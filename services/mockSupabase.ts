@@ -18,7 +18,7 @@ class DatabaseService {
 
   /**
    * UNIVERSAL AUDIT LOGGER
-   * Records actions to both Cloud (Supabase) and Local (Backup)
+   * Records every single system mutation.
    */
   async logAction(action: string, details: string, outlet_id?: string) {
     const sessionStr = localStorage.getItem('membership_session');
@@ -36,9 +36,9 @@ class DatabaseService {
 
     if (this.isSupabase()) {
         try {
-            // No await here to prevent logging latency from slowing down the UI
+            // Non-blocking cloud insert
             supabase.from('system_logs').insert([logEntry]).then(({ error }) => {
-                if (error) console.error("Cloud Logging Policy Violation:", error.message);
+                if (error) console.error("Cloud Logging Failure:", error.message);
             });
         } catch (e) {
             console.warn("Cloud log failed.");
@@ -46,7 +46,7 @@ class DatabaseService {
     }
     
     const localLogs = await this.localGet<any[]>('system_logs', []);
-    await this.localSet('system_logs', [logEntry, ...localLogs].slice(0, 1000));
+    await this.localSet('system_logs', [logEntry, ...localLogs].slice(0, 2000));
   }
 
   private async forceSyncHierarchy(outletId: string) {
@@ -66,7 +66,7 @@ class DatabaseService {
   }
 
   /**
-   * AUTHENTICATION
+   * AUTHENTICATION & AUTO-ACTIVATION
    */
   async signUp(email: string, password: string, name: string): Promise<{ user: any, error: string | null }> {
     if (!this.isSupabase()) return { user: null, error: "Cloud connection disabled." };
@@ -82,13 +82,32 @@ class DatabaseService {
 
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (this.isSupabase()) {
+        // 1. Try Standard Auth Login
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
             email,
             password: passwordAttempt
         });
+
+        // 2. Handle Provisioned Users (First-time login with "password")
+        if (authError && passwordAttempt === 'password') {
+            const { data: profile } = await supabase.from('profiles').select('*').eq('email', email).single();
+            if (profile) {
+                // Auto-provision Auth account for the pre-existing profile
+                const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                    email,
+                    password: 'password'
+                });
+                if (!signUpError && signUpData.user) {
+                   await this.logAction('AUTH_AUTO_PROVISION', `Account activated for provisioned user: ${email}`);
+                   // Profile is linked via the Postgres trigger created in schema.sql
+                   return { user: { ...profile, auth_id: signUpData.user.id }, error: null };
+                }
+            }
+        }
+
         if (authError) return { user: null, error: authError.message };
+
         if (authData.user) {
-            // Attempt lookup by auth_id (real account) or id (provisioned profile)
             let { data: profile } = await supabase.from('profiles').select('*').eq('auth_id', authData.user.id).single();
             if (!profile) {
                 const { data: fallback } = await supabase.from('profiles').select('*').eq('email', email).single();
@@ -100,25 +119,20 @@ class DatabaseService {
             }
         }
     }
-    return { user: null, error: "Access Denied." };
+    return { user: null, error: "Access Denied. Check credentials or contact Admin." };
   }
 
   /**
-   * DATA MUTATIONS
+   * DATA MUTATIONS (VERIFIED LOGGING)
    */
   async addUser(user: Omit<UserProfile, 'id'>): Promise<UserProfile> {
     const id = crypto.randomUUID();
     const newUser = { ...user, id };
-    
     if (this.isSupabase()) {
         const { error } = await supabase.from('profiles').insert([newUser]);
-        if (error) {
-            console.error("DB Provisioning Failed:", error.message);
-            throw new Error(`Profile Provisioning Failed: ${error.message}. TIP: Run the FINAL SQL script to add the 'auth_id' column.`);
-        }
+        if (error) throw new Error(`Profile Provisioning Failed: ${error.message}`);
     }
-    
-    await this.logAction('USER_PROVISION', `New staff profile deployed: ${user.email}`);
+    await this.logAction('USER_PROVISION', `Staff profile created: ${user.email} with default password 'password'`);
     return newUser;
   }
 
@@ -135,7 +149,7 @@ class DatabaseService {
   async addProperty(prop: Omit<Property, 'id'>): Promise<Property> {
     const newProp = { ...prop, id: crypto.randomUUID() };
     if (this.isSupabase()) await supabase.from('properties').insert([newProp]);
-    await this.logAction('PROP_CREATE', `Added property: ${prop.name}`);
+    await this.logAction('PROP_CREATE', `Property added: ${prop.name}`);
     return newProp;
   }
 
@@ -155,7 +169,7 @@ class DatabaseService {
         await this.forceSyncHierarchy(newOutlet.id);
         await supabase.from('outlets').insert([newOutlet]);
     }
-    await this.logAction('OUTLET_CREATE', `Deployed facility: ${name}`, newOutlet.id);
+    await this.logAction('OUTLET_CREATE', `Facility deployed: ${name}`, newOutlet.id);
     return newOutlet;
   }
 
@@ -209,7 +223,11 @@ class DatabaseService {
   }
 
   async addFreeze(freeze: Freeze): Promise<void> { 
-    if (this.isSupabase()) await supabase.from('freezes').insert([freeze]); 
+    if (this.isSupabase()) {
+        await supabase.from('freezes').insert([freeze]); 
+        // Sync status to frozen
+        await supabase.from('members').update({ status: MemberStatus.FROZEN }).eq('id', freeze.member_id);
+    }
     await this.logAction('MEMBER_FREEZE', `Applied freeze period to member ID: ${freeze.member_id}`);
   }
 
@@ -269,7 +287,7 @@ class DatabaseService {
   async getUsers(): Promise<UserProfile[]> { if (this.isSupabase()) { const { data } = await supabase.from('profiles').select('*'); if (data) return data; } return []; }
   async getLogs(outletId?: string): Promise<SystemLog[]> {
     if (this.isSupabase()) {
-        let q = supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(200);
+        let q = supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(2000);
         if (outletId) q = q.eq('outlet_id', outletId);
         const { data } = await q;
         return data || [];

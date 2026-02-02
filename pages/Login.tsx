@@ -4,18 +4,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Button, Card, CardContent } from '../components/ui';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Lock, Mail, ArrowRight, Activity, ShieldCheck, User, Info } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, ArrowRight, Activity, ShieldCheck, User } from 'lucide-react';
 
 const Login = () => {
-  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { login, register } = useAuth();
+  const { login } = useAuth();
   const { settings } = useSettings();
   const navigate = useNavigate();
 
@@ -24,13 +22,7 @@ const Login = () => {
     setLoading(true);
     setError('');
     
-    let err: string | null = null;
-    if (isSignUp) {
-        err = await register(email, password, name);
-    } else {
-        err = await login(email, password);
-    }
-    
+    const err = await login(email, password);
     setLoading(false);
     
     if (err) {
@@ -69,7 +61,7 @@ const Login = () => {
            <div className="flex items-center justify-center gap-3">
               <span className="h-px w-8 bg-indigo-500/30"></span>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.3em]">
-                {isSignUp ? 'New Account Provisioning' : 'Resilience Framework'}
+                Resilience Framework
               </p>
               <span className="h-px w-8 bg-indigo-500/30"></span>
            </div>
@@ -80,25 +72,6 @@ const Login = () => {
             <CardContent className="p-10">
               <form onSubmit={handleSubmit} className="space-y-8">
                 
-                {isSignUp && (
-                    <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Full Name</label>
-                        <div className="relative group">
-                            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-                                <User className="w-5 h-5 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
-                            </div>
-                            <input 
-                                type="text" 
-                                value={name} 
-                                onChange={(e) => setName(e.target.value)} 
-                                placeholder="Your Name"
-                                className="w-full h-14 pl-14 pr-5 rounded-2xl bg-slate-950/40 border border-white/10 text-white placeholder:text-slate-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-slate-950/60 transition-all text-base font-medium"
-                                required={isSignUp}
-                            />
-                        </div>
-                    </div>
-                )}
-
                 {/* Email Input Field */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center px-1">
@@ -162,19 +135,15 @@ const Login = () => {
                     isLoading={loading}
                   >
                     <span className="flex items-center justify-center gap-3 tracking-tight">
-                      {isSignUp ? 'Create Admin Account' : 'Sign in'} <ArrowRight className="w-5 h-5" />
+                      Sign in <ArrowRight className="w-5 h-5" />
                     </span>
                   </Button>
                 </div>
 
                 <div className="text-center">
-                    <button 
-                        type="button" 
-                        onClick={() => setIsSignUp(!isSignUp)}
-                        className="text-[10px] font-black text-indigo-400 uppercase tracking-widest hover:text-indigo-300 transition-colors"
-                    >
-                        {isSignUp ? 'Back to sign in' : 'First time? Setup Admin account'}
-                    </button>
+                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                        System Access Restricted to Authorized Personnel
+                    </p>
                 </div>
               </form>
             </CardContent>
@@ -189,7 +158,7 @@ const Login = () => {
                <button className="text-[10px] font-bold text-slate-500 hover:text-indigo-400 transition-colors uppercase tracking-[0.2em]">Terms</button>
             </div>
             <p className="text-slate-600 text-[10px] font-bold tracking-[0.3em] uppercase">
-              &copy; {new Date().getFullYear()} Membership System &bull; v2.8.4
+              &copy; {new Date().getFullYear()} Membership System &bull; Enterprise Edition
             </p>
           </div>
         </div>

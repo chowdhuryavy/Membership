@@ -302,7 +302,7 @@ const Users = () => {
         isOpen={!!deleteId}
         onClose={() => setDeleteId(null)}
         onConfirm={confirmDelete}
-        title="Terminate Identity"
+        title="Logout"
         description="Are you sure you want to permanently remove this user account? All access privileges will be revoked immediately."
         confirmText="Confirm Termination"
         isDestructive={true}
