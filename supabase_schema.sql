@@ -1,6 +1,6 @@
 
 -- ==========================================
--- MEMBERSHIP ERP - SECURE SCHEMA SETUP
+-- MEMBERSHIP ERP - FULL SECURE SCHEMA
 -- ==========================================
 
 -- 1. SECURITY ROLES
@@ -68,6 +68,50 @@ CREATE TABLE IF NOT EXISTS public.members (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 7. FREEZES
+CREATE TABLE IF NOT EXISTS public.freezes (
+    id TEXT PRIMARY KEY,
+    member_id TEXT REFERENCES public.members(id) ON DELETE CASCADE,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    total_days INTEGER NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. SYSTEM CONFIGURATIONS
+CREATE TABLE IF NOT EXISTS public.company_settings (
+    id TEXT PRIMARY KEY DEFAULT 'global',
+    name TEXT NOT NULL DEFAULT 'Membership ERP',
+    logo_url TEXT,
+    address TEXT,
+    currency_id TEXT,
+    report_title TEXT,
+    report_subtitle TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 9. CURRENCIES
+CREATE TABLE IF NOT EXISTS public.currencies (
+    id TEXT PRIMARY KEY,
+    code TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    rate NUMERIC(15,6) DEFAULT 1,
+    is_default BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 10. SYSTEM LOGS
+CREATE TABLE IF NOT EXISTS public.system_logs (
+    id TEXT PRIMARY KEY,
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    user_id TEXT,
+    user_name TEXT,
+    action TEXT NOT NULL,
+    details TEXT,
+    outlet_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ==========================================
 -- ADMINISTRATIVE HELPER FUNCTIONS (No Recursion)
 -- ==========================================
@@ -94,25 +138,56 @@ ALTER TABLE public.properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.outlets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.membership_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.freezes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.company_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.currencies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
 
--- Select policies (Allow all authenticated users to read)
-CREATE POLICY "Read Roles" ON public.roles FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read Profiles" ON public.profiles FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read Properties" ON public.properties FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read Outlets" ON public.outlets FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read Categories" ON public.membership_categories FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read Members" ON public.members FOR SELECT TO authenticated USING (true);
+-- Select policies
+CREATE POLICY "Read All" ON public.roles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Read All" ON public.profiles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Read All" ON public.properties FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Read All" ON public.outlets FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Read All" ON public.membership_categories FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Read All" ON public.members FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Read All" ON public.freezes FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Read All" ON public.company_settings FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Read All" ON public.currencies FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Read All" ON public.system_logs FOR SELECT TO authenticated USING (true);
 
--- Write policies (Use the is_admin() function to prevent 403 recursion)
-CREATE POLICY "Admin Manage Roles" ON public.roles FOR ALL TO authenticated USING (public.is_admin());
-CREATE POLICY "Admin Manage Properties" ON public.properties FOR ALL TO authenticated USING (public.is_admin());
-CREATE POLICY "Admin Manage Outlets" ON public.outlets FOR ALL TO authenticated USING (public.is_admin());
-CREATE POLICY "Admin Manage Categories" ON public.membership_categories FOR ALL TO authenticated USING (public.is_admin());
-CREATE POLICY "Admin Manage Members" ON public.members FOR ALL TO authenticated USING (public.is_admin());
+-- Write policies (Admins Manage All)
+CREATE POLICY "Admin Manage" ON public.roles FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin Manage" ON public.properties FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin Manage" ON public.outlets FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin Manage" ON public.membership_categories FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin Manage" ON public.members FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin Manage" ON public.freezes FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin Manage" ON public.company_settings FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin Manage" ON public.currencies FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin Manage" ON public.system_logs FOR ALL TO authenticated USING (public.is_admin());
 
--- Special Policy for Profiles (Admins can manage all, users can manage self)
+-- Profile special case: users can edit their own or admin can edit all
 CREATE POLICY "Manage Profiles" ON public.profiles FOR ALL TO authenticated 
 USING (public.is_admin() OR id = auth.uid());
+
+-- ==========================================
+-- AUTOMATION TRIGGERS
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, name, role_id)
+  VALUES (new.id, new.email, COALESCE(new.raw_user_meta_data->>'name', 'System Admin'), 'admin')
+  ON CONFLICT (id) DO NOTHING;
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
 -- ==========================================
 -- SEED DATA
@@ -121,3 +196,5 @@ USING (public.is_admin() OR id = auth.uid());
 INSERT INTO public.roles (id, name, permissions, is_system)
 VALUES ('admin', 'Administrator', '{"members:view", "members:create", "members:edit", "members:delete", "categories:view", "categories:create", "categories:edit", "categories:delete", "users:view", "users:create", "users:edit", "users:delete", "settings:view", "settings:edit", "reports:view", "reports:export", "logs:view", "properties:view", "properties:edit", "outlets:view", "outlets:edit"}', true)
 ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.company_settings (id, name) VALUES ('global', 'Membership ERP') ON CONFLICT DO NOTHING;
