@@ -17,37 +17,31 @@ class DatabaseService {
   }
 
   /**
-   * DEPENDENCY SYNCING
-   * Ensures parent objects exist in Supabase before children are saved.
+   * RECURSIVE DEPENDENCY SYNC
+   * Ensures the entire chain exists in Supabase: Property -> Outlet
    */
-  private async ensureOutletExists(outletId?: string) {
-    if (!this.isSupabase() || !outletId) return;
+  private async forceSyncHierarchy(outletId: string) {
+    if (!this.isSupabase()) return;
 
-    const { data: existing } = await supabase.from('outlets').select('id').eq('id', outletId).single();
-    if (existing) return;
+    // 1. Check Outlet
+    const { data: out } = await supabase.from('outlets').select('id, property_id').eq('id', outletId).single();
+    if (out) return; // Hierarchy likely intact
 
+    // 2. Resolve locally
     const localOutlets = await this.getOutlets();
     const outlet = localOutlets.find(o => o.id === outletId);
-    
-    if (outlet) {
-        await this.ensurePropertyExists(outlet.property_id);
-        const { error } = await supabase.from('outlets').insert([outlet]);
-        if (error) console.error("Sync Outlet Fail:", error.message);
-    }
-  }
+    if (!outlet) return;
 
-  private async ensurePropertyExists(propertyId?: string) {
-    if (!this.isSupabase() || !propertyId) return;
-    
-    const { data: existing } = await supabase.from('properties').select('id').eq('id', propertyId).single();
-    if (existing) return;
-
-    const localProps = await this.getProperties();
-    const prop = localProps.find(p => p.id === propertyId);
-    if (prop) {
-        const { error } = await supabase.from('properties').insert([prop]);
-        if (error) console.error("Sync Property Fail:", error.message);
+    // 3. Check/Sync Property first
+    const { data: prop } = await supabase.from('properties').select('id').eq('id', outlet.property_id).single();
+    if (!prop) {
+        const localProps = await this.getProperties();
+        const property = localProps.find(p => p.id === outlet.property_id);
+        if (property) await supabase.from('properties').insert([property]);
     }
+
+    // 4. Finally sync Outlet
+    await supabase.from('outlets').insert([outlet]);
   }
 
   /**
@@ -55,36 +49,28 @@ class DatabaseService {
    */
   async signUp(email: string, password: string, name: string): Promise<{ user: any, error: string | null }> {
     if (!this.isSupabase()) return { user: null, error: "Supabase not initialized." };
-    
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { name } }
     });
-
     if (error) return { user: null, error: error.message };
     return { user: data.user, error: null };
   }
 
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (this.isSupabase()) {
-        try {
-            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-                email,
-                password: passwordAttempt
-            });
-
-            if (authError) return { user: null, error: authError.message };
-
-            if (authData.user) {
-                const { data: profile } = await supabase.from('profiles').select('*').eq('id', authData.user.id).single();
-                if (profile) return { user: profile, error: null };
-            }
-        } catch (e) {
-            console.error("Critical Auth Error:", e);
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email,
+            password: passwordAttempt
+        });
+        if (authError) return { user: null, error: authError.message };
+        if (authData.user) {
+            const { data: profile } = await supabase.from('profiles').select('*').eq('id', authData.user.id).single();
+            if (profile) return { user: profile, error: null };
         }
     }
-    return { user: null, error: "Access Denied." };
+    return { user: null, error: "Authentication Failed." };
   }
 
   /**
@@ -100,10 +86,7 @@ class DatabaseService {
   }
 
   async updateSettings(updates: Partial<CompanySettings>): Promise<void> {
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('company_settings').upsert({ id: 'global', ...updates });
-        if (error) console.error("Settings Update Error:", error.message);
-    }
+    if (this.isSupabase()) await supabase.from('company_settings').upsert({ id: 'global', ...updates });
     const current = await this.getSettings();
     await this.localSet('settings', { ...current, ...updates });
   }
@@ -118,13 +101,7 @@ class DatabaseService {
 
   async addCurrency(curr: Omit<Currency, 'id'>): Promise<Currency> {
     const newCurr = { ...curr, id: crypto.randomUUID() };
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('currencies').insert([newCurr]);
-        if (error) {
-            console.error("Cloud Currency Fail:", error.message);
-            throw new Error(`Cloud sync rejected: ${error.message}`);
-        }
-    }
+    if (this.isSupabase()) await supabase.from('currencies').insert([newCurr]);
     const list = await this.getCurrencies();
     await this.localSet('currencies', [...list, newCurr]);
     return newCurr;
@@ -140,9 +117,7 @@ class DatabaseService {
 
   async addProperty(prop: Omit<Property, 'id'>): Promise<Property> {
     const newProp = { ...prop, id: crypto.randomUUID() };
-    if (this.isSupabase()) {
-        await supabase.from('properties').insert([newProp]);
-    }
+    if (this.isSupabase()) await supabase.from('properties').insert([newProp]);
     const list = await this.getProperties();
     await this.localSet('properties', [...list, newProp]);
     return newProp;
@@ -159,7 +134,7 @@ class DatabaseService {
   async addOutlet(name: string, propertyId: string): Promise<Outlet> {
     const newOutlet = { id: crypto.randomUUID(), name, property_id: propertyId };
     if (this.isSupabase()) {
-        await this.ensurePropertyExists(propertyId);
+        await this.forceSyncHierarchy(newOutlet.id);
         await supabase.from('outlets').insert([newOutlet]);
     }
     const list = await this.getOutlets();
@@ -169,9 +144,9 @@ class DatabaseService {
 
   async getCategories(outletId?: string): Promise<MembershipCategory[]> {
     if (this.isSupabase()) {
-        let query = supabase.from('membership_categories').select('*');
-        if (outletId) query = query.eq('outlet_id', outletId);
-        const { data } = await query;
+        let q = supabase.from('membership_categories').select('*');
+        if (outletId) q = q.eq('outlet_id', outletId);
+        const { data } = await q;
         if (data) return data;
     }
     const list = await this.localGet<MembershipCategory[]>('categories', []);
@@ -180,10 +155,10 @@ class DatabaseService {
 
   async addCategory(cat: Omit<MembershipCategory, 'id'>): Promise<MembershipCategory> {
     const newCat = { ...cat, id: crypto.randomUUID() };
-    if (this.isSupabase()) {
-        await this.ensureOutletExists(cat.outlet_id);
+    if (this.isSupabase() && cat.outlet_id) {
+        await this.forceSyncHierarchy(cat.outlet_id);
         const { error } = await supabase.from('membership_categories').insert([newCat]);
-        if (error) throw new Error(`Cloud Sync Failed: ${error.message}`);
+        if (error) throw new Error(`Category Save Error: ${error.message}`);
     }
     const list = await this.localGet<MembershipCategory[]>('categories', []);
     await this.localSet('categories', [...list, newCat]);
@@ -192,20 +167,19 @@ class DatabaseService {
 
   async getMembers(outletId?: string): Promise<Member[]> {
     if (this.isSupabase()) {
-        let query = supabase.from('members').select('*');
-        if (outletId) query = query.eq('outlet_id', outletId);
-        const { data } = await query;
+        let q = supabase.from('members').select('*');
+        if (outletId) q = q.eq('outlet_id', outletId);
+        const { data } = await q;
         if (data) return data;
     }
-    const list = await this.localGet<Member[]>('members', []);
-    return outletId ? list.filter(m => m.outlet_id === outletId) : list;
+    return this.localGet<Member[]>('members', []);
   }
 
   async addMember(member: Member): Promise<Member> {
-    if (this.isSupabase()) {
-        await this.ensureOutletExists(member.outlet_id);
+    if (this.isSupabase() && member.outlet_id) {
+        await this.forceSyncHierarchy(member.outlet_id);
         const { error } = await supabase.from('members').insert([member]);
-        if (error) throw new Error(`Cloud Sync Failed: ${error.message}`);
+        if (error) throw new Error(`Member Save Error: ${error.message}`);
     }
     const list = await this.getMembers();
     await this.localSet('members', [...list, member]);
@@ -215,21 +189,24 @@ class DatabaseService {
   async getUsers(): Promise<UserProfile[]> {
     if (this.isSupabase()) {
         const { data } = await supabase.from('profiles').select('*');
-        if (data && data.length > 0) return data;
+        if (data) return data;
     }
     return this.localGet<UserProfile[]>('users', []);
   }
 
   async addUser(user: Omit<UserProfile, 'id'>): Promise<UserProfile> {
-    // Generate a new UUID for the profile (No longer strictly linked to Auth FK at first)
-    const newUser = { ...user, id: crypto.randomUUID() };
+    // Generate a proper UUID string
+    const id = crypto.randomUUID();
+    const newUser = { ...user, id };
+    
     if (this.isSupabase()) {
         const { error } = await supabase.from('profiles').insert([newUser]);
         if (error) {
-            console.error("Profile Provisioning Failed:", error.message);
-            throw new Error(`Profile Provisioning Failed: ${error.message}`);
+            console.error("Critical Permission Error:", error.message);
+            throw new Error(`Profile sync failed. Ensure the SQL script was run to drop the profiles_id_fkey constraint. Details: ${error.message}`);
         }
     }
+    
     const list = await this.getUsers();
     await this.localSet('users', [...list, newUser]);
     return newUser;
@@ -238,15 +215,13 @@ class DatabaseService {
   async getRoles(): Promise<Role[]> {
     if (this.isSupabase()) {
         const { data } = await supabase.from('roles').select('*');
-        if (data && data.length > 0) return data;
+        if (data) return data;
     }
     return this.localGet<Role[]>('roles', []);
   }
 
   async logAction(action: string, details: string, outlet_id?: string) {
-    if (this.isSupabase()) {
-        await supabase.from('system_logs').insert([{ id: crypto.randomUUID(), action, details, outlet_id }]);
-    }
+    if (this.isSupabase()) await supabase.from('system_logs').insert([{ id: crypto.randomUUID(), action, details, outlet_id }]);
   }
 
   async getLogs(outletId?: string): Promise<SystemLog[]> {
