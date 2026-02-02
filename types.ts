@@ -1,25 +1,40 @@
 
 export type Permission = 
-  | 'manage_members' 
-  | 'manage_categories' 
-  | 'manage_users' 
-  | 'manage_settings' 
-  | 'view_reports'
-  | 'view_logs';
+  | 'members:view' | 'members:create' | 'members:edit' | 'members:delete'
+  | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete'
+  | 'users:view' | 'users:create' | 'users:edit' | 'users:delete'
+  | 'settings:view' | 'settings:edit'
+  | 'reports:view' | 'reports:export'
+  | 'logs:view'
+  | 'properties:view' | 'properties:edit'
+  | 'outlets:view' | 'outlets:edit';
 
 export interface Role {
   id: string;
   name: string;
   permissions: Permission[];
-  is_system?: boolean; // Prevent deleting system roles
+  is_system?: boolean;
+}
+
+export interface Property {
+  id: string;
+  name: string;
+  logo_url: string;
+  address: string;
+}
+
+export interface Outlet {
+  id: string;
+  name: string;
+  property_id: string; // Links to Property
 }
 
 export interface UserProfile {
   id: string;
   email: string;
-  role_id: string; // References Role.id
+  role_id: string;
   name: string;
-  allowed_outlets: string[]; // Array of Outlet IDs this user can access
+  allowed_outlets: string[];
 }
 
 export interface SystemLog {
@@ -36,13 +51,8 @@ export interface Currency {
   id: string;
   code: string;
   symbol: string;
-  rate: number; // vs base currency
+  rate: number;
   is_default: boolean;
-}
-
-export interface Outlet {
-  id: string;
-  name: string;
 }
 
 export interface CompanySettings {
@@ -56,7 +66,7 @@ export interface CompanySettings {
 
 export interface MembershipCategory {
   id: string;
-  outlet_id?: string; // Scoped to outlet
+  outlet_id?: string;
   name: string;
   duration_months: number;
   base_rate: number;
@@ -71,13 +81,13 @@ export enum MemberStatus {
 
 export interface Member {
   id: string;
-  outlet_id?: string; // Scoped to outlet
+  outlet_id?: string;
   membership_number: string;
   guest_name: string;
   category_id: string;
-  start_date: string; // ISO Date String
-  original_end_date: string; // ISO Date String
-  current_end_date: string; // ISO Date String
+  start_date: string;
+  original_end_date: string;
+  current_end_date: string;
   actual_rate: number;
   discount: number;
   net_amount: number;
