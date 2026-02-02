@@ -60,9 +60,12 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const allowedOutlets = useMemo(() => outlets.filter(o => 
-        user?.allowed_outlets?.includes(o.id)
-    ), [outlets, user]);
+    // Logic Change: Admins automatically have access to all outlets in the database
+    const allowedOutlets = useMemo(() => {
+        if (!user) return [];
+        if (user.role_id === 'admin') return outlets;
+        return outlets.filter(o => user.allowed_outlets?.includes(o.id));
+    }, [outlets, user]);
 
     const groupedData = useMemo(() => {
         const groups: { [key: string]: { property: Property; outlets: any[] } } = {};

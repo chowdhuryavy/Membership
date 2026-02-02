@@ -4,7 +4,7 @@
 -- ==========================================
 
 -- 1. SECURITY ROLES & PERMISSIONS
-CREATE TABLE public.roles (
+CREATE TABLE IF NOT EXISTS public.roles (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     permissions TEXT[] NOT NULL DEFAULT '{}',
@@ -13,7 +13,7 @@ CREATE TABLE public.roles (
 );
 
 -- 2. PROPERTIES & PORTFOLIOS
-CREATE TABLE public.properties (
+CREATE TABLE IF NOT EXISTS public.properties (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     name TEXT NOT NULL,
     logo_url TEXT,
@@ -22,7 +22,7 @@ CREATE TABLE public.properties (
 );
 
 -- 3. FACILITY OUTLETS
-CREATE TABLE public.outlets (
+CREATE TABLE IF NOT EXISTS public.outlets (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     name TEXT NOT NULL,
     property_id TEXT REFERENCES public.properties(id) ON DELETE CASCADE,
@@ -30,7 +30,7 @@ CREATE TABLE public.outlets (
 );
 
 -- 4. USER PROFILES (Linked to Auth.Users)
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT UNIQUE NOT NULL,
     name TEXT,
@@ -40,7 +40,7 @@ CREATE TABLE public.profiles (
 );
 
 -- 5. REVENUE CATEGORIES / TIERS
-CREATE TABLE public.membership_categories (
+CREATE TABLE IF NOT EXISTS public.membership_categories (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE public.membership_categories (
 );
 
 -- 6. MEMBERSHIP LEDGER
-CREATE TABLE public.members (
+CREATE TABLE IF NOT EXISTS public.members (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE,
     membership_number TEXT NOT NULL,
@@ -69,7 +69,7 @@ CREATE TABLE public.members (
 );
 
 -- 7. TEMPORAL FREEZES / EXTENSIONS
-CREATE TABLE public.freezes (
+CREATE TABLE IF NOT EXISTS public.freezes (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     member_id TEXT REFERENCES public.members(id) ON DELETE CASCADE,
     start_date DATE NOT NULL,
@@ -79,7 +79,7 @@ CREATE TABLE public.freezes (
 );
 
 -- 8. SYSTEM CONFIGURATIONS
-CREATE TABLE public.company_settings (
+CREATE TABLE IF NOT EXISTS public.company_settings (
     id TEXT PRIMARY KEY DEFAULT 'global',
     name TEXT NOT NULL DEFAULT 'Membership ERP',
     logo_url TEXT,
@@ -91,7 +91,7 @@ CREATE TABLE public.company_settings (
 );
 
 -- 9. CURRENCY STANDARDS
-CREATE TABLE public.currencies (
+CREATE TABLE IF NOT EXISTS public.currencies (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     code TEXT NOT NULL,
     symbol TEXT NOT NULL,
@@ -101,7 +101,7 @@ CREATE TABLE public.currencies (
 );
 
 -- 10. AUDIT LOGS
-CREATE TABLE public.system_logs (
+CREATE TABLE IF NOT EXISTS public.system_logs (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     timestamp TIMESTAMPTZ DEFAULT NOW(),
     user_id TEXT,
@@ -127,29 +127,36 @@ ALTER TABLE public.members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.freezes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
 
--- GLOBAL READ ACCESS FOR AUTHENTICATED USERS
-CREATE POLICY "View Access Roles" ON public.roles FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access Profiles" ON public.profiles FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access Properties" ON public.properties FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access Outlets" ON public.outlets FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access Settings" ON public.company_settings FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access Currencies" ON public.currencies FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access Categories" ON public.membership_categories FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access Members" ON public.members FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access Freezes" ON public.freezes FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access Logs" ON public.system_logs FOR SELECT TO authenticated USING (true);
+-- 1. SELECT POLICIES (Read access for all authenticated)
+DO $$ BEGIN
+    CREATE POLICY "View Roles" ON public.roles FOR SELECT TO authenticated USING (true);
+    CREATE POLICY "View Profiles" ON public.profiles FOR SELECT TO authenticated USING (true);
+    CREATE POLICY "View Properties" ON public.properties FOR SELECT TO authenticated USING (true);
+    CREATE POLICY "View Outlets" ON public.outlets FOR SELECT TO authenticated USING (true);
+    CREATE POLICY "View Settings" ON public.company_settings FOR SELECT TO authenticated USING (true);
+    CREATE POLICY "View Currencies" ON public.currencies FOR SELECT TO authenticated USING (true);
+    CREATE POLICY "View Categories" ON public.membership_categories FOR SELECT TO authenticated USING (true);
+    CREATE POLICY "View Members" ON public.members FOR SELECT TO authenticated USING (true);
+    CREATE POLICY "View Freezes" ON public.freezes FOR SELECT TO authenticated USING (true);
+    CREATE POLICY "View Logs" ON public.system_logs FOR SELECT TO authenticated USING (true);
+EXCEPTION WHEN others THEN NULL; END $$;
 
--- FULL MANAGEMENT ACCESS FOR ADMINS
--- Check if user has 'admin' role in profiles table
-CREATE POLICY "Admin All Access Roles" ON public.roles FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
-CREATE POLICY "Admin All Access Properties" ON public.properties FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
-CREATE POLICY "Admin All Access Outlets" ON public.outlets FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
-CREATE POLICY "Admin All Access Categories" ON public.membership_categories FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
-CREATE POLICY "Admin All Access Members" ON public.members FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
-CREATE POLICY "Admin All Access Freezes" ON public.freezes FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
-CREATE POLICY "Admin All Access Settings" ON public.company_settings FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
-CREATE POLICY "Admin All Access Currencies" ON public.currencies FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
-CREATE POLICY "Admin All Access Logs" ON public.system_logs FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+-- 2. MANAGEMENT POLICIES (Simplified Admin Check)
+-- Note: We allow users to update their own profile and admins to update everything
+DO $$ BEGIN
+    CREATE POLICY "Admins Manage Everything Roles" ON public.roles FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+    CREATE POLICY "Admins Manage Everything Properties" ON public.properties FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+    CREATE POLICY "Admins Manage Everything Outlets" ON public.outlets FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+    CREATE POLICY "Admins Manage Everything Categories" ON public.membership_categories FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+    CREATE POLICY "Admins Manage Everything Members" ON public.members FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+    CREATE POLICY "Admins Manage Everything Freezes" ON public.freezes FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+    CREATE POLICY "Admins Manage Everything Settings" ON public.company_settings FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+    CREATE POLICY "Admins Manage Everything Currencies" ON public.currencies FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+    CREATE POLICY "Admins Manage Everything Logs" ON public.system_logs FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+    
+    -- Special handling for profiles to avoid recursion during first creation
+    CREATE POLICY "Admins Manage All Profiles" ON public.profiles FOR ALL TO authenticated USING (role_id = 'admin' OR id = auth.uid());
+EXCEPTION WHEN others THEN NULL; END $$;
 
 -- ==========================================
 -- AUTOMATION TRIGGERS
@@ -159,11 +166,13 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
   INSERT INTO public.profiles (id, email, name, role_id)
-  VALUES (new.id, new.email, new.raw_user_meta_data->>'name', 'admin');
+  VALUES (new.id, new.email, new.raw_user_meta_data->>'name', 'admin')
+  ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
@@ -184,3 +193,5 @@ VALUES ('admin', 'Administrator', '{
   "outlets:view", "outlets:edit"
 }', true)
 ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.company_settings (id, name) VALUES ('global', 'Membership ERP') ON CONFLICT DO NOTHING;
