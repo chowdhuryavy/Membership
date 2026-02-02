@@ -46,7 +46,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setOutlets(o);
         setProperties(p);
         
-        // Find default or currently selected currency
         const activeCurr = c.find(curr => curr.id === s.currency_id) || c.find(curr => curr.is_default) || c[0];
         setCurrency(activeCurr);
         
@@ -72,7 +71,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     if (user && outlets.length > 0) {
-      const allowed = outlets.filter(o => user.allowed_outlets?.includes(o.id));
+      // Logic Change: Admins see all outlets, others are filtered by allowed_outlets array
+      const allowed = user.role_id === 'admin' 
+          ? outlets 
+          : outlets.filter(o => user.allowed_outlets?.includes(o.id));
+
       if (allowed.length > 0) {
         const isAllowed = currentOutlet && allowed.find(o => o.id === currentOutlet.id);
         
@@ -90,8 +93,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const formatMoney = (amount: number) => {
     const value = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (!currency) return value;
-    
-    // Check if it's an Arabic/RTL symbol like ر.ق
     const isRtl = /[\u0600-\u06FF]/.test(currency.symbol);
     return isRtl ? `${value} ${currency.symbol}` : `${currency.symbol} ${value}`;
   };

@@ -128,28 +128,33 @@ ALTER TABLE public.freezes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
 
 -- GLOBAL READ ACCESS FOR AUTHENTICATED USERS
-CREATE POLICY "View Access" ON public.roles FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access" ON public.profiles FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access" ON public.properties FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access" ON public.outlets FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access" ON public.company_settings FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access" ON public.currencies FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access" ON public.membership_categories FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access" ON public.members FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access" ON public.freezes FOR SELECT TO authenticated USING (true);
-CREATE POLICY "View Access" ON public.system_logs FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Access Roles" ON public.roles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Access Profiles" ON public.profiles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Access Properties" ON public.properties FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Access Outlets" ON public.outlets FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Access Settings" ON public.company_settings FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Access Currencies" ON public.currencies FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Access Categories" ON public.membership_categories FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Access Members" ON public.members FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Access Freezes" ON public.freezes FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Access Logs" ON public.system_logs FOR SELECT TO authenticated USING (true);
 
--- ADMIN-ONLY WRITE ACCESS HELPER
--- Assumption: 'admin' is the reserved ID for full clearance
-CREATE POLICY "Admin Management" ON public.roles FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
-CREATE POLICY "Admin Management" ON public.company_settings FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
-CREATE POLICY "Admin Management" ON public.currencies FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+-- FULL MANAGEMENT ACCESS FOR ADMINS
+-- Check if user has 'admin' role in profiles table
+CREATE POLICY "Admin All Access Roles" ON public.roles FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+CREATE POLICY "Admin All Access Properties" ON public.properties FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+CREATE POLICY "Admin All Access Outlets" ON public.outlets FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+CREATE POLICY "Admin All Access Categories" ON public.membership_categories FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+CREATE POLICY "Admin All Access Members" ON public.members FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+CREATE POLICY "Admin All Access Freezes" ON public.freezes FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+CREATE POLICY "Admin All Access Settings" ON public.company_settings FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+CREATE POLICY "Admin All Access Currencies" ON public.currencies FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
+CREATE POLICY "Admin All Access Logs" ON public.system_logs FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role_id = 'admin'));
 
 -- ==========================================
 -- AUTOMATION TRIGGERS
 -- ==========================================
 
--- AUTO-CREATE PROFILE ON SIGNUP
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
@@ -178,12 +183,4 @@ VALUES ('admin', 'Administrator', '{
   "properties:view", "properties:edit",
   "outlets:view", "outlets:edit"
 }', true)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.currencies (id, code, symbol, rate, is_default)
-VALUES ('default', 'USD', '$', 1, true)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.company_settings (id, name, currency_id)
-VALUES ('global', 'Membership ERP', 'default')
 ON CONFLICT (id) DO NOTHING;
