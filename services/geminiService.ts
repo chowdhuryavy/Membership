@@ -1,14 +1,18 @@
+
 import { GoogleGenAI } from "@google/genai";
 
+/**
+ * Generates financial insights using Google Gemini API.
+ * Follows the latest @google/genai SDK standards.
+ */
 export const generateFinancialInsight = async (dataContext: string): Promise<string> => {
-  if (!process.env.API_KEY) {
-    return "API Key is missing. Please configure the environment to use AI Insights.";
-  }
-
   try {
+    // Initializing the GenAI client with the environment API key as per guidelines.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    // Using gemini-3-pro-preview for complex financial reasoning tasks.
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: `
         Role: Senior Financial Analyst. 
         Task: Analyze the following monthly revenue dataset for a membership business.
@@ -23,6 +27,7 @@ export const generateFinancialInsight = async (dataContext: string): Promise<str
       `,
     });
 
+    // Accessing the .text property directly as per modern response object definition.
     return response.text || "No insight generated.";
   } catch (error) {
     console.error("Gemini API Error:", error);

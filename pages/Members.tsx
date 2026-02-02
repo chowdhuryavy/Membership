@@ -1,10 +1,25 @@
 
-import React, { useEffect, useState } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal } from '../components/ui';
-import { Plus, Search, Filter, Snowflake, Trash2, Edit2, ChevronDown, ChevronRight, Layers, AlertCircle, CalendarDays } from 'lucide-react';
+import { 
+  Plus, 
+  Search, 
+  Filter, 
+  Snowflake, 
+  Trash2, 
+  Edit2, 
+  Layers, 
+  AlertCircle, 
+  CalendarDays,
+  CalendarClock,
+  X,
+  CheckCircle2,
+  Activity,
+  History
+} from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Freeze } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
@@ -12,7 +27,6 @@ import { format, parseISO, differenceInCalendarDays, addDays } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 
-// --- Zod Schema ---
 const memberSchema = z.object({
   membership_number: z.string().min(1, "Required"),
   guest_name: z.string().min(2, "Name too short"),
@@ -26,16 +40,18 @@ type MemberFormValues = z.infer<typeof memberSchema>;
 
 const Members = () => {
   const { user } = useAuth();
-  const { currentOutlet, formatMoney, currency } = useSettings();
+  const { currentOutlet, formatMoney, hasPermission } = useSettings();
   const [view, setView] = useState<'list' | 'form' | 'detail'>('list');
   const [members, setMembers] = useState<Member[]>([]);
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<MemberStatus | 'All'>('All');
+  const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [lastSavedMember, setLastSavedMember] = useState<Member | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  
-  // State to auto-open freeze section in detail view
+  const [showFilters, setShowFilters] = useState(false);
   const [autoFreeze, setAutoFreeze] = useState(false);
 
   useEffect(() => {
@@ -57,11 +73,17 @@ const Members = () => {
           await db.deleteMember(deleteId);
           loadData();
           setDeleteId(null);
+          if (lastSavedMember?.id === deleteId) setLastSavedMember(null);
       }
   };
 
+  const canCreate = user && hasPermission(user.role_id, 'members:create');
+  const canEdit = user && hasPermission(user.role_id, 'members:edit');
+  const canDelete = user && hasPermission(user.role_id, 'members:delete');
+
   const handleEdit = (member: Member, e: React.MouseEvent) => {
       e.stopPropagation();
+      if (!canEdit) return;
       setSelectedMember(member);
       setIsEditing(true);
       setView('form');
@@ -75,128 +97,216 @@ const Members = () => {
   };
 
   const handleAddNew = () => {
+      if (!canCreate) return;
       setSelectedMember(null);
       setIsEditing(false);
       setView('form');
   };
 
-  // Grouping Logic
-  const filteredMembers = members.filter(m => 
-    m.guest_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    m.membership_number.includes(searchTerm)
+  const handleFormSuccess = (member: Member) => {
+      loadData();
+      setLastSavedMember(member);
+      setView('list'); 
+  };
+
+  const filteredMembers = useMemo(() => {
+    return members.filter(m => {
+      const matchesSearch = 
+        m.guest_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        m.membership_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (m.check_no && m.check_no.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      const matchesStatus = statusFilter === 'All' || m.status === statusFilter;
+      const matchesCategory = categoryFilter === 'All' || m.category_id === categoryFilter;
+
+      return matchesSearch && matchesStatus && matchesCategory;
+    });
+  }, [members, searchTerm, statusFilter, categoryFilter]);
+
+  const groupedMembers = useMemo(() => {
+    const groups = categories.map(cat => ({
+        category: cat,
+        members: filteredMembers.filter(m => m.category_id === cat.id)
+    })).filter(g => g.members.length > 0 || (searchTerm === '' && statusFilter === 'All' && categoryFilter === 'All'));
+
+    const orphanMembers = filteredMembers.filter(m => !categories.find(c => c.id === m.category_id));
+    if (orphanMembers.length > 0) {
+        groups.push({
+            category: { id: 'unknown', name: 'Uncategorized', base_rate: 0, duration_months: 0, outlet_id: currentOutlet?.id },
+            members: orphanMembers
+        });
+    }
+    return groups;
+  }, [categories, filteredMembers, searchTerm, statusFilter, categoryFilter, currentOutlet]);
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('All');
+    setCategoryFilter('All');
+  };
+
+  const StatusChip = ({ status, active, onClick, icon: Icon }: any) => (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+        active 
+          ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200' 
+          : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'
+      }`}
+    >
+      {Icon && <Icon className="w-3.5 h-3.5" />}
+      {status}
+    </button>
   );
-
-  const groupedMembers = categories.map(cat => ({
-      category: cat,
-      members: filteredMembers.filter(m => m.category_id === cat.id)
-  })).filter(g => g.members.length > 0 || searchTerm === '');
-
-  const orphanMembers = filteredMembers.filter(m => !categories.find(c => c.id === m.category_id));
-  if (orphanMembers.length > 0) {
-      groupedMembers.push({
-          category: { id: 'unknown', name: 'Uncategorized / Archived', base_rate: 0, duration_months: 0, outlet_id: currentOutlet?.id },
-          members: orphanMembers
-      });
-  }
 
   return (
     <div className="space-y-6">
       {view === 'list' && (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div>
-                 <h1 className="text-2xl font-bold text-slate-900">Members</h1>
-                 <p className="text-sm text-slate-500">Managing {currentOutlet?.name}</p>
+                 <h1 className="text-3xl font-black text-slate-900 tracking-tight">Members</h1>
+                 <p className="text-sm font-medium text-slate-500 mt-1">Managing portfolio for <span className="text-indigo-600 font-bold">{currentOutlet?.name}</span></p>
             </div>
             
-            <Button onClick={handleAddNew}>
-              <Plus className="w-4 h-4 mr-2" /> Add Member
-            </Button>
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              {lastSavedMember && (
+                <Button 
+                  onClick={() => { setSelectedMember(lastSavedMember); setView('detail'); }} 
+                  className="hidden md:flex flex-1 md:flex-none h-12 px-5 rounded-2xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 font-bold shadow-sm"
+                >
+                  <History className="w-4 h-4 mr-2" /> View Last Saved
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setShowFilters(!showFilters)} className={`flex-1 md:flex-none h-12 px-5 rounded-2xl border-slate-200 ${showFilters ? 'bg-slate-100 text-indigo-600 border-indigo-200' : ''}`}>
+                <Filter className="w-4 h-4 mr-2" /> 
+                Filters
+              </Button>
+              {canCreate && (
+                <Button onClick={handleAddNew} className="flex-1 md:flex-none h-12 px-6 rounded-2xl shadow-xl shadow-indigo-100 font-bold">
+                    <Plus className="w-5 h-5 mr-2" /> Add Member
+                </Button>
+              )}
+            </div>
           </div>
 
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <Input 
-                placeholder="Search by name, ID or check number..." 
-                className="pl-9 bg-white"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+          <Card className={`border-slate-200/60 shadow-sm transition-all overflow-hidden ${showFilters ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 border-none py-0'}`}>
+            <CardContent className="p-6 space-y-6 bg-slate-50/50">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Universal Search</label>
+                  <div className="relative group">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input 
+                        placeholder="Name, ID, or Reference" 
+                        className="w-full h-12 pl-11 pr-4 rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-medium"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
 
-          <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tier Filter</label>
+                  <select 
+                    className="w-full h-12 px-4 rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-medium appearance-none"
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                  >
+                    <option value="All">All Tiers</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Status Filter</label>
+                  <div className="flex flex-wrap gap-2">
+                    <StatusChip status="All" active={statusFilter === 'All'} onClick={() => setStatusFilter('All')} />
+                    <StatusChip status="Active" active={statusFilter === MemberStatus.ACTIVE} onClick={() => setStatusFilter(MemberStatus.ACTIVE)} icon={CheckCircle2} />
+                    <StatusChip status="Frozen" active={statusFilter === MemberStatus.FROZEN} onClick={() => setStatusFilter(MemberStatus.FROZEN)} icon={Snowflake} />
+                  </div>
+                </div>
+              </div>
+
+              {(searchTerm || statusFilter !== 'All' || categoryFilter !== 'All') && (
+                <div className="flex justify-between items-center pt-4 border-t border-slate-200/60">
+                  <p className="text-xs text-slate-500 font-medium italic">
+                    Found <span className="font-bold text-indigo-600">{filteredMembers.length}</span> members
+                  </p>
+                  <button onClick={resetFilters} className="text-xs font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
+                    <X className="w-3 h-3" /> Clear All
+                  </button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="space-y-8">
             {groupedMembers.map((group) => (
-                <Card key={group.category.id} className="overflow-hidden border-slate-200">
-                    <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 flex items-center gap-2">
-                        <Layers className="w-4 h-4 text-indigo-500" />
-                        <h3 className="font-semibold text-slate-700">{group.category.name}</h3>
-                        <span className="bg-slate-200 text-slate-600 text-xs px-2 py-0.5 rounded-full">
-                            {group.members.length}
+                <Card key={group.category.id} className="overflow-hidden border-slate-200/60 shadow-sm group">
+                    <div className="bg-slate-50/80 px-4 md:px-8 py-4 border-b border-slate-200/60 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="p-2 bg-white rounded-lg border border-slate-200">
+                              <Layers className="w-4 h-4 text-indigo-600" />
+                            </div>
+                            <div>
+                              <h3 className="font-black text-slate-800 tracking-tight uppercase text-xs">{group.category.name}</h3>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Base: {formatMoney(group.category.base_rate)}</p>
+                            </div>
+                        </div>
+                        <span className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter">
+                            {group.members.length} Total
                         </span>
                     </div>
                     {group.members.length === 0 ? (
-                        <div className="p-6 text-center text-slate-500 text-sm">No members found in this category.</div>
+                        <div className="p-12 text-center text-slate-400 font-medium italic">No members in this tier matching criteria.</div>
                     ) : (
                         <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-slate-500 uppercase border-b">
+                        <table className="w-full text-sm text-left min-w-[700px]">
+                            <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] border-b border-slate-100 bg-slate-50/30">
                             <tr>
-                                <th className="px-6 py-3">ID</th>
-                                <th className="px-6 py-3">Name</th>
-                                <th className="px-6 py-3">Status</th>
-                                <th className="px-6 py-3">Start</th>
-                                <th className="px-6 py-3">End</th>
-                                <th className="px-6 py-3 text-right">Net ({currency?.symbol || '$'})</th>
-                                <th className="px-6 py-3 text-center">Actions</th>
+                                <th className="px-8 py-4">Membership #</th>
+                                <th className="px-8 py-4">Guest Profile</th>
+                                <th className="px-8 py-4">Status</th>
+                                <th className="px-8 py-4">Start Date</th>
+                                <th className="px-8 py-4">Expiry Date</th>
+                                <th className="px-8 py-4 text-right">Net Amount</th>
+                                {(canEdit || canDelete) && <th className="px-8 py-4 text-center">Operations</th>}
                             </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="divide-y divide-slate-100">
                             {group.members.map((member) => (
                                 <tr 
                                     key={member.id} 
-                                    className="border-b last:border-0 hover:bg-slate-50 cursor-pointer transition-colors"
+                                    className="hover:bg-indigo-50/30 cursor-pointer transition-colors"
                                     onClick={() => { setSelectedMember(member); setView('detail'); }}
                                 >
-                                <td className="px-6 py-4 font-medium text-slate-900">{member.membership_number}</td>
-                                <td className="px-6 py-4 font-medium">{member.guest_name}</td>
-                                <td className="px-6 py-4">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold
-                                    ${member.status === 'Active' ? 'bg-green-100 text-green-700' : 
-                                        member.status === 'Frozen' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                                <td className="px-8 py-5 font-black text-slate-900 tracking-tighter">{member.membership_number}</td>
+                                <td className="px-8 py-5">
+                                    <div className="font-bold text-slate-700">{member.guest_name}</div>
+                                    <div className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">{member.check_no || 'Ref: N/A'}</div>
+                                </td>
+                                <td className="px-8 py-5">
+                                    <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border
+                                    ${member.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                                        member.status === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                                     {member.status}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 text-slate-500">{member.start_date}</td>
-                                <td className="px-6 py-4 text-indigo-600 font-medium">{member.current_end_date}</td>
-                                <td className="px-6 py-4 text-right font-mono">{formatMoney(member.net_amount)}</td>
-                                <td className="px-6 py-4">
-                                    <div className="flex justify-center gap-2">
-                                        <button 
-                                            type="button"
-                                            onClick={(e) => handleFreezeClick(member, e)}
-                                            className="p-1 text-slate-400 hover:text-amber-600 rounded hover:bg-amber-50"
-                                            title="Freeze Membership"
-                                        >
-                                            <Snowflake className="w-4 h-4" />
-                                        </button>
-                                        <button 
-                                            type="button"
-                                            onClick={(e) => handleEdit(member, e)}
-                                            className="p-1 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50"
-                                            title="Edit Member"
-                                        >
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
-                                        <button 
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); setDeleteId(member.id); }}
-                                            className="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-red-50"
-                                            title="Delete Member"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </td>
+                                <td className="px-8 py-5 text-slate-500 font-medium">{member.start_date}</td>
+                                <td className="px-8 py-5 text-indigo-600 font-black tracking-tight">{member.current_end_date}</td>
+                                <td className="px-8 py-5 text-right font-black tabular-nums">{formatMoney(member.net_amount)}</td>
+                                {(canEdit || canDelete) && (
+                                  <td className="px-8 py-5">
+                                      <div className="flex justify-center gap-1" onClick={e => e.stopPropagation()}>
+                                          {canEdit && <button type="button" onClick={(e) => handleFreezeClick(member, e)} className="p-2 text-slate-400 hover:text-indigo-600 rounded-xl hover:bg-white border border-transparent hover:border-slate-200 transition-all"><Snowflake className="w-4 h-4" /></button>}
+                                          {canEdit && <button type="button" onClick={(e) => handleEdit(member, e)} className="p-2 text-slate-400 hover:text-indigo-600 rounded-xl hover:bg-white border border-transparent hover:border-slate-200 transition-all"><Edit2 className="w-4 h-4" /></button>}
+                                          {canDelete && <button type="button" onClick={(e) => { setDeleteId(member.id); }} className="p-2 text-slate-400 hover:text-red-600 rounded-xl hover:bg-white border border-transparent hover:border-slate-200 transition-all"><Trash2 className="w-4 h-4" /></button>}
+                                      </div>
+                                  </td>
+                                )}
                                 </tr>
                             ))}
                             </tbody>
@@ -205,12 +315,6 @@ const Members = () => {
                     )}
                 </Card>
             ))}
-            
-            {groupedMembers.length === 0 && (
-                <div className="text-center py-10 text-slate-500">
-                    No members found matching your search.
-                </div>
-            )}
           </div>
           
           <ConfirmationModal 
@@ -231,7 +335,7 @@ const Members = () => {
           existingMember={isEditing ? selectedMember : null}
           currentOutletId={currentOutlet?.id || ''}
           onCancel={() => setView('list')} 
-          onSuccess={() => { loadData(); setView('list'); }} 
+          onSuccess={handleFormSuccess} 
         />
       )}
 
@@ -247,20 +351,7 @@ const Members = () => {
   );
 };
 
-// --- Member Form Component ---
-const MemberForm = ({ 
-    categories, 
-    existingMember,
-    currentOutletId,
-    onCancel, 
-    onSuccess 
-}: { 
-    categories: MembershipCategory[], 
-    existingMember: Member | null,
-    currentOutletId: string,
-    onCancel: () => void, 
-    onSuccess: () => void 
-}) => {
+const MemberForm = ({ categories, existingMember, currentOutletId, onCancel, onSuccess }: { categories: MembershipCategory[], existingMember: Member | null, currentOutletId: string, onCancel: () => void, onSuccess: (m: Member) => void }) => {
   const { formatMoney, currency } = useSettings();
   const { register, handleSubmit, watch, formState: { errors } } = useForm<MemberFormValues>({
     resolver: zodResolver(memberSchema),
@@ -281,7 +372,7 @@ const MemberForm = ({
   const startDate = watch('start_date');
   const discount = watch('discount');
 
-  const selectedCategory = categories.find(c => c.id === categoryId);
+  const selectedCategory = categories.find((c: any) => c.id === categoryId);
   const baseRate = selectedCategory?.base_rate || 0;
   const netAmount = Math.max(0, baseRate - (Number(discount) || 0));
   
@@ -299,10 +390,7 @@ const MemberForm = ({
 
   const onSubmit = async (data: MemberFormValues) => {
     if (!selectedCategory || !endDateStr) return;
-
     const memberId = existingMember ? existingMember.id : `mem_${Date.now()}`;
-    const status = existingMember ? existingMember.status : MemberStatus.ACTIVE;
-    
     const memberData: Member = {
       id: memberId,
       outlet_id: currentOutletId, 
@@ -317,89 +405,93 @@ const MemberForm = ({
       net_amount: netAmount,
       daily_rate: dailyRate,
       check_no: data.check_no,
-      status: status
+      status: existingMember ? existingMember.status : MemberStatus.ACTIVE
     };
-
-    if (existingMember) {
-        await db.updateMember(memberId, memberData);
-    } else {
-        await db.addMember(memberData);
-    }
-    
-    onSuccess();
+    existingMember ? await db.updateMember(memberId, memberData) : await db.addMember(memberData);
+    onSuccess(memberData);
   };
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <Card>
-        <CardHeader>
-          <CardTitle>{existingMember ? 'Edit Member' : 'Register New Member'}</CardTitle>
+    <div className="max-w-3xl mx-auto animate-in fade-in zoom-in-95 duration-500">
+      <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden">
+        <CardHeader className="bg-slate-50 border-b border-slate-100 p-6 md:p-10">
+          <CardTitle className="text-2xl font-black tracking-tight text-slate-900">
+            {existingMember ? 'Edit Profile' : 'New Enrollment'}
+          </CardTitle>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Fill in the membership details</p>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Input label="Membership ID" {...register('membership_number')} error={errors.membership_number?.message} />
-              <Input label="Guest Name" {...register('guest_name')} error={errors.guest_name?.message} />
+        <CardContent className="p-6 md:p-10">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Membership No.</label>
+                 <Input {...register('membership_number')} error={errors.membership_number?.message} className="h-12 rounded-xl" />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Guest Name</label>
+                 <Input {...register('guest_name')} error={errors.guest_name?.message} className="h-12 rounded-xl" />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Membership Tier</label>
+                 <Select options={[{ value: '', label: 'Select Tier...' }, ...categories.map((c: any) => ({ value: c.id, label: `${c.name} (${formatMoney(c.base_rate)})` }))]} {...register('category_id')} error={errors.category_id?.message} className="h-12 rounded-xl" />
+              </div>
               
-              <Select 
-                label="Category" 
-                options={[
-                    { value: '', label: 'Select...' }, 
-                    ...categories.map(c => ({ 
-                        value: c.id, 
-                        label: `${c.name} (${formatMoney(c.base_rate)})` 
-                    }))
-                ]} 
-                {...register('category_id')}
-                error={errors.category_id?.message}
-              />
-              <Input type="date" label="Start Date" {...register('start_date')} error={errors.start_date?.message} />
-              
-              <Input 
-                label="End Date (Calculated)" 
-                value={endDateStr || '-'} 
-                disabled 
-                className="bg-slate-50 text-slate-600"
-              />
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Start Date</label>
+                 <input 
+                    type="date" 
+                    {...register('start_date')}
+                    onClick={(e) => {
+                        try {
+                            if (typeof (e.currentTarget as any).showPicker === 'function') {
+                                (e.currentTarget as any).showPicker();
+                            }
+                        } catch (err) {}
+                    }} 
+                    className={`flex h-12 w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-medium cursor-pointer ${errors.start_date ? 'border-red-500 focus:ring-red-500' : ''}`}
+                 />
+                 {errors.start_date?.message && <p className="text-xs text-red-500 mt-1">{errors.start_date.message}</p>}
+              </div>
 
-              <Input 
-                type="number" 
-                label={`Discount Amount (${currency?.symbol || '$'})`}
-                {...register('discount', { valueAsNumber: true })} 
-                error={errors.discount?.message} 
-              />
-              <Input label="Check/Reference No." {...register('check_no')} />
-            </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Expiry (Auto)</label>
+                 <div className="relative">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                        <CalendarClock className="w-5 h-5" />
+                    </div>
+                    <input 
+                        value={endDateStr || '-'} 
+                        disabled 
+                        className="flex h-12 w-full rounded-xl border border-slate-100 bg-slate-50 pl-12 pr-4 py-2 text-sm text-slate-500 font-bold focus:outline-none"
+                    />
+                 </div>
+              </div>
 
-            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mt-4 space-y-2">
-              <h4 className="font-semibold text-slate-700 mb-2">Revenue Engine Preview</h4>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Base Rate:</span>
-                <span>{formatMoney(baseRate)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Net Amount:</span>
-                <span className="font-medium text-indigo-600">{formatMoney(netAmount)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Calculated End Date:</span>
-                <span>{endDateStr || '-'}</span>
-              </div>
-              <div className="flex justify-between text-sm pt-2 border-t border-slate-200">
-                <span className="text-slate-500 flex items-center gap-1">
-                   <CalendarDays className="w-3.5 h-3.5" /> Total Membership Days:
-                </span>
-                <span className="font-bold text-slate-900">{totalDays} Days</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Daily Revenue Recognition:</span>
-                <span className="font-mono text-indigo-700">{currency?.symbol || '$'} {dailyRate.toFixed(2)} / day</span>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Discount ({currency?.symbol || '$'})</label>
+                 <Input type="number" {...register('discount', { valueAsNumber: true })} error={errors.discount?.message} className="h-12 rounded-xl" />
               </div>
             </div>
-
-            <div className="flex justify-end gap-3">
-              <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-              <Button type="submit">{existingMember ? 'Update Member' : 'Submit Membership'}</Button>
+            <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Check / Reference (Optional)</label>
+                 <Input {...register('check_no')} className="h-12 rounded-xl" />
+            </div>
+            
+            <div className="bg-indigo-50/50 p-6 rounded-[2rem] border border-indigo-100/50 mt-4 space-y-4">
+              <h4 className="text-xs font-black text-indigo-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Activity className="w-4 h-4" /> Revenue Preview
+              </h4>
+              <div className="grid grid-cols-2 gap-y-3 gap-x-8 text-xs font-bold">
+                <div className="flex justify-between"><span className="text-slate-500">Gross:</span><span className="text-slate-900">{formatMoney(baseRate)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">Net:</span><span className="text-indigo-600">{formatMoney(netAmount)}</span></div>
+                <div className="flex justify-between border-t border-indigo-100 pt-3"><span className="text-slate-500">Term:</span><span className="text-slate-900">{totalDays} Days</span></div>
+                <div className="flex justify-between border-t border-indigo-100 pt-3"><span className="text-slate-500">Accrual:</span><span className="text-indigo-600 tabular-nums">{currency?.symbol || '$'}{dailyRate.toFixed(2)}/day</span></div>
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-3 pt-6">
+              <Button type="button" variant="secondary" onClick={onCancel} className="h-14 px-8 rounded-2xl font-bold bg-white border-slate-200">Cancel</Button>
+              <Button type="submit" className="h-14 px-10 rounded-2xl font-black shadow-xl shadow-indigo-100">{existingMember ? 'Save Changes' : 'Finalize Enrollment'}</Button>
             </div>
           </form>
         </CardContent>
@@ -408,168 +500,85 @@ const MemberForm = ({
   );
 };
 
-const MemberDetail = ({ member, initialFreeze = false, onBack, onUpdate }: { member: Member, initialFreeze?: boolean, onBack: () => void, onUpdate: () => void }) => {
-  const { formatMoney, currency } = useSettings();
+const MemberDetail = ({ member, initialFreeze = false, onBack, onUpdate }: any) => {
+  const { user } = useAuth();
+  const { formatMoney, currency, hasPermission } = useSettings();
   const [freezes, setFreezes] = useState<Freeze[]>([]);
   const [isFreezing, setIsFreezing] = useState(initialFreeze);
   const [freezeStart, setFreezeStart] = useState('');
   const [freezeDays, setFreezeDays] = useState(0);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    db.getFreezes(member.id).then(setFreezes);
-  }, [member.id]);
+  const canEdit = user && hasPermission(user.role_id, 'members:edit');
+
+  useEffect(() => { db.getFreezes(member.id).then(setFreezes); }, [member.id]);
 
   const handleAddFreeze = async () => {
+    if (!canEdit) return;
     setError('');
     if (!freezeStart || freezeDays <= 0) return;
-    
     const start = parseISO(freezeStart);
     const end = addDays(start, freezeDays - 1);
-    
-    if (RevenueEngine.checkFreezeOverlap(start, end, freezes)) {
-      setError("Freeze period overlaps with an existing freeze.");
-      return;
-    }
-
-    const newFreeze: Freeze = {
-      id: `fz_${Date.now()}`,
-      member_id: member.id,
-      start_date: freezeStart,
-      end_date: format(end, 'yyyy-MM-dd'),
-      total_days: freezeDays
-    };
-
-    await db.addFreeze(newFreeze);
+    if (RevenueEngine.checkFreezeOverlap(start, end, freezes)) { setError("Overlap with existing freeze."); return; }
+    await db.addFreeze({ id: `fz_${Date.now()}`, member_id: member.id, start_date: freezeStart, end_date: format(end, 'yyyy-MM-dd'), total_days: freezeDays });
     setIsFreezing(false);
     onUpdate(); 
   };
 
   return (
-    <div className="space-y-6">
-      <Button variant="secondary" size="sm" onClick={onBack}>&larr; Back to List</Button>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <CardHeader><CardTitle>Member Profile</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4">
-               <div>
-                 <label className="text-xs text-slate-500 uppercase">Guest Name</label>
-                 <p className="font-medium text-lg">{member.guest_name}</p>
-                 <p className="text-xs text-slate-400">ID: {member.membership_number}</p>
-               </div>
-               <div>
-                 <label className="text-xs text-slate-500 uppercase">Status</label>
-                 <div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-semibold
-                          ${member.status === 'Active' ? 'bg-green-100 text-green-700' : 
-                            member.status === 'Frozen' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
-                          {member.status}
-                    </span>
-                 </div>
-               </div>
-               <div>
-                 <label className="text-xs text-slate-500 uppercase">Start Date</label>
-                 <p>{member.start_date}</p>
-               </div>
-               <div>
-                 <label className="text-xs text-slate-500 uppercase">Current End Date</label>
-                 <p className="text-indigo-600 font-bold text-lg">{member.current_end_date}</p>
-               </div>
-               {member.check_no && (
-                   <div>
-                       <label className="text-xs text-slate-500 uppercase">Reference / Check</label>
-                       <p>{member.check_no}</p>
-                   </div>
-               )}
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
+      <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors"><X className="w-4 h-4" /> Close Details</button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
+            <CardHeader className="bg-slate-50 border-b border-slate-100 p-8">
+              <div className="flex justify-between items-start">
+                <div><CardTitle className="text-3xl font-black text-slate-900 tracking-tighter">{member.guest_name}</CardTitle><p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.3em] mt-2">ID: {member.membership_number}</p></div>
+                <span className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest border ${member.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : member.status === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{member.status}</span>
+              </div>
+            </CardHeader>
+            <CardContent className="p-8 grid grid-cols-2 md:grid-cols-3 gap-8">
+               <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Start Date</label><p className="font-bold text-slate-700">{member.start_date}</p></div>
+               <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Expiry Date</label><p className="font-black text-indigo-600">{member.current_end_date}</p></div>
+               <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ref No.</label><p className="font-bold text-slate-700 uppercase">{member.check_no || 'N/A'}</p></div>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row justify-between items-center">
-              <CardTitle>Freeze History</CardTitle>
-              <Button size="sm" variant="outline" onClick={() => setIsFreezing(!isFreezing)}>
-                <Snowflake className="w-4 h-4 mr-2" />
-                {isFreezing ? 'Cancel' : 'Add Freeze'}
-              </Button>
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
+            <CardHeader className="flex flex-row justify-between items-center p-8 border-b border-slate-100 bg-white">
+              <div><CardTitle className="text-xl font-black text-slate-900 tracking-tight">Freeze History</CardTitle><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Temporal Extensions</p></div>
+              {canEdit && (
+                <Button size="sm" variant="outline" onClick={() => setIsFreezing(!isFreezing)} className="rounded-xl font-black h-10 border-slate-200">
+                    <Snowflake className="w-4 h-4 mr-2" /> {isFreezing ? 'Cancel' : 'Add Freeze'}
+                </Button>
+              )}
             </CardHeader>
-            <CardContent>
-              {isFreezing && (
-                <div className="bg-slate-50 p-4 mb-4 rounded border border-slate-200">
-                  <h5 className="font-medium text-sm mb-2">New Freeze Period</h5>
-                  <div className="flex gap-4 items-end">
-                    <Input 
-                      type="date" 
-                      label="Start Date" 
-                      value={freezeStart} 
-                      onChange={e => setFreezeStart(e.target.value)} 
-                    />
-                    <Input 
-                      type="number" 
-                      label="Duration (Days)" 
-                      value={freezeDays} 
-                      onChange={e => setFreezeDays(parseInt(e.target.value))} 
-                    />
-                    <Button onClick={handleAddFreeze}>Save</Button>
+            <CardContent className="p-8">
+              {isFreezing && canEdit && (
+                <div className="bg-indigo-50/50 p-6 mb-8 rounded-[1.5rem] border border-indigo-100 animate-in zoom-in-95">
+                  <div className="flex flex-col md:flex-row gap-4 items-end">
+                    <div className="w-full md:flex-1 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Start Date</label><Input type="date" value={freezeStart} onChange={e => setFreezeStart(e.target.value)} className="h-12 rounded-xl bg-white border-indigo-100" /></div>
+                    <div className="w-full md:flex-1 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Days</label><Input type="number" value={freezeDays} onChange={e => setFreezeDays(parseInt(e.target.value))} className="h-12 rounded-xl bg-white border-indigo-100" /></div>
+                    <Button onClick={handleAddFreeze} className="w-full md:w-auto h-12 px-8 rounded-xl font-black">Apply</Button>
                   </div>
-                  {error && <div className="text-red-600 text-xs mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> {error}</div>}
-                  <p className="text-xs text-slate-500 mt-2">Revenue recognition will pause during this period, and the membership end date will be extended.</p>
+                  {error && <div className="text-red-600 text-[10px] font-black uppercase mt-3 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> {error}</div>}
                 </div>
               )}
-
-              {freezes.length === 0 ? (
-                <p className="text-slate-500 text-sm">No freeze records found.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-slate-500">
-                      <th className="font-normal pb-2">Start Date</th>
-                      <th className="font-normal pb-2">End Date</th>
-                      <th className="font-normal pb-2">Total Days</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {freezes.map(f => (
-                      <tr key={f.id} className="border-b last:border-0">
-                        <td className="py-2">{f.start_date}</td>
-                        <td className="py-2">{f.end_date}</td>
-                        <td className="py-2">{f.total_days}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {freezes.length === 0 ? (<div className="text-center py-12 text-slate-400 font-medium italic">No freeze logs found.</div>) : (
+                <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest"><th className="pb-4">Start</th><th className="pb-4">End</th><th className="pb-4 text-right">Days</th></tr></thead><tbody className="divide-y divide-slate-100">{freezes.map(f => (<tr key={f.id}><td className="py-4 font-bold text-slate-700">{f.start_date}</td><td className="py-4 font-bold text-slate-700">{f.end_date}</td><td className="py-4 text-right font-black text-indigo-600 tabular-nums">{f.total_days}</td></tr>))}</tbody></table></div>
               )}
             </CardContent>
           </Card>
         </div>
-
-        <div>
-           <Card>
-             <CardHeader><CardTitle>Financial Breakdown</CardTitle></CardHeader>
-             <CardContent className="space-y-4">
-               <div className="flex justify-between border-b border-slate-100 pb-2">
-                 <span className="text-slate-500">Base Rate</span>
-                 <span className="font-medium">{formatMoney(member.actual_rate)}</span>
-               </div>
-               <div className="flex justify-between border-b border-slate-100 pb-2">
-                 <span className="text-slate-500">Discount Applied</span>
-                 <span className="text-red-500">-{formatMoney(member.discount)}</span>
-               </div>
-               <div className="flex justify-between border-b border-slate-100 pb-2">
-                 <span className="text-slate-900 font-bold">Net Amount</span>
-                 <span className="font-bold text-indigo-600 text-lg">{formatMoney(member.net_amount)}</span>
-               </div>
-               
-               <div className="pt-2 bg-slate-50 p-3 rounded text-sm space-y-2">
-                 <div className="flex justify-between">
-                    <span className="text-slate-500">Daily Rev. Rec.</span>
-                    <span className="font-mono">{currency?.symbol || '$'} {member.daily_rate.toFixed(2)} / day</span>
-                 </div>
-                 <div className="flex justify-between">
-                    <span className="text-slate-500">Revenue Model</span>
-                    <span>Straight-Line</span>
-                 </div>
+        <div className="space-y-8">
+           <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
+             <CardHeader className="p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900 tracking-tight">Summary</CardTitle></CardHeader>
+             <CardContent className="p-8 space-y-6">
+               <div className="flex justify-between items-center text-xs font-bold"><span className="text-slate-400 uppercase tracking-widest">Gross Rate</span><span className="text-slate-900">{formatMoney(member.actual_rate)}</span></div>
+               <div className="flex justify-between items-center text-xs font-bold"><span className="text-slate-400 uppercase tracking-widest">Discount</span><span className="text-red-500">{formatMoney(member.discount)}</span></div>
+               <div className="pt-4 border-t border-slate-100 flex justify-between items-center"><span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Net Recognized</span><span className="text-2xl font-black text-indigo-600 tracking-tighter tabular-nums">{formatMoney(member.net_amount)}</span></div>
+               <div className="pt-6 bg-slate-50 p-6 rounded-[1.5rem] space-y-4 border border-slate-100 shadow-inner">
+                 <div className="flex justify-between items-center text-[10px] font-black"><span className="text-slate-400 uppercase tracking-widest">Daily Velocity</span><span className="text-indigo-900 font-mono tracking-tighter">{currency?.symbol || '$'}{member.daily_rate.toFixed(2)} / DAY</span></div>
+                 <div className="flex justify-between items-center text-[10px] font-black"><span className="text-slate-400 uppercase tracking-widest">Logic</span><span className="text-emerald-600 uppercase">Linear Pro-Rata</span></div>
                </div>
              </CardContent>
            </Card>

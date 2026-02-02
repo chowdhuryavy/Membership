@@ -7,6 +7,7 @@ interface AuthContextType {
   user: UserProfile | null;
   login: (email: string, password: string) => Promise<string | null>;
   changePassword: (currentPass: string, newPass: string) => Promise<void>;
+  updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   refreshUser: () => Promise<void>;
   logout: () => void;
   isLoading: boolean;
@@ -19,22 +20,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshUser = async () => {
-      const storedUser = localStorage.getItem('nexus_session');
+      const storedUser = localStorage.getItem('membership_session');
       if (storedUser) {
           const parsed = JSON.parse(storedUser);
-          // Fetch fresh data from DB
           try {
               const users = await db.getUsers();
               const freshUser = users.find(u => u.id === parsed.id);
               if (freshUser) {
                   setUser(freshUser);
-                  localStorage.setItem('nexus_session', JSON.stringify(freshUser));
+                  localStorage.setItem('membership_session', JSON.stringify(freshUser));
               } else {
-                  // User might have been deleted
-                  logout(); 
+                  setUser(parsed);
               }
           } catch (e) {
-              console.error("Failed to refresh session", e);
               setUser(parsed);
           }
       }
@@ -52,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { user: foundUser, error } = await db.login(email, password);
     if (foundUser) {
       setUser(foundUser);
-      localStorage.setItem('nexus_session', JSON.stringify(foundUser));
+      localStorage.setItem('membership_session', JSON.stringify(foundUser));
       return null;
     }
     return error || 'Unknown error';
@@ -63,13 +61,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await db.changePassword(user.id, currentPass, newPass);
   };
 
+  const updateProfile = async (updates: Partial<UserProfile>) => {
+      if (!user) throw new Error("Not authenticated");
+      await db.updateUser(user.id, updates);
+      // Immediately sync state to avoid "System" name lag
+      const updatedUser = { ...user, ...updates };
+      setUser(updatedUser);
+      localStorage.setItem('membership_session', JSON.stringify(updatedUser));
+  };
+
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('nexus_session');
+    localStorage.removeItem('membership_session');
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, changePassword, refreshUser, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, changePassword, updateProfile, refreshUser, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

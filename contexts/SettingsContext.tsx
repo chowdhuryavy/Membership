@@ -1,7 +1,8 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { CompanySettings, Currency, Role, Permission, Outlet } from '../types';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { CompanySettings, Currency, Role, Permission, Outlet, Property } from '../types';
 import { db } from '../services/mockSupabase';
+import { useAuth } from './AuthContext';
 
 interface SettingsContextType {
   settings: CompanySettings | null;
@@ -9,7 +10,9 @@ interface SettingsContextType {
   roles: Role[];
   currencies: Currency[];
   outlets: Outlet[];
+  properties: Property[];
   currentOutlet: Outlet | null;
+  currentProperty: Property | null;
   setCurrentOutlet: (outlet: Outlet) => void;
   refreshSettings: () => Promise<void>;
   formatMoney: (amount: number) => string;
@@ -19,53 +22,78 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, refreshUser } = useAuth();
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [currency, setCurrency] = useState<Currency | null>(null);
   const [currentOutlet, setCurrentOutletState] = useState<Outlet | null>(null);
 
   const refreshSettings = async () => {
-    const [s, c, r, o] = await Promise.all([
-        db.getSettings(), 
-        db.getCurrencies(), 
-        db.getRoles(),
-        db.getOutlets()
-    ]);
-    setSettings(s);
-    setCurrencies(c);
-    setRoles(r);
-    setOutlets(o);
-    
-    const activeCurr = c.find(curr => curr.id === s.currency_id) || c[0];
-    setCurrency(activeCurr);
-
-    // Initial Outlet Setup
-    if (o.length > 0 && !currentOutlet) {
-        // Check local storage for last used outlet
-        const storedOutletId = localStorage.getItem('nexus_last_outlet');
-        const found = o.find(out => out.id === storedOutletId);
-        setCurrentOutletState(found || o[0]);
-    } else if (currentOutlet) {
-        // Refresh current object in case name changed
-        const found = o.find(out => out.id === currentOutlet.id);
-        if (found) setCurrentOutletState(found);
+    try {
+        const [s, c, r, o, p] = await Promise.all([
+            db.getSettings(), 
+            db.getCurrencies(), 
+            db.getRoles(),
+            db.getOutlets(),
+            db.getProperties()
+        ]);
+        setSettings(s);
+        setCurrencies(c);
+        setRoles(r);
+        setOutlets(o);
+        setProperties(p);
+        
+        // Find default or currently selected currency
+        const activeCurr = c.find(curr => curr.id === s.currency_id) || c.find(curr => curr.is_default) || c[0];
+        setCurrency(activeCurr);
+        
+        if (user) await refreshUser();
+    } catch (e) {
+        console.error("Failed to load settings", e);
     }
   };
 
+  const currentProperty = useMemo(() => {
+      if (!currentOutlet || properties.length === 0) return null;
+      return properties.find(p => p.id === currentOutlet.property_id) || null;
+  }, [currentOutlet, properties]);
+
   const setCurrentOutlet = (outlet: Outlet) => {
       setCurrentOutletState(outlet);
-      localStorage.setItem('nexus_last_outlet', outlet.id);
+      localStorage.setItem('membership_last_outlet', outlet.id);
   };
 
   useEffect(() => {
     refreshSettings();
   }, []);
 
+  useEffect(() => {
+    if (user && outlets.length > 0) {
+      const allowed = outlets.filter(o => user.allowed_outlets?.includes(o.id));
+      if (allowed.length > 0) {
+        const isAllowed = currentOutlet && allowed.find(o => o.id === currentOutlet.id);
+        
+        if (!currentOutlet || !isAllowed) {
+            const storedOutletId = localStorage.getItem('membership_last_outlet');
+            const storedOutlet = allowed.find(out => out.id === storedOutletId);
+            setCurrentOutletState(storedOutlet || allowed[0]);
+        }
+      } else {
+          setCurrentOutletState(null);
+      }
+    }
+  }, [user, outlets]);
+
   const formatMoney = (amount: number) => {
-    if (!currency) return `${amount.toFixed(2)}`;
-    return `${currency.symbol} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const value = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (!currency) return value;
+    
+    // Check if it's an Arabic/RTL symbol like ر.ق
+    const isRtl = /[\u0600-\u06FF]/.test(currency.symbol);
+    return isRtl ? `${value} ${currency.symbol}` : `${currency.symbol} ${value}`;
   };
 
   const hasPermission = (userRoleId: string, permission: Permission): boolean => {
@@ -81,7 +109,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       roles, 
       currencies, 
       outlets,
+      properties,
       currentOutlet,
+      currentProperty,
       setCurrentOutlet,
       refreshSettings, 
       formatMoney,

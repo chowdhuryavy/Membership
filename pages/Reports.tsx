@@ -1,19 +1,22 @@
 
-import React, { useEffect, useState } from 'react';
-import { Button, Input, Card, CardContent } from '../components/ui';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { Button, Card } from '../components/ui';
 import { db } from '../services/mockSupabase';
-import { MembershipCategory, MemberStatus } from '../types';
+import { MembershipCategory, Member, Freeze } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, startOfMonth, endOfMonth, parseISO, subDays } from 'date-fns';
+import { format, startOfMonth, endOfMonth, parseISO, subDays, differenceInCalendarDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Printer, Download, Settings2, X, Check, Calendar, Layout, Save, AlertTriangle, HelpCircle } from 'lucide-react';
+import { Activity, Building2, Calculator, ReceiptText, FileSpreadsheet, Settings2, Check, X } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface ReportRow {
   sl_no: number;
   guest_name: string;
   from: string;
   to: string;
+  total_days: number;
   original_fees: number;
   actual_fees: number;
   carry_forward: number;
@@ -27,440 +30,354 @@ interface ReportRow {
   category_name: string;
 }
 
-interface ColumnDef {
-    key: string;
-    label: string;
-    headerClassName?: string;
-    cellClassName?: string;
-    footerClassName?: string; 
-}
-
-const ALL_COLUMNS: ColumnDef[] = [
-    { key: 'sl_no', label: 'Sl. No', headerClassName: 'text-center w-12', cellClassName: 'text-center w-12' },
-    { key: 'guest_name', label: 'Name of the guest', headerClassName: 'text-left', cellClassName: 'text-left font-medium' },
-    { key: 'from', label: 'From', headerClassName: 'text-center w-24', cellClassName: 'text-center w-24' },
-    { key: 'to', label: 'To', headerClassName: 'text-center w-24', cellClassName: 'text-center w-24' },
-    { key: 'original_fees', label: 'Original Fees', headerClassName: 'text-right', cellClassName: 'text-right' },
-    { key: 'actual_fees', label: 'Actual Fees', headerClassName: 'text-right', cellClassName: 'text-right font-semibold' },
-    { key: 'carry_forward', label: 'C/F Prev', headerClassName: 'text-right whitespace-nowrap px-4', cellClassName: 'text-right text-slate-600' },
-    { key: 'daily', label: 'Daily', headerClassName: 'text-right', cellClassName: 'text-right text-slate-500 font-mono' },
-    { key: 'current_month_rev', label: 'Current Month', headerClassName: 'text-right bg-blue-800', cellClassName: 'text-right font-bold bg-blue-50', footerClassName: 'text-right font-bold' }, 
-    { key: 'controll', label: 'Controll', headerClassName: 'text-right', cellClassName: 'text-right font-medium' },
-    { key: 'balance', label: 'Balance', headerClassName: 'text-right', cellClassName: 'text-right font-medium text-red-600' },
-    { key: 'remarks', label: 'Remarks', headerClassName: 'text-left', cellClassName: 'text-xs truncate max-w-[120px]' },
-    { key: 'membership_no', label: 'Membership No#', headerClassName: 'text-left', cellClassName: 'text-xs' }
+const ALL_POSSIBLE_COLUMNS = [
+    { key: 'sl_no', label: 'Sl.', width: 'w-12', defaultVisible: true },
+    { key: 'guest_name', label: 'Guest Name / Profile', width: 'min-w-[200px]', defaultVisible: true },
+    { key: 'from', label: 'Start Date', width: 'w-24', defaultVisible: true },
+    { key: 'to', label: 'End Date', width: 'w-24', defaultVisible: true },
+    { key: 'total_days', label: 'Days', width: 'w-16', defaultVisible: true },
+    { key: 'actual_fees', label: 'Net Fees', width: 'w-32', defaultVisible: true },
+    { key: 'carry_forward', label: 'Prev. Accrual', width: 'w-32', defaultVisible: true },
+    { key: 'current_month_rev', label: 'Period Revenue', width: 'w-36', defaultVisible: true }, 
+    { key: 'balance', label: 'Deferred', width: 'w-32', defaultVisible: true },
+    { key: 'remarks', label: 'Remarks', width: 'w-32', defaultVisible: false }
 ];
 
 const Reports = () => {
   const { user } = useAuth();
-  const { settings, currentOutlet, hasPermission, refreshSettings, currency, formatMoney } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
   const [reportMonth, setReportMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
-  
-  // Custom Header State
-  const [isEditingBranding, setIsEditingBranding] = useState(false);
-  const [customTitle, setCustomTitle] = useState('');
-  const [customSubtitle, setCustomSubtitle] = useState('');
-  
-  // UI States
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(ALL_COLUMNS.map(c => c.key));
-  const [showColMenu, setShowColMenu] = useState(false);
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(
+    ALL_POSSIBLE_COLUMNS.filter(c => c.defaultVisible).map(c => c.key)
+  );
+  const [showConfig, setShowConfig] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  useEffect(() => {
-    if (currentOutlet) {
-        loadData();
-    }
-  }, [reportMonth, currentOutlet]);
-
-  useEffect(() => {
-    if (settings) {
-        setCustomTitle(settings.report_title || `${currentOutlet?.name || 'Facility'} Membership`);
-        setCustomSubtitle(settings.report_subtitle || format(parseISO(reportMonth + '-01'), 'MMMM yyyy'));
-    }
-  }, [settings, currentOutlet, reportMonth]);
+  useEffect(() => { if (currentOutlet) loadData(); }, [reportMonth, currentOutlet]);
 
   const loadData = async () => {
     if (!currentOutlet) return;
+    try {
+        const [members, cats, freezes] = await Promise.all([
+            db.getMembers(currentOutlet.id),
+            db.getCategories(currentOutlet.id),
+            db.getFreezes() 
+        ]);
+        
+        setCategories(cats);
+        const targetDate = parseISO(reportMonth + '-01'); 
+        const startOfReport = startOfMonth(targetDate);
+        const endOfReport = endOfMonth(targetDate);
+        const prevMonthEnd = subDays(startOfReport, 1);
 
-    const [members, cats, freezes] = await Promise.all([
-        db.getMembers(currentOutlet.id),
-        db.getCategories(currentOutlet.id),
-        db.getFreezes() 
-    ]);
-    setCategories(cats);
+        const reportRows: ReportRow[] = members.filter(m => {
+            const mEnd = parseISO(m.current_end_date);
+            const mStart = parseISO(m.start_date);
+            return mEnd >= startOfReport && mStart <= endOfReport;
+        }).map((m, idx) => {
+            const memFreezes = freezes.filter(f => f.member_id === m.id);
+            const carryForward = RevenueEngine.calculateRevenuePeriod(m, memFreezes, parseISO(m.start_date), prevMonthEnd);
+            const currentRev = RevenueEngine.calculateRevenuePeriod(m, memFreezes, startOfReport, endOfReport);
+            const controll = carryForward + currentRev;
+            const balance = Math.max(0, m.net_amount - controll);
+            const totalDays = differenceInCalendarDays(parseISO(m.current_end_date), parseISO(m.start_date)) + 1;
+            return {
+                sl_no: idx + 1,
+                guest_name: m.guest_name,
+                from: format(parseISO(m.start_date), 'yy-MM-dd'),
+                to: format(parseISO(m.current_end_date), 'yy-MM-dd'),
+                total_days: totalDays,
+                original_fees: m.actual_rate, 
+                actual_fees: m.net_amount,
+                carry_forward: carryForward,
+                daily: m.daily_rate,
+                current_month_rev: currentRev,
+                controll: controll,
+                balance: balance,
+                remarks: m.check_no || '',
+                membership_no: m.membership_number,
+                category_id: m.category_id,
+                category_name: cats.find(c => c.id === m.category_id)?.name || 'Uncategorized'
+            };
+        });
+        setRows(reportRows);
+    } catch (e) { console.error(e); }
+  };
 
-    const targetDate = parseISO(reportMonth + '-01'); 
-    const startOfReport = startOfMonth(targetDate);
-    const endOfReport = endOfMonth(targetDate);
-    const prevMonthEnd = subDays(startOfReport, 1);
-
-    let filteredMembers = members.filter(m => m.status !== MemberStatus.EXPIRED);
-    filteredMembers.sort((a, b) => a.guest_name.localeCompare(b.guest_name));
-
-    let sl = 1;
-    const reportRows: ReportRow[] = filteredMembers.map(m => {
-        const memFreezes = freezes.filter(f => f.member_id === m.id);
-        const carryForward = RevenueEngine.calculateRevenuePeriod(m, memFreezes, parseISO(m.start_date), prevMonthEnd);
-        const currentRev = RevenueEngine.calculateRevenuePeriod(m, memFreezes, startOfReport, endOfReport);
-        const controll = carryForward + currentRev;
-        const balance = Math.max(0, m.net_amount - controll);
-        const catName = cats.find(c => c.id === m.category_id)?.name || 'Unknown Category';
-
-        return {
-            sl_no: sl++,
-            guest_name: m.guest_name,
-            from: format(parseISO(m.start_date), 'yy-MM-dd'),
-            to: format(parseISO(m.current_end_date), 'yy-MM-dd'),
-            original_fees: m.actual_rate, 
-            actual_fees: m.net_amount,
-            carry_forward: carryForward,
-            daily: m.daily_rate,
-            current_month_rev: currentRev,
-            controll: controll,
-            balance: balance,
-            remarks: m.check_no || '',
-            membership_no: m.membership_number,
-            category_id: m.category_id,
-            category_name: catName
-        };
+  const groupedRows = useMemo(() => {
+    const groups: { [catName: string]: ReportRow[] } = {};
+    rows.forEach(row => {
+      if (!groups[row.category_name]) groups[row.category_name] = [];
+      groups[row.category_name].push(row);
     });
+    return groups;
+  }, [rows]);
 
-    setRows(reportRows);
-  };
+  const totals = useMemo(() => {
+    return rows.reduce((acc, row) => ({
+      fees: acc.fees + row.actual_fees,
+      prev: acc.prev + row.carry_forward,
+      current: acc.current + row.current_month_rev,
+      balance: acc.balance + row.balance
+    }), { fees: 0, prev: 0, current: 0, balance: 0 });
+  }, [rows]);
 
-  const handleSaveBranding = async () => {
-      if (!user || !hasPermission(user.role_id, 'manage_settings')) return;
-      await db.updateSettings({
-          report_title: customTitle,
-          report_subtitle: customSubtitle
-      });
-      await refreshSettings();
-      setIsEditingBranding(false);
-  };
+  const activeColumns = useMemo(() => 
+    ALL_POSSIBLE_COLUMNS.filter(col => visibleColumnKeys.includes(col.key))
+  , [visibleColumnKeys]);
 
   const toggleColumn = (key: string) => {
-      setVisibleColumns(prev => 
-          prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-      );
+    setVisibleColumnKeys(prev => 
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
   };
 
-  const handleDownloadCSV = () => {
-      const headers = ALL_COLUMNS.filter(c => visibleColumns.includes(c.key)).map(c => c.key === 'current_month_rev' ? format(parseISO(reportMonth + '-01'), 'MMM-yy') : c.label);
-      const csvContent = [
-          headers.join(','),
-          ...rows.map(row => 
-              ALL_COLUMNS.filter(c => visibleColumns.includes(c.key)).map(c => {
-                  const val = row[c.key as keyof ReportRow];
-                  return typeof val === 'string' ? `"${val}"` : val;
-              }).join(',')
-          )
-      ].join('\n');
+  const handleDownloadPDF = async () => {
+    if (!reportRef.current) return;
+    setIsGeneratingPDF(true);
+    const element = reportRef.current;
+    
+    const clone = element.cloneNode(true) as HTMLElement;
+    clone.style.width = '2000px'; 
+    clone.style.position = 'fixed';
+    clone.style.top = '0';
+    clone.style.left = '-5000px'; 
+    clone.style.backgroundColor = '#ffffff';
+    document.body.appendChild(clone);
 
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `Report_${reportMonth}.csv`;
-      link.click();
+    try {
+      const canvas = await html2canvas(clone, { 
+        scale: 3, 
+        useCORS: true, 
+        backgroundColor: '#ffffff', 
+        width: 2000, 
+        windowWidth: 2000,
+        logging: false
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('l', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Statement_${currentProperty?.name || 'Report'}_${reportMonth}.pdf`);
+    } catch (err) { 
+        console.error("PDF engine failure:", err); 
+    } finally { 
+        document.body.removeChild(clone); 
+        setIsGeneratingPDF(false); 
+    }
   };
 
-  const fmt = (n: number) => n === 0 ? '-' : formatMoney(n);
-  const fmtRate = (n: number) => n === 0 ? '-' : n.toFixed(2);
-  const currentMonthLabel = format(parseISO(reportMonth + '-01'), 'MMM-yy');
-
-  const getTotals = (subset: ReportRow[]) => {
-      return {
-          actual: subset.reduce((sum, r) => sum + r.actual_fees, 0),
-          cf: subset.reduce((sum, r) => sum + r.carry_forward, 0),
-          current: subset.reduce((sum, r) => sum + r.current_month_rev, 0),
-          balance: subset.reduce((sum, r) => sum + r.balance, 0)
-      };
-  };
-
-  const grandTotals = getTotals(rows);
-  const groupedData = categories.map(cat => ({
-      ...cat,
-      rows: rows.filter(r => r.category_id === cat.id)
-  })).filter(g => g.rows.length > 0);
-  
-  const uncategorized = rows.filter(r => !categories.find(c => c.id === r.category_id));
-  if (uncategorized.length > 0) {
-      groupedData.push({ id: 'unknown', name: 'Uncategorized', rows: uncategorized } as any);
-  }
-
-  const canEditHeaders = user && hasPermission(user.role_id, 'manage_settings');
-
-  // Helper to remove bg classes for footer cells to ensure dark theme stays consistent
-  const getFooterCellClass = (originalClass?: string) => {
-      if (!originalClass) return '';
-      // Remove any bg- class to allow the row's dark blue to show
-      return originalClass.split(' ').filter(c => !c.startsWith('bg-')).join(' ');
-  };
-
-  // Inline style for footer cells to strictly enforce dark theme
-  const footerCellStyle: React.CSSProperties = {
-      backgroundColor: '#1e3a8a', // blue-900
-      color: '#ffffff',
-      printColorAdjust: 'exact',
-      WebkitPrintColorAdjust: 'exact',
-      borderColor: '#475569' // slate-600
-  };
+  const canExport = hasPermission(user?.role_id || '', 'reports:export');
 
   return (
-    <>
-      <style type="text/css" media="print">
-        {`
-          @page { size: landscape; margin: 0.5cm; }
-          body { background-color: white !important; }
-          /* Ensure we hide standard app shell elements if they leak through */
-          nav, aside, header, .no-print { display: none !important; }
-          .print-container { position: absolute; left: 0; top: 0; width: 100%; min-height: 100vh; padding: 0 !important; margin: 0 !important; border: none !important; overflow: visible !important; }
-          /* Force background colors to print */
-          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        `}
-      </style>
-
-      <div className={`space-y-6 ${isPreviewMode ? 'fixed inset-0 z-50 bg-white p-8 overflow-auto' : ''}`}>
-        <div className={`flex flex-col md:flex-row justify-between items-end gap-4 ${isPreviewMode ? 'hidden' : ''}`}>
-            <div>
-                <h1 className="text-2xl font-bold text-slate-900">Financial Reports</h1>
-                <p className="text-slate-500">Monthly revenue recognition statement ({currency?.code})</p>
+    <div className={isPreviewMode ? "fixed inset-0 z-[9999] bg-slate-900 overflow-auto p-10" : "space-y-6"}>
+        <div className="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-3xl shadow-sm no-print border border-slate-200 gap-4">
+            <div className="flex items-center gap-4">
+                <FileSpreadsheet className="w-8 h-8 text-indigo-600" />
+                <div>
+                  <h2 className="text-xl font-black tracking-tighter">Revenue Ledger</h2>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Financial Reporting Context</p>
+                </div>
+                <div className="h-10 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                <input 
+                    type="month" 
+                    value={reportMonth} 
+                    onChange={e => setReportMonth(e.target.value)}
+                    className="h-10 px-4 rounded-xl border border-slate-200 font-black text-xs uppercase tracking-widest bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500"
+                />
             </div>
-            <div className="flex gap-2 items-end flex-wrap justify-end">
-              <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-slate-500 uppercase flex items-center gap-1">
-                      <Calendar className="w-3 h-3"/> Report Month
-                  </label>
-                  <Input 
-                      type="month" 
-                      value={reportMonth} 
-                      onChange={e => setReportMonth(e.target.value)} 
-                      className="w-40"
-                  />
-              </div>
-              
-              <div className="relative">
-                  <Button variant="outline" onClick={() => setShowColMenu(!showColMenu)} className="w-10 px-0 flex items-center justify-center" title="Table Settings">
-                      <Settings2 className="w-4 h-4" />
+            <div className="flex gap-2">
+                <div className="relative">
+                    <Button 
+                        variant="outline" 
+                        className={`rounded-xl font-black text-xs uppercase tracking-widest h-11 px-6 ${showConfig ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : ''}`}
+                        onClick={() => setShowConfig(!showConfig)}
+                    >
+                        <Settings2 className="w-4 h-4 mr-2" /> Line Setup
+                    </Button>
+                    {showConfig && (
+                        <div className="absolute top-full right-0 mt-3 bg-white border border-slate-200 rounded-[1.5rem] shadow-2xl p-4 z-[100] w-64 animate-in zoom-in-95 duration-200">
+                            <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-50">
+                                <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Visible Columns</span>
+                                <button onClick={() => setShowConfig(false)} className="text-slate-400 hover:text-red-500"><X className="w-4 h-4"/></button>
+                            </div>
+                            <div className="space-y-1 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
+                                {ALL_POSSIBLE_COLUMNS.map(col => (
+                                    <button 
+                                        key={col.key} 
+                                        onClick={() => toggleColumn(col.key)}
+                                        className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left text-[11px] font-bold transition-all ${visibleColumnKeys.includes(col.key) ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                                    >
+                                        {col.label} {visibleColumnKeys.includes(col.key) && <Check className="w-3 h-3"/>}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+                <Button variant="outline" className="rounded-xl font-black text-xs uppercase tracking-widest h-11 px-6" onClick={() => setIsPreviewMode(!isPreviewMode)}>
+                  {isPreviewMode ? 'Exit Mode' : 'Ledger Preview'}
+                </Button>
+                {canExport && (
+                  <Button className="rounded-xl font-black text-xs uppercase tracking-widest h-11 px-6 shadow-xl shadow-indigo-100" onClick={handleDownloadPDF} isLoading={isGeneratingPDF}>
+                    {isGeneratingPDF ? 'Rendering...' : 'Export Statement'}
                   </Button>
-                  {showColMenu && (
-                      <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-slate-200 rounded-lg shadow-xl z-20 p-2 max-h-80 overflow-y-auto">
-                          <div className="flex justify-between items-center mb-2 px-2 pb-2 border-b">
-                              <span className="text-xs font-bold text-slate-500 uppercase">Visible Columns</span>
-                              <button onClick={() => setShowColMenu(false)}><X className="w-3 h-3 text-slate-400"/></button>
-                          </div>
-                          {ALL_COLUMNS.map(col => (
-                              <button 
-                                  key={col.key}
-                                  onClick={() => toggleColumn(col.key)}
-                                  className="flex w-full items-center justify-between px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50 rounded text-left"
-                              >
-                                  <span className="whitespace-pre-line">{col.label.replace('\n', ' ')}</span>
-                                  {visibleColumns.includes(col.key) && <Check className="w-3 h-3 text-indigo-600"/>}
-                              </button>
-                          ))}
-                      </div>
-                  )}
-              </div>
-
-              {canEditHeaders && (
-                  <Button variant="outline" onClick={() => setIsEditingBranding(!isEditingBranding)}>
-                      <Layout className="w-4 h-4 mr-2"/> Edit Header
-                  </Button>
-              )}
-
-              <Button variant="outline" onClick={handleDownloadCSV}>
-                  <Download className="w-4 h-4 mr-2"/> Export CSV
-              </Button>
-              
-              <Button onClick={() => setIsPreviewMode(true)}>
-                  <Printer className="w-4 h-4 mr-2"/> Print Preview
-              </Button>
+                )}
             </div>
         </div>
 
-        {isEditingBranding && !isPreviewMode && (
-            <Card className="bg-indigo-50 border-indigo-200 border animate-in slide-in-from-top-2">
-                <CardContent className="p-4">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="font-bold text-indigo-900 flex items-center gap-2">
-                            <Layout className="w-4 h-4"/> Customize Report Branding
-                        </h3>
-                        <button onClick={() => setIsEditingBranding(false)} className="text-indigo-400 hover:text-indigo-600"><X className="w-4 h-4"/></button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input 
-                            label="Report Main Title" 
-                            value={customTitle} 
-                            onChange={e => setCustomTitle(e.target.value)} 
-                            className="bg-white"
-                        />
-                        <Input 
-                            label="Report Sub-Header" 
-                            value={customSubtitle} 
-                            onChange={e => setCustomSubtitle(e.target.value)}
-                            className="bg-white"
-                        />
-                    </div>
-                    <div className="mt-4 flex justify-end gap-2">
-                         <Button variant="secondary" size="sm" onClick={() => setIsEditingBranding(false)}>Discard</Button>
-                         <Button size="sm" onClick={handleSaveBranding}>
-                             <Save className="w-4 h-4 mr-2"/> Save Permanently
-                         </Button>
-                    </div>
-                </CardContent>
-            </Card>
-        )}
-
-        {isPreviewMode && (
-            <div className="mb-6 flex flex-col md:flex-row justify-between items-center gap-4 print:hidden no-print bg-slate-900 border border-slate-700 p-4 rounded-lg shadow-lg text-white animate-in fade-in slide-in-from-top-4">
-                <div className="flex items-start gap-4">
-                    <div className="bg-blue-600 p-3 rounded-full text-white mt-1 shadow-lg shadow-blue-900/50">
-                        <Printer className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-lg text-white">Preview Mode Active</h3>
-                        <div className="text-slate-300 text-sm mt-1 max-w-xl space-y-2">
-                            <p>
-                                The report below is formatted for <strong>Landscape</strong> printing.
-                            </p>
-                            <div className="flex items-center gap-3 bg-white/10 border border-white/20 p-3 rounded-md w-fit mt-2">
-                                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-                                <span>
-                                    <strong>Browser Security Restriction:</strong><br/>
-                                    Automatic printing is blocked. Please press 
-                                    <span className="font-mono bg-black/30 px-1.5 py-0.5 rounded mx-1 text-white font-bold border border-white/20">Ctrl + P</span> 
-                                    (or <span className="font-mono bg-black/30 px-1.5 py-0.5 rounded mx-1 text-white font-bold border border-white/20">Cmd + P</span> on Mac) 
-                                    manually.
-                                </span>
-                            </div>
+        <div ref={reportRef} className="bg-white p-6 md:p-16 rounded-[3rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.12)] max-w-[1400px] mx-auto min-h-[1000px] print-container border border-slate-100 relative overflow-x-auto">
+            {/* Professional Header Section - Fully Restored */}
+            <div className="flex flex-col md:flex-row justify-between items-start border-b-[6px] border-slate-950 pb-12 mb-12 gap-10 min-w-[1250px]">
+                <div className="flex items-center gap-10">
+                    {currentProperty?.logo_url ? (
+                        <img src={currentProperty.logo_url} alt="Logo" className="h-28 w-auto object-contain shrink-0" />
+                    ) : (
+                        <div className="w-24 h-24 bg-slate-900 rounded-3xl flex items-center justify-center shadow-2xl shrink-0">
+                          <Building2 className="w-12 h-12 text-white" />
+                        </div>
+                    )}
+                    <div className="overflow-visible">
+                        <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter text-slate-900 leading-none whitespace-nowrap overflow-visible">
+                            {currentProperty?.name || 'Property Portfolio'}
+                        </h1>
+                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] mt-3">{currentProperty?.address || 'Corporate Headquarters'}</p>
+                        <div className="flex items-center gap-4 mt-8 flex-wrap">
+                          <div className="flex items-center gap-3 bg-indigo-600 text-white px-6 py-3 rounded-2xl shadow-xl shadow-indigo-100">
+                              <Activity className="w-4 h-4" />
+                              <span className="text-xs font-black uppercase tracking-widest">{currentOutlet?.name || 'Authorized Facility'}</span>
+                          </div>
+                          <div className="px-5 py-3 border-2 border-slate-100 rounded-2xl text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            Ref: {reportMonth}-STMT
+                          </div>
                         </div>
                     </div>
                 </div>
-                <div className="flex gap-3 w-full md:w-auto">
-                    <Button variant="secondary" onClick={() => setIsPreviewMode(false)} className="flex-1 md:flex-none justify-center h-12 px-6">
-                        <X className="w-4 h-4 mr-2"/> Exit Preview
-                    </Button>
-                </div>
-            </div>
-        )}
-
-        <div className={`print-container bg-white shadow-sm border border-slate-200 ${isPreviewMode ? 'shadow-none border-none' : 'p-4 md:p-8'}`}>
-            <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end border-b-2 border-slate-800 pb-4 gap-4">
-                <div className="flex items-center gap-4">
-                    {settings?.logo_url && <img src={settings.logo_url} alt="Logo" className="h-16 w-auto object-contain" />}
-                    <div>
-                        <h2 className="text-xl font-bold text-slate-900 uppercase tracking-wide">{settings?.name || 'Company Name'}</h2>
-                        <p className="text-sm text-slate-500">{settings?.address}</p>
-                    </div>
-                </div>
-                
-                <div className="bg-blue-900 text-white px-6 py-2 shadow-sm min-w-[300px] text-center md:text-right">
-                    <h3 className="font-bold text-lg uppercase tracking-wide">
-                        {customTitle}
-                    </h3>
-                    <div className="text-xl font-light text-blue-100">
-                      {customSubtitle}
+                <div className="text-right shrink-0">
+                    <h2 className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-400 mb-2">Statement Range</h2>
+                    <p className="text-4xl font-black text-slate-950 tracking-tighter tabular-nums mb-2">{format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}</p>
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-emerald-50 border border-emerald-100 rounded-full text-[9px] font-black text-emerald-700 uppercase tracking-widest shadow-sm">
+                        <Check className="w-3 h-3 inline mr-1"/> Reconciled Audit
                     </div>
                 </div>
             </div>
 
-            <div className="overflow-x-auto">
-                <table className="w-full text-xs border-collapse border border-slate-300">
-                    <thead>
-                        <tr className="bg-blue-700 text-white">
-                            {ALL_COLUMNS.filter(c => visibleColumns.includes(c.key)).map(col => (
-                                <th key={col.key} className={`border border-slate-400 px-2 py-3 text-white font-bold whitespace-pre-line text-center ${col.headerClassName || ''}`}>
-                                    {col.key === 'current_month_rev' ? currentMonthLabel : col.label}
-                                    {col.key === 'carry_forward' && <span title="Accumulated revenue from start date up to the beginning of this month.">*</span>}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {groupedData.length === 0 ? (
-                            <tr><td colSpan={visibleColumns.length} className="text-center py-8 text-slate-500 italic">No records found matching your selection.</td></tr>
-                        ) : (
-                            groupedData.map((group) => {
-                                const groupTotals = getTotals(group.rows);
-                                return (
-                                <React.Fragment key={group.id}>
-                                    <tr className="bg-slate-200 font-bold text-slate-800">
-                                        <td colSpan={visibleColumns.length} className="border border-slate-300 px-2 py-1.5 uppercase tracking-wider text-[10px]">
-                                            {group.name}
-                                        </td>
-                                    </tr>
-                                    {group.rows.map((row) => (
-                                        <tr key={row.sl_no} className="even:bg-slate-50 hover:bg-yellow-50 transition-colors">
-                                            {ALL_COLUMNS.filter(c => visibleColumns.includes(c.key)).map(col => (
-                                                <td key={col.key} className={`border border-slate-300 px-2 py-1.5 ${col.cellClassName || ''}`}>
-                                                    {['original_fees', 'actual_fees', 'carry_forward', 'current_month_rev', 'controll', 'balance'].includes(col.key) 
-                                                        ? fmt(row[col.key as keyof ReportRow] as number)
-                                                        : col.key === 'daily'
-                                                        ? fmtRate(row[col.key as keyof ReportRow] as number)
-                                                        : row[col.key as keyof ReportRow]
-                                                    }
-                                                </td>
-                                            ))}
-                                        </tr>
-                                    ))}
-                                    <tr className="bg-slate-100 font-semibold text-slate-900 border-t border-slate-300">
-                                        {ALL_COLUMNS.filter(c => visibleColumns.includes(c.key)).map(col => {
-                                            let val: React.ReactNode = '';
-                                            if (col.key === 'guest_name') val = `${group.name} Total`;
-                                            if (col.key === 'actual_fees') val = fmt(groupTotals.actual);
-                                            if (col.key === 'carry_forward') val = fmt(groupTotals.cf);
-                                            if (col.key === 'current_month_rev') val = fmt(groupTotals.current);
-                                            if (col.key === 'balance') val = fmt(groupTotals.balance);
-                                            
-                                            return (
-                                                <td key={col.key} className={`border border-slate-300 px-2 py-1.5 ${getFooterCellClass(col.cellClassName)}`}>
-                                                    {val}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                    <tr><td colSpan={visibleColumns.length} className="h-2 bg-white border-l border-r border-slate-300"></td></tr>
-                                </React.Fragment>
-                            )})
-                        )}
-                    </tbody>
-                    {groupedData.length > 0 && (
-                        <tfoot>
-                            <tr style={footerCellStyle} className="font-bold border-t-2 border-slate-900">
-                                {ALL_COLUMNS.filter(c => visibleColumns.includes(c.key)).map(col => {
-                                    let val: React.ReactNode = '';
-                                    if (col.key === 'guest_name') val = 'GRAND TOTAL';
-                                    if (col.key === 'actual_fees') val = fmt(grandTotals.actual);
-                                    if (col.key === 'carry_forward') val = fmt(grandTotals.cf);
-                                    if (col.key === 'current_month_rev') val = fmt(grandTotals.current);
-                                    if (col.key === 'balance') val = fmt(grandTotals.balance);
-                                    
-                                    return (
-                                        <td 
-                                            key={col.key} 
-                                            style={footerCellStyle}
-                                            className={`border border-slate-600 px-2 py-3 ${col.footerClassName || getFooterCellClass(col.cellClassName)}`}
-                                        >
-                                            {val}
-                                        </td>
-                                    );
-                                })}
+            <table className="w-full text-[11px] border-collapse min-w-[1250px]">
+                <thead>
+                    <tr className="bg-slate-900 text-white rounded-t-xl overflow-hidden">
+                        {activeColumns.map(col => (
+                            <th key={col.key} className={`px-4 py-6 text-center font-black uppercase tracking-[0.15em] border-r border-white/10 last:border-0 ${col.width}`}>{col.label}</th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {Object.keys(groupedRows).map(catName => {
+                      const groupRows = groupedRows[catName];
+                      const groupTotals = groupRows.reduce((acc, r) => ({
+                        fees: acc.fees + r.actual_fees,
+                        prev: acc.prev + r.carry_forward,
+                        current: acc.current + r.current_month_rev,
+                        balance: acc.balance + r.balance
+                      }), { fees: 0, prev: 0, current: 0, balance: 0 });
+
+                      return (
+                        <React.Fragment key={catName}>
+                          <tr className="bg-slate-50 border-y border-slate-200">
+                            <td colSpan={activeColumns.length} className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <ReceiptText className="w-4 h-4 text-indigo-600" />
+                                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-900">{catName}</span>
+                                <span className="ml-2 px-2 py-0.5 bg-white border border-slate-200 rounded text-[9px] font-bold text-slate-400 uppercase tracking-widest">{groupRows.length} Accounts</span>
+                              </div>
+                            </td>
+                          </tr>
+                          {groupRows.map((row) => (
+                            <tr key={`${row.membership_no}-${row.sl_no}`} className="hover:bg-slate-50 transition-colors group/row">
+                                {activeColumns.map(col => (
+                                    <td key={col.key} className={`px-4 py-4 border-r border-slate-50 last:border-0 ${['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? 'text-right' : 'text-center'} ${col.key === 'guest_name' ? 'text-left font-black text-slate-900' : ''}`}>
+                                        <span className={`
+                                            ${col.key === 'current_month_rev' ? 'text-indigo-600 font-black' : ''} 
+                                            ${col.key === 'balance' ? 'text-red-600 font-black' : ''}
+                                            ${['actual_fees', 'carry_forward'].includes(col.key) ? 'font-bold text-slate-700' : ''}
+                                        `}>
+                                            {['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) 
+                                                ? formatMoney(row[col.key as keyof ReportRow] as number)
+                                                : row[col.key as keyof ReportRow]
+                                            }
+                                        </span>
+                                    </td>
+                                ))}
                             </tr>
-                        </tfoot>
-                    )}
-                </table>
-            </div>
+                          ))}
+                          {/* Category Sub-totals */}
+                          <tr className="bg-indigo-50/20 border-b border-indigo-100">
+                            <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest text-indigo-400">Sub-total: {catName}</td>
+                            {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
+                                <td key={col.key} className={`px-4 py-4 text-right font-black border-x border-slate-100 ${col.key === 'current_month_rev' ? 'text-indigo-800 bg-indigo-50/30' : ''}`}>
+                                    {col.key === 'actual_fees' ? formatMoney(groupTotals.fees) : col.key === 'carry_forward' ? formatMoney(groupTotals.prev) : col.key === 'current_month_rev' ? formatMoney(groupTotals.current) : formatMoney(groupTotals.balance)}
+                                </td>
+                            ))}
+                            {activeColumns.filter(c => !['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key) && activeColumns.indexOf(c) > activeColumns.findIndex(d => d.key === 'balance')).map(col => (
+                                <td key={col.key} className="px-4 py-4 border-l border-slate-100"></td>
+                            ))}
+                          </tr>
+                        </React.Fragment>
+                      );
+                    })}
+                </tbody>
+                {rows.length > 0 && (
+                  <tfoot>
+                    <tr className="bg-slate-950 text-white shadow-2xl">
+                      <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-6 py-8 text-right text-xs font-black uppercase tracking-[0.3em] border-r border-white/5">Consolidated Totals</td>
+                      {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
+                          <td key={col.key} className={`px-4 py-8 text-right font-black border-r border-white/5 last:border-0 ${col.key === 'current_month_rev' ? 'bg-indigo-600' : ''}`}>
+                             {col.key === 'actual_fees' ? formatMoney(totals.fees) : col.key === 'carry_forward' ? formatMoney(totals.prev) : col.key === 'current_month_rev' ? formatMoney(totals.current) : formatMoney(totals.balance)}
+                          </td>
+                      ))}
+                      {activeColumns.filter(c => !['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key) && activeColumns.indexOf(c) > activeColumns.findIndex(d => d.key === 'balance')).map(col => (
+                          <td key={col.key} className="px-4 py-8 border-l border-white/5"></td>
+                      ))}
+                    </tr>
+                  </tfoot>
+                )}
+            </table>
+
+            {rows.length === 0 && (
+                <div className="py-60 text-center min-w-[1250px]">
+                    <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner">
+                        <Calculator className="w-10 h-10 text-slate-300" />
+                    </div>
+                    <p className="text-slate-400 font-black uppercase tracking-[0.3em] text-xs">Zero operational activities recorded for this period.</p>
+                </div>
+            )}
             
-            <div className="mt-8 pt-8 border-t border-slate-200 flex justify-between text-[10px] text-slate-500">
-                <p>Printed on: {format(new Date(), 'PPpp')}</p>
-                <p>Nexus Membership OS - Enterprise Financial Reporting ({currency?.code})</p>
+            <div className="mt-40 pt-16 border-t-2 border-slate-100 flex flex-col md:flex-row justify-between items-end gap-12 min-w-[1250px]">
+                <div className="space-y-6 w-full md:w-auto">
+                    <div className="flex flex-col sm:flex-row gap-12">
+                      <div className="space-y-4"><div className="w-56 h-px bg-slate-300"></div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">General Manager Approval</p></div>
+                      <div className="space-y-4"><div className="w-56 h-px bg-slate-300"></div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Controller Authorization</p></div>
+                    </div>
+                </div>
+                <div className="text-right text-[10px] font-bold text-slate-300 uppercase tracking-[0.2em] space-y-2">
+                    <p className="text-slate-950 font-black uppercase">Audit ID: {crypto.randomUUID().slice(0, 16).toUpperCase()}</p>
+                    <p>Internal Governance Policy - Restricted Data</p>
+                    <p>Generated at {format(new Date(), 'PPpp')}</p>
+                </div>
             </div>
         </div>
-      </div>
-    </>
+    </div>
   );
 };
+
+const CheckCircle2 = ({ className }: { className?: string }) => (
+  <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
+);
 
 export default Reports;
