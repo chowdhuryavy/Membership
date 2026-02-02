@@ -17,8 +17,38 @@ class DatabaseService {
   }
 
   /**
-   * RECURSIVE DEPENDENCY SYNC
+   * UNIVERSAL AUDIT LOGGER
+   * Records actions to both Cloud (Supabase) and Local (Backup)
    */
+  async logAction(action: string, details: string, outlet_id?: string) {
+    const sessionStr = localStorage.getItem('membership_session');
+    const session = sessionStr ? JSON.parse(sessionStr) : null;
+    
+    const logEntry = {
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        user_id: session?.id || 'system',
+        user_name: session?.name || 'System Engine',
+        action: action.toUpperCase(),
+        details,
+        outlet_id: outlet_id || null
+    };
+
+    if (this.isSupabase()) {
+        try {
+            // No await here to prevent logging latency from slowing down the UI
+            supabase.from('system_logs').insert([logEntry]).then(({ error }) => {
+                if (error) console.error("Cloud Logging Policy Violation:", error.message);
+            });
+        } catch (e) {
+            console.warn("Cloud log failed.");
+        }
+    }
+    
+    const localLogs = await this.localGet<any[]>('system_logs', []);
+    await this.localSet('system_logs', [logEntry, ...localLogs].slice(0, 1000));
+  }
+
   private async forceSyncHierarchy(outletId: string) {
     if (!this.isSupabase()) return;
     const { data: out } = await supabase.from('outlets').select('id').eq('id', outletId).single();
@@ -46,6 +76,7 @@ class DatabaseService {
       options: { data: { name } }
     });
     if (error) return { user: null, error: error.message };
+    await this.logAction('AUTH_SIGNUP', `Identity provisioned: ${email}`);
     return { user: data.user, error: null };
   }
 
@@ -57,97 +88,65 @@ class DatabaseService {
         });
         if (authError) return { user: null, error: authError.message };
         if (authData.user) {
-            // Priority 1: Find by Linked auth_id
+            // Attempt lookup by auth_id (real account) or id (provisioned profile)
             let { data: profile } = await supabase.from('profiles').select('*').eq('auth_id', authData.user.id).single();
-            // Priority 2: Fallback to ID (for older records)
             if (!profile) {
-                const { data: fallback } = await supabase.from('profiles').select('*').eq('id', authData.user.id).single();
+                const { data: fallback } = await supabase.from('profiles').select('*').eq('email', email).single();
                 profile = fallback;
             }
-            if (profile) return { user: profile, error: null };
+            if (profile) {
+                await this.logAction('AUTH_LOGIN', `Authorized session opened for ${email}`);
+                return { user: profile, error: null };
+            }
         }
     }
     return { user: null, error: "Access Denied." };
   }
 
   /**
-   * USER & PROFILE OPERATIONS
+   * DATA MUTATIONS
    */
-  async getUsers(): Promise<UserProfile[]> {
-    if (this.isSupabase()) {
-        const { data } = await supabase.from('profiles').select('*');
-        if (data) return data;
-    }
-    return this.localGet<UserProfile[]>('users', []);
-  }
-
   async addUser(user: Omit<UserProfile, 'id'>): Promise<UserProfile> {
     const id = crypto.randomUUID();
     const newUser = { ...user, id };
     
     if (this.isSupabase()) {
-        // We insert into PROFILES table. It no longer has a FK to auth.users.
         const { error } = await supabase.from('profiles').insert([newUser]);
         if (error) {
-            console.error("Critical Deployment Error:", error.message);
-            throw new Error(`Profile Provisioning Failed: ${error.message}. TIP: Ensure you executed the SQL to drop profiles_id_fkey.`);
+            console.error("DB Provisioning Failed:", error.message);
+            throw new Error(`Profile Provisioning Failed: ${error.message}. TIP: Run the FINAL SQL script to add the 'auth_id' column.`);
         }
     }
     
-    const list = await this.getUsers();
-    await this.localSet('users', [...list, newUser]);
+    await this.logAction('USER_PROVISION', `New staff profile deployed: ${user.email}`);
     return newUser;
   }
 
-  /**
-   * SYSTEM OPERATIONS
-   */
-  async getSettings(): Promise<CompanySettings> {
-    if (this.isSupabase()) {
-        const { data } = await supabase.from('company_settings').select('*').single();
-        if (data) return data;
-    }
-    return { name: 'Membership ERP', logo_url: '', address: '', currency_id: 'default' };
+  async updateUser(id: string, updates: Partial<UserProfile>) { 
+    if (this.isSupabase()) await supabase.from('profiles').update(updates).eq('id', id);
+    await this.logAction('USER_UPDATE', `Modified staff profile ID: ${id}`);
   }
 
-  async updateSettings(updates: Partial<CompanySettings>): Promise<void> {
-    if (this.isSupabase()) await supabase.from('company_settings').upsert({ id: 'global', ...updates });
-  }
-
-  async getCurrencies(): Promise<Currency[]> {
-    if (this.isSupabase()) {
-        const { data } = await supabase.from('currencies').select('*');
-        if (data && data.length > 0) return data;
-    }
-    return [{ id: 'default', code: 'USD', symbol: '$', rate: 1, is_default: true }];
-  }
-
-  async addCurrency(curr: Omit<Currency, 'id'>): Promise<Currency> {
-    const newCurr = { ...curr, id: crypto.randomUUID() };
-    if (this.isSupabase()) await supabase.from('currencies').insert([newCurr]);
-    return newCurr;
-  }
-
-  async getProperties(): Promise<Property[]> {
-    if (this.isSupabase()) {
-        const { data } = await supabase.from('properties').select('*');
-        if (data && data.length > 0) return data;
-    }
-    return [{ id: 'prop_01', name: 'Grand Resort & Spa', logo_url: '', address: 'Corporate HQ' }];
+  async deleteUser(id: string) { 
+    if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id);
+    await this.logAction('USER_DELETE', `Purged user identity ID: ${id}`);
   }
 
   async addProperty(prop: Omit<Property, 'id'>): Promise<Property> {
     const newProp = { ...prop, id: crypto.randomUUID() };
     if (this.isSupabase()) await supabase.from('properties').insert([newProp]);
+    await this.logAction('PROP_CREATE', `Added property: ${prop.name}`);
     return newProp;
   }
 
-  async getOutlets(): Promise<Outlet[]> {
-    if (this.isSupabase()) {
-        const { data } = await supabase.from('outlets').select('*');
-        if (data && data.length > 0) return data;
-    }
-    return [{ id: 'outlet_01', name: 'Main Club', property_id: 'prop_01' }];
+  async updateProperty(id: string, updates: Partial<Property>) {
+    if (this.isSupabase()) await supabase.from('properties').update(updates).eq('id', id);
+    await this.logAction('PROP_UPDATE', `Updated property configuration ID: ${id}`);
+  }
+
+  async deleteProperty(id: string) { 
+    if (this.isSupabase()) await supabase.from('properties').delete().eq('id', id); 
+    await this.logAction('PROP_DELETE', `Property decommissioned: ${id}`);
   }
 
   async addOutlet(name: string, propertyId: string): Promise<Outlet> {
@@ -156,17 +155,18 @@ class DatabaseService {
         await this.forceSyncHierarchy(newOutlet.id);
         await supabase.from('outlets').insert([newOutlet]);
     }
+    await this.logAction('OUTLET_CREATE', `Deployed facility: ${name}`, newOutlet.id);
     return newOutlet;
   }
 
-  async getCategories(outletId?: string): Promise<MembershipCategory[]> {
-    if (this.isSupabase()) {
-        let q = supabase.from('membership_categories').select('*');
-        if (outletId) q = q.eq('outlet_id', outletId);
-        const { data } = await q;
-        if (data) return data;
-    }
-    return [];
+  async updateOutlet(id: string, updates: Partial<Outlet>) {
+    if (this.isSupabase()) await supabase.from('outlets').update(updates).eq('id', id);
+    await this.logAction('OUTLET_UPDATE', `Modified facility configuration ID: ${id}`);
+  }
+
+  async deleteOutlet(id: string) { 
+    if (this.isSupabase()) await supabase.from('outlets').delete().eq('id', id); 
+    await this.logAction('OUTLET_DELETE', `Facility decommissioned: ${id}`);
   }
 
   async addCategory(cat: Omit<MembershipCategory, 'id'>): Promise<MembershipCategory> {
@@ -175,17 +175,18 @@ class DatabaseService {
         await this.forceSyncHierarchy(cat.outlet_id);
         await supabase.from('membership_categories').insert([newCat]);
     }
+    await this.logAction('CAT_CREATE', `Revenue tier deployed: ${cat.name}`, cat.outlet_id);
     return newCat;
   }
 
-  async getMembers(outletId?: string): Promise<Member[]> {
-    if (this.isSupabase()) {
-        let q = supabase.from('members').select('*');
-        if (outletId) q = q.eq('outlet_id', outletId);
-        const { data } = await q;
-        if (data) return data;
-    }
-    return [];
+  async updateCategory(id: string, updates: Partial<MembershipCategory>) {
+    if (this.isSupabase()) await supabase.from('membership_categories').update(updates).eq('id', id);
+    await this.logAction('CAT_UPDATE', `Modified revenue tier ID: ${id}`);
+  }
+
+  async deleteCategory(id: string) { 
+    if (this.isSupabase()) await supabase.from('membership_categories').delete().eq('id', id); 
+    await this.logAction('CAT_DELETE', `Revenue tier decommissioned: ${id}`);
   }
 
   async addMember(member: Member): Promise<Member> {
@@ -193,43 +194,88 @@ class DatabaseService {
         await this.forceSyncHierarchy(member.outlet_id);
         await supabase.from('members').insert([member]);
     }
+    await this.logAction('MEMBER_ENROLL', `New guest enrollment: ${member.guest_name}`, member.outlet_id);
     return member;
   }
 
-  async getRoles(): Promise<Role[]> {
-    if (this.isSupabase()) {
-        const { data } = await supabase.from('roles').select('*');
-        if (data) return data;
-    }
-    return [];
+  async updateMember(id: string, updates: Partial<Member>) { 
+    if (this.isSupabase()) await supabase.from('members').update(updates).eq('id', id); 
+    await this.logAction('MEMBER_UPDATE', `Updated guest profile ID: ${id}`, updates.outlet_id);
   }
 
+  async deleteMember(id: string) { 
+    if (this.isSupabase()) await supabase.from('members').delete().eq('id', id); 
+    await this.logAction('MEMBER_DELETE', `Expunged guest enrollment ID: ${id}`);
+  }
+
+  async addFreeze(freeze: Freeze): Promise<void> { 
+    if (this.isSupabase()) await supabase.from('freezes').insert([freeze]); 
+    await this.logAction('MEMBER_FREEZE', `Applied freeze period to member ID: ${freeze.member_id}`);
+  }
+
+  async updateSettings(updates: Partial<CompanySettings>): Promise<void> {
+    if (this.isSupabase()) await supabase.from('company_settings').upsert({ id: 'global', ...updates });
+    await this.logAction('SETTINGS_UPDATE', 'Global framework configurations modified');
+  }
+
+  async addCurrency(curr: Omit<Currency, 'id'>): Promise<Currency> {
+    const newCurr = { ...curr, id: crypto.randomUUID() };
+    if (this.isSupabase()) await supabase.from('currencies').insert([newCurr]);
+    await this.logAction('CURR_CREATE', `Monetary standard added: ${curr.code}`);
+    return newCurr;
+  }
+
+  async updateCurrency(id: string, updates: Partial<Currency>) {
+    if (this.isSupabase()) await supabase.from('currencies').update(updates).eq('id', id);
+    await this.logAction('CURR_UPDATE', `Monetary standard modified: ${id}`);
+  }
+
+  async deleteCurrency(id: string) {
+    if (this.isSupabase()) await supabase.from('currencies').delete().eq('id', id);
+    await this.logAction('CURR_DELETE', `Monetary standard purged: ${id}`);
+  }
+
+  async addRole(role: Omit<Role, 'id'>) { 
+    const r = { ...role, id: crypto.randomUUID() }; 
+    if (this.isSupabase()) await supabase.from('roles').insert([r]); 
+    await this.logAction('ROLE_CREATE', `Security clearance tier defined: ${role.name}`); 
+    return r as Role; 
+  }
+
+  async updateRole(id: string, updates: Partial<Role>) { 
+    if (this.isSupabase()) await supabase.from('roles').update(updates).eq('id', id); 
+    await this.logAction('ROLE_UPDATE', `Modified security clearance tier: ${id}`);
+  }
+
+  async deleteRole(id: string) { 
+    if (this.isSupabase()) await supabase.from('roles').delete().eq('id', id); 
+    await this.logAction('ROLE_DELETE', `Purged security clearance tier: ${id}`);
+  }
+
+  async changePassword(userId: string, cur: string, n: string) { 
+    if (this.isSupabase()) await supabase.auth.updateUser({ password: n }); 
+    await this.logAction('AUTH_SECURITY_UPDATE', `Staff security key modified for ID: ${userId}`); 
+  }
+
+  // --- DATA RETRIEVAL ---
+  async getSettings(): Promise<CompanySettings> { if (this.isSupabase()) { const { data } = await supabase.from('company_settings').select('*').single(); if (data) return data; } return { name: 'Membership ERP', logo_url: '', address: '', currency_id: 'default' }; }
+  async getCurrencies(): Promise<Currency[]> { if (this.isSupabase()) { const { data } = await supabase.from('currencies').select('*'); if (data && data.length > 0) return data; } return [{ id: 'default', code: 'USD', symbol: '$', rate: 1, is_default: true }]; }
+  async getProperties(): Promise<Property[]> { if (this.isSupabase()) { const { data } = await supabase.from('properties').select('*'); if (data && data.length > 0) return data; } return [{ id: 'prop_01', name: 'Corporate HQ', logo_url: '', address: 'HQ' }]; }
+  async getOutlets(): Promise<Outlet[]> { if (this.isSupabase()) { const { data } = await supabase.from('outlets').select('*'); if (data && data.length > 0) return data; } return [{ id: 'outlet_01', name: 'Main Club', property_id: 'prop_01' }]; }
+  async getCategories(outletId?: string): Promise<MembershipCategory[]> { if (this.isSupabase()) { let q = supabase.from('membership_categories').select('*'); if (outletId) q = q.eq('outlet_id', outletId); const { data } = await q; if (data) return data; } return []; }
+  async getMembers(outletId?: string): Promise<Member[]> { if (this.isSupabase()) { let q = supabase.from('members').select('*'); if (outletId) q = q.eq('outlet_id', outletId); const { data } = await q; if (data) return data; } return []; }
+  async getRoles(): Promise<Role[]> { if (this.isSupabase()) { const { data } = await supabase.from('roles').select('*'); if (data) return data; } return []; }
+  async getFreezes(memberId?: string): Promise<Freeze[]> { if (this.isSupabase()) { let q = supabase.from('freezes').select('*'); if (memberId) q = q.eq('member_id', memberId); const { data } = await q; if (data) return data; } return []; }
+  async getUsers(): Promise<UserProfile[]> { if (this.isSupabase()) { const { data } = await supabase.from('profiles').select('*'); if (data) return data; } return []; }
   async getLogs(outletId?: string): Promise<SystemLog[]> {
     if (this.isSupabase()) {
-        const { data } = await supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(100);
+        let q = supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(200);
+        if (outletId) q = q.eq('outlet_id', outletId);
+        const { data } = await q;
         return data || [];
     }
     return [];
   }
-
-  async updateMember(id: string, updates: Partial<Member>) { if (this.isSupabase()) await supabase.from('members').update(updates).eq('id', id); }
-  async deleteMember(id: string) { if (this.isSupabase()) await supabase.from('members').delete().eq('id', id); }
-  async updateCategory(id: string, updates: Partial<MembershipCategory>) { if (this.isSupabase()) await supabase.from('membership_categories').update(updates).eq('id', id); }
-  async deleteCategory(id: string) { if (this.isSupabase()) await supabase.from('membership_categories').delete().eq('id', id); }
-  async updateUser(id: string, updates: Partial<UserProfile>) { if (this.isSupabase()) await supabase.from('profiles').update(updates).eq('id', id); }
-  async deleteUser(id: string) { if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id); }
-  async getFreezes(memberId?: string): Promise<Freeze[]> { return []; }
-  async addFreeze(freeze: Freeze): Promise<void> { if (this.isSupabase()) await supabase.from('freezes').insert([freeze]); }
-  async updateProperty(id: string, updates: Partial<Property>) { if (this.isSupabase()) await supabase.from('properties').update(updates).eq('id', id); }
-  async deleteProperty(id: string) { if (this.isSupabase()) await supabase.from('properties').delete().eq('id', id); }
-  async updateOutlet(id: string, updates: Partial<Outlet>) { if (this.isSupabase()) await supabase.from('outlets').update(updates).eq('id', id); }
-  async deleteOutlet(id: string) { if (this.isSupabase()) await supabase.from('outlets').delete().eq('id', id); }
-  async updateCurrency(id: string, updates: Partial<Currency>) { if (this.isSupabase()) await supabase.from('currencies').update(updates).eq('id', id); }
-  async deleteCurrency(id: string) { if (this.isSupabase()) await supabase.from('currencies').delete().eq('id', id); }
-  async addRole(role: Omit<Role, 'id'>) { const r = { ...role, id: crypto.randomUUID() }; if (this.isSupabase()) await supabase.from('roles').insert([r]); return r as Role; }
-  async updateRole(id: string, updates: Partial<Role>) { if (this.isSupabase()) await supabase.from('roles').update(updates).eq('id', id); }
-  async deleteRole(id: string) { if (this.isSupabase()) await supabase.from('roles').delete().eq('id', id); }
-  async changePassword(userId: string, cur: string, n: string) { if (this.isSupabase()) await supabase.auth.updateUser({ password: n }); }
 }
 
 export const db = new DatabaseService();

@@ -26,11 +26,12 @@ export interface Property {
 export interface Outlet {
   id: string;
   name: string;
-  property_id: string; // Links to Property
+  property_id: string;
 }
 
 export interface UserProfile {
   id: string;
+  auth_id?: string; // Links to Supabase Auth ID
   email: string;
   role_id: string;
   name: string;
