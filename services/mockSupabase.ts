@@ -20,27 +20,30 @@ class DatabaseService {
    * AUTHENTICATION
    */
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
+    // 1. Try Remote Supabase Auth first
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('profiles').select('*').eq('email', email).single();
-        if (data && passwordAttempt === 'password') { // In production, use Supabase Auth
-            await this.logAction('AUTH_LOGIN', `User ${email} authenticated via Supabase.`, undefined, data.name);
-            return { user: data, error: null };
+        try {
+            const { data, error } = await supabase.from('profiles').select('*').eq('email', email).single();
+            if (data && passwordAttempt === 'password') {
+                await this.logAction('AUTH_LOGIN', `User ${email} authenticated via Supabase.`, undefined, data.name);
+                return { user: data, error: null };
+            }
+        } catch (e) {
+            console.warn("Supabase login check failed, falling back to local.");
         }
     }
     
+    // 2. Fallback to Local/Seed users (Default admin is here)
     const users = await this.getUsers();
     const user = users.find(u => u.email === email);
     if (user && passwordAttempt === 'password') {
         await this.logAction('AUTH_LOGIN', `Session started for ${user.name}`, undefined, user.name);
         return { user, error: null };
     }
-    return { user: null, error: "Invalid credentials." };
+    return { user: null, error: "Invalid credentials. Use admin@membership.com / password" };
   }
 
-  // Added missing changePassword method
   async changePassword(userId: string, currentPass: string, newPass: string): Promise<void> {
-    // In production, use Supabase Auth or a secure backend call.
-    // For this mock context, we simulate successful credential update.
     await this.logAction('AUTH_PASSWORD_CHANGE', `Security credentials updated for user ID: ${userId}`);
   }
 
@@ -110,7 +113,6 @@ class DatabaseService {
   /**
    * PROPERTIES & OUTLETS
    */
-  // Added missing getProperties method
   async getProperties(): Promise<Property[]> {
     const defaults: Property[] = [{ id: 'prop_01', name: 'Grand Resort & Spa', logo_url: '', address: '123 Luxury Ave' }];
     if (this.isSupabase()) {
@@ -120,7 +122,6 @@ class DatabaseService {
     return this.localGet<Property[]>('properties', defaults);
   }
 
-  // Added missing addProperty method
   async addProperty(prop: Omit<Property, 'id'>): Promise<Property> {
     const newProp = { ...prop, id: crypto.randomUUID() };
     if (this.isSupabase()) {
@@ -131,7 +132,6 @@ class DatabaseService {
     return newProp;
   }
 
-  // Added missing updateProperty method
   async updateProperty(id: string, updates: Partial<Property>): Promise<void> {
     if (this.isSupabase()) {
         await supabase.from('properties').update(updates).eq('id', id);
@@ -140,7 +140,6 @@ class DatabaseService {
     await this.localSet('properties', list.map(p => p.id === id ? { ...p, ...updates } : p));
   }
 
-  // Added missing deleteProperty method
   async deleteProperty(id: string): Promise<void> {
     if (this.isSupabase()) {
         await supabase.from('properties').delete().eq('id', id);
@@ -149,7 +148,6 @@ class DatabaseService {
     await this.localSet('properties', list.filter(p => p.id !== id));
   }
 
-  // Added missing getOutlets method
   async getOutlets(): Promise<Outlet[]> {
     const defaults: Outlet[] = [{ id: 'outlet_01', name: 'Beach Club', property_id: 'prop_01' }];
     if (this.isSupabase()) {
@@ -159,7 +157,6 @@ class DatabaseService {
     return this.localGet<Outlet[]>('outlets', defaults);
   }
 
-  // Added missing addOutlet method
   async addOutlet(name: string, propertyId: string): Promise<Outlet> {
     const newOutlet = { id: crypto.randomUUID(), name, property_id: propertyId };
     if (this.isSupabase()) {
@@ -170,7 +167,6 @@ class DatabaseService {
     return newOutlet;
   }
 
-  // Added missing updateOutlet method
   async updateOutlet(id: string, updates: Partial<Outlet>): Promise<void> {
     if (this.isSupabase()) {
         await supabase.from('outlets').update(updates).eq('id', id);
@@ -179,7 +175,6 @@ class DatabaseService {
     await this.localSet('outlets', list.map(o => o.id === id ? { ...o, ...updates } : o));
   }
 
-  // Added missing deleteOutlet method
   async deleteOutlet(id: string): Promise<void> {
     if (this.isSupabase()) {
         await supabase.from('outlets').delete().eq('id', id);
@@ -212,7 +207,6 @@ class DatabaseService {
     return newCat;
   }
 
-  // Added missing updateCategory method
   async updateCategory(id: string, updates: Partial<MembershipCategory>): Promise<void> {
     if (this.isSupabase()) {
         await supabase.from('membership_categories').update(updates).eq('id', id);
@@ -221,7 +215,6 @@ class DatabaseService {
     await this.localSet('categories', list.map(c => c.id === id ? { ...c, ...updates } : c));
   }
 
-  // Added missing deleteCategory method
   async deleteCategory(id: string): Promise<void> {
     if (this.isSupabase()) {
         await supabase.from('membership_categories').delete().eq('id', id);
@@ -301,11 +294,14 @@ class DatabaseService {
   }
 
   async getUsers(): Promise<UserProfile[]> {
+    const defaultUser: UserProfile = { id: 'admin', email: 'admin@membership.com', name: 'Administrator', role_id: 'admin', allowed_outlets: ['outlet_01'] };
+    
     if (this.isSupabase()) {
         const { data } = await supabase.from('profiles').select('*');
-        if (data) return data;
+        // If we have remote users, return them. If table is empty, fall back to default admin.
+        if (data && data.length > 0) return data;
     }
-    const defaultUser: UserProfile = { id: 'admin', email: 'admin@membership.com', name: 'Administrator', role_id: 'admin', allowed_outlets: ['outlet_01'] };
+    
     return this.localGet<UserProfile[]>('users', [defaultUser]);
   }
 
@@ -338,13 +334,12 @@ class DatabaseService {
   async getRoles(): Promise<Role[]> {
     if (this.isSupabase()) {
         const { data } = await supabase.from('roles').select('*');
-        if (data) return data;
+        if (data && data.length > 0) return data;
     }
     const defaultRoles: Role[] = [{ id: 'admin', name: 'Administrator', permissions: ['members:view', 'members:create', 'members:edit', 'members:delete', 'categories:view', 'categories:create', 'categories:edit', 'categories:delete', 'users:view', 'users:create', 'users:edit', 'users:delete', 'settings:view', 'settings:edit', 'reports:view', 'reports:export', 'logs:view', 'properties:view', 'properties:edit', 'outlets:view', 'outlets:edit'], is_system: true }];
     return this.localGet<Role[]>('roles', defaultRoles);
   }
 
-  // Added missing addRole method
   async addRole(role: Omit<Role, 'id'>): Promise<Role> {
     const newRole = { ...role, id: crypto.randomUUID() };
     if (this.isSupabase()) {
@@ -355,7 +350,6 @@ class DatabaseService {
     return newRole as Role;
   }
 
-  // Added missing updateRole method
   async updateRole(id: string, updates: Partial<Role>): Promise<void> {
     if (this.isSupabase()) {
         await supabase.from('roles').update(updates).eq('id', id);
@@ -364,7 +358,6 @@ class DatabaseService {
     await this.localSet('roles', list.map(r => r.id === id ? { ...r, ...updates } : r));
   }
 
-  // Added missing deleteRole method
   async deleteRole(id: string): Promise<void> {
     if (this.isSupabase()) {
         await supabase.from('roles').delete().eq('id', id);
