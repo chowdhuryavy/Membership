@@ -18,8 +18,22 @@ class DatabaseService {
 
   /**
    * AUTHENTICATION
-   * Uses real Supabase Auth to establish the session required for RLS policies
    */
+  async signUp(email: string, password: string, name: string): Promise<{ user: any, error: string | null }> {
+    if (!this.isSupabase()) return { user: null, error: "Supabase not initialized." };
+    
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name } // This metadata is picked up by the SQL trigger
+      }
+    });
+
+    if (error) return { user: null, error: error.message };
+    return { user: data.user, error: null };
+  }
+
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (this.isSupabase()) {
         try {
@@ -34,11 +48,11 @@ class DatabaseService {
                 if (!profileError && profile && passwordAttempt === 'password') {
                    return { user: profile, error: null };
                 }
-                return { user: null, error: "Auth failed. Ensure user exists in Supabase Dashboard -> Auth." };
+                return { user: null, error: authError.message };
             }
 
             if (authData.user) {
-                const { data: profile, error: fetchError } = await supabase.from('profiles').select('*').eq('id', authData.user.id).single();
+                const { data: profile } = await supabase.from('profiles').select('*').eq('id', authData.user.id).single();
                 if (profile) {
                     await this.logAction('AUTH_LOGIN', `Authenticated via Supabase.`, undefined, profile.name);
                     return { user: profile, error: null };

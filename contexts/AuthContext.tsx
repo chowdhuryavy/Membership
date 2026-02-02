@@ -6,6 +6,7 @@ import { db } from '../services/mockSupabase';
 interface AuthContextType {
   user: UserProfile | null;
   login: (email: string, password: string) => Promise<string | null>;
+  register: (email: string, password: string, name: string) => Promise<string | null>;
   changePassword: (currentPass: string, newPass: string) => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -56,6 +57,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return error || 'Unknown error';
   };
 
+  const register = async (email: string, password: string, name: string) => {
+    const { user: createdUser, error } = await db.signUp(email, password, name);
+    if (createdUser) {
+        // After registration, immediately attempt login to establish profile session
+        return await login(email, password);
+    }
+    return error || 'Registration failed';
+  };
+
   const changePassword = async (currentPass: string, newPass: string) => {
       if (!user) throw new Error("Not authenticated");
       await db.changePassword(user.id, currentPass, newPass);
@@ -76,7 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, changePassword, updateProfile, refreshUser, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, changePassword, updateProfile, refreshUser, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
