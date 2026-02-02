@@ -101,7 +101,8 @@ class DatabaseService {
 
   async updateSettings(updates: Partial<CompanySettings>): Promise<void> {
     if (this.isSupabase()) {
-        await supabase.from('company_settings').upsert({ id: 'global', ...updates });
+        const { error } = await supabase.from('company_settings').upsert({ id: 'global', ...updates });
+        if (error) console.error("Settings Update Error:", error.message);
     }
     const current = await this.getSettings();
     await this.localSet('settings', { ...current, ...updates });
@@ -119,7 +120,10 @@ class DatabaseService {
     const newCurr = { ...curr, id: crypto.randomUUID() };
     if (this.isSupabase()) {
         const { error } = await supabase.from('currencies').insert([newCurr]);
-        if (error) console.error("Cloud Currency Fail:", error.message);
+        if (error) {
+            console.error("Cloud Currency Fail:", error.message);
+            throw new Error(`Cloud sync rejected: ${error.message}`);
+        }
     }
     const list = await this.getCurrencies();
     await this.localSet('currencies', [...list, newCurr]);
@@ -217,10 +221,14 @@ class DatabaseService {
   }
 
   async addUser(user: Omit<UserProfile, 'id'>): Promise<UserProfile> {
+    // Generate a new UUID for the profile (No longer strictly linked to Auth FK at first)
     const newUser = { ...user, id: crypto.randomUUID() };
     if (this.isSupabase()) {
         const { error } = await supabase.from('profiles').insert([newUser]);
-        if (error) throw new Error(`Permission Denied: ${error.message}`);
+        if (error) {
+            console.error("Profile Provisioning Failed:", error.message);
+            throw new Error(`Profile Provisioning Failed: ${error.message}`);
+        }
     }
     const list = await this.getUsers();
     await this.localSet('users', [...list, newUser]);

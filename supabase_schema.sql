@@ -29,9 +29,9 @@ CREATE TABLE IF NOT EXISTS public.outlets (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. PROFILES
+-- 4. PROFILES (Removed strict FK to allow manual provisioning)
 CREATE TABLE IF NOT EXISTS public.profiles (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT UNIQUE NOT NULL,
     name TEXT,
     role_id TEXT REFERENCES public.roles(id),
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS public.company_settings (
 
 -- 9. CURRENCIES
 CREATE TABLE IF NOT EXISTS public.currencies (
-    id TEXT PRIMARY KEY,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     code TEXT NOT NULL,
     symbol TEXT NOT NULL,
     rate NUMERIC(15,6) DEFAULT 1,
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS public.currencies (
 
 -- 10. SYSTEM LOGS
 CREATE TABLE IF NOT EXISTS public.system_logs (
-    id TEXT PRIMARY KEY,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     timestamp TIMESTAMPTZ DEFAULT NOW(),
     user_id TEXT,
     user_name TEXT,
@@ -113,10 +113,9 @@ CREATE TABLE IF NOT EXISTS public.system_logs (
 );
 
 -- ==========================================
--- ADMINISTRATIVE HELPER FUNCTIONS (No Recursion)
+-- ADMINISTRATIVE HELPER FUNCTIONS (Non-Recursive)
 -- ==========================================
 
--- This function bypasses RLS to check admin status safely
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -143,43 +142,46 @@ ALTER TABLE public.company_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.currencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
 
--- Select policies
-CREATE POLICY "Read All" ON public.roles FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read All" ON public.profiles FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read All" ON public.properties FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read All" ON public.outlets FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read All" ON public.membership_categories FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read All" ON public.members FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read All" ON public.freezes FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read All" ON public.company_settings FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read All" ON public.currencies FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Read All" ON public.system_logs FOR SELECT TO authenticated USING (true);
+-- Shared Select Policy
+CREATE POLICY "View Authenticated" ON public.roles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Authenticated" ON public.profiles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Authenticated" ON public.properties FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Authenticated" ON public.outlets FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Authenticated" ON public.membership_categories FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Authenticated" ON public.members FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Authenticated" ON public.freezes FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Authenticated" ON public.company_settings FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Authenticated" ON public.currencies FOR SELECT TO authenticated USING (true);
+CREATE POLICY "View Authenticated" ON public.system_logs FOR SELECT TO authenticated USING (true);
 
--- Write policies (Admins Manage All)
-CREATE POLICY "Admin Manage" ON public.roles FOR ALL TO authenticated USING (public.is_admin());
-CREATE POLICY "Admin Manage" ON public.properties FOR ALL TO authenticated USING (public.is_admin());
-CREATE POLICY "Admin Manage" ON public.outlets FOR ALL TO authenticated USING (public.is_admin());
-CREATE POLICY "Admin Manage" ON public.membership_categories FOR ALL TO authenticated USING (public.is_admin());
-CREATE POLICY "Admin Manage" ON public.members FOR ALL TO authenticated USING (public.is_admin());
-CREATE POLICY "Admin Manage" ON public.freezes FOR ALL TO authenticated USING (public.is_admin());
-CREATE POLICY "Admin Manage" ON public.company_settings FOR ALL TO authenticated USING (public.is_admin());
-CREATE POLICY "Admin Manage" ON public.currencies FOR ALL TO authenticated USING (public.is_admin());
-CREATE POLICY "Admin Manage" ON public.system_logs FOR ALL TO authenticated USING (public.is_admin());
+-- Admin Write Policies
+CREATE POLICY "Admin All" ON public.roles FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin All" ON public.properties FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin All" ON public.outlets FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin All" ON public.membership_categories FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin All" ON public.members FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin All" ON public.freezes FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin All" ON public.company_settings FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin All" ON public.currencies FOR ALL TO authenticated USING (public.is_admin());
+CREATE POLICY "Admin All" ON public.system_logs FOR ALL TO authenticated USING (public.is_admin());
 
--- Profile special case: users can edit their own or admin can edit all
-CREATE POLICY "Manage Profiles" ON public.profiles FOR ALL TO authenticated 
+-- Profile Policy (Admin manages all, users manage self)
+CREATE POLICY "Manage Self Profile" ON public.profiles FOR ALL TO authenticated 
 USING (public.is_admin() OR id = auth.uid());
 
 -- ==========================================
--- AUTOMATION TRIGGERS
+-- AUTOMATION TRIGGERS (SMART SYNC)
 -- ==========================================
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
+  -- If a profile with this email was pre-provisioned, update it with the REAL Auth ID
   INSERT INTO public.profiles (id, email, name, role_id)
-  VALUES (new.id, new.email, COALESCE(new.raw_user_meta_data->>'name', 'System Admin'), 'admin')
-  ON CONFLICT (id) DO NOTHING;
+  VALUES (new.id, new.email, COALESCE(new.raw_user_meta_data->>'name', 'Staff User'), 'admin')
+  ON CONFLICT (email) DO UPDATE SET 
+    id = EXCLUDED.id,
+    updated_at = NOW();
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
