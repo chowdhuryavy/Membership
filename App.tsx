@@ -24,19 +24,19 @@ const SplashLoading = () => {
         <div className="relative mb-8">
           <div className="absolute -inset-6 border-2 border-indigo-500/20 rounded-full animate-[spin_4s_linear_infinite]"></div>
           <div className="absolute -inset-6 border-t-2 border-indigo-500 rounded-full animate-[spin_1.5s_linear_infinite]"></div>
-          <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 p-6 rounded-3xl shadow-2xl animate-pulse">
+          <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 p-6 rounded-3xl shadow-2xl">
             {settings?.logo_url ? (
               <img src={settings.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
             ) : (
-              <Activity className="w-16 h-16 text-indigo-400" />
+              <Globe className="w-16 h-16 text-indigo-400" />
             )}
           </div>
         </div>
         <div className="text-center">
-          <h2 className="text-2xl font-black text-white tracking-widest uppercase mb-2">{settings?.name || 'Membership System'}</h2>
-          <div className="flex items-center justify-center gap-3 text-indigo-400/60 font-medium text-xs tracking-[0.3em]">
+          <h2 className="text-2xl font-black text-white tracking-tighter uppercase mb-2">{settings?.name || 'Torch Hospitality'}</h2>
+          <div className="flex items-center justify-center gap-3 text-indigo-400/60 font-medium text-[10px] tracking-[0.3em] uppercase">
             <Loader2 className="w-3 h-3 animate-spin" />
-            INITIALIZING CORE DATA ENGINE
+            Synchronizing Enterprise Solution
           </div>
         </div>
       </div>
@@ -60,7 +60,6 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Logic Change: Admins automatically have access to all outlets in the database
     const allowedOutlets = useMemo(() => {
         if (!user) return [];
         if (user.role_id === 'admin') return outlets;
@@ -214,7 +213,6 @@ const Sidebar = () => {
     const location = useLocation();
 
     const NavItem = ({ to, icon: Icon, label, permission }: { to: string, icon: any, label: string, permission?: Permission }) => {
-        // Strict Admin Control: Only show if the user has specific VIEW permission for this module
         if (permission && user && !hasPermission(user.role_id, permission)) return null;
         
         const isActive = location.pathname === to;
@@ -237,13 +235,23 @@ const Sidebar = () => {
         <aside className="hidden md:flex w-72 flex-col bg-white border-r border-slate-200 h-screen sticky top-0 print:hidden shrink-0 shadow-sm overflow-hidden">
             <div className="p-8 shrink-0">
                 <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-200">
-                        <Globe className="w-6 h-6" />
+                    {settings?.logo_url ? (
+                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-xl shadow-slate-100 p-2 overflow-hidden border border-slate-100">
+                             <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain" />
+                        </div>
+                    ) : (
+                        <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100">
+                            <Globe className="w-6 h-6" />
+                        </div>
+                    )}
+                    <div className="overflow-hidden">
+                        <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-none truncate">
+                            {settings?.name || 'Torch Hospitality'}
+                        </h1>
+                        <span className="block text-[9px] text-slate-400 uppercase tracking-[0.2em] font-black mt-1 whitespace-nowrap">
+                            Enterprise Solution
+                        </span>
                     </div>
-                    <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-none">
-                        {settings?.name || 'Framework ERP'}
-                        <span className="block text-[10px] text-slate-400 uppercase tracking-widest mt-1">Enterprise Solution</span>
-                    </h1>
                 </div>
             </div>
             
@@ -296,10 +304,21 @@ const MobileHeader = () => {
         <div className="md:hidden bg-white border-b border-slate-200 px-6 py-4 flex flex-col sticky top-0 z-50 print:hidden shadow-sm">
             <div className="flex justify-between items-center w-full mb-3">
                 <div className="flex items-center gap-3">
-                     <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white">
-                         <Globe className="w-5 h-5" />
+                     {settings?.logo_url ? (
+                         <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-lg p-1 overflow-hidden border border-slate-100">
+                             <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain" />
+                         </div>
+                     ) : (
+                         <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white">
+                             <Globe className="w-5 h-5" />
+                         </div>
+                     )}
+                     <div className="flex flex-col">
+                        <h1 className="font-black text-slate-900 tracking-tighter truncate max-w-[150px] leading-none">
+                            {settings?.name || 'Torch Hospitality'}
+                        </h1>
+                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Enterprise Solution</span>
                      </div>
-                     <h1 className="font-black text-slate-900 tracking-tighter truncate max-w-[150px]">{settings?.name || 'System'}</h1>
                 </div>
                 <button onClick={() => setIsOpen(!isOpen)} className="text-slate-600 p-3 bg-slate-50 rounded-xl transition-colors border border-slate-100">
                     {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}

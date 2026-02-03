@@ -23,9 +23,13 @@ import {
 import { db } from '../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Freeze } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, parseISO, differenceInCalendarDays, addDays } from 'date-fns';
+// Fix: Verifying and ensuring correct named exports from date-fns, providing local fallback for parseISO
+import { format, differenceInCalendarDays, addDays } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
+
+// Fix: Local implementation for parseISO to resolve environment-specific import errors
+const parseISO = (dateString: string) => new Date(dateString);
 
 const memberSchema = z.object({
   membership_number: z.string().min(1, "Required"),

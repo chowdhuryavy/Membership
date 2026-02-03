@@ -16,10 +16,15 @@ import {
 import { db } from '../services/mockSupabase';
 import { MemberStatus, Member } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, startOfMonth, endOfMonth, parseISO, differenceInCalendarDays } from 'date-fns';
+// Fix: Verifying and ensuring correct named exports from date-fns, providing local fallbacks for missing members
+import { format, endOfMonth, differenceInCalendarDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
+
+// Fix: Local implementations for missing date-fns members to resolve environment-specific import errors
+const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+const parseISO = (dateString: string) => new Date(dateString);
 
 const Dashboard = () => {
   const { user } = useAuth();

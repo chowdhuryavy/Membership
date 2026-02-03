@@ -18,7 +18,7 @@ class DatabaseService {
 
   /**
    * UNIVERSAL AUDIT LOGGER
-   * Records every single system mutation.
+   * Records every single system mutation to Cloud and Local vaults.
    */
   async logAction(action: string, details: string, outlet_id?: string) {
     const sessionStr = localStorage.getItem('membership_session');
@@ -68,18 +68,6 @@ class DatabaseService {
   /**
    * AUTHENTICATION & AUTO-ACTIVATION
    */
-  async signUp(email: string, password: string, name: string): Promise<{ user: any, error: string | null }> {
-    if (!this.isSupabase()) return { user: null, error: "Cloud connection disabled." };
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name } }
-    });
-    if (error) return { user: null, error: error.message };
-    await this.logAction('AUTH_SIGNUP', `Identity provisioned: ${email}`);
-    return { user: data.user, error: null };
-  }
-
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (this.isSupabase()) {
         // 1. Try Standard Auth Login
@@ -88,19 +76,27 @@ class DatabaseService {
             password: passwordAttempt
         });
 
-        // 2. Handle Provisioned Users (First-time login with "password")
-        if (authError && passwordAttempt === 'password') {
+        // 2. Handle Provisioned Users (Login with "firstname123")
+        if (authError) {
+            // Find if a profile exists for this email
             const { data: profile } = await supabase.from('profiles').select('*').eq('email', email).single();
+            
             if (profile) {
-                // Auto-provision Auth account for the pre-existing profile
-                const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                    email,
-                    password: 'password'
-                });
-                if (!signUpError && signUpData.user) {
-                   await this.logAction('AUTH_AUTO_PROVISION', `Account activated for provisioned user: ${email}`);
-                   // Profile is linked via the Postgres trigger created in schema.sql
-                   return { user: { ...profile, auth_id: signUpData.user.id }, error: null };
+                const firstName = (profile.name || 'Staff').split(' ')[0];
+                const expectedDefault = `${firstName}123`;
+
+                if (passwordAttempt === expectedDefault || passwordAttempt === 'password') {
+                    // This is a first-time activation
+                    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                        email,
+                        password: passwordAttempt
+                    });
+
+                    if (!signUpError && signUpData.user) {
+                       await this.logAction('AUTH_AUTO_PROVISION', `Account activated for: ${email}`);
+                       // Return the profile with the newly created auth_id
+                       return { user: { ...profile, auth_id: signUpData.user.id }, error: null };
+                    }
                 }
             }
         }
@@ -119,48 +115,83 @@ class DatabaseService {
             }
         }
     }
-    return { user: null, error: "Access Denied. Check credentials or contact Admin." };
+    return { user: null, error: "Access Denied. Check credentials or contact your administrator." };
   }
 
   /**
-   * DATA MUTATIONS (VERIFIED LOGGING)
+   * Explicit user registration logic.
+   * Required by AuthContext to establish new identities.
+   */
+  async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
+    if (this.isSupabase()) {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password: passwordAttempt,
+      });
+
+      if (authError) return { user: null, error: authError.message };
+
+      if (authData.user) {
+        // Create the profile for the new user
+        const newUser: UserProfile = {
+          id: crypto.randomUUID(),
+          auth_id: authData.user.id,
+          email,
+          name,
+          role_id: 'viewer', // Default low-privilege role
+          allowed_outlets: []
+        };
+        
+        const { error: profileError } = await supabase.from('profiles').insert([newUser]);
+        if (profileError) return { user: null, error: profileError.message };
+
+        await this.logAction('AUTH_SIGNUP', `New account registered: ${email}`);
+        return { user: newUser, error: null };
+      }
+    }
+    return { user: null, error: "Registration is only available in cloud mode." };
+  }
+
+  /**
+   * DATA MUTATIONS
    */
   async addUser(user: Omit<UserProfile, 'id'>): Promise<UserProfile> {
     const id = crypto.randomUUID();
     const newUser = { ...user, id };
     if (this.isSupabase()) {
         const { error } = await supabase.from('profiles').insert([newUser]);
-        if (error) throw new Error(`Profile Provisioning Failed: ${error.message}`);
+        if (error) throw new Error(`User Provisioning Failed: ${error.message}`);
     }
-    await this.logAction('USER_PROVISION', `Staff profile created: ${user.email} with default password 'password'`);
+    const firstName = user.name.split(' ')[0];
+    await this.logAction('USER_PROVISION', `Staff profile created: ${user.email} (Default Password: ${firstName}123)`);
     return newUser;
   }
 
   async updateUser(id: string, updates: Partial<UserProfile>) { 
     if (this.isSupabase()) await supabase.from('profiles').update(updates).eq('id', id);
-    await this.logAction('USER_UPDATE', `Modified staff profile ID: ${id}`);
+    await this.logAction('USER_UPDATE', `Modified identity profile ID: ${id}`);
   }
 
   async deleteUser(id: string) { 
-    if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id);
-    await this.logAction('USER_DELETE', `Purged user identity ID: ${id}`);
+    if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id); 
+    await this.logAction('USER_DELETE', `Purged identity ID: ${id}`);
   }
 
   async addProperty(prop: Omit<Property, 'id'>): Promise<Property> {
     const newProp = { ...prop, id: crypto.randomUUID() };
     if (this.isSupabase()) await supabase.from('properties').insert([newProp]);
-    await this.logAction('PROP_CREATE', `Property added: ${prop.name}`);
+    await this.logAction('PROP_CREATE', `Property registered: ${prop.name}`);
     return newProp;
   }
 
   async updateProperty(id: string, updates: Partial<Property>) {
     if (this.isSupabase()) await supabase.from('properties').update(updates).eq('id', id);
-    await this.logAction('PROP_UPDATE', `Updated property configuration ID: ${id}`);
+    await this.logAction('PROP_UPDATE', `Modified property state ID: ${id}`);
   }
 
   async deleteProperty(id: string) { 
     if (this.isSupabase()) await supabase.from('properties').delete().eq('id', id); 
-    await this.logAction('PROP_DELETE', `Property decommissioned: ${id}`);
+    await this.logAction('PROP_DELETE', `Decommissioned property ID: ${id}`);
   }
 
   async addOutlet(name: string, propertyId: string): Promise<Outlet> {
@@ -175,12 +206,12 @@ class DatabaseService {
 
   async updateOutlet(id: string, updates: Partial<Outlet>) {
     if (this.isSupabase()) await supabase.from('outlets').update(updates).eq('id', id);
-    await this.logAction('OUTLET_UPDATE', `Modified facility configuration ID: ${id}`);
+    await this.logAction('OUTLET_UPDATE', `Modified facility state ID: ${id}`);
   }
 
   async deleteOutlet(id: string) { 
     if (this.isSupabase()) await supabase.from('outlets').delete().eq('id', id); 
-    await this.logAction('OUTLET_DELETE', `Facility decommissioned: ${id}`);
+    await this.logAction('OUTLET_DELETE', `Decommissioned facility ID: ${id}`);
   }
 
   async addCategory(cat: Omit<MembershipCategory, 'id'>): Promise<MembershipCategory> {
@@ -189,18 +220,18 @@ class DatabaseService {
         await this.forceSyncHierarchy(cat.outlet_id);
         await supabase.from('membership_categories').insert([newCat]);
     }
-    await this.logAction('CAT_CREATE', `Revenue tier deployed: ${cat.name}`, cat.outlet_id);
+    await this.logAction('CAT_CREATE', `Tier architecture deployed: ${cat.name}`, cat.outlet_id);
     return newCat;
   }
 
   async updateCategory(id: string, updates: Partial<MembershipCategory>) {
     if (this.isSupabase()) await supabase.from('membership_categories').update(updates).eq('id', id);
-    await this.logAction('CAT_UPDATE', `Modified revenue tier ID: ${id}`);
+    await this.logAction('CAT_UPDATE', `Modified tier architecture ID: ${id}`);
   }
 
   async deleteCategory(id: string) { 
     if (this.isSupabase()) await supabase.from('membership_categories').delete().eq('id', id); 
-    await this.logAction('CAT_DELETE', `Revenue tier decommissioned: ${id}`);
+    await this.logAction('CAT_DELETE', `Decommissioned tier architecture ID: ${id}`);
   }
 
   async addMember(member: Member): Promise<Member> {
@@ -208,7 +239,7 @@ class DatabaseService {
         await this.forceSyncHierarchy(member.outlet_id);
         await supabase.from('members').insert([member]);
     }
-    await this.logAction('MEMBER_ENROLL', `New guest enrollment: ${member.guest_name}`, member.outlet_id);
+    await this.logAction('MEMBER_ENROLL', `New guest enrollment: ${member.guest_name} (#${member.membership_number})`, member.outlet_id);
     return member;
   }
 
@@ -219,16 +250,15 @@ class DatabaseService {
 
   async deleteMember(id: string) { 
     if (this.isSupabase()) await supabase.from('members').delete().eq('id', id); 
-    await this.logAction('MEMBER_DELETE', `Expunged guest enrollment ID: ${id}`);
+    await this.logAction('MEMBER_DELETE', `Expunged guest profile ID: ${id}`);
   }
 
   async addFreeze(freeze: Freeze): Promise<void> { 
     if (this.isSupabase()) {
         await supabase.from('freezes').insert([freeze]); 
-        // Sync status to frozen
         await supabase.from('members').update({ status: MemberStatus.FROZEN }).eq('id', freeze.member_id);
     }
-    await this.logAction('MEMBER_FREEZE', `Applied freeze period to member ID: ${freeze.member_id}`);
+    await this.logAction('MEMBER_FREEZE', `Applied ${freeze.total_days} day freeze to ID: ${freeze.member_id}`);
   }
 
   async updateSettings(updates: Partial<CompanySettings>): Promise<void> {
@@ -245,34 +275,34 @@ class DatabaseService {
 
   async updateCurrency(id: string, updates: Partial<Currency>) {
     if (this.isSupabase()) await supabase.from('currencies').update(updates).eq('id', id);
-    await this.logAction('CURR_UPDATE', `Monetary standard modified: ${id}`);
+    await this.logAction('CURR_UPDATE', `Monetary standard modified ID: ${id}`);
   }
 
   async deleteCurrency(id: string) {
     if (this.isSupabase()) await supabase.from('currencies').delete().eq('id', id);
-    await this.logAction('CURR_DELETE', `Monetary standard purged: ${id}`);
+    await this.logAction('CURR_DELETE', `Purged monetary standard ID: ${id}`);
   }
 
   async addRole(role: Omit<Role, 'id'>) { 
     const r = { ...role, id: crypto.randomUUID() }; 
     if (this.isSupabase()) await supabase.from('roles').insert([r]); 
-    await this.logAction('ROLE_CREATE', `Security clearance tier defined: ${role.name}`); 
+    await this.logAction('ROLE_CREATE', `Security tier defined: ${role.name}`); 
     return r as Role; 
   }
 
   async updateRole(id: string, updates: Partial<Role>) { 
     if (this.isSupabase()) await supabase.from('roles').update(updates).eq('id', id); 
-    await this.logAction('ROLE_UPDATE', `Modified security clearance tier: ${id}`);
+    await this.logAction('ROLE_UPDATE', `Modified security tier ID: ${id}`);
   }
 
   async deleteRole(id: string) { 
     if (this.isSupabase()) await supabase.from('roles').delete().eq('id', id); 
-    await this.logAction('ROLE_DELETE', `Purged security clearance tier: ${id}`);
+    await this.logAction('ROLE_DELETE', `Purged security tier ID: ${id}`);
   }
 
   async changePassword(userId: string, cur: string, n: string) { 
     if (this.isSupabase()) await supabase.auth.updateUser({ password: n }); 
-    await this.logAction('AUTH_SECURITY_UPDATE', `Staff security key modified for ID: ${userId}`); 
+    await this.logAction('AUTH_SECURITY_UPDATE', `Credentials modified for identity ID: ${userId}`); 
   }
 
   // --- DATA RETRIEVAL ---

@@ -1,18 +1,21 @@
 
+// Fix: Consolidating and verifying named exports from date-fns
 import { 
   differenceInCalendarDays, 
   addDays, 
   isWithinInterval, 
-  startOfMonth, 
   endOfMonth, 
   eachDayOfInterval, 
-  parseISO, 
   format,
-  addMonths,
-  min,
-  max
+  addMonths
 } from 'date-fns';
 import { Member, Freeze } from '../types';
+
+// Fix: Local implementations for missing date-fns members to resolve environment-specific import errors
+const parseISO = (dateString: string) => new Date(dateString);
+const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+const min = (dates: Date[]) => new Date(Math.min(...dates.map(d => d.getTime())));
+const max = (dates: Date[]) => new Date(Math.max(...dates.map(d => d.getTime())));
 
 export const RevenueEngine = {
   calculateDailyRate: (netAmount: number, startDate: Date, endDate: Date): number => {

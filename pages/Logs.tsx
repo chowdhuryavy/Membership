@@ -3,10 +3,14 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Input, Button } from '../components/ui';
 import { db } from '../services/mockSupabase';
 import { SystemLog } from '../types';
-import { format, parseISO } from 'date-fns';
+// Fix: Verifying and ensuring correct named exports from date-fns, providing local fallback for parseISO
+import { format } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { History, Search, RefreshCcw, Shield, Clock, User, Info, Terminal } from 'lucide-react';
+
+// Fix: Local implementation for parseISO to resolve environment-specific import errors
+const parseISO = (dateString: string) => new Date(dateString);
 
 const Logs = () => {
     const { user } = useAuth();

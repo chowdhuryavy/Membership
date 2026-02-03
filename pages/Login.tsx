@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Button, Card, CardContent } from '../components/ui';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Lock, Mail, ArrowRight, Activity, ShieldCheck, User } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, ArrowRight, Activity, ShieldCheck } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -61,7 +61,7 @@ const Login = () => {
            <div className="flex items-center justify-center gap-3">
               <span className="h-px w-8 bg-indigo-500/30"></span>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.3em]">
-             Manage Your Memberships
+                Enterprise Access Portal
               </p>
               <span className="h-px w-8 bg-indigo-500/30"></span>
            </div>
@@ -75,7 +75,7 @@ const Login = () => {
                 {/* Email Input Field */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center px-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Work Identity</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Credential ID</label>
                   </div>
                   <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
@@ -95,7 +95,7 @@ const Login = () => {
                 {/* Password Input Field */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center px-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Security Key</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Access Key</label>
                   </div>
                   <div className="relative group">
                       <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
@@ -135,14 +135,14 @@ const Login = () => {
                     isLoading={loading}
                   >
                     <span className="flex items-center justify-center gap-3 tracking-tight">
-                      Sign in <ArrowRight className="w-5 h-5" />
+                      Authorize Access <ArrowRight className="w-5 h-5" />
                     </span>
                   </Button>
                 </div>
 
                 <div className="text-center">
-                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
-                        System Access Restricted to Authorized Personnel
+                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest leading-relaxed">
+                        Notice: System monitoring is active.<br/>Authorized Personnel Only.
                     </p>
                 </div>
               </form>
@@ -150,15 +150,8 @@ const Login = () => {
           </Card>
           
           <div className="mt-10 flex flex-col items-center gap-4">
-            <div className="flex items-center gap-6">
-               <button className="text-[10px] font-bold text-slate-500 hover:text-indigo-400 transition-colors uppercase tracking-[0.2em]">Documentation</button>
-               <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
-               <button className="text-[10px] font-bold text-slate-500 hover:text-indigo-400 transition-colors uppercase tracking-[0.2em]">Support</button>
-               <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
-               <button className="text-[10px] font-bold text-slate-500 hover:text-indigo-400 transition-colors uppercase tracking-[0.2em]">Terms</button>
-            </div>
             <p className="text-slate-600 text-[10px] font-bold tracking-[0.3em] uppercase">
-              &copy; {new Date().getFullYear()} Membership System &bull; Enterprise Edition
+              &copy; {new Date().getFullYear()} Membership ERP &bull; Version 2.4.0
             </p>
           </div>
         </div>
