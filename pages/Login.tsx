@@ -61,7 +61,7 @@ const Login = () => {
            <div className="flex items-center justify-center gap-3">
               <span className="h-px w-8 bg-indigo-500/30"></span>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.3em]">
-                Resilience Framework
+             Manage Your Memberships
               </p>
               <span className="h-px w-8 bg-indigo-500/30"></span>
            </div>
