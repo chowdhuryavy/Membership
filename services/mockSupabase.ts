@@ -59,27 +59,24 @@ class DatabaseService {
   }
 
   /**
-   * AUTHENTICATION ENGINE
-   * 1. Check if user has a standard Supabase session.
-   * 2. If not, check if they match a temp_password in the profiles table.
-   * 3. Automatically sync temp_password to Supabase Auth on first successful match.
+   * REFINED AUTHENTICATION ENGINE
    */
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (this.isSupabase()) {
         const cleanEmail = email.trim().toLowerCase();
         
-        // Strategy A: Standard Supabase Auth
+        // 1. Primary Attempt: Supabase Auth
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
             email: cleanEmail,
             password: passwordAttempt
         });
 
-        // Strategy B: Profile-based Credentials (for provisioned users or resets)
+        // 2. Hybrid Fallback: Check Profile for temp_password (Admin Reset / Provisioned)
         if (authError) {
             const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
             
             if (profile && profile.temp_password === passwordAttempt) {
-                // The profile password matches. Let's try to "hand-off" to Supabase Auth.
+                // Provisioning hand-off attempt
                 const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                     email: cleanEmail,
                     password: passwordAttempt,
@@ -87,43 +84,42 @@ class DatabaseService {
                 });
 
                 if (!signUpError && signUpData.user) {
-                    // Success! Update profile with auth_id and clear temp_password
-                    await supabase.from('profiles').update({ 
-                        auth_id: signUpData.user.id, 
-                        temp_password: null 
-                    }).eq('id', profile.id);
-                    await this.logAction('AUTH_SYNC', `Credential hand-off successful for: ${cleanEmail}`);
+                    await supabase.from('profiles').update({ auth_id: signUpData.user.id, temp_password: null }).eq('id', profile.id);
+                    await this.logAction('AUTH_SYNC', `Success for: ${cleanEmail}`);
                     return { user: profile, error: null };
                 } else if (signUpError?.message.toLowerCase().includes('already registered')) {
-                    // Already registered but auth password differs from temp_password.
-                    // This means Admin reset the password in the app UI. 
-                    // We allow access based on the Profile table but log the mismatch.
-                    await this.logAction('AUTH_HYBRID', `Login authorized via profile override for: ${cleanEmail}`);
+                    // Password was reset by Admin, Auth already exists
+                    await this.logAction('AUTH_HYBRID', `Bypass for: ${cleanEmail}`);
                     return { user: profile, error: null };
                 }
             }
             return { user: null, error: authError.message };
         }
 
-        // Finalize standard login
+        // 3. Post-Auth Success: Linkage Check
         if (authData.user) {
             let { data: profile } = await supabase.from('profiles').select('*').eq('auth_id', authData.user.id).maybeSingle();
             
             if (!profile) {
-                // Self-Heal linkage by email
+                // Find by email if auth_id mismatch
                 const { data: emailProfile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
                 if (emailProfile) {
                     await supabase.from('profiles').update({ auth_id: authData.user.id, temp_password: null }).eq('id', emailProfile.id);
                     const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', emailProfile.id).single();
                     profile = refreshed;
+                } else {
+                    // Create minimal entry if completely missing
+                    const newUser: UserProfile = { id: crypto.randomUUID(), auth_id: authData.user.id, email: cleanEmail, name: authData.user.user_metadata?.name || 'Staff', role_id: 'viewer', allowed_outlets: [] };
+                    await supabase.from('profiles').insert([newUser]);
+                    profile = newUser;
                 }
             }
             
-            await this.logAction('AUTH_LOGIN', `Standard session for ${cleanEmail}`);
+            await this.logAction('AUTH_LOGIN', `Authorized: ${cleanEmail}`);
             return { user: profile, error: null };
         }
     }
-    return { user: null, error: "System infrastructure inaccessible." };
+    return { user: null, error: "Access to cloud infrastructure failed." };
   }
 
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
@@ -279,7 +275,13 @@ class DatabaseService {
     } 
   }
 
-  async getSettings(): Promise<CompanySettings> { if (this.isSupabase()) { const { data } = await supabase.from('company_settings').select('*').single(); if (data) return data; } return { name: 'Membership ERP', logo_url: '', address: '', currency_id: 'default' }; }
+  async getSettings(): Promise<CompanySettings> { 
+      if (this.isSupabase()) { 
+          const { data } = await supabase.from('company_settings').select('*').maybeSingle(); 
+          if (data) return data; 
+      } 
+      return { name: 'Membership ERP', logo_url: '', address: '', currency_id: 'default' }; 
+  }
   async getCurrencies(): Promise<Currency[]> { if (this.isSupabase()) { const { data } = await supabase.from('currencies').select('*'); if (data && data.length > 0) return data; } return [{ id: 'default', code: 'USD', symbol: '$', rate: 1, is_default: true }]; }
   async getProperties(): Promise<Property[]> { if (this.isSupabase()) { const { data } = await supabase.from('properties').select('*'); if (data && data.length > 0) return data; } return [{ id: 'prop_01', name: 'Corporate HQ', logo_url: '', address: 'HQ' }]; }
   async getOutlets(): Promise<Outlet[]> { if (this.isSupabase()) { const { data } = await supabase.from('outlets').select('*'); if (data && data.length > 0) return data; } return [{ id: 'outlet_01', name: 'Main Club', property_id: 'prop_01' }]; }

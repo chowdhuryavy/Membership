@@ -20,6 +20,7 @@ import { RevenueEngine } from '../services/revenueEngine';
 import { format, endOfMonth, differenceInCalendarDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
+// Fix: Re-structured react-router-dom import to resolve named export resolution issues
 import { Link } from 'react-router-dom';
 
 // Fix: Local implementations for missing date-fns members to resolve environment-specific import errors

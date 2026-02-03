@@ -1,6 +1,6 @@
 
 -- ==========================================
--- FINAL DEFINITIVE SCHEMA
+-- FINAL DEFINITIVE SCHEMA (V2.5)
 -- ==========================================
 
 -- 1. SECURITY ROLES
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     name TEXT,
     role_id TEXT REFERENCES public.roles(id),
     allowed_outlets TEXT[] DEFAULT '{}',
-    temp_password TEXT, -- For Admin-reset passwords
+    temp_password TEXT,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -119,9 +119,11 @@ ALTER TABLE public.company_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.currencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
 
--- Permissive profiles/logs for Login & Audit
+-- Profiles: Allow login engine and self-service
 DROP POLICY IF EXISTS "Public Profiles" ON public.profiles;
 CREATE POLICY "Public Profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
+
+-- System Logs: Public insert for auditing
 DROP POLICY IF EXISTS "Public Logs" ON public.system_logs;
 CREATE POLICY "Public Logs" ON public.system_logs FOR ALL USING (true) WITH CHECK (true);
 
@@ -135,7 +137,7 @@ CREATE POLICY "Auth View Freezes" ON public.freezes FOR SELECT TO authenticated 
 CREATE POLICY "Auth View Settings" ON public.company_settings FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Auth View Currencies" ON public.currencies FOR SELECT TO authenticated USING (true);
 
--- 7. AUTOMATION TRIGGER (Links Auth Users to Profiles)
+-- 7. AUTOMATION TRIGGER
 CREATE OR REPLACE FUNCTION public.handle_new_user_sync()
 RETURNS trigger AS $$
 BEGIN
@@ -157,9 +159,11 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user_sync();
 
--- 8. SEED DATA
+-- 8. SEED DATA (Self-Healing)
 INSERT INTO public.roles (id, name, permissions, is_system)
 VALUES ('admin', 'Administrator', '{"members:view", "members:create", "members:edit", "members:delete", "categories:view", "categories:create", "categories:edit", "categories:delete", "users:view", "users:create", "users:edit", "users:delete", "settings:view", "settings:edit", "reports:view", "reports:export", "logs:view", "properties:view", "properties:edit", "outlets:view", "outlets:edit"}', true)
 ON CONFLICT (id) DO UPDATE SET permissions = EXCLUDED.permissions;
 
-INSERT INTO public.company_settings (id, name) VALUES ('global', 'Membership ERP') ON CONFLICT DO NOTHING;
+INSERT INTO public.company_settings (id, name) 
+VALUES ('global', 'Membership ERP') 
+ON CONFLICT (id) DO NOTHING;

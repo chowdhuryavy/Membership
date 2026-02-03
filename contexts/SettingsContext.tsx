@@ -17,6 +17,7 @@ interface SettingsContextType {
   refreshSettings: () => Promise<void>;
   formatMoney: (amount: number) => string;
   hasPermission: (userRoleId: string, permission: Permission) => boolean;
+  isLoading: boolean;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -30,6 +31,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [properties, setProperties] = useState<Property[]>([]);
   const [currency, setCurrency] = useState<Currency | null>(null);
   const [currentOutlet, setCurrentOutletState] = useState<Outlet | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const refreshSettings = async () => {
     try {
@@ -52,6 +54,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (user) await refreshUser();
     } catch (e) {
         console.error("Failed to load settings", e);
+    } finally {
+        setIsLoading(false);
     }
   };
 
@@ -71,7 +75,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     if (user && outlets.length > 0) {
-      // Logic Change: Admins see all outlets, others are filtered by allowed_outlets array
       const allowed = user.role_id === 'admin' 
           ? outlets 
           : outlets.filter(o => user.allowed_outlets?.includes(o.id));
@@ -116,7 +119,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCurrentOutlet,
       refreshSettings, 
       formatMoney,
-      hasPermission
+      hasPermission,
+      isLoading
     }}>
       {children}
     </SettingsContext.Provider>

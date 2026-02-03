@@ -1,6 +1,14 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate, Outlet as RouterOutlet } from 'react-router-dom';
+import { 
+  HashRouter as Router, 
+  Routes, 
+  Route, 
+  Link, 
+  useLocation, 
+  Navigate, 
+  Outlet as RouterOutlet 
+} from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import Login from './pages/Login';
@@ -180,15 +188,18 @@ const TopHeader = () => {
 };
 
 const ProtectedLayout = () => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const { isLoading: isSettingsLoading } = useSettings();
   const [showSplash, setShowSplash] = useState(true);
 
+  const combinedLoading = isAuthLoading || isSettingsLoading;
+
   useEffect(() => {
-    if (!isLoading) {
+    if (!combinedLoading) {
       const timer = setTimeout(() => setShowSplash(false), 800);
       return () => clearTimeout(timer);
     }
-  }, [isLoading]);
+  }, [combinedLoading]);
   
   if (showSplash) return <SplashLoading />;
   if (!user) return <Navigate to="/login" replace />;
