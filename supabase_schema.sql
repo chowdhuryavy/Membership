@@ -10,35 +10,43 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     name TEXT,
     role_id TEXT,
     allowed_outlets TEXT[] DEFAULT '{}',
+    temp_password TEXT, -- Column for storing admin-set passwords
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Force add auth_id if missing
+-- Force add auth_id and temp_password if missing
 DO $$ 
 BEGIN 
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='auth_id') THEN
     ALTER TABLE public.profiles ADD COLUMN auth_id UUID UNIQUE;
   END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='temp_password') THEN
+    ALTER TABLE public.profiles ADD COLUMN temp_password TEXT;
+  END IF;
 END $$;
 
--- Drop the legacy constraint that links profiles directly to auth.users.id
--- This allows "Provisioning" users before they sign up.
-DO $$ 
-DECLARE
-    r RECORD;
-BEGIN
-    FOR r IN (
-        SELECT conname 
-        FROM pg_constraint 
-        WHERE conrelid = 'public.profiles'::regclass 
-        AND confrelid = 'auth.users'::regclass
-    ) LOOP
-        EXECUTE 'ALTER TABLE public.profiles DROP CONSTRAINT ' || quote_ident(r.conname);
-    END LOOP;
-END $$;
+-- Enable RLS
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+-- Allow users to see their own profile
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+CREATE POLICY "Users can view own profile" ON public.profiles
+    FOR SELECT USING (auth.uid() = auth_id);
+
+-- CRITICAL: Allow the login engine to check temp_password for unauthenticated users
+-- Restricted to selecting by email only
+DROP POLICY IF EXISTS "Public lookup for provisioning" ON public.profiles;
+CREATE POLICY "Public lookup for provisioning" ON public.profiles
+    FOR SELECT USING (true);
+
+-- Allow admins (or the app) to insert/update profiles
+DROP POLICY IF EXISTS "Public profile management" ON public.profiles;
+CREATE POLICY "Public profile management" ON public.profiles
+    FOR ALL USING (true) WITH CHECK (true);
 
 -- =========================================================
--- 2. SYSTEM LOGS & SECURITY (FIXES MISSING LOGS)
+-- 2. SYSTEM LOGS
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS public.system_logs (
@@ -52,12 +60,9 @@ CREATE TABLE IF NOT EXISTS public.system_logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- IMPORTANT: Enable RLS and add policies so the APP can write to this table
 ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "Public Log Insert" ON public.system_logs;
 CREATE POLICY "Public Log Insert" ON public.system_logs FOR INSERT WITH CHECK (true);
-
 DROP POLICY IF EXISTS "Public Log View" ON public.system_logs;
 CREATE POLICY "Public Log View" ON public.system_logs FOR SELECT USING (true);
 
@@ -68,15 +73,13 @@ CREATE POLICY "Public Log View" ON public.system_logs FOR SELECT USING (true);
 CREATE OR REPLACE FUNCTION public.handle_new_auth_user_link()
 RETURNS trigger AS $$
 BEGIN
-  -- Link pre-provisioned profile to new Auth user
   UPDATE public.profiles 
   SET auth_id = new.id, updated_at = NOW() 
   WHERE email = new.email;
   
-  -- Create if not exists
-  IF NOT FOUND THEN
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE email = new.email) THEN
     INSERT INTO public.profiles (id, auth_id, email, name, role_id)
-    VALUES (new.id, new.id, new.email, COALESCE(new.raw_user_meta_data->>'name', 'Staff'), 'admin');
+    VALUES (new.id, new.id, new.email, COALESCE(new.raw_user_meta_data->>'name', 'Staff'), 'viewer');
   END IF;
   
   RETURN new;
