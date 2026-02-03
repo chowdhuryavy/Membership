@@ -24,9 +24,14 @@ import { LayoutDashboard, Users, Tag, BarChart3, LogOut, Menu, X, Shield, Settin
 import { Permission, Property } from './types';
 
 const SplashLoading = () => {
-  const { settings } = useSettings();
+  const { settings, isLoading } = useSettings();
+  
+  // Only show the name if loading is complete or name is not the default fallback
+  const showBranding = !isLoading && settings && settings.name !== 'Membership ERP';
+  const displayTitle = showBranding ? settings.name : "Enterprise Intelligence";
+  
   return (
-    <div className="fixed inset-0 z-[99999] bg-[#0f172a] flex flex-col items-center justify-center overflow-hidden">
+    <div className="fixed inset-0 z-[100000] bg-[#0f172a] flex flex-col items-center justify-center overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-600/20 blur-[120px] rounded-full animate-pulse"></div>
       <div className="relative flex flex-col items-center animate-in fade-in zoom-in duration-1000">
         <div className="relative mb-8">
@@ -41,10 +46,10 @@ const SplashLoading = () => {
           </div>
         </div>
         <div className="text-center">
-          <h2 className="text-2xl font-black text-white tracking-tighter uppercase mb-2">{settings?.name || 'Torch Hospitality'}</h2>
+          <h2 className="text-2xl font-black text-white tracking-tighter uppercase mb-2">{displayTitle}</h2>
           <div className="flex items-center justify-center gap-3 text-indigo-400/60 font-medium text-[10px] tracking-[0.3em] uppercase">
             <Loader2 className="w-3 h-3 animate-spin" />
-            Synchronizing Enterprise Solution
+            Synchronizing Facility Protocol
           </div>
         </div>
       </div>
@@ -92,7 +97,7 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
 
     if (allowedOutlets.length === 0) return (
         <div className="px-4 py-3 bg-red-50 rounded-xl text-[9px] font-black text-red-600 uppercase tracking-widest border border-red-100 flex items-center gap-2">
-            <X className="w-3 h-3" /> Restricted
+            <X className="w-3 h-3" /> Restricted Access
         </div>
     );
 
@@ -107,7 +112,7 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
                 </div>
                 <div className="flex flex-col items-start overflow-hidden pr-2">
                     <span className="text-[9px] font-black tracking-widest truncate w-full text-left uppercase text-slate-400 leading-none mb-1">
-                        {currentProp?.name || 'Property'}
+                        {currentProp?.name || 'Authorized'}
                     </span>
                     <span className="text-xs font-black text-slate-900 truncate w-full text-left leading-none">
                         {currentOutlet?.name || 'Select Outlet'}
@@ -162,7 +167,7 @@ const TopHeader = () => {
                 <PortfolioSelector />
                 <div className="h-6 w-px bg-slate-200 mx-2"></div>
                 <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Workspace</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Portfolio</span>
                     <span className="text-sm font-black text-slate-900 leading-none">Management Console</span>
                 </div>
             </div>
@@ -257,10 +262,10 @@ const Sidebar = () => {
                     )}
                     <div className="overflow-hidden">
                         <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-none truncate">
-                            {settings?.name || 'Torch Hospitality'}
+                            {settings?.name || 'Membership ERP'}
                         </h1>
                         <span className="block text-[9px] text-slate-400 uppercase tracking-[0.2em] font-black mt-1 whitespace-nowrap">
-                            Enterprise Solution
+                            Facility Solution
                         </span>
                     </div>
                 </div>
@@ -326,9 +331,9 @@ const MobileHeader = () => {
                      )}
                      <div className="flex flex-col">
                         <h1 className="font-black text-slate-900 tracking-tighter truncate max-w-[150px] leading-none">
-                            {settings?.name || 'Torch Hospitality'}
+                            {settings?.name || 'Membership ERP'}
                         </h1>
-                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Enterprise Solution</span>
+                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Facility Solution</span>
                      </div>
                 </div>
                 <button onClick={() => setIsOpen(!isOpen)} className="text-slate-600 p-3 bg-slate-50 rounded-xl transition-colors border border-slate-100">

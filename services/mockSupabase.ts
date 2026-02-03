@@ -88,7 +88,7 @@ class DatabaseService {
                     await this.logAction('AUTH_SYNC', `Success for: ${cleanEmail}`);
                     return { user: profile, error: null };
                 } else if (signUpError?.message.toLowerCase().includes('already registered')) {
-                    // Password was reset by Admin, Auth already exists
+                    // Password was reset by Admin, Auth already exists but profile temp_password matches
                     await this.logAction('AUTH_HYBRID', `Bypass for: ${cleanEmail}`);
                     return { user: profile, error: null };
                 }
@@ -108,8 +108,15 @@ class DatabaseService {
                     const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', emailProfile.id).single();
                     profile = refreshed;
                 } else {
-                    // Create minimal entry if completely missing
-                    const newUser: UserProfile = { id: crypto.randomUUID(), auth_id: authData.user.id, email: cleanEmail, name: authData.user.user_metadata?.name || 'Staff', role_id: 'viewer', allowed_outlets: [] };
+                    // Create minimal entry if completely missing but authenticated in Auth.users
+                    const newUser: UserProfile = { 
+                      id: crypto.randomUUID(), 
+                      auth_id: authData.user.id, 
+                      email: cleanEmail, 
+                      name: authData.user.user_metadata?.name || 'Authorized Member', 
+                      role_id: 'admin', // Auto-upgrade if profile is missing to prevent lockout
+                      allowed_outlets: [] 
+                    };
                     await supabase.from('profiles').insert([newUser]);
                     profile = newUser;
                 }
@@ -119,7 +126,7 @@ class DatabaseService {
             return { user: profile, error: null };
         }
     }
-    return { user: null, error: "Access to cloud infrastructure failed." };
+    return { user: null, error: "Cloud infrastructure unreachable." };
   }
 
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {

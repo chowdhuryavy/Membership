@@ -1,6 +1,6 @@
 
 -- ==========================================
--- FINAL DEFINITIVE SCHEMA (V2.5)
+-- FINAL DEFINITIVE SCHEMA (V2.6)
 -- ==========================================
 
 -- 1. SECURITY ROLES
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS public.system_logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. SECURITY POLICIES (RLS)
+-- 6. SECURITY POLICIES (IDEMPOTENT CLEANUP)
 ALTER TABLE public.roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.properties ENABLE ROW LEVEL SECURITY;
@@ -119,15 +119,21 @@ ALTER TABLE public.company_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.currencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
 
--- Profiles: Allow login engine and self-service
+-- Explicitly drop all possible policy names to prevent duplicate errors
 DROP POLICY IF EXISTS "Public Profiles" ON public.profiles;
-CREATE POLICY "Public Profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
-
--- System Logs: Public insert for auditing
 DROP POLICY IF EXISTS "Public Logs" ON public.system_logs;
-CREATE POLICY "Public Logs" ON public.system_logs FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Auth View Roles" ON public.roles;
+DROP POLICY IF EXISTS "Auth View Properties" ON public.properties;
+DROP POLICY IF EXISTS "Auth View Outlets" ON public.outlets;
+DROP POLICY IF EXISTS "Auth View Categories" ON public.membership_categories;
+DROP POLICY IF EXISTS "Auth View Members" ON public.members;
+DROP POLICY IF EXISTS "Auth View Freezes" ON public.freezes;
+DROP POLICY IF EXISTS "Auth View Settings" ON public.company_settings;
+DROP POLICY IF EXISTS "Auth View Currencies" ON public.currencies;
 
--- Authenticated Selects
+-- Recreate policies with full clean state
+CREATE POLICY "Public Profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Logs" ON public.system_logs FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Auth View Roles" ON public.roles FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Auth View Properties" ON public.properties FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Auth View Outlets" ON public.outlets FOR SELECT TO authenticated USING (true);
