@@ -17,7 +17,10 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(() => {
+      const stored = localStorage.getItem('membership_session');
+      return stored ? JSON.parse(stored) : null;
+  });
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshUser = async () => {
@@ -26,15 +29,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const parsed = JSON.parse(storedUser);
           try {
               const users = await db.getUsers();
-              const freshUser = users.find(u => u.id === parsed.id);
+              const freshUser = users.find(u => u.email.toLowerCase() === parsed.email.toLowerCase());
               if (freshUser) {
                   setUser(freshUser);
                   localStorage.setItem('membership_session', JSON.stringify(freshUser));
-              } else {
-                  setUser(parsed);
               }
           } catch (e) {
-              setUser(parsed);
+              console.warn("User state sync failed, using cached session.");
           }
       }
   };
@@ -54,13 +55,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('membership_session', JSON.stringify(foundUser));
       return null;
     }
-    return error || 'Unknown error';
+    return error || 'Authentication failed.';
   };
 
   const register = async (email: string, password: string, name: string) => {
     const { user: createdUser, error } = await db.signUp(email, password, name);
     if (createdUser) {
-        // After registration, immediately attempt login to establish profile session
         return await login(email, password);
     }
     return error || 'Registration failed';
@@ -74,7 +74,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = async (updates: Partial<UserProfile>) => {
       if (!user) throw new Error("Not authenticated");
       await db.updateUser(user.id, updates);
-      // Immediately sync state to avoid "System" name lag
       const updatedUser = { ...user, ...updates };
       setUser(updatedUser);
       localStorage.setItem('membership_session', JSON.stringify(updatedUser));
@@ -83,6 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setUser(null);
     localStorage.removeItem('membership_session');
+    localStorage.removeItem('membership_last_outlet');
   };
 
   return (

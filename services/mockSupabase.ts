@@ -32,7 +32,6 @@ class DatabaseService {
 
     if (this.isSupabase()) {
         try {
-            // We use a permissive RLS policy so this insert should work even if session is 'soft'
             supabase.from('system_logs').insert([logEntry]).then(({ error }) => {
                 if (error) console.error("Cloud Logging Failure:", error.message);
             });
@@ -60,34 +59,27 @@ class DatabaseService {
   }
 
   /**
-   * REFINED AUTHENTICATION ENGINE
-   * Handles Standard Auth, Auto-Provisioning, and Admin-Reset 'Soft Login'.
+   * AUTHENTICATION ENGINE
+   * 1. Check if user has a standard Supabase session.
+   * 2. If not, check if they match a temp_password in the profiles table.
+   * 3. Automatically sync temp_password to Supabase Auth on first successful match.
    */
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (this.isSupabase()) {
         const cleanEmail = email.trim().toLowerCase();
         
-        // 1. Primary Attempt: Standard Supabase Auth
+        // Strategy A: Standard Supabase Auth
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
             email: cleanEmail,
             password: passwordAttempt
         });
 
-        // 2. Secondary Attempt: Check for Provisioned Profile with temp_password
+        // Strategy B: Profile-based Credentials (for provisioned users or resets)
         if (authError) {
-            console.debug("Standard auth failed, checking provisioning table...");
+            const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
             
-            // Query profile directly. RLS policy must allow 'anon' to read this for provisioning.
-            const { data: profile } = await supabase.from('profiles')
-                .select('*')
-                .eq('email', cleanEmail)
-                .single();
-            
-            // Check if Admin has set a temporary password
-            if (profile && (profile as any).temp_password === passwordAttempt) {
-                console.debug("Provisioning match found! Attempting activation or soft-login...");
-                
-                // Attempt to register the user in Auth system
+            if (profile && profile.temp_password === passwordAttempt) {
+                // The profile password matches. Let's try to "hand-off" to Supabase Auth.
                 const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                     email: cleanEmail,
                     password: passwordAttempt,
@@ -95,47 +87,43 @@ class DatabaseService {
                 });
 
                 if (!signUpError && signUpData.user) {
-                   // CASE A: New User Activation Success
-                   // Link profile to the new Auth user and clear the temp password
-                   await supabase.from('profiles').update({ 
-                       temp_password: null, 
-                       auth_id: signUpData.user.id,
-                       updated_at: new Date().toISOString()
-                   }).eq('id', profile.id);
-
-                   await this.logAction('AUTH_ACTIVATED', `Provisioned account activated for: ${cleanEmail}`);
-                   const { data: finalProfile } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
-                   return { user: finalProfile, error: null };
-                } 
-                else if (signUpError && signUpError.message.toLowerCase().includes("already registered")) {
-                    // CASE B: Existing User (Admin Reset Password)
-                    // The user exists in Auth but with an OLD password.
-                    // The Admin set a NEW `temp_password` in the profile.
-                    // We trust the Admin's `temp_password` and allow a "Soft Login".
-                    
-                    console.warn("User exists but Auth password mismatch. Allowing Soft Login via Admin Reset.");
-                    
-                    await this.logAction('AUTH_OVERRIDE', `Login via Admin-set password (Auth Sync Skipped)`);
+                    // Success! Update profile with auth_id and clear temp_password
+                    await supabase.from('profiles').update({ 
+                        auth_id: signUpData.user.id, 
+                        temp_password: null 
+                    }).eq('id', profile.id);
+                    await this.logAction('AUTH_SYNC', `Credential hand-off successful for: ${cleanEmail}`);
+                    return { user: profile, error: null };
+                } else if (signUpError?.message.toLowerCase().includes('already registered')) {
+                    // Already registered but auth password differs from temp_password.
+                    // This means Admin reset the password in the app UI. 
+                    // We allow access based on the Profile table but log the mismatch.
+                    await this.logAction('AUTH_HYBRID', `Login authorized via profile override for: ${cleanEmail}`);
                     return { user: profile, error: null };
                 }
-
-                // If signup failed for other reasons (e.g. rate limit), return error
-                if (signUpError) return { user: null, error: signUpError.message };
             }
+            return { user: null, error: authError.message };
         }
 
-        // Return original auth error if no provisioning match was found
-        if (authError) return { user: null, error: authError.message };
-
+        // Finalize standard login
         if (authData.user) {
-            const { data: profile } = await supabase.from('profiles').select('*').eq('auth_id', authData.user.id).single();
-            if (profile) {
-                await this.logAction('AUTH_LOGIN', `Authorized session opened for ${cleanEmail}`);
-                return { user: profile, error: null };
+            let { data: profile } = await supabase.from('profiles').select('*').eq('auth_id', authData.user.id).maybeSingle();
+            
+            if (!profile) {
+                // Self-Heal linkage by email
+                const { data: emailProfile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
+                if (emailProfile) {
+                    await supabase.from('profiles').update({ auth_id: authData.user.id, temp_password: null }).eq('id', emailProfile.id);
+                    const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', emailProfile.id).single();
+                    profile = refreshed;
+                }
             }
+            
+            await this.logAction('AUTH_LOGIN', `Standard session for ${cleanEmail}`);
+            return { user: profile, error: null };
         }
     }
-    return { user: null, error: "Access Denied. Identity not found." };
+    return { user: null, error: "System infrastructure inaccessible." };
   }
 
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
@@ -158,19 +146,8 @@ class DatabaseService {
   async addUser(user: Omit<UserProfile, 'id'> & { password?: string }): Promise<UserProfile> {
     const id = crypto.randomUUID();
     const { password, ...userData } = user;
-    
-    const newUser = { 
-        ...userData, 
-        id, 
-        temp_password: password || null,
-        email: userData.email.trim().toLowerCase()
-    };
-    
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('profiles').insert([newUser]);
-        if (error) throw new Error(`Profile creation failed: ${error.message}`);
-    }
-    
+    const newUser = { ...userData, id, temp_password: password || null, email: userData.email.trim().toLowerCase() };
+    if (this.isSupabase()) await supabase.from('profiles').insert([newUser]);
     await this.logAction('USER_PROVISION', `Account provisioned for: ${user.email}`);
     return { ...userData, id } as UserProfile;
   }
@@ -181,7 +158,6 @@ class DatabaseService {
         const finalUpdates: any = { ...userData };
         if (password) finalUpdates.temp_password = password;
         if (userData.email) finalUpdates.email = userData.email.trim().toLowerCase();
-        
         await supabase.from('profiles').update(finalUpdates).eq('id', id);
     }
     await this.logAction('USER_UPDATE', `Modified user ID: ${id}`);
@@ -297,21 +273,9 @@ class DatabaseService {
 
   async changePassword(userId: string, cur: string, n: string) { 
     if (this.isSupabase()) {
-        // Check if we have a real Auth session
+        await supabase.from('profiles').update({ temp_password: n }).eq('id', userId);
         const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session) {
-            // Real session exists, update Auth password
-            const { error } = await supabase.auth.updateUser({ password: n });
-            if (error) throw error;
-        } else {
-            // Soft Login session (no real Auth session), update temp_password in Profile
-            const { error } = await supabase.from('profiles')
-                .update({ temp_password: n })
-                .eq('id', userId);
-            
-            if (error) throw new Error("Failed to update credential record.");
-        }
+        if (session) await supabase.auth.updateUser({ password: n });
     } 
   }
 
