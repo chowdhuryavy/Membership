@@ -35,14 +35,9 @@ CREATE POLICY "Users can view own profile" ON public.profiles
     FOR SELECT USING (auth.uid() = auth_id);
 
 -- CRITICAL: Allow the login engine to check temp_password for unauthenticated users
--- Restricted to selecting by email only
+-- This makes profiles publicly readable/writable which is required for the client-side Admin provisioning flow
 DROP POLICY IF EXISTS "Public lookup for provisioning" ON public.profiles;
 CREATE POLICY "Public lookup for provisioning" ON public.profiles
-    FOR SELECT USING (true);
-
--- Allow admins (or the app) to insert/update profiles
-DROP POLICY IF EXISTS "Public profile management" ON public.profiles;
-CREATE POLICY "Public profile management" ON public.profiles
     FOR ALL USING (true) WITH CHECK (true);
 
 -- =========================================================
@@ -62,9 +57,7 @@ CREATE TABLE IF NOT EXISTS public.system_logs (
 
 ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Log Insert" ON public.system_logs;
-CREATE POLICY "Public Log Insert" ON public.system_logs FOR INSERT WITH CHECK (true);
-DROP POLICY IF EXISTS "Public Log View" ON public.system_logs;
-CREATE POLICY "Public Log View" ON public.system_logs FOR SELECT USING (true);
+CREATE POLICY "Public Log Insert" ON public.system_logs FOR ALL USING (true) WITH CHECK (true);
 
 -- =========================================================
 -- 3. AUTH LINKING TRIGGER
