@@ -76,16 +76,19 @@ class DatabaseService {
             password: passwordAttempt
         });
 
-        // 2. Handle Provisioned Users (Login with "firstname123")
+        // 2. Handle Provisioned Users (Login with Admin-set password)
         if (authError) {
             // Find if a profile exists for this email
-            const { data: profile } = await supabase.from('profiles').select('*').eq('email', email).single();
+            const { data: profile, error: profileErr } = await supabase.from('profiles').select('*').eq('email', email).single();
             
             if (profile) {
+                // Check if admin set a custom temporary password
+                const tempPassword = (profile as any).temp_password;
                 const firstName = (profile.name || 'Staff').split(' ')[0];
                 const expectedDefault = `${firstName}123`;
 
-                if (passwordAttempt === expectedDefault || passwordAttempt === 'password') {
+                // Support either specific temp password or the legacy default
+                if (passwordAttempt === tempPassword || passwordAttempt === expectedDefault || passwordAttempt === 'password') {
                     // This is a first-time activation
                     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                         email,
@@ -93,6 +96,9 @@ class DatabaseService {
                     });
 
                     if (!signUpError && signUpData.user) {
+                       // Clean up the temp password from the profile
+                       await supabase.from('profiles').update({ temp_password: null }).eq('id', profile.id);
+                       
                        await this.logAction('AUTH_AUTO_PROVISION', `Account activated for: ${email}`);
                        // Return the profile with the newly created auth_id
                        return { user: { ...profile, auth_id: signUpData.user.id }, error: null };
@@ -155,20 +161,26 @@ class DatabaseService {
   /**
    * DATA MUTATIONS
    */
-  async addUser(user: Omit<UserProfile, 'id'>): Promise<UserProfile> {
+  async addUser(user: Omit<UserProfile, 'id'> & { password?: string }): Promise<UserProfile> {
     const id = crypto.randomUUID();
-    const newUser = { ...user, id };
+    const { password, ...userData } = user;
+    const newUser = { ...userData, id, temp_password: password };
+    
     if (this.isSupabase()) {
         const { error } = await supabase.from('profiles').insert([newUser]);
         if (error) throw new Error(`User Provisioning Failed: ${error.message}`);
     }
-    const firstName = user.name.split(' ')[0];
-    await this.logAction('USER_PROVISION', `Staff profile created: ${user.email} (Default Password: ${firstName}123)`);
-    return newUser;
+    
+    await this.logAction('USER_PROVISION', `Staff profile created: ${user.email} (Password: ${password ? 'Admin-set' : 'Default'})`);
+    return { ...userData, id } as UserProfile;
   }
 
-  async updateUser(id: string, updates: Partial<UserProfile>) { 
-    if (this.isSupabase()) await supabase.from('profiles').update(updates).eq('id', id);
+  async updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) { 
+    if (this.isSupabase()) {
+        const { password, ...userData } = updates;
+        const finalUpdates = password ? { ...userData, temp_password: password } : userData;
+        await supabase.from('profiles').update(finalUpdates).eq('id', id);
+    }
     await this.logAction('USER_UPDATE', `Modified identity profile ID: ${id}`);
   }
 

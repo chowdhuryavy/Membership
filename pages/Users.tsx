@@ -5,12 +5,13 @@ import { db } from '../services/mockSupabase';
 import { UserProfile, Role, Outlet } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock } from 'lucide-react';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff } from 'lucide-react';
 
 const Users = () => {
   const { user } = useAuth();
   const { roles, outlets, hasPermission } = useSettings();
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [showPassword, setShowPassword] = useState(false);
   
   // Form State
   const [formData, setFormData] = useState<{
@@ -19,7 +20,8 @@ const Users = () => {
       email: string;
       role_id: string;
       allowed_outlets: string[];
-  }>({ id: '', name: '', email: '', role_id: '', allowed_outlets: [] });
+      password?: string;
+  }>({ id: '', name: '', email: '', role_id: '', allowed_outlets: [], password: '' });
   
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState('');
@@ -35,9 +37,10 @@ const Users = () => {
   };
 
   const resetForm = () => {
-      setFormData({ id: '', name: '', email: '', role_id: '', allowed_outlets: [] });
+      setFormData({ id: '', name: '', email: '', role_id: '', allowed_outlets: [], password: '' });
       setIsEditing(false);
       setError('');
+      setShowPassword(false);
   }
 
   // Proper permission check using granular strings
@@ -76,6 +79,10 @@ const Users = () => {
         setError("You must assign at least one outlet.");
         return;
     }
+    if (!isEditing && (!formData.password || formData.password.length < 6)) {
+        setError("Initial Access Key must be at least 6 characters.");
+        return;
+    }
     
     try {
         if (isEditing && formData.id) {
@@ -83,15 +90,17 @@ const Users = () => {
                 name: formData.name,
                 email: formData.email,
                 role_id: formData.role_id,
-                allowed_outlets: formData.allowed_outlets
-            });
+                allowed_outlets: formData.allowed_outlets,
+                password: formData.password || undefined // Only update if provided
+            } as any);
         } else {
             await db.addUser({
                 name: formData.name,
                 email: formData.email,
                 role_id: formData.role_id,
-                allowed_outlets: formData.allowed_outlets
-            });
+                allowed_outlets: formData.allowed_outlets,
+                password: formData.password
+            } as any);
         }
         resetForm();
         await loadUsers();
@@ -106,10 +115,12 @@ const Users = () => {
           name: u.name,
           email: u.email,
           role_id: u.role_id,
-          allowed_outlets: u.allowed_outlets || []
+          allowed_outlets: u.allowed_outlets || [],
+          password: '' // Reset password field for editing
       });
       setIsEditing(true);
       setError('');
+      setShowPassword(false);
   };
 
   const confirmDelete = async () => {
@@ -217,7 +228,7 @@ const Users = () => {
                           {!isEditing && (
                               <div className="bg-blue-50/50 p-4 rounded-2xl text-[11px] font-bold text-blue-700 border border-blue-100 flex gap-3">
                                   <Info className="w-5 h-5 shrink-0 text-blue-500" />
-                                  <p>Standard initialization password is <strong>"password"</strong>. Users must update this immediately.</p>
+                                  <p>Provide an initial access key. The user can update this after their first login.</p>
                               </div>
                           )}
 
@@ -240,6 +251,31 @@ const Users = () => {
                                   placeholder="user@enterprise.com"
                                   className="h-12 rounded-xl"
                               />
+                          </div>
+
+                          <div className="space-y-2">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                                {isEditing ? 'Update Access Key (Optional)' : 'Initial Access Key'}
+                              </label>
+                              <div className="relative group">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <Lock className="w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                                </div>
+                                <input 
+                                    type={showPassword ? "text" : "password"}
+                                    value={formData.password} 
+                                    onChange={e => setFormData({...formData, password: e.target.value})} 
+                                    placeholder={isEditing ? "Leave blank to keep current" : "••••••••"}
+                                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-medium"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 focus:outline-none transition-colors"
+                                >
+                                    {showPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                                </button>
+                              </div>
                           </div>
                           
                           <div className="space-y-2">
