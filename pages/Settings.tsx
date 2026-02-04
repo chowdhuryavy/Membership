@@ -5,7 +5,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/mockSupabase';
 import { Role, Permission, Currency, CompanySettings, Outlet, Property } from '../types';
-import { Trash2, Check, Store, Edit2, X, Shield, Eye, PlusSquare, FileEdit, Trash, Download, Building2, Activity, Coins, Globe, Key, Settings, AlertTriangle, RefreshCcw } from 'lucide-react';
+import { Trash2, Check, Store, Edit2, X, Shield, Eye, PlusSquare, FileEdit, Trash, Download, Building2, Activity, Coins, Globe, Key, Settings, AlertTriangle, RefreshCcw, UserCircle2 } from 'lucide-react';
 
 const PERMISSION_MODULES = [
     { id: 'members', label: 'Membership Management', actions: [{ id: 'view', label: 'View', icon: Eye }, { id: 'create', label: 'Create', icon: PlusSquare }, { id: 'edit', label: 'Edit', icon: FileEdit }, { id: 'delete', label: 'Delete', icon: Trash }] },
@@ -247,43 +247,106 @@ const SettingsPage = () => {
       {/* GLOBAL SETTINGS TAB */}
       {activeTab === 'company' && canViewSettings && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-              <Card className="lg:col-span-2 rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
-                  <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
-                    <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3">
-                        <Globe className="w-5 h-5 text-indigo-600" /> Core Framework Settings
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-8 space-y-8">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">System Name</label>
-                            <Input value={companyForm.name} onChange={e => setCompanyForm({...companyForm, name: e.target.value})} className="h-12 rounded-xl" />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Global Logo URL</label>
-                            <Input value={companyForm.logo_url} onChange={e => setCompanyForm({...companyForm, logo_url: e.target.value})} className="h-12 rounded-xl" />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Corporate Headquarters Address</label>
-                        <Input value={companyForm.address} onChange={e => setCompanyForm({...companyForm, address: e.target.value})} className="h-12 rounded-xl" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Primary Currency</label>
-                        <Select 
-                            options={currencies.map(c => ({ value: c.id, label: `${c.code} (${c.symbol})` }))} 
-                            value={companyForm.currency_id} 
-                            onChange={e => setCompanyForm({...companyForm, currency_id: e.target.value})}
-                            className="h-12 rounded-xl"
-                        />
-                      </div>
-                      {canEditSettings && (
-                        <div className="pt-6">
-                          <Button onClick={saveCompany} isLoading={isSaving} className="h-14 px-10 rounded-2xl font-black shadow-xl shadow-indigo-100">Update Global State</Button>
-                        </div>
-                      )}
-                  </CardContent>
-              </Card>
+              <div className="lg:col-span-2 space-y-8">
+                  <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
+                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
+                        <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3">
+                            <Globe className="w-5 h-5 text-indigo-600" /> Core Framework Settings
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-8 space-y-8">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">System Name</label>
+                                <Input value={companyForm.name} onChange={e => setCompanyForm({...companyForm, name: e.target.value})} className="h-12 rounded-xl" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Global Logo URL</label>
+                                <Input value={companyForm.logo_url} onChange={e => setCompanyForm({...companyForm, logo_url: e.target.value})} className="h-12 rounded-xl" />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Corporate Headquarters Address</label>
+                            <Input value={companyForm.address} onChange={e => setCompanyForm({...companyForm, address: e.target.value})} className="h-12 rounded-xl" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Primary Currency</label>
+                            <Select 
+                                options={currencies.map(c => ({ value: c.id, label: `${c.code} (${c.symbol})` }))} 
+                                value={companyForm.currency_id} 
+                                onChange={e => setCompanyForm({...companyForm, currency_id: e.target.value})}
+                                className="h-12 rounded-xl"
+                            />
+                          </div>
+                      </CardContent>
+                  </Card>
+
+                  <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
+                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
+                        <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3">
+                            <UserCircle2 className="w-5 h-5 text-indigo-600" /> Report Governance
+                        </CardTitle>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Configure Signatory Roles for Financial Statements</p>
+                      </CardHeader>
+                      <CardContent className="p-8 space-y-8">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Prepared By (Role)</label>
+                                <Input 
+                                  value={companyForm.signatory_prepared_role || ''} 
+                                  onChange={e => setCompanyForm({...companyForm, signatory_prepared_role: e.target.value})} 
+                                  placeholder="Cluster Income Auditor"
+                                  className="h-12 rounded-xl" 
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reviewed By (Role)</label>
+                                <Input 
+                                  value={companyForm.signatory_reviewed_role || ''} 
+                                  onChange={e => setCompanyForm({...companyForm, signatory_reviewed_role: e.target.value})} 
+                                  placeholder="Cluster Assist. Financial Controller"
+                                  className="h-12 rounded-xl" 
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Approved By (Role)</label>
+                                <Input 
+                                  value={companyForm.signatory_approved_role || ''} 
+                                  onChange={e => setCompanyForm({...companyForm, signatory_approved_role: e.target.value})} 
+                                  placeholder="Cluster Ex- Assist. Director of Finance"
+                                  className="h-12 rounded-xl" 
+                                />
+                            </div>
+                          </div>
+                          
+                          {canEditSettings && (
+                            <div className="pt-6">
+                              <Button onClick={saveCompany} isLoading={isSaving} className="h-14 px-10 rounded-2xl font-black shadow-xl shadow-indigo-100">Update System State</Button>
+                            </div>
+                          )}
+                      </CardContent>
+                  </Card>
+              </div>
+
+              <div className="lg:col-span-1">
+                 <div className="bg-indigo-600 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden text-white h-fit">
+                    <Shield className="absolute top-[-20%] right-[-10%] w-48 h-48 opacity-10" />
+                    <h4 className="text-xl font-black tracking-tight mb-4">Configuration Protocol</h4>
+                    <p className="text-indigo-100 text-xs font-bold leading-relaxed mb-6">
+                      These settings define the operational DNA of the system. Signatory changes will reflect immediately on all generated PDF and Print reports.
+                    </p>
+                    <div className="space-y-4">
+                       <div className="flex items-center gap-3 bg-white/10 p-4 rounded-2xl border border-white/5">
+                          <div className="w-8 h-8 rounded-full bg-white text-indigo-600 flex items-center justify-center font-black text-xs">1</div>
+                          <span className="text-[10px] font-black uppercase tracking-widest">Global Sync</span>
+                       </div>
+                       <div className="flex items-center gap-3 bg-white/10 p-4 rounded-2xl border border-white/5">
+                          <div className="w-8 h-8 rounded-full bg-white text-indigo-600 flex items-center justify-center font-black text-xs">2</div>
+                          <span className="text-[10px] font-black uppercase tracking-widest">Instant Update</span>
+                       </div>
+                    </div>
+                 </div>
+              </div>
           </div>
       )}
 

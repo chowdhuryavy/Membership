@@ -4,15 +4,13 @@ import { Button, Card } from '../components/ui';
 import { db } from '../services/mockSupabase';
 import { MembershipCategory, Member, Freeze } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-// Fix: Verifying and ensuring correct named exports from date-fns
 import { format, endOfMonth, differenceInCalendarDays, addDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Activity, Building2, Calculator, ReceiptText, FileSpreadsheet, Settings2, Check, X, ShieldCheck, FileText, Printer } from 'lucide-react';
+import { Activity, Building2, Calculator, ReceiptText, Settings2, Check, X, ShieldCheck, FileText, Printer } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
-// Local implementations for missing date-fns members
 const parseISO = (dateString: string) => new Date(dateString);
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 const subDays = (date: Date, amount: number) => addDays(date, -amount);
@@ -50,7 +48,7 @@ const ALL_POSSIBLE_COLUMNS = [
 
 const Reports = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
+  const { settings, currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
   const [reportMonth, setReportMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
@@ -150,43 +148,40 @@ const Reports = () => {
     setIsGeneratingPDF(true);
     const element = reportRef.current;
     
-    // Create high-fidelity clone for rendering
-    const clone = element.cloneNode(true) as HTMLElement;
-    clone.style.width = '1600px'; 
-    clone.style.position = 'fixed';
-    clone.style.top = '0';
-    clone.style.left = '-5000px'; 
-    clone.style.backgroundColor = '#ffffff';
-    document.body.appendChild(clone);
+    const originalScrollPos = window.scrollY;
+    window.scrollTo(0, 0);
 
     try {
-      const canvas = await html2canvas(clone, { 
-        scale: 2.5, 
+      const canvas = await html2canvas(element, { 
+        scale: 2.2, 
         useCORS: true, 
-        backgroundColor: '#ffffff', 
-        width: 1600, 
-        windowWidth: 1600,
-        logging: false
+        backgroundColor: '#ffffff',
+        width: element.scrollWidth,
+        height: element.scrollHeight,
+        logging: false,
+        onclone: (clonedDoc) => {
+            const el = clonedDoc.querySelector('.print-container') as HTMLElement;
+            if (el) {
+                el.style.boxShadow = 'none';
+                el.style.border = 'none';
+                el.style.borderRadius = '0';
+            }
+        }
       });
       
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('l', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Statement_${currentProperty?.name || 'Report'}_${reportMonth}.pdf`);
+      const pdf = new jsPDF('l', 'px', [canvas.width, canvas.height]);
+      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+      pdf.save(`Ledger_${currentOutlet?.name}_${reportMonth}.pdf`);
     } catch (err) { 
         console.error("PDF engine failure:", err); 
     } finally { 
-        document.body.removeChild(clone); 
+        window.scrollTo(0, originalScrollPos);
         setIsGeneratingPDF(false); 
     }
   };
 
   const canExport = hasPermission(user?.role_id || '', 'reports:export');
-
-  // This counter is used to provide correct serial numbers in grouped output
   let globalIndex = 0;
 
   return (
@@ -194,24 +189,26 @@ const Reports = () => {
         <style>
           {`
             @media print {
-              @page { size: landscape; margin: 0; }
-              body { background: white !important; }
+              @page { size: landscape; margin: 10mm; }
+              body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
               .print-container { 
                 margin: 0 !important; 
-                padding: 40px !important; 
+                padding: 0 !important; 
                 box-shadow: none !important; 
                 border: none !important;
                 width: 100% !important;
                 max-width: none !important;
                 min-height: auto !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
+                transform: scale(0.95);
+                transform-origin: top left;
               }
               .no-print { display: none !important; }
+              .signature-block { page-break-inside: avoid; margin-top: 100px; }
               tr { page-break-inside: avoid; }
             }
           `}
         </style>
+        
         <div className="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-3xl shadow-sm no-print border border-slate-200 gap-4">
             <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100">
@@ -219,38 +216,30 @@ const Reports = () => {
                 </div>
                 <div>
                   <h2 className="text-xl font-black tracking-tighter">Revenue Ledger</h2>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Financial Reporting Context</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Financial Reporting</p>
                 </div>
                 <div className="h-10 w-px bg-slate-200 mx-2 hidden sm:block"></div>
                 <input 
                     type="month" 
                     value={reportMonth} 
                     onChange={e => setReportMonth(e.target.value)}
-                    className="h-11 px-5 rounded-xl border border-slate-200 font-black text-xs uppercase tracking-[0.2em] bg-slate-50 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all"
+                    className="h-11 px-5 rounded-xl border border-slate-200 font-black text-xs uppercase tracking-[0.2em] bg-slate-50 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
                 />
             </div>
             <div className="flex gap-3">
-                <Button 
-                    variant="outline" 
-                    className={`rounded-xl font-black text-[10px] uppercase tracking-widest h-11 px-6 border-slate-200 transition-all ${showConfig ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-inner' : ''}`}
-                    onClick={() => setShowConfig(!showConfig)}
-                >
-                    <Settings2 className="w-4 h-4 mr-2" /> Line Setup
+                <Button variant="outline" className={`rounded-xl font-black text-[10px] uppercase tracking-widest h-11 px-6 border-slate-200 transition-all ${showConfig ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : ''}`} onClick={() => setShowConfig(!showConfig)}>
+                    <Settings2 className="w-4 h-4 mr-2" /> Columns
                 </Button>
                 
                 {showConfig && (
-                    <div className="absolute top-24 right-48 mt-3 bg-white border border-slate-200 rounded-[1.5rem] shadow-2xl p-5 z-[100] w-72 animate-in zoom-in-95 duration-200">
-                        <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
-                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Visible Columns</span>
-                            <button onClick={() => setShowConfig(false)} className="text-slate-400 hover:text-red-500 p-1 rounded-lg hover:bg-slate-50 transition-colors"><X className="w-4 h-4"/></button>
+                    <div className="absolute top-24 right-48 mt-3 bg-white border border-slate-200 rounded-[1.5rem] shadow-2xl p-5 z-[100] w-72">
+                        <div className="flex justify-between items-center mb-4 pb-3 border-b">
+                            <span className="text-[10px] font-black uppercase text-slate-400">Visibility Setup</span>
+                            <button onClick={() => setShowConfig(false)} className="text-slate-400 p-1 hover:bg-slate-50 rounded-lg transition-colors"><X className="w-4 h-4"/></button>
                         </div>
-                        <div className="space-y-1.5 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
+                        <div className="space-y-1.5 max-h-[400px] overflow-y-auto pr-1">
                             {ALL_POSSIBLE_COLUMNS.map(col => (
-                                <button 
-                                    key={col.key} 
-                                    onClick={() => toggleColumn(col.key)}
-                                    className={`w-full flex items-center justify-between p-3 rounded-xl text-left text-[11px] font-bold transition-all ${visibleColumnKeys.includes(col.key) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50 border border-transparent hover:border-slate-100'}`}
-                                >
+                                <button key={col.key} onClick={() => toggleColumn(col.key)} className={`w-full flex items-center justify-between p-3 rounded-xl text-left text-[11px] font-bold transition-all ${visibleColumnKeys.includes(col.key) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50 border border-transparent'}`}>
                                     {col.label} {visibleColumnKeys.includes(col.key) && <Check className="w-3.5 h-3.5"/>}
                                 </button>
                             ))}
@@ -258,23 +247,19 @@ const Reports = () => {
                     </div>
                 )}
                 
-                <Button variant="outline" className={`rounded-xl font-black text-[10px] uppercase tracking-widest h-11 px-6 border-slate-200 transition-all ${isPreviewMode ? 'bg-indigo-900 text-white border-transparent shadow-xl' : ''}`} onClick={() => setIsPreviewMode(!isPreviewMode)}>
-                  {isPreviewMode ? 'Exit Mode' : 'Ledger Preview'}
-                </Button>
-
                 <Button variant="outline" className="rounded-xl font-black text-[10px] uppercase tracking-widest h-11 px-6 border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-all" onClick={handlePrint}>
-                  <Printer className="w-4 h-4 mr-2" /> Print Statement
+                  <Printer className="w-4 h-4 mr-2" /> Print
                 </Button>
                 
                 {canExport && (
-                  <Button className="rounded-xl font-black text-[10px] uppercase tracking-widest h-11 px-8 shadow-xl shadow-indigo-100 transition-all hover:-translate-y-0.5" onClick={handleDownloadPDF} isLoading={isGeneratingPDF}>
-                    {isGeneratingPDF ? 'Generating...' : 'Export PDF'}
+                  <Button className="rounded-xl font-black text-[10px] uppercase tracking-widest h-11 px-8 shadow-xl shadow-indigo-100 transition-all" onClick={handleDownloadPDF} isLoading={isGeneratingPDF}>
+                    {isGeneratingPDF ? 'Syncing...' : 'Export PDF'}
                   </Button>
                 )}
             </div>
         </div>
 
-        <div ref={reportRef} className="bg-white p-6 md:p-20 rounded-[3rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.12)] max-w-[1500px] mx-auto min-h-[1000px] print-container border border-slate-100 relative overflow-x-auto">
+        <div ref={reportRef} className="bg-white p-12 md:p-20 rounded-[3rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.12)] max-w-[1500px] mx-auto min-h-screen print-container border border-slate-100 relative overflow-x-auto">
             
             <div className="flex flex-col md:flex-row justify-between items-start border-b-[4px] border-slate-950 pb-12 mb-12 gap-10 min-w-[1300px]">
                 <div className="flex items-center gap-10">
@@ -285,15 +270,15 @@ const Reports = () => {
                           <Building2 className="w-14 h-14 text-white" />
                         </div>
                     )}
-                    <div className="overflow-visible">
-                        <h1 className="text-5xl md:text-6xl font-black uppercase tracking-tighter text-slate-950 leading-[0.85] whitespace-nowrap overflow-visible mb-2">
-                            {currentProperty?.name || 'Property Portfolio'}
+                    <div>
+                        <h1 className="text-5xl md:text-6xl font-black uppercase tracking-tighter text-slate-950 leading-[0.85] mb-2">
+                            {currentProperty?.name || 'Property'}
                         </h1>
                         <p className="text-[12px] font-black text-slate-400 uppercase tracking-[0.4em] mb-10">{currentProperty?.address || 'Corporate Headquarters'}</p>
                         <div className="flex items-center gap-4 flex-wrap">
-                          <div className="flex items-center gap-3 bg-indigo-600 text-white px-8 py-3.5 rounded-2xl shadow-xl shadow-indigo-100 transition-all cursor-default">
+                          <div className="flex items-center gap-3 bg-indigo-600 text-white px-8 py-3.5 rounded-2xl shadow-xl shadow-indigo-100">
                               <Activity className="w-4 h-4" />
-                              <span className="text-[11px] font-black uppercase tracking-[0.2em]">{currentOutlet?.name || 'Authorized Facility'}</span>
+                              <span className="text-[11px] font-black uppercase tracking-[0.2em]">{currentOutlet?.name || 'Health Club'}</span>
                           </div>
                           <div className="px-6 py-3.5 border-2 border-slate-100 rounded-2xl text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">
                             REF: {reportMonth}-STMT
@@ -302,11 +287,11 @@ const Reports = () => {
                     </div>
                 </div>
                 <div className="text-right shrink-0">
-                    <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mb-3">Statement Range</h2>
+                    <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mb-3 text-right">Statement Range</h2>
                     <p className="text-5xl font-black text-slate-950 tracking-tighter tabular-nums mb-3">
                         {format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
                     </p>
-                    <div className="inline-flex items-center gap-3 px-5 py-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl text-[10px] font-black text-emerald-700 uppercase tracking-widest shadow-sm">
+                    <div className="inline-flex items-center gap-3 px-5 py-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl text-[10px] font-black text-emerald-700 uppercase tracking-widest">
                         <ShieldCheck className="w-4 h-4"/> RECONCILED AUDIT
                     </div>
                 </div>
@@ -349,7 +334,7 @@ const Reports = () => {
                           {groupRows.map((row) => {
                             globalIndex++;
                             return (
-                                <tr key={`${row.membership_no}-${row.sl_no}`} className="hover:bg-slate-50 transition-colors group/row">
+                                <tr key={`${row.membership_no}-${row.sl_no}`} className="hover:bg-slate-50 transition-colors">
                                     {activeColumns.map(col => (
                                         <td key={col.key} className={`px-4 py-5 border-r border-slate-50 last:border-0 ${['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? 'text-right' : 'text-center'} ${col.key === 'guest_name' ? 'text-left font-black text-slate-800' : ''}`}>
                                             <span className={`
@@ -389,11 +374,10 @@ const Reports = () => {
                     })}
                 </tbody>
 
-                {rows.length > 0 && (
-                  <tfoot>
+                <tfoot>
                     <tr className="bg-slate-950 text-white">
                       <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-6 py-8 text-right text-[11px] font-black uppercase tracking-[0.4em] border-r border-white/5">
-                        Consolidated Ledger Totals
+                        CONSOLIDATED LEDGER TOTALS
                       </td>
                       {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
                           <td key={col.key} className={`px-4 py-8 text-right font-black border-r border-white/5 last:border-0 ${col.key === 'current_month_rev' ? 'bg-indigo-600' : ''}`}>
@@ -404,38 +388,34 @@ const Reports = () => {
                           <td key={col.key} className="px-4 py-8 border-l border-white/5"></td>
                       ))}
                     </tr>
-                  </tfoot>
-                )}
+                </tfoot>
             </table>
 
-            {rows.length === 0 && (
-                <div className="py-64 text-center min-w-[1300px]">
-                    <div className="w-28 h-28 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-10 shadow-inner">
-                        <Calculator className="w-12 h-12 text-slate-300" />
-                    </div>
-                    <p className="text-slate-400 font-black uppercase tracking-[0.4em] text-xs">Zero operational activities recorded for this period.</p>
-                </div>
-            )}
-            
-            <div className="mt-48 pt-20 border-t-[3px] border-slate-100 flex justify-between items-start gap-16 min-w-[1300px]">
+            <div className="signature-block mt-48 pt-20 border-t-[3px] border-slate-100 flex justify-between items-start gap-16 min-w-[1300px]">
                 <div className="flex-1 text-center space-y-12">
                     <p className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Prepared By:</p>
-                    <div className="pt-8">
-                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest">Cluster Income Auditor</p>
+                    <div className="pt-8 border-t border-slate-200 w-2/3 mx-auto">
+                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest leading-relaxed">
+                        {settings?.signatory_prepared_role || 'Cluster Income Auditor'}
+                      </p>
                     </div>
                 </div>
 
                 <div className="flex-1 text-center space-y-12">
                     <p className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Reviewed By:</p>
-                    <div className="pt-8">
-                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest">Cluster Assist. Financial Controller</p>
+                    <div className="pt-8 border-t border-slate-200 w-2/3 mx-auto">
+                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest leading-relaxed">
+                        {settings?.signatory_reviewed_role || 'Cluster Assist. Financial Controller'}
+                      </p>
                     </div>
                 </div>
 
                 <div className="flex-1 text-center space-y-12">
                     <p className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Approved By:</p>
-                    <div className="pt-8">
-                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest">Cluster Ex- Assist. Director of Finance</p>
+                    <div className="pt-8 border-t border-slate-200 w-2/3 mx-auto">
+                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest leading-relaxed">
+                        {settings?.signatory_approved_role || 'Cluster Ex- Assist. Director of Finance'}
+                      </p>
                     </div>
                 </div>
             </div>

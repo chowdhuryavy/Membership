@@ -29,6 +29,15 @@ export interface Outlet {
   property_id: string;
 }
 
+// Fixed: Added missing MembershipCategory interface to resolve multi-file import errors
+export interface MembershipCategory {
+  id: string;
+  outlet_id: string;
+  name: string;
+  duration_months: number;
+  base_rate: number;
+}
+
 export interface UserProfile {
   id: string;
   auth_id?: string | null; // Links to Supabase Auth ID
@@ -64,14 +73,9 @@ export interface CompanySettings {
   currency_id: string;
   report_title?: string;
   report_subtitle?: string;
-}
-
-export interface MembershipCategory {
-  id: string;
-  outlet_id?: string;
-  name: string;
-  duration_months: number;
-  base_rate: number;
+  signatory_prepared_role?: string;
+  signatory_reviewed_role?: string;
+  signatory_approved_role?: string;
 }
 
 export enum MemberStatus {
