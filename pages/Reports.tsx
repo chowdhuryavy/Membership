@@ -422,39 +422,30 @@ const Reports = () => {
                 </div>
             )}
             
-            {/* Signature & Audit Info - Updated precisely as per user request */}
-            <div className="mt-48 pt-20 border-t-[3px] border-slate-100 flex flex-col md:flex-row justify-between items-end gap-16 min-w-[1300px]">
-                <div className="space-y-8 w-full md:w-auto">
-                    <div className="flex flex-col xl:flex-row gap-12 items-end">
-                      {/* Prepared By */}
-                      <div className="space-y-4">
-                        <div className="w-64 h-px bg-slate-400"></div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">
-                          Prepared By Cluster Income Auditor
-                        </p>
-                      </div>
-                      
-                      {/* Reviewed By */}
-                      <div className="space-y-4">
-                        <div className="w-64 h-px bg-slate-400"></div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">
-                          Reviewed By Cluster assistant financial controller
-                        </p>
-                      </div>
-
-                      {/* Approved By */}
-                      <div className="space-y-4">
-                        <div className="w-64 h-px bg-slate-400"></div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">
-                          Approved by Cluster executive dicrector of finance
-                        </p>
-                      </div>
+            {/* Signature Block - Redesigned to match user requested 3-column style */}
+            <div className="mt-48 pt-20 border-t-[3px] border-slate-100 flex justify-between items-start gap-16 min-w-[1300px]">
+                {/* Prepared By Column */}
+                <div className="flex-1 text-center space-y-12">
+                    <p className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Prepared By:</p>
+                    <div className="pt-8">
+                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest">Cluster Income Auditor</p>
                     </div>
                 </div>
-                
-                <div className="text-right text-[10px] font-bold text-slate-300 uppercase tracking-[0.3em] space-y-3 shrink-0">
-                    <p className="text-slate-950 font-black uppercase tracking-widest bg-slate-50 px-3 py-1 rounded inline-block">Audit ID: {crypto.randomUUID().slice(0, 16).toUpperCase()}</p>
-                    <p className="leading-relaxed">Internal Governance Policy - Proprietary Ledger Data<br/>Generated at {format(new Date(), 'PPpp')}</p>
+
+                {/* Reviewed By Column */}
+                <div className="flex-1 text-center space-y-12">
+                    <p className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Reviewed By:</p>
+                    <div className="pt-8">
+                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest">Cluster assistant financial controller</p>
+                    </div>
+                </div>
+
+                {/* Approved By Column */}
+                <div className="flex-1 text-center space-y-12">
+                    <p className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Approved By:</p>
+                    <div className="pt-8">
+                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest">Cluster executive dicrector of finance</p>
+                    </div>
                 </div>
             </div>
         </div>

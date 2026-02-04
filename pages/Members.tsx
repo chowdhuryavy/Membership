@@ -18,7 +18,8 @@ import {
   X,
   CheckCircle2,
   Activity,
-  History
+  History,
+  Check
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Freeze } from '../types';
@@ -70,6 +71,12 @@ const Members = () => {
     ]);
     setMembers(m);
     setCategories(c);
+    
+    // Refresh selected member if we are in detail view
+    if (selectedMember) {
+        const updated = m.find(mem => mem.id === selectedMember.id);
+        if (updated) setSelectedMember(updated);
+    }
   };
 
   const confirmDelete = async () => {
@@ -348,7 +355,7 @@ const Members = () => {
           member={selectedMember} 
           initialFreeze={autoFreeze}
           onBack={() => { setView('list'); setSelectedMember(null); setAutoFreeze(false); }}
-          onUpdate={() => { loadData(); setView('list'); setAutoFreeze(false); }} 
+          onUpdate={() => { loadData(); setAutoFreeze(false); }} 
         />
       )}
     </div>
@@ -403,7 +410,7 @@ const MemberForm = ({ categories, existingMember, currentOutletId, onCancel, onS
       category_id: data.category_id,
       start_date: data.start_date,
       original_end_date: endDateStr, 
-      current_end_date: endDateStr,  
+      current_end_date: existingMember ? existingMember.current_end_date : endDateStr,  
       actual_rate: selectedCategory.base_rate,
       discount: data.discount,
       net_amount: netAmount,
@@ -509,13 +516,20 @@ const MemberDetail = ({ member, initialFreeze = false, onBack, onUpdate }: any) 
   const { formatMoney, currency, hasPermission } = useSettings();
   const [freezes, setFreezes] = useState<Freeze[]>([]);
   const [isFreezing, setIsFreezing] = useState(initialFreeze);
+  const [editingFreezeId, setEditingFreezeId] = useState<string | null>(null);
   const [freezeStart, setFreezeStart] = useState('');
   const [freezeDays, setFreezeDays] = useState(0);
   const [error, setError] = useState('');
+  const [freezeToDelete, setFreezeToDelete] = useState<string | null>(null);
 
   const canEdit = user && hasPermission(user.role_id, 'members:edit');
 
-  useEffect(() => { db.getFreezes(member.id).then(setFreezes); }, [member.id]);
+  const loadFreezes = async () => {
+    const data = await db.getFreezes(member.id);
+    setFreezes(data);
+  };
+
+  useEffect(() => { loadFreezes(); }, [member.id]);
 
   const handleAddFreeze = async () => {
     if (!canEdit) return;
@@ -523,10 +537,49 @@ const MemberDetail = ({ member, initialFreeze = false, onBack, onUpdate }: any) 
     if (!freezeStart || freezeDays <= 0) return;
     const start = parseISO(freezeStart);
     const end = addDays(start, freezeDays - 1);
-    if (RevenueEngine.checkFreezeOverlap(start, end, freezes)) { setError("Overlap with existing freeze."); return; }
-    await db.addFreeze({ id: `fz_${Date.now()}`, member_id: member.id, start_date: freezeStart, end_date: format(end, 'yyyy-MM-dd'), total_days: freezeDays });
+    
+    // Check overlap with OTHER freezes
+    const otherFreezes = editingFreezeId ? freezes.filter(f => f.id !== editingFreezeId) : freezes;
+    if (RevenueEngine.checkFreezeOverlap(start, end, otherFreezes)) { setError("Overlap with existing freeze."); return; }
+    
+    if (editingFreezeId) {
+        await db.updateFreeze(editingFreezeId, { 
+          start_date: freezeStart, 
+          end_date: format(end, 'yyyy-MM-dd'), 
+          total_days: freezeDays 
+        });
+        setEditingFreezeId(null);
+    } else {
+        await db.addFreeze({ 
+          id: `fz_${Date.now()}`, 
+          member_id: member.id, 
+          start_date: freezeStart, 
+          end_date: format(end, 'yyyy-MM-dd'), 
+          total_days: freezeDays 
+        });
+    }
+    
     setIsFreezing(false);
+    setFreezeStart('');
+    setFreezeDays(0);
+    loadFreezes();
     onUpdate(); 
+  };
+
+  const startEditFreeze = (fz: Freeze) => {
+      setEditingFreezeId(fz.id);
+      setFreezeStart(fz.start_date);
+      setFreezeDays(fz.total_days);
+      setIsFreezing(true);
+  };
+
+  const confirmDeleteFreeze = async () => {
+      if (freezeToDelete) {
+          await db.deleteFreeze(freezeToDelete);
+          setFreezeToDelete(null);
+          loadFreezes();
+          onUpdate();
+      }
   };
 
   return (
@@ -542,52 +595,105 @@ const MemberDetail = ({ member, initialFreeze = false, onBack, onUpdate }: any) 
               </div>
             </CardHeader>
             <CardContent className="p-8 grid grid-cols-2 md:grid-cols-3 gap-8">
-               <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Start Date</label><p className="font-bold text-slate-700">{member.start_date}</p></div>
-               <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Expiry Date</label><p className="font-black text-indigo-600">{member.current_end_date}</p></div>
+               <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Enrollment Date</label><p className="font-bold text-slate-700">{member.start_date}</p></div>
+               <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Adjusted Expiry</label><p className="font-black text-indigo-600">{member.current_end_date}</p></div>
                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ref No.</label><p className="font-bold text-slate-700 uppercase">{member.check_no || 'N/A'}</p></div>
             </CardContent>
           </Card>
           <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
             <CardHeader className="flex flex-row justify-between items-center p-8 border-b border-slate-100 bg-white">
-              <div><CardTitle className="text-xl font-black text-slate-900 tracking-tight">Freeze History</CardTitle><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Temporal Extensions</p></div>
+              <div><CardTitle className="text-xl font-black text-slate-900 tracking-tight">Freeze History</CardTitle><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Lifecycle Extensions</p></div>
               {canEdit && (
-                <Button size="sm" variant="outline" onClick={() => setIsFreezing(!isFreezing)} className="rounded-xl font-black h-10 border-slate-200">
-                    <Snowflake className="w-4 h-4 mr-2" /> {isFreezing ? 'Cancel' : 'Add Freeze'}
+                <Button size="sm" variant="outline" onClick={() => { setIsFreezing(!isFreezing); setEditingFreezeId(null); }} className="rounded-xl font-black h-10 border-slate-200">
+                    <Snowflake className="w-4 h-4 mr-2" /> {isFreezing && !editingFreezeId ? 'Cancel' : 'Add Freeze'}
                 </Button>
               )}
             </CardHeader>
             <CardContent className="p-8">
               {isFreezing && canEdit && (
                 <div className="bg-indigo-50/50 p-6 mb-8 rounded-[1.5rem] border border-indigo-100 animate-in zoom-in-95">
+                  <div className="flex justify-between items-center mb-4">
+                      <h4 className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">{editingFreezeId ? 'Modify Suspension' : 'New Suspension'}</h4>
+                      {editingFreezeId && <button onClick={() => { setIsFreezing(false); setEditingFreezeId(null); }} className="text-indigo-400 hover:text-indigo-600"><X className="w-4 h-4"/></button>}
+                  </div>
                   <div className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="w-full md:flex-1 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Start Date</label><Input type="date" value={freezeStart} onChange={e => setFreezeStart(e.target.value)} className="h-12 rounded-xl bg-white border-indigo-100" /></div>
                     <div className="w-full md:flex-1 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Days</label><Input type="number" value={freezeDays} onChange={e => setFreezeDays(parseInt(e.target.value))} className="h-12 rounded-xl bg-white border-indigo-100" /></div>
-                    <Button onClick={handleAddFreeze} className="w-full md:w-auto h-12 px-8 rounded-xl font-black">Apply</Button>
+                    <Button onClick={handleAddFreeze} className="w-full md:w-auto h-12 px-8 rounded-xl font-black flex items-center gap-2">
+                        {editingFreezeId ? <Check className="w-4 h-4" /> : null}
+                        {editingFreezeId ? 'Update' : 'Apply'}
+                    </Button>
                   </div>
                   {error && <div className="text-red-600 text-[10px] font-black uppercase mt-3 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> {error}</div>}
                 </div>
               )}
               {freezes.length === 0 ? (<div className="text-center py-12 text-slate-400 font-medium italic">No freeze logs found.</div>) : (
-                <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest"><th className="pb-4">Start</th><th className="pb-4">End</th><th className="pb-4 text-right">Days</th></tr></thead><tbody className="divide-y divide-slate-100">{freezes.map(f => (<tr key={f.id}><td className="py-4 font-bold text-slate-700">{f.start_date}</td><td className="py-4 font-bold text-slate-700">{f.end_date}</td><td className="py-4 text-right font-black text-indigo-600 tabular-nums">{f.total_days}</td></tr>))}</tbody></table></div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
+                                <th className="pb-4">Start Date</th>
+                                <th className="pb-4">End Date</th>
+                                <th className="pb-4 text-center">Duration</th>
+                                {canEdit && <th className="pb-4 text-right">Operations</th>}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {freezes.map(f => (
+                                <tr key={f.id} className="group hover:bg-slate-50 transition-colors">
+                                    <td className="py-4 font-bold text-slate-700">{f.start_date}</td>
+                                    <td className="py-4 font-bold text-slate-700">{f.end_date}</td>
+                                    <td className="py-4 text-center">
+                                        <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest">
+                                            {f.total_days} Days
+                                        </span>
+                                    </td>
+                                    {canEdit && (
+                                        <td className="py-4 text-right">
+                                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => startEditFreeze(f)} className="p-2 text-slate-400 hover:text-indigo-600 rounded-xl hover:bg-white border border-transparent hover:border-slate-200 transition-all">
+                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button onClick={() => setFreezeToDelete(f.id)} className="p-2 text-slate-400 hover:text-red-600 rounded-xl hover:bg-white border border-transparent hover:border-slate-200 transition-all">
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    )}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
               )}
             </CardContent>
           </Card>
         </div>
         <div className="space-y-8">
            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
-             <CardHeader className="p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900 tracking-tight">Summary</CardTitle></CardHeader>
+             <CardHeader className="p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900 tracking-tight">Financial Summary</CardTitle></CardHeader>
              <CardContent className="p-8 space-y-6">
                <div className="flex justify-between items-center text-xs font-bold"><span className="text-slate-400 uppercase tracking-widest">Gross Rate</span><span className="text-slate-900">{formatMoney(member.actual_rate)}</span></div>
                <div className="flex justify-between items-center text-xs font-bold"><span className="text-slate-400 uppercase tracking-widest">Discount</span><span className="text-red-500">{formatMoney(member.discount)}</span></div>
                <div className="pt-4 border-t border-slate-100 flex justify-between items-center"><span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Net Recognized</span><span className="text-2xl font-black text-indigo-600 tracking-tighter tabular-nums">{formatMoney(member.net_amount)}</span></div>
                <div className="pt-6 bg-slate-50 p-6 rounded-[1.5rem] space-y-4 border border-slate-100 shadow-inner">
                  <div className="flex justify-between items-center text-[10px] font-black"><span className="text-slate-400 uppercase tracking-widest">Daily Velocity</span><span className="text-indigo-900 font-mono tracking-tighter">{currency?.symbol || '$'}{member.daily_rate.toFixed(2)} / DAY</span></div>
-                 <div className="flex justify-between items-center text-[10px] font-black"><span className="text-slate-400 uppercase tracking-widest">Logic</span><span className="text-emerald-600 uppercase">Linear Pro-Rata</span></div>
+                 <div className="flex justify-between items-center text-[10px] font-black"><span className="text-slate-400 uppercase tracking-widest">Logic</span><span className="text-emerald-600 uppercase">Linear Extension</span></div>
                </div>
              </CardContent>
            </Card>
         </div>
       </div>
+      
+      <ConfirmationModal 
+        isOpen={!!freezeToDelete}
+        onClose={() => setFreezeToDelete(null)}
+        onConfirm={confirmDeleteFreeze}
+        title="Revoke Suspension"
+        description="Are you sure you want to delete this freeze? The membership expiry date will be automatically adjusted (reduced) by the duration of this suspension."
+        confirmText="Confirm Deletion"
+        isDestructive={true}
+      />
     </div>
   );
 };

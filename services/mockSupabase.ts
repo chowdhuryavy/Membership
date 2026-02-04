@@ -2,6 +2,10 @@
 import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission } from '../types';
 import { supabase } from './supabase';
 import { createClient } from '@supabase/supabase-js';
+import { addDays, format } from 'date-fns';
+
+// Fix: Local implementation for parseISO to resolve environment-specific import errors
+const parseISO = (dateString: string) => new Date(dateString);
 
 const supabaseUrl = 'https://fqwfffkkaeknaqjorygy.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxd2ZmZmtrYWVrbmFxam9yeWd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4ODgxNjgsImV4cCI6MjA4NTQ2NDE2OH0.ntOUbYdxrge-0imvDduz1uA01tgHDttU5fNdxbxMm9A';
@@ -311,12 +315,65 @@ class DatabaseService {
 
   async addFreeze(freeze: Freeze): Promise<void> { 
     if (this.isSupabase()) { 
-        const { data: m } = await supabase.from('members').select('guest_name, outlet_id').eq('id', freeze.member_id).single();
+        const { data: m } = await supabase.from('members').select('*').eq('id', freeze.member_id).single();
+        if (!m) throw new Error("Member not found");
+
         const { error: fzErr } = await supabase.from('freezes').insert([freeze]); 
         if (fzErr) throw new Error(fzErr.message); 
-        await supabase.from('members').update({ status: MemberStatus.FROZEN }).eq('id', freeze.member_id); 
-        await this.logAction('FREEZE_MEMBER', `Suspended account activity: ${m?.guest_name || freeze.member_id} for ${freeze.total_days} days`, m?.outlet_id);
+
+        // Auto-Extension Logic: Increase current_end_date by freeze total_days
+        const newEndDate = format(addDays(parseISO(m.current_end_date), freeze.total_days), 'yyyy-MM-dd');
+        
+        await supabase.from('members').update({ 
+          status: MemberStatus.FROZEN,
+          current_end_date: newEndDate 
+        }).eq('id', freeze.member_id); 
+
+        await this.logAction('FREEZE_MEMBER', `Account suspended: ${m.guest_name}. Membership extended by ${freeze.total_days} days to ${newEndDate}`, m.outlet_id);
     } 
+  }
+
+  async updateFreeze(id: string, updates: Partial<Freeze>): Promise<void> {
+    if (this.isSupabase()) {
+      const { data: oldFz } = await supabase.from('freezes').select('*').eq('id', id).single();
+      const { data: m } = await supabase.from('members').select('*').eq('id', oldFz.member_id).single();
+      if (!oldFz || !m) return;
+
+      const { error: fzErr } = await supabase.from('freezes').update(updates).eq('id', id);
+      if (fzErr) throw new Error(fzErr.message);
+
+      // Recalculate Extension: Difference between old and new duration
+      if (updates.total_days !== undefined && updates.total_days !== oldFz.total_days) {
+        const diff = updates.total_days - oldFz.total_days;
+        const newEndDate = format(addDays(parseISO(m.current_end_date), diff), 'yyyy-MM-dd');
+        await supabase.from('members').update({ current_end_date: newEndDate }).eq('id', m.id);
+        await this.logAction('UPDATE_FREEZE', `Modified suspension term for ${m.guest_name}. Adjusted expiry by ${diff} days.`, m.outlet_id);
+      }
+    }
+  }
+
+  async deleteFreeze(id: string): Promise<void> {
+    if (this.isSupabase()) {
+      const { data: fz } = await supabase.from('freezes').select('*').eq('id', id).single();
+      const { data: m } = await supabase.from('members').select('*').eq('id', fz.member_id).single();
+      if (!fz || !m) return;
+
+      await supabase.from('freezes').delete().eq('id', id);
+
+      // Reversal Logic: Subtract the days that were previously added
+      const newEndDate = format(addDays(parseISO(m.current_end_date), -fz.total_days), 'yyyy-MM-dd');
+      
+      // Check if other active freezes exist to determine status
+      const { data: otherFreezes } = await supabase.from('freezes').select('*').eq('member_id', m.id);
+      const stillFrozen = (otherFreezes || []).length > 0;
+      
+      await supabase.from('members').update({ 
+        current_end_date: newEndDate,
+        status: stillFrozen ? MemberStatus.FROZEN : MemberStatus.ACTIVE 
+      }).eq('id', m.id);
+
+      await this.logAction('DELETE_FREEZE', `Revoked suspension for ${m.guest_name}. Expiry rolled back by ${fz.total_days} days to ${newEndDate}`, m.outlet_id);
+    }
   }
 
   async updateSettings(updates: Partial<CompanySettings>): Promise<void> { 
@@ -406,7 +463,20 @@ class DatabaseService {
   async getMembers(outletId?: string): Promise<Member[]> { if (this.isSupabase()) { let q = supabase.from('members').select('*'); if (outletId) q = q.eq('outlet_id', outletId); const { data } = await q; if (data) return data; } return []; }
   async getFreezes(memberId?: string): Promise<Freeze[]> { if (this.isSupabase()) { let q = supabase.from('freezes').select('*'); if (memberId) q = q.eq('member_id', memberId); const { data } = await q; if (data) return data; } return []; }
   async getUsers(): Promise<UserProfile[]> { if (this.isSupabase()) { const { data } = await supabase.from('profiles').select('*').order('name'); if (data) return data; } return []; }
-  async getLogs(outletId?: string): Promise<SystemLog[]> { if (this.isSupabase()) { let q = supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(2000); if (outletId) q = q.eq('outlet_id', outletId); const { data } = await q; return data || []; } return []; }
+  async getLogs(outletId?: string): Promise<SystemLog[]> { 
+    if (this.isSupabase()) { 
+      let q = supabase.from('system_logs').select('*');
+      
+      // Inclusion Logic: Show facility events OR global events (where outlet_id is NULL)
+      if (outletId) {
+        q = q.or(`outlet_id.eq.${outletId},outlet_id.is.null`);
+      }
+      
+      const { data } = await q.order('timestamp', { ascending: false }).limit(2000); 
+      return data || []; 
+    } 
+    return []; 
+  }
 }
 
 export const db = new DatabaseService();

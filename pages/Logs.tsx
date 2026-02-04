@@ -30,6 +30,10 @@ const Logs = () => {
         try {
             const data = await db.getLogs(currentOutlet?.id);
             setLogs(data || []);
+            // Heartbeat: If logs are empty, log a system ready event to ensure the table isn't blank next refresh
+            if (data && data.length === 0) {
+              db.logAction('SYSTEM_INITIALIZED', 'Audit engine verified connectivity to cloud database.');
+            }
         } catch (e) {
             console.error("Failed to load logs", e);
         } finally {
@@ -83,7 +87,7 @@ const Logs = () => {
                     <div>
                         <h1 className="text-2xl font-black text-slate-900 tracking-tighter">System Audit Trail</h1>
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                           Scope: {currentOutlet?.name || 'Global Events'}
+                           Scope: {currentOutlet?.name || 'Global'} + Shared Identity Logs
                         </p>
                     </div>
                 </div>
@@ -91,7 +95,7 @@ const Logs = () => {
                     <div className="relative group">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <input 
-                            placeholder="Universal Search..." 
+                            placeholder="Search actions or users..." 
                             className="h-11 pl-12 pr-4 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-xs font-bold w-full sm:w-64"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -120,15 +124,16 @@ const Logs = () => {
                                     <td colSpan={4} className="px-8 py-32 text-center">
                                         <div className="flex flex-col items-center gap-4">
                                             <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Acquiring Log Fragments...</p>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Synchronizing Audit Buffers...</p>
                                         </div>
                                     </td>
                                 </tr>
                             ) : filteredLogs.length === 0 ? (
                                 <tr>
                                     <td colSpan={4} className="px-8 py-20 text-center">
-                                        <div className="bg-slate-50 inline-flex p-4 rounded-full mb-4"><History className="w-8 h-8 text-slate-300" /></div>
-                                        <p className="text-slate-400 font-bold italic">Zero event data matching search parameters.</p>
+                                        <div className="bg-slate-50 inline-flex p-4 rounded-full mb-4 shadow-inner"><History className="w-8 h-8 text-slate-300" /></div>
+                                        <p className="text-slate-500 font-black uppercase tracking-widest text-[11px]">No activity logs detected in current scope.</p>
+                                        <p className="text-slate-400 text-[10px] mt-1 font-bold">Try performing an action (like adding a member) to generate data.</p>
                                     </td>
                                 </tr>
                             ) : (
@@ -187,8 +192,7 @@ const Logs = () => {
                     <div>
                         <h4 className="text-white font-black uppercase tracking-widest text-sm mb-1">Cryptographic Audit Integrity</h4>
                         <p className="text-indigo-200/60 text-xs font-medium max-w-2xl leading-relaxed">
-                            This log documents every mutation in the system state. All session activities and identity shifts are tracked for compliance auditing. 
-                            Global actions are recorded alongside facility operations.
+                            This log documents every mutation in the system state. To ensure visibility, global events like Logins and Settings changes are displayed regardless of the facility currently selected.
                         </p>
                     </div>
                 </div>
