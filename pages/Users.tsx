@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
+import { supabase } from '../services/supabase';
 import { UserProfile, Role, Outlet } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -48,11 +49,14 @@ const Users = () => {
 
   // Helper for deletion logic
   const callEdgeFunction = async (action: string, userId: string, extra?: { newPassword?: string, newEmail?: string }) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    
     const res = await fetch("https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/dynamic-action", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${(user as any)?.access_token || ''}`
+        "Authorization": `Bearer ${token || ''}`
       },
       body: JSON.stringify({ action, userId, ...extra }),
     });
@@ -64,11 +68,15 @@ const Users = () => {
 
   // Helper specifically for Admin Reset updates (Password/Email/Name)
   const callAdminReset = async (userId: string, updates: { password?: string; email?: string; name?: string }) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
     const res = await fetch("https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/admin-reset-user", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-admin-token": "SUPER_SECRET_12345", // Edge Function secret
+        "Authorization": `Bearer ${token || ''}`,
+        "x-admin-token": "SUPER_SECRET_12345", 
       },
       body: JSON.stringify({ userId, ...updates }),
     });

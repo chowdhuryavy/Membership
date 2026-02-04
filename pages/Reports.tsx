@@ -214,11 +214,10 @@ const Reports = () => {
   const canExport = hasPermission(user?.role_id || '', 'reports:export');
   let globalIndexCounter = 0;
 
-  // Verification helper for logo URL string
+  // Reliable Logo Rendering with Fallback
+  // Ensure we don't block valid non-standard URLs
   const isValidUrl = (url?: string) => {
-    if (!url) return false;
-    if (url === 'Logo' || url === '') return false;
-    return url.startsWith('http') || url.startsWith('data:image') || url.startsWith('/');
+    return url && url.length > 5;
   };
 
   // Determine logo source with fallback to system settings
@@ -311,9 +310,16 @@ const Reports = () => {
                         {logoToUse ? (
                             <img 
                                 src={logoToUse} 
-                                crossOrigin="anonymous" 
+                                // CORS attribute removed to allow non-compliant images to display on screen
                                 alt="Branding" 
-                                onError={() => setLogoError(true)}
+                                onError={(e) => {
+                                    // Prevent infinite loop if global logo also fails
+                                    if (logoToUse !== settings?.logo_url) {
+                                        setLogoError(true);
+                                    } else {
+                                        e.currentTarget.style.display = 'none'; // Hide if both fail
+                                    }
+                                }}
                                 className="h-32 w-auto object-contain block" 
                                 style={{ maxWidth: '300px' }}
                             />
