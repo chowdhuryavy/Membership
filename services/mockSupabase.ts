@@ -180,31 +180,35 @@ class DatabaseService {
       return [{ id: 'admin', name: 'Administrator', permissions: ['members:view', 'members:create', 'members:edit', 'members:delete', 'categories:view', 'categories:create', 'categories:edit', 'categories:delete', 'users:view', 'users:create', 'users:edit', 'users:delete', 'settings:view', 'settings:edit', 'reports:view', 'reports:export', 'logs:view', 'properties:view', 'properties:edit', 'outlets:view', 'outlets:edit'], is_system: true }];
   }
 
-  aasync updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) {
-    const { data: current } = await supabase.from('profiles').select('email, auth_id, name').eq('id', id).single();
+  async addUser(user: Omit<UserProfile, 'id'> & { password: string }) {
+    // 1️⃣ Create Auth account
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: user.email.trim().toLowerCase(),
+        password: user.password,
+        options: { data: { name: user.name, full_name: user.name, display_name: user.name } }
+    });
 
-    if (!current) throw new Error("User not found");
+    if (authError) throw new Error(authError.message);
+    if (!authData.user) throw new Error("Auth signup failed");
 
-    // If user has an auth account
-    if (current.auth_id) {
-        await supabase.auth.admin.updateUserById(current.auth_id, {
-            email: updates.email?.trim().toLowerCase(),
-            password: updates.password
-        });
-    }
-
-    // Update the profile table
-    const finalUpdates: any = {
-        name: updates.name,
-        email: updates.email?.trim().toLowerCase(),
-        role_id: updates.role_id,
-        allowed_outlets: updates.allowed_outlets,
-        updated_at: new Date().toISOString()
+    // 2️⃣ Insert into profiles table with auth_id
+    const id = crypto.randomUUID();
+    const insertData = {
+        id,
+        email: user.email.trim().toLowerCase(),
+        name: user.name,
+        role_id: user.role_id,
+        allowed_outlets: user.allowed_outlets || [],
+        auth_id: authData.user.id, // LINK to Auth
+        temp_password: null
     };
-    Object.keys(finalUpdates).forEach(k => finalUpdates[k] === undefined && delete finalUpdates[k]);
 
-    await supabase.from('profiles').update(finalUpdates).eq('id', id);
+    const { error: dbError } = await supabase.from('profiles').insert([insertData]);
+    if (dbError) throw new Error(dbError.message);
+
+    return { ...user, id, auth_id: authData.user.id } as UserProfile;
 }
+
 
 
   async updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) {
