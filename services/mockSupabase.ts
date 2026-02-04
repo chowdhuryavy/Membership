@@ -1,10 +1,30 @@
 
 import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission } from '../types';
 import { supabase } from './supabase';
+import { createClient } from '@supabase/supabase-js';
+
+// Credentials for internal re-provisioning
+const supabaseUrl = 'https://fqwfffkkaeknaqjorygy.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxd2ZmZmtrYWVrbmFxam9yeWd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4ODgxNjgsImV4cCI6MjA4NTQ2NDE2OH0.ntOUbYdxrge-0imvDduz1uA01tgHDttU5fNdxbxMm9A';
 
 class DatabaseService {
   private isSupabase() {
     return !!supabase;
+  }
+
+  /**
+   * Creates a temporary client that doesn't share localStorage.
+   * This is the ONLY way to call signUp from an Admin session 
+   * without logging the Admin out.
+   */
+  private getTempClient() {
+    return createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
+      }
+    });
   }
 
   async logAction(action: string, details: string, outlet_id?: string) {
@@ -28,132 +48,143 @@ class DatabaseService {
     }
   }
 
-  /**
-   * REFINED IDENTITY SYNC ENGINE
-   * Ensures the Supabase Auth "Display Name" column matches our "Profiles" table.
-   */
   async syncAuthMetadata(profile: UserProfile) {
     if (!this.isSupabase()) return;
-    
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
     const metaName = user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.display_name;
-    
     if (profile.name !== metaName) {
-      console.debug("Pushing metadata to Supabase Auth Dashboard...");
       await supabase.auth.updateUser({
-        data: {
-          full_name: profile.name,
-          display_name: profile.name,
-          name: profile.name
-        }
+        data: { full_name: profile.name, display_name: profile.name, name: profile.name }
       });
     }
   }
 
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (!this.isSupabase()) return { user: null, error: "Cloud sync offline." };
-    
     const cleanEmail = email.trim().toLowerCase();
     
-    // 1. Fetch the user profile from the database first
+    // 1. Check local profile state
     const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
 
-    // 2. Try standard login with existing Auth record
+    // 2. Standard Login Attempt
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: passwordAttempt
     });
 
-    // 3. JIT RECONCILIATION LOGIC (Handles Admin Password Resets)
-    // If standard login fails OR profile is unlinked (auth_id is null)
+    // 3. JIT RECONCILIATION (Handles password resets or failed initial syncs)
     if (authError || (profile && !profile.auth_id)) {
-        // If the password matches the one the Admin set in the DB
         if (profile && profile.temp_password === passwordAttempt) {
-            console.debug("Admin reset detected. Provisioning new Auth identity...");
+            console.debug("JIT: Syncing profile with Auth Dashboard...");
             
-            // Create a fresh entry in Supabase Auth dashboard
+            // Try to create the Auth record (will fail if record exists in Auth but with different pass)
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                 email: cleanEmail,
                 password: passwordAttempt,
                 options: { 
-                  data: { 
-                    full_name: profile.name, 
-                    display_name: profile.name, 
-                    name: profile.name 
-                  }
+                  data: { full_name: profile.name, display_name: profile.name, name: profile.name }
                 }
             });
 
             if (signUpError) {
-              // Handle "User already exists" conflict
               if (signUpError.message.toLowerCase().includes('already registered')) {
                 return { 
                   user: null, 
-                  error: "Identity Sync Conflict: Admin has reset your password, but your old record still exists in Supabase. Admin must delete your old account from 'Auth > Users' in the Supabase Dashboard before you can log in with the new key." 
+                  error: "SYNC ERROR: A record for this email exists in the Supabase Auth Dashboard with a different password. To apply the new password, the Administrator must manually delete the user from the 'Authentication' tab in the Supabase Dashboard first." 
                 };
               }
-              // Handle "Email confirmations" error
               if (signUpError.status === 500 || signUpError.message.includes('Email confirmations')) {
-                return { 
-                  user: null, 
-                  error: "Supabase Config Error: 'Email Confirmations' must be OFF in your Supabase Auth Settings (Dashboard) to allow password resets." 
-                };
+                return { user: null, error: "SUPABASE ERROR 500: Please disable 'Email Confirmations' in your Supabase Auth Settings to allow password provisioning." };
               }
               return { user: null, error: signUpError.message };
             }
 
             if (signUpData.user) {
-              // Successfully provisioned. Link the profile.
-              await supabase.from('profiles').update({ 
-                  auth_id: signUpData.user.id, 
-                  temp_password: null 
-              }).eq('id', profile.id);
-              
+              await supabase.from('profiles').update({ auth_id: signUpData.user.id, temp_password: null }).eq('id', profile.id);
               const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
               return { user: refreshed, error: null };
             }
         }
-        
-        // Handle First-Time Admin Setup
-        const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-        if (count === 0 && email.includes('@')) {
-          const { data: bs } = await supabase.auth.signUp({ 
-              email, 
-              password: passwordAttempt, 
-              options: { data: { name: "System Admin", full_name: "System Admin" } } 
-          });
-          if (bs.user) {
-            const admin = { id: crypto.randomUUID(), auth_id: bs.user.id, email, name: "System Admin", role_id: 'admin', allowed_outlets: [] };
-            await supabase.from('profiles').insert([admin]);
-            return { user: admin, error: null };
-          }
-        }
-        
         return { user: null, error: authError?.message || "Invalid credentials." };
     }
 
-    // 4. Standard Success Flow
+    // 4. Standard Flow
     if (authData.user && profile) {
-        // Update auth_id if it was missing
-        if (!profile.auth_id || profile.auth_id !== authData.user.id) {
+        if (!profile.auth_id) {
           await supabase.from('profiles').update({ auth_id: authData.user.id, temp_password: null }).eq('id', profile.id);
         }
-        // Force metadata sync for Dashboard display
         await this.syncAuthMetadata(profile);
         return { user: profile, error: null };
     }
 
-    return { user: null, error: "Auth communication timeout." };
+    return { user: null, error: "Identity server unreachable." };
+  }
+
+  async addUser(user: Omit<UserProfile, 'id'> & { password?: string }): Promise<UserProfile> {
+    const id = crypto.randomUUID();
+    const cleanEmail = user.email.trim().toLowerCase();
+    
+    if (this.isSupabase()) {
+        // 1. Immediate Auth Provisioning using Temp Client
+        // This makes the user appear in the Supabase Dashboard instantly
+        const tempClient = this.getTempClient();
+        const { data: authData, error: authError } = await tempClient.auth.signUp({
+            email: cleanEmail,
+            password: user.password || 'Temporary123!',
+            options: {
+                data: { full_name: user.name, name: user.name, display_name: user.name }
+            }
+        });
+
+        // 2. Create Profile record
+        const insertData = {
+            id,
+            email: cleanEmail,
+            name: user.name,
+            role_id: user.role_id,
+            allowed_outlets: user.allowed_outlets || [],
+            temp_password: authError ? user.password : null,
+            auth_id: authData?.user?.id || null
+        };
+
+        const { error: dbError } = await supabase.from('profiles').insert([insertData]);
+        if (dbError) throw new Error(`DB Sync Error: ${dbError.message}`);
+        
+        if (authError) {
+            console.warn("Auth Provisioning failed but profile saved. User will re-sync on login. Reason:", authError.message);
+        }
+    }
+    return { ...user, id } as UserProfile;
+  }
+
+  async updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) { 
+    if (this.isSupabase()) {
+        const { data: current } = await supabase.from('profiles').select('email, auth_id, name').eq('id', id).single();
+        const finalUpdates: any = { 
+            name: updates.name,
+            email: updates.email?.trim().toLowerCase(),
+            role_id: updates.role_id,
+            allowed_outlets: updates.allowed_outlets,
+            updated_at: new Date().toISOString()
+        };
+
+        // If credentials change, we UNLINK to allow re-provisioning on user login
+        // (Standard client SDKs cannot change passwords for other users)
+        if (updates.password || (updates.email && updates.email !== current.email)) {
+            finalUpdates.auth_id = null;
+            if (updates.password) finalUpdates.temp_password = updates.password;
+        }
+
+        Object.keys(finalUpdates).forEach(k => finalUpdates[k] === undefined && delete finalUpdates[k]);
+        const { error } = await supabase.from('profiles').update(finalUpdates).eq('id', id);
+        if (error) throw new Error(error.message);
+    }
   }
 
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
-    if (!this.isSupabase()) return { user: null, error: "Cloud sync offline." };
     const { data: authData, error: authError } = await supabase.auth.signUp({ 
-        email, 
-        password: passwordAttempt, 
-        options: { data: { name, full_name: name, display_name: name } } 
+        email, password: passwordAttempt, options: { data: { name, full_name: name } } 
     });
     if (authError) return { user: null, error: authError.message };
     if (authData.user) {
@@ -161,225 +192,33 @@ class DatabaseService {
       await supabase.from('profiles').insert([newUser]);
       return { user: newUser as any, error: null };
     }
-    return { user: null, error: "Signup failed." };
+    return { user: null, error: "Signup process failed." };
   }
 
-  async getSettings(): Promise<CompanySettings> { 
-      if (this.isSupabase()) { 
-          const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle(); 
-          if (data && data.name) return data; 
-      } 
-      return { name: 'The Torch Hospitality', logo_url: '', address: '', currency_id: 'default' }; 
-  }
-  
-  async getRoles(): Promise<Role[]> {
-      if (this.isSupabase()) {
-          const { data } = await supabase.from('roles').select('*');
-          if (data && data.length > 0) return data;
-      }
-      return [{ id: 'admin', name: 'Administrator', permissions: ['members:view', 'members:create', 'members:edit', 'members:delete', 'categories:view', 'categories:create', 'categories:edit', 'categories:delete', 'users:view', 'users:create', 'users:edit', 'users:delete', 'settings:view', 'settings:edit', 'reports:view', 'reports:export', 'logs:view', 'properties:view', 'properties:edit', 'outlets:view', 'outlets:edit'], is_system: true }];
-  }
-
-  async addUser(user: Omit<UserProfile, 'id'> & { password: string }) {
-    // 1️⃣ Create Auth account
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: user.email.trim().toLowerCase(),
-        password: user.password,
-        options: { data: { name: user.name, full_name: user.name, display_name: user.name } }
-    });
-
-    if (authError) throw new Error(authError.message);
-    if (!authData.user) throw new Error("Auth signup failed");
-
-    // 2️⃣ Insert into profiles table with auth_id
-    const id = crypto.randomUUID();
-    const insertData = {
-        id,
-        email: user.email.trim().toLowerCase(),
-        name: user.name,
-        role_id: user.role_id,
-        allowed_outlets: user.allowed_outlets || [],
-        auth_id: authData.user.id, // LINK to Auth
-        temp_password: null
-    };
-
-    const { error: dbError } = await supabase.from('profiles').insert([insertData]);
-    if (dbError) throw new Error(dbError.message);
-
-    return { ...user, id, auth_id: authData.user.id } as UserProfile;
-}
-
-
-
-  async updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) {
-    const { data: current } = await supabase.from('profiles').select('*').eq('id', id).single();
-
-    const finalUpdates: any = {
-        name: updates.name || current.name,
-        role_id: updates.role_id,
-        allowed_outlets: updates.allowed_outlets,
-        updated_at: new Date().toISOString()
-    };
-
-    // Check if the current session user is updating their own credentials
-    const session = await supabase.auth.getSession();
-    if (session.data.session?.user?.id === current.auth_id) {
-        if (updates.password || updates.email) {
-            // Update Auth
-            const { error } = await supabase.auth.updateUser({
-                email: updates.email,
-                password: updates.password,
-                data: { name: updates.name }
-            });
-            if (error) throw new Error(error.message);
-
-            // Update profile table email/name as well
-            if (updates.email) finalUpdates.email = updates.email;
-        }
-    } else if (updates.password || updates.email) {
-        // Admin trying to change another user -> must use server/Admin API
-        finalUpdates.temp_password = updates.password || current.temp_password;
-        // auth_id remains null until user logs in (JIT)
-    }
-
-    Object.keys(finalUpdates).forEach(k => finalUpdates[k] === undefined && delete finalUpdates[k]);
-    const { error } = await supabase.from('profiles').update(finalUpdates).eq('id', id);
-    if (error) throw new Error(error.message);
-}
-
-
-
+  async getSettings(): Promise<CompanySettings> { if (this.isSupabase()) { const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle(); if (data && data.name) return data; } return { name: 'The Torch Hospitality', logo_url: '', address: '', currency_id: 'default' }; }
+  async getRoles(): Promise<Role[]> { if (this.isSupabase()) { const { data } = await supabase.from('roles').select('*'); if (data && data.length > 0) return data; } return [{ id: 'admin', name: 'Administrator', permissions: ['members:view', 'members:create', 'members:edit', 'members:delete', 'categories:view', 'categories:create', 'categories:edit', 'categories:delete', 'users:view', 'users:create', 'users:edit', 'users:delete', 'settings:view', 'settings:edit', 'reports:view', 'reports:export', 'logs:view', 'properties:view', 'properties:edit', 'outlets:view', 'outlets:edit'], is_system: true }]; }
   async deleteUser(id: string) { if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id); }
-
-  async addProperty(prop: Omit<Property, 'id'>): Promise<Property> {
-    const id = crypto.randomUUID();
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('properties').insert([{ ...prop, id }]);
-        if (error) throw new Error(error.message);
-    }
-    return { ...prop, id };
-  }
-
-  async updateProperty(id: string, updates: Partial<Property>) { 
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('properties').update(updates).eq('id', id);
-        if (error) throw new Error(error.message);
-    }
-  }
-
+  async addProperty(prop: Omit<Property, 'id'>): Promise<Property> { const id = crypto.randomUUID(); if (this.isSupabase()) { const { error } = await supabase.from('properties').insert([{ ...prop, id }]); if (error) throw new Error(error.message); } return { ...prop, id }; }
+  async updateProperty(id: string, updates: Partial<Property>) { if (this.isSupabase()) { const { error } = await supabase.from('properties').update(updates).eq('id', id); if (error) throw new Error(error.message); } }
   async deleteProperty(id: string) { if (this.isSupabase()) await supabase.from('properties').delete().eq('id', id); }
-
-  async addOutlet(name: string, propertyId: string): Promise<Outlet> {
-    const id = crypto.randomUUID();
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('outlets').insert([{ id, name, property_id: propertyId }]);
-        if (error) throw new Error(error.message);
-    }
-    return { id, name, property_id: propertyId };
-  }
-
-  async updateOutlet(id: string, updates: Partial<Outlet>) { 
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('outlets').update(updates).eq('id', id);
-        if (error) throw new Error(error.message);
-    }
-  }
-
+  async addOutlet(name: string, propertyId: string): Promise<Outlet> { const id = crypto.randomUUID(); if (this.isSupabase()) { const { error } = await supabase.from('outlets').insert([{ id, name, property_id: propertyId }]); if (error) throw new Error(error.message); } return { id, name, property_id: propertyId }; }
+  async updateOutlet(id: string, updates: Partial<Outlet>) { if (this.isSupabase()) { const { error } = await supabase.from('outlets').update(updates).eq('id', id); if (error) throw new Error(error.message); } }
   async deleteOutlet(id: string) { if (this.isSupabase()) await supabase.from('outlets').delete().eq('id', id); }
-
-  async addCategory(cat: Omit<MembershipCategory, 'id'>): Promise<MembershipCategory> {
-    const id = crypto.randomUUID();
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('membership_categories').insert([{ ...cat, id }]);
-        if (error) throw new Error(error.message);
-    }
-    return { ...cat, id };
-  }
-
-  async updateCategory(id: string, updates: Partial<MembershipCategory>) { 
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('membership_categories').update(updates).eq('id', id);
-        if (error) throw new Error(error.message);
-    }
-  }
-
+  async addCategory(cat: Omit<MembershipCategory, 'id'>): Promise<MembershipCategory> { const id = crypto.randomUUID(); if (this.isSupabase()) { const { error } = await supabase.from('membership_categories').insert([{ ...cat, id }]); if (error) throw new Error(error.message); } return { ...cat, id }; }
+  async updateCategory(id: string, updates: Partial<MembershipCategory>) { if (this.isSupabase()) { const { error } = await supabase.from('membership_categories').update(updates).eq('id', id); if (error) throw new Error(error.message); } }
   async deleteCategory(id: string) { if (this.isSupabase()) await supabase.from('membership_categories').delete().eq('id', id); }
-
-  async addMember(member: Member): Promise<Member> { 
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('members').insert([member]);
-        if (error) throw new Error(error.message);
-    } 
-    return member; 
-  }
-
-  async updateMember(id: string, updates: Partial<Member>) { 
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('members').update(updates).eq('id', id);
-        if (error) throw new Error(error.message);
-    }
-  }
-
+  async addMember(member: Member): Promise<Member> { if (this.isSupabase()) { const { error } = await supabase.from('members').insert([member]); if (error) throw new Error(error.message); } return member; }
+  async updateMember(id: string, updates: Partial<Member>) { if (this.isSupabase()) { const { error } = await supabase.from('members').update(updates).eq('id', id); if (error) throw new Error(error.message); } }
   async deleteMember(id: string) { if (this.isSupabase()) await supabase.from('members').delete().eq('id', id); }
-
-  async addFreeze(freeze: Freeze): Promise<void> { 
-    if (this.isSupabase()) {
-        const { error: fzErr } = await supabase.from('freezes').insert([freeze]); 
-        if (fzErr) throw new Error(fzErr.message);
-        await supabase.from('members').update({ status: MemberStatus.FROZEN }).eq('id', freeze.member_id);
-    }
-  }
-
-  async updateSettings(updates: Partial<CompanySettings>): Promise<void> { 
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('company_settings').upsert({ id: 'global', ...updates });
-        if (error) throw new Error(error.message);
-    }
-  }
-
-  async addCurrency(curr: Omit<Currency, 'id'>): Promise<Currency> {
-    const id = crypto.randomUUID();
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('currencies').insert([{ ...curr, id }]);
-        if (error) throw new Error(error.message);
-    }
-    return { ...curr, id };
-  }
-
-  async updateCurrency(id: string, updates: Partial<Currency>) { 
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('currencies').update(updates).eq('id', id);
-        if (error) throw new Error(error.message);
-    }
-  }
-
+  async addFreeze(freeze: Freeze): Promise<void> { if (this.isSupabase()) { const { error: fzErr } = await supabase.from('freezes').insert([freeze]); if (fzErr) throw new Error(fzErr.message); await supabase.from('members').update({ status: MemberStatus.FROZEN }).eq('id', freeze.member_id); } }
+  async updateSettings(updates: Partial<CompanySettings>): Promise<void> { if (this.isSupabase()) { const { error } = await supabase.from('company_settings').upsert({ id: 'global', ...updates }); if (error) throw new Error(error.message); } }
+  async addCurrency(curr: Omit<Currency, 'id'>): Promise<Currency> { const id = crypto.randomUUID(); if (this.isSupabase()) { const { error } = await supabase.from('currencies').insert([{ ...curr, id }]); if (error) throw new Error(error.message); } return { ...curr, id }; }
+  async updateCurrency(id: string, updates: Partial<Currency>) { if (this.isSupabase()) { const { error } = await supabase.from('currencies').update(updates).eq('id', id); if (error) throw new Error(error.message); } }
   async deleteCurrency(id: string) { if (this.isSupabase()) await supabase.from('currencies').delete().eq('id', id); }
-
-  async addRole(role: Omit<Role, 'id'>) { 
-    const id = crypto.randomUUID(); 
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('roles').insert([{ ...role, id }]); 
-        if (error) throw new Error(error.message);
-    }
-    return { ...role, id } as Role; 
-  }
-
-  async updateRole(id: string, updates: Partial<Role>) { 
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('roles').update(updates).eq('id', id);
-        if (error) throw new Error(error.message);
-    }
-  }
-
+  async addRole(role: Omit<Role, 'id'>) { const id = crypto.randomUUID(); if (this.isSupabase()) { const { error } = await supabase.from('roles').insert([{ ...role, id }]); if (error) throw new Error(error.message); } return { ...role, id } as Role; }
+  async updateRole(id: string, updates: Partial<Role>) { if (this.isSupabase()) { const { error } = await supabase.from('roles').update(updates).eq('id', id); if (error) throw new Error(error.message); } }
   async deleteRole(id: string) { if (this.isSupabase()) await supabase.from('roles').delete().eq('id', id); }
-
-  async changePassword(userId: string, cur: string, n: string) { 
-    if (this.isSupabase()) {
-        const { error } = await supabase.auth.updateUser({ password: n });
-        if (error) throw new Error(error.message);
-    } 
-  }
-
+  async changePassword(userId: string, cur: string, n: string) { if (this.isSupabase()) { const { error } = await supabase.auth.updateUser({ password: n }); if (error) throw new Error(error.message); } }
   async getCurrencies(): Promise<Currency[]> { if (this.isSupabase()) { const { data } = await supabase.from('currencies').select('*'); if (data && data.length > 0) return data; } return [{ id: 'default', code: 'USD', symbol: '$', rate: 1, is_default: true }]; }
   async getProperties(): Promise<Property[]> { if (this.isSupabase()) { const { data } = await supabase.from('properties').select('*'); if (data && data.length > 0) return data; } return []; }
   async getOutlets(): Promise<Outlet[]> { if (this.isSupabase()) { const { data } = await supabase.from('outlets').select('*'); if (data && data.length > 0) return data; } return []; }
@@ -387,15 +226,7 @@ class DatabaseService {
   async getMembers(outletId?: string): Promise<Member[]> { if (this.isSupabase()) { let q = supabase.from('members').select('*'); if (outletId) q = q.eq('outlet_id', outletId); const { data } = await q; if (data) return data; } return []; }
   async getFreezes(memberId?: string): Promise<Freeze[]> { if (this.isSupabase()) { let q = supabase.from('freezes').select('*'); if (memberId) q = q.eq('member_id', memberId); const { data } = await q; if (data) return data; } return []; }
   async getUsers(): Promise<UserProfile[]> { if (this.isSupabase()) { const { data } = await supabase.from('profiles').select('*').order('name'); if (data) return data; } return []; }
-  async getLogs(outletId?: string): Promise<SystemLog[]> {
-    if (this.isSupabase()) {
-        let q = supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(2000);
-        if (outletId) q = q.eq('outlet_id', outletId);
-        const { data } = await q;
-        return data || [];
-    }
-    return [];
-  }
+  async getLogs(outletId?: string): Promise<SystemLog[]> { if (this.isSupabase()) { let q = supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(2000); if (outletId) q = q.eq('outlet_id', outletId); const { data } = await q; return data || []; } return []; }
 }
 
 export const db = new DatabaseService();
