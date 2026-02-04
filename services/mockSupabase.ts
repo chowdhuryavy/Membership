@@ -29,52 +29,50 @@ class DatabaseService {
   }
 
   /**
-   * ATOMIC SHADOW SYNC ENGINE
-   * Handles re-provisioning of Auth accounts when Admins override credentials.
+   * REFINED AUTHENTICATION & METADATA SYNC ENGINE
+   * 1. Validates identity.
+   * 2. If login is successful, mirrors the 'Profile Name' into the 'Supabase Auth Metadata'
+   *    so the Supabase Dashboard 'Display Name' stays in sync.
    */
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (!this.isSupabase()) return { user: null, error: "Cloud sync offline." };
     
     const cleanEmail = email.trim().toLowerCase();
     
-    // 1. Attempt standard login with existing Supabase Auth credentials
+    // 1. Standard Login
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: passwordAttempt
     });
 
-    // 2. Handle failure: Check for Bootstrap or Re-Sync Pending
+    // 2. Failure: Check for Bootstrap or Re-Sync Pending
     if (authError) {
-        // Fetch profile to see if Admin provided a temporary override or changed the email
-        const { data: profile } = await supabase.from('profiles')
-            .select('*')
-            .eq('email', cleanEmail)
-            .maybeSingle();
-
+        const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
         const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
         const isFirstUser = count === 0;
 
-        // Logic: If Admin-set password matches, we attempt to CREATE the Auth account
         if (isFirstUser || (profile && profile.temp_password === passwordAttempt)) {
+            const userName = isFirstUser ? "System Administrator" : (profile?.name || "Staff");
             
+            // Provision NEW identity in Auth (Syncs Name immediately)
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                 email: cleanEmail,
                 password: passwordAttempt,
                 options: { 
-                  data: { name: isFirstUser ? "System Administrator" : (profile?.name || "Staff") },
+                  data: { 
+                    name: userName, 
+                    full_name: userName, // Dashboard often looks for full_name
+                    display_name: userName 
+                  },
                   emailRedirectTo: window.location.origin 
                 }
             });
 
             if (signUpError) {
-                // Scenario: Email change made by Admin, but an old Auth account with that email already exists
                 if (signUpError.message.toLowerCase().includes('already registered')) {
-                  return { 
-                    user: null, 
-                    error: "Sync Conflict: An authentication record for this email already exists with a different password. Please use the original password or contact support for a total reset." 
-                  };
+                  return { user: null, error: "Identity conflict. An auth record exists for this email with a different password." };
                 }
-                return { user: null, error: `Provisioning Error: ${signUpError.message}` };
+                return { user: null, error: `Sync Error: ${signUpError.message}` };
             }
 
             if (signUpData.user) {
@@ -83,47 +81,49 @@ class DatabaseService {
                     id: crypto.randomUUID(),
                     auth_id: signUpData.user.id,
                     email: cleanEmail,
-                    name: "System Administrator",
+                    name: userName,
                     role_id: 'admin',
                     allowed_outlets: []
                   };
                   await supabase.from('profiles').insert([adminProfile]);
                   return { user: adminProfile, error: null };
                 } else if (profile) {
-                  // Migration Success: Re-link profile to the new Auth ID
-                  await supabase.from('profiles').update({ 
-                      auth_id: signUpData.user.id, 
-                      temp_password: null 
-                  }).eq('id', profile.id);
+                  await supabase.from('profiles').update({ auth_id: signUpData.user.id, temp_password: null }).eq('id', profile.id);
                   const { data: updated } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
                   return { user: updated, error: null };
                 }
             }
         }
-        
-        return { user: null, error: authError.message || "Unauthorized." };
+        return { user: null, error: authError.message || "Invalid credentials." };
     }
 
-    // 3. Successful Login: Reconcile IDs
+    // 3. Success: Perform Metadata Sync for the Supabase Dashboard
     if (authData.user) {
         let { data: profile } = await supabase.from('profiles').select('*').eq('auth_id', authData.user.id).maybeSingle();
         
         if (!profile) {
-            // Check by email in case of mismatch
             const { data: emailProfile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
             if (emailProfile) {
                 await supabase.from('profiles').update({ auth_id: authData.user.id, temp_password: null }).eq('id', emailProfile.id);
                 const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', emailProfile.id).single();
                 profile = refreshed;
-            } else {
-                const newUser = { id: crypto.randomUUID(), auth_id: authData.user.id, email: cleanEmail, name: authData.user.user_metadata?.name || 'Staff User', role_id: 'viewer', allowed_outlets: [] };
-                await supabase.from('profiles').insert([newUser]);
-                profile = newUser as any;
             }
+        }
+
+        // AUTO-MIRROR NAME TO AUTH METADATA
+        // This ensures the Supabase Auth "Display Name" column stays updated after an Admin changes the name in the ERP.
+        if (profile && profile.name !== authData.user.user_metadata?.full_name) {
+            await supabase.auth.updateUser({ 
+                data: { 
+                    name: profile.name, 
+                    full_name: profile.name,
+                    display_name: profile.name 
+                } 
+            });
         }
         
         await this.logAction('AUTH_LOGIN', `Identity Verified: ${cleanEmail}`);
-        return { user: profile, error: null };
+        return { user: profile || null, error: profile ? null : "Auth verified but profile missing." };
     }
 
     return { user: null, error: "Auth Timeout." };
@@ -131,7 +131,11 @@ class DatabaseService {
 
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (!this.isSupabase()) return { user: null, error: "Cloud sync offline." };
-    const { data: authData, error: authError } = await supabase.auth.signUp({ email, password: passwordAttempt, options: { data: { name } } });
+    const { data: authData, error: authError } = await supabase.auth.signUp({ 
+        email, 
+        password: passwordAttempt, 
+        options: { data: { name, full_name: name } } 
+    });
     if (authError) return { user: null, error: authError.message };
     if (authData.user) {
       const newUser = { id: crypto.randomUUID(), auth_id: authData.user.id, email, name, role_id: 'viewer', allowed_outlets: [] };
@@ -178,7 +182,7 @@ class DatabaseService {
 
   async updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) { 
     if (this.isSupabase()) {
-        const { data: current } = await supabase.from('profiles').select('email, auth_id').eq('id', id).single();
+        const { data: current } = await supabase.from('profiles').select('email, auth_id, name').eq('id', id).single();
         
         const finalUpdates: any = { 
             name: updates.name,
@@ -188,10 +192,12 @@ class DatabaseService {
             updated_at: new Date().toISOString()
         };
 
-        // CRITICAL: If Email or Password changed by Admin, clear auth_id to force re-sync
+        // If Email changed: Clear auth_id to force migration to new identity
         if (updates.email && current && updates.email.trim().toLowerCase() !== current.email.toLowerCase()) {
             finalUpdates.auth_id = null;
         }
+        
+        // If Password changed: Clear auth_id to allow re-provisioning with new key
         if (updates.password) {
             finalUpdates.temp_password = updates.password;
             finalUpdates.auth_id = null;
@@ -341,7 +347,7 @@ class DatabaseService {
   async getCategories(outletId?: string): Promise<MembershipCategory[]> { if (this.isSupabase()) { let q = supabase.from('membership_categories').select('*'); if (outletId) q = q.eq('outlet_id', outletId); const { data } = await q; if (data) return data; } return []; }
   async getMembers(outletId?: string): Promise<Member[]> { if (this.isSupabase()) { let q = supabase.from('members').select('*'); if (outletId) q = q.eq('outlet_id', outletId); const { data } = await q; if (data) return data; } return []; }
   async getFreezes(memberId?: string): Promise<Freeze[]> { if (this.isSupabase()) { let q = supabase.from('freezes').select('*'); if (memberId) q = q.eq('member_id', memberId); const { data } = await q; if (data) return data; } return []; }
-  async getUsers(): Promise<UserProfile[]> { if (this.isSupabase()) { const { data } = await supabase.from('profiles').select('*'); if (data) return data; } return []; }
+  async getUsers(): Promise<UserProfile[]> { if (this.isSupabase()) { const { data } = await supabase.from('profiles').select('*').order('name'); if (data) return data; } return []; }
   async getLogs(outletId?: string): Promise<SystemLog[]> {
     if (this.isSupabase()) {
         let q = supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(2000);
