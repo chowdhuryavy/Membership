@@ -147,19 +147,18 @@ const Reports = () => {
     setIsGeneratingPDF(true);
     const element = reportRef.current;
     
-    // Virtual Render Optimization:
-    // We force a high scale and absolute positioning to capture the full landscape page accurately.
+    // Virtual Render: Temporarily clone to capture hidden elements and signatures
     const originalScrollPos = window.scrollY;
     window.scrollTo(0, 0);
 
     try {
       const canvas = await html2canvas(element, { 
-        scale: 3, // 300 DPI equivalent for professional print quality
+        scale: 3, // High-DPI for professional output
         useCORS: true, 
         backgroundColor: '#ffffff',
-        width: element.scrollWidth,
+        width: 1600, // Force landscape width for capture
         height: element.scrollHeight,
-        windowWidth: 1600, // Force landscape desktop width during capture
+        windowWidth: 1600,
         logging: false,
         onclone: (clonedDoc) => {
             const container = clonedDoc.querySelector('.print-container') as HTMLElement;
@@ -167,7 +166,10 @@ const Reports = () => {
                 container.style.boxShadow = 'none';
                 container.style.border = 'none';
                 container.style.borderRadius = '0';
-                container.style.padding = '120px'; // High margin for PDF framing
+                container.style.padding = '80px'; 
+                container.style.margin = '0';
+                container.style.width = '1600px';
+                container.style.minHeight = 'auto';
             }
         }
       });
@@ -180,9 +182,9 @@ const Reports = () => {
       });
       
       pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
-      pdf.save(`Revenue_Ledger_${currentOutlet?.name || 'TTH'}_${reportMonth}.pdf`);
+      pdf.save(`Ledger_${currentOutlet?.name || 'ERP'}_${reportMonth}.pdf`);
     } catch (err) { 
-        console.error("PDF engine failure:", err); 
+        console.error("PDF generator error:", err); 
     } finally { 
         window.scrollTo(0, originalScrollPos);
         setIsGeneratingPDF(false); 
@@ -190,25 +192,25 @@ const Reports = () => {
   };
 
   const canExport = hasPermission(user?.role_id || '', 'reports:export');
-  let globalIndexCounter = 0;
+  let globalSLIndex = 0;
 
   return (
     <div className="space-y-6">
         <style>
           {`
             @media print {
-              @page { size: landscape; margin: 10mm; }
+              @page { size: landscape; margin: 0; }
               body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
               .print-container { 
                 margin: 0 !important; 
-                padding: 0 !important; 
+                padding: 40mm !important; 
                 box-shadow: none !important; 
                 border: none !important;
                 width: 100% !important;
-                min-height: auto !important;
+                min-height: 100vh !important;
               }
               .no-print { display: none !important; }
-              .signature-block { page-break-inside: avoid; margin-top: 100px; padding-bottom: 50px; }
+              .signature-block { page-break-inside: avoid; margin-top: 150px; padding-bottom: 80px; }
               tr { page-break-inside: avoid; }
             }
             .deferred-text { color: #dc2626 !important; font-weight: 900 !important; }
@@ -222,7 +224,7 @@ const Reports = () => {
                     <FileText className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-black tracking-tighter">Revenue Ledger</h2>
+                  <h2 className="text-xl font-black tracking-tighter text-slate-950">Revenue Ledger</h2>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Financial Reporting</p>
                 </div>
                 <div className="h-10 w-px bg-slate-200 mx-2 hidden sm:block"></div>
@@ -260,22 +262,22 @@ const Reports = () => {
                 
                 {canExport && (
                   <Button className="rounded-xl font-black text-[10px] uppercase tracking-widest h-11 px-8 shadow-xl shadow-indigo-100 transition-all" onClick={handleDownloadPDF} isLoading={isGeneratingPDF}>
-                    {isGeneratingPDF ? 'Optimizing...' : 'Export PDF'}
+                    {isGeneratingPDF ? 'Synchronizing...' : 'Export PDF'}
                   </Button>
                 )}
             </div>
         </div>
 
         {/* Professional Ledger Document */}
-        <div ref={reportRef} className="bg-white p-20 md:p-32 rounded-[3rem] shadow-2xl max-w-[1700px] mx-auto min-h-screen print-container border border-slate-50 relative overflow-x-auto flex flex-col">
+        <div ref={reportRef} className="bg-white p-20 md:p-32 rounded-[4rem] shadow-[0_48px_128px_-16px_rgba(0,0,0,0.1)] max-w-[1700px] mx-auto min-h-screen print-container border border-slate-50 relative overflow-x-auto flex flex-col">
             
-            {/* Executive Branding Header */}
+            {/* Header / Branding */}
             <div className="flex flex-col md:flex-row justify-between items-start border-b-[8px] border-slate-950 pb-16 mb-16 gap-12 min-w-[1400px]">
                 <div className="flex items-center gap-16">
                     {currentProperty?.logo_url ? (
                         <img src={currentProperty.logo_url} alt="Logo" className="h-44 w-auto object-contain shrink-0" />
                     ) : (
-                        <div className="w-32 h-32 bg-slate-900 rounded-[2rem] flex items-center justify-center shadow-2xl shrink-0">
+                        <div className="w-32 h-32 bg-slate-900 rounded-[2.5rem] flex items-center justify-center shadow-2xl shrink-0">
                           <Building2 className="w-16 h-16 text-white" />
                         </div>
                     )}
@@ -283,36 +285,36 @@ const Reports = () => {
                         <h1 className="text-6xl md:text-8xl font-black uppercase tracking-tighter text-slate-950 leading-[0.75] mb-4">
                             {currentProperty?.name || 'The Torch Doha'}
                         </h1>
-                        <p className="text-[14px] font-black text-slate-400 uppercase tracking-[0.5em] mb-14">{currentProperty?.address || 'Corporate Headquarters'}</p>
+                        <p className="text-[14px] font-black text-slate-400 uppercase tracking-[0.6em] mb-14">{currentProperty?.address || 'Corporate Headquarters'}</p>
                         <div className="flex items-center gap-8 flex-wrap">
-                          <div className="flex items-center gap-5 bg-indigo-600 text-white px-10 py-4.5 rounded-2xl shadow-xl shadow-indigo-100">
+                          <div className="flex items-center gap-5 bg-indigo-600 text-white px-12 py-5 rounded-3xl shadow-2xl shadow-indigo-100">
                               <Activity className="w-6 h-6" />
-                              <span className="text-[13px] font-black uppercase tracking-[0.25em]">{currentOutlet?.name || 'Health Club'}</span>
+                              <span className="text-[13px] font-black uppercase tracking-[0.3em]">{currentOutlet?.name || 'Health Club'}</span>
                           </div>
-                          <div className="px-8 py-4.5 border-[3px] border-slate-100 rounded-2xl text-[12px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">
+                          <div className="px-10 py-5 border-[3px] border-slate-100 rounded-3xl text-[12px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">
                             REF: {reportMonth}-STMT
                           </div>
                         </div>
                     </div>
                 </div>
                 <div className="text-right shrink-0">
-                    <h2 className="text-[12px] font-black uppercase tracking-[0.5em] text-slate-400 mb-6 text-right">Statement Range</h2>
+                    <h2 className="text-[12px] font-black uppercase tracking-[0.5em] text-slate-400 mb-5 text-right">Statement Period</h2>
                     <p className="text-7xl font-black text-slate-950 tracking-tighter tabular-nums mb-6">
                         {format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
                     </p>
-                    <div className="inline-flex items-center gap-5 px-8 py-4 bg-emerald-50 border-[3px] border-emerald-100 rounded-3xl text-[12px] font-black text-emerald-700 uppercase tracking-[0.25em] shadow-sm">
+                    <div className="inline-flex items-center gap-5 px-8 py-4 bg-emerald-50 border-[3px] border-emerald-100 rounded-3xl text-[12px] font-black text-emerald-700 uppercase tracking-[0.3em] shadow-sm">
                         <ShieldCheck className="w-6 h-6"/> RECONCILED AUDIT
                     </div>
                 </div>
             </div>
 
-            {/* Financial Ledger Core */}
+            {/* Financial Ledger Table */}
             <div className="flex-1">
                 <table className="w-full text-[13px] border-collapse min-w-[1400px]">
                     <thead>
                         <tr className="bg-[#0f172a] text-white">
                             {activeColumns.map(col => (
-                                <th key={col.key} className={`px-6 py-10 text-center font-black uppercase tracking-[0.25em] border-r border-white/10 last:border-0 ${col.width}`}>
+                                <th key={col.key} className={`px-6 py-10 text-center font-black uppercase tracking-[0.3em] border-r border-white/10 last:border-0 ${col.width}`}>
                                     {col.label}
                                 </th>
                             ))}
@@ -330,30 +332,30 @@ const Reports = () => {
 
                         return (
                             <React.Fragment key={catName}>
-                            <tr className="bg-slate-50/60 border-b-2 border-slate-100">
+                            <tr className="bg-slate-50/50 border-b-2 border-slate-100">
                                 <td colSpan={activeColumns.length} className="px-10 py-10">
                                 <div className="flex items-center gap-6">
                                     <div className="p-3 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-100"><ReceiptText className="w-6 h-6 text-white" /></div>
-                                    <span className="text-[16px] font-black uppercase tracking-[0.45em] text-slate-950">{catName}</span>
-                                    <span className="ml-4 px-5 py-2.5 bg-white border-2 border-slate-200 rounded-full text-[11px] font-black text-slate-400 uppercase tracking-widest shadow-sm">
-                                        {groupRows.length} ACCOUNTS
+                                    <span className="text-[15px] font-black uppercase tracking-[0.5em] text-slate-950">{catName}</span>
+                                    <span className="ml-4 px-5 py-2 bg-white border-2 border-slate-200 rounded-full text-[11px] font-black text-slate-400 uppercase tracking-widest shadow-sm">
+                                        {groupRows.length} ACTIVE ACCOUNTS
                                     </span>
                                 </div>
                                 </td>
                             </tr>
                             
                             {groupRows.map((row) => {
-                                globalIndexCounter++;
+                                globalSLIndex++;
                                 return (
-                                    <tr key={`${row.membership_no}-${row.sl_no}`} className="hover:bg-slate-50/50 transition-colors">
+                                    <tr key={`${row.membership_no}-${row.sl_no}`} className="hover:bg-slate-50/70 transition-colors">
                                         {activeColumns.map(col => (
-                                            <td key={col.key} className={`px-6 py-8 border-r border-slate-50 last:border-0 ${['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? 'text-right tabular-nums' : 'text-center'} ${col.key === 'guest_name' ? 'text-left font-black text-slate-800' : ''}`}>
+                                            <td key={col.key} className={`px-6 py-8 border-r border-slate-50 last:border-0 ${['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? 'text-right tabular-nums font-bold' : 'text-center'} ${col.key === 'guest_name' ? 'text-left font-black text-slate-800' : ''}`}>
                                                 <span className={`
                                                     ${col.key === 'current_month_rev' ? 'revenue-text' : ''} 
                                                     ${col.key === 'balance' && row.balance > 0 ? 'deferred-text' : ''}
-                                                    ${['actual_fees', 'carry_forward'].includes(col.key) ? 'font-bold text-slate-700' : ''}
+                                                    ${['actual_fees', 'carry_forward'].includes(col.key) ? 'text-slate-700' : ''}
                                                 `}>
-                                                    {col.key === 'sl_no' ? globalIndexCounter : (
+                                                    {col.key === 'sl_no' ? globalSLIndex : (
                                                     ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) 
                                                     ? formatMoney(row[col.key as keyof ReportRow] as number)
                                                     : row[col.key as keyof ReportRow]
@@ -365,14 +367,14 @@ const Reports = () => {
                                 );
                             })}
 
-                            <tr className="bg-indigo-50/20 border-y-2 border-indigo-100/50">
+                            <tr className="bg-indigo-50/30 border-y-2 border-indigo-100/50">
                                 <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-10 py-8 text-right">
-                                    <span className="text-[12px] font-black uppercase tracking-[0.3em] text-indigo-400">
+                                    <span className="text-[12px] font-black uppercase tracking-[0.4em] text-indigo-400">
                                         SUB-TOTAL: {catName}
                                     </span>
                                 </td>
                                 {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
-                                    <td key={col.key} className={`px-6 py-8 text-right font-black border-x-2 border-white ${col.key === 'current_month_rev' ? 'text-indigo-900 bg-indigo-50/50' : 'text-slate-800'}`}>
+                                    <td key={col.key} className={`px-6 py-8 text-right font-black border-x-2 border-white ${col.key === 'current_month_rev' ? 'text-indigo-950 bg-indigo-50/80' : 'text-slate-800'}`}>
                                         {col.key === 'actual_fees' ? formatMoney(groupTotals.fees) : col.key === 'carry_forward' ? formatMoney(groupTotals.prev) : col.key === 'current_month_rev' ? formatMoney(groupTotals.current) : formatMoney(groupTotals.balance)}
                                     </td>
                                 ))}
@@ -386,8 +388,8 @@ const Reports = () => {
                     </tbody>
 
                     <tfoot>
-                        <tr className="bg-slate-950 text-white shadow-2xl relative z-10">
-                        <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-12 py-14 text-right text-[15px] font-black uppercase tracking-[0.6em] border-r border-white/5">
+                        <tr className="bg-slate-950 text-white shadow-[0_-10px_30px_rgba(0,0,0,0.15)] relative z-10">
+                        <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-12 py-14 text-right text-[14px] font-black uppercase tracking-[0.6em] border-r border-white/5">
                             CONSOLIDATED LEDGER TOTALS
                         </td>
                         {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
@@ -408,7 +410,7 @@ const Reports = () => {
                 <div className="flex-1 text-center space-y-20">
                     <p className="text-[17px] font-black text-slate-900 uppercase tracking-[0.4em]">Prepared By:</p>
                     <div className="pt-12 border-t-[3px] border-slate-200 w-4/5 mx-auto">
-                      <p className="text-[15px] font-bold text-slate-600 uppercase tracking-widest leading-loose">
+                      <p className="text-[15px] font-bold text-slate-600 uppercase tracking-[0.1em] leading-loose">
                         {settings?.signatory_prepared_role || 'Cluster Income Auditor'}
                       </p>
                     </div>
@@ -417,7 +419,7 @@ const Reports = () => {
                 <div className="flex-1 text-center space-y-20">
                     <p className="text-[17px] font-black text-slate-900 uppercase tracking-[0.4em]">Reviewed By:</p>
                     <div className="pt-12 border-t-[3px] border-slate-200 w-4/5 mx-auto">
-                      <p className="text-[15px] font-bold text-slate-600 uppercase tracking-widest leading-loose">
+                      <p className="text-[15px] font-bold text-slate-600 uppercase tracking-[0.1em] leading-loose">
                         {settings?.signatory_reviewed_role || 'Cluster Assist. Financial Controller'}
                       </p>
                     </div>
@@ -426,7 +428,7 @@ const Reports = () => {
                 <div className="flex-1 text-center space-y-20">
                     <p className="text-[17px] font-black text-slate-900 uppercase tracking-[0.4em]">Approved By:</p>
                     <div className="pt-12 border-t-[3px] border-slate-200 w-4/5 mx-auto">
-                      <p className="text-[15px] font-bold text-slate-600 uppercase tracking-widest leading-loose">
+                      <p className="text-[15px] font-bold text-slate-600 uppercase tracking-[0.1em] leading-loose">
                         {settings?.signatory_approved_role || 'Cluster Ex- Assist. Director of Finance'}
                       </p>
                     </div>

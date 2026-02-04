@@ -120,9 +120,7 @@ const Users = () => {
 
   const confirmDelete = async () => {
       if (deleteId) {
-          // Logic: This deletes the profile record.
-          // Due to client-side Supabase security, we cannot delete auth.users entries with an anon key.
-          // However, once the profile is gone, the login logic will reject this user entirely.
+          // Deletion logic: Purges profile record. Auth persistence is noted in UI.
           await db.deleteUser(deleteId);
           await loadUsers();
           setDeleteId(null);
@@ -257,26 +255,26 @@ const Users = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div className="bg-white/5 p-8 rounded-3xl border border-white/10 space-y-6">
                             <h5 className="text-indigo-400 font-black text-xs uppercase tracking-widest flex items-center gap-2">
-                                <Info className="w-4 h-4"/> Profile vs. Auth User
+                                <Info className="w-4 h-4"/> Profile vs. Auth Sync
                             </h5>
                             <p className="text-slate-400 text-[11px] leading-relaxed">
-                                Deleting a user here removes their <strong>ERP Profile</strong> and <strong>Access Role</strong>. Even if their email remains in the Supabase Auth list, they will be blocked from logging in as the system will find no valid authorization for them.
+                                Deleting a user here removes their <strong>ERP Profile</strong> and <strong>Access Clearance</strong>. Even if their email remains in the Supabase Auth list, they will be blocked from logging in as the system will find no valid authorization profile.
                             </p>
                         </div>
 
                         <div className="bg-white/5 p-8 rounded-3xl border border-white/10 space-y-6">
                             <h5 className="text-amber-400 font-black text-xs uppercase tracking-widest flex items-center gap-2">
-                                <RefreshCcw className="w-4 h-4"/> Manual Cleanup (Optional)
+                                <RefreshCcw className="w-4 h-4"/> Manual Auth Cleanup
                             </h5>
                             <p className="text-slate-400 text-[11px] leading-relaxed">
-                                For perfect hygiene, you may occasionally visit the Supabase Dashboard and delete emails from the <strong>Auth &rarr; Users</strong> tab. This is not strictly required for security, as access is controlled via the profile records managed on this page.
+                                To fully remove an email from the cloud project, visit your <strong>Supabase Dashboard &rarr; Auth &rarr; Users</strong>. This ensures the account is physically purged from the identity provider.
                             </p>
                             <a 
                                 href="https://supabase.com/dashboard" 
                                 target="_blank" 
                                 className="inline-flex items-center justify-between w-full p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all group/link"
                             >
-                                <span className="text-[10px] font-black text-white uppercase tracking-widest">Supabase Dashboard</span>
+                                <span className="text-[10px] font-black text-white uppercase tracking-widest">Project Dashboard</span>
                                 <ExternalLink className="w-4 h-4 text-slate-500 group-hover/link:text-indigo-400 group-hover/link:translate-x-1 transition-all" />
                             </a>
                         </div>
@@ -317,7 +315,7 @@ const Users = () => {
 
                           <div className="space-y-2">
                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                                {isEditing ? 'Override Password' : 'Initial Password'}
+                                {isEditing ? 'Override Access Key' : 'Initial Access Key'}
                               </label>
                               <div className="relative group">
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">

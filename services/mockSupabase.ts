@@ -4,7 +4,7 @@ import { supabase } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format } from 'date-fns';
 
-// Fix: Local implementation for parseISO to resolve environment-specific import errors
+// Local implementation for parseISO to resolve environment-specific import errors
 const parseISO = (dateString: string) => new Date(dateString);
 
 const supabaseUrl = 'https://fqwfffkkaeknaqjorygy.supabase.co';
@@ -82,13 +82,13 @@ class DatabaseService {
               if (msg.includes('confirm') || msg.includes('email') || signUpError.status === 500) {
                 return { 
                   user: null, 
-                  error: "SUPABASE CONFIG ERROR: 'Email Confirmations' must be OFF in your Supabase Auth Settings (Dashboard) to allow password resets. Current security policy is blocking the login." 
+                  error: "SECURITY ERROR: Email Confirmations are blocking login. Please disable 'Email Confirmations' in Supabase Auth Settings." 
                 };
               }
               if (msg.includes('already registered')) {
                 return { 
                   user: null, 
-                  error: "SYNC CONFLICT: This email is already in the Auth Dashboard with a different password. Please delete the user from 'Auth -> Users' in the Supabase Dashboard and try again." 
+                  error: "IDENTITY CONFLICT: This email is already in the Auth system. Please clear the record in the Supabase Dashboard and try again." 
                 };
               }
               return { user: null, error: signUpError.message };
@@ -113,7 +113,7 @@ class DatabaseService {
         return { user: profile, error: null };
     }
 
-    return { user: null, error: "Identity server unreachable." };
+    return { user: null, error: "Identity profile not found. User may have been revoked." };
   }
 
   async addUser(user: Omit<UserProfile, 'id'> & { password?: string }): Promise<UserProfile> {
@@ -132,8 +132,6 @@ class DatabaseService {
         if (authData?.user) {
             authId = authData.user.id;
             tempPassword = null; 
-        } else if (authError?.message.includes('already registered')) {
-            authId = null; 
         }
 
         const insertData = {
@@ -152,10 +150,7 @@ class DatabaseService {
             .select()
             .single();
 
-        if (dbError) {
-            console.error("Profile Upsert Error:", dbError);
-            throw new Error(`Profile Sync Failed: ${dbError.message}`);
-        }
+        if (dbError) throw new Error(`Profile Sync Failed: ${dbError.message}`);
         await this.logAction('CREATE_USER', `Identity provisioned: ${user.name} (${user.email})`);
         return data as UserProfile;
     }
@@ -185,6 +180,15 @@ class DatabaseService {
     }
   }
 
+  // Added changePassword method to fix error in AuthContext
+  async changePassword(userId: string, currentPass: string, newPass: string) {
+    if (this.isSupabase()) {
+        const { error } = await (supabase.auth as any).updateUser({ password: newPass });
+        if (error) throw new Error(error.message);
+        await this.logAction('CHANGE_PASSWORD', `Credentials updated for user ID: ${userId}`);
+    }
+  }
+
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
     const { data: authData, error: authError } = await (supabase.auth as any).signUp({ 
         email, password: passwordAttempt, options: { data: { name, full_name: name, display_name: name } } 
@@ -209,14 +213,39 @@ class DatabaseService {
   
   async getRoles(): Promise<Role[]> { if (this.isSupabase()) { const { data } = await supabase.from('roles').select('*'); if (data && data.length > 0) return data; } return [{ id: 'admin', name: 'Administrator', permissions: ['members:view', 'members:create', 'members:edit', 'members:delete', 'categories:view', 'categories:create', 'categories:edit', 'categories:delete', 'users:view', 'users:create', 'users:edit', 'users:delete', 'settings:view', 'settings:edit', 'reports:view', 'reports:export', 'logs:view', 'properties:view', 'properties:edit', 'outlets:view', 'outlets:edit'], is_system: true }]; }
   
+  // Added role management methods to fix errors in Settings page
+  async addRole(role: Omit<Role, 'id'>): Promise<Role> {
+    const id = crypto.randomUUID();
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('roles').insert([{ ...role, id }]);
+      if (error) throw new Error(error.message);
+      await this.logAction('CREATE_ROLE', `Deployed new security tier: ${role.name}`);
+    }
+    return { ...role, id } as Role;
+  }
+
+  async updateRole(id: string, updates: Partial<Role>) { 
+    if (this.isSupabase()) { 
+        const { error } = await supabase.from('roles').update(updates).eq('id', id); 
+        if (error) throw new Error(error.message); 
+        await this.logAction('UPDATE_ROLE', `Modified security tier: ${updates.name || id}`);
+    } 
+  }
+
+  async deleteRole(id: string) {
+    if (this.isSupabase()) {
+      const { data: r } = await supabase.from('roles').select('name').eq('id', id).maybeSingle();
+      await supabase.from('roles').delete().eq('id', id);
+      if (r) await this.logAction('DELETE_ROLE', `Purged security tier: ${r.name}`);
+    }
+  }
+
   async deleteUser(id: string) { 
     if (this.isSupabase()) {
         const { data: user } = await supabase.from('profiles').select('email').eq('id', id).single();
-        // Step 1: Purge Profile (Revokes ERP access immediately)
+        // Deleting profile record. Revokes app access immediately.
         await supabase.from('profiles').delete().eq('id', id);
-        
-        // Note: auth.users cleanup requires Admin/Service role or Supabase Dashboard.
-        if (user) await this.logAction('DELETE_USER', `Identity revoked: ${user.email}. Manual cleanup of auth record recommended.`);
+        if (user) await this.logAction('DELETE_USER', `Identity revoked: ${user.email}. ERP profile purged.`);
     } 
   }
 
@@ -332,150 +361,93 @@ class DatabaseService {
         const { error: fzErr } = await supabase.from('freezes').insert([freeze]); 
         if (fzErr) throw new Error(fzErr.message); 
 
-        // Auto-Extension Logic: Increase current_end_date by freeze total_days
         const newEndDate = format(addDays(parseISO(m.current_end_date), freeze.total_days), 'yyyy-MM-dd');
-        
-        await supabase.from('members').update({ 
-          status: MemberStatus.FROZEN,
-          current_end_date: newEndDate 
-        }).eq('id', freeze.member_id); 
-
-        await this.logAction('FREEZE_MEMBER', `Account suspended: ${m.guest_name}. Membership extended by ${freeze.total_days} days to ${newEndDate}`, m.outlet_id);
+        await supabase.from('members').update({ status: MemberStatus.FROZEN, current_end_date: newEndDate }).eq('id', freeze.member_id); 
+        await this.logAction('FREEZE_MEMBER', `Account suspended: ${m.guest_name}. Membership extended to ${newEndDate}`, m.outlet_id);
     } 
   }
 
-  async updateFreeze(id: string, updates: Partial<Freeze>): Promise<void> {
+  // Added freeze management methods to fix errors in Members page
+  async updateFreeze(id: string, updates: Partial<Freeze>) {
     if (this.isSupabase()) {
-      const { data: oldFz } = await supabase.from('freezes').select('*').eq('id', id).single();
-      const { data: m } = await supabase.from('members').select('*').eq('id', oldFz.member_id).single();
-      if (!oldFz || !m) return;
-
-      const { error: fzErr } = await supabase.from('freezes').update(updates).eq('id', id);
-      if (fzErr) throw new Error(fzErr.message);
-
-      // Recalculate Extension: Difference between old and new duration
-      if (updates.total_days !== undefined && updates.total_days !== oldFz.total_days) {
-        const diff = updates.total_days - oldFz.total_days;
-        const newEndDate = format(addDays(parseISO(m.current_end_date), diff), 'yyyy-MM-dd');
-        await supabase.from('members').update({ current_end_date: newEndDate }).eq('id', m.id);
-        await this.logAction('UPDATE_FREEZE', `Modified suspension term for ${m.guest_name}. Adjusted expiry by ${diff} days.`, m.outlet_id);
-      }
+        const { data: oldFz } = await supabase.from('freezes').select('member_id, total_days').eq('id', id).maybeSingle();
+        const { error } = await supabase.from('freezes').update(updates).eq('id', id);
+        if (error) throw new Error(error.message);
+        
+        if (oldFz && updates.total_days !== undefined && updates.total_days !== oldFz.total_days) {
+            const diff = updates.total_days - oldFz.total_days;
+            const { data: m } = await supabase.from('members').select('current_end_date, outlet_id').eq('id', oldFz.member_id).maybeSingle();
+            if (m) {
+                const newEndDate = format(addDays(parseISO(m.current_end_date), diff), 'yyyy-MM-dd');
+                await supabase.from('members').update({ current_end_date: newEndDate }).eq('id', oldFz.member_id);
+            }
+        }
+        await this.logAction('UPDATE_FREEZE', `Modified suspension parameters for freeze ID: ${id}`);
     }
   }
 
-  async deleteFreeze(id: string): Promise<void> {
+  async deleteFreeze(id: string) { 
     if (this.isSupabase()) {
-      const { data: fz } = await supabase.from('freezes').select('*').eq('id', id).single();
-      const { data: m } = await supabase.from('members').select('*').eq('id', fz.member_id).single();
-      if (!fz || !m) return;
-
-      await supabase.from('freezes').delete().eq('id', id);
-
-      // Reversal Logic: Subtract the days that were previously added
-      const newEndDate = format(addDays(parseISO(m.current_end_date), -fz.total_days), 'yyyy-MM-dd');
-      
-      // Check if other active freezes exist to determine status
-      const { data: otherFreezes } = await supabase.from('freezes').select('*').eq('member_id', m.id);
-      const stillFrozen = (otherFreezes || []).length > 0;
-      
-      await supabase.from('members').update({ 
-        current_end_date: newEndDate,
-        status: stillFrozen ? MemberStatus.FROZEN : MemberStatus.ACTIVE 
-      }).eq('id', m.id);
-
-      await this.logAction('DELETE_FREEZE', `Revoked suspension for ${m.guest_name}. Expiry rolled back by ${fz.total_days} days to ${newEndDate}`, m.outlet_id);
+        const { data: fz } = await supabase.from('freezes').select('member_id, total_days').eq('id', id).maybeSingle();
+        if (fz) {
+            const { data: m } = await supabase.from('members').select('current_end_date, guest_name, outlet_id').eq('id', fz.member_id).maybeSingle();
+            if (m) {
+                const newEndDate = format(addDays(parseISO(m.current_end_date), -fz.total_days), 'yyyy-MM-dd');
+                const { data: remainingFreezes } = await supabase.from('freezes').select('id').eq('member_id', fz.member_id).neq('id', id);
+                const status = (remainingFreezes && remainingFreezes.length > 0) ? MemberStatus.FROZEN : MemberStatus.ACTIVE;
+                
+                await supabase.from('members').update({ status, current_end_date: newEndDate }).eq('id', fz.member_id); 
+                await this.logAction('DELETE_FREEZE', `Suspension revoked for ${m.guest_name}. Membership reduced to ${newEndDate}`, m.outlet_id);
+            }
+        }
+        await supabase.from('freezes').delete().eq('id', id); 
     }
   }
 
   async updateSettings(updates: Partial<CompanySettings>): Promise<void> { 
     if (this.isSupabase()) { 
-        // Defensive: Extract only valid keys to avoid column name errors if the schema is stale
         const validKeys = ['name', 'logo_url', 'address', 'currency_id', 'signatory_prepared_role', 'signatory_reviewed_role', 'signatory_approved_role'];
         const payload: any = { id: 'global' };
         validKeys.forEach(k => { if ((updates as any)[k] !== undefined) payload[k] = (updates as any)[k]; });
 
         const { error } = await supabase.from('company_settings').upsert(payload, { onConflict: 'id' }); 
         if (error) {
-            console.error("Settings Sync Error:", error);
-            throw new Error(`Cloud Sync Failed: ${error.message}. Ensure you have run the latest SQL update in the Supabase Dashboard.`);
+            console.error("Schema Mismatch Warning:", error);
+            throw new Error(`Database Error: ${error.message}. Please run the latest SQL update in the Supabase Dashboard.`);
         }
         await this.logAction('UPDATE_SETTINGS', 'Global framework configurations synchronized');
     } 
   }
   
-  async addCurrency(curr: Omit<Currency, 'id'>): Promise<Currency> { 
-    const id = crypto.randomUUID(); 
-    if (this.isSupabase()) { 
-        if (curr.is_default) {
-            await supabase.from('currencies').update({ is_default: false }).neq('id', id);
-        }
-        const { error } = await supabase.from('currencies').upsert([{ ...curr, id }], { onConflict: 'id' }); 
-        if (error) throw new Error(error.message);
-        if (curr.is_default) {
-            await supabase.from('company_settings').upsert({ id: 'global', currency_id: id }, { onConflict: 'id' });
-        }
-        await this.logAction('CREATE_CURRENCY', `Added monetary standard: ${curr.code}`);
-    } 
-    return { ...curr, id }; 
+  async getCurrencies(): Promise<Currency[]> { if (this.isSupabase()) { const { data } = await supabase.from('currencies').select('*').order('code'); if (data && data.length > 0) return data; } return [{ id: 'default', code: 'USD', symbol: '$', rate: 1, is_default: true }]; }
+  
+  // Added currency management methods to fix errors in Settings page
+  async addCurrency(currency: Omit<Currency, 'id'>): Promise<Currency> {
+    const id = crypto.randomUUID();
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('currencies').insert([{ ...currency, id }]);
+      if (error) throw new Error(error.message);
+      await this.logAction('CREATE_CURRENCY', `Synchronized new monetary standard: ${currency.code}`);
+    }
+    return { ...currency, id } as Currency;
   }
 
   async updateCurrency(id: string, updates: Partial<Currency>) { 
     if (this.isSupabase()) { 
-        if (updates.is_default) {
-            await supabase.from('currencies').update({ is_default: false }).neq('id', id);
-        }
-        const { error } = await supabase.from('currencies').upsert({ ...updates, id }, { onConflict: 'id' }); 
-        if (error) throw new Error(error.message);
-        if (updates.is_default) {
-            await supabase.from('company_settings').upsert({ id: 'global', currency_id: id }, { onConflict: 'id' });
-        }
+        const { error } = await supabase.from('currencies').update(updates).eq('id', id); 
+        if (error) throw new Error(error.message); 
         await this.logAction('UPDATE_CURRENCY', `Modified monetary standard: ${updates.code || id}`);
     } 
   }
 
-  async deleteCurrency(id: string) { 
+  async deleteCurrency(id: string) {
     if (this.isSupabase()) {
-        const { data: c } = await supabase.from('currencies').select('code').eq('id', id).single();
-        await supabase.from('currencies').delete().eq('id', id); 
-        if (c) await this.logAction('DELETE_CURRENCY', `Purged monetary standard: ${c.code}`);
+      const { data: c } = await supabase.from('currencies').select('code').eq('id', id).maybeSingle();
+      await supabase.from('currencies').delete().eq('id', id);
+      if (c) await this.logAction('DELETE_CURRENCY', `Decommissioned monetary standard: ${c.code}`);
     }
   }
 
-  async addRole(role: Omit<Role, 'id'>) { 
-    const id = crypto.randomUUID(); 
-    if (this.isSupabase()) { 
-        const { error } = await supabase.from('roles').insert([{ ...role, id }]); 
-        if (error) throw new Error(error.message); 
-        await this.logAction('CREATE_ROLE', `Defined security tier: ${role.name}`);
-    } 
-    return { ...role, id } as Role; 
-  }
-
-  async updateRole(id: string, updates: Partial<Role>) { 
-    if (this.isSupabase()) { 
-        const { error } = await supabase.from('roles').update(updates).eq('id', id); 
-        if (error) throw new Error(error.message); 
-        await this.logAction('UPDATE_ROLE', `Modified security tier: ${updates.name || id}`);
-    } 
-  }
-
-  async deleteRole(id: string) { 
-    if (this.isSupabase()) {
-        const { data: r } = await supabase.from('roles').select('name').eq('id', id).single();
-        await supabase.from('roles').delete().eq('id', id); 
-        if (r) await this.logAction('DELETE_ROLE', `Purged security tier: ${r.name}`);
-    }
-  }
-
-  async changePassword(userId: string, cur: string, n: string) { 
-    if (this.isSupabase()) { 
-        const { error } = await (supabase.auth as any).updateUser({ password: n }); 
-        if (error) throw new Error(error.message); 
-        await this.logAction('AUTH_PASSWORD_CHANGE', 'User initiated security key rotation');
-    } 
-  }
-
-  async getCurrencies(): Promise<Currency[]> { if (this.isSupabase()) { const { data } = await supabase.from('currencies').select('*').order('code'); if (data && data.length > 0) return data; } return [{ id: 'default', code: 'USD', symbol: '$', rate: 1, is_default: true }]; }
   async getProperties(): Promise<Property[]> { if (this.isSupabase()) { const { data } = await supabase.from('properties').select('*'); if (data && data.length > 0) return data; } return []; }
   async getOutlets(): Promise<Outlet[]> { if (this.isSupabase()) { const { data } = await supabase.from('outlets').select('*'); if (data && data.length > 0) return data; } return []; }
   async getCategories(outletId?: string): Promise<MembershipCategory[]> { if (this.isSupabase()) { let q = supabase.from('membership_categories').select('*'); if (outletId) q = q.eq('outlet_id', outletId); const { data } = await q; if (data) return data; } return []; }
@@ -485,12 +457,7 @@ class DatabaseService {
   async getLogs(outletId?: string): Promise<SystemLog[]> { 
     if (this.isSupabase()) { 
       let q = supabase.from('system_logs').select('*');
-      
-      // Inclusion Logic: Show facility events OR global events (where outlet_id is NULL)
-      if (outletId) {
-        q = q.or(`outlet_id.eq.${outletId},outlet_id.is.null`);
-      }
-      
+      if (outletId) q = q.or(`outlet_id.eq.${outletId},outlet_id.is.null`);
       const { data } = await q.order('timestamp', { ascending: false }).limit(2000); 
       return data || []; 
     } 

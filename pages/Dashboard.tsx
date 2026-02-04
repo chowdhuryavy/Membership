@@ -122,7 +122,7 @@ const Dashboard = () => {
             <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em]">Operational Overview</span>
           </div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tighter">
-            Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600">{displayName}</span>
+            Welcome, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600">{displayName}</span>
           </h1>
           <p className="text-slate-500 text-sm font-medium mt-1">
             Analyzing metrics for <span className="font-bold text-slate-700">{currentOutlet?.name || 'Authorized Facility'}</span>.
