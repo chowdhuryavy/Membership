@@ -4,7 +4,7 @@ import { Button, Card } from '../components/ui';
 import { db } from '../services/mockSupabase';
 import { MembershipCategory, Member, Freeze } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-// Fix: Verifying and ensuring correct named exports from date-fns, providing local fallbacks for missing members
+// Fix: Verifying and ensuring correct named exports from date-fns
 import { format, endOfMonth, differenceInCalendarDays, addDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,7 +12,7 @@ import { Activity, Building2, Calculator, ReceiptText, FileSpreadsheet, Settings
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
-// Fix: Local implementations for missing date-fns members to resolve environment-specific import errors
+// Local implementations for missing date-fns members
 const parseISO = (dateString: string) => new Date(dateString);
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 const subDays = (date: Date, amount: number) => addDays(date, -amount);
@@ -204,8 +204,11 @@ const Reports = () => {
                 width: 100% !important;
                 max-width: none !important;
                 min-height: auto !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
               }
               .no-print { display: none !important; }
+              tr { page-break-inside: avoid; }
             }
           `}
         </style>
@@ -271,10 +274,8 @@ const Reports = () => {
             </div>
         </div>
 
-        {/* The Main Report Body - Styled to match screenshot */}
         <div ref={reportRef} className="bg-white p-6 md:p-20 rounded-[3rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.12)] max-w-[1500px] mx-auto min-h-[1000px] print-container border border-slate-100 relative overflow-x-auto">
             
-            {/* Professional Header Section (Restored & Enhanced) */}
             <div className="flex flex-col md:flex-row justify-between items-start border-b-[4px] border-slate-950 pb-12 mb-12 gap-10 min-w-[1300px]">
                 <div className="flex items-center gap-10">
                     {currentProperty?.logo_url ? (
@@ -311,7 +312,6 @@ const Reports = () => {
                 </div>
             </div>
 
-            {/* The Ledger Table */}
             <table className="w-full text-[11px] border-collapse min-w-[1300px]">
                 <thead>
                     <tr className="bg-[#0f172a] text-white">
@@ -334,7 +334,6 @@ const Reports = () => {
 
                       return (
                         <React.Fragment key={catName}>
-                          {/* Category Header Row */}
                           <tr className="bg-white border-b border-slate-100">
                             <td colSpan={activeColumns.length} className="px-6 py-6">
                               <div className="flex items-center gap-4">
@@ -347,7 +346,6 @@ const Reports = () => {
                             </td>
                           </tr>
                           
-                          {/* Member Rows */}
                           {groupRows.map((row) => {
                             globalIndex++;
                             return (
@@ -371,7 +369,6 @@ const Reports = () => {
                             );
                           })}
 
-                          {/* Category Sub-totals Row (Indigo Striped) */}
                           <tr className="bg-indigo-50/30 border-b border-indigo-100/50">
                             <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-6 py-4 text-right">
                                 <span className="text-[10px] font-black uppercase tracking-[0.25em] text-indigo-400">
@@ -392,7 +389,6 @@ const Reports = () => {
                     })}
                 </tbody>
 
-                {/* Consolidated Table Footer */}
                 {rows.length > 0 && (
                   <tfoot>
                     <tr className="bg-slate-950 text-white">
@@ -412,7 +408,6 @@ const Reports = () => {
                 )}
             </table>
 
-            {/* Empty State */}
             {rows.length === 0 && (
                 <div className="py-64 text-center min-w-[1300px]">
                     <div className="w-28 h-28 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-10 shadow-inner">
@@ -422,9 +417,7 @@ const Reports = () => {
                 </div>
             )}
             
-            {/* Signature Block - Redesigned to match user requested 3-column style */}
             <div className="mt-48 pt-20 border-t-[3px] border-slate-100 flex justify-between items-start gap-16 min-w-[1300px]">
-                {/* Prepared By Column */}
                 <div className="flex-1 text-center space-y-12">
                     <p className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Prepared By:</p>
                     <div className="pt-8">
@@ -432,19 +425,17 @@ const Reports = () => {
                     </div>
                 </div>
 
-                {/* Reviewed By Column */}
                 <div className="flex-1 text-center space-y-12">
                     <p className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Reviewed By:</p>
                     <div className="pt-8">
-                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest">Cluster assistant financial controller</p>
+                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest">Cluster Assist. Financial Controller</p>
                     </div>
                 </div>
 
-                {/* Approved By Column */}
                 <div className="flex-1 text-center space-y-12">
                     <p className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Approved By:</p>
                     <div className="pt-8">
-                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest">Cluster executive dicrector of finance</p>
+                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest">Cluster Ex- Assist. Director of Finance</p>
                     </div>
                 </div>
             </div>
