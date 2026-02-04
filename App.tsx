@@ -20,14 +20,12 @@ import Reports from './pages/Reports';
 import Logs from './pages/Logs';
 import SettingsPage from './pages/Settings';
 import Profile from './pages/Profile';
-import { LayoutDashboard, Users, Tag, BarChart3, LogOut, Menu, X, Shield, Settings, Store, ChevronDown, History, UserCircle, Activity, Loader2, Building2, Check, Globe, ChevronsUpDown, Bell, Search } from 'lucide-react';
+import { LayoutDashboard, Users, Tag, BarChart3, LogOut, Menu, X, Shield, Settings, Store, ChevronDown, History, UserCircle, Activity, Loader2, Building2, Check, Globe, ChevronsUpDown, Bell, Search, Info } from 'lucide-react';
 import { Permission, Property } from './types';
 
 const SplashLoading = () => {
-  const { settings, isLoading } = useSettings();
-  
-  // Explicitly do not show the fallback name during synchronisation
-  const displayTitle = settings?.name || "Enterprise Intelligence";
+  const { settings } = useSettings();
+  const displayTitle = (settings && settings.name) ? settings.name : "System Intelligence";
   
   return (
     <div className="fixed inset-0 z-[100000] bg-[#0f172a] flex flex-col items-center justify-center overflow-hidden">
@@ -74,6 +72,7 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
 
     const allowedOutlets = useMemo(() => {
         if (!user) return [];
+        // ADMIN OVERRIDE: Admins always see all outlets, fixing "No Access Scopes"
         if (user.role_id === 'admin') return outlets;
         return outlets.filter(o => user.allowed_outlets?.includes(o.id));
     }, [outlets, user]);
@@ -94,9 +93,14 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
         properties.find(p => p.id === currentOutlet?.property_id)
     , [currentOutlet, properties]);
 
+    const isAdmin = user?.role_id === 'admin';
+
     if (allowedOutlets.length === 0) return (
-        <div className="px-4 py-3 bg-red-50 rounded-xl text-[9px] font-black text-red-600 uppercase tracking-widest border border-red-100 flex items-center gap-2">
-            <X className="w-3 h-3" /> No Access Scopes
+        <div className={`px-4 py-3 rounded-xl border flex items-center gap-2 ${isAdmin ? 'bg-indigo-50 border-indigo-100 text-indigo-600' : 'bg-red-50 border-red-100 text-red-600'}`}>
+            {isAdmin ? <Info className="w-3 h-3" /> : <X className="w-3 h-3" />}
+            <span className="text-[9px] font-black uppercase tracking-widest">
+                {isAdmin ? 'System Boot (No Facilities Found)' : 'Restricted Access'}
+            </span>
         </div>
     );
 
@@ -111,7 +115,7 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
                 </div>
                 <div className="flex flex-col items-start overflow-hidden pr-2 text-left">
                     <span className="text-[9px] font-black tracking-widest truncate w-full uppercase text-slate-400 leading-none mb-1">
-                        {currentProp?.name || 'Property'}
+                        {currentProp?.name || 'Facility Scope'}
                     </span>
                     <span className="text-xs font-black text-slate-900 truncate w-full leading-none">
                         {currentOutlet?.name || 'Select Outlet'}
@@ -261,10 +265,10 @@ const Sidebar = () => {
                     )}
                     <div className="overflow-hidden text-left">
                         <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-none truncate">
-                            {settings?.name || 'Identity Sync'}
+                            {settings?.name || 'System Identity'}
                         </h1>
                         <span className="block text-[9px] text-slate-400 uppercase tracking-[0.2em] font-black mt-1 whitespace-nowrap">
-                            Facility Solution
+                            Corporate Solution
                         </span>
                     </div>
                 </div>
@@ -330,9 +334,9 @@ const MobileHeader = () => {
                      )}
                      <div className="flex flex-col text-left">
                         <h1 className="font-black text-slate-900 tracking-tighter truncate max-w-[150px] leading-none">
-                            {settings?.name || 'Syncing...'}
+                            {settings?.name || 'Identity Sync'}
                         </h1>
-                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Facility Solution</span>
+                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Corporate Solution</span>
                      </div>
                 </div>
                 <button onClick={() => setIsOpen(!isOpen)} className="text-slate-600 p-3 bg-slate-50 rounded-xl transition-colors border border-slate-100">

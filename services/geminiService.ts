@@ -5,8 +5,15 @@ import { GoogleGenAI } from "@google/genai";
  * Generates strategic financial insights using Google Gemini API.
  */
 export const generateFinancialInsight = async (dataContext: string): Promise<string> => {
+  const apiKey = process.env.API_KEY;
+  
+  if (!apiKey) {
+    console.error("Gemini API Error: Missing environment variable API_KEY.");
+    return "Intelligence engine configuration incomplete. API_KEY required.";
+  }
+
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
     
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -26,8 +33,11 @@ export const generateFinancialInsight = async (dataContext: string): Promise<str
     });
 
     return response.text || "Operational analysis inconclusive. Refreshing data stream.";
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
+    if (error.message?.includes("API Key")) {
+        return "Intelligence engine rejected access key. Check system environment.";
+    }
     return "Intelligence engine temporarily offline. Please verify connectivity.";
   }
 };

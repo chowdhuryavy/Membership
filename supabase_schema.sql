@@ -1,34 +1,28 @@
 
 -- ==========================================
--- MEMBERSHIP ERP - CORE SCHEMA V3.0 (CLEAN)
+-- MEMBERSHIP ERP - CORE SCHEMA V3.1 (WRITE ACCESS)
 -- ==========================================
 
--- 1. CLEANUP PREVIOUS POLICIES (Idempotency Guard)
-DO $$ 
-BEGIN
-    -- Profiles
-    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public Profiles') THEN DROP POLICY "Public Profiles" ON public.profiles; END IF;
-    -- Roles
-    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Roles') THEN DROP POLICY "Auth View Roles" ON public.roles; END IF;
-    -- Properties
-    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Properties') THEN DROP POLICY "Auth View Properties" ON public.properties; END IF;
-    -- Outlets
-    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Outlets') THEN DROP POLICY "Auth View Outlets" ON public.outlets; END IF;
-    -- Categories
-    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Categories') THEN DROP POLICY "Auth View Categories" ON public.membership_categories; END IF;
-    -- Members
-    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Members') THEN DROP POLICY "Auth View Members" ON public.members; END IF;
-    -- Freezes
-    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Freezes') THEN DROP POLICY "Auth View Freezes" ON public.freezes; END IF;
-    -- Settings
-    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Settings') THEN DROP POLICY "Auth View Settings" ON public.company_settings; END IF;
-    -- Currencies
-    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Currencies') THEN DROP POLICY "Auth View Currencies" ON public.currencies; END IF;
-    -- Logs
-    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public Logs') THEN DROP POLICY "Public Logs" ON public.system_logs; END IF;
-END $$;
+-- 1. CLEANUP PREVIOUS POLICIES
+DROP POLICY IF EXISTS "Public Profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Auth View Roles" ON public.roles;
+DROP POLICY IF EXISTS "Auth View Properties" ON public.properties;
+DROP POLICY IF EXISTS "Auth Manage Properties" ON public.properties;
+DROP POLICY IF EXISTS "Auth View Outlets" ON public.outlets;
+DROP POLICY IF EXISTS "Auth Manage Outlets" ON public.outlets;
+DROP POLICY IF EXISTS "Auth View Categories" ON public.membership_categories;
+DROP POLICY IF EXISTS "Auth Manage Categories" ON public.membership_categories;
+DROP POLICY IF EXISTS "Auth View Members" ON public.members;
+DROP POLICY IF EXISTS "Auth Manage Members" ON public.members;
+DROP POLICY IF EXISTS "Auth View Freezes" ON public.freezes;
+DROP POLICY IF EXISTS "Auth Manage Freezes" ON public.freezes;
+DROP POLICY IF EXISTS "Auth View Settings" ON public.company_settings;
+DROP POLICY IF EXISTS "Auth Manage Settings" ON public.company_settings;
+DROP POLICY IF EXISTS "Auth View Currencies" ON public.currencies;
+DROP POLICY IF EXISTS "Auth Manage Currencies" ON public.currencies;
+DROP POLICY IF EXISTS "Public Logs" ON public.system_logs;
 
--- 2. CORE TABLES
+-- 2. RECREATE TABLES (Idempotent)
 CREATE TABLE IF NOT EXISTS public.roles (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -140,19 +134,19 @@ ALTER TABLE public.company_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.currencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
 
--- 4. RECREATE POLICIES
+-- 4. RECREATE POLICIES (Granting Write Access)
 CREATE POLICY "Public Profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public Logs" ON public.system_logs FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Auth View Roles" ON public.roles FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Auth View Properties" ON public.properties FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Auth View Outlets" ON public.outlets FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Auth View Categories" ON public.membership_categories FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Auth View Members" ON public.members FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Auth View Freezes" ON public.freezes FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Auth View Settings" ON public.company_settings FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Auth View Currencies" ON public.currencies FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Auth Manage Roles" ON public.roles FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Manage Properties" ON public.properties FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Manage Outlets" ON public.outlets FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Manage Categories" ON public.membership_categories FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Manage Members" ON public.members FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Manage Freezes" ON public.freezes FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Manage Settings" ON public.company_settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Auth Manage Currencies" ON public.currencies FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- 5. SEED INITIAL ADMIN ROLE
+-- 5. SEED INITIAL DATA
 INSERT INTO public.roles (id, name, permissions, is_system)
 VALUES ('admin', 'Administrator', '{"members:view", "members:create", "members:edit", "members:delete", "categories:view", "categories:create", "categories:edit", "categories:delete", "users:view", "users:create", "users:edit", "users:delete", "settings:view", "settings:edit", "reports:view", "reports:export", "logs:view", "properties:view", "properties:edit", "outlets:view", "outlets:edit"}', true)
 ON CONFLICT (id) DO UPDATE SET permissions = EXCLUDED.permissions;

@@ -26,7 +26,6 @@ const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState<TabId>('company');
 
   const [companyForm, setCompanyForm] = useState<CompanySettings>({ name: '', logo_url: '', address: '', currency_id: '' });
-  
   const [newCurrency, setNewCurrency] = useState<Partial<Currency>>({ code: '', symbol: '', rate: 1, is_default: false });
   const [editingCurrencyId, setEditingCurrencyId] = useState<string | null>(null);
 
@@ -41,7 +40,8 @@ const SettingsPage = () => {
   const [propForm, setPropForm] = useState<Omit<Property, 'id'>>({ name: '', logo_url: '', address: '' });
   const [editingPropId, setEditingPropId] = useState<string | null>(null);
 
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Permission Checks
   const canEditSettings = user && hasPermission(user.role_id, 'settings:edit');
@@ -71,39 +71,64 @@ const SettingsPage = () => {
 
   useEffect(() => { if (settings) setCompanyForm(settings); }, [settings]);
 
+  const showStatus = (text: string, type: 'success' | 'error' = 'success') => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 5000);
+  };
+
   const saveCompany = async () => {
     if (!canEditSettings) return;
-    await db.updateSettings(companyForm);
-    await refreshSettings();
-    setMessage('Global settings updated successfully.');
-    setTimeout(() => setMessage(''), 3000);
+    setIsSaving(true);
+    try {
+        await db.updateSettings(companyForm);
+        await refreshSettings();
+        showStatus('Global settings updated successfully.');
+    } catch (e: any) {
+        showStatus(`Update failed: ${e.message}`, 'error');
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const handleSaveProperty = async () => {
       if (!canEditProperties || !propForm.name) return;
-      if (editingPropId) {
-          await db.updateProperty(editingPropId, propForm);
-      } else {
-          await db.addProperty(propForm);
+      setIsSaving(true);
+      try {
+          if (editingPropId) {
+              await db.updateProperty(editingPropId, propForm);
+          } else {
+              await db.addProperty(propForm);
+          }
+          setPropForm({ name: '', logo_url: '', address: '' });
+          setEditingPropId(null);
+          await refreshSettings();
+          showStatus('Property saved successfully.');
+      } catch (e: any) {
+          showStatus(`Property sync failed: ${e.message}`, 'error');
+      } finally {
+          setIsSaving(false);
       }
-      setPropForm({ name: '', logo_url: '', address: '' });
-      setEditingPropId(null);
-      refreshSettings();
-      setMessage('Property saved successfully.');
   };
 
   const handleSaveOutlet = async () => {
     if (!canEditOutlets || !newOutletName || !outletPropertyId) return;
-    if (editingOutlet) {
-      await db.updateOutlet(editingOutlet.id, { name: newOutletName, property_id: outletPropertyId });
-    } else {
-      await db.addOutlet(newOutletName, outletPropertyId);
+    setIsSaving(true);
+    try {
+        if (editingOutlet) {
+          await db.updateOutlet(editingOutlet.id, { name: newOutletName, property_id: outletPropertyId });
+        } else {
+          await db.addOutlet(newOutletName, outletPropertyId);
+        }
+        setNewOutletName('');
+        setOutletPropertyId('');
+        setEditingOutlet(null);
+        await refreshSettings();
+        showStatus('Outlet saved successfully.');
+    } catch (e: any) {
+        showStatus(`Outlet sync failed: ${e.message}`, 'error');
+    } finally {
+        setIsSaving(false);
     }
-    setNewOutletName('');
-    setOutletPropertyId('');
-    setEditingOutlet(null);
-    refreshSettings();
-    setMessage('Outlet saved successfully.');
   };
 
   const handleTogglePermission = (permission: Permission) => {
@@ -117,15 +142,22 @@ const SettingsPage = () => {
 
   const saveRole = async () => {
     if (!canManageRoles || !newRole.name) return;
-    if (editingRoleId) {
-        await db.updateRole(editingRoleId, newRole);
-    } else {
-        await db.addRole(newRole);
+    setIsSaving(true);
+    try {
+        if (editingRoleId) {
+            await db.updateRole(editingRoleId, newRole);
+        } else {
+            await db.addRole(newRole);
+        }
+        setNewRole({ name: '', permissions: [] });
+        setEditingRoleId(null);
+        await refreshSettings();
+        showStatus('Security role state updated.');
+    } catch (e: any) {
+        showStatus(`Role sync failed: ${e.message}`, 'error');
+    } finally {
+        setIsSaving(false);
     }
-    setNewRole({ name: '', permissions: [] });
-    setEditingRoleId(null);
-    refreshSettings();
-    setMessage('Security role state updated.');
   };
 
   const handleEditRole = (role: Role) => {
@@ -135,10 +167,14 @@ const SettingsPage = () => {
 
   const handleDeleteRole = async () => {
       if (roleToDelete) {
-          await db.deleteRole(roleToDelete);
-          setRoleToDelete(null);
-          refreshSettings();
-          setMessage('Security role purged from database.');
+          try {
+              await db.deleteRole(roleToDelete);
+              setRoleToDelete(null);
+              await refreshSettings();
+              showStatus('Security role purged from database.');
+          } catch (e: any) {
+              showStatus(`Purge failed: ${e.message}`, 'error');
+          }
       }
   };
 
@@ -149,35 +185,27 @@ const SettingsPage = () => {
 
   const handleSaveCurrency = async () => {
     if (!canEditSettings || !newCurrency.code || !newCurrency.symbol) return;
-    
-    if (editingCurrencyId) {
-        await db.updateCurrency(editingCurrencyId, newCurrency);
-    } else {
-        await db.addCurrency(newCurrency as Omit<Currency, 'id'>);
+    setIsSaving(true);
+    try {
+        if (editingCurrencyId) {
+            await db.updateCurrency(editingCurrencyId, newCurrency);
+        } else {
+            await db.addCurrency(newCurrency as Omit<Currency, 'id'>);
+        }
+        setEditingCurrencyId(null);
+        setNewCurrency({ code: '', symbol: '', rate: 1, is_default: false });
+        await refreshSettings();
+        showStatus('Monetary standard synchronized.');
+    } catch (e: any) {
+        showStatus(`Currency sync failed: ${e.message}`, 'error');
+    } finally {
+        setIsSaving(false);
     }
-    
-    setEditingCurrencyId(null);
-    setNewCurrency({ code: '', symbol: '', rate: 1, is_default: false });
-    await refreshSettings();
-    setMessage('Monetary standard synchronized.');
-    setTimeout(() => setMessage(''), 3000);
   };
 
   const handleEditCurrency = (c: Currency) => {
       setEditingCurrencyId(c.id);
       setNewCurrency(c);
-  }
-
-  if (availableTabs.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-center p-8">
-          <AlertTriangle className="w-16 h-16 text-amber-500 mb-6" />
-          <h3 className="text-2xl font-black text-slate-900 tracking-tight">Access Restricted</h3>
-          <p className="text-slate-500 max-w-md font-medium mt-2 leading-relaxed">
-            Your current security clearance does not allow modification of system configurations. Please contact a Tier-1 Administrator for authorization.
-          </p>
-      </div>
-    );
   }
 
   return (
@@ -200,8 +228,9 @@ const SettingsPage = () => {
       </div>
 
       {message && (
-        <div className="bg-emerald-50 text-emerald-700 p-5 rounded-3xl text-xs font-black border border-emerald-100 animate-in fade-in zoom-in flex items-center gap-3 shadow-sm">
-            <Check className="w-5 h-5"/> {message}
+        <div className={`${message.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'} p-5 rounded-3xl text-xs font-black border animate-in fade-in zoom-in flex items-center gap-3 shadow-sm`}>
+            {message.type === 'success' ? <Check className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5"/>} 
+            {message.text}
         </div>
       )}
 
@@ -240,7 +269,7 @@ const SettingsPage = () => {
                       </div>
                       {canEditSettings && (
                         <div className="pt-6">
-                          <Button onClick={saveCompany} className="h-14 px-10 rounded-2xl font-black shadow-xl shadow-indigo-100">Update Global State</Button>
+                          <Button onClick={saveCompany} isLoading={isSaving} className="h-14 px-10 rounded-2xl font-black shadow-xl shadow-indigo-100">Update Global State</Button>
                         </div>
                       )}
                   </CardContent>
@@ -267,7 +296,7 @@ const SettingsPage = () => {
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Property Address</label>
                             <Input value={propForm.address} onChange={e => setPropForm({...propForm, address: e.target.value})} className="h-12 rounded-xl" />
                         </div>
-                        <Button onClick={handleSaveProperty} className="w-full h-14 rounded-2xl font-black mt-4">Save Property</Button>
+                        <Button onClick={handleSaveProperty} isLoading={isSaving} className="w-full h-14 rounded-2xl font-black mt-4">Save Property</Button>
                     </CardContent>
                 </Card>
               )}
@@ -277,7 +306,9 @@ const SettingsPage = () => {
                           <tr><th className="px-8 py-5">Property</th>{canEditProperties && <th className="px-8 py-5 text-right">Actions</th>}</tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                          {properties.map(p => (
+                          {properties.length === 0 ? (
+                              <tr><td colSpan={2} className="px-8 py-10 text-center text-slate-400 italic">No properties registered.</td></tr>
+                          ) : properties.map(p => (
                               <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                                   <td className="px-8 py-6 flex items-center gap-4">
                                       {p.logo_url ? <img src={p.logo_url} className="w-12 h-12 object-contain rounded-xl border p-2 bg-white" /> : <Building2 className="w-12 h-12 p-3 bg-slate-100 rounded-xl" />}
@@ -300,6 +331,67 @@ const SettingsPage = () => {
                   </table>
               </Card>
           </div>
+      )}
+
+      {/* OUTLETS TAB */}
+      {activeTab === 'outlets' && canViewOutlets && (
+           <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                {canEditOutlets && (
+                    <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
+                        <CardHeader className="bg-slate-50 border-b border-slate-100 p-8">
+                            <CardTitle className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                                <Store className="w-5 h-5 text-indigo-600" /> {editingOutlet ? 'Edit Facility' : 'New Facility'}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-8 space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Facility Name</label>
+                                <Input placeholder="Main Facility" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} className="h-12 rounded-xl" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Portfolio Parent</label>
+                                <Select options={[{ value: '', label: 'Select Portfolio...' }, ...properties.map(p => ({ value: p.id, label: p.name }))]} value={outletPropertyId} onChange={e => setOutletPropertyId(e.target.value)} className="h-12 rounded-xl" />
+                            </div>
+                            <Button onClick={handleSaveOutlet} isLoading={isSaving} className="w-full h-14 rounded-2xl font-black shadow-xl shadow-indigo-100 mt-4">Save Configuration</Button>
+                        </CardContent>
+                    </Card>
+                )}
+                <Card className={`${canEditOutlets ? 'lg:col-span-2' : 'lg:col-span-3'} rounded-[2.5rem] border-slate-200/60 shadow-lg overflow-hidden`}>
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-widest border-b">
+                            <tr><th className="px-8 py-5">Facility Context</th>{canEditOutlets && <th className="px-8 py-5 text-right">Actions</th>}</tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {outlets.length === 0 ? (
+                                <tr><td colSpan={2} className="px-8 py-10 text-center text-slate-400 italic">No facilities configured.</td></tr>
+                            ) : outlets.map(o => {
+                                const parent = properties.find(p => p.id === o.property_id);
+                                return (
+                                    <tr key={o.id} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-8 py-6">
+                                            <div className="flex items-center gap-3">
+                                                <Activity className="w-4 h-4 text-indigo-400"/>
+                                                <div>
+                                                    <div className="font-black text-slate-900 tracking-tight">{o.name}</div>
+                                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Portfolio: {parent?.name || 'Isolated'}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        {canEditOutlets && (
+                                          <td className="px-8 py-6 text-right">
+                                              <div className="flex justify-end gap-2">
+                                                  <button onClick={() => { setEditingOutlet(o); setNewOutletName(o.name); setOutletPropertyId(o.property_id); }} className="p-3 text-slate-400 hover:text-indigo-600 bg-white shadow-sm rounded-xl border border-slate-100 transition-colors"><Edit2 className="w-4 h-4"/></button>
+                                                  <button onClick={() => db.deleteOutlet(o.id).then(refreshSettings)} className="p-3 text-slate-400 hover:text-red-600 bg-white shadow-sm rounded-xl border border-slate-100 transition-colors"><Trash2 className="w-4 h-4"/></button>
+                                              </div>
+                                          </td>
+                                        )}
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </Card>
+           </div>
       )}
 
       {/* ROLES TAB */}
@@ -345,7 +437,7 @@ const SettingsPage = () => {
                       </div>
                       <div className="flex gap-2">
                         {editingRoleId && <Button variant="outline" onClick={resetRoleForm} className="flex-1 h-14 rounded-2xl font-black">Cancel</Button>}
-                        <Button onClick={saveRole} className="flex-1 h-14 rounded-2xl font-black shadow-xl shadow-indigo-100">{editingRoleId ? 'Sync Identity' : 'Deploy Identity'}</Button>
+                        <Button onClick={saveRole} isLoading={isSaving} className="flex-1 h-14 rounded-2xl font-black shadow-xl shadow-indigo-100">{editingRoleId ? 'Sync Identity' : 'Deploy Identity'}</Button>
                       </div>
                   </CardContent>
               </Card>
@@ -377,9 +469,7 @@ const SettingsPage = () => {
                                                 <Edit2 className="w-4 h-4"/>
                                             </button>
                                             {!r.is_system && (
-                                              <button onClick={() => setRoleToDelete(r.id)} className="p-3 text-slate-400 hover:text-red-600 bg-white shadow-sm rounded-xl border border-slate-100 transition-colors">
-                                                  <Trash2 className="w-4 h-4"/>
-                                              </button>
+                                              <button onClick={() => setRoleToDelete(r.id)} className="p-3 text-slate-400 hover:text-red-600 bg-white shadow-sm rounded-xl border border-slate-100 transition-colors"><Trash2 className="w-4 h-4"/></button>
                                             )}
                                         </div>
                                     </td>
@@ -390,65 +480,6 @@ const SettingsPage = () => {
                 </Card>
               </div>
           </div>
-      )}
-
-      {/* OUTLETS TAB */}
-      {activeTab === 'outlets' && canViewOutlets && (
-           <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                {canEditOutlets && (
-                    <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
-                        <CardHeader className="bg-slate-50 border-b border-slate-100 p-8">
-                            <CardTitle className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                                <Store className="w-5 h-5 text-indigo-600" /> {editingOutlet ? 'Edit Facility' : 'New Facility'}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-8 space-y-6">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Facility Name</label>
-                                <Input placeholder="Main Facility" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} className="h-12 rounded-xl" />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Portfolio Parent</label>
-                                <Select options={[{ value: '', label: 'Select Portfolio...' }, ...properties.map(p => ({ value: p.id, label: p.name }))]} value={outletPropertyId} onChange={e => setOutletPropertyId(e.target.value)} className="h-12 rounded-xl" />
-                            </div>
-                            <Button onClick={handleSaveOutlet} className="w-full h-14 rounded-2xl font-black shadow-xl shadow-indigo-100 mt-4">Save Configuration</Button>
-                        </CardContent>
-                    </Card>
-                )}
-                <Card className={`${canEditOutlets ? 'lg:col-span-2' : 'lg:col-span-3'} rounded-[2.5rem] border-slate-200/60 shadow-lg overflow-hidden`}>
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-widest border-b">
-                            <tr><th className="px-8 py-5">Facility Context</th>{canEditOutlets && <th className="px-8 py-5 text-right">Actions</th>}</tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {outlets.map(o => {
-                                const parent = properties.find(p => p.id === o.property_id);
-                                return (
-                                    <tr key={o.id} className="hover:bg-slate-50 transition-colors">
-                                        <td className="px-8 py-6">
-                                            <div className="flex items-center gap-3">
-                                                <Activity className="w-4 h-4 text-indigo-400"/>
-                                                <div>
-                                                    <div className="font-black text-slate-900 tracking-tight">{o.name}</div>
-                                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Portfolio: {parent?.name || 'Isolated'}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        {canEditOutlets && (
-                                          <td className="px-8 py-6 text-right">
-                                              <div className="flex justify-end gap-2">
-                                                  <button onClick={() => { setEditingOutlet(o); setNewOutletName(o.name); setOutletPropertyId(o.property_id); }} className="p-3 text-slate-400 hover:text-indigo-600 bg-white shadow-sm rounded-xl border border-slate-100 transition-colors"><Edit2 className="w-4 h-4"/></button>
-                                                  <button onClick={() => db.deleteOutlet(o.id).then(refreshSettings)} className="p-3 text-slate-400 hover:text-red-600 bg-white shadow-sm rounded-xl border border-slate-100 transition-colors"><Trash2 className="w-4 h-4"/></button>
-                                              </div>
-                                          </td>
-                                        )}
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </Card>
-           </div>
       )}
 
       {/* CURRENCY TAB */}
@@ -485,7 +516,7 @@ const SettingsPage = () => {
                           </div>
                           <div className="flex gap-2">
                               {editingCurrencyId && <Button variant="outline" onClick={() => { setEditingCurrencyId(null); setNewCurrency({ code: '', symbol: '', rate: 1, is_default: false }); }} className="flex-1 h-14 rounded-2xl font-black">Cancel</Button>}
-                              <Button onClick={handleSaveCurrency} className="flex-1 h-14 rounded-2xl font-black shadow-xl shadow-amber-100">{editingCurrencyId ? 'Commit' : 'Sync Currency'}</Button>
+                              <Button onClick={handleSaveCurrency} isLoading={isSaving} className="flex-1 h-14 rounded-2xl font-black shadow-xl shadow-amber-100">{editingCurrencyId ? 'Commit' : 'Sync Currency'}</Button>
                           </div>
                       </CardContent>
                   </Card>
@@ -509,13 +540,9 @@ const SettingsPage = () => {
                                   </td>
                                   <td className="px-8 py-6 text-right">
                                       <div className="flex justify-end gap-2">
-                                          <button onClick={() => handleEditCurrency(c)} className="p-3 text-slate-400 hover:text-indigo-600 bg-white shadow-sm rounded-xl border border-slate-100 transition-colors">
-                                              <Edit2 className="w-4 h-4"/>
-                                          </button>
+                                          <button onClick={() => handleEditCurrency(c)} className="p-3 text-slate-400 hover:text-indigo-600 bg-white shadow-sm rounded-xl border border-slate-100 transition-colors"><Edit2 className="w-4 h-4"/></button>
                                           {!c.is_default && (
-                                              <button onClick={() => db.deleteCurrency(c.id).then(refreshSettings)} className="p-3 text-slate-400 hover:text-red-600 bg-white shadow-sm rounded-xl border border-slate-100 transition-colors">
-                                                  <Trash2 className="w-4 h-4"/>
-                                              </button>
+                                              <button onClick={() => db.deleteCurrency(c.id).then(refreshSettings)} className="p-3 text-slate-400 hover:text-red-600 bg-white shadow-sm rounded-xl border border-slate-100 transition-colors"><Trash2 className="w-4 h-4"/></button>
                                           )}
                                       </div>
                                   </td>

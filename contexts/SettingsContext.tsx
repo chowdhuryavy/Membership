@@ -43,6 +43,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             db.getOutlets(),
             db.getProperties()
         ]);
+        
         setSettings(s);
         setCurrencies(c);
         setRoles(r);
@@ -54,7 +55,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         
         if (user) await refreshUser();
     } catch (e) {
-        console.error("Failed to load settings", e);
+        console.error("Critical Settings Load Failure:", e);
     } finally {
         setIsLoading(false);
     }
@@ -101,7 +102,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return isRtl ? `${value} ${currency.symbol}` : `${currency.symbol} ${value}`;
   };
 
+  /**
+   * REFINED PERMISSION LOGIC
+   * Includes an Administrative Master Key to prevent UI lockouts.
+   */
   const hasPermission = (userRoleId: string, permission: Permission): boolean => {
+    // Master Key: Admins always have all permissions
+    if (userRoleId === 'admin') return true;
+    
     const role = roles.find(r => r.id === userRoleId);
     if (!role) return false;
     return role.permissions.includes(permission);
