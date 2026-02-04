@@ -1,9 +1,9 @@
 
 -- ==========================================
--- MEMBERSHIP ERP - CORE SCHEMA V8.0 (MAX PERMISSIONS)
+-- MEMBERSHIP ERP - CORE SCHEMA V9.0 (PERMISSIVE ACCESS)
 -- ==========================================
 
--- 1. AGGRESSIVE CLEANUP
+-- 1. AGGRESSIVE CLEANUP OF EXISTING POLICIES
 DO $$ 
 DECLARE
     pol_record RECORD;
@@ -113,24 +113,25 @@ CREATE TABLE IF NOT EXISTS public.company_settings (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. BYPASS SECURITY POLICIES (Development Mode)
-ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.roles DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.properties DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.outlets DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.currencies DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.membership_categories DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.members DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.freezes DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.system_logs DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.company_settings DISABLE ROW LEVEL SECURITY;
+-- 3. ENABLE RLS AND CREATE MASTER POLICIES
+-- This ensures that even if Supabase forces RLS, the 'anon' role has a master key.
 
--- Explicitly grant full control to PUBLIC (includes anon and authenticated)
+DO $$ 
+DECLARE
+    t text;
+BEGIN
+    FOR t IN (SELECT table_name FROM information_schema.tables WHERE table_schema = 'public') LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+        EXECUTE format('CREATE POLICY "Master Access %s" ON public.%I FOR ALL TO public USING (true) WITH CHECK (true)', t, t);
+    END LOOP;
+END $$;
+
+-- 4. PERMISSIONS GRANTS
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, postgres;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, postgres;
 GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated, postgres;
 
--- 4. SEED CORE DATA
+-- 5. SEED CORE DATA
 INSERT INTO public.roles (id, name, permissions, is_system)
 VALUES 
 ('admin', 'Administrator', '{"members:view", "members:create", "members:edit", "members:delete", "categories:view", "categories:create", "categories:edit", "categories:delete", "users:view", "users:create", "users:edit", "users:delete", "settings:view", "settings:edit", "reports:view", "reports:export", "logs:view", "properties:view", "properties:edit", "outlets:view", "outlets:edit"}', true),

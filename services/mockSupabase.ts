@@ -201,7 +201,7 @@ class DatabaseService {
   async updateMember(id: string, updates: Partial<Member>) { if (this.isSupabase()) { const { error } = await supabase.from('members').update(updates).eq('id', id); if (error) throw new Error(error.message); } }
   async deleteMember(id: string) { if (this.isSupabase()) await supabase.from('members').delete().eq('id', id); }
   async addFreeze(freeze: Freeze): Promise<void> { if (this.isSupabase()) { const { error: fzErr } = await supabase.from('freezes').insert([freeze]); if (fzErr) throw new Error(fzErr.message); await supabase.from('members').update({ status: MemberStatus.FROZEN }).eq('id', freeze.member_id); } }
-  async updateSettings(updates: Partial<CompanySettings>): Promise<void> { if (this.isSupabase()) { const { error } = await supabase.from('company_settings').upsert({ id: 'global', ...updates }); if (error) throw new Error(error.message); } }
+  async updateSettings(updates: Partial<CompanySettings>): Promise<void> { if (this.isSupabase()) { const { error } = await supabase.from('company_settings').upsert({ id: 'global', ...updates }, { onConflict: 'id' }); if (error) throw new Error(error.message); } }
   
   async addCurrency(curr: Omit<Currency, 'id'>): Promise<Currency> { 
     const id = crypto.randomUUID(); 
@@ -210,38 +210,35 @@ class DatabaseService {
         if (curr.is_default) {
             await supabase.from('currencies').update({ is_default: false }).neq('id', id);
         }
-        const { error } = await supabase.from('currencies').insert([{ ...curr, id }]); 
+        const { error } = await supabase.from('currencies').upsert([{ ...curr, id }], { onConflict: 'id' }); 
         if (error) {
             console.error("DB Error (Add Currency):", error);
             throw new Error(error.message);
         }
         if (curr.is_default) {
-            await supabase.from('company_settings').upsert({ id: 'global', currency_id: id });
+            await supabase.from('company_settings').upsert({ id: 'global', currency_id: id }, { onConflict: 'id' });
         }
-        console.log("DB Success: Currency added.");
     } 
     return { ...curr, id }; 
   }
 
   async updateCurrency(id: string, updates: Partial<Currency>) { 
-    console.log("DB: Updating currency...", id, updates);
+    console.log("DB: Syncing currency...", id, updates);
     if (this.isSupabase()) { 
         if (updates.is_default) {
             await supabase.from('currencies').update({ is_default: false }).neq('id', id);
         }
         
-        const { id: _, ...cleanUpdates } = updates as any;
-        const { error } = await supabase.from('currencies').update(cleanUpdates).eq('id', id); 
+        const { error } = await supabase.from('currencies').upsert({ ...updates, id }, { onConflict: 'id' }); 
         
         if (error) {
-            console.error("DB Error (Update Currency):", error);
+            console.error("DB Error (Sync Currency):", error);
             throw new Error(error.message);
         }
 
         if (updates.is_default) {
-            await supabase.from('company_settings').upsert({ id: 'global', currency_id: id });
+            await supabase.from('company_settings').upsert({ id: 'global', currency_id: id }, { onConflict: 'id' });
         }
-        console.log("DB Success: Currency updated.");
     } 
   }
 
