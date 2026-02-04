@@ -180,24 +180,32 @@ class DatabaseService {
       return [{ id: 'admin', name: 'Administrator', permissions: ['members:view', 'members:create', 'members:edit', 'members:delete', 'categories:view', 'categories:create', 'categories:edit', 'categories:delete', 'users:view', 'users:create', 'users:edit', 'users:delete', 'settings:view', 'settings:edit', 'reports:view', 'reports:export', 'logs:view', 'properties:view', 'properties:edit', 'outlets:view', 'outlets:edit'], is_system: true }];
   }
 
-  async addUser(user: Omit<UserProfile, 'id'> & { password?: string }): Promise<UserProfile> {
-    const id = crypto.randomUUID();
-    const insertData = {
-        id: id,
-        email: user.email.trim().toLowerCase(),
-        name: user.name,
-        role_id: user.role_id,
-        allowed_outlets: user.allowed_outlets || [],
-        temp_password: user.password || null,
-        auth_id: null // Unlinked - forces JIT on login
-    };
+  aasync updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) {
+    const { data: current } = await supabase.from('profiles').select('email, auth_id, name').eq('id', id).single();
 
-    if (this.isSupabase()) {
-        const { error } = await supabase.from('profiles').insert([insertData]);
-        if (error) throw new Error(`DB Error: ${error.message}`);
+    if (!current) throw new Error("User not found");
+
+    // If user has an auth account
+    if (current.auth_id) {
+        await supabase.auth.admin.updateUserById(current.auth_id, {
+            email: updates.email?.trim().toLowerCase(),
+            password: updates.password
+        });
     }
-    return { ...user, id } as UserProfile;
-  }
+
+    // Update the profile table
+    const finalUpdates: any = {
+        name: updates.name,
+        email: updates.email?.trim().toLowerCase(),
+        role_id: updates.role_id,
+        allowed_outlets: updates.allowed_outlets,
+        updated_at: new Date().toISOString()
+    };
+    Object.keys(finalUpdates).forEach(k => finalUpdates[k] === undefined && delete finalUpdates[k]);
+
+    await supabase.from('profiles').update(finalUpdates).eq('id', id);
+}
+
 
   async updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) {
     const { data: current } = await supabase.from('profiles').select('*').eq('id', id).single();
