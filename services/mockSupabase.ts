@@ -168,9 +168,10 @@ class DatabaseService {
             updated_at: new Date().toISOString()
         };
 
-        if (updates.password || (updates.email && updates.email !== current.email)) {
-            finalUpdates.auth_id = null;
-            if (updates.password) finalUpdates.temp_password = updates.password;
+        // FIXED: Do not unlink Auth ID. This preserves the link when Admins update via Edge Functions.
+        // Only set temp_password if there is no existing Auth link (unlinked/shadow user)
+        if (!current.auth_id && updates.password) {
+             finalUpdates.temp_password = updates.password;
         }
 
         Object.keys(finalUpdates).forEach(k => finalUpdates[k] === undefined && delete finalUpdates[k]);
@@ -180,7 +181,15 @@ class DatabaseService {
     }
   }
 
-  // Added changePassword method to fix error in AuthContext
+  // New method for users to update their own email via Supabase Auth
+  async updateEmail(newEmail: string) {
+      if (this.isSupabase()) {
+          const { error } = await (supabase.auth as any).updateUser({ email: newEmail });
+          if (error) throw new Error(error.message);
+          // Note: This often triggers a confirmation email to the new address
+      }
+  }
+
   async changePassword(userId: string, currentPass: string, newPass: string) {
     if (this.isSupabase()) {
         const { error } = await (supabase.auth as any).updateUser({ password: newPass });
@@ -213,7 +222,6 @@ class DatabaseService {
   
   async getRoles(): Promise<Role[]> { if (this.isSupabase()) { const { data } = await supabase.from('roles').select('*'); if (data && data.length > 0) return data; } return [{ id: 'admin', name: 'Administrator', permissions: ['members:view', 'members:create', 'members:edit', 'members:delete', 'categories:view', 'categories:create', 'categories:edit', 'categories:delete', 'users:view', 'users:create', 'users:edit', 'users:delete', 'settings:view', 'settings:edit', 'reports:view', 'reports:export', 'logs:view', 'properties:view', 'properties:edit', 'outlets:view', 'outlets:edit'], is_system: true }]; }
   
-  // Added role management methods to fix errors in Settings page
   async addRole(role: Omit<Role, 'id'>): Promise<Role> {
     const id = crypto.randomUUID();
     if (this.isSupabase()) {
@@ -243,7 +251,6 @@ class DatabaseService {
   async deleteUser(id: string) { 
     if (this.isSupabase()) {
         const { data: user } = await supabase.from('profiles').select('email').eq('id', id).single();
-        // Deleting profile record. Revokes app access immediately.
         await supabase.from('profiles').delete().eq('id', id);
         if (user) await this.logAction('DELETE_USER', `Identity revoked: ${user.email}. ERP profile purged.`);
     } 
@@ -367,7 +374,6 @@ class DatabaseService {
     } 
   }
 
-  // Added freeze management methods to fix errors in Members page
   async updateFreeze(id: string, updates: Partial<Freeze>) {
     if (this.isSupabase()) {
         const { data: oldFz } = await supabase.from('freezes').select('member_id, total_days').eq('id', id).maybeSingle();
@@ -421,7 +427,6 @@ class DatabaseService {
   
   async getCurrencies(): Promise<Currency[]> { if (this.isSupabase()) { const { data } = await supabase.from('currencies').select('*').order('code'); if (data && data.length > 0) return data; } return [{ id: 'default', code: 'USD', symbol: '$', rate: 1, is_default: true }]; }
   
-  // Added currency management methods to fix errors in Settings page
   async addCurrency(currency: Omit<Currency, 'id'>): Promise<Currency> {
     const id = crypto.randomUUID();
     if (this.isSupabase()) {

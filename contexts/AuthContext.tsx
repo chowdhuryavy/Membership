@@ -73,6 +73,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
       if (!user) throw new Error("Not authenticated");
+      
+      // If email is changing, update Auth provider as well
+      if (updates.email && updates.email !== user.email) {
+          await db.updateEmail(updates.email);
+      }
+
       await db.updateUser(user.id, updates);
       const updatedUser = { ...user, ...updates };
       setUser(updatedUser);

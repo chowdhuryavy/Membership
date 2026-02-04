@@ -46,7 +46,7 @@ const Users = () => {
       setShowPassword(false);
   }
 
-  // Original helper for deletion logic
+  // Helper for deletion logic
   const callEdgeFunction = async (action: string, userId: string, extra?: { newPassword?: string, newEmail?: string }) => {
     const res = await fetch("https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/dynamic-action", {
       method: "POST",
@@ -62,7 +62,7 @@ const Users = () => {
     return data;
   };
 
-  // New helper specifically for Admin Reset updates (Password/Email/Name)
+  // Helper specifically for Admin Reset updates (Password/Email/Name)
   const callAdminReset = async (userId: string, updates: { password?: string; email?: string; name?: string }) => {
     const res = await fetch("https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/admin-reset-user", {
       method: "POST",
@@ -130,10 +130,8 @@ const Users = () => {
                     try {
                         await callAdminReset(currentUserProfile.auth_id, updates);
                     } catch (err: any) {
-                        console.warn("Auth Sync Failure (Non-Fatal):", err.message);
-                        // We continue with database update even if Auth sync has issues,
-                        // though typically this means the login credentials won't change.
-                        setError(`Warning: Auth Provider Sync failed (${err.message}). Database profile updated locally.`);
+                        console.warn("Auth Sync Failure:", err.message);
+                        setError(`Warning: Auth Provider Sync failed (${err.message}). Database profile updated locally, but login credentials may be out of sync.`);
                     }
                 }
             }
@@ -143,6 +141,7 @@ const Users = () => {
                 email: formData.email,
                 role_id: formData.role_id,
                 allowed_outlets: formData.allowed_outlets,
+                // Only pass password to DB update if there is NO auth link (unlinked user), handled inside db.updateUser
                 password: formData.password || undefined 
             } as any);
         } else {
@@ -186,7 +185,7 @@ const Users = () => {
     try {
         const currentUserProfile = users.find(u => u.id === deleteId);
         
-        // 1. Sync with Auth Provider (using original deletion logic)
+        // 1. Sync with Auth Provider
         if (currentUserProfile?.auth_id) {
             try {
                 await callEdgeFunction('delete', currentUserProfile.auth_id);
@@ -340,7 +339,7 @@ const Users = () => {
                                 <Info className="w-4 h-4"/> Profile vs. Auth Sync
                             </h5>
                             <p className="text-slate-400 text-[11px] leading-relaxed">
-                                Updating a user's email or name here triggers a sync attempt with <strong>Supabase Auth</strong> via Service Role Edge Functions. This physically updates primary identity provider records.
+                                Updating a user's email or password here triggers a sync attempt with <strong>Supabase Auth</strong> via the 'admin-reset-user' Edge Function. This updates credentials in the primary identity provider.
                             </p>
                         </div>
 
@@ -349,7 +348,7 @@ const Users = () => {
                                 <RefreshCcw className="w-4 h-4"/> Manual Auth Cleanup
                             </h5>
                             <p className="text-slate-400 text-[11px] leading-relaxed">
-                                To fully manage an email or view detailed logs, visit your <strong>Supabase Dashboard &rarr; Auth &rarr; Users</strong>. This is where primary credentials and MFA settings reside.
+                                To fully manage MFA settings or view detailed login logs, visit your <strong>Supabase Dashboard &rarr; Auth &rarr; Users</strong>.
                             </p>
                             <a 
                                 href="https://supabase.com/dashboard" 

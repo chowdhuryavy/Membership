@@ -221,6 +221,11 @@ const Reports = () => {
     return url.startsWith('http') || url.startsWith('data:image') || url.startsWith('/');
   };
 
+  // Determine logo source with fallback to system settings
+  const logoToUse = (!logoError && isValidUrl(currentProperty?.logo_url)) 
+    ? currentProperty?.logo_url 
+    : (settings?.logo_url && isValidUrl(settings.logo_url)) ? settings.logo_url : null;
+
   return (
     <div className="space-y-6">
         <style>
@@ -303,9 +308,9 @@ const Reports = () => {
                 <div className="flex items-start">
                     {/* Reliable Logo Rendering with Fallback */}
                     <div className="mr-12">
-                        {(!logoError && isValidUrl(currentProperty?.logo_url)) ? (
+                        {logoToUse ? (
                             <img 
-                                src={currentProperty!.logo_url} 
+                                src={logoToUse} 
                                 crossOrigin="anonymous" 
                                 alt="Branding" 
                                 onError={() => setLogoError(true)}
@@ -321,10 +326,10 @@ const Reports = () => {
                     {/* Facility & Property Identity */}
                     <div>
                         <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-950 leading-[0.85] mb-4">
-                            {currentProperty?.name || 'Asset Group Management'}
+                            {currentProperty?.name || settings?.name || 'Asset Group Management'}
                         </h1>
                         <p className="text-[12px] font-bold text-slate-400 uppercase tracking-[0.4em] mb-10">
-                            {currentProperty?.address || 'Corporate Headquarters'}
+                            {currentProperty?.address || settings?.address || 'Corporate Headquarters'}
                         </p>
                         
                         <div className="inline-block px-8 py-3 bg-indigo-50 border-[2px] border-indigo-600 rounded-xl shadow-sm">
