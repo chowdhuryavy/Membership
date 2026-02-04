@@ -1,9 +1,9 @@
 
 -- ==========================================
--- MEMBERSHIP ERP - CORE SCHEMA V4.1 (ROBUST)
+-- MEMBERSHIP ERP - CORE SCHEMA V4.2 (HARDENED)
 -- ==========================================
 
--- 1. DROP ALL EXISTING POLICIES TO PREVENT "ALREADY EXISTS" ERRORS
+-- 1. CLEANUP POLICIES
 DO $$ 
 DECLARE
     pol RECORD;
@@ -13,7 +13,7 @@ BEGIN
     END LOOP;
 END $$;
 
--- 2. ENSURE TABLES EXIST (Idempotent)
+-- 2. CORE TABLES (Ensuring Roles first for References)
 CREATE TABLE IF NOT EXISTS public.roles (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -21,6 +21,13 @@ CREATE TABLE IF NOT EXISTS public.roles (
     is_system BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Seed System Roles (Fixes foreign key errors during profile creation)
+INSERT INTO public.roles (id, name, permissions, is_system)
+VALUES 
+('admin', 'Administrator', '{"members:view", "members:create", "members:edit", "members:delete", "categories:view", "categories:create", "categories:edit", "categories:delete", "users:view", "users:create", "users:edit", "users:delete", "settings:view", "settings:edit", "reports:view", "reports:export", "logs:view", "properties:view", "properties:edit", "outlets:view", "outlets:edit"}', true),
+('viewer', 'Viewer / Staff', '{"members:view", "categories:view", "reports:view"}', true)
+ON CONFLICT (id) DO UPDATE SET permissions = EXCLUDED.permissions;
 
 CREATE TABLE IF NOT EXISTS public.properties (
     id TEXT PRIMARY KEY,
@@ -86,7 +93,7 @@ CREATE TABLE IF NOT EXISTS public.freezes (
 
 CREATE TABLE IF NOT EXISTS public.company_settings (
     id TEXT PRIMARY KEY DEFAULT 'global',
-    name TEXT NOT NULL DEFAULT 'Membership ERP',
+    name TEXT NOT NULL DEFAULT 'The Torch Hospitality',
     logo_url TEXT,
     address TEXT,
     currency_id TEXT,
@@ -125,24 +132,17 @@ ALTER TABLE public.company_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.currencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
 
--- 4. CREATE PERMISSIVE POLICIES FOR AUTHENTICATED USERS
--- This allows the ERP to function as a full-access admin tool once logged in
-CREATE POLICY "Full Access Roles" ON public.roles FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Full Access Profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Full Access Properties" ON public.properties FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Full Access Outlets" ON public.outlets FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Full Access Categories" ON public.membership_categories FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Full Access Members" ON public.members FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Full Access Freezes" ON public.freezes FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Full Access Settings" ON public.company_settings FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Full Access Currencies" ON public.currencies FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Full Access Logs" ON public.system_logs FOR ALL USING (true) WITH CHECK (true);
+-- 4. CREATE PERMISSIVE POLICIES
+CREATE POLICY "Permissive Roles" ON public.roles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permissive Profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permissive Properties" ON public.properties FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permissive Outlets" ON public.outlets FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permissive Categories" ON public.membership_categories FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permissive Members" ON public.members FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permissive Freezes" ON public.freezes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permissive Settings" ON public.company_settings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permissive Currencies" ON public.currencies FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permissive Logs" ON public.system_logs FOR ALL USING (true) WITH CHECK (true);
 
--- 5. SEED INITIAL DATA
-INSERT INTO public.roles (id, name, permissions, is_system)
-VALUES ('admin', 'Administrator', '{"members:view", "members:create", "members:edit", "members:delete", "categories:view", "categories:create", "categories:edit", "categories:delete", "users:view", "users:create", "users:edit", "users:delete", "settings:view", "settings:edit", "reports:view", "reports:export", "logs:view", "properties:view", "properties:edit", "outlets:view", "outlets:edit"}', true)
-ON CONFLICT (id) DO UPDATE SET permissions = EXCLUDED.permissions;
-
-INSERT INTO public.company_settings (id, name) 
-VALUES ('global', 'The Torch Hospitality') 
-ON CONFLICT (id) DO NOTHING;
+-- 5. INITIAL SEED
+INSERT INTO public.company_settings (id, name) VALUES ('global', 'The Torch Hospitality') ON CONFLICT (id) DO NOTHING;

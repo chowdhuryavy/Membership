@@ -30,10 +30,10 @@ class DatabaseService {
 
   /**
    * REFINED AUTHENTICATION ENGINE
-   * Handles 400/500 errors by attempting to reconcile the Auth user with the Profiles table.
+   * Detects 500 errors from Supabase Auth and provides specific remediation.
    */
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
-    if (!this.isSupabase()) return { user: null, error: "Cloud sync offline." };
+    if (!this.isSupabase()) return { user: null, error: "Supabase connection offline." };
     
     const cleanEmail = email.trim().toLowerCase();
     
@@ -43,34 +43,43 @@ class DatabaseService {
         password: passwordAttempt
     });
 
-    // 2. Fallback logic for new users created in the UI (Shadow Users)
+    // 2. Handle failure: Potential "Shadow User" Provisioning
     if (authError) {
-        // Log the exact error for debugging but don't show technical 400s to user
-        console.warn("Auth Attempt Info:", authError.message);
+        console.warn("Standard Auth failed:", authError.message);
 
-        // Check if this user exists in our local profiles table with a temp password
-        const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
+        // Check if user exists in our local profiles table with a matching temp password
+        const { data: profile, error: profErr } = await supabase.from('profiles')
+            .select('*')
+            .eq('email', cleanEmail)
+            .maybeSingle();
         
         if (profile && profile.temp_password === passwordAttempt) {
-            // This is a new staff member. Attempt to provision them in Supabase Auth.
-            // Note: If this fails with 500, check Supabase Email Auth settings (SMTP/Confirmation).
+            // Provision the user in Supabase Auth
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                 email: cleanEmail,
                 password: passwordAttempt,
-                options: { data: { name: profile.name } }
+                options: { 
+                  data: { name: profile.name },
+                  // Force redirect to current origin to avoid Site URL 500s
+                  emailRedirectTo: window.location.origin 
+                }
             });
 
             if (signUpError) {
-                // If they already exist in Auth but we couldn't sign in (e.g. unconfirmed email),
-                // we might need to tell the user to confirm or contact admin.
+                if (signUpError.status === 500) {
+                    return { 
+                      user: null, 
+                      error: "Supabase Auth 500: Please check 'Email Confirmations' in Supabase Dashboard (Auth -> Settings). It must be OFF if SMTP is not configured." 
+                    };
+                }
                 if (signUpError.message.toLowerCase().includes('already registered')) {
-                  return { user: null, error: "Account exists but credentials failed. Check your access key." };
+                  return { user: null, error: "Access key incorrect for this registered account." };
                 }
                 return { user: null, error: `Provisioning Error: ${signUpError.message}` };
             }
 
             if (signUpData.user) {
-                // Provisioning successful. Link the profile and clear the temp password.
+                // Provisioning success: Update link and clear temp password
                 await supabase.from('profiles').update({ 
                     auth_id: signUpData.user.id, 
                     temp_password: null 
@@ -81,23 +90,22 @@ class DatabaseService {
             }
         }
         
-        return { user: null, error: "Invalid credentials or unauthorized identity." };
+        return { user: null, error: authError.message || "Invalid credentials." };
     }
 
-    // 3. Successful standard login: Ensure Profile is synchronized
+    // 3. Reconcile valid Auth session with Profile
     if (authData.user) {
         let { data: profile } = await supabase.from('profiles').select('*').eq('auth_id', authData.user.id).maybeSingle();
         
         if (!profile) {
-            // Reconcile by email if the auth_id isn't linked yet
             const { data: emailProfile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
             if (emailProfile) {
                 await supabase.from('profiles').update({ auth_id: authData.user.id, temp_password: null }).eq('id', emailProfile.id);
                 const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', emailProfile.id).single();
                 profile = refreshed;
             } else {
-                // Disaster Recovery: Create a profile if one doesn't exist for this valid Auth user
-                const newUser: UserProfile = { 
+                // Create profile if missing
+                const newUser = { 
                     id: crypto.randomUUID(), 
                     auth_id: authData.user.id, 
                     email: cleanEmail, 
@@ -106,15 +114,15 @@ class DatabaseService {
                     allowed_outlets: [] 
                 };
                 await supabase.from('profiles').insert([newUser]);
-                profile = newUser;
+                profile = newUser as any;
             }
         }
         
-        await this.logAction('AUTH_LOGIN', `Identity Verified: ${cleanEmail}`);
+        await this.logAction('AUTH_LOGIN', `Identity Reconciled: ${cleanEmail}`);
         return { user: profile, error: null };
     }
 
-    return { user: null, error: "Authentication timed out." };
+    return { user: null, error: "Authentication timeout." };
   }
 
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
@@ -122,11 +130,11 @@ class DatabaseService {
     const { data: authData, error: authError } = await supabase.auth.signUp({ email, password: passwordAttempt, options: { data: { name } } });
     if (authError) return { user: null, error: authError.message };
     if (authData.user) {
-      const newUser: UserProfile = { id: crypto.randomUUID(), auth_id: authData.user.id, email, name, role_id: 'viewer', allowed_outlets: [] };
+      const newUser = { id: crypto.randomUUID(), auth_id: authData.user.id, email, name, role_id: 'viewer', allowed_outlets: [] };
       await supabase.from('profiles').insert([newUser]);
-      return { user: newUser, error: null };
+      return { user: newUser as any, error: null };
     }
-    return { user: null, error: "User creation failed." };
+    return { user: null, error: "Signup failed." };
   }
 
   async getSettings(): Promise<CompanySettings> { 
@@ -145,22 +153,50 @@ class DatabaseService {
       return [{ id: 'admin', name: 'Administrator', permissions: ['members:view', 'members:create', 'members:edit', 'members:delete', 'categories:view', 'categories:create', 'categories:edit', 'categories:delete', 'users:view', 'users:create', 'users:edit', 'users:delete', 'settings:view', 'settings:edit', 'reports:view', 'reports:export', 'logs:view', 'properties:view', 'properties:edit', 'outlets:view', 'outlets:edit'], is_system: true }];
   }
 
+  /**
+   * REFINED USER CREATION
+   * Explicitly construction prevents database "Database error saving new user" due to field spread.
+   */
   async addUser(user: Omit<UserProfile, 'id'> & { password?: string }): Promise<UserProfile> {
     const id = crypto.randomUUID();
-    const { password, ...userData } = user;
-    const newUser = { ...userData, id, temp_password: password || null, email: userData.email.trim().toLowerCase() };
+    
+    // Explicit construction
+    const insertData = {
+        id: id,
+        email: user.email.trim().toLowerCase(),
+        name: user.name,
+        role_id: user.role_id,
+        allowed_outlets: user.allowed_outlets || [],
+        temp_password: user.password || null,
+        auth_id: null
+    };
+
     if (this.isSupabase()) {
-        const { error } = await supabase.from('profiles').insert([newUser]);
-        if (error) throw new Error(error.message);
+        const { error } = await supabase.from('profiles').insert([insertData]);
+        if (error) {
+            console.error("Supabase Profile Insert Error:", error);
+            throw new Error(`DB Error: ${error.message}`);
+        }
     }
-    return { ...userData, id } as UserProfile;
+    
+    return { ...user, id } as UserProfile;
   }
 
   async updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) { 
     if (this.isSupabase()) {
-        const { password, ...userData } = updates;
-        const finalUpdates: any = { ...userData };
-        if (password) finalUpdates.temp_password = password;
+        const finalUpdates: any = { 
+            name: updates.name,
+            email: updates.email?.trim().toLowerCase(),
+            role_id: updates.role_id,
+            allowed_outlets: updates.allowed_outlets,
+            updated_at: new Date().toISOString()
+        };
+        
+        if (updates.password) finalUpdates.temp_password = updates.password;
+        
+        // Remove undefined fields
+        Object.keys(finalUpdates).forEach(key => finalUpdates[key] === undefined && delete finalUpdates[key]);
+
         const { error } = await supabase.from('profiles').update(finalUpdates).eq('id', id);
         if (error) throw new Error(error.message);
     }
@@ -169,12 +205,12 @@ class DatabaseService {
   async deleteUser(id: string) { if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id); }
 
   async addProperty(prop: Omit<Property, 'id'>): Promise<Property> {
-    const newProp = { ...prop, id: crypto.randomUUID() };
+    const id = crypto.randomUUID();
     if (this.isSupabase()) {
-        const { error } = await supabase.from('properties').insert([newProp]);
+        const { error } = await supabase.from('properties').insert([{ ...prop, id }]);
         if (error) throw new Error(error.message);
     }
-    return newProp;
+    return { ...prop, id };
   }
 
   async updateProperty(id: string, updates: Partial<Property>) { 
@@ -187,12 +223,12 @@ class DatabaseService {
   async deleteProperty(id: string) { if (this.isSupabase()) await supabase.from('properties').delete().eq('id', id); }
 
   async addOutlet(name: string, propertyId: string): Promise<Outlet> {
-    const newOutlet = { id: crypto.randomUUID(), name, property_id: propertyId };
+    const id = crypto.randomUUID();
     if (this.isSupabase()) {
-        const { error } = await supabase.from('outlets').insert([newOutlet]);
+        const { error } = await supabase.from('outlets').insert([{ id, name, property_id: propertyId }]);
         if (error) throw new Error(error.message);
     }
-    return newOutlet;
+    return { id, name, property_id: propertyId };
   }
 
   async updateOutlet(id: string, updates: Partial<Outlet>) { 
@@ -205,12 +241,12 @@ class DatabaseService {
   async deleteOutlet(id: string) { if (this.isSupabase()) await supabase.from('outlets').delete().eq('id', id); }
 
   async addCategory(cat: Omit<MembershipCategory, 'id'>): Promise<MembershipCategory> {
-    const newCat = { ...cat, id: crypto.randomUUID() };
+    const id = crypto.randomUUID();
     if (this.isSupabase()) {
-        const { error } = await supabase.from('membership_categories').insert([newCat]);
+        const { error } = await supabase.from('membership_categories').insert([{ ...cat, id }]);
         if (error) throw new Error(error.message);
     }
-    return newCat;
+    return { ...cat, id };
   }
 
   async updateCategory(id: string, updates: Partial<MembershipCategory>) { 
@@ -255,12 +291,12 @@ class DatabaseService {
   }
 
   async addCurrency(curr: Omit<Currency, 'id'>): Promise<Currency> {
-    const newCurr = { ...curr, id: crypto.randomUUID() };
+    const id = crypto.randomUUID();
     if (this.isSupabase()) {
-        const { error } = await supabase.from('currencies').insert([newCurr]);
+        const { error } = await supabase.from('currencies').insert([{ ...curr, id }]);
         if (error) throw new Error(error.message);
     }
-    return newCurr;
+    return { ...curr, id };
   }
 
   async updateCurrency(id: string, updates: Partial<Currency>) { 
@@ -273,12 +309,12 @@ class DatabaseService {
   async deleteCurrency(id: string) { if (this.isSupabase()) await supabase.from('currencies').delete().eq('id', id); }
 
   async addRole(role: Omit<Role, 'id'>) { 
-    const r = { ...role, id: crypto.randomUUID() }; 
+    const id = crypto.randomUUID(); 
     if (this.isSupabase()) {
-        const { error } = await supabase.from('roles').insert([r]); 
+        const { error } = await supabase.from('roles').insert([{ ...role, id }]); 
         if (error) throw new Error(error.message);
     }
-    return r as Role; 
+    return { ...role, id } as Role; 
   }
 
   async updateRole(id: string, updates: Partial<Role>) { 
