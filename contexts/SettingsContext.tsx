@@ -1,8 +1,8 @@
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { CompanySettings, Currency, Role, Permission, Outlet, Property } from '../types';
 import { db } from '../services/mockSupabase';
 import { useAuth } from './AuthContext';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 
 interface SettingsContextType {
   settings: CompanySettings | null;
@@ -50,8 +50,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setOutlets(o);
         setProperties(p);
         
-        const activeCurr = c.find(curr => curr.id === s.currency_id) || c.find(curr => curr.is_default) || c[0];
-        setCurrency(activeCurr);
+        // Logic: Primary choice is global setting, secondary is flagged 'is_default' in table, tertiary is first available.
+        const activeCurr = c.find(curr => curr.id === s.currency_id) || 
+                          c.find(curr => curr.is_default) || 
+                          c[0];
+                          
+        setCurrency(activeCurr || null);
         
         if (user) await refreshUser();
     } catch (e) {
@@ -102,14 +106,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return isRtl ? `${value} ${currency.symbol}` : `${currency.symbol} ${value}`;
   };
 
-  /**
-   * REFINED PERMISSION LOGIC
-   * Includes an Administrative Master Key to prevent UI lockouts.
-   */
   const hasPermission = (userRoleId: string, permission: Permission): boolean => {
-    // Master Key: Admins always have all permissions
     if (userRoleId === 'admin') return true;
-    
     const role = roles.find(r => r.id === userRoleId);
     if (!role) return false;
     return role.permissions.includes(permission);

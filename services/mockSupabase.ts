@@ -118,12 +118,10 @@ class DatabaseService {
             options: { data: { full_name: user.name, name: user.name, display_name: user.name } }
         });
 
-        // If user already exists in Auth, we try to get their ID if it's the same project
         if (authData?.user) {
             authId = authData.user.id;
-            tempPassword = null; // Successfully created in Auth, no need for temp password
+            tempPassword = null; 
         } else if (authError?.message.includes('already registered')) {
-            // User exists in Auth, we'll try to link them on their next successful login
             authId = null; 
         }
 
@@ -137,7 +135,6 @@ class DatabaseService {
             updated_at: new Date().toISOString()
         };
 
-        // UPSERT strategy on email to prevent unique constraint failures
         const { data, error: dbError } = await supabase
             .from('profiles')
             .upsert([insertData], { onConflict: 'email' })
@@ -210,7 +207,10 @@ class DatabaseService {
     const id = crypto.randomUUID(); 
     if (this.isSupabase()) { 
         if (curr.is_default) {
+            // Unset all existing defaults
             await supabase.from('currencies').update({ is_default: false }).neq('id', id);
+            // Synchronize global settings
+            await supabase.from('company_settings').upsert({ id: 'global', currency_id: id });
         }
         const { error } = await supabase.from('currencies').insert([{ ...curr, id }]); 
         if (error) throw new Error(error.message); 
@@ -221,10 +221,16 @@ class DatabaseService {
   async updateCurrency(id: string, updates: Partial<Currency>) { 
     if (this.isSupabase()) { 
         if (updates.is_default) {
+            // Unset all other defaults
             await supabase.from('currencies').update({ is_default: false }).neq('id', id);
+            // Synchronize global settings to use THIS currency as primary
+            await supabase.from('company_settings').upsert({ id: 'global', currency_id: id });
         }
+        
+        // Strip PK from update body to prevent 'cannot update primary key' errors
         const { id: _, ...cleanUpdates } = updates as any;
         const { error } = await supabase.from('currencies').update(cleanUpdates).eq('id', id); 
+        
         if (error) throw new Error(error.message); 
     } 
   }
@@ -236,7 +242,7 @@ class DatabaseService {
   async deleteRole(id: string) { if (this.isSupabase()) await supabase.from('roles').delete().eq('id', id); }
 
   async changePassword(userId: string, cur: string, n: string) { if (this.isSupabase()) { const { error } = await (supabase.auth as any).updateUser({ password: n }); if (error) throw new Error(error.message); } }
-  async getCurrencies(): Promise<Currency[]> { if (this.isSupabase()) { const { data } = await supabase.from('currencies').select('*'); if (data && data.length > 0) return data; } return [{ id: 'default', code: 'USD', symbol: '$', rate: 1, is_default: true }]; }
+  async getCurrencies(): Promise<Currency[]> { if (this.isSupabase()) { const { data } = await supabase.from('currencies').select('*').order('code'); if (data && data.length > 0) return data; } return [{ id: 'default', code: 'USD', symbol: '$', rate: 1, is_default: true }]; }
   async getProperties(): Promise<Property[]> { if (this.isSupabase()) { const { data } = await supabase.from('properties').select('*'); if (data && data.length > 0) return data; } return []; }
   async getOutlets(): Promise<Outlet[]> { if (this.isSupabase()) { const { data } = await supabase.from('outlets').select('*'); if (data && data.length > 0) return data; } return []; }
   async getCategories(outletId?: string): Promise<MembershipCategory[]> { if (this.isSupabase()) { let q = supabase.from('membership_categories').select('*'); if (outletId) q = q.eq('outlet_id', outletId); const { data } = await q; if (data) return data; } return []; }
