@@ -317,7 +317,7 @@ const Reports = () => {
                                     if (logoToUse !== settings?.logo_url) {
                                         setLogoError(true);
                                     } else {
-                                        e.currentTarget.style.display = 'none'; // Hide if both fail
+                                        (e.currentTarget as HTMLImageElement).style.display = 'none'; // Hide if both fail
                                     }
                                 }}
                                 className="h-32 w-auto object-contain block" 
