@@ -5,7 +5,7 @@ import { db } from '../services/mockSupabase';
 import { UserProfile, Role, Outlet } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff, RefreshCcw, CheckCircle2 } from 'lucide-react';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff, RefreshCcw, CheckCircle2, UserCheck } from 'lucide-react';
 
 const Users = () => {
   const { user } = useAuth();
@@ -159,7 +159,7 @@ const Users = () => {
                         <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] bg-slate-50 border-b">
                             <tr>
                                 <th className="px-8 py-6">Profile</th>
-                                <th className="px-8 py-6">Identity State</th>
+                                <th className="px-8 py-6">Dashboard Sync</th>
                                 <th className="px-8 py-6">Security Tier</th>
                                 <th className="px-8 py-6">Access Scopes</th>
                                 {canManageUsers && <th className="px-8 py-6 text-right">Operations</th>}
@@ -167,7 +167,7 @@ const Users = () => {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {users.map(u => {
-                                const needsSync = !u.auth_id;
+                                const isUnlinked = !u.auth_id;
                                 return (
                                     <tr key={u.id} className="bg-white hover:bg-slate-50 transition-colors group">
                                         <td className="px-8 py-6">
@@ -175,15 +175,15 @@ const Users = () => {
                                             <div className="text-indigo-600 text-xs font-bold">{u.email}</div>
                                         </td>
                                         <td className="px-8 py-6">
-                                            {needsSync ? (
+                                            {isUnlinked ? (
                                                 <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-100 w-fit">
                                                     <RefreshCcw className="w-3.5 h-3.5 animate-spin-slow" />
                                                     <span className="text-[9px] font-black uppercase tracking-widest">Re-Sync Pending</span>
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 w-fit">
-                                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                                    <span className="text-[9px] font-black uppercase tracking-widest">Auth Active</span>
+                                                    <UserCheck className="w-3.5 h-3.5" />
+                                                    <span className="text-[9px] font-black uppercase tracking-widest">Active Mirror</span>
                                                 </div>
                                             )}
                                         </td>
@@ -230,20 +230,23 @@ const Users = () => {
                 </div>
             </Card>
 
-            <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
+            <div className="bg-slate-950 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group border border-white/5">
                 <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <Shield className="w-32 h-32 text-white" />
+                    <Lock className="w-32 h-32 text-indigo-500" />
                 </div>
-                <div className="relative z-10 flex items-start gap-6">
-                    <div className="p-4 bg-white/10 rounded-2xl backdrop-blur-xl border border-white/10 shrink-0">
-                        <Lock className="w-6 h-6 text-indigo-400" />
+                <div className="relative z-10 flex flex-col md:flex-row items-start gap-8">
+                    <div className="p-4 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-900/40 shrink-0">
+                        <Shield className="w-8 h-8 text-white" />
                     </div>
                     <div>
-                        <h4 className="text-white font-black uppercase tracking-widest text-sm mb-2">Atomic Shadow Sync Protocol</h4>
-                        <p className="text-indigo-200/60 text-xs font-medium max-w-2xl leading-relaxed">
-                            Supabase Auth records are managed via a deferred sync strategy. If an email or password is changed by an administrator, 
-                            the account is marked "Re-Sync Pending." On the next successful login, the system will automatically reconcile the 
-                            identities and finalize the migration. Old Auth identities for changed emails will remain orphaned in Supabase.
+                        <h4 className="text-white font-black uppercase tracking-widest text-sm mb-3 flex items-center gap-2">
+                           Identity Protocol Notice
+                           <span className="px-2 py-0.5 bg-indigo-500 text-white text-[8px] rounded uppercase">Secure</span>
+                        </h4>
+                        <p className="text-slate-400 text-xs font-medium max-w-3xl leading-relaxed">
+                            Due to Supabase security policies, Admin changes to <strong>passwords</strong> or <strong>emails</strong> will only appear in the 
+                            Auth Dashboard after the target user logs in once with their new credentials. If you get a <strong>500 Error</strong>, ensure 
+                            "Email Confirmations" is disabled in your Supabase Auth settings.
                         </p>
                     </div>
                 </div>
@@ -254,35 +257,35 @@ const Users = () => {
           <div className="space-y-6">
               <Card className="sticky top-8 rounded-[2rem] border-slate-200/60 shadow-2xl overflow-hidden">
                   <CardHeader className="bg-indigo-600 text-white p-8">
-                      <CardTitle className="text-xl font-black tracking-tight">{isEditing ? 'Update Profile' : 'New Identity'}</CardTitle>
-                      <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mt-2">Credential Provisioning</p>
+                      <CardTitle className="text-xl font-black tracking-tight">{isEditing ? 'Modify User' : 'New User'}</CardTitle>
+                      <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mt-2">Access Governance</p>
                   </CardHeader>
                   <CardContent className="p-8">
                       <form onSubmit={handleSubmit} className="space-y-6">
                           <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Legal Name</label>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Legal Name</label>
                               <Input 
                                   value={formData.name} 
                                   onChange={e => setFormData({...formData, name: e.target.value})} 
-                                  placeholder="Jane Smith"
+                                  placeholder="John Doe"
                                   className="h-12 rounded-xl"
                               />
                           </div>
                           
                           <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Corporate Email</label>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Work Email</label>
                               <Input 
                                   type="email"
                                   value={formData.email} 
                                   onChange={e => setFormData({...formData, email: e.target.value})} 
-                                  placeholder="jsmith@enterprise.com"
+                                  placeholder="user@enterprise.com"
                                   className="h-12 rounded-xl"
                               />
                           </div>
 
                           <div className="space-y-2">
                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                                {isEditing ? 'Override Access Key (Optional)' : 'Initial Access Key'}
+                                {isEditing ? 'New Access Key (Optional)' : 'Initial Access Key'}
                               </label>
                               <div className="relative group">
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -292,7 +295,7 @@ const Users = () => {
                                     type={showPassword ? "text" : "password"}
                                     value={formData.password} 
                                     onChange={e => setFormData({...formData, password: e.target.value})} 
-                                    placeholder={isEditing ? "Unchanged" : "••••••••"}
+                                    placeholder={isEditing ? "••••••••" : "••••••••"}
                                     className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-medium"
                                 />
                                 <button
@@ -303,13 +306,14 @@ const Users = () => {
                                     {showPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
                                 </button>
                               </div>
+                              <p className="text-[8px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">Changing credentials resets the dashboard sync status.</p>
                           </div>
                           
                           <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assigned Security Tier</label>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Security Tier</label>
                               <Select
                                   options={[
-                                      { value: '', label: 'Assign Tier...' },
+                                      { value: '', label: 'Select Tier...' },
                                       ...roles.map(r => ({ value: r.id, label: r.name }))
                                   ]}
                                   value={formData.role_id}
@@ -319,7 +323,7 @@ const Users = () => {
                           </div>
 
                           <div className="space-y-2 pt-4 border-t border-slate-100">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Facility Scopes</label>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Facility Access Scopes</label>
                               <div className="grid grid-cols-1 gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100 max-h-48 overflow-y-auto shadow-inner">
                                   {outlets.map(outlet => (
                                       <label key={outlet.id} className="flex items-center space-x-3 p-3 hover:bg-white rounded-xl cursor-pointer transition-all border border-transparent hover:border-slate-100 group">
@@ -351,7 +355,7 @@ const Users = () => {
                                   </Button>
                               )}
                               <Button type="submit" className="flex-1 h-14 rounded-2xl font-black text-base shadow-xl shadow-indigo-100">
-                                  {isEditing ? 'Update User' : 'Provision Account'}
+                                  {isEditing ? 'Commit Changes' : 'Provision User'}
                               </Button>
                           </div>
                       </form>
@@ -365,8 +369,8 @@ const Users = () => {
         isOpen={!!deleteId}
         onClose={() => setDeleteId(null)}
         onConfirm={confirmDelete}
-        title="Revoke Credentials"
-        description="Are you sure you want to permanently remove this user account? All access privileges will be revoked immediately."
+        title="Revoke Access"
+        description="Are you sure you want to delete this user? This profile will be removed from the ERP, but you must manually delete them from the Supabase Auth dashboard if you wish to clear their credentials entirely."
         confirmText="Confirm Deletion"
         isDestructive={true}
       />

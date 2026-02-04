@@ -29,104 +29,93 @@ class DatabaseService {
   }
 
   /**
-   * REFINED AUTHENTICATION & METADATA SYNC ENGINE
-   * 1. Validates identity.
-   * 2. If login is successful, mirrors the 'Profile Name' into the 'Supabase Auth Metadata'
-   *    so the Supabase Dashboard 'Display Name' stays in sync.
+   * REFINED IDENTITY SYNC ENGINE
+   * Forces the Supabase Auth "Display Name" column to match our "Profiles" table.
    */
+  async syncAuthMetadata(profile: UserProfile) {
+    if (!this.isSupabase()) return;
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const metaName = user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.display_name;
+    
+    if (profile.name !== metaName) {
+      console.debug("Pushing metadata to Supabase Auth Dashboard...");
+      await supabase.auth.updateUser({
+        data: {
+          full_name: profile.name,
+          display_name: profile.name,
+          name: profile.name
+        }
+      });
+    }
+  }
+
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (!this.isSupabase()) return { user: null, error: "Cloud sync offline." };
     
     const cleanEmail = email.trim().toLowerCase();
     
-    // 1. Standard Login
+    // 1. Check current profile state
+    const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
+
+    // 2. Standard Auth Attempt
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: passwordAttempt
     });
 
-    // 2. Failure: Check for Bootstrap or Re-Sync Pending
-    if (authError) {
-        const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
-        const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-        const isFirstUser = count === 0;
-
-        if (isFirstUser || (profile && profile.temp_password === passwordAttempt)) {
-            const userName = isFirstUser ? "System Administrator" : (profile?.name || "Staff");
-            
-            // Provision NEW identity in Auth (Syncs Name immediately)
+    // 3. JIT RECONCILIATION
+    // If Auth fails or profile is unlinked, check if this is a pending admin update
+    if (authError || (profile && !profile.auth_id)) {
+        if (profile && profile.temp_password === passwordAttempt) {
+            // This is an Admin-updated identity. Provision it in Auth now.
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                 email: cleanEmail,
                 password: passwordAttempt,
                 options: { 
-                  data: { 
-                    name: userName, 
-                    full_name: userName, // Dashboard often looks for full_name
-                    display_name: userName 
-                  },
-                  emailRedirectTo: window.location.origin 
+                  data: { full_name: profile.name, display_name: profile.name, name: profile.name }
                 }
             });
 
             if (signUpError) {
-                if (signUpError.message.toLowerCase().includes('already registered')) {
-                  return { user: null, error: "Identity conflict. An auth record exists for this email with a different password." };
-                }
-                return { user: null, error: `Sync Error: ${signUpError.message}` };
+              if (signUpError.message.toLowerCase().includes('already registered')) {
+                return { user: null, error: "Sync Conflict: This email is already in the Auth dashboard with a different password. Please delete the old user in Supabase Auth or use the original password." };
+              }
+              return { user: null, error: signUpError.message };
             }
 
             if (signUpData.user) {
-                if (isFirstUser) {
-                  const adminProfile: UserProfile = {
-                    id: crypto.randomUUID(),
-                    auth_id: signUpData.user.id,
-                    email: cleanEmail,
-                    name: userName,
-                    role_id: 'admin',
-                    allowed_outlets: []
-                  };
-                  await supabase.from('profiles').insert([adminProfile]);
-                  return { user: adminProfile, error: null };
-                } else if (profile) {
-                  await supabase.from('profiles').update({ auth_id: signUpData.user.id, temp_password: null }).eq('id', profile.id);
-                  const { data: updated } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
-                  return { user: updated, error: null };
-                }
+              await supabase.from('profiles').update({ auth_id: signUpData.user.id, temp_password: null }).eq('id', profile.id);
+              const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
+              return { user: refreshed, error: null };
             }
         }
-        return { user: null, error: authError.message || "Invalid credentials." };
+        
+        // Handle Bootstrap
+        const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+        if (count === 0 && email.includes('@')) {
+          const { data: bs } = await supabase.auth.signUp({ email, password: passwordAttempt, options: { data: { name: "Admin", full_name: "Admin" } } });
+          if (bs.user) {
+            const admin = { id: crypto.randomUUID(), auth_id: bs.user.id, email, name: "Admin", role_id: 'admin', allowed_outlets: [] };
+            await supabase.from('profiles').insert([admin]);
+            return { user: admin, error: null };
+          }
+        }
+        return { user: null, error: authError?.message || "Invalid credentials." };
     }
 
-    // 3. Success: Perform Metadata Sync for the Supabase Dashboard
-    if (authData.user) {
-        let { data: profile } = await supabase.from('profiles').select('*').eq('auth_id', authData.user.id).maybeSingle();
-        
-        if (!profile) {
-            const { data: emailProfile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
-            if (emailProfile) {
-                await supabase.from('profiles').update({ auth_id: authData.user.id, temp_password: null }).eq('id', emailProfile.id);
-                const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', emailProfile.id).single();
-                profile = refreshed;
-            }
+    // 4. Success: Mirror Metadata to Dashboard
+    if (authData.user && profile) {
+        if (!profile.auth_id) {
+          await supabase.from('profiles').update({ auth_id: authData.user.id, temp_password: null }).eq('id', profile.id);
         }
-
-        // AUTO-MIRROR NAME TO AUTH METADATA
-        // This ensures the Supabase Auth "Display Name" column stays updated after an Admin changes the name in the ERP.
-        if (profile && profile.name !== authData.user.user_metadata?.full_name) {
-            await supabase.auth.updateUser({ 
-                data: { 
-                    name: profile.name, 
-                    full_name: profile.name,
-                    display_name: profile.name 
-                } 
-            });
-        }
-        
-        await this.logAction('AUTH_LOGIN', `Identity Verified: ${cleanEmail}`);
-        return { user: profile || null, error: profile ? null : "Auth verified but profile missing." };
+        await this.syncAuthMetadata(profile);
+        return { user: profile, error: null };
     }
 
-    return { user: null, error: "Auth Timeout." };
+    return { user: null, error: "Auth timeout." };
   }
 
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
@@ -134,7 +123,7 @@ class DatabaseService {
     const { data: authData, error: authError } = await supabase.auth.signUp({ 
         email, 
         password: passwordAttempt, 
-        options: { data: { name, full_name: name } } 
+        options: { data: { name, full_name: name, display_name: name } } 
     });
     if (authError) return { user: null, error: authError.message };
     if (authData.user) {
@@ -170,7 +159,7 @@ class DatabaseService {
         role_id: user.role_id,
         allowed_outlets: user.allowed_outlets || [],
         temp_password: user.password || null,
-        auth_id: null
+        auth_id: null // Force JIT sync
     };
 
     if (this.isSupabase()) {
@@ -192,12 +181,18 @@ class DatabaseService {
             updated_at: new Date().toISOString()
         };
 
-        // If Email changed: Clear auth_id to force migration to new identity
+        // IF CURRENT USER IS SELF: Update Auth metadata immediately
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser && current && current.auth_id === currentUser.id) {
+            if (updates.name && updates.name !== current.name) {
+                await supabase.auth.updateUser({ data: { full_name: updates.name, name: updates.name } });
+            }
+        }
+
+        // IF ADMIN OVERRIDE: Clear auth_id to force a fresh provisioning on login
         if (updates.email && current && updates.email.trim().toLowerCase() !== current.email.toLowerCase()) {
             finalUpdates.auth_id = null;
         }
-        
-        // If Password changed: Clear auth_id to allow re-provisioning with new key
         if (updates.password) {
             finalUpdates.temp_password = updates.password;
             finalUpdates.auth_id = null;
@@ -338,6 +333,7 @@ class DatabaseService {
     if (this.isSupabase()) {
         const { error } = await supabase.auth.updateUser({ password: n });
         if (error) throw new Error(error.message);
+        // Also update local profiles table if needed
     } 
   }
 

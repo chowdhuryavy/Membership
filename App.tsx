@@ -22,6 +22,7 @@ import SettingsPage from './pages/Settings';
 import Profile from './pages/Profile';
 import { LayoutDashboard, Users, Tag, BarChart3, LogOut, Menu, X, Shield, Settings, Store, ChevronDown, History, UserCircle, Activity, Loader2, Building2, Check, Globe, ChevronsUpDown, Bell, Search, Info } from 'lucide-react';
 import { Permission, Property } from './types';
+import { db } from './services/mockSupabase';
 
 const SplashLoading = () => {
   const { settings } = useSettings();
@@ -209,6 +210,14 @@ const ProtectedLayout = () => {
     }
   }, [combinedLoading]);
   
+  // PERSISTENT METADATA SYNC
+  // Ensures that Supabase Auth Dashboard is updated with the profile name whenever the user is active
+  useEffect(() => {
+    if (user && !combinedLoading) {
+      db.syncAuthMetadata(user).catch(console.warn);
+    }
+  }, [user, combinedLoading]);
+
   if (showSplash) return <SplashLoading />;
   if (!user) return <Navigate to="/login" replace />;
   
