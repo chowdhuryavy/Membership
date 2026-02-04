@@ -11,15 +11,11 @@ import {
   ShieldCheck, 
   ArrowUpRight,
   CalendarDays,
-  ChevronRight,
-  Sparkles,
-  RefreshCcw,
-  Zap
+  ChevronRight
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { MemberStatus, Member } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { generateFinancialInsight } from '../services/geminiService';
 import { format, endOfMonth, differenceInCalendarDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -30,7 +26,7 @@ const parseISO = (dateString: string) => new Date(dateString);
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const { currentOutlet, formatMoney, currency, settings } = useSettings();
+  const { currentOutlet, formatMoney } = useSettings();
   const [stats, setStats] = useState({
     totalMembers: 0,
     activeMembers: 0,
@@ -39,8 +35,6 @@ const Dashboard = () => {
   });
   const [expiringMembers, setExpiringMembers] = useState<Member[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [aiInsight, setAiInsight] = useState<string>('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -50,7 +44,6 @@ const Dashboard = () => {
   useEffect(() => {
     if(currentOutlet) {
       loadStats();
-      setAiInsight(''); // Reset insight on facility change
     }
   }, [currentOutlet]);
 
@@ -88,24 +81,6 @@ const Dashboard = () => {
       revenueThisMonth: monthlyRev
     });
     setExpiringMembers(expiring);
-  };
-
-  const handleGenerateInsight = async () => {
-    if (isAnalyzing) return;
-    setIsAnalyzing(true);
-    
-    const dataContext = `
-      Facility: ${currentOutlet?.name}
-      Total Members: ${stats.totalMembers}
-      Active: ${stats.activeMembers}
-      Frozen: ${stats.frozenMembers}
-      Revenue this month: ${formatMoney(stats.revenueThisMonth)}
-      Expiring in 30 days: ${expiringMembers.length}
-    `;
-
-    const insight = await generateFinancialInsight(dataContext);
-    setAiInsight(insight);
-    setIsAnalyzing(false);
   };
 
   const displayName = useMemo(() => {
@@ -165,49 +140,6 @@ const Dashboard = () => {
           </span>
         </div>
       </div>
-
-      {/* AI Insights Bar */}
-      <Card className="rounded-[2rem] border-indigo-200 bg-gradient-to-r from-indigo-50 to-white overflow-hidden relative shadow-lg shadow-indigo-50 group">
-        <div className="absolute -left-12 -top-12 w-48 h-48 bg-indigo-100/50 rounded-full blur-3xl group-hover:bg-indigo-200/50 transition-colors duration-500"></div>
-        <CardContent className="p-8 relative z-10">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div className="flex items-center gap-5">
-              <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-200 animate-pulse-slow">
-                <Sparkles className="w-7 h-7" />
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-900 tracking-tight">AI Operational Intelligence</h3>
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Real-time Financial Reasoning Engine</p>
-              </div>
-            </div>
-            <Button 
-              onClick={handleGenerateInsight} 
-              isLoading={isAnalyzing}
-              className="h-12 px-8 rounded-xl bg-slate-900 hover:bg-black text-white font-black text-xs uppercase tracking-widest shadow-xl transition-all transform active:scale-95"
-            >
-              <RefreshCcw className={`w-4 h-4 mr-2 ${isAnalyzing ? 'animate-spin' : ''}`} />
-              {isAnalyzing ? 'Analyzing Portfolio...' : 'Generate Strategic Insight'}
-            </Button>
-          </div>
-          
-          {aiInsight ? (
-            <div className="mt-8 p-6 bg-white border border-indigo-100 rounded-2xl shadow-inner animate-in fade-in slide-in-from-top-2 duration-500">
-               <div className="flex items-start gap-4">
-                  <div className="p-2 bg-indigo-50 rounded-lg shrink-0 mt-1">
-                    <Zap className="w-4 h-4 text-indigo-600" />
-                  </div>
-                  <p className="text-slate-700 leading-relaxed font-medium text-sm italic">
-                    {aiInsight}
-                  </p>
-               </div>
-            </div>
-          ) : !isAnalyzing && (
-            <div className="mt-6 flex items-center gap-3 text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-              <Info className="w-3 h-3" /> System ready for trend analysis.
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatTile title="Total Portfolio" value={stats.totalMembers} icon={Users} color="bg-blue-600" trend="+12%" />
@@ -309,11 +241,5 @@ const Dashboard = () => {
     </div>
   );
 };
-
-const Info = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
 
 export default Dashboard;

@@ -106,31 +106,51 @@ class DatabaseService {
   }
 
   async addUser(user: Omit<UserProfile, 'id'> & { password?: string }): Promise<UserProfile> {
-    const id = crypto.randomUUID();
     const cleanEmail = user.email.trim().toLowerCase();
+    let authId: string | null = null;
+    let tempPassword: string | null = user.password || 'Temporary123!';
     
     if (this.isSupabase()) {
         const shadow = this.getShadowClient();
         const { data: authData, error: authError } = await (shadow.auth as any).signUp({
             email: cleanEmail,
-            password: user.password || 'Temporary123!',
+            password: tempPassword,
             options: { data: { full_name: user.name, name: user.name, display_name: user.name } }
         });
 
+        // If user already exists in Auth, we try to get their ID if it's the same project
+        if (authData?.user) {
+            authId = authData.user.id;
+            tempPassword = null; // Successfully created in Auth, no need for temp password
+        } else if (authError?.message.includes('already registered')) {
+            // User exists in Auth, we'll try to link them on their next successful login
+            authId = null; 
+        }
+
         const insertData = {
-            id,
             email: cleanEmail,
             name: user.name,
             role_id: user.role_id,
             allowed_outlets: user.allowed_outlets || [],
-            temp_password: authError ? user.password : null,
-            auth_id: authData?.user?.id || null
+            temp_password: tempPassword,
+            auth_id: authId,
+            updated_at: new Date().toISOString()
         };
 
-        const { error: dbError } = await supabase.from('profiles').insert([insertData]);
-        if (dbError) throw new Error(`Database Sync Failed: ${dbError.message}`);
+        // UPSERT strategy on email to prevent unique constraint failures
+        const { data, error: dbError } = await supabase
+            .from('profiles')
+            .upsert([insertData], { onConflict: 'email' })
+            .select()
+            .single();
+
+        if (dbError) {
+            console.error("Profile Upsert Error:", dbError);
+            throw new Error(`Profile Sync Failed: ${dbError.message}`);
+        }
+        return data as UserProfile;
     }
-    return { ...user, id } as UserProfile;
+    return { ...user, id: crypto.randomUUID() } as UserProfile;
   }
 
   async updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) { 

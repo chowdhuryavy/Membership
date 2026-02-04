@@ -13,6 +13,7 @@ const Users = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form State
   const [formData, setFormData] = useState<{
@@ -63,7 +64,7 @@ const Users = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canManageUsers) return;
+    if (!canManageUsers || isSubmitting) return;
     setError('');
     
     if (!formData.name || !formData.email) {
@@ -75,6 +76,7 @@ const Users = () => {
         return;
     }
     
+    setIsSubmitting(true);
     try {
         if (isEditing && formData.id) {
             await db.updateUser(formData.id, {
@@ -96,7 +98,10 @@ const Users = () => {
         resetForm();
         await loadUsers();
     } catch (err: any) {
-        setError(err.message);
+        console.error("User Provisioning Failed:", err);
+        setError(err.message || "Database sync failed. Please check your SQL seeding and Role configuration.");
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
@@ -391,7 +396,7 @@ const Users = () => {
                                       Cancel
                                   </Button>
                               )}
-                              <Button type="submit" className="flex-1 h-14 rounded-2xl font-black text-base shadow-xl shadow-indigo-100">
+                              <Button type="submit" isLoading={isSubmitting} className="flex-1 h-14 rounded-2xl font-black text-base shadow-xl shadow-indigo-100">
                                   {isEditing ? 'Commit Changes' : 'Provision User'}
                               </Button>
                           </div>
