@@ -205,33 +205,43 @@ class DatabaseService {
   
   async addCurrency(curr: Omit<Currency, 'id'>): Promise<Currency> { 
     const id = crypto.randomUUID(); 
+    console.log("DB: Provisioning new currency...", curr);
     if (this.isSupabase()) { 
         if (curr.is_default) {
-            // Unset all existing defaults
             await supabase.from('currencies').update({ is_default: false }).neq('id', id);
-            // Synchronize global settings
-            await supabase.from('company_settings').upsert({ id: 'global', currency_id: id });
         }
         const { error } = await supabase.from('currencies').insert([{ ...curr, id }]); 
-        if (error) throw new Error(error.message); 
+        if (error) {
+            console.error("DB Error (Add Currency):", error);
+            throw new Error(error.message);
+        }
+        if (curr.is_default) {
+            await supabase.from('company_settings').upsert({ id: 'global', currency_id: id });
+        }
+        console.log("DB Success: Currency added.");
     } 
     return { ...curr, id }; 
   }
 
   async updateCurrency(id: string, updates: Partial<Currency>) { 
+    console.log("DB: Updating currency...", id, updates);
     if (this.isSupabase()) { 
         if (updates.is_default) {
-            // Unset all other defaults
             await supabase.from('currencies').update({ is_default: false }).neq('id', id);
-            // Synchronize global settings to use THIS currency as primary
-            await supabase.from('company_settings').upsert({ id: 'global', currency_id: id });
         }
         
-        // Strip PK from update body to prevent 'cannot update primary key' errors
         const { id: _, ...cleanUpdates } = updates as any;
         const { error } = await supabase.from('currencies').update(cleanUpdates).eq('id', id); 
         
-        if (error) throw new Error(error.message); 
+        if (error) {
+            console.error("DB Error (Update Currency):", error);
+            throw new Error(error.message);
+        }
+
+        if (updates.is_default) {
+            await supabase.from('company_settings').upsert({ id: 'global', currency_id: id });
+        }
+        console.log("DB Success: Currency updated.");
     } 
   }
 

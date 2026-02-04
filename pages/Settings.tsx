@@ -5,7 +5,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/mockSupabase';
 import { Role, Permission, Currency, CompanySettings, Outlet, Property } from '../types';
-import { Trash2, Check, Store, Edit2, X, Shield, Eye, PlusSquare, FileEdit, Trash, Download, Building2, Activity, Coins, Globe, Key, Settings, AlertTriangle } from 'lucide-react';
+import { Trash2, Check, Store, Edit2, X, Shield, Eye, PlusSquare, FileEdit, Trash, Download, Building2, Activity, Coins, Globe, Key, Settings, AlertTriangle, RefreshCcw } from 'lucide-react';
 
 const PERMISSION_MODULES = [
     { id: 'members', label: 'Membership Management', actions: [{ id: 'view', label: 'View', icon: Eye }, { id: 'create', label: 'Create', icon: PlusSquare }, { id: 'edit', label: 'Edit', icon: FileEdit }, { id: 'delete', label: 'Delete', icon: Trash }] },
@@ -191,17 +191,18 @@ const SettingsPage = () => {
         } else {
             await db.addCurrency(newCurrency as Omit<Currency, 'id'>);
         }
+        
+        // Reset local form state
         setEditingCurrencyId(null);
         setNewCurrency({ code: '', symbol: '', rate: 1, is_default: false });
+        
+        // Brief delay to allow database triggers/sequences to finalize
+        await new Promise(r => setTimeout(r, 500));
         await refreshSettings();
+        
         showStatus('Monetary standard synchronized.');
     } catch (e: any) {
-        const errorMsg = e.message.toLowerCase();
-        if (errorMsg.includes('row-level security') || errorMsg.includes('rls')) {
-            showStatus("CRITICAL: RLS Policy Violation. Please go to the Supabase SQL Editor and re-run the updated 'supabase_schema.sql' script to grant necessary permissions.", "error");
-        } else {
-            showStatus(`Currency sync failed: ${e.message}`, 'error');
-        }
+        showStatus(`Currency sync failed: ${e.message}`, 'error');
     } finally {
         setIsSaving(false);
     }
@@ -214,9 +215,14 @@ const SettingsPage = () => {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-in fade-in duration-700">
-      <div className="flex items-center gap-4">
-        <Settings className="w-10 h-10 text-indigo-600" />
-        <h1 className="text-3xl font-black text-slate-900 tracking-tighter">System Control</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Settings className="w-10 h-10 text-indigo-600" />
+          <h1 className="text-3xl font-black text-slate-900 tracking-tighter">System Control</h1>
+        </div>
+        <Button variant="outline" onClick={refreshSettings} className="rounded-xl font-black text-[10px] uppercase tracking-widest h-11 px-6 border-slate-200">
+            <RefreshCcw className="w-4 h-4 mr-2" /> Sync Data
+        </Button>
       </div>
       
       <div className="flex gap-2 bg-slate-100 p-1.5 rounded-2xl w-fit flex-wrap border border-slate-200/50">
