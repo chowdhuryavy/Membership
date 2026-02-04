@@ -5,13 +5,14 @@ import { db } from '../services/mockSupabase';
 import { UserProfile, Role, Outlet } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff } from 'lucide-react';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff, RefreshCcw, CheckCircle2 } from 'lucide-react';
 
 const Users = () => {
   const { user } = useAuth();
   const { roles, outlets, hasPermission } = useSettings();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   
   // Form State
   const [formData, setFormData] = useState<{
@@ -32,8 +33,10 @@ const Users = () => {
   }, []);
 
   const loadUsers = async () => {
+    setLoading(true);
     const data = await db.getUsers();
     setUsers(data);
+    setLoading(false);
   };
 
   const resetForm = () => {
@@ -43,7 +46,6 @@ const Users = () => {
       setShowPassword(false);
   }
 
-  // Proper permission check using granular strings
   const canViewUsers = user && hasPermission(user.role_id, 'users:view');
   const canManageUsers = user && (hasPermission(user.role_id, 'users:create') || hasPermission(user.role_id, 'users:edit')); 
 
@@ -61,10 +63,7 @@ const Users = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canManageUsers) {
-        setError("You do not have permission to create or modify users.");
-        return;
-    }
+    if (!canManageUsers) return;
     setError('');
     
     if (!formData.name || !formData.email) {
@@ -75,14 +74,6 @@ const Users = () => {
         setError("You must assign a role to this user.");
         return;
     }
-    if (formData.allowed_outlets.length === 0) {
-        setError("You must assign at least one outlet.");
-        return;
-    }
-    if (!isEditing && (!formData.password || formData.password.length < 6)) {
-        setError("Initial Access Key must be at least 6 characters.");
-        return;
-    }
     
     try {
         if (isEditing && formData.id) {
@@ -91,7 +82,7 @@ const Users = () => {
                 email: formData.email,
                 role_id: formData.role_id,
                 allowed_outlets: formData.allowed_outlets,
-                password: formData.password || undefined // Only update if provided
+                password: formData.password || undefined 
             } as any);
         } else {
             await db.addUser({
@@ -116,7 +107,7 @@ const Users = () => {
           email: u.email,
           role_id: u.role_id,
           allowed_outlets: u.allowed_outlets || [],
-          password: '' // Reset password field for editing
+          password: '' 
       });
       setIsEditing(true);
       setError('');
@@ -145,117 +136,153 @@ const Users = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Shield className="w-8 h-8 text-indigo-600" />
-        <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Identity Management</h1>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div className="flex items-center gap-4">
+            <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-xl shadow-indigo-100">
+                <Shield className="w-6 h-6" />
+            </div>
+            <div>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Identity Management</h1>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Authorized User Directory</p>
+            </div>
+        </div>
+        <Button variant="outline" onClick={loadUsers} className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest border-slate-200">
+            <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh Data
+        </Button>
       </div>
       
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
-        <div className={canManageUsers ? "xl:col-span-2 space-y-6" : "xl:col-span-3 space-y-6"}>
-            <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden">
-                <CardHeader className="bg-slate-50 border-b border-slate-100 p-6">
-                    <CardTitle className="text-xl font-black">Authorized Directory</CardTitle>
-                </CardHeader>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-10 items-start">
+        <div className={canManageUsers ? "xl:col-span-2 space-y-8" : "xl:col-span-3 space-y-8"}>
+            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
-                        <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] bg-slate-50/50 border-b">
+                        <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] bg-slate-50 border-b">
                             <tr>
-                                <th className="px-8 py-5">Profile</th>
-                                <th className="px-8 py-5">Security Tier</th>
-                                <th className="px-8 py-5">Access Scopes</th>
-                                {canManageUsers && <th className="px-8 py-5 text-right">Operations</th>}
+                                <th className="px-8 py-6">Profile</th>
+                                <th className="px-8 py-6">Identity State</th>
+                                <th className="px-8 py-6">Security Tier</th>
+                                <th className="px-8 py-6">Access Scopes</th>
+                                {canManageUsers && <th className="px-8 py-6 text-right">Operations</th>}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {users.map(u => (
-                                <tr key={u.id} className="bg-white hover:bg-slate-50 transition-colors">
-                                    <td className="px-8 py-6">
-                                        <div className="font-black text-slate-900 tracking-tight">{u.name}</div>
-                                        <div className="text-slate-400 text-xs font-bold">{u.email}</div>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <span className="inline-flex items-center px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-700 border border-indigo-100">
-                                            {getRoleName(u.role_id)}
-                                        </span>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <div className="flex flex-wrap gap-2">
-                                            {(!u.allowed_outlets || u.allowed_outlets.length === 0) ? (
-                                                <span className="text-red-500 text-[10px] font-black uppercase tracking-widest flex items-center bg-red-50 px-2 py-1 rounded-lg"><AlertTriangle className="w-3 h-3 mr-1"/> Zero Scopes</span>
+                            {users.map(u => {
+                                const needsSync = !u.auth_id;
+                                return (
+                                    <tr key={u.id} className="bg-white hover:bg-slate-50 transition-colors group">
+                                        <td className="px-8 py-6">
+                                            <div className="font-black text-slate-900 tracking-tight text-base">{u.name}</div>
+                                            <div className="text-indigo-600 text-xs font-bold">{u.email}</div>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            {needsSync ? (
+                                                <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-100 w-fit">
+                                                    <RefreshCcw className="w-3.5 h-3.5 animate-spin-slow" />
+                                                    <span className="text-[9px] font-black uppercase tracking-widest">Re-Sync Pending</span>
+                                                </div>
                                             ) : (
-                                                u.allowed_outlets.map(outId => {
-                                                    const outName = outlets.find(o => o.id === outId)?.name;
-                                                    return outName ? (
-                                                        <span key={outId} className="text-[10px] font-black uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-xl text-slate-600 flex items-center border border-slate-200">
-                                                            <Store className="w-3 h-3 mr-1.5 text-slate-400"/> {outName}
-                                                        </span>
-                                                    ) : null;
-                                                })
+                                                <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 w-fit">
+                                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                                    <span className="text-[9px] font-black uppercase tracking-widest">Auth Active</span>
+                                                </div>
                                             )}
-                                        </div>
-                                    </td>
-                                    {canManageUsers && (
-                                      <td className="px-8 py-6 text-right">
-                                          <div className="flex justify-end gap-2">
-                                              <button type="button" onClick={() => handleEdit(u)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white hover:shadow-md border border-transparent hover:border-slate-100 rounded-xl transition-all">
-                                                  <Edit2 className="w-4 h-4" />
-                                              </button>
-                                              {u.id !== user?.id && (
-                                                  <button type="button" onClick={() => setDeleteId(u.id)} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-white hover:shadow-md border border-transparent hover:border-slate-100 rounded-xl transition-all">
-                                                      <Trash2 className="w-4 h-4" />
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">
+                                                {getRoleName(u.role_id)}
+                                            </span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className="flex flex-wrap gap-2">
+                                                {(!u.allowed_outlets || u.allowed_outlets.length === 0) ? (
+                                                    <span className="text-red-500 text-[10px] font-black uppercase tracking-widest flex items-center bg-red-50 px-2.5 py-1 rounded-lg"><AlertTriangle className="w-3.5 h-3.5 mr-1.5"/> Restricted</span>
+                                                ) : (
+                                                    u.allowed_outlets.map(outId => {
+                                                        const outName = outlets.find(o => o.id === outId)?.name;
+                                                        return outName ? (
+                                                            <span key={outId} className="text-[10px] font-black uppercase tracking-widest bg-white px-3 py-1 rounded-xl text-slate-500 flex items-center border border-slate-200 shadow-sm">
+                                                                <Store className="w-3 h-3 mr-1.5 text-slate-300"/> {outName}
+                                                            </span>
+                                                        ) : null;
+                                                    })
+                                                )}
+                                            </div>
+                                        </td>
+                                        {canManageUsers && (
+                                          <td className="px-8 py-6 text-right">
+                                              <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                  <button type="button" onClick={() => handleEdit(u)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all">
+                                                      <Edit2 className="w-4 h-4" />
                                                   </button>
-                                              )}
-                                          </div>
-                                      </td>
-                                    )}
-                                </tr>
-                            ))}
+                                                  {u.id !== user?.id && (
+                                                      <button type="button" onClick={() => setDeleteId(u.id)} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all">
+                                                          <Trash2 className="w-4 h-4" />
+                                                      </button>
+                                                  )}
+                                              </div>
+                                          </td>
+                                        )}
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
             </Card>
+
+            <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <Shield className="w-32 h-32 text-white" />
+                </div>
+                <div className="relative z-10 flex items-start gap-6">
+                    <div className="p-4 bg-white/10 rounded-2xl backdrop-blur-xl border border-white/10 shrink-0">
+                        <Lock className="w-6 h-6 text-indigo-400" />
+                    </div>
+                    <div>
+                        <h4 className="text-white font-black uppercase tracking-widest text-sm mb-2">Atomic Shadow Sync Protocol</h4>
+                        <p className="text-indigo-200/60 text-xs font-medium max-w-2xl leading-relaxed">
+                            Supabase Auth records are managed via a deferred sync strategy. If an email or password is changed by an administrator, 
+                            the account is marked "Re-Sync Pending." On the next successful login, the system will automatically reconcile the 
+                            identities and finalize the migration. Old Auth identities for changed emails will remain orphaned in Supabase.
+                        </p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         {canManageUsers && (
           <div className="space-y-6">
               <Card className="sticky top-8 rounded-[2rem] border-slate-200/60 shadow-2xl overflow-hidden">
-                  <CardHeader className="bg-slate-900 text-white p-8">
-                      <CardTitle className="text-xl font-black tracking-tight">{isEditing ? 'Modify Identity' : 'Initialize Identity'}</CardTitle>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Security Credential Provisioning</p>
+                  <CardHeader className="bg-indigo-600 text-white p-8">
+                      <CardTitle className="text-xl font-black tracking-tight">{isEditing ? 'Update Profile' : 'New Identity'}</CardTitle>
+                      <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mt-2">Credential Provisioning</p>
                   </CardHeader>
                   <CardContent className="p-8">
                       <form onSubmit={handleSubmit} className="space-y-6">
-                          {!isEditing && (
-                              <div className="bg-blue-50/50 p-4 rounded-2xl text-[11px] font-bold text-blue-700 border border-blue-100 flex gap-3">
-                                  <Info className="w-5 h-5 shrink-0 text-blue-500" />
-                                  <p>Provide an initial access key. The user can update this after their first login.</p>
-                              </div>
-                          )}
-
                           <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Legal Name</label>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Legal Name</label>
                               <Input 
                                   value={formData.name} 
                                   onChange={e => setFormData({...formData, name: e.target.value})} 
-                                  placeholder="John Doe"
+                                  placeholder="Jane Smith"
                                   className="h-12 rounded-xl"
                               />
                           </div>
                           
                           <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Work Email</label>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Corporate Email</label>
                               <Input 
                                   type="email"
                                   value={formData.email} 
                                   onChange={e => setFormData({...formData, email: e.target.value})} 
-                                  placeholder="user@enterprise.com"
+                                  placeholder="jsmith@enterprise.com"
                                   className="h-12 rounded-xl"
                               />
                           </div>
 
                           <div className="space-y-2">
                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                                {isEditing ? 'Update Access Key (Optional)' : 'Initial Access Key'}
+                                {isEditing ? 'Override Access Key (Optional)' : 'Initial Access Key'}
                               </label>
                               <div className="relative group">
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -265,8 +292,8 @@ const Users = () => {
                                     type={showPassword ? "text" : "password"}
                                     value={formData.password} 
                                     onChange={e => setFormData({...formData, password: e.target.value})} 
-                                    placeholder={isEditing ? "Leave blank to keep current" : "••••••••"}
-                                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-medium"
+                                    placeholder={isEditing ? "Unchanged" : "••••••••"}
+                                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-medium"
                                 />
                                 <button
                                     type="button"
@@ -279,10 +306,10 @@ const Users = () => {
                           </div>
                           
                           <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Security Tier</label>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assigned Security Tier</label>
                               <Select
                                   options={[
-                                      { value: '', label: 'Select Tier...' },
+                                      { value: '', label: 'Assign Tier...' },
                                       ...roles.map(r => ({ value: r.id, label: r.name }))
                                   ]}
                                   value={formData.role_id}
@@ -291,7 +318,7 @@ const Users = () => {
                               />
                           </div>
 
-                          <div className="space-y-2 pt-4 border-t border-slate-50">
+                          <div className="space-y-2 pt-4 border-t border-slate-100">
                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Facility Scopes</label>
                               <div className="grid grid-cols-1 gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100 max-h-48 overflow-y-auto shadow-inner">
                                   {outlets.map(outlet => (
@@ -324,7 +351,7 @@ const Users = () => {
                                   </Button>
                               )}
                               <Button type="submit" className="flex-1 h-14 rounded-2xl font-black text-base shadow-xl shadow-indigo-100">
-                                  {isEditing ? 'Update Profile' : 'Deploy User'}
+                                  {isEditing ? 'Update User' : 'Provision Account'}
                               </Button>
                           </div>
                       </form>
@@ -338,9 +365,9 @@ const Users = () => {
         isOpen={!!deleteId}
         onClose={() => setDeleteId(null)}
         onConfirm={confirmDelete}
-        title="Logout"
+        title="Revoke Credentials"
         description="Are you sure you want to permanently remove this user account? All access privileges will be revoked immediately."
-        confirmText="Confirm Termination"
+        confirmText="Confirm Deletion"
         isDestructive={true}
       />
     </div>

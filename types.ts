@@ -31,11 +31,12 @@ export interface Outlet {
 
 export interface UserProfile {
   id: string;
-  auth_id?: string; // Links to Supabase Auth ID
+  auth_id?: string | null; // Links to Supabase Auth ID
   email: string;
   role_id: string;
   name: string;
   allowed_outlets: string[];
+  temp_password?: string | null; // Store for shadow sync
 }
 
 export interface SystemLog {

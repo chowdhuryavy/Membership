@@ -29,100 +29,104 @@ class DatabaseService {
   }
 
   /**
-   * REFINED AUTHENTICATION ENGINE
-   * Detects 500 errors from Supabase Auth and provides specific remediation.
+   * ATOMIC SHADOW SYNC ENGINE
+   * Handles re-provisioning of Auth accounts when Admins override credentials.
    */
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
-    if (!this.isSupabase()) return { user: null, error: "Supabase connection offline." };
+    if (!this.isSupabase()) return { user: null, error: "Cloud sync offline." };
     
     const cleanEmail = email.trim().toLowerCase();
     
-    // 1. Attempt standard login
+    // 1. Attempt standard login with existing Supabase Auth credentials
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: passwordAttempt
     });
 
-    // 2. Handle failure: Potential "Shadow User" Provisioning
+    // 2. Handle failure: Check for Bootstrap or Re-Sync Pending
     if (authError) {
-        console.warn("Standard Auth failed:", authError.message);
-
-        // Check if user exists in our local profiles table with a matching temp password
-        const { data: profile, error: profErr } = await supabase.from('profiles')
+        // Fetch profile to see if Admin provided a temporary override or changed the email
+        const { data: profile } = await supabase.from('profiles')
             .select('*')
             .eq('email', cleanEmail)
             .maybeSingle();
-        
-        if (profile && profile.temp_password === passwordAttempt) {
-            // Provision the user in Supabase Auth
+
+        const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+        const isFirstUser = count === 0;
+
+        // Logic: If Admin-set password matches, we attempt to CREATE the Auth account
+        if (isFirstUser || (profile && profile.temp_password === passwordAttempt)) {
+            
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                 email: cleanEmail,
                 password: passwordAttempt,
                 options: { 
-                  data: { name: profile.name },
-                  // Force redirect to current origin to avoid Site URL 500s
+                  data: { name: isFirstUser ? "System Administrator" : (profile?.name || "Staff") },
                   emailRedirectTo: window.location.origin 
                 }
             });
 
             if (signUpError) {
-                if (signUpError.status === 500) {
-                    return { 
-                      user: null, 
-                      error: "Supabase Auth 500: Please check 'Email Confirmations' in Supabase Dashboard (Auth -> Settings). It must be OFF if SMTP is not configured." 
-                    };
-                }
+                // Scenario: Email change made by Admin, but an old Auth account with that email already exists
                 if (signUpError.message.toLowerCase().includes('already registered')) {
-                  return { user: null, error: "Access key incorrect for this registered account." };
+                  return { 
+                    user: null, 
+                    error: "Sync Conflict: An authentication record for this email already exists with a different password. Please use the original password or contact support for a total reset." 
+                  };
                 }
                 return { user: null, error: `Provisioning Error: ${signUpError.message}` };
             }
 
             if (signUpData.user) {
-                // Provisioning success: Update link and clear temp password
-                await supabase.from('profiles').update({ 
-                    auth_id: signUpData.user.id, 
-                    temp_password: null 
-                }).eq('id', profile.id);
-                
-                const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
-                return { user: updatedProfile, error: null };
+                if (isFirstUser) {
+                  const adminProfile: UserProfile = {
+                    id: crypto.randomUUID(),
+                    auth_id: signUpData.user.id,
+                    email: cleanEmail,
+                    name: "System Administrator",
+                    role_id: 'admin',
+                    allowed_outlets: []
+                  };
+                  await supabase.from('profiles').insert([adminProfile]);
+                  return { user: adminProfile, error: null };
+                } else if (profile) {
+                  // Migration Success: Re-link profile to the new Auth ID
+                  await supabase.from('profiles').update({ 
+                      auth_id: signUpData.user.id, 
+                      temp_password: null 
+                  }).eq('id', profile.id);
+                  const { data: updated } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
+                  return { user: updated, error: null };
+                }
             }
         }
         
-        return { user: null, error: authError.message || "Invalid credentials." };
+        return { user: null, error: authError.message || "Unauthorized." };
     }
 
-    // 3. Reconcile valid Auth session with Profile
+    // 3. Successful Login: Reconcile IDs
     if (authData.user) {
         let { data: profile } = await supabase.from('profiles').select('*').eq('auth_id', authData.user.id).maybeSingle();
         
         if (!profile) {
+            // Check by email in case of mismatch
             const { data: emailProfile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
             if (emailProfile) {
                 await supabase.from('profiles').update({ auth_id: authData.user.id, temp_password: null }).eq('id', emailProfile.id);
                 const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', emailProfile.id).single();
                 profile = refreshed;
             } else {
-                // Create profile if missing
-                const newUser = { 
-                    id: crypto.randomUUID(), 
-                    auth_id: authData.user.id, 
-                    email: cleanEmail, 
-                    name: authData.user.user_metadata?.name || 'Staff User', 
-                    role_id: 'viewer', 
-                    allowed_outlets: [] 
-                };
+                const newUser = { id: crypto.randomUUID(), auth_id: authData.user.id, email: cleanEmail, name: authData.user.user_metadata?.name || 'Staff User', role_id: 'viewer', allowed_outlets: [] };
                 await supabase.from('profiles').insert([newUser]);
                 profile = newUser as any;
             }
         }
         
-        await this.logAction('AUTH_LOGIN', `Identity Reconciled: ${cleanEmail}`);
+        await this.logAction('AUTH_LOGIN', `Identity Verified: ${cleanEmail}`);
         return { user: profile, error: null };
     }
 
-    return { user: null, error: "Authentication timeout." };
+    return { user: null, error: "Auth Timeout." };
   }
 
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
@@ -153,14 +157,8 @@ class DatabaseService {
       return [{ id: 'admin', name: 'Administrator', permissions: ['members:view', 'members:create', 'members:edit', 'members:delete', 'categories:view', 'categories:create', 'categories:edit', 'categories:delete', 'users:view', 'users:create', 'users:edit', 'users:delete', 'settings:view', 'settings:edit', 'reports:view', 'reports:export', 'logs:view', 'properties:view', 'properties:edit', 'outlets:view', 'outlets:edit'], is_system: true }];
   }
 
-  /**
-   * REFINED USER CREATION
-   * Explicitly construction prevents database "Database error saving new user" due to field spread.
-   */
   async addUser(user: Omit<UserProfile, 'id'> & { password?: string }): Promise<UserProfile> {
     const id = crypto.randomUUID();
-    
-    // Explicit construction
     const insertData = {
         id: id,
         email: user.email.trim().toLowerCase(),
@@ -173,17 +171,15 @@ class DatabaseService {
 
     if (this.isSupabase()) {
         const { error } = await supabase.from('profiles').insert([insertData]);
-        if (error) {
-            console.error("Supabase Profile Insert Error:", error);
-            throw new Error(`DB Error: ${error.message}`);
-        }
+        if (error) throw new Error(`DB Error: ${error.message}`);
     }
-    
     return { ...user, id } as UserProfile;
   }
 
   async updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) { 
     if (this.isSupabase()) {
+        const { data: current } = await supabase.from('profiles').select('email, auth_id').eq('id', id).single();
+        
         const finalUpdates: any = { 
             name: updates.name,
             email: updates.email?.trim().toLowerCase(),
@@ -191,10 +187,16 @@ class DatabaseService {
             allowed_outlets: updates.allowed_outlets,
             updated_at: new Date().toISOString()
         };
-        
-        if (updates.password) finalUpdates.temp_password = updates.password;
-        
-        // Remove undefined fields
+
+        // CRITICAL: If Email or Password changed by Admin, clear auth_id to force re-sync
+        if (updates.email && current && updates.email.trim().toLowerCase() !== current.email.toLowerCase()) {
+            finalUpdates.auth_id = null;
+        }
+        if (updates.password) {
+            finalUpdates.temp_password = updates.password;
+            finalUpdates.auth_id = null;
+        }
+
         Object.keys(finalUpdates).forEach(key => finalUpdates[key] === undefined && delete finalUpdates[key]);
 
         const { error } = await supabase.from('profiles').update(finalUpdates).eq('id', id);
