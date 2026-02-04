@@ -46,6 +46,37 @@ const Users = () => {
       setShowPassword(false);
   }
 
+  // Original helper for deletion logic
+  const callEdgeFunction = async (action: string, userId: string, extra?: { newPassword?: string, newEmail?: string }) => {
+    const res = await fetch("https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/dynamic-action", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${(user as any)?.access_token || ''}`
+      },
+      body: JSON.stringify({ action, userId, ...extra }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Identity synchronization engine failed.");
+    return data;
+  };
+
+  // New helper specifically for Admin Reset updates (Password/Email/Name)
+  const callAdminReset = async (userId: string, updates: { password?: string; email?: string; name?: string }) => {
+    const res = await fetch("https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/admin-reset-user", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-token": "SUPER_SECRET_12345", // Edge Function secret
+      },
+      body: JSON.stringify({ userId, ...updates }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Admin reset failed");
+    return data;
+  };
+
   const canViewUsers = user && hasPermission(user.role_id, 'users:view');
   const canManageUsers = user && (hasPermission(user.role_id, 'users:create') || hasPermission(user.role_id, 'users:edit')); 
 
@@ -77,34 +108,33 @@ const Users = () => {
     
     setIsSubmitting(true);
     try {
-        // Sync with Auth via Edge Function first if editing an existing linked user
         if (isEditing && formData.id) {
             const currentUserProfile = users.find(u => u.id === formData.id);
+            
+            // Trigger Admin Reset Sync if Auth ID exists
             if (currentUserProfile?.auth_id) {
-                try {
-                    const response = await fetch(
-                        "https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/update_user",
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                Authorization: `Bearer ${(user as any)?.access_token || ''}`
-                            },
-                            body: JSON.stringify({ 
-                                userId: currentUserProfile.auth_id,
-                                email: formData.email,
-                                password: formData.password || undefined,
-                                name: formData.name
-                            }),
-                        }
-                    );
-                    const authRes = await response.json();
-                    if (!authRes.success) {
-                        console.warn("Auth Sync Warning:", authRes.message);
-                        // We continue with profile update even if auth sync fails, as the user might be unlinked
+                const updates: { password?: string; email?: string; name?: string } = {};
+                
+                if (formData.password && formData.password.trim() !== "") {
+                    updates.password = formData.password;
+                }
+                if (formData.email !== currentUserProfile.email) {
+                    updates.email = formData.email;
+                }
+                if (formData.name !== currentUserProfile.name) {
+                    updates.name = formData.name;
+                }
+                
+                // If there are sensitive updates (email, password, or name), sync with Auth provider
+                if (Object.keys(updates).length > 0) {
+                    try {
+                        await callAdminReset(currentUserProfile.auth_id, updates);
+                    } catch (err: any) {
+                        console.warn("Auth Sync Failure (Non-Fatal):", err.message);
+                        // We continue with database update even if Auth sync has issues,
+                        // though typically this means the login credentials won't change.
+                        setError(`Warning: Auth Provider Sync failed (${err.message}). Database profile updated locally.`);
                     }
-                } catch (err) {
-                    console.error("Auth Update Request Failed:", err);
                 }
             }
             
@@ -116,7 +146,6 @@ const Users = () => {
                 password: formData.password || undefined 
             } as any);
         } else {
-            // New User: db.addUser already handles shadow signup attempt
             await db.addUser({
                 name: formData.name,
                 email: formData.email,
@@ -149,41 +178,36 @@ const Users = () => {
       setShowPassword(false);
   };
 
- const confirmDelete = async () => {
-  if (!deleteId) return;
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    setIsSubmitting(true);
+    setError('');
 
-  try {
-    // Call the edge function
-    const res = await fetch('https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/dynamic-action', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ userId: deleteId }) // send the ID of the user to delete
-    });
+    try {
+        const currentUserProfile = users.find(u => u.id === deleteId);
+        
+        // 1. Sync with Auth Provider (using original deletion logic)
+        if (currentUserProfile?.auth_id) {
+            try {
+                await callEdgeFunction('delete', currentUserProfile.auth_id);
+            } catch (err: any) {
+                console.warn("Auth Deletion Warning:", err.message);
+            }
+        }
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to delete user');
+        // 2. Clear Database Profile
+        await db.deleteUser(deleteId);
 
-    // Refresh your local users table
-    await loadUsers();
-    setDeleteId(null);
-
-  } catch (err: any) {
-    console.error('Failed to delete user:', err);
-    setError(err.message || "Revocation failed. Please ensure the 'delete_user' function is deployed.");
-  }
-};
-
-
+        // 3. Refresh State
+        await loadUsers();
+        setDeleteId(null);
     } catch (err: any) {
-        console.error(err);
-        setError("Revocation failed. Please ensure the 'delete_user' function is deployed.");
+        console.error('Failed to purge user:', err);
+        setError(err.message || "Revocation failed. Please ensure the 'dynamic-action' function is deployed.");
     } finally {
         setIsSubmitting(false);
     }
-};
-
+  };
 
   const toggleOutlet = (outletId: string) => {
       setFormData(prev => {
@@ -316,7 +340,7 @@ const Users = () => {
                                 <Info className="w-4 h-4"/> Profile vs. Auth Sync
                             </h5>
                             <p className="text-slate-400 text-[11px] leading-relaxed">
-                                Updating a user's email or name here triggers a sync attempt with <strong>Supabase Auth</strong>. If you have the 'update_user' Edge Function deployed, it will physically update the primary identity provider records.
+                                Updating a user's email or name here triggers a sync attempt with <strong>Supabase Auth</strong> via Service Role Edge Functions. This physically updates primary identity provider records.
                             </p>
                         </div>
 
@@ -325,7 +349,7 @@ const Users = () => {
                                 <RefreshCcw className="w-4 h-4"/> Manual Auth Cleanup
                             </h5>
                             <p className="text-slate-400 text-[11px] leading-relaxed">
-                                To fully manage an email from the cloud project, visit your <strong>Supabase Dashboard &rarr; Auth &rarr; Users</strong>. This is where primary credentials and MFA settings are physically stored.
+                                To fully manage an email or view detailed logs, visit your <strong>Supabase Dashboard &rarr; Auth &rarr; Users</strong>. This is where primary credentials and MFA settings reside.
                             </p>
                             <a 
                                 href="https://supabase.com/dashboard" 
