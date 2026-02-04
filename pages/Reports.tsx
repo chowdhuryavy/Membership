@@ -58,8 +58,12 @@ const Reports = () => {
   const [showConfig, setShowConfig] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [logoError, setLogoError] = useState(false);
 
   useEffect(() => { if (currentOutlet) loadData(); }, [reportMonth, currentOutlet]);
+  
+  // Reset logo error when property changes
+  useEffect(() => { setLogoError(false); }, [currentProperty?.id]);
 
   const loadData = async () => {
     if (!currentOutlet) return;
@@ -151,7 +155,6 @@ const Reports = () => {
     window.scrollTo(0, 0);
 
     try {
-      // Scale 2.5 for high-def results suitable for financial filing
       const canvas = await html2canvas(element, { 
         scale: 2.5,
         useCORS: true, 
@@ -174,7 +177,6 @@ const Reports = () => {
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
       
-      // Page setup: landscape
       const pdf = new jsPDF('l', 'px', [imgWidth, (imgWidth * 0.707)]); 
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
@@ -197,12 +199,12 @@ const Reports = () => {
           
           pdf.setFontSize(10);
           pdf.setTextColor(180);
-          pdf.text(`Project Integrity Audit - Page ${i + 1} of ${totalPages}`, 40, pageHeight - 20);
+          pdf.text(`Audit Trail • Facility Ledger • Page ${i + 1} of ${totalPages}`, 40, pageHeight - 20);
       }
       
-      pdf.save(`Ledger_${currentOutlet?.name || 'TTH'}_${reportMonth}.pdf`);
+      pdf.save(`Ledger_${currentOutlet?.name || 'ERP'}_${reportMonth}.pdf`);
     } catch (err) { 
-        console.error("PDF Engine Failure:", err); 
+        console.error("PDF Capture Pipeline Failure:", err); 
     } finally { 
         window.scrollTo(0, originalScrollPos);
         setIsGeneratingPDF(false); 
@@ -211,6 +213,13 @@ const Reports = () => {
 
   const canExport = hasPermission(user?.role_id || '', 'reports:export');
   let globalIndexCounter = 0;
+
+  // Verification helper for logo URL string
+  const isValidUrl = (url?: string) => {
+    if (!url) return false;
+    if (url === 'Logo' || url === '') return false;
+    return url.startsWith('http') || url.startsWith('data:image') || url.startsWith('/');
+  };
 
   return (
     <div className="space-y-6">
@@ -238,17 +247,17 @@ const Reports = () => {
           `}
         </style>
         
-        {/* Controls Bar */}
+        {/* Navigation / Controls */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm no-print border border-slate-200 gap-4">
             <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg">
+                <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-indigo-100">
                     <FileText className="w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-lg font-black tracking-tight text-slate-900 leading-none">Financial Ledger</h2>
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Audit Reporting Suite</p>
                 </div>
-                <div className="h-8 w-px bg-slate-200 mx-1 hidden sm:block"></div>
+                <div className="h-8 w-px bg-slate-200 mx-2 hidden sm:block"></div>
                 <input 
                     type="month" 
                     value={reportMonth} 
@@ -263,7 +272,7 @@ const Reports = () => {
                 {showConfig && (
                     <div className="absolute top-24 right-48 mt-2 bg-white border border-slate-200 rounded-xl shadow-2xl p-4 z-[100] w-64">
                         <div className="flex justify-between items-center mb-3 pb-2 border-b">
-                            <span className="text-[10px] font-black uppercase text-slate-400">Ledger View</span>
+                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Visibility</span>
                             <button onClick={() => setShowConfig(false)} className="text-slate-400 p-1 hover:bg-slate-50 rounded-lg"><X className="w-4 h-4"/></button>
                         </div>
                         <div className="space-y-1">
@@ -279,46 +288,48 @@ const Reports = () => {
                   <Printer className="w-4 h-4 mr-2" /> Print
                 </Button>
                 {canExport && (
-                  <Button className="rounded-lg font-black text-[10px] uppercase h-10 px-6 shadow-md" onClick={handleDownloadPDF} isLoading={isGeneratingPDF}>
+                  <Button className="rounded-lg font-black text-[10px] uppercase h-10 px-6 shadow-md shadow-indigo-100" onClick={handleDownloadPDF} isLoading={isGeneratingPDF}>
                     {isGeneratingPDF ? 'Exporting...' : 'Export PDF'} <FileDown className="w-4 h-4 ml-2" />
                   </Button>
                 )}
             </div>
         </div>
 
-        {/* Professional Document Layer */}
-        <div ref={reportRef} className="bg-white p-12 md:p-16 rounded-[1rem] shadow-xl max-w-[1300px] mx-auto min-h-screen print-container border border-slate-100 flex flex-col overflow-hidden">
+        {/* Corporate Report Document */}
+        <div ref={reportRef} className="bg-white p-12 md:p-16 rounded-[1rem] shadow-2xl max-w-[1300px] mx-auto min-h-screen print-container border border-slate-100 flex flex-col overflow-hidden">
             
-            {/* Authoritative Corporate Header */}
-            <div className="flex flex-row justify-between items-start border-b-[5px] border-slate-900 pb-12 mb-10 min-w-[1100px]">
+            {/* Professional Letterhead Header */}
+            <div className="flex flex-row justify-between items-start border-b-[6px] border-slate-950 pb-12 mb-10 min-w-[1100px]">
                 <div className="flex items-start">
-                    {/* Logo Section */}
-                    <div className="mr-10">
-                        {currentProperty?.logo_url ? (
+                    {/* Reliable Logo Rendering with Fallback */}
+                    <div className="mr-12">
+                        {(!logoError && isValidUrl(currentProperty?.logo_url)) ? (
                             <img 
-                                src={currentProperty.logo_url} 
+                                src={currentProperty!.logo_url} 
                                 crossOrigin="anonymous" 
-                                alt="Logo" 
-                                className="h-28 w-auto object-contain block" 
+                                alt="Branding" 
+                                onError={() => setLogoError(true)}
+                                className="h-32 w-auto object-contain block" 
+                                style={{ maxWidth: '300px' }}
                             />
                         ) : (
-                            <div className="w-20 h-20 bg-slate-900 rounded-xl flex items-center justify-center text-white shrink-0">
-                                <Building2 className="w-10 h-10" />
+                            <div className="w-24 h-24 bg-slate-900 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-slate-200">
+                                <Building2 className="w-12 h-12" />
                             </div>
                         )}
                     </div>
-                    {/* Property Identification */}
+                    {/* Facility & Property Identity */}
                     <div>
-                        <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-950 leading-[0.9] mb-3">
-                            {currentProperty?.name || 'The Torch Doha'}
+                        <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-950 leading-[0.85] mb-4">
+                            {currentProperty?.name || 'Asset Group Management'}
                         </h1>
-                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.4em] mb-8">
+                        <p className="text-[12px] font-bold text-slate-400 uppercase tracking-[0.4em] mb-10">
                             {currentProperty?.address || 'Corporate Headquarters'}
                         </p>
                         
-                        <div className="inline-flex items-center px-6 py-2.5 border-[2.5px] border-indigo-600 rounded-lg bg-indigo-50/30">
-                            <span className="text-[13px] font-black uppercase tracking-[0.2em] text-indigo-900">
-                                Facility Context: {currentOutlet?.name || 'Health Club'}
+                        <div className="inline-block px-8 py-3 bg-indigo-50 border-[2px] border-indigo-600 rounded-xl shadow-sm">
+                            <span className="text-[14px] font-black uppercase tracking-[0.15em] text-indigo-950">
+                                Facility Context: {currentOutlet?.name || 'Operational Health Club'}
                             </span>
                         </div>
                     </div>
@@ -326,18 +337,18 @@ const Reports = () => {
 
                 {/* Audit Context Details */}
                 <div className="text-right">
-                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mb-2">Audit Interval</p>
-                    <h2 className="text-4xl font-black text-slate-950 tracking-tighter tabular-nums mb-4">
+                    <p className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-400 mb-2">Audit Statement Period</p>
+                    <h2 className="text-5xl font-black text-slate-950 tracking-tighter tabular-nums mb-4">
                         {format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
                     </h2>
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 border-[2px] border-emerald-100 rounded-xl text-[10px] font-black text-emerald-700 uppercase tracking-widest shadow-sm">
-                        <ShieldCheck className="w-4 h-4"/> Reconciled Audit Status
+                    <div className="inline-flex items-center gap-2.5 px-5 py-2.5 bg-emerald-50 border-[2px] border-emerald-100 rounded-2xl text-[11px] font-black text-emerald-700 uppercase tracking-widest shadow-sm">
+                        <ShieldCheck className="w-4 h-4"/> Verified Audit Trail
                     </div>
-                    <div className="mt-4 text-[9px] font-black text-slate-300 uppercase tracking-widest">STMT_REF: {reportMonth}-LEDGER-ID</div>
+                    <div className="mt-6 text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">RECON_ID: {reportMonth}-LEDGER-001</div>
                 </div>
             </div>
 
-            {/* Main Financial Ledger */}
+            {/* Financial Ledger Section */}
             <div className="flex-1">
                 <table className="w-full text-[11px] border-collapse min-w-[1100px]">
                     <thead>
@@ -361,13 +372,13 @@ const Reports = () => {
 
                         return (
                             <React.Fragment key={catName}>
-                            <tr className="bg-slate-50/60 border-b border-slate-200">
+                            <tr className="bg-slate-50/70 border-b border-slate-200">
                                 <td colSpan={activeColumns.length} className="px-6 py-5">
                                 <div className="flex items-center">
-                                    <ReceiptText className="w-4 h-4 text-indigo-600 mr-3" />
-                                    <span className="text-[13px] font-black uppercase tracking-widest text-slate-950 mr-4">{catName}</span>
-                                    <span className="px-2.5 py-0.5 bg-white border border-slate-200 rounded-full text-[8px] font-black text-slate-400 uppercase tracking-tighter">
-                                        {groupRows.length} ACTIVE ACCOUNTS
+                                    <ReceiptText className="w-5 h-5 text-indigo-600 mr-4" />
+                                    <span className="text-[14px] font-black uppercase tracking-widest text-slate-950 mr-6">{catName}</span>
+                                    <span className="px-3 py-1 bg-white border border-slate-200 rounded-full text-[9px] font-black text-slate-400 uppercase tracking-tighter">
+                                        {groupRows.length} Consolidated Accounts
                                     </span>
                                 </div>
                                 </td>
@@ -376,7 +387,7 @@ const Reports = () => {
                             {groupRows.map((row) => {
                                 globalIndexCounter++;
                                 return (
-                                    <tr key={`${row.membership_no}-${row.sl_no}`} className="hover:bg-slate-50 transition-colors">
+                                    <tr key={`${row.membership_no}-${row.sl_no}`} className="hover:bg-slate-50/50 transition-colors">
                                         {activeColumns.map(col => (
                                             <td key={col.key} className={`px-4 py-4 border-r border-slate-100 last:border-0 ${['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? 'text-right tabular-nums' : 'text-center'} ${col.key === 'guest_name' ? 'text-left font-bold text-slate-800' : ''}`}>
                                                 <span className={`
@@ -396,14 +407,14 @@ const Reports = () => {
                                 );
                             })}
 
-                            <tr className="bg-indigo-50/10 border-y border-indigo-100">
+                            <tr className="bg-indigo-50/10 border-y border-indigo-100/50">
                                 <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-6 py-4 text-right">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
-                                        Sub-Total: {catName}
+                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">
+                                        Subtotal Ledger: {catName}
                                     </span>
                                 </td>
                                 {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
-                                    <td key={col.key} className={`px-4 py-4 text-right font-black border-x border-white ${col.key === 'current_month_rev' ? 'text-indigo-900 bg-indigo-50/30' : 'text-slate-800'}`}>
+                                    <td key={col.key} className={`px-4 py-4 text-right font-black border-x border-white ${col.key === 'current_month_rev' ? 'text-indigo-900 bg-indigo-50/40' : 'text-slate-800'}`}>
                                         {col.key === 'actual_fees' ? formatMoney(groupTotals.fees) : col.key === 'carry_forward' ? formatMoney(groupTotals.prev) : col.key === 'current_month_rev' ? formatMoney(groupTotals.current) : formatMoney(groupTotals.balance)}
                                     </td>
                                 ))}
@@ -418,7 +429,7 @@ const Reports = () => {
 
                     <tfoot>
                         <tr className="bg-slate-950 text-white shadow-2xl">
-                        <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-8 py-8 text-right text-[11px] font-black uppercase tracking-[0.4em] border-r border-white/5">
+                        <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-8 py-8 text-right text-[12px] font-black uppercase tracking-[0.4em] border-r border-white/5">
                             CONSOLIDATED AUDIT TOTALS
                         </td>
                         {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
@@ -434,10 +445,10 @@ const Reports = () => {
                 </table>
             </div>
 
-            {/* Regulatory Signatory Block */}
-            <div className="signature-block mt-24 pt-16 border-t-2 border-slate-100 flex justify-between items-start gap-12 min-w-[1100px]">
+            {/* Authoritative Signatory Grid */}
+            <div className="signature-block mt-24 pt-16 border-t-[3px] border-slate-100 flex justify-between items-start gap-12 min-w-[1100px]">
                 <div className="flex-1 text-center space-y-12">
-                    <p className="text-[12px] font-black text-slate-950 uppercase tracking-[0.3em]">Prepared By:</p>
+                    <p className="text-[13px] font-black text-slate-950 uppercase tracking-[0.3em]">Prepared By:</p>
                     <div className="pt-8 border-t border-slate-200 w-3/4 mx-auto">
                       <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">
                         {settings?.signatory_prepared_role || 'Income Auditor'}
@@ -446,7 +457,7 @@ const Reports = () => {
                 </div>
 
                 <div className="flex-1 text-center space-y-12">
-                    <p className="text-[12px] font-black text-slate-950 uppercase tracking-[0.3em]">Reviewed By:</p>
+                    <p className="text-[13px] font-black text-slate-950 uppercase tracking-[0.3em]">Reviewed By:</p>
                     <div className="pt-8 border-t border-slate-200 w-3/4 mx-auto">
                       <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">
                         {settings?.signatory_reviewed_role || 'Financial Controller'}
@@ -455,7 +466,7 @@ const Reports = () => {
                 </div>
 
                 <div className="flex-1 text-center space-y-12">
-                    <p className="text-[12px] font-black text-slate-950 uppercase tracking-[0.3em]">Approved By:</p>
+                    <p className="text-[13px] font-black text-slate-950 uppercase tracking-[0.3em]">Approved By:</p>
                     <div className="pt-8 border-t border-slate-200 w-3/4 mx-auto">
                       <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">
                         {settings?.signatory_approved_role || 'Director of Finance'}
@@ -465,7 +476,7 @@ const Reports = () => {
             </div>
             
             <div className="mt-20 pt-6 border-t border-slate-50 text-center opacity-30">
-                <p className="text-[7px] font-black text-slate-300 uppercase tracking-[0.8em]">Automated Integrity Verification Protocol • Generated {format(new Date(), 'PPpp')}</p>
+                <p className="text-[8px] font-black text-slate-300 uppercase tracking-[1em]">SYSTEM INTEGRITY VERIFICATION PROTOCOL • GENERATED {format(new Date(), 'PPpp')}</p>
             </div>
         </div>
     </div>

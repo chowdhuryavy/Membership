@@ -118,14 +118,48 @@ const Users = () => {
       setShowPassword(false);
   };
 
-  const confirmDelete = async () => {
-      if (deleteId) {
-          // Deletion logic: Purges profile record. Auth persistence is noted in UI.
-          await db.deleteUser(deleteId);
-          await loadUsers();
-          setDeleteId(null);
-      }
-  };
+ const confirmDelete = async () => {
+    if (!deleteId) return;
+
+    setIsSubmitting(true);
+
+    try {
+        // 1️⃣ Call Supabase Edge Function to delete Auth user
+        const response = await fetch(
+            "https://https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/delete_user", // <-- replace with your function URL
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${user?.access_token}` // your logged-in admin token
+                },
+                body: JSON.stringify({ userId: deleteId }),
+            }
+        );
+
+        const data = await response.json();
+
+        if (!data.success) {
+            alert("Error deleting Auth user: " + data.message);
+            return;
+        }
+
+        // 2️⃣ Delete from your profiles table
+        await db.deleteUser(deleteId);
+
+        // 3️⃣ Reload users table
+        await loadUsers();
+
+        setDeleteId(null);
+        alert("User successfully revoked from ERP and Auth.");
+    } catch (err: any) {
+        console.error(err);
+        alert("Something went wrong while deleting the user.");
+    } finally {
+        setIsSubmitting(false);
+    }
+};
+
 
   const toggleOutlet = (outletId: string) => {
       setFormData(prev => {
