@@ -199,41 +199,42 @@ class DatabaseService {
     return { ...user, id } as UserProfile;
   }
 
-  async updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) { 
-    if (!this.isSupabase()) return;
-
-    const { data: current } = await supabase.from('profiles').select('email, auth_id, name').eq('id', id).single();
+  async updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) {
+    const { data: current } = await supabase.from('profiles').select('*').eq('id', id).single();
 
     const finalUpdates: any = {
-        name: updates.name,
+        name: updates.name || current.name,
         role_id: updates.role_id,
         allowed_outlets: updates.allowed_outlets,
         updated_at: new Date().toISOString()
     };
 
-    if (updates.email || updates.password) {
-        // Only allow if the current user is updating their own account
-        const session = await supabase.auth.getSession();
-        if (session.data.session?.user?.id !== current.auth_id) {
-            throw new Error("Cannot update another user's Auth info directly.");
+    // Check if the current session user is updating their own credentials
+    const session = await supabase.auth.getSession();
+    if (session.data.session?.user?.id === current.auth_id) {
+        if (updates.password || updates.email) {
+            // Update Auth
+            const { error } = await supabase.auth.updateUser({
+                email: updates.email,
+                password: updates.password,
+                data: { name: updates.name }
+            });
+            if (error) throw new Error(error.message);
+
+            // Update profile table email/name as well
+            if (updates.email) finalUpdates.email = updates.email;
         }
-
-        const { error } = await supabase.auth.updateUser({
-            email: updates.email,
-            password: updates.password,
-            data: { name: updates.name }
-        });
-        if (error) throw new Error(error.message);
-
-        // Update local profile table as well
-        if (updates.password) delete updates.password; // no need to store temp_password
-        if (updates.email) finalUpdates.email = updates.email;
+    } else if (updates.password || updates.email) {
+        // Admin trying to change another user -> must use server/Admin API
+        finalUpdates.temp_password = updates.password || current.temp_password;
+        // auth_id remains null until user logs in (JIT)
     }
 
-    Object.keys(finalUpdates).forEach(key => finalUpdates[key] === undefined && delete finalUpdates[key]);
+    Object.keys(finalUpdates).forEach(k => finalUpdates[k] === undefined && delete finalUpdates[k]);
     const { error } = await supabase.from('profiles').update(finalUpdates).eq('id', id);
     if (error) throw new Error(error.message);
 }
+
 
 
   async deleteUser(id: string) { if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id); }
