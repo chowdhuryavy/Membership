@@ -77,7 +77,37 @@ const Users = () => {
     
     setIsSubmitting(true);
     try {
+        // Sync with Auth via Edge Function first if editing an existing linked user
         if (isEditing && formData.id) {
+            const currentUserProfile = users.find(u => u.id === formData.id);
+            if (currentUserProfile?.auth_id) {
+                try {
+                    const response = await fetch(
+                        "https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/update_user",
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${(user as any)?.access_token || ''}`
+                            },
+                            body: JSON.stringify({ 
+                                userId: currentUserProfile.auth_id,
+                                email: formData.email,
+                                password: formData.password || undefined,
+                                name: formData.name
+                            }),
+                        }
+                    );
+                    const authRes = await response.json();
+                    if (!authRes.success) {
+                        console.warn("Auth Sync Warning:", authRes.message);
+                        // We continue with profile update even if auth sync fails, as the user might be unlinked
+                    }
+                } catch (err) {
+                    console.error("Auth Update Request Failed:", err);
+                }
+            }
+            
             await db.updateUser(formData.id, {
                 name: formData.name,
                 email: formData.email,
@@ -86,6 +116,7 @@ const Users = () => {
                 password: formData.password || undefined 
             } as any);
         } else {
+            // New User: db.addUser already handles shadow signup attempt
             await db.addUser({
                 name: formData.name,
                 email: formData.email,
@@ -124,37 +155,38 @@ const Users = () => {
     setIsSubmitting(true);
 
     try {
-        // 1️⃣ Call Supabase Edge Function to delete Auth user
-        const response = await fetch(
-            "https://https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/delete_user", // <-- replace with your function URL
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${user?.access_token}` // your logged-in admin token
-                },
-                body: JSON.stringify({ userId: deleteId }),
+        const currentUserProfile = users.find(u => u.id === deleteId);
+        
+        // 1️⃣ Call Supabase Edge Function to delete Auth user if auth_id exists
+        if (currentUserProfile?.auth_id) {
+            const response = await fetch(
+                "https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/delete_user",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${(user as any)?.access_token || ''}`
+                    },
+                    body: JSON.stringify({ userId: currentUserProfile.auth_id }),
+                }
+            );
+
+            const data = await response.json();
+            if (!data.success) {
+                console.warn("Auth Deletion Warning:", data.message);
             }
-        );
-
-        const data = await response.json();
-
-        if (!data.success) {
-            alert("Error deleting Auth user: " + data.message);
-            return;
         }
 
-        // 2️⃣ Delete from your profiles table
+        // 2️⃣ Delete from profiles table
         await db.deleteUser(deleteId);
 
         // 3️⃣ Reload users table
         await loadUsers();
 
         setDeleteId(null);
-        alert("User successfully revoked from ERP and Auth.");
     } catch (err: any) {
         console.error(err);
-        alert("Something went wrong while deleting the user.");
+        setError("Revocation failed. Please ensure the 'delete_user' function is deployed.");
     } finally {
         setIsSubmitting(false);
     }
@@ -292,7 +324,7 @@ const Users = () => {
                                 <Info className="w-4 h-4"/> Profile vs. Auth Sync
                             </h5>
                             <p className="text-slate-400 text-[11px] leading-relaxed">
-                                Deleting a user here removes their <strong>ERP Profile</strong> and <strong>Access Clearance</strong>. Even if their email remains in the Supabase Auth list, they will be blocked from logging in as the system will find no valid authorization profile.
+                                Updating a user's email or name here triggers a sync attempt with <strong>Supabase Auth</strong>. If you have the 'update_user' Edge Function deployed, it will physically update the primary identity provider records.
                             </p>
                         </div>
 
@@ -301,7 +333,7 @@ const Users = () => {
                                 <RefreshCcw className="w-4 h-4"/> Manual Auth Cleanup
                             </h5>
                             <p className="text-slate-400 text-[11px] leading-relaxed">
-                                To fully remove an email from the cloud project, visit your <strong>Supabase Dashboard &rarr; Auth &rarr; Users</strong>. This ensures the account is physically purged from the identity provider.
+                                To fully manage an email from the cloud project, visit your <strong>Supabase Dashboard &rarr; Auth &rarr; Users</strong>. This is where primary credentials and MFA settings are physically stored.
                             </p>
                             <a 
                                 href="https://supabase.com/dashboard" 
