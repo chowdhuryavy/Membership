@@ -26,9 +26,8 @@ import { Permission, Property } from './types';
 const SplashLoading = () => {
   const { settings, isLoading } = useSettings();
   
-  // Only show the name if loading is complete or name is not the default fallback
-  const showBranding = !isLoading && settings && settings.name !== 'Membership ERP';
-  const displayTitle = showBranding ? settings.name : "Enterprise Intelligence";
+  // Explicitly do not show the fallback name during synchronisation
+  const displayTitle = settings?.name || "Enterprise Intelligence";
   
   return (
     <div className="fixed inset-0 z-[100000] bg-[#0f172a] flex flex-col items-center justify-center overflow-hidden">
@@ -49,7 +48,7 @@ const SplashLoading = () => {
           <h2 className="text-2xl font-black text-white tracking-tighter uppercase mb-2">{displayTitle}</h2>
           <div className="flex items-center justify-center gap-3 text-indigo-400/60 font-medium text-[10px] tracking-[0.3em] uppercase">
             <Loader2 className="w-3 h-3 animate-spin" />
-            Synchronizing Facility Protocol
+            Synchronizing Cloud Identity
           </div>
         </div>
       </div>
@@ -97,7 +96,7 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
 
     if (allowedOutlets.length === 0) return (
         <div className="px-4 py-3 bg-red-50 rounded-xl text-[9px] font-black text-red-600 uppercase tracking-widest border border-red-100 flex items-center gap-2">
-            <X className="w-3 h-3" /> Restricted Access
+            <X className="w-3 h-3" /> No Access Scopes
         </div>
     );
 
@@ -110,11 +109,11 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
                 <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100">
                     <Building2 className="w-4 h-4 text-white" />
                 </div>
-                <div className="flex flex-col items-start overflow-hidden pr-2">
-                    <span className="text-[9px] font-black tracking-widest truncate w-full text-left uppercase text-slate-400 leading-none mb-1">
-                        {currentProp?.name || 'Authorized'}
+                <div className="flex flex-col items-start overflow-hidden pr-2 text-left">
+                    <span className="text-[9px] font-black tracking-widest truncate w-full uppercase text-slate-400 leading-none mb-1">
+                        {currentProp?.name || 'Property'}
                     </span>
-                    <span className="text-xs font-black text-slate-900 truncate w-full text-left leading-none">
+                    <span className="text-xs font-black text-slate-900 truncate w-full leading-none">
                         {currentOutlet?.name || 'Select Outlet'}
                     </span>
                 </div>
@@ -167,8 +166,8 @@ const TopHeader = () => {
                 <PortfolioSelector />
                 <div className="h-6 w-px bg-slate-200 mx-2"></div>
                 <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Portfolio</span>
-                    <span className="text-sm font-black text-slate-900 leading-none">Management Console</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 text-left">Portfolio</span>
+                    <span className="text-sm font-black text-slate-900 leading-none text-left">Management Console</span>
                 </div>
             </div>
             
@@ -183,7 +182,7 @@ const TopHeader = () => {
                         <span className="text-xs font-black text-slate-900 tracking-tight leading-none mb-1">{user?.name}</span>
                         <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest leading-none">{user?.role_id}</span>
                     </div>
-                    <div className="w-9 h-9 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black group-hover:scale-105 transition-transform">
+                    <div className="w-9 h-9 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black group-hover:scale-105 transition-transform text-xs">
                         {user?.name?.charAt(0)}
                     </div>
                 </Link>
@@ -260,9 +259,9 @@ const Sidebar = () => {
                             <Globe className="w-6 h-6" />
                         </div>
                     )}
-                    <div className="overflow-hidden">
+                    <div className="overflow-hidden text-left">
                         <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-none truncate">
-                            {settings?.name || 'Membership ERP'}
+                            {settings?.name || 'Identity Sync'}
                         </h1>
                         <span className="block text-[9px] text-slate-400 uppercase tracking-[0.2em] font-black mt-1 whitespace-nowrap">
                             Facility Solution
@@ -329,9 +328,9 @@ const MobileHeader = () => {
                              <Globe className="w-5 h-5" />
                          </div>
                      )}
-                     <div className="flex flex-col">
+                     <div className="flex flex-col text-left">
                         <h1 className="font-black text-slate-900 tracking-tighter truncate max-w-[150px] leading-none">
-                            {settings?.name || 'Membership ERP'}
+                            {settings?.name || 'Syncing...'}
                         </h1>
                         <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Facility Solution</span>
                      </div>

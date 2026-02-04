@@ -34,6 +34,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshSettings = async () => {
+    setIsLoading(true);
     try {
         const [s, c, r, o, p] = await Promise.all([
             db.getSettings(), 
