@@ -15,7 +15,6 @@ const Users = () => {
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Form State
   const [formData, setFormData] = useState<{
       id: string;
       name: string;
@@ -99,7 +98,7 @@ const Users = () => {
         await loadUsers();
     } catch (err: any) {
         console.error("User Provisioning Failed:", err);
-        setError(err.message || "Database sync failed. Please check your SQL seeding and Role configuration.");
+        setError(err.message || "Database sync failed.");
     } finally {
         setIsSubmitting(false);
     }
@@ -121,6 +120,9 @@ const Users = () => {
 
   const confirmDelete = async () => {
       if (deleteId) {
+          // Logic: This deletes the profile record.
+          // Due to client-side Supabase security, we cannot delete auth.users entries with an anon key.
+          // However, once the profile is gone, the login logic will reject this user entirely.
           await db.deleteUser(deleteId);
           await loadUsers();
           setDeleteId(null);
@@ -164,7 +166,7 @@ const Users = () => {
                         <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] bg-slate-50 border-b">
                             <tr>
                                 <th className="px-8 py-6">Profile</th>
-                                <th className="px-8 py-6">Dashboard Sync</th>
+                                <th className="px-8 py-6 text-center">Identity Sync</th>
                                 <th className="px-8 py-6">Security Tier</th>
                                 <th className="px-8 py-6">Access Scopes</th>
                                 {canManageUsers && <th className="px-8 py-6 text-right">Operations</th>}
@@ -179,19 +181,18 @@ const Users = () => {
                                             <div className="font-black text-slate-900 tracking-tight text-base">{u.name}</div>
                                             <div className="text-indigo-600 text-xs font-bold">{u.email}</div>
                                         </td>
-                                        <td className="px-8 py-6">
+                                        <td className="px-8 py-6 text-center">
                                             {isUnlinked ? (
-                                                <div className="flex flex-col gap-1">
+                                                <div className="inline-flex flex-col gap-1 items-center">
                                                   <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-100 w-fit">
                                                       <RefreshCcw className="w-3.5 h-3.5 animate-spin-slow" />
-                                                      <span className="text-[9px] font-black uppercase tracking-widest">Awaiting Re-Sync</span>
+                                                      <span className="text-[9px] font-black uppercase tracking-widest">Awaiting Login</span>
                                                   </div>
-                                                  <p className="text-[8px] font-bold text-amber-500 uppercase ml-1">Admin reset active</p>
                                                 </div>
                                             ) : (
-                                                <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 w-fit">
+                                                <div className="inline-flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 w-fit">
                                                     <UserCheck className="w-3.5 h-3.5" />
-                                                    <span className="text-[9px] font-black uppercase tracking-widest">Active Mirror</span>
+                                                    <span className="text-[9px] font-black uppercase tracking-widest">Active Link</span>
                                                 </div>
                                             )}
                                         </td>
@@ -244,50 +245,38 @@ const Users = () => {
                 </div>
                 <div className="relative z-10 space-y-8">
                     <div className="flex items-center gap-6">
-                        <div className="p-4 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-900/40">
+                        <div className="p-4 bg-red-600 rounded-2xl shadow-xl shadow-red-900/40">
                             <ShieldAlert className="w-10 h-10 text-white" />
                         </div>
                         <div>
-                            <h4 className="text-white font-black uppercase tracking-[0.2em] text-lg">Supabase Security Configuration</h4>
-                            <p className="text-indigo-400 text-xs font-bold">Mandatory Dashboard Settings for Perfect Provisioning</p>
+                            <h4 className="text-white font-black uppercase tracking-[0.2em] text-lg">Identity Revocation Policy</h4>
+                            <p className="text-red-400 text-xs font-bold">Protocol for Terminating Personnel Access</p>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div className="bg-white/5 p-8 rounded-3xl border border-white/10 space-y-6">
-                            <h5 className="text-red-400 font-black text-xs uppercase tracking-widest flex items-center gap-2">
-                                <AlertTriangle className="w-4 h-4"/> Critical: Email Settings
+                            <h5 className="text-indigo-400 font-black text-xs uppercase tracking-widest flex items-center gap-2">
+                                <Info className="w-4 h-4"/> Profile vs. Auth User
                             </h5>
                             <p className="text-slate-400 text-[11px] leading-relaxed">
-                                Supabase blocks immediate login if "Confirm Email" is ON. <strong>You must disable this</strong> in your dashboard to allow admins to set passwords.
+                                Deleting a user here removes their <strong>ERP Profile</strong> and <strong>Access Role</strong>. Even if their email remains in the Supabase Auth list, they will be blocked from logging in as the system will find no valid authorization for them.
                             </p>
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-4 bg-black/40 p-4 rounded-2xl border border-white/5">
-                                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-black text-white shrink-0">1</div>
-                                    <div className="text-[10px] font-bold text-white leading-tight">Go to <strong>Authentication</strong> &rarr; <strong>Settings</strong></div>
-                                </div>
-                                <div className="flex items-center gap-4 bg-indigo-600/20 p-4 rounded-2xl border border-indigo-500/30">
-                                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-black text-white shrink-0">2</div>
-                                    <div className="text-[10px] font-black text-indigo-300 leading-tight">Switch <strong>"Confirm Email"</strong> to <span className="text-white underline decoration-white underline-offset-2">OFF</span></div>
-                                </div>
-                            </div>
                         </div>
 
-                        <div className="bg-white/5 p-8 rounded-3xl border border-white/10 space-y-6 flex flex-col justify-between">
-                            <div>
-                                <h5 className="text-indigo-400 font-black text-xs uppercase tracking-widest flex items-center gap-2">
-                                    <Info className="w-4 h-4"/> Why is this needed?
-                                </h5>
-                                <p className="text-slate-400 text-[11px] leading-relaxed mt-4">
-                                    By default, Supabase waits for a user to click a link in their email. Turning this off allows our ERP to immediately provision the "Display Name" and "Access Level" you define here.
-                                </p>
-                            </div>
+                        <div className="bg-white/5 p-8 rounded-3xl border border-white/10 space-y-6">
+                            <h5 className="text-amber-400 font-black text-xs uppercase tracking-widest flex items-center gap-2">
+                                <RefreshCcw className="w-4 h-4"/> Manual Cleanup (Optional)
+                            </h5>
+                            <p className="text-slate-400 text-[11px] leading-relaxed">
+                                For perfect hygiene, you may occasionally visit the Supabase Dashboard and delete emails from the <strong>Auth &rarr; Users</strong> tab. This is not strictly required for security, as access is controlled via the profile records managed on this page.
+                            </p>
                             <a 
                                 href="https://supabase.com/dashboard" 
                                 target="_blank" 
                                 className="inline-flex items-center justify-between w-full p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all group/link"
                             >
-                                <span className="text-[10px] font-black text-white uppercase tracking-widest">Launch Supabase Console</span>
+                                <span className="text-[10px] font-black text-white uppercase tracking-widest">Supabase Dashboard</span>
                                 <ExternalLink className="w-4 h-4 text-slate-500 group-hover/link:text-indigo-400 group-hover/link:translate-x-1 transition-all" />
                             </a>
                         </div>
@@ -411,9 +400,9 @@ const Users = () => {
         isOpen={!!deleteId}
         onClose={() => setDeleteId(null)}
         onConfirm={confirmDelete}
-        title="Revoke Identity"
-        description="This profile will be removed from the ERP. Note: You must manually delete the record from the Supabase 'Authentication' tab if the user has already logged in once."
-        confirmText="Confirm Deletion"
+        title="Revoke Identity Protocol"
+        description="This profile and all associated facility access scopes will be permanently purged from the ERP. Access is terminated immediately upon profile deletion."
+        confirmText="Confirm Revocation"
         isDestructive={true}
       />
     </div>

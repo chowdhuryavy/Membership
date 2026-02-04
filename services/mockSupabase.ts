@@ -199,13 +199,24 @@ class DatabaseService {
     return { user: null, error: "Provisioning failed." };
   }
 
-  async getSettings(): Promise<CompanySettings> { if (this.isSupabase()) { const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle(); if (data && data.name) return data; } return { name: 'The Torch Hospitality', logo_url: '', address: '', currency_id: 'default' }; }
+  async getSettings(): Promise<CompanySettings> { 
+    if (this.isSupabase()) { 
+        const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle(); 
+        if (data && data.name) return data; 
+    } 
+    return { name: 'The Torch Hospitality', logo_url: '', address: '', currency_id: 'default' }; 
+  }
+  
   async getRoles(): Promise<Role[]> { if (this.isSupabase()) { const { data } = await supabase.from('roles').select('*'); if (data && data.length > 0) return data; } return [{ id: 'admin', name: 'Administrator', permissions: ['members:view', 'members:create', 'members:edit', 'members:delete', 'categories:view', 'categories:create', 'categories:edit', 'categories:delete', 'users:view', 'users:create', 'users:edit', 'users:delete', 'settings:view', 'settings:edit', 'reports:view', 'reports:export', 'logs:view', 'properties:view', 'properties:edit', 'outlets:view', 'outlets:edit'], is_system: true }]; }
+  
   async deleteUser(id: string) { 
     if (this.isSupabase()) {
         const { data: user } = await supabase.from('profiles').select('email').eq('id', id).single();
+        // Step 1: Purge Profile (Revokes ERP access immediately)
         await supabase.from('profiles').delete().eq('id', id);
-        if (user) await this.logAction('DELETE_USER', `Identity revoked: ${user.email}`);
+        
+        // Note: auth.users cleanup requires Admin/Service role or Supabase Dashboard.
+        if (user) await this.logAction('DELETE_USER', `Identity revoked: ${user.email}. Manual cleanup of auth record recommended.`);
     } 
   }
 
@@ -378,8 +389,16 @@ class DatabaseService {
 
   async updateSettings(updates: Partial<CompanySettings>): Promise<void> { 
     if (this.isSupabase()) { 
-        const { error } = await supabase.from('company_settings').upsert({ id: 'global', ...updates }, { onConflict: 'id' }); 
-        if (error) throw new Error(error.message); 
+        // Defensive: Extract only valid keys to avoid column name errors if the schema is stale
+        const validKeys = ['name', 'logo_url', 'address', 'currency_id', 'signatory_prepared_role', 'signatory_reviewed_role', 'signatory_approved_role'];
+        const payload: any = { id: 'global' };
+        validKeys.forEach(k => { if ((updates as any)[k] !== undefined) payload[k] = (updates as any)[k]; });
+
+        const { error } = await supabase.from('company_settings').upsert(payload, { onConflict: 'id' }); 
+        if (error) {
+            console.error("Settings Sync Error:", error);
+            throw new Error(`Cloud Sync Failed: ${error.message}. Ensure you have run the latest SQL update in the Supabase Dashboard.`);
+        }
         await this.logAction('UPDATE_SETTINGS', 'Global framework configurations synchronized');
     } 
   }
