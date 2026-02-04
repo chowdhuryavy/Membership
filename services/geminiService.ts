@@ -2,35 +2,32 @@
 import { GoogleGenAI } from "@google/genai";
 
 /**
- * Generates financial insights using Google Gemini API.
- * Follows the latest @google/genai SDK standards.
+ * Generates strategic financial insights using Google Gemini API.
  */
 export const generateFinancialInsight = async (dataContext: string): Promise<string> => {
   try {
-    // Initializing the GenAI client with the environment API key as per guidelines.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    // Using gemini-3-pro-preview for complex financial reasoning tasks.
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-flash-preview',
       contents: `
-        Role: Senior Financial Analyst. 
-        Task: Analyze the following monthly revenue dataset for a membership business.
+        Role: Strategic Financial Consultant. 
+        Context: Quarterly Operational Analysis for a High-End Membership Facility.
         Data: ${dataContext}
         
-        Please provide:
-        1. A brief summary of the revenue trend.
-        2. Identify any anomalies (e.g., dips or spikes).
-        3. Strategic advice on how to improve deferred revenue stability.
+        Instruction: Analyze these operational metrics and provide a high-level strategic observation. 
+        Focus on:
+        - Revenue stability based on active/frozen ratio.
+        - Immediate risk factors (expirations).
+        - One actionable growth strategy.
         
-        Keep it concise (under 150 words) and professional.
+        Constraint: Use professional, authoritative, and concise language. Under 120 words.
       `,
     });
 
-    // Accessing the .text property directly as per modern response object definition.
-    return response.text || "No insight generated.";
+    return response.text || "Operational analysis inconclusive. Refreshing data stream.";
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "Failed to generate insight. Please try again later.";
+    return "Intelligence engine temporarily offline. Please verify connectivity.";
   }
 };

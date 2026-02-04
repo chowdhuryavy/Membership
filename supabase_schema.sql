@@ -1,9 +1,34 @@
 
 -- ==========================================
--- FINAL DEFINITIVE SCHEMA (V2.6)
+-- MEMBERSHIP ERP - CORE SCHEMA V3.0 (CLEAN)
 -- ==========================================
 
--- 1. SECURITY ROLES
+-- 1. CLEANUP PREVIOUS POLICIES (Idempotency Guard)
+DO $$ 
+BEGIN
+    -- Profiles
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public Profiles') THEN DROP POLICY "Public Profiles" ON public.profiles; END IF;
+    -- Roles
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Roles') THEN DROP POLICY "Auth View Roles" ON public.roles; END IF;
+    -- Properties
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Properties') THEN DROP POLICY "Auth View Properties" ON public.properties; END IF;
+    -- Outlets
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Outlets') THEN DROP POLICY "Auth View Outlets" ON public.outlets; END IF;
+    -- Categories
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Categories') THEN DROP POLICY "Auth View Categories" ON public.membership_categories; END IF;
+    -- Members
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Members') THEN DROP POLICY "Auth View Members" ON public.members; END IF;
+    -- Freezes
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Freezes') THEN DROP POLICY "Auth View Freezes" ON public.freezes; END IF;
+    -- Settings
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Settings') THEN DROP POLICY "Auth View Settings" ON public.company_settings; END IF;
+    -- Currencies
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth View Currencies') THEN DROP POLICY "Auth View Currencies" ON public.currencies; END IF;
+    -- Logs
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public Logs') THEN DROP POLICY "Public Logs" ON public.system_logs; END IF;
+END $$;
+
+-- 2. CORE TABLES
 CREATE TABLE IF NOT EXISTS public.roles (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -12,7 +37,6 @@ CREATE TABLE IF NOT EXISTS public.roles (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. PROPERTIES & OUTLETS
 CREATE TABLE IF NOT EXISTS public.properties (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -28,7 +52,6 @@ CREATE TABLE IF NOT EXISTS public.outlets (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. PROFILES (HYBRID AUTH SUPPORT)
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     auth_id UUID UNIQUE, 
@@ -40,7 +63,6 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. MEMBERSHIP TABLES
 CREATE TABLE IF NOT EXISTS public.membership_categories (
     id TEXT PRIMARY KEY,
     outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE,
@@ -77,7 +99,6 @@ CREATE TABLE IF NOT EXISTS public.freezes (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. SYSTEM SETTINGS & LOGS
 CREATE TABLE IF NOT EXISTS public.company_settings (
     id TEXT PRIMARY KEY DEFAULT 'global',
     name TEXT NOT NULL DEFAULT 'Membership ERP',
@@ -107,7 +128,7 @@ CREATE TABLE IF NOT EXISTS public.system_logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. SECURITY POLICIES (IDEMPOTENT CLEANUP)
+-- 3. ENABLE RLS
 ALTER TABLE public.roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.properties ENABLE ROW LEVEL SECURITY;
@@ -119,19 +140,7 @@ ALTER TABLE public.company_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.currencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
 
--- Explicitly drop all possible policy names to prevent duplicate errors
-DROP POLICY IF EXISTS "Public Profiles" ON public.profiles;
-DROP POLICY IF EXISTS "Public Logs" ON public.system_logs;
-DROP POLICY IF EXISTS "Auth View Roles" ON public.roles;
-DROP POLICY IF EXISTS "Auth View Properties" ON public.properties;
-DROP POLICY IF EXISTS "Auth View Outlets" ON public.outlets;
-DROP POLICY IF EXISTS "Auth View Categories" ON public.membership_categories;
-DROP POLICY IF EXISTS "Auth View Members" ON public.members;
-DROP POLICY IF EXISTS "Auth View Freezes" ON public.freezes;
-DROP POLICY IF EXISTS "Auth View Settings" ON public.company_settings;
-DROP POLICY IF EXISTS "Auth View Currencies" ON public.currencies;
-
--- Recreate policies with full clean state
+-- 4. RECREATE POLICIES
 CREATE POLICY "Public Profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public Logs" ON public.system_logs FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Auth View Roles" ON public.roles FOR SELECT TO authenticated USING (true);
@@ -143,29 +152,7 @@ CREATE POLICY "Auth View Freezes" ON public.freezes FOR SELECT TO authenticated 
 CREATE POLICY "Auth View Settings" ON public.company_settings FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Auth View Currencies" ON public.currencies FOR SELECT TO authenticated USING (true);
 
--- 7. AUTOMATION TRIGGER
-CREATE OR REPLACE FUNCTION public.handle_new_user_sync()
-RETURNS trigger AS $$
-BEGIN
-  UPDATE public.profiles 
-  SET auth_id = new.id, updated_at = NOW() 
-  WHERE email = new.email;
-  
-  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE auth_id = new.id OR email = new.email) THEN
-    INSERT INTO public.profiles (auth_id, email, name, role_id)
-    VALUES (new.id, new.email, COALESCE(new.raw_user_meta_data->>'name', 'Staff'), 'viewer');
-  END IF;
-  
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user_sync();
-
--- 8. SEED DATA (Self-Healing)
+-- 5. SEED INITIAL ADMIN ROLE
 INSERT INTO public.roles (id, name, permissions, is_system)
 VALUES ('admin', 'Administrator', '{"members:view", "members:create", "members:edit", "members:delete", "categories:view", "categories:create", "categories:edit", "categories:delete", "users:view", "users:create", "users:edit", "users:delete", "settings:view", "settings:edit", "reports:view", "reports:export", "logs:view", "properties:view", "properties:edit", "outlets:view", "outlets:edit"}', true)
 ON CONFLICT (id) DO UPDATE SET permissions = EXCLUDED.permissions;

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Card, CardContent, CardHeader } from '../components/ui';
+import { Card, CardContent, CardHeader, Button } from '../components/ui';
 import { 
   Users, 
   CreditCard, 
@@ -11,19 +11,20 @@ import {
   ShieldCheck, 
   ArrowUpRight,
   CalendarDays,
-  ChevronRight
+  ChevronRight,
+  Sparkles,
+  RefreshCcw,
+  Zap
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { MemberStatus, Member } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-// Fix: Verifying and ensuring correct named exports from date-fns, providing local fallbacks for missing members
+import { generateFinancialInsight } from '../services/geminiService';
 import { format, endOfMonth, differenceInCalendarDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-// Fix: Re-structured react-router-dom import to resolve named export resolution issues
 import { Link } from 'react-router-dom';
 
-// Fix: Local implementations for missing date-fns members to resolve environment-specific import errors
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 const parseISO = (dateString: string) => new Date(dateString);
 
@@ -38,6 +39,8 @@ const Dashboard = () => {
   });
   const [expiringMembers, setExpiringMembers] = useState<Member[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [aiInsight, setAiInsight] = useState<string>('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -45,7 +48,10 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    if(currentOutlet) loadStats();
+    if(currentOutlet) {
+      loadStats();
+      setAiInsight(''); // Reset insight on facility change
+    }
   }, [currentOutlet]);
 
   const loadStats = async () => {
@@ -84,13 +90,28 @@ const Dashboard = () => {
     setExpiringMembers(expiring);
   };
 
-  // REATIVE IDENTITY LOGIC: Computes the first name dynamically from the user object
+  const handleGenerateInsight = async () => {
+    if (isAnalyzing) return;
+    setIsAnalyzing(true);
+    
+    const dataContext = `
+      Facility: ${currentOutlet?.name}
+      Total Members: ${stats.totalMembers}
+      Active: ${stats.activeMembers}
+      Frozen: ${stats.frozenMembers}
+      Revenue this month: ${formatMoney(stats.revenueThisMonth)}
+      Expiring in 30 days: ${expiringMembers.length}
+    `;
+
+    const insight = await generateFinancialInsight(dataContext);
+    setAiInsight(insight);
+    setIsAnalyzing(false);
+  };
+
   const displayName = useMemo(() => {
       if (!user?.name) return 'Admin';
       const rawName = user.name.trim();
-      // If it's the system default, show a professional title
       if (rawName.toLowerCase().includes('system administrator')) return 'Administrator';
-      // Otherwise return the first name
       return rawName.split(/\s+/)[0];
   }, [user?.name]);
 
@@ -111,9 +132,6 @@ const Dashboard = () => {
         <div className="space-y-1">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] group-hover:text-indigo-600 transition-colors duration-300">{title}</p>
           <h4 className="text-2xl font-black text-slate-900 tracking-tight group-hover:tracking-normal transition-all duration-300">{value}</h4>
-        </div>
-        <div className="mt-4 h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-           <div className={`h-full rounded-full ${color} opacity-60 w-[70%] group-hover:w-[85%] transition-all duration-1000 ease-out`}></div>
         </div>
       </CardContent>
     </Card>
@@ -147,6 +165,49 @@ const Dashboard = () => {
           </span>
         </div>
       </div>
+
+      {/* AI Insights Bar */}
+      <Card className="rounded-[2rem] border-indigo-200 bg-gradient-to-r from-indigo-50 to-white overflow-hidden relative shadow-lg shadow-indigo-50 group">
+        <div className="absolute -left-12 -top-12 w-48 h-48 bg-indigo-100/50 rounded-full blur-3xl group-hover:bg-indigo-200/50 transition-colors duration-500"></div>
+        <CardContent className="p-8 relative z-10">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-200 animate-pulse-slow">
+                <Sparkles className="w-7 h-7" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-900 tracking-tight">AI Operational Intelligence</h3>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Real-time Financial Reasoning Engine</p>
+              </div>
+            </div>
+            <Button 
+              onClick={handleGenerateInsight} 
+              isLoading={isAnalyzing}
+              className="h-12 px-8 rounded-xl bg-slate-900 hover:bg-black text-white font-black text-xs uppercase tracking-widest shadow-xl transition-all transform active:scale-95"
+            >
+              <RefreshCcw className={`w-4 h-4 mr-2 ${isAnalyzing ? 'animate-spin' : ''}`} />
+              {isAnalyzing ? 'Analyzing Portfolio...' : 'Generate Strategic Insight'}
+            </Button>
+          </div>
+          
+          {aiInsight ? (
+            <div className="mt-8 p-6 bg-white border border-indigo-100 rounded-2xl shadow-inner animate-in fade-in slide-in-from-top-2 duration-500">
+               <div className="flex items-start gap-4">
+                  <div className="p-2 bg-indigo-50 rounded-lg shrink-0 mt-1">
+                    <Zap className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <p className="text-slate-700 leading-relaxed font-medium text-sm italic">
+                    {aiInsight}
+                  </p>
+               </div>
+            </div>
+          ) : !isAnalyzing && (
+            <div className="mt-6 flex items-center gap-3 text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+              <Info className="w-3 h-3" /> System ready for trend analysis.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatTile title="Total Portfolio" value={stats.totalMembers} icon={Users} color="bg-blue-600" trend="+12%" />
@@ -191,7 +252,7 @@ const Dashboard = () => {
                                        {m.guest_name.charAt(0)}
                                    </div>
                                    <div>
-                                       <h4 className="font-bold text-slate-900 text-sm group-hover/item:text-indigo-700 transition-colors">{m.guest_name}</h4>
+                                       <h4 className="font-bold text-slate-700 text-sm group-hover/item:text-indigo-700 transition-colors">{m.guest_name}</h4>
                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{m.membership_number}</p>
                                    </div>
                                </div>
@@ -238,7 +299,7 @@ const Dashboard = () => {
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 group-hover:text-indigo-500 transition-colors">Instance Details</p>
                   <div className="space-y-3">
                      <div className="flex justify-between text-[11px] font-bold"><span className="text-slate-500">Node Status</span><span className="text-slate-900">Active</span></div>
-                     <div className="flex justify-between text-[11px] font-bold"><span className="text-slate-500">Last Database Flush</span><span className="text-slate-900">{format(new Date(), 'HH:mm')}</span></div>
+                     <div className="flex justify-between text-[11px] font-bold"><span className="text-slate-500">Last Sync</span><span className="text-slate-900">{format(new Date(), 'HH:mm')}</span></div>
                   </div>
               </div>
             </div>
@@ -248,5 +309,11 @@ const Dashboard = () => {
     </div>
   );
 };
+
+const Info = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
 
 export default Dashboard;
