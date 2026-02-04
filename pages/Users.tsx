@@ -5,7 +5,7 @@ import { db } from '../services/mockSupabase';
 import { UserProfile, Role, Outlet } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff, RefreshCcw, CheckCircle2, UserCheck } from 'lucide-react';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff, RefreshCcw, CheckCircle2, UserCheck, ExternalLink } from 'lucide-react';
 
 const Users = () => {
   const { user } = useAuth();
@@ -159,7 +159,7 @@ const Users = () => {
                         <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] bg-slate-50 border-b">
                             <tr>
                                 <th className="px-8 py-6">Profile</th>
-                                <th className="px-8 py-6">Dashboard Sync</th>
+                                <th className="px-8 py-6">Auth Status</th>
                                 <th className="px-8 py-6">Security Tier</th>
                                 <th className="px-8 py-6">Access Scopes</th>
                                 {canManageUsers && <th className="px-8 py-6 text-right">Operations</th>}
@@ -230,24 +230,63 @@ const Users = () => {
                 </div>
             </Card>
 
-            <div className="bg-slate-950 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group border border-white/5">
+            {/* CRITICAL SECURITY & CONFIGURATION PANEL */}
+            <div className="bg-slate-950 p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden group border border-white/5">
                 <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <Lock className="w-32 h-32 text-indigo-500" />
+                    <Lock className="w-48 h-48 text-indigo-500" />
                 </div>
-                <div className="relative z-10 flex flex-col md:flex-row items-start gap-8">
-                    <div className="p-4 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-900/40 shrink-0">
-                        <Shield className="w-8 h-8 text-white" />
+                <div className="relative z-10 space-y-8">
+                    <div className="flex items-center gap-6">
+                        <div className="p-4 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-900/40">
+                            <Shield className="w-10 h-10 text-white" />
+                        </div>
+                        <div>
+                            <h4 className="text-white font-black uppercase tracking-[0.2em] text-lg">Identity Protocol Dashboard</h4>
+                            <p className="text-indigo-400 text-xs font-bold">Synchronizing Application Profiles with Supabase Auth</p>
+                        </div>
                     </div>
-                    <div>
-                        <h4 className="text-white font-black uppercase tracking-widest text-sm mb-3 flex items-center gap-2">
-                           Identity Protocol Notice
-                           <span className="px-2 py-0.5 bg-indigo-500 text-white text-[8px] rounded uppercase">Secure</span>
-                        </h4>
-                        <p className="text-slate-400 text-xs font-medium max-w-3xl leading-relaxed">
-                            Due to Supabase security policies, Admin changes to <strong>passwords</strong> or <strong>emails</strong> will only appear in the 
-                            Auth Dashboard after the target user logs in once with their new credentials. If you get a <strong>500 Error</strong>, ensure 
-                            "Email Confirmations" is disabled in your Supabase Auth settings.
-                        </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="bg-white/5 p-6 rounded-3xl border border-white/10 space-y-4">
+                            <h5 className="text-red-400 font-black text-xs uppercase tracking-widest flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4"/> Solving "Auth 500" Errors
+                            </h5>
+                            <p className="text-slate-400 text-[11px] leading-relaxed">
+                                If you cannot login after a password reset and get a 500 error, you <strong>MUST</strong> perform this step in your Supabase Dashboard:
+                            </p>
+                            <div className="bg-black/40 p-4 rounded-xl space-y-2 border border-white/5">
+                                <p className="text-white text-[10px] font-bold flex items-center gap-2">
+                                    <span className="w-4 h-4 bg-indigo-500 rounded-full flex items-center justify-center text-[8px]">1</span> 
+                                    Go to <strong>Authentication</strong> &rarr; <strong>Settings</strong>
+                                </p>
+                                <p className="text-white text-[10px] font-bold flex items-center gap-2">
+                                    <span className="w-4 h-4 bg-indigo-500 rounded-full flex items-center justify-center text-[8px]">2</span> 
+                                    Find <strong>Email Confirmations</strong>
+                                </p>
+                                <p className="text-amber-400 text-[10px] font-black flex items-center gap-2">
+                                    <span className="w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center text-[8px] text-black">3</span> 
+                                    Toggle it to <strong>OFF</strong>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-white/5 p-6 rounded-3xl border border-white/10 space-y-4">
+                            <h5 className="text-indigo-400 font-black text-xs uppercase tracking-widest flex items-center gap-2">
+                                <Info className="w-4 h-4"/> Why Dashboard doesn't change
+                            </h5>
+                            <p className="text-slate-400 text-[11px] leading-relaxed">
+                                Security rules prevent one user from editing another's Auth record. 
+                                <strong> Our Solution:</strong> When you reset a password, we orphan the old record. 
+                                The Dashboard only updates <strong>after</strong> the user logs in for the first time with their new key.
+                            </p>
+                            <a 
+                                href="https://supabase.com/dashboard" 
+                                target="_blank" 
+                                className="inline-flex items-center gap-2 text-indigo-400 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest"
+                            >
+                                Open Supabase Console <ExternalLink className="w-3 h-3"/>
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -257,8 +296,8 @@ const Users = () => {
           <div className="space-y-6">
               <Card className="sticky top-8 rounded-[2rem] border-slate-200/60 shadow-2xl overflow-hidden">
                   <CardHeader className="bg-indigo-600 text-white p-8">
-                      <CardTitle className="text-xl font-black tracking-tight">{isEditing ? 'Modify User' : 'New User'}</CardTitle>
-                      <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mt-2">Access Governance</p>
+                      <CardTitle className="text-xl font-black tracking-tight">{isEditing ? 'Modify Credentials' : 'Provision User'}</CardTitle>
+                      <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mt-2">Identity Governance</p>
                   </CardHeader>
                   <CardContent className="p-8">
                       <form onSubmit={handleSubmit} className="space-y-6">
@@ -285,7 +324,7 @@ const Users = () => {
 
                           <div className="space-y-2">
                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                                {isEditing ? 'New Access Key (Optional)' : 'Initial Access Key'}
+                                {isEditing ? 'New Access Key (Force Sync)' : 'Initial Access Key'}
                               </label>
                               <div className="relative group">
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -295,7 +334,7 @@ const Users = () => {
                                     type={showPassword ? "text" : "password"}
                                     value={formData.password} 
                                     onChange={e => setFormData({...formData, password: e.target.value})} 
-                                    placeholder={isEditing ? "••••••••" : "••••••••"}
+                                    placeholder={isEditing ? "Set new password..." : "••••••••"}
                                     className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-medium"
                                 />
                                 <button
@@ -306,7 +345,10 @@ const Users = () => {
                                     {showPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
                                 </button>
                               </div>
-                              <p className="text-[8px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">Changing credentials resets the dashboard sync status.</p>
+                              <p className="text-[8px] font-bold text-amber-600 mt-2 uppercase tracking-tighter bg-amber-50 p-2 rounded-lg border border-amber-100 flex items-start gap-2">
+                                <Info className="w-3 h-3 shrink-0 mt-0.5"/> 
+                                Important: If the user already existed in Auth, delete them from Supabase Dashboard manually to allow the new password to take effect.
+                              </p>
                           </div>
                           
                           <div className="space-y-2">
@@ -369,8 +411,8 @@ const Users = () => {
         isOpen={!!deleteId}
         onClose={() => setDeleteId(null)}
         onConfirm={confirmDelete}
-        title="Revoke Access"
-        description="Are you sure you want to delete this user? This profile will be removed from the ERP, but you must manually delete them from the Supabase Auth dashboard if you wish to clear their credentials entirely."
+        title="Revoke Identity"
+        description="Are you sure you want to delete this user? This profile will be removed from the ERP, but for security, you must manually delete them from the Supabase Auth Dashboard."
         confirmText="Confirm Deletion"
         isDestructive={true}
       />

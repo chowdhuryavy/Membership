@@ -30,7 +30,7 @@ class DatabaseService {
 
   /**
    * REFINED IDENTITY SYNC ENGINE
-   * Forces the Supabase Auth "Display Name" column to match our "Profiles" table.
+   * Ensures the Supabase Auth "Display Name" column matches our "Profiles" table.
    */
   async syncAuthMetadata(profile: UserProfile) {
     if (!this.isSupabase()) return;
@@ -57,65 +57,95 @@ class DatabaseService {
     
     const cleanEmail = email.trim().toLowerCase();
     
-    // 1. Check current profile state
+    // 1. Fetch the user profile from the database first
     const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
 
-    // 2. Standard Auth Attempt
+    // 2. Try standard login with existing Auth record
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: passwordAttempt
     });
 
-    // 3. JIT RECONCILIATION
-    // If Auth fails or profile is unlinked, check if this is a pending admin update
+    // 3. JIT RECONCILIATION LOGIC (Handles Admin Password Resets)
+    // If standard login fails OR profile is unlinked (auth_id is null)
     if (authError || (profile && !profile.auth_id)) {
+        // If the password matches the one the Admin set in the DB
         if (profile && profile.temp_password === passwordAttempt) {
-            // This is an Admin-updated identity. Provision it in Auth now.
+            console.debug("Admin reset detected. Provisioning new Auth identity...");
+            
+            // Create a fresh entry in Supabase Auth dashboard
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                 email: cleanEmail,
                 password: passwordAttempt,
                 options: { 
-                  data: { full_name: profile.name, display_name: profile.name, name: profile.name }
+                  data: { 
+                    full_name: profile.name, 
+                    display_name: profile.name, 
+                    name: profile.name 
+                  }
                 }
             });
 
             if (signUpError) {
+              // Handle "User already exists" conflict
               if (signUpError.message.toLowerCase().includes('already registered')) {
-                return { user: null, error: "Sync Conflict: This email is already in the Auth dashboard with a different password. Please delete the old user in Supabase Auth or use the original password." };
+                return { 
+                  user: null, 
+                  error: "Identity Sync Conflict: Admin has reset your password, but your old record still exists in Supabase. Admin must delete your old account from 'Auth > Users' in the Supabase Dashboard before you can log in with the new key." 
+                };
+              }
+              // Handle "Email confirmations" error
+              if (signUpError.status === 500 || signUpError.message.includes('Email confirmations')) {
+                return { 
+                  user: null, 
+                  error: "Supabase Config Error: 'Email Confirmations' must be OFF in your Supabase Auth Settings (Dashboard) to allow password resets." 
+                };
               }
               return { user: null, error: signUpError.message };
             }
 
             if (signUpData.user) {
-              await supabase.from('profiles').update({ auth_id: signUpData.user.id, temp_password: null }).eq('id', profile.id);
+              // Successfully provisioned. Link the profile.
+              await supabase.from('profiles').update({ 
+                  auth_id: signUpData.user.id, 
+                  temp_password: null 
+              }).eq('id', profile.id);
+              
               const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
               return { user: refreshed, error: null };
             }
         }
         
-        // Handle Bootstrap
+        // Handle First-Time Admin Setup
         const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
         if (count === 0 && email.includes('@')) {
-          const { data: bs } = await supabase.auth.signUp({ email, password: passwordAttempt, options: { data: { name: "Admin", full_name: "Admin" } } });
+          const { data: bs } = await supabase.auth.signUp({ 
+              email, 
+              password: passwordAttempt, 
+              options: { data: { name: "System Admin", full_name: "System Admin" } } 
+          });
           if (bs.user) {
-            const admin = { id: crypto.randomUUID(), auth_id: bs.user.id, email, name: "Admin", role_id: 'admin', allowed_outlets: [] };
+            const admin = { id: crypto.randomUUID(), auth_id: bs.user.id, email, name: "System Admin", role_id: 'admin', allowed_outlets: [] };
             await supabase.from('profiles').insert([admin]);
             return { user: admin, error: null };
           }
         }
+        
         return { user: null, error: authError?.message || "Invalid credentials." };
     }
 
-    // 4. Success: Mirror Metadata to Dashboard
+    // 4. Standard Success Flow
     if (authData.user && profile) {
-        if (!profile.auth_id) {
+        // Update auth_id if it was missing
+        if (!profile.auth_id || profile.auth_id !== authData.user.id) {
           await supabase.from('profiles').update({ auth_id: authData.user.id, temp_password: null }).eq('id', profile.id);
         }
+        // Force metadata sync for Dashboard display
         await this.syncAuthMetadata(profile);
         return { user: profile, error: null };
     }
 
-    return { user: null, error: "Auth timeout." };
+    return { user: null, error: "Auth communication timeout." };
   }
 
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
@@ -159,7 +189,7 @@ class DatabaseService {
         role_id: user.role_id,
         allowed_outlets: user.allowed_outlets || [],
         temp_password: user.password || null,
-        auth_id: null // Force JIT sync
+        auth_id: null // Unlinked - forces JIT on login
     };
 
     if (this.isSupabase()) {
@@ -170,40 +200,41 @@ class DatabaseService {
   }
 
   async updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) { 
-    if (this.isSupabase()) {
-        const { data: current } = await supabase.from('profiles').select('email, auth_id, name').eq('id', id).single();
-        
-        const finalUpdates: any = { 
-            name: updates.name,
-            email: updates.email?.trim().toLowerCase(),
-            role_id: updates.role_id,
-            allowed_outlets: updates.allowed_outlets,
-            updated_at: new Date().toISOString()
-        };
+    if (!this.isSupabase()) return;
 
-        // IF CURRENT USER IS SELF: Update Auth metadata immediately
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        if (currentUser && current && current.auth_id === currentUser.id) {
-            if (updates.name && updates.name !== current.name) {
-                await supabase.auth.updateUser({ data: { full_name: updates.name, name: updates.name } });
-            }
+    const { data: current } = await supabase.from('profiles').select('email, auth_id, name').eq('id', id).single();
+
+    const finalUpdates: any = {
+        name: updates.name,
+        role_id: updates.role_id,
+        allowed_outlets: updates.allowed_outlets,
+        updated_at: new Date().toISOString()
+    };
+
+    if (updates.email || updates.password) {
+        // Only allow if the current user is updating their own account
+        const session = await supabase.auth.getSession();
+        if (session.data.session?.user?.id !== current.auth_id) {
+            throw new Error("Cannot update another user's Auth info directly.");
         }
 
-        // IF ADMIN OVERRIDE: Clear auth_id to force a fresh provisioning on login
-        if (updates.email && current && updates.email.trim().toLowerCase() !== current.email.toLowerCase()) {
-            finalUpdates.auth_id = null;
-        }
-        if (updates.password) {
-            finalUpdates.temp_password = updates.password;
-            finalUpdates.auth_id = null;
-        }
-
-        Object.keys(finalUpdates).forEach(key => finalUpdates[key] === undefined && delete finalUpdates[key]);
-
-        const { error } = await supabase.from('profiles').update(finalUpdates).eq('id', id);
+        const { error } = await supabase.auth.updateUser({
+            email: updates.email,
+            password: updates.password,
+            data: { name: updates.name }
+        });
         if (error) throw new Error(error.message);
+
+        // Update local profile table as well
+        if (updates.password) delete updates.password; // no need to store temp_password
+        if (updates.email) finalUpdates.email = updates.email;
     }
-  }
+
+    Object.keys(finalUpdates).forEach(key => finalUpdates[key] === undefined && delete finalUpdates[key]);
+    const { error } = await supabase.from('profiles').update(finalUpdates).eq('id', id);
+    if (error) throw new Error(error.message);
+}
+
 
   async deleteUser(id: string) { if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id); }
 
@@ -333,7 +364,6 @@ class DatabaseService {
     if (this.isSupabase()) {
         const { error } = await supabase.auth.updateUser({ password: n });
         if (error) throw new Error(error.message);
-        // Also update local profiles table if needed
     } 
   }
 
