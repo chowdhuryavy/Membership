@@ -7,9 +7,9 @@ import { GoogleGenAI } from "@google/genai";
 export const generateFinancialInsight = async (dataContext: string): Promise<string> => {
   const apiKey = process.env.API_KEY;
   
-  if (!apiKey || apiKey === "undefined" || apiKey.length < 5) {
-    console.warn("Gemini API skipped: Missing or invalid API_KEY environment variable.");
-    return "Operational intelligence engine is not configured. Please ensure API_KEY is set in the environment.";
+  if (!apiKey || apiKey === "undefined" || apiKey === "" || apiKey.length < 5) {
+    console.error("Gemini API Error: Missing environment variable API_KEY.");
+    return "The operational intelligence engine requires a valid API_KEY in the environment.";
   }
 
   try {
@@ -34,10 +34,10 @@ export const generateFinancialInsight = async (dataContext: string): Promise<str
 
     return response.text || "Operational analysis inconclusive. Refreshing data stream.";
   } catch (error: any) {
-    console.error("Gemini API Execution Error:", error);
-    if (error.message?.includes("API Key") || error.message?.includes("403")) {
-        return "Intelligence engine access denied. Please verify your system API Key.";
+    console.error("Gemini API Error:", error);
+    if (error.message?.includes("API Key") || error.message?.includes("key")) {
+        return "Intelligence engine rejected the provided API Key. Check system configuration.";
     }
-    return "Intelligence engine temporarily unavailable. Please verify connectivity.";
+    return "The operational intelligence engine is temporarily unreachable.";
   }
 };

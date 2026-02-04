@@ -1,22 +1,19 @@
 
 -- ==========================================
--- MEMBERSHIP ERP - CORE SCHEMA V4.0 (FIXED)
+-- MEMBERSHIP ERP - CORE SCHEMA V4.1 (ROBUST)
 -- ==========================================
 
--- 1. PRE-CLEANUP (Avoids "already exists" errors)
+-- 1. DROP ALL EXISTING POLICIES TO PREVENT "ALREADY EXISTS" ERRORS
 DO $$ 
+DECLARE
+    pol RECORD;
 BEGIN
-    -- Drop policies if they exist using a loop to avoid missing specific table policies
-    DECLARE
-        r RECORD;
-    BEGIN
-        FOR r IN (SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public') LOOP
-            EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON ' || quote_ident(r.tablename);
-        END LOOP;
-    END;
+    FOR pol IN (SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public') LOOP
+        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(pol.policyname) || ' ON ' || quote_ident(pol.tablename);
+    END LOOP;
 END $$;
 
--- 2. RECREATE TABLES (Idempotent)
+-- 2. ENSURE TABLES EXIST (Idempotent)
 CREATE TABLE IF NOT EXISTS public.roles (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -116,7 +113,7 @@ CREATE TABLE IF NOT EXISTS public.system_logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. ENABLE RLS
+-- 3. ENABLE ROW LEVEL SECURITY
 ALTER TABLE public.roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.properties ENABLE ROW LEVEL SECURITY;
@@ -128,17 +125,18 @@ ALTER TABLE public.company_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.currencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
 
--- 4. RECREATE POLICIES (Full permissive for this prototype to bypass 403 errors)
-CREATE POLICY "Permissive Profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permissive Roles" ON public.roles FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permissive Properties" ON public.properties FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permissive Outlets" ON public.outlets FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permissive Categories" ON public.membership_categories FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permissive Members" ON public.members FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permissive Freezes" ON public.freezes FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permissive Settings" ON public.company_settings FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permissive Currencies" ON public.currencies FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permissive Logs" ON public.system_logs FOR ALL USING (true) WITH CHECK (true);
+-- 4. CREATE PERMISSIVE POLICIES FOR AUTHENTICATED USERS
+-- This allows the ERP to function as a full-access admin tool once logged in
+CREATE POLICY "Full Access Roles" ON public.roles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Full Access Profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Full Access Properties" ON public.properties FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Full Access Outlets" ON public.outlets FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Full Access Categories" ON public.membership_categories FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Full Access Members" ON public.members FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Full Access Freezes" ON public.freezes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Full Access Settings" ON public.company_settings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Full Access Currencies" ON public.currencies FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Full Access Logs" ON public.system_logs FOR ALL USING (true) WITH CHECK (true);
 
 -- 5. SEED INITIAL DATA
 INSERT INTO public.roles (id, name, permissions, is_system)

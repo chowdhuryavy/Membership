@@ -28,26 +28,32 @@ class DatabaseService {
     }
   }
 
+  /**
+   * REFINED AUTHENTICATION ENGINE
+   * Handles 400/500 errors by attempting to reconcile the Auth user with the Profiles table.
+   */
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
-    if (!this.isSupabase()) return { user: null, error: "Supabase connection not initialized." };
+    if (!this.isSupabase()) return { user: null, error: "Cloud sync offline." };
     
     const cleanEmail = email.trim().toLowerCase();
     
-    // 1. Attempt standard sign-in
+    // 1. Attempt standard login
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: passwordAttempt
     });
 
-    // 2. Handle failure: Check if user needs provisioning or linking
+    // 2. Fallback logic for new users created in the UI (Shadow Users)
     if (authError) {
-        console.warn("Auth Login Attempt Failed:", authError.message);
-        
-        // Fetch profile to check if they have a temp password
+        // Log the exact error for debugging but don't show technical 400s to user
+        console.warn("Auth Attempt Info:", authError.message);
+
+        // Check if this user exists in our local profiles table with a temp password
         const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
         
         if (profile && profile.temp_password === passwordAttempt) {
-            // Self-Provision: This user was created by an admin but hasn't logged in yet
+            // This is a new staff member. Attempt to provision them in Supabase Auth.
+            // Note: If this fails with 500, check Supabase Email Auth settings (SMTP/Confirmation).
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                 email: cleanEmail,
                 password: passwordAttempt,
@@ -55,15 +61,16 @@ class DatabaseService {
             });
 
             if (signUpError) {
-                // If 400 "User already registered", it means Auth exists but password doesn't match
-                if (signUpError.status === 400 || signUpError.message.includes('already registered')) {
-                    return { user: null, error: "Access key incorrect for this registered account." };
+                // If they already exist in Auth but we couldn't sign in (e.g. unconfirmed email),
+                // we might need to tell the user to confirm or contact admin.
+                if (signUpError.message.toLowerCase().includes('already registered')) {
+                  return { user: null, error: "Account exists but credentials failed. Check your access key." };
                 }
-                return { user: null, error: signUpError.message };
+                return { user: null, error: `Provisioning Error: ${signUpError.message}` };
             }
 
             if (signUpData.user) {
-                // Link profile and clear temp password
+                // Provisioning successful. Link the profile and clear the temp password.
                 await supabase.from('profiles').update({ 
                     auth_id: signUpData.user.id, 
                     temp_password: null 
@@ -73,28 +80,29 @@ class DatabaseService {
                 return { user: updatedProfile, error: null };
             }
         }
-        return { user: null, error: authError.message };
+        
+        return { user: null, error: "Invalid credentials or unauthorized identity." };
     }
 
-    // 3. Handle success: Ensure profile linkage
+    // 3. Successful standard login: Ensure Profile is synchronized
     if (authData.user) {
         let { data: profile } = await supabase.from('profiles').select('*').eq('auth_id', authData.user.id).maybeSingle();
         
         if (!profile) {
-            // Reconcile if profile exists but isn't linked to this auth_id
+            // Reconcile by email if the auth_id isn't linked yet
             const { data: emailProfile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
             if (emailProfile) {
                 await supabase.from('profiles').update({ auth_id: authData.user.id, temp_password: null }).eq('id', emailProfile.id);
                 const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', emailProfile.id).single();
                 profile = refreshed;
             } else {
-                // Emergency Provisioning: Auth exists but profile is missing
+                // Disaster Recovery: Create a profile if one doesn't exist for this valid Auth user
                 const newUser: UserProfile = { 
                     id: crypto.randomUUID(), 
                     auth_id: authData.user.id, 
                     email: cleanEmail, 
-                    name: authData.user.user_metadata?.name || 'Staff Member', 
-                    role_id: 'admin', 
+                    name: authData.user.user_metadata?.name || 'Staff User', 
+                    role_id: 'viewer', 
                     allowed_outlets: [] 
                 };
                 await supabase.from('profiles').insert([newUser]);
@@ -102,15 +110,15 @@ class DatabaseService {
             }
         }
         
-        await this.logAction('AUTH_LOGIN', `Authenticated session for: ${cleanEmail}`);
+        await this.logAction('AUTH_LOGIN', `Identity Verified: ${cleanEmail}`);
         return { user: profile, error: null };
     }
 
-    return { user: null, error: "Unexpected authentication state." };
+    return { user: null, error: "Authentication timed out." };
   }
 
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
-    if (!this.isSupabase()) return { user: null, error: "Supabase connection not initialized." };
+    if (!this.isSupabase()) return { user: null, error: "Cloud sync offline." };
     const { data: authData, error: authError } = await supabase.auth.signUp({ email, password: passwordAttempt, options: { data: { name } } });
     if (authError) return { user: null, error: authError.message };
     if (authData.user) {
@@ -118,7 +126,7 @@ class DatabaseService {
       await supabase.from('profiles').insert([newUser]);
       return { user: newUser, error: null };
     }
-    return { user: null, error: "Signup failed." };
+    return { user: null, error: "User creation failed." };
   }
 
   async getSettings(): Promise<CompanySettings> { 
@@ -126,7 +134,7 @@ class DatabaseService {
           const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle(); 
           if (data && data.name) return data; 
       } 
-      return { name: 'System Identity', logo_url: '', address: '', currency_id: 'default' }; 
+      return { name: 'The Torch Hospitality', logo_url: '', address: '', currency_id: 'default' }; 
   }
   
   async getRoles(): Promise<Role[]> {
