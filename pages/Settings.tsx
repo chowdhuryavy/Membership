@@ -43,7 +43,6 @@ const SettingsPage = () => {
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Permission Checks
   const canEditSettings = user && hasPermission(user.role_id, 'settings:edit');
   const canViewProperties = user && hasPermission(user.role_id, 'properties:view');
   const canEditProperties = user && hasPermission(user.role_id, 'properties:edit');
@@ -73,7 +72,7 @@ const SettingsPage = () => {
 
   const showStatus = (text: string, type: 'success' | 'error' = 'success') => {
     setMessage({ text, type });
-    setTimeout(() => setMessage(null), 5000);
+    setTimeout(() => setMessage(null), 8000);
   };
 
   const saveCompany = async () => {
@@ -197,7 +196,12 @@ const SettingsPage = () => {
         await refreshSettings();
         showStatus('Monetary standard synchronized.');
     } catch (e: any) {
-        showStatus(`Currency sync failed: ${e.message}`, 'error');
+        const errorMsg = e.message.toLowerCase();
+        if (errorMsg.includes('row-level security') || errorMsg.includes('rls')) {
+            showStatus("CRITICAL: RLS Policy Violation. Please go to the Supabase SQL Editor and re-run the updated 'supabase_schema.sql' script to grant necessary permissions.", "error");
+        } else {
+            showStatus(`Currency sync failed: ${e.message}`, 'error');
+        }
     } finally {
         setIsSaving(false);
     }
@@ -229,8 +233,8 @@ const SettingsPage = () => {
 
       {message && (
         <div className={`${message.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'} p-5 rounded-3xl text-xs font-black border animate-in fade-in zoom-in flex items-center gap-3 shadow-sm`}>
-            {message.type === 'success' ? <Check className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5"/>} 
-            {message.text}
+            {message.type === 'success' ? <Check className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5 shrink-0"/>} 
+            <span className="leading-relaxed">{message.text}</span>
         </div>
       )}
 

@@ -5,7 +5,7 @@ import { db } from '../services/mockSupabase';
 import { UserProfile, Role, Outlet } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff, RefreshCcw, CheckCircle2, UserCheck, ExternalLink, ShieldAlert } from 'lucide-react';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff, RefreshCcw, CheckCircle2, UserCheck, ExternalLink, ShieldAlert, ChevronRight } from 'lucide-react';
 
 const Users = () => {
   const { user } = useAuth();
@@ -243,51 +243,47 @@ const Users = () => {
                             <ShieldAlert className="w-10 h-10 text-white" />
                         </div>
                         <div>
-                            <h4 className="text-white font-black uppercase tracking-[0.2em] text-lg">Administrative Credentials Policy</h4>
-                            <p className="text-indigo-400 text-xs font-bold">Synchronizing Application Profiles with Supabase Auth</p>
+                            <h4 className="text-white font-black uppercase tracking-[0.2em] text-lg">Supabase Security Configuration</h4>
+                            <p className="text-indigo-400 text-xs font-bold">Mandatory Dashboard Settings for Perfect Provisioning</p>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="bg-white/5 p-6 rounded-3xl border border-white/10 space-y-4">
+                        <div className="bg-white/5 p-8 rounded-3xl border border-white/10 space-y-6">
                             <h5 className="text-red-400 font-black text-xs uppercase tracking-widest flex items-center gap-2">
-                                <AlertTriangle className="w-4 h-4"/> Fixing "Sync Conflicts"
+                                <AlertTriangle className="w-4 h-4"/> Critical: Email Settings
                             </h5>
                             <p className="text-slate-400 text-[11px] leading-relaxed">
-                                If a user cannot log in after you reset their password, it's because their old identity still exists in the Supabase Dashboard. 
-                                <strong> To fix this:</strong>
+                                Supabase blocks immediate login if "Confirm Email" is ON. <strong>You must disable this</strong> in your dashboard to allow admins to set passwords.
                             </p>
-                            <div className="bg-black/40 p-4 rounded-xl space-y-2 border border-white/5">
-                                <p className="text-white text-[10px] font-bold flex items-center gap-2">
-                                    <span className="w-4 h-4 bg-indigo-50 rounded-full flex items-center justify-center text-[8px]">1</span> 
-                                    Go to <strong>Authentication &rarr; Users</strong>
-                                </p>
-                                <p className="text-amber-400 text-[10px] font-black flex items-center gap-2">
-                                    <span className="w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center text-[8px] text-black">2</span> 
-                                    Delete the existing record for that email
-                                </p>
-                                <p className="text-white text-[10px] font-bold flex items-center gap-2">
-                                    <span className="w-4 h-4 bg-indigo-50 rounded-full flex items-center justify-center text-[8px]">3</span> 
-                                    User logs in with the new password successfully
-                                </p>
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-4 bg-black/40 p-4 rounded-2xl border border-white/5">
+                                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-black text-white shrink-0">1</div>
+                                    <div className="text-[10px] font-bold text-white leading-tight">Go to <strong>Authentication</strong> &rarr; <strong>Settings</strong></div>
+                                </div>
+                                <div className="flex items-center gap-4 bg-indigo-600/20 p-4 rounded-2xl border border-indigo-500/30">
+                                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-black text-white shrink-0">2</div>
+                                    <div className="text-[10px] font-black text-indigo-300 leading-tight">Switch <strong>"Confirm Email"</strong> to <span className="text-white underline decoration-white underline-offset-2">OFF</span></div>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="bg-white/5 p-6 rounded-3xl border border-white/10 space-y-4">
-                            <h5 className="text-indigo-400 font-black text-xs uppercase tracking-widest flex items-center gap-2">
-                                <Info className="w-4 h-4"/> Real-time Provisioning
-                            </h5>
-                            <p className="text-slate-400 text-[11px] leading-relaxed">
-                                When you create a <strong>New User</strong>, they are instantly added to the Supabase "Authentication" tab. 
-                                However, when you <strong>Reset a Password</strong>, security rules prevent direct modification. 
-                                We "orphan" the old record so a fresh one can be provisioned on their next login.
-                            </p>
+                        <div className="bg-white/5 p-8 rounded-3xl border border-white/10 space-y-6 flex flex-col justify-between">
+                            <div>
+                                <h5 className="text-indigo-400 font-black text-xs uppercase tracking-widest flex items-center gap-2">
+                                    <Info className="w-4 h-4"/> Why is this needed?
+                                </h5>
+                                <p className="text-slate-400 text-[11px] leading-relaxed mt-4">
+                                    By default, Supabase waits for a user to click a link in their email. Turning this off allows our ERP to immediately provision the "Display Name" and "Access Level" you define here.
+                                </p>
+                            </div>
                             <a 
                                 href="https://supabase.com/dashboard" 
                                 target="_blank" 
-                                className="inline-flex items-center gap-2 text-indigo-400 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest"
+                                className="inline-flex items-center justify-between w-full p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all group/link"
                             >
-                                Open Supabase Console <ExternalLink className="w-3 h-3"/>
+                                <span className="text-[10px] font-black text-white uppercase tracking-widest">Launch Supabase Console</span>
+                                <ExternalLink className="w-4 h-4 text-slate-500 group-hover/link:text-indigo-400 group-hover/link:translate-x-1 transition-all" />
                             </a>
                         </div>
                     </div>

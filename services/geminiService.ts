@@ -1,5 +1,5 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 
 /**
  * Generates strategic financial insights using Google Gemini API.
@@ -15,8 +15,9 @@ export const generateFinancialInsight = async (dataContext: string): Promise<str
   try {
     const ai = new GoogleGenAI({ apiKey });
     
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+    // Fix: Using gemini-3-pro-preview for strategic financial analysis as it involves complex reasoning.
+    const response: GenerateContentResponse = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
       contents: `
         Role: Strategic Financial Consultant. 
         Context: Quarterly Operational Analysis for a High-End Membership Facility.
@@ -32,6 +33,7 @@ export const generateFinancialInsight = async (dataContext: string): Promise<str
       `,
     });
 
+    // Fix: Accessing .text property directly instead of as a method to comply with @google/genai SDK.
     return response.text || "Operational analysis inconclusive. Refreshing data stream.";
   } catch (error: any) {
     console.error("Gemini API Error:", error);
