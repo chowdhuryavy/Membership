@@ -150,39 +150,32 @@ const Users = () => {
   };
 
  const confirmDelete = async () => {
-    if (!deleteId) return;
+  if (!deleteId) return;
 
-    try {
-        // Call the edge function
-        const res = await fetch('https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/dynamic-action', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ userId: deleteId }) // send the ID of the user to delete
-        });
+  try {
+    // Call the edge function
+    const res = await fetch('https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/dynamic-action', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ userId: deleteId }) // send the ID of the user to delete
+    });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to delete user');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to delete user');
 
-        // Refresh your local users table
-        await loadUsers();
-        setDeleteId(null);
+    // Refresh your local users table
+    await loadUsers();
+    setDeleteId(null);
 
-    } catch (err: any) {
-        console.error('Failed to delete user:', err);
-        alert(err.message);
-    }
+  } catch (err: any) {
+    console.error('Failed to delete user:', err);
+    setError(err.message || "Revocation failed. Please ensure the 'delete_user' function is deployed.");
+  }
 };
 
 
-        // 2️⃣ Delete from profiles table
-        await db.deleteUser(deleteId);
-
-        // 3️⃣ Reload users table
-        await loadUsers();
-
-        setDeleteId(null);
     } catch (err: any) {
         console.error(err);
         setError("Revocation failed. Please ensure the 'delete_user' function is deployed.");
