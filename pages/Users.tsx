@@ -152,30 +152,29 @@ const Users = () => {
  const confirmDelete = async () => {
     if (!deleteId) return;
 
-    setIsSubmitting(true);
-
     try {
-        const currentUserProfile = users.find(u => u.id === deleteId);
-        
-        // 1️⃣ Call Supabase Edge Function to delete Auth user if auth_id exists
-        if (currentUserProfile?.auth_id) {
-            const response = await fetch(
-                "https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/delete_user",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${(user as any)?.access_token || ''}`
-                    },
-                    body: JSON.stringify({ userId: currentUserProfile.auth_id }),
-                }
-            );
+        // Call the edge function
+        const res = await fetch('https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/dynamic-action', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ userId: deleteId }) // send the ID of the user to delete
+        });
 
-            const data = await response.json();
-            if (!data.success) {
-                console.warn("Auth Deletion Warning:", data.message);
-            }
-        }
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to delete user');
+
+        // Refresh your local users table
+        await loadUsers();
+        setDeleteId(null);
+
+    } catch (err: any) {
+        console.error('Failed to delete user:', err);
+        alert(err.message);
+    }
+};
+
 
         // 2️⃣ Delete from profiles table
         await db.deleteUser(deleteId);
