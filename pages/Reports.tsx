@@ -148,16 +148,20 @@ const Reports = () => {
     setIsGeneratingPDF(true);
     const element = reportRef.current;
     
+    // Crucial: Create a temporary clone for accurate PDF rendering
     const originalScrollPos = window.scrollY;
     window.scrollTo(0, 0);
 
     try {
+      // Scale up for high resolution
       const canvas = await html2canvas(element, { 
-        scale: 2.2, 
+        scale: 2.5, 
         useCORS: true, 
         backgroundColor: '#ffffff',
         width: element.scrollWidth,
         height: element.scrollHeight,
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight,
         logging: false,
         onclone: (clonedDoc) => {
             const el = clonedDoc.querySelector('.print-container') as HTMLElement;
@@ -165,6 +169,8 @@ const Reports = () => {
                 el.style.boxShadow = 'none';
                 el.style.border = 'none';
                 el.style.borderRadius = '0';
+                el.style.margin = '0';
+                el.style.padding = '80px'; // Ensure sufficient border padding
             }
         }
       });
@@ -172,7 +178,7 @@ const Reports = () => {
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('l', 'px', [canvas.width, canvas.height]);
       pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-      pdf.save(`Ledger_${currentOutlet?.name}_${reportMonth}.pdf`);
+      pdf.save(`Revenue_Ledger_${currentOutlet?.name}_${reportMonth}.pdf`);
     } catch (err) { 
         console.error("PDF engine failure:", err); 
     } finally { 
@@ -189,7 +195,7 @@ const Reports = () => {
         <style>
           {`
             @media print {
-              @page { size: landscape; margin: 10mm; }
+              @page { size: landscape; margin: 15mm; }
               body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
               .print-container { 
                 margin: 0 !important; 
@@ -199,11 +205,11 @@ const Reports = () => {
                 width: 100% !important;
                 max-width: none !important;
                 min-height: auto !important;
-                transform: scale(0.95);
+                transform: scale(1);
                 transform-origin: top left;
               }
               .no-print { display: none !important; }
-              .signature-block { page-break-inside: avoid; margin-top: 100px; }
+              .signature-block { page-break-inside: avoid; margin-top: 120px; border-top: 2px solid #f1f5f9; padding-top: 40px; }
               tr { page-break-inside: avoid; }
             }
           `}
@@ -259,165 +265,171 @@ const Reports = () => {
             </div>
         </div>
 
-        <div ref={reportRef} className="bg-white p-12 md:p-20 rounded-[3rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.12)] max-w-[1500px] mx-auto min-h-screen print-container border border-slate-100 relative overflow-x-auto">
+        <div ref={reportRef} className="bg-white p-16 md:p-24 rounded-[3.5rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.12)] max-w-[1600px] mx-auto min-h-[1100px] print-container border border-slate-100 relative overflow-x-auto flex flex-col">
             
-            <div className="flex flex-col md:flex-row justify-between items-start border-b-[4px] border-slate-950 pb-12 mb-12 gap-10 min-w-[1300px]">
-                <div className="flex items-center gap-10">
+            <div className="flex flex-col md:flex-row justify-between items-start border-b-[6px] border-slate-950 pb-12 mb-12 gap-10 min-w-[1300px]">
+                <div className="flex items-center gap-12">
                     {currentProperty?.logo_url ? (
-                        <img src={currentProperty.logo_url} alt="Logo" className="h-32 w-auto object-contain shrink-0" />
+                        <img src={currentProperty.logo_url} alt="Logo" className="h-40 w-auto object-contain shrink-0" />
                     ) : (
                         <div className="w-28 h-28 bg-slate-900 rounded-3xl flex items-center justify-center shadow-2xl shrink-0">
                           <Building2 className="w-14 h-14 text-white" />
                         </div>
                     )}
                     <div>
-                        <h1 className="text-5xl md:text-6xl font-black uppercase tracking-tighter text-slate-950 leading-[0.85] mb-2">
-                            {currentProperty?.name || 'Property'}
+                        <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter text-slate-950 leading-[0.8] mb-3">
+                            {currentProperty?.name || 'The Torch Doha'}
                         </h1>
-                        <p className="text-[12px] font-black text-slate-400 uppercase tracking-[0.4em] mb-10">{currentProperty?.address || 'Corporate Headquarters'}</p>
-                        <div className="flex items-center gap-4 flex-wrap">
-                          <div className="flex items-center gap-3 bg-indigo-600 text-white px-8 py-3.5 rounded-2xl shadow-xl shadow-indigo-100">
-                              <Activity className="w-4 h-4" />
-                              <span className="text-[11px] font-black uppercase tracking-[0.2em]">{currentOutlet?.name || 'Health Club'}</span>
+                        <p className="text-[13px] font-black text-slate-400 uppercase tracking-[0.5em] mb-12">{currentProperty?.address || 'Corporate Headquarters'}</p>
+                        <div className="flex items-center gap-6 flex-wrap">
+                          <div className="flex items-center gap-4 bg-indigo-600 text-white px-10 py-4 rounded-2xl shadow-xl shadow-indigo-100">
+                              <Activity className="w-5 h-5" />
+                              <span className="text-[12px] font-black uppercase tracking-[0.2em]">{currentOutlet?.name || 'Health Club'}</span>
                           </div>
-                          <div className="px-6 py-3.5 border-2 border-slate-100 rounded-2xl text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">
+                          <div className="px-8 py-4 border-2 border-slate-100 rounded-2xl text-[11px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50">
                             REF: {reportMonth}-STMT
                           </div>
                         </div>
                     </div>
                 </div>
                 <div className="text-right shrink-0">
-                    <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mb-3 text-right">Statement Range</h2>
-                    <p className="text-5xl font-black text-slate-950 tracking-tighter tabular-nums mb-3">
+                    <h2 className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-400 mb-4 text-right">Statement Period</h2>
+                    <p className="text-6xl font-black text-slate-950 tracking-tighter tabular-nums mb-4">
                         {format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
                     </p>
-                    <div className="inline-flex items-center gap-3 px-5 py-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl text-[10px] font-black text-emerald-700 uppercase tracking-widest">
-                        <ShieldCheck className="w-4 h-4"/> RECONCILED AUDIT
+                    <div className="inline-flex items-center gap-4 px-6 py-3 bg-emerald-50 border-2 border-emerald-100 rounded-2xl text-[11px] font-black text-emerald-700 uppercase tracking-[0.2em]">
+                        <ShieldCheck className="w-5 h-5"/> RECONCILED AUDIT
                     </div>
                 </div>
             </div>
 
-            <table className="w-full text-[11px] border-collapse min-w-[1300px]">
-                <thead>
-                    <tr className="bg-[#0f172a] text-white">
-                        {activeColumns.map(col => (
-                            <th key={col.key} className={`px-4 py-7 text-center font-black uppercase tracking-[0.2em] border-r border-white/10 last:border-0 ${col.width}`}>
-                                {col.label}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                    {Object.keys(groupedRows).map(catName => {
-                      const groupRows = groupedRows[catName];
-                      const groupTotals = groupRows.reduce((acc, r) => ({
-                        fees: acc.fees + r.actual_fees,
-                        prev: acc.prev + r.carry_forward,
-                        current: acc.current + r.current_month_rev,
-                        balance: acc.balance + r.balance
-                      }), { fees: 0, prev: 0, current: 0, balance: 0 });
+            <div className="flex-1">
+                <table className="w-full text-[12px] border-collapse min-w-[1300px]">
+                    <thead>
+                        <tr className="bg-[#0f172a] text-white">
+                            {activeColumns.map(col => (
+                                <th key={col.key} className={`px-5 py-8 text-center font-black uppercase tracking-[0.2em] border-r border-white/10 last:border-0 ${col.width}`}>
+                                    {col.label}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {Object.keys(groupedRows).map(catName => {
+                        const groupRows = groupedRows[catName];
+                        const groupTotals = groupRows.reduce((acc, r) => ({
+                            fees: acc.fees + r.actual_fees,
+                            prev: acc.prev + r.carry_forward,
+                            current: acc.current + r.current_month_rev,
+                            balance: acc.balance + r.balance
+                        }), { fees: 0, prev: 0, current: 0, balance: 0 });
 
-                      return (
-                        <React.Fragment key={catName}>
-                          <tr className="bg-white border-b border-slate-100">
-                            <td colSpan={activeColumns.length} className="px-6 py-6">
-                              <div className="flex items-center gap-4">
-                                <div className="p-1.5 bg-indigo-50 rounded-lg"><ReceiptText className="w-4 h-4 text-indigo-600" /></div>
-                                <span className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-950">{catName}</span>
-                                <span className="ml-2 px-3 py-1 bg-slate-50 border border-slate-200 rounded-full text-[9px] font-black text-slate-400 uppercase tracking-widest shadow-sm">
-                                    {groupRows.length} ACCOUNTS
-                                </span>
-                              </div>
-                            </td>
-                          </tr>
-                          
-                          {groupRows.map((row) => {
-                            globalIndex++;
-                            return (
-                                <tr key={`${row.membership_no}-${row.sl_no}`} className="hover:bg-slate-50 transition-colors">
-                                    {activeColumns.map(col => (
-                                        <td key={col.key} className={`px-4 py-5 border-r border-slate-50 last:border-0 ${['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? 'text-right' : 'text-center'} ${col.key === 'guest_name' ? 'text-left font-black text-slate-800' : ''}`}>
-                                            <span className={`
-                                                ${col.key === 'current_month_rev' ? 'text-indigo-600 font-black' : ''} 
-                                                ${col.key === 'balance' ? 'text-red-600 font-black' : ''}
-                                                ${['actual_fees', 'carry_forward'].includes(col.key) ? 'font-bold text-slate-700' : ''}
-                                            `}>
-                                                {col.key === 'sl_no' ? globalIndex : (
-                                                   ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) 
-                                                   ? formatMoney(row[col.key as keyof ReportRow] as number)
-                                                   : row[col.key as keyof ReportRow]
-                                                )}
-                                            </span>
-                                        </td>
-                                    ))}
-                                </tr>
-                            );
-                          })}
-
-                          <tr className="bg-indigo-50/30 border-b border-indigo-100/50">
-                            <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-6 py-4 text-right">
-                                <span className="text-[10px] font-black uppercase tracking-[0.25em] text-indigo-400">
-                                    SUB-TOTAL: {catName}
-                                </span>
-                            </td>
-                            {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
-                                <td key={col.key} className={`px-4 py-4 text-right font-black border-x border-white ${col.key === 'current_month_rev' ? 'text-indigo-800' : 'text-slate-800'}`}>
-                                    {col.key === 'actual_fees' ? formatMoney(groupTotals.fees) : col.key === 'carry_forward' ? formatMoney(groupTotals.prev) : col.key === 'current_month_rev' ? formatMoney(groupTotals.current) : formatMoney(groupTotals.balance)}
+                        return (
+                            <React.Fragment key={catName}>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                                <td colSpan={activeColumns.length} className="px-8 py-8">
+                                <div className="flex items-center gap-5">
+                                    <div className="p-2 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-100"><ReceiptText className="w-5 h-5 text-white" /></div>
+                                    <span className="text-[13px] font-black uppercase tracking-[0.4em] text-slate-950">{catName}</span>
+                                    <span className="ml-3 px-4 py-1.5 bg-white border border-slate-200 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest shadow-sm">
+                                        {groupRows.length} ACCOUNTS REGISTERED
+                                    </span>
+                                </div>
                                 </td>
-                            ))}
-                            {activeColumns.filter(c => !['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key) && activeColumns.indexOf(c) > activeColumns.findIndex(d => d.key === 'balance')).map(col => (
-                                <td key={col.key} className="px-4 py-4"></td>
-                            ))}
-                          </tr>
-                        </React.Fragment>
-                      );
-                    })}
-                </tbody>
+                            </tr>
+                            
+                            {groupRows.map((row) => {
+                                globalIndex++;
+                                return (
+                                    <tr key={`${row.membership_no}-${row.sl_no}`} className="hover:bg-slate-50/50 transition-colors">
+                                        {activeColumns.map(col => (
+                                            <td key={col.key} className={`px-5 py-6 border-r border-slate-50 last:border-0 ${['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? 'text-right tabular-nums' : 'text-center'} ${col.key === 'guest_name' ? 'text-left font-black text-slate-800' : ''}`}>
+                                                <span className={`
+                                                    ${col.key === 'current_month_rev' ? 'text-indigo-600 font-black' : ''} 
+                                                    ${col.key === 'balance' ? 'text-red-600 font-black' : ''}
+                                                    ${['actual_fees', 'carry_forward'].includes(col.key) ? 'font-bold text-slate-700' : ''}
+                                                `}>
+                                                    {col.key === 'sl_no' ? globalIndex : (
+                                                    ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) 
+                                                    ? formatMoney(row[col.key as keyof ReportRow] as number)
+                                                    : row[col.key as keyof ReportRow]
+                                                    )}
+                                                </span>
+                                            </td>
+                                        ))}
+                                    </tr>
+                                );
+                            })}
 
-                <tfoot>
-                    <tr className="bg-slate-950 text-white">
-                      <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-6 py-8 text-right text-[11px] font-black uppercase tracking-[0.4em] border-r border-white/5">
-                        CONSOLIDATED LEDGER TOTALS
-                      </td>
-                      {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
-                          <td key={col.key} className={`px-4 py-8 text-right font-black border-r border-white/5 last:border-0 ${col.key === 'current_month_rev' ? 'bg-indigo-600' : ''}`}>
-                             {col.key === 'actual_fees' ? formatMoney(totals.fees) : col.key === 'carry_forward' ? formatMoney(totals.prev) : col.key === 'current_month_rev' ? formatMoney(totals.current) : formatMoney(totals.balance)}
-                          </td>
-                      ))}
-                      {activeColumns.filter(c => !['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key) && activeColumns.indexOf(c) > activeColumns.findIndex(d => d.key === 'balance')).map(col => (
-                          <td key={col.key} className="px-4 py-8 border-l border-white/5"></td>
-                      ))}
-                    </tr>
-                </tfoot>
-            </table>
+                            <tr className="bg-indigo-50/20 border-y border-indigo-100/50">
+                                <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-8 py-6 text-right">
+                                    <span className="text-[11px] font-black uppercase tracking-[0.3em] text-indigo-400">
+                                        SUB-TOTAL FOR {catName}
+                                    </span>
+                                </td>
+                                {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
+                                    <td key={col.key} className={`px-5 py-6 text-right font-black border-x border-white ${col.key === 'current_month_rev' ? 'text-indigo-900 bg-indigo-50/50' : 'text-slate-800'}`}>
+                                        {col.key === 'actual_fees' ? formatMoney(groupTotals.fees) : col.key === 'carry_forward' ? formatMoney(groupTotals.prev) : col.key === 'current_month_rev' ? formatMoney(groupTotals.current) : formatMoney(groupTotals.balance)}
+                                    </td>
+                                ))}
+                                {activeColumns.filter(c => !['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key) && activeColumns.indexOf(c) > activeColumns.findIndex(d => d.key === 'balance')).map(col => (
+                                    <td key={col.key} className="px-5 py-6"></td>
+                                ))}
+                            </tr>
+                            </React.Fragment>
+                        );
+                        })}
+                    </tbody>
 
-            <div className="signature-block mt-48 pt-20 border-t-[3px] border-slate-100 flex justify-between items-start gap-16 min-w-[1300px]">
-                <div className="flex-1 text-center space-y-12">
-                    <p className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Prepared By:</p>
-                    <div className="pt-8 border-t border-slate-200 w-2/3 mx-auto">
-                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest leading-relaxed">
+                    <tfoot>
+                        <tr className="bg-slate-950 text-white">
+                        <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-10 py-10 text-right text-[12px] font-black uppercase tracking-[0.5em] border-r border-white/5">
+                            CONSOLIDATED LEDGER TOTALS
+                        </td>
+                        {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
+                            <td key={col.key} className={`px-5 py-10 text-right font-black border-r border-white/5 last:border-0 ${col.key === 'current_month_rev' ? 'bg-indigo-700' : ''}`}>
+                                {col.key === 'actual_fees' ? formatMoney(totals.fees) : col.key === 'carry_forward' ? formatMoney(totals.prev) : col.key === 'current_month_rev' ? formatMoney(totals.current) : formatMoney(totals.balance)}
+                            </td>
+                        ))}
+                        {activeColumns.filter(c => !['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key) && activeColumns.indexOf(c) > activeColumns.findIndex(d => d.key === 'balance')).map(col => (
+                            <td key={col.key} className="px-5 py-10 border-l border-white/5"></td>
+                        ))}
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div className="signature-block mt-48 pt-20 border-t-[4px] border-slate-100 flex justify-between items-start gap-24 min-w-[1300px]">
+                <div className="flex-1 text-center space-y-16">
+                    <p className="text-[15px] font-black text-slate-900 uppercase tracking-[0.3em]">Prepared By:</p>
+                    <div className="pt-10 border-t-2 border-slate-200 w-3/4 mx-auto">
+                      <p className="text-[13px] font-bold text-slate-600 uppercase tracking-widest leading-loose">
                         {settings?.signatory_prepared_role || 'Cluster Income Auditor'}
                       </p>
                     </div>
                 </div>
 
-                <div className="flex-1 text-center space-y-12">
-                    <p className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Reviewed By:</p>
-                    <div className="pt-8 border-t border-slate-200 w-2/3 mx-auto">
-                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest leading-relaxed">
+                <div className="flex-1 text-center space-y-16">
+                    <p className="text-[15px] font-black text-slate-900 uppercase tracking-[0.3em]">Reviewed By:</p>
+                    <div className="pt-10 border-t-2 border-slate-200 w-3/4 mx-auto">
+                      <p className="text-[13px] font-bold text-slate-600 uppercase tracking-widest leading-loose">
                         {settings?.signatory_reviewed_role || 'Cluster Assist. Financial Controller'}
                       </p>
                     </div>
                 </div>
 
-                <div className="flex-1 text-center space-y-12">
-                    <p className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Approved By:</p>
-                    <div className="pt-8 border-t border-slate-200 w-2/3 mx-auto">
-                      <p className="text-[12px] font-bold text-slate-600 uppercase tracking-widest leading-relaxed">
+                <div className="flex-1 text-center space-y-16">
+                    <p className="text-[15px] font-black text-slate-900 uppercase tracking-[0.3em]">Approved By:</p>
+                    <div className="pt-10 border-t-2 border-slate-200 w-3/4 mx-auto">
+                      <p className="text-[13px] font-bold text-slate-600 uppercase tracking-widest leading-loose">
                         {settings?.signatory_approved_role || 'Cluster Ex- Assist. Director of Finance'}
                       </p>
                     </div>
                 </div>
+            </div>
+            
+            <div className="mt-20 pt-10 border-t border-slate-100 text-center">
+                <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.8em]">System Generated Audit Report &bull; {format(new Date(), 'PPpp')}</p>
             </div>
         </div>
     </div>

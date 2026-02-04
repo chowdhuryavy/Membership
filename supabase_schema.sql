@@ -1,6 +1,6 @@
 
 -- ==========================================
--- MEMBERSHIP ERP - CORE SCHEMA V9.0 (PERMISSIVE ACCESS)
+-- MEMBERSHIP ERP - CORE SCHEMA V10.0
 -- ==========================================
 
 -- 1. AGGRESSIVE CLEANUP OF EXISTING POLICIES
@@ -110,12 +110,18 @@ CREATE TABLE IF NOT EXISTS public.company_settings (
     logo_url TEXT,
     address TEXT,
     currency_id TEXT,
+    signatory_prepared_role TEXT DEFAULT 'Cluster Income Auditor',
+    signatory_reviewed_role TEXT DEFAULT 'Cluster Assist. Financial Controller',
+    signatory_approved_role TEXT DEFAULT 'Cluster Ex- Assist. Director of Finance',
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. ENABLE RLS AND CREATE MASTER POLICIES
--- This ensures that even if Supabase forces RLS, the 'anon' role has a master key.
+-- Fix: Add columns if table already existed without them
+ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS signatory_prepared_role TEXT DEFAULT 'Cluster Income Auditor';
+ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS signatory_reviewed_role TEXT DEFAULT 'Cluster Assist. Financial Controller';
+ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS signatory_approved_role TEXT DEFAULT 'Cluster Ex- Assist. Director of Finance';
 
+-- 3. ENABLE RLS AND CREATE MASTER POLICIES
 DO $$ 
 DECLARE
     t text;
