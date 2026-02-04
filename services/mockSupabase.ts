@@ -34,7 +34,12 @@ class DatabaseService {
         outlet_id: outlet_id || null
     };
     if (this.isSupabase()) {
-        try { await supabase.from('system_logs').insert([logEntry]); } catch (e) {}
+        try { 
+          const { error } = await supabase.from('system_logs').insert([logEntry]); 
+          if (error) console.error("Log Injection Failed:", error);
+        } catch (e) {
+          console.error("Critical Log Error:", e);
+        }
     }
   }
 
@@ -88,6 +93,7 @@ class DatabaseService {
             if (signUpData.user) {
               await supabase.from('profiles').update({ auth_id: signUpData.user.id, temp_password: null }).eq('id', profile.id);
               const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
+              await this.logAction('AUTH_SIGNUP', `Identity provisioned for ${profile.email}`);
               return { user: refreshed, error: null };
             }
         }
@@ -99,6 +105,7 @@ class DatabaseService {
           await supabase.from('profiles').update({ auth_id: authData.user.id, temp_password: null }).eq('id', profile.id);
         }
         await this.syncAuthMetadata(profile);
+        await this.logAction('AUTH_LOGIN', `Access authorized for ${profile.email}`);
         return { user: profile, error: null };
     }
 
@@ -145,6 +152,7 @@ class DatabaseService {
             console.error("Profile Upsert Error:", dbError);
             throw new Error(`Profile Sync Failed: ${dbError.message}`);
         }
+        await this.logAction('CREATE_USER', `Identity provisioned: ${user.name} (${user.email})`);
         return data as UserProfile;
     }
     return { ...user, id: crypto.randomUUID() } as UserProfile;
@@ -152,7 +160,7 @@ class DatabaseService {
 
   async updateUser(id: string, updates: Partial<UserProfile> & { password?: string }) { 
     if (this.isSupabase()) {
-        const { data: current } = await supabase.from('profiles').select('email, auth_id').eq('id', id).single();
+        const { data: current } = await supabase.from('profiles').select('email, auth_id, name').eq('id', id).single();
         const finalUpdates: any = { 
             name: updates.name,
             email: updates.email?.trim().toLowerCase(),
@@ -169,6 +177,7 @@ class DatabaseService {
         Object.keys(finalUpdates).forEach(k => finalUpdates[k] === undefined && delete finalUpdates[k]);
         const { error } = await supabase.from('profiles').update(finalUpdates).eq('id', id);
         if (error) throw new Error(error.message);
+        await this.logAction('UPDATE_USER', `Identity modified for ${current.name} (${current.email})`);
     }
   }
 
@@ -180,6 +189,7 @@ class DatabaseService {
     if (authData.user) {
       const newUser = { id: crypto.randomUUID(), auth_id: authData.user.id, email, name, role_id: 'viewer', allowed_outlets: [] };
       await supabase.from('profiles').insert([newUser]);
+      await this.logAction('USER_REGISTRATION', `Self-registration for ${email}`);
       return { user: newUser as any, error: null };
     }
     return { user: null, error: "Provisioning failed." };
@@ -187,68 +197,208 @@ class DatabaseService {
 
   async getSettings(): Promise<CompanySettings> { if (this.isSupabase()) { const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle(); if (data && data.name) return data; } return { name: 'The Torch Hospitality', logo_url: '', address: '', currency_id: 'default' }; }
   async getRoles(): Promise<Role[]> { if (this.isSupabase()) { const { data } = await supabase.from('roles').select('*'); if (data && data.length > 0) return data; } return [{ id: 'admin', name: 'Administrator', permissions: ['members:view', 'members:create', 'members:edit', 'members:delete', 'categories:view', 'categories:create', 'categories:edit', 'categories:delete', 'users:view', 'users:create', 'users:edit', 'users:delete', 'settings:view', 'settings:edit', 'reports:view', 'reports:export', 'logs:view', 'properties:view', 'properties:edit', 'outlets:view', 'outlets:edit'], is_system: true }]; }
-  async deleteUser(id: string) { if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id); }
-  async addProperty(prop: Omit<Property, 'id'>): Promise<Property> { const id = crypto.randomUUID(); if (this.isSupabase()) { const { error } = await supabase.from('properties').insert([{ ...prop, id }]); if (error) throw new Error(error.message); } return { ...prop, id }; }
-  async updateProperty(id: string, updates: Partial<Property>) { if (this.isSupabase()) { const { error } = await supabase.from('properties').update(updates).eq('id', id); if (error) throw new Error(error.message); } }
-  async deleteProperty(id: string) { if (this.isSupabase()) await supabase.from('properties').delete().eq('id', id); }
-  async addOutlet(name: string, propertyId: string): Promise<Outlet> { const id = crypto.randomUUID(); if (this.isSupabase()) { const { error } = await supabase.from('outlets').insert([{ id, name, property_id: propertyId }]); if (error) throw new Error(error.message); } return { id, name, property_id: propertyId }; }
-  async updateOutlet(id: string, updates: Partial<Outlet>) { if (this.isSupabase()) { const { error } = await supabase.from('outlets').update(updates).eq('id', id); if (error) throw new Error(error.message); } }
-  async deleteOutlet(id: string) { if (this.isSupabase()) await supabase.from('outlets').delete().eq('id', id); }
-  async addCategory(cat: Omit<MembershipCategory, 'id'>): Promise<MembershipCategory> { const id = crypto.randomUUID(); if (this.isSupabase()) { const { error } = await supabase.from('membership_categories').insert([{ ...cat, id }]); if (error) throw new Error(error.message); } return { ...cat, id }; }
-  async updateCategory(id: string, updates: Partial<MembershipCategory>) { if (this.isSupabase()) { const { error } = await supabase.from('membership_categories').update(updates).eq('id', id); if (error) throw new Error(error.message); } }
-  async deleteCategory(id: string) { if (this.isSupabase()) await supabase.from('membership_categories').delete().eq('id', id); }
-  async addMember(member: Member): Promise<Member> { if (this.isSupabase()) { const { error } = await supabase.from('members').insert([member]); if (error) throw new Error(error.message); } return member; }
-  async updateMember(id: string, updates: Partial<Member>) { if (this.isSupabase()) { const { error } = await supabase.from('members').update(updates).eq('id', id); if (error) throw new Error(error.message); } }
-  async deleteMember(id: string) { if (this.isSupabase()) await supabase.from('members').delete().eq('id', id); }
-  async addFreeze(freeze: Freeze): Promise<void> { if (this.isSupabase()) { const { error: fzErr } = await supabase.from('freezes').insert([freeze]); if (fzErr) throw new Error(fzErr.message); await supabase.from('members').update({ status: MemberStatus.FROZEN }).eq('id', freeze.member_id); } }
-  async updateSettings(updates: Partial<CompanySettings>): Promise<void> { if (this.isSupabase()) { const { error } = await supabase.from('company_settings').upsert({ id: 'global', ...updates }, { onConflict: 'id' }); if (error) throw new Error(error.message); } }
+  async deleteUser(id: string) { 
+    if (this.isSupabase()) {
+        const { data: user } = await supabase.from('profiles').select('email').eq('id', id).single();
+        await supabase.from('profiles').delete().eq('id', id);
+        if (user) await this.logAction('DELETE_USER', `Identity revoked: ${user.email}`);
+    } 
+  }
+
+  async addProperty(prop: Omit<Property, 'id'>): Promise<Property> { 
+    const id = crypto.randomUUID(); 
+    if (this.isSupabase()) { 
+        const { error } = await supabase.from('properties').insert([{ ...prop, id }]); 
+        if (error) throw new Error(error.message); 
+        await this.logAction('CREATE_PROPERTY', `Added portfolio asset: ${prop.name}`);
+    } 
+    return { ...prop, id }; 
+  }
+
+  async updateProperty(id: string, updates: Partial<Property>) { 
+    if (this.isSupabase()) { 
+        const { error } = await supabase.from('properties').update(updates).eq('id', id); 
+        if (error) throw new Error(error.message); 
+        await this.logAction('UPDATE_PROPERTY', `Modified portfolio asset: ${updates.name || id}`);
+    } 
+  }
+
+  async deleteProperty(id: string) { 
+    if (this.isSupabase()) {
+        const { data: p } = await supabase.from('properties').select('name').eq('id', id).single();
+        await supabase.from('properties').delete().eq('id', id); 
+        if (p) await this.logAction('DELETE_PROPERTY', `Purged portfolio asset: ${p.name}`);
+    }
+  }
+
+  async addOutlet(name: string, propertyId: string): Promise<Outlet> { 
+    const id = crypto.randomUUID(); 
+    if (this.isSupabase()) { 
+        const { error } = await supabase.from('outlets').insert([{ id, name, property_id: propertyId }]); 
+        if (error) throw new Error(error.message); 
+        await this.logAction('CREATE_FACILITY', `Commissioned new facility: ${name}`);
+    } 
+    return { id, name, property_id: propertyId }; 
+  }
+
+  async updateOutlet(id: string, updates: Partial<Outlet>) { 
+    if (this.isSupabase()) { 
+        const { error } = await supabase.from('outlets').update(updates).eq('id', id); 
+        if (error) throw new Error(error.message); 
+        await this.logAction('UPDATE_FACILITY', `Modified facility configuration: ${updates.name || id}`);
+    } 
+  }
+
+  async deleteOutlet(id: string) { 
+    if (this.isSupabase()) {
+        const { data: o } = await supabase.from('outlets').select('name').eq('id', id).single();
+        await supabase.from('outlets').delete().eq('id', id); 
+        if (o) await this.logAction('DELETE_FACILITY', `Decommissioned facility: ${o.name}`);
+    }
+  }
+
+  async addCategory(cat: Omit<MembershipCategory, 'id'>): Promise<MembershipCategory> { 
+    const id = crypto.randomUUID(); 
+    if (this.isSupabase()) { 
+        const { error } = await supabase.from('membership_categories').insert([{ ...cat, id }]); 
+        if (error) throw new Error(error.message); 
+        await this.logAction('CREATE_TIER', `Deployed revenue tier: ${cat.name}`, cat.outlet_id);
+    } 
+    return { ...cat, id }; 
+  }
+
+  async updateCategory(id: string, updates: Partial<MembershipCategory>) { 
+    if (this.isSupabase()) { 
+        const { data: cat } = await supabase.from('membership_categories').select('outlet_id').eq('id', id).single();
+        const { error } = await supabase.from('membership_categories').update(updates).eq('id', id); 
+        if (error) throw new Error(error.message); 
+        await this.logAction('UPDATE_TIER', `Modified revenue tier: ${updates.name || id}`, cat?.outlet_id);
+    } 
+  }
+
+  async deleteCategory(id: string) { 
+    if (this.isSupabase()) {
+        const { data: c } = await supabase.from('membership_categories').select('name, outlet_id').eq('id', id).single();
+        await supabase.from('membership_categories').delete().eq('id', id); 
+        if (c) await this.logAction('DELETE_TIER', `Decommissioned revenue tier: ${c.name}`, c.outlet_id);
+    }
+  }
+
+  async addMember(member: Member): Promise<Member> { 
+    if (this.isSupabase()) { 
+        const { error } = await supabase.from('members').insert([member]); 
+        if (error) throw new Error(error.message); 
+        await this.logAction('ENROLL_MEMBER', `Enrolled: ${member.guest_name} (${member.membership_number})`, member.outlet_id);
+    } 
+    return member; 
+  }
+
+  async updateMember(id: string, updates: Partial<Member>) { 
+    if (this.isSupabase()) { 
+        const { error } = await supabase.from('members').update(updates).eq('id', id); 
+        if (error) throw new Error(error.message); 
+        await this.logAction('UPDATE_MEMBER', `Profile modified for ${updates.guest_name || id}`, updates.outlet_id);
+    } 
+  }
+
+  async deleteMember(id: string) { 
+    if (this.isSupabase()) {
+        const { data: m } = await supabase.from('members').select('guest_name, outlet_id').eq('id', id).single();
+        await supabase.from('members').delete().eq('id', id); 
+        if (m) await this.logAction('DELETE_MEMBER', `Purged account: ${m.guest_name}`, m.outlet_id);
+    }
+  }
+
+  async addFreeze(freeze: Freeze): Promise<void> { 
+    if (this.isSupabase()) { 
+        const { data: m } = await supabase.from('members').select('guest_name, outlet_id').eq('id', freeze.member_id).single();
+        const { error: fzErr } = await supabase.from('freezes').insert([freeze]); 
+        if (fzErr) throw new Error(fzErr.message); 
+        await supabase.from('members').update({ status: MemberStatus.FROZEN }).eq('id', freeze.member_id); 
+        await this.logAction('FREEZE_MEMBER', `Suspended account activity: ${m?.guest_name || freeze.member_id} for ${freeze.total_days} days`, m?.outlet_id);
+    } 
+  }
+
+  async updateSettings(updates: Partial<CompanySettings>): Promise<void> { 
+    if (this.isSupabase()) { 
+        const { error } = await supabase.from('company_settings').upsert({ id: 'global', ...updates }, { onConflict: 'id' }); 
+        if (error) throw new Error(error.message); 
+        await this.logAction('UPDATE_SETTINGS', 'Global framework configurations synchronized');
+    } 
+  }
   
   async addCurrency(curr: Omit<Currency, 'id'>): Promise<Currency> { 
     const id = crypto.randomUUID(); 
-    console.log("DB: Provisioning new currency...", curr);
     if (this.isSupabase()) { 
         if (curr.is_default) {
             await supabase.from('currencies').update({ is_default: false }).neq('id', id);
         }
         const { error } = await supabase.from('currencies').upsert([{ ...curr, id }], { onConflict: 'id' }); 
-        if (error) {
-            console.error("DB Error (Add Currency):", error);
-            throw new Error(error.message);
-        }
+        if (error) throw new Error(error.message);
         if (curr.is_default) {
             await supabase.from('company_settings').upsert({ id: 'global', currency_id: id }, { onConflict: 'id' });
         }
+        await this.logAction('CREATE_CURRENCY', `Added monetary standard: ${curr.code}`);
     } 
     return { ...curr, id }; 
   }
 
   async updateCurrency(id: string, updates: Partial<Currency>) { 
-    console.log("DB: Syncing currency...", id, updates);
     if (this.isSupabase()) { 
         if (updates.is_default) {
             await supabase.from('currencies').update({ is_default: false }).neq('id', id);
         }
-        
         const { error } = await supabase.from('currencies').upsert({ ...updates, id }, { onConflict: 'id' }); 
-        
-        if (error) {
-            console.error("DB Error (Sync Currency):", error);
-            throw new Error(error.message);
-        }
-
+        if (error) throw new Error(error.message);
         if (updates.is_default) {
             await supabase.from('company_settings').upsert({ id: 'global', currency_id: id }, { onConflict: 'id' });
         }
+        await this.logAction('UPDATE_CURRENCY', `Modified monetary standard: ${updates.code || id}`);
     } 
   }
 
-  async deleteCurrency(id: string) { if (this.isSupabase()) await supabase.from('currencies').delete().eq('id', id); }
+  async deleteCurrency(id: string) { 
+    if (this.isSupabase()) {
+        const { data: c } = await supabase.from('currencies').select('code').eq('id', id).single();
+        await supabase.from('currencies').delete().eq('id', id); 
+        if (c) await this.logAction('DELETE_CURRENCY', `Purged monetary standard: ${c.code}`);
+    }
+  }
 
-  async addRole(role: Omit<Role, 'id'>) { const id = crypto.randomUUID(); if (this.isSupabase()) { const { error } = await supabase.from('roles').insert([{ ...role, id }]); if (error) throw new Error(error.message); } return { ...role, id } as Role; }
-  async updateRole(id: string, updates: Partial<Role>) { if (this.isSupabase()) { const { error } = await supabase.from('roles').update(updates).eq('id', id); if (error) throw new Error(error.message); } }
-  async deleteRole(id: string) { if (this.isSupabase()) await supabase.from('roles').delete().eq('id', id); }
+  async addRole(role: Omit<Role, 'id'>) { 
+    const id = crypto.randomUUID(); 
+    if (this.isSupabase()) { 
+        const { error } = await supabase.from('roles').insert([{ ...role, id }]); 
+        if (error) throw new Error(error.message); 
+        await this.logAction('CREATE_ROLE', `Defined security tier: ${role.name}`);
+    } 
+    return { ...role, id } as Role; 
+  }
 
-  async changePassword(userId: string, cur: string, n: string) { if (this.isSupabase()) { const { error } = await (supabase.auth as any).updateUser({ password: n }); if (error) throw new Error(error.message); } }
+  async updateRole(id: string, updates: Partial<Role>) { 
+    if (this.isSupabase()) { 
+        const { error } = await supabase.from('roles').update(updates).eq('id', id); 
+        if (error) throw new Error(error.message); 
+        await this.logAction('UPDATE_ROLE', `Modified security tier: ${updates.name || id}`);
+    } 
+  }
+
+  async deleteRole(id: string) { 
+    if (this.isSupabase()) {
+        const { data: r } = await supabase.from('roles').select('name').eq('id', id).single();
+        await supabase.from('roles').delete().eq('id', id); 
+        if (r) await this.logAction('DELETE_ROLE', `Purged security tier: ${r.name}`);
+    }
+  }
+
+  async changePassword(userId: string, cur: string, n: string) { 
+    if (this.isSupabase()) { 
+        const { error } = await (supabase.auth as any).updateUser({ password: n }); 
+        if (error) throw new Error(error.message); 
+        await this.logAction('AUTH_PASSWORD_CHANGE', 'User initiated security key rotation');
+    } 
+  }
+
   async getCurrencies(): Promise<Currency[]> { if (this.isSupabase()) { const { data } = await supabase.from('currencies').select('*').order('code'); if (data && data.length > 0) return data; } return [{ id: 'default', code: 'USD', symbol: '$', rate: 1, is_default: true }]; }
   async getProperties(): Promise<Property[]> { if (this.isSupabase()) { const { data } = await supabase.from('properties').select('*'); if (data && data.length > 0) return data; } return []; }
   async getOutlets(): Promise<Outlet[]> { if (this.isSupabase()) { const { data } = await supabase.from('outlets').select('*'); if (data && data.length > 0) return data; } return []; }

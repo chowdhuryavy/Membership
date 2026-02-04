@@ -8,7 +8,7 @@ import { RevenueEngine } from '../services/revenueEngine';
 import { format, endOfMonth, differenceInCalendarDays, addDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Activity, Building2, Calculator, ReceiptText, FileSpreadsheet, Settings2, Check, X, ShieldCheck, FileText } from 'lucide-react';
+import { Activity, Building2, Calculator, ReceiptText, FileSpreadsheet, Settings2, Check, X, ShieldCheck, FileText, Printer } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -141,6 +141,10 @@ const Reports = () => {
     );
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   const handleDownloadPDF = async () => {
     if (!reportRef.current) return;
     setIsGeneratingPDF(true);
@@ -187,6 +191,24 @@ const Reports = () => {
 
   return (
     <div className={isPreviewMode ? "fixed inset-0 z-[9999] bg-[#0a0f1e] overflow-auto p-10" : "space-y-6"}>
+        <style>
+          {`
+            @media print {
+              @page { size: landscape; margin: 0; }
+              body { background: white !important; }
+              .print-container { 
+                margin: 0 !important; 
+                padding: 40px !important; 
+                box-shadow: none !important; 
+                border: none !important;
+                width: 100% !important;
+                max-width: none !important;
+                min-height: auto !important;
+              }
+              .no-print { display: none !important; }
+            }
+          `}
+        </style>
         <div className="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-3xl shadow-sm no-print border border-slate-200 gap-4">
             <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100">
@@ -236,10 +258,14 @@ const Reports = () => {
                 <Button variant="outline" className={`rounded-xl font-black text-[10px] uppercase tracking-widest h-11 px-6 border-slate-200 transition-all ${isPreviewMode ? 'bg-indigo-900 text-white border-transparent shadow-xl' : ''}`} onClick={() => setIsPreviewMode(!isPreviewMode)}>
                   {isPreviewMode ? 'Exit Mode' : 'Ledger Preview'}
                 </Button>
+
+                <Button variant="outline" className="rounded-xl font-black text-[10px] uppercase tracking-widest h-11 px-6 border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-all" onClick={handlePrint}>
+                  <Printer className="w-4 h-4 mr-2" /> Print Statement
+                </Button>
                 
                 {canExport && (
                   <Button className="rounded-xl font-black text-[10px] uppercase tracking-widest h-11 px-8 shadow-xl shadow-indigo-100 transition-all hover:-translate-y-0.5" onClick={handleDownloadPDF} isLoading={isGeneratingPDF}>
-                    {isGeneratingPDF ? 'Generating...' : 'Export Statement'}
+                    {isGeneratingPDF ? 'Generating...' : 'Export PDF'}
                   </Button>
                 )}
             </div>
@@ -396,15 +422,37 @@ const Reports = () => {
                 </div>
             )}
             
-            {/* Signature & Audit Info */}
+            {/* Signature & Audit Info - Updated precisely as per user request */}
             <div className="mt-48 pt-20 border-t-[3px] border-slate-100 flex flex-col md:flex-row justify-between items-end gap-16 min-w-[1300px]">
                 <div className="space-y-8 w-full md:w-auto">
-                    <div className="flex flex-col sm:flex-row gap-16">
-                      <div className="space-y-4"><div className="w-64 h-px bg-slate-400"></div><p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">General Manager Approval</p></div>
-                      <div className="space-y-4"><div className="w-64 h-px bg-slate-400"></div><p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Financial Controller Authorization</p></div>
+                    <div className="flex flex-col xl:flex-row gap-12 items-end">
+                      {/* Prepared By */}
+                      <div className="space-y-4">
+                        <div className="w-64 h-px bg-slate-400"></div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">
+                          Prepared By Cluster Income Auditor
+                        </p>
+                      </div>
+                      
+                      {/* Reviewed By */}
+                      <div className="space-y-4">
+                        <div className="w-64 h-px bg-slate-400"></div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">
+                          Reviewed By Cluster assistant financial controller
+                        </p>
+                      </div>
+
+                      {/* Approved By */}
+                      <div className="space-y-4">
+                        <div className="w-64 h-px bg-slate-400"></div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">
+                          Approved by Cluster executive dicrector of finance
+                        </p>
+                      </div>
                     </div>
                 </div>
-                <div className="text-right text-[10px] font-bold text-slate-300 uppercase tracking-[0.3em] space-y-3">
+                
+                <div className="text-right text-[10px] font-bold text-slate-300 uppercase tracking-[0.3em] space-y-3 shrink-0">
                     <p className="text-slate-950 font-black uppercase tracking-widest bg-slate-50 px-3 py-1 rounded inline-block">Audit ID: {crypto.randomUUID().slice(0, 16).toUpperCase()}</p>
                     <p className="leading-relaxed">Internal Governance Policy - Proprietary Ledger Data<br/>Generated at {format(new Date(), 'PPpp')}</p>
                 </div>
