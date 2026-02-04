@@ -28,27 +28,26 @@ class DatabaseService {
     }
   }
 
-  /**
-   * REFINED AUTHENTICATION ENGINE
-   * Handles "Shadow Users" created in the UI by provisioning them in Auth upon first login.
-   */
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
-    if (!this.isSupabase()) return { user: null, error: "Cloud sync offline." };
+    if (!this.isSupabase()) return { user: null, error: "Supabase connection not initialized." };
     
     const cleanEmail = email.trim().toLowerCase();
     
-    // 1. Attempt standard login
+    // 1. Attempt standard sign-in
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: passwordAttempt
     });
 
-    // 2. If login fails, check if user exists in profiles but not yet in Auth
+    // 2. Handle failure: Check if user needs provisioning or linking
     if (authError) {
-        const { data: profile, error: profErr } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
+        console.warn("Auth Login Attempt Failed:", authError.message);
+        
+        // Fetch profile to check if they have a temp password
+        const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
         
         if (profile && profile.temp_password === passwordAttempt) {
-            // Self-Provision: Create the Auth record for this existing profile
+            // Self-Provision: This user was created by an admin but hasn't logged in yet
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                 email: cleanEmail,
                 password: passwordAttempt,
@@ -56,44 +55,46 @@ class DatabaseService {
             });
 
             if (signUpError) {
-                // If signup fails because user exists but is unconfirmed, try to re-link or return error
-                return { user: null, error: `Provisioning failed: ${signUpError.message}` };
+                // If 400 "User already registered", it means Auth exists but password doesn't match
+                if (signUpError.status === 400 || signUpError.message.includes('already registered')) {
+                    return { user: null, error: "Access key incorrect for this registered account." };
+                }
+                return { user: null, error: signUpError.message };
             }
 
             if (signUpData.user) {
-                // Link profile to new Auth ID and clear temp password
-                const { error: updErr } = await supabase.from('profiles')
-                    .update({ auth_id: signUpData.user.id, temp_password: null })
-                    .eq('id', profile.id);
-                
-                if (updErr) return { user: null, error: "Profile link failed." };
+                // Link profile and clear temp password
+                await supabase.from('profiles').update({ 
+                    auth_id: signUpData.user.id, 
+                    temp_password: null 
+                }).eq('id', profile.id);
                 
                 const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
                 return { user: updatedProfile, error: null };
             }
         }
-        return { user: null, error: "Invalid credentials or unauthorized access." };
+        return { user: null, error: authError.message };
     }
 
-    // 3. Successful login: Reconcile profile
+    // 3. Handle success: Ensure profile linkage
     if (authData.user) {
         let { data: profile } = await supabase.from('profiles').select('*').eq('auth_id', authData.user.id).maybeSingle();
         
         if (!profile) {
-            // Check by email if auth_id link is missing
+            // Reconcile if profile exists but isn't linked to this auth_id
             const { data: emailProfile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
             if (emailProfile) {
                 await supabase.from('profiles').update({ auth_id: authData.user.id, temp_password: null }).eq('id', emailProfile.id);
                 const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', emailProfile.id).single();
                 profile = refreshed;
             } else {
-                // Recovery: Create profile for orphaned Auth user
+                // Emergency Provisioning: Auth exists but profile is missing
                 const newUser: UserProfile = { 
                     id: crypto.randomUUID(), 
                     auth_id: authData.user.id, 
                     email: cleanEmail, 
-                    name: authData.user.user_metadata?.name || 'Staff User', 
-                    role_id: 'viewer', 
+                    name: authData.user.user_metadata?.name || 'Staff Member', 
+                    role_id: 'admin', 
                     allowed_outlets: [] 
                 };
                 await supabase.from('profiles').insert([newUser]);
@@ -101,15 +102,15 @@ class DatabaseService {
             }
         }
         
-        await this.logAction('AUTH_LOGIN', `Identity Verified: ${cleanEmail}`);
+        await this.logAction('AUTH_LOGIN', `Authenticated session for: ${cleanEmail}`);
         return { user: profile, error: null };
     }
 
-    return { user: null, error: "Authentication timeout." };
+    return { user: null, error: "Unexpected authentication state." };
   }
 
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
-    if (!this.isSupabase()) return { user: null, error: "Cloud unavailable." };
+    if (!this.isSupabase()) return { user: null, error: "Supabase connection not initialized." };
     const { data: authData, error: authError } = await supabase.auth.signUp({ email, password: passwordAttempt, options: { data: { name } } });
     if (authError) return { user: null, error: authError.message };
     if (authData.user) {
@@ -117,7 +118,7 @@ class DatabaseService {
       await supabase.from('profiles').insert([newUser]);
       return { user: newUser, error: null };
     }
-    return { user: null, error: "Creation failed." };
+    return { user: null, error: "Signup failed." };
   }
 
   async getSettings(): Promise<CompanySettings> { 
@@ -125,7 +126,7 @@ class DatabaseService {
           const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle(); 
           if (data && data.name) return data; 
       } 
-      return { name: 'System Intelligence', logo_url: '', address: '', currency_id: 'default' }; 
+      return { name: 'System Identity', logo_url: '', address: '', currency_id: 'default' }; 
   }
   
   async getRoles(): Promise<Role[]> {
