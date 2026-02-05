@@ -212,6 +212,12 @@ const Reports = () => {
                 container.style.width = '1300px';
                 container.style.maxWidth = '1300px';
             }
+            // GUARANTEE LOGO CAPTURE: Directly inject Base64 source into the cloned document's image
+            // This is the most reliable way to bypass CORS/timing issues for PDF generation.
+            const logoEl = clonedDoc.querySelector('.company-logo-img') as HTMLImageElement;
+            if (logoEl && displayLogoSrc && displayLogoSrc.startsWith('data:image')) {
+                logoEl.src = displayLogoSrc;
+            }
         }
       });
       
@@ -258,14 +264,24 @@ const Reports = () => {
           {`
             @media print {
               @page { size: landscape; margin: 0; }
-              body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-              .print-container { 
-                margin: 0 !important; 
-                padding: 10mm !important; 
-                box-shadow: none !important; 
-                border: none !important;
+              body { background: white !important; }
+              body * {
+                visibility: hidden;
+              }
+              .print-container, .print-container * {
+                visibility: visible;
+              }
+              .print-container {
+                position: absolute;
+                left: 0;
+                top: 0;
+                margin: 0 !important;
+                padding: 10mm !important;
                 width: 100% !important;
-                max-width: 100% !important;
+                box-shadow: none !important;
+                border: none !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
               }
               .no-print { display: none !important; }
               thead { display: table-header-group !important; }
@@ -334,7 +350,7 @@ const Reports = () => {
                             <img 
                                 src={displayLogoSrc} 
                                 alt="Company Logo" 
-                                className="w-full h-full object-contain"
+                                className="w-full h-full object-contain company-logo-img"
                                 onError={() => setImgError(true)}
                             />
                         ) : (
