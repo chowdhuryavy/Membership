@@ -60,33 +60,49 @@ const Reports = () => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   
   // Image handling state
-  const [logoSrc, setLogoSrc] = useState<string | null>(null);
+  const logoUrl = currentProperty?.logo_url || settings?.logo_url;
+  const [displayLogoSrc, setDisplayLogoSrc] = useState<string | null>(logoUrl || null);
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => { if (currentOutlet) loadData(); }, [reportMonth, currentOutlet]);
   
-  // Prepare Logo for PDF 
-  const logoUrl = currentProperty?.logo_url || settings?.logo_url;
-  
+  // Logo Logic:
+  // 1. Initially set the source to the URL (works for Screen).
+  // 2. Attempt to fetch and convert to Base64 (works for PDF).
+  // 3. If Base64 fails, it stays as URL.
   useEffect(() => {
-    const prepareLogo = async () => {
-        if (!logoUrl) {
-            setLogoSrc(null);
-            return;
-        }
+    setImgError(false);
+    if (!logoUrl) {
+        setDisplayLogoSrc(null);
+        return;
+    }
+    
+    // Start with direct URL for immediate display
+    setDisplayLogoSrc(logoUrl);
+
+    // Attempt Base64 upgrade in background
+    let active = true;
+    const upgradeToBase64 = async () => {
         try {
-            // Attempt to fetch as blob to convert to Base64 (solves CORS for PDF generation if server supports it)
             const response = await fetch(logoUrl);
+            if (!response.ok) throw new Error('Network response was not ok');
             const blob = await response.blob();
             const reader = new FileReader();
-            reader.onloadend = () => setLogoSrc(reader.result as string);
+            reader.onloadend = () => {
+                if (active && reader.result) {
+                    setDisplayLogoSrc(reader.result as string);
+                }
+            };
             reader.readAsDataURL(blob);
         } catch (error) {
-            console.warn("Logo CORS fetch failed, falling back to direct URL. Note: PDF generation may skip this image if CORS is strict.", error);
-            // Fallback to direct URL so it at least shows in the DOM
-            setLogoSrc(logoUrl);
+            // Silently fail to Base64, keep the URL version which might work in browser
+            // even if CORS blocks the fetch
+            console.warn("Background Base64 conversion failed (PDF might miss logo if CORS strict):", error);
         }
     };
-    prepareLogo();
+    upgradeToBase64();
+
+    return () => { active = false; };
   }, [logoUrl]);
 
   const loadData = async () => {
@@ -175,24 +191,21 @@ const Reports = () => {
     setIsGeneratingPDF(true);
     
     const element = reportRef.current;
-    
-    // Temporarily ensure the element is visible and styled for capture
     const originalScrollPos = window.scrollY;
     window.scrollTo(0, 0);
 
     try {
       const canvas = await html2canvas(element, { 
-        scale: 2, // High resolution
+        scale: 2, 
         useCORS: true, 
         allowTaint: true,
         backgroundColor: '#ffffff',
-        logging: true,
+        logging: false,
         width: 1300, 
         windowWidth: 1300,
         onclone: (clonedDoc) => {
             const container = clonedDoc.querySelector('.print-container') as HTMLElement;
             if (container) {
-                // Force specific print styles for capture
                 container.style.boxShadow = 'none';
                 container.style.margin = '0';
                 container.style.padding = '40px'; 
@@ -205,7 +218,6 @@ const Reports = () => {
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
       
-      // Standard A4 Landscape ratio (approx)
       const pdf = new jsPDF('l', 'px', [imgWidth, (imgWidth * 0.707)]); 
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
@@ -229,8 +241,8 @@ const Reports = () => {
       
       pdf.save(`Ledger_${currentOutlet?.name || 'ERP'}_${reportMonth}.pdf`);
     } catch (err) { 
-        console.error("PDF Capture Pipeline Failure:", err); 
-        alert("Could not generate PDF. Please ensure images are accessible or try Printing to PDF.");
+        console.error("PDF Error:", err); 
+        alert("PDF Generation Failed. Please use the Print option as a fallback.");
     } finally { 
         window.scrollTo(0, originalScrollPos);
         setIsGeneratingPDF(false); 
@@ -318,12 +330,12 @@ const Reports = () => {
                 <div className="flex items-center gap-6">
                     {/* Logo Section */}
                     <div className="w-24 h-24 shrink-0 flex items-center justify-center">
-                        {logoSrc ? (
+                        {displayLogoSrc && !imgError ? (
                             <img 
-                                src={logoSrc} 
+                                src={displayLogoSrc} 
                                 alt="Company Logo" 
                                 className="w-full h-full object-contain"
-                                // Note: Removed crossOrigin="anonymous" to ensure browser display works even for non-CORS images
+                                onError={() => setImgError(true)}
                             />
                         ) : (
                             <div className="w-full h-full bg-slate-900 text-white flex items-center justify-center rounded-xl">
