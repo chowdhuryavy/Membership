@@ -2,34 +2,43 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 
-// Fix: Add Deno type declaration to resolve "Cannot find name 'Deno'" error.
 declare const Deno: any;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-admin-token',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 serve(async (req) => {
-  // This is needed to handle CORS preflight requests.
+  // 1. Log immediately for visibility in Supabase Dashboard
+  console.log(`[AdminReset] Request Received: ${req.method} ${new URL(req.url).pathname}`);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
     const { userId, email, password, name } = await req.json();
+    console.log(`[AdminReset] Target User ID: ${userId}`);
 
-    // 1. Create a Supabase client with the user's auth token
+    // 2. Initialize Client with caller's identity
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error("Missing Authorization Header");
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      { global: { headers: { Authorization: authHeader } } }
     );
 
-    // 2. Verify the user is an admin
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-        return new Response(JSON.stringify({ error: 'Authentication failed.' }), {
+    // 3. Verify the caller is an admin in the profiles table
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !user) {
+        console.error("[AdminReset] Auth Error:", authError);
+        return new Response(JSON.stringify({ error: 'Identity verification failed.' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 401,
         });
@@ -42,46 +51,41 @@ serve(async (req) => {
       .single();
 
     if (profileError || profile?.role_id !== 'admin') {
-      return new Response(JSON.stringify({ error: 'Access denied: Admin role required.' }), {
+      console.warn(`[AdminReset] Access Denied: User ${user.email} is not an admin.`);
+      return new Response(JSON.stringify({ error: 'Permission denied. Admin clearance required.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 403,
       });
     }
 
-    // 3. Create Admin client to perform privileged operation
+    // 4. Use Service Role Client for management
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
     
-    // 4. Prepare the update payload for Auth
     const updatePayload: any = {};
     if (email) updatePayload.email = email;
     if (password) updatePayload.password = password;
     if (name) updatePayload.data = { name: name, full_name: name, display_name: name };
 
-    if (Object.keys(updatePayload).length === 0) {
-        return new Response(JSON.stringify({ error: 'No update data provided.' }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 400,
-        });
-    }
-
-    // 5. Perform the update
     const { data: updateData, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       userId,
       updatePayload
     );
 
     if (updateError) {
+      console.error("[AdminReset] Update Error:", updateError);
       throw updateError;
     }
 
-    return new Response(JSON.stringify({ message: 'User updated successfully', user: updateData.user }), {
+    console.log(`[AdminReset] Successfully updated user: ${userId}`);
+    return new Response(JSON.stringify({ message: 'Identity synchronized successfully', user: updateData.user }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
   } catch (error) {
+    console.error("[AdminReset] Critical Failure:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
