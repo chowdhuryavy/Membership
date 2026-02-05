@@ -44,12 +44,12 @@ const Login = () => {
       <div className="w-full max-w-[460px] z-10">
         {/* Branding Section */}
         <div className="text-center mb-10 animate-in fade-in slide-in-from-bottom-8 duration-1000">
-           <div className="inline-flex mb-6 relative group">
+           <div className="flex justify-center mb-8 relative group">
                {settings?.logo_url ? (
                    <img 
                      src={settings.logo_url} 
                      alt="Company Logo" 
-                     className="h-28 w-auto object-contain relative z-10 transition-transform duration-500 hover:scale-105" 
+                     className="w-80 h-auto object-contain relative z-10 transition-transform duration-500 hover:scale-105" 
                    />
                ) : (
                    <Activity className="w-24 h-24 text-indigo-400 relative z-10" />
