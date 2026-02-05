@@ -5,12 +5,12 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/mockSupabase';
 import { Role, Permission, Currency, CompanySettings, Outlet, Property } from '../types';
-import { Trash2, Check, Store, Edit2, X, Shield, Eye, PlusSquare, FileEdit, Trash, Download, Building2, Activity, Coins, Globe, Key, Settings, AlertTriangle, RefreshCcw, UserCircle2 } from 'lucide-react';
+import { Trash2, Check, Store, Edit2, X, Shield, Eye, PlusSquare, FileEdit, Trash, Download, Building2, Activity, Coins, Globe, Key, Settings, AlertTriangle, RefreshCcw, UserCircle2, Mail } from 'lucide-react';
 
 const PERMISSION_MODULES = [
     { id: 'members', label: 'Membership Management', actions: [{ id: 'view', label: 'View', icon: Eye }, { id: 'create', label: 'Create', icon: PlusSquare }, { id: 'edit', label: 'Edit', icon: FileEdit }, { id: 'delete', label: 'Delete', icon: Trash }] },
     { id: 'categories', label: 'Revenue Tiers / Categories', actions: [{ id: 'view', label: 'View', icon: Eye }, { id: 'create', label: 'Create', icon: PlusSquare }, { id: 'edit', label: 'Edit', icon: FileEdit }, { id: 'delete', label: 'Delete', icon: Trash }] },
-    { id: 'users', label: 'Users & Security', actions: [{ id: 'view', label: 'View', icon: Eye }, { id: 'create', label: 'Create', icon: PlusSquare }, { id: 'edit', label: 'Edit', icon: FileEdit }, { id: 'delete', label: 'Delete', icon: Trash }] },
+    { id: 'users', label: 'Users & Security', actions: [{ id: 'view', label: 'View', icon: Eye }, { id: 'create', label: 'Create', icon: PlusSquare }, { id: 'edit', label: 'Edit Profile', icon: FileEdit }, { id: 'edit_email', label: 'Modify Email', icon: Mail }, { id: 'delete', label: 'Delete', icon: Trash }] },
     { id: 'properties', label: 'Property Portfolio', actions: [{ id: 'view', label: 'View', icon: Eye }, { id: 'edit', label: 'Edit/Manage', icon: FileEdit }] },
     { id: 'outlets', label: 'Facility Management', actions: [{ id: 'view', label: 'View', icon: Eye }, { id: 'edit', label: 'Edit/Manage', icon: FileEdit }] },
     { id: 'settings', label: 'System Configurations', actions: [{ id: 'view', label: 'View', icon: Eye }, { id: 'edit', label: 'Edit', icon: FileEdit }] },

@@ -22,7 +22,7 @@ const Profile = () => {
         setMessage(null);
         setLoading(true);
         try {
-            await updateProfile(profileData);
+            await updateProfile({ name: profileData.name });
             setMessage({ type: 'success', text: "Profile identity synchronized successfully." });
         } catch (err: any) {
             setMessage({ type: 'error', text: err.message || "Failed to sync profile." });
@@ -111,10 +111,12 @@ const Profile = () => {
                                     <Input 
                                         type="email"
                                         value={profileData.email} 
-                                        onChange={e => setProfileData({...profileData, email: e.target.value})}
-                                        className="h-12 rounded-xl"
+                                        disabled
+                                        readOnly
+                                        className="h-12 rounded-xl bg-slate-50 text-slate-500 border-slate-200 cursor-not-allowed"
                                         placeholder="Email Address"
                                     />
+                                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider ml-1">Contact system administrator to update email.</p>
                                 </div>
                                 <Button type="submit" disabled={loading} className="h-14 px-10 rounded-2xl font-black shadow-xl shadow-indigo-100 mt-2">
                                     Save Profile Changes

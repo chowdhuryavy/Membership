@@ -2,7 +2,7 @@
 export type Permission = 
   | 'members:view' | 'members:create' | 'members:edit' | 'members:delete'
   | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete'
-  | 'users:view' | 'users:create' | 'users:edit' | 'users:delete'
+  | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email'
   | 'settings:view' | 'settings:edit'
   | 'reports:view' | 'reports:export'
   | 'logs:view'

@@ -87,6 +87,8 @@ const Users = () => {
 
   const canViewUsers = user && hasPermission(user.role_id, 'users:view');
   const canManageUsers = user && (hasPermission(user.role_id, 'users:create') || hasPermission(user.role_id, 'users:edit')); 
+  // Allow email edit if permission exists OR if we are in creation mode (not editing)
+  const canEditEmail = user && (hasPermission(user.role_id, 'users:edit_email') || !isEditing);
 
   if (!canViewUsers) {
     return (
@@ -126,7 +128,8 @@ const Users = () => {
                 if (formData.password && formData.password.trim() !== "") {
                     updates.password = formData.password;
                 }
-                if (formData.email !== currentUserProfile.email) {
+                // Only include email update if permission allows and it actually changed
+                if (canEditEmail && formData.email !== currentUserProfile.email) {
                     updates.email = formData.email;
                 }
                 if (formData.name !== currentUserProfile.name) {
@@ -146,7 +149,7 @@ const Users = () => {
             
             await db.updateUser(formData.id, {
                 name: formData.name,
-                email: formData.email,
+                email: canEditEmail ? formData.email : undefined, // Only update email in DB if allowed
                 role_id: formData.role_id,
                 allowed_outlets: formData.allowed_outlets,
                 // Only pass password to DB update if there is NO auth link (unlinked user), handled inside db.updateUser
@@ -398,8 +401,10 @@ const Users = () => {
                                   value={formData.email} 
                                   onChange={e => setFormData({...formData, email: e.target.value})} 
                                   placeholder="user@enterprise.com"
-                                  className="h-12 rounded-xl"
+                                  className={`h-12 rounded-xl ${!canEditEmail ? 'bg-slate-50 text-slate-500' : ''}`}
+                                  disabled={!canEditEmail}
                               />
+                              {!canEditEmail && <p className="text-[9px] text-amber-600 font-bold uppercase tracking-wider ml-1">Modification Restricted</p>}
                           </div>
 
                           <div className="space-y-2">
