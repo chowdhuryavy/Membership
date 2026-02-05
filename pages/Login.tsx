@@ -49,7 +49,7 @@ const Login = () => {
                    <img 
                      src={settings.logo_url} 
                      alt="Company Logo" 
-                     className="w-56 h-auto object-contain relative z-10 transition-transform duration-500 hover:scale-105" 
+                     className="h-16 w-auto object-contain relative z-10 transition-transform duration-500 hover:scale-105" 
                    />
                ) : (
                    <Activity className="w-24 h-24 text-indigo-400 relative z-10" />
