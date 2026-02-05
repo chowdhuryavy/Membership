@@ -27,31 +27,70 @@ const {
 
 const SplashLoading = () => {
   const { settings } = useSettings();
-  const displayTitle = (settings && settings.name) ? settings.name : "System Intelligence";
+  const displayTitle = (settings && settings.name) ? settings.name : "The Torch Hospitality";
   
   return (
-    <div className="fixed inset-0 z-[100000] bg-[#0f172a] flex flex-col items-center justify-center overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-600/20 blur-[120px] rounded-full animate-pulse"></div>
-      <div className="relative flex flex-col items-center animate-in fade-in zoom-in duration-1000">
-        <div className="relative mb-8">
-          <div className="absolute -inset-6 border-2 border-indigo-500/20 rounded-full animate-[spin_4s_linear_infinite]"></div>
-          <div className="absolute -inset-6 border-t-2 border-indigo-500 rounded-full animate-[spin_1.5s_linear_infinite]"></div>
-          <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 p-6 rounded-3xl shadow-2xl">
-            {settings?.logo_url ? (
-              <img src={settings.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
-            ) : (
-              <Globe className="w-16 h-16 text-indigo-400" />
-            )}
+    <div className="fixed inset-0 z-[100000] bg-[#020617] flex flex-col items-center justify-center overflow-hidden selection:bg-indigo-500/30">
+      {/* Dynamic Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-[-20%] left-[-20%] w-[70vw] h-[70vw] bg-indigo-600/10 rounded-full blur-[100px] animate-[pulse_8s_ease-in-out_infinite]" />
+          <div className="absolute bottom-[-20%] right-[-20%] w-[70vw] h-[70vw] bg-blue-600/10 rounded-full blur-[100px] animate-[pulse_10s_ease-in-out_infinite_reverse]" />
+          <div className="absolute inset-0 opacity-[0.03]" 
+               style={{ backgroundImage: 'linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)', backgroundSize: '60px 60px' }}>
           </div>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#020617_100%)]"></div>
+      </div>
+
+      <div className="relative z-10 flex flex-col items-center">
+        {/* Central Core Animation */}
+        <div className="relative w-48 h-48 flex items-center justify-center mb-12">
+            {/* Rotating Rings */}
+            <div className="absolute inset-0 rounded-full border border-indigo-500/10 animate-[spin_12s_linear_infinite]"></div>
+            <div className="absolute inset-0 rounded-full border-t border-indigo-400/40 animate-[spin_12s_linear_infinite]"></div>
+            
+            <div className="absolute inset-4 rounded-full border border-white/5 animate-[spin_15s_linear_infinite_reverse]"></div>
+            <div className="absolute inset-4 rounded-full border-b border-indigo-300/30 animate-[spin_15s_linear_infinite_reverse]"></div>
+
+            {/* Glowing Core */}
+            <div className="absolute inset-12 bg-indigo-500/10 blur-xl rounded-full animate-pulse"></div>
+            
+            <div className="relative w-24 h-24 bg-slate-900/80 backdrop-blur-2xl rounded-3xl border border-white/10 flex items-center justify-center shadow-[0_0_50px_-10px_rgba(79,70,229,0.3)] overflow-hidden group">
+                 {/* Shiny Swipe Effect */}
+                 <div className="absolute top-0 -left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent animate-[shimmer_2s_infinite] skew-x-12"></div>
+                 
+                 {settings?.logo_url ? (
+                    <img src={settings.logo_url} alt="Logo" className="w-14 h-14 object-contain relative z-10" />
+                 ) : (
+                    <Globe className="w-12 h-12 text-indigo-400 relative z-10" />
+                 )}
+            </div>
         </div>
-        <div className="text-center">
-          <h2 className="text-2xl font-black text-white tracking-tighter uppercase mb-2">{displayTitle}</h2>
-          <div className="flex items-center justify-center gap-3 text-indigo-400/60 font-medium text-[10px] tracking-[0.3em] uppercase">
-            <Loader2 className="w-3 h-3 animate-spin" />
-            Synchronizing Cloud Identity
-          </div>
+
+        {/* Typography */}
+        <div className="text-center space-y-4 z-10">
+           <h2 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 tracking-tighter uppercase animate-in fade-in slide-in-from-bottom-4 duration-700">
+             {displayTitle}
+           </h2>
+           
+           <div className="flex items-center justify-center gap-3 animate-in fade-in zoom-in duration-700 delay-150">
+              <div className="flex gap-1">
+                 <span className="w-1 h-1 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                 <span className="w-1 h-1 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                 <span className="w-1 h-1 bg-indigo-500 rounded-full animate-bounce"></span>
+              </div>
+              <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.3em]">
+                System Handshake
+              </span>
+           </div>
         </div>
       </div>
+      
+      {/* Custom Styles for Shimmer */}
+      <style>{`
+        @keyframes shimmer {
+          100% { left: 200%; }
+        }
+      `}</style>
     </div>
   );
 };
