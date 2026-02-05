@@ -11,43 +11,58 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // 1. Log immediately
   console.log(`[AdminReset] Request: ${req.method} ${req.url}`);
 
-  // 2. Handle CORS Preflight
+  // Handle CORS Preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // 3. Parse Body
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+        console.error("Missing Environment Variables");
+        throw new Error("Server Configuration Error: Missing Supabase keys");
+    }
+
     let body;
     try {
         body = await req.json();
     } catch (e) {
+        console.error("JSON Parse Error:", e);
         throw new Error("Invalid JSON body");
     }
     
-    const { userId, email, password, name } = body;
-    console.log(`[AdminReset] Processing user: ${userId}`);
+    const { userId, email, password, name, accessToken } = body;
+    console.log(`[AdminReset] Target User: ${userId}`);
 
-    // 4. Validate Auth Header
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error("Missing Authorization Header");
+    // Try header first, fallback to body
+    let token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token && accessToken) {
+        console.log("[AdminReset] Using Access Token from Body");
+        token = accessToken;
     }
 
-    // 5. Check Permissions
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    if (!token) {
+      console.error("[AdminReset] No token found in Header or Body");
+      return new Response(JSON.stringify({ error: 'Missing Authorization Token' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 401,
+      });
+    }
+
+    // Verify User with the provided token
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } }
+    });
 
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+
     if (authError || !user) {
-        console.error("[AdminReset] Invalid Token:", authError);
-        return new Response(JSON.stringify({ error: 'Unauthorized: Invalid token' }), {
+        console.error(`[AdminReset] Auth Failed: ${authError?.message}`);
+        return new Response(JSON.stringify({ error: `Auth Rejected: ${authError?.message || 'Unknown Error'}` }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 401,
         });
@@ -61,16 +76,16 @@ serve(async (req) => {
       .single();
 
     if (profile?.role_id !== 'admin') {
-      console.warn(`[AdminReset] 403 Forbidden: User ${user.email} is ${profile?.role_id}`);
-      return new Response(JSON.stringify({ error: 'Forbidden: Admin access required.' }), {
+      console.warn(`[AdminReset] Forbidden: ${user.email} (Role: ${profile?.role_id})`);
+      return new Response(JSON.stringify({ error: 'Forbidden: Admin privileges required.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 403,
       });
     }
 
-    // 6. Perform Admin Action
+    // Perform Admin Action using Service Role
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
+      supabaseUrl,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
     
@@ -92,7 +107,7 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
-    console.error("[AdminReset] Error:", error.message);
+    console.error("[AdminReset] Internal Error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,

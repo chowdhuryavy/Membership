@@ -5,7 +5,7 @@ import { supabase } from '../services/supabase';
 import { UserProfile, Role, Outlet } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff, RefreshCcw, UserCheck, ShieldAlert, ServerCrash } from 'lucide-react';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff, RefreshCcw, UserCheck, ShieldAlert, ServerCrash, Activity } from 'lucide-react';
 
 const Users = () => {
   const { user: currentUser } = useAuth();
@@ -53,22 +53,20 @@ const Users = () => {
       setShowPassword(false);
   }
 
-  const callEdgeFunction = async (funcName: string, body: any) => {
+  const callEdgeFunction = async (funcName: string, payload: any) => {
     // 1. Get fresh session
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
         throw new Error("Session expired. Please refresh the page or login again.");
     }
 
-    console.log(`[Frontend] Invoking ${funcName} with user: ${session.user.email}`);
+    console.log(`[Frontend] Invoking ${funcName} for: ${session.user.email}`);
 
-    // 2. Invoke with explicit Auth header
+    // 2. Invoke Function
+    // FIXED: Removed manual Authorization header to avoid conflict with SDK's auto-injection
+    // We still pass accessToken in body as a backup for the function logic
     const { data, error: funcError } = await supabase.functions.invoke(funcName, {
-      body,
-      headers: {
-        // Explicitly force the header to ensure it's sent even if the client state is stale
-        Authorization: `Bearer ${session.access_token}`
-      }
+      body: { ...payload, accessToken: session.access_token }
     });
 
     if (funcError) {
@@ -78,22 +76,20 @@ const Users = () => {
         if (funcError instanceof Error && 'context' in funcError) {
              const ctx = (funcError as any).context;
              if (ctx instanceof Response) {
-                 // Try to read the body for more info
                  try {
                      const json = await ctx.json();
-                     if (json.error) message = json.error;
+                     if (json.error) message = `Server Error: ${json.error}`;
                  } catch (e) {
-                     // If JSON parse fails, check status
-                     if (ctx.status === 404) message = `Function '${funcName}' not found (404). Check deployment.`;
-                     else if (ctx.status === 500) message = `Function '${funcName}' crashed (500). Check Supabase logs.`;
-                     else message = `Function Error: ${ctx.status} ${ctx.statusText}`;
+                     if (ctx.status === 401) message = "Unauthorized: The system rejected your security token.";
+                     else if (ctx.status === 404) message = `Function '${funcName}' not found on server.`;
+                     else if (ctx.status === 500) message = "Internal Server Error. Check Edge Function logs.";
+                     else message = `Request failed with status ${ctx.status}`;
                  }
              }
         }
         throw new Error(message);
     }
     
-    console.log(`[Frontend] Function ${funcName} Success:`, data);
     return data;
   };
 
@@ -145,7 +141,8 @@ const Users = () => {
                         await callEdgeFunction('admin-reset-user', { userId: currentUserProfile.auth_id, ...updates });
                         setDiagInfo("Success: Identity updated via secure Edge Function.");
                     } catch (err: any) {
-                        setDiagInfo(`Auth Sync Warning: ${err.message}. Local profile updated, but Auth login may be old.`);
+                        console.error("Auth Sync Error:", err);
+                        setDiagInfo(`Auth Sync Warning: ${err.message}. Database updated locally.`);
                     }
                 }
             }
@@ -353,10 +350,12 @@ const Users = () => {
 
                         <div className="bg-white/5 p-8 rounded-3xl border border-white/10 space-y-6">
                             <h5 className="text-amber-400 font-black text-xs uppercase tracking-widest flex items-center gap-2">
-                                <RefreshCcw className="w-4 h-4"/> Sync Troubleshooting
+                                <Activity className="w-4 h-4"/> Error Diagnostics
                             </h5>
                             <p className="text-slate-400 text-[11px] leading-relaxed">
-                                If logs are empty, ensure <strong>'admin-reset-user'</strong> is deployed. Test by checking for the <strong>"Admin Reset Function Invoked"</strong> message in your project dashboard.
+                                <strong>401 Unauthorized:</strong> The function rejected your token. Try logging out and back in.
+                                <br/>
+                                <strong>404 Not Found:</strong> The function is not deployed. Run <code>npx supabase functions deploy</code>.
                             </p>
                         </div>
                     </div>
