@@ -35,23 +35,20 @@ serve(async (req) => {
     const { userId, email, password, name, accessToken } = body;
     console.log(`[AdminReset] Target User: ${userId}`);
 
-    // Try header first, fallback to body
-    let token = req.headers.get('Authorization')?.replace('Bearer ', '');
-    if (!token && accessToken) {
-        console.log("[AdminReset] Using Access Token from Body");
-        token = accessToken;
+    // Logic: Prioritize Body Access Token because the Header likely contains the Anon Key
+    // which bypasses the Gateway but provides no user context.
+    let token = accessToken;
+    if (!token) {
+        token = req.headers.get('Authorization')?.replace('Bearer ', '');
     }
 
     if (!token) {
       console.error("[AdminReset] No token found in Header or Body");
-      // RETURN 200 to bubble error to UI
       return new Response(JSON.stringify({ error: 'Missing Authorization Token' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200, 
       });
     }
-
-    console.log(`[AdminReset] Token Length: ${token.length}`);
 
     // Verify User with the provided token
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -62,7 +59,6 @@ serve(async (req) => {
 
     if (authError || !user) {
         console.error(`[AdminReset] Auth Failed: ${authError?.message}`);
-        // RETURN 200 to bubble error to UI
         return new Response(JSON.stringify({ error: `Auth Rejected: ${authError?.message || 'Unknown Error'}` }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200, 
@@ -78,7 +74,6 @@ serve(async (req) => {
 
     if (profile?.role_id !== 'admin') {
       console.warn(`[AdminReset] Forbidden: ${user.email} (Role: ${profile?.role_id})`);
-      // RETURN 200 to bubble error to UI
       return new Response(JSON.stringify({ error: 'Forbidden: Admin privileges required.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200, 
@@ -112,7 +107,7 @@ serve(async (req) => {
     console.error("[AdminReset] Internal Error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200, // Return 200 to allow frontend to parse error
+      status: 200, 
     });
   }
 });

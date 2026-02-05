@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
-import { supabase } from '../services/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabase';
 import { UserProfile, Role, Outlet } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -62,41 +62,36 @@ const Users = () => {
 
     console.log(`[Frontend] Invoking ${funcName} for: ${session.user.email}`);
 
-    // 2. Invoke Function with explicit headers
-    const { data, error: funcError } = await supabase.functions.invoke(funcName, {
-      body: { ...payload, accessToken: session.access_token },
-      headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-      }
-    });
+    try {
+        // 2. Invoke Function using raw Fetch
+        // We use the ANON KEY in the header to pass the Gateway check
+        // We pass the USER TOKEN in the body for the function to verify identity
+        const response = await fetch(`${supabaseUrl}/functions/v1/${funcName}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${supabaseAnonKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ ...payload, accessToken: session.access_token })
+        });
 
-    // 3. Handle Network/SDK Errors
-    if (funcError) {
-        console.error(`[Frontend] Function ${funcName} Network/SDK Error:`, funcError);
-        
-        let message = funcError.message;
-        if (funcError instanceof Error && 'context' in funcError) {
-             const ctx = (funcError as any).context;
-             if (ctx instanceof Response) {
-                 try {
-                     const json = await ctx.json();
-                     if (json.error) message = `Server Error: ${json.error}`;
-                 } catch (e) {
-                     message = `Request failed: ${ctx.status} ${ctx.statusText}`;
-                 }
-             }
+        const data = await response.json();
+
+        // 3. Handle Application Errors (Function returns 200 OK but with { error: ... })
+        if (data && data.error) {
+            console.error(`[Frontend] Function ${funcName} Application Error:`, data.error);
+            throw new Error(data.error);
         }
-        throw new Error(message);
-    }
 
-    // 4. Handle Application Errors (Function returns 200 OK but with { error: ... })
-    if (data && data.error) {
-        console.error(`[Frontend] Function ${funcName} Application Error:`, data.error);
-        throw new Error(data.error);
+        if (!response.ok) {
+            throw new Error(`Server returned status ${response.status}`);
+        }
+        
+        return data;
+    } catch (err: any) {
+        console.error(`[Frontend] Function ${funcName} Failed:`, err);
+        throw new Error(err.message || "Network request failed.");
     }
-    
-    return data;
   };
 
   const canViewUsers = currentUser && hasPermission(currentUser.role_id, 'users:view');

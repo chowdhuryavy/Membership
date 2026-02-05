@@ -28,9 +28,11 @@ serve(async (req) => {
     const { action, userId, accessToken } = body;
     console.log(`[DynamicAction] Action: ${action}, Target: ${userId}`);
 
-    // Fallback to body token if header is missing
-    let token = req.headers.get('Authorization')?.replace('Bearer ', '');
-    if (!token && accessToken) token = accessToken;
+    // Logic: Prioritize Body Access Token because the Header likely contains the Anon Key
+    let token = accessToken;
+    if (!token) {
+        token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    }
 
     if (!token) {
         return new Response(JSON.stringify({ error: 'Missing Token' }), { status: 200, headers: corsHeaders });
