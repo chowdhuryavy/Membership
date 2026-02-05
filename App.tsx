@@ -1,5 +1,16 @@
+
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import * as ReactRouterDOM from 'react-router-dom';
+// Fix: Use named imports for react-router-dom components as per v6.
+import { 
+  HashRouter as Router, 
+  Routes, 
+  Route, 
+  Link, 
+  useLocation, 
+  Navigate, 
+  Outlet as RouterOutlet 
+} from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import Login from './pages/Login';
@@ -14,16 +25,6 @@ import Profile from './pages/Profile';
 import { LayoutDashboard, Users, Tag, BarChart3, LogOut, Menu, X, Shield, Settings, Store, ChevronDown, History, UserCircle, Activity, Loader2, Building2, Check, Globe, ChevronsUpDown, Bell, Search, Info } from 'lucide-react';
 import { Permission, Property } from './types';
 import { db } from './services/mockSupabase';
-
-const { 
-  HashRouter: Router, 
-  Routes, 
-  Route, 
-  Link, 
-  useLocation, 
-  Navigate, 
-  Outlet: RouterOutlet 
-} = ReactRouterDOM;
 
 const SplashLoading = () => {
   const { settings } = useSettings();
@@ -313,7 +314,7 @@ const Sidebar = () => {
                         </div>
                     )}
                     <div className="overflow-hidden text-left">
-                        <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-none truncate">
+                        <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-snug">
                             {settings?.name || 'System Identity'}
                         </h1>
                         <span className="block text-[9px] text-slate-400 uppercase tracking-[0.2em] font-black mt-1 whitespace-nowrap">
@@ -339,7 +340,7 @@ const Sidebar = () => {
                     className="flex w-full items-center justify-center px-4 py-4 text-[11px] font-black uppercase tracking-widest text-red-600 bg-red-50 hover:bg-red-100 rounded-2xl transition-all border border-red-100 shadow-sm active:scale-95"
                 >
                     <LogOut className="w-4 h-4 mr-3" />
-                    Terminate Session
+                    Logout
                 </button>
             </div>
         </aside>
@@ -382,7 +383,7 @@ const MobileHeader = () => {
                          </div>
                      )}
                      <div className="flex flex-col text-left">
-                        <h1 className="font-black text-slate-900 tracking-tighter truncate max-w-[150px] leading-none">
+                        <h1 className="font-black text-slate-900 tracking-tighter max-w-[150px] leading-tight">
                             {settings?.name || 'Identity Sync'}
                         </h1>
                         <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Corporate Solution</span>

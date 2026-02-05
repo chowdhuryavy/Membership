@@ -59,50 +59,13 @@ const Reports = () => {
   const reportRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   
-  // Image handling state
   const logoUrl = currentProperty?.logo_url || settings?.logo_url;
-  const [displayLogoSrc, setDisplayLogoSrc] = useState<string | null>(logoUrl || null);
   const [imgError, setImgError] = useState(false);
 
   useEffect(() => { if (currentOutlet) loadData(); }, [reportMonth, currentOutlet]);
   
-  // Logo Logic:
-  // 1. Initially set the source to the URL (works for Screen).
-  // 2. Attempt to fetch and convert to Base64 (works for PDF).
-  // 3. If Base64 fails, it stays as URL.
   useEffect(() => {
     setImgError(false);
-    if (!logoUrl) {
-        setDisplayLogoSrc(null);
-        return;
-    }
-    
-    // Start with direct URL for immediate display
-    setDisplayLogoSrc(logoUrl);
-
-    // Attempt Base64 upgrade in background
-    let active = true;
-    const upgradeToBase64 = async () => {
-        try {
-            const response = await fetch(logoUrl);
-            if (!response.ok) throw new Error('Network response was not ok');
-            const blob = await response.blob();
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                if (active && reader.result) {
-                    setDisplayLogoSrc(reader.result as string);
-                }
-            };
-            reader.readAsDataURL(blob);
-        } catch (error) {
-            // Silently fail to Base64, keep the URL version which might work in browser
-            // even if CORS blocks the fetch
-            console.warn("Background Base64 conversion failed (PDF might miss logo if CORS strict):", error);
-        }
-    };
-    upgradeToBase64();
-
-    return () => { active = false; };
   }, [logoUrl]);
 
   const loadData = async () => {
@@ -198,7 +161,7 @@ const Reports = () => {
       const canvas = await html2canvas(element, { 
         scale: 2, 
         useCORS: true, 
-        allowTaint: true,
+        allowTaint: false,
         backgroundColor: '#ffffff',
         logging: false,
         width: 1300, 
@@ -211,12 +174,6 @@ const Reports = () => {
                 container.style.padding = '40px'; 
                 container.style.width = '1300px';
                 container.style.maxWidth = '1300px';
-            }
-            // GUARANTEE LOGO CAPTURE: Directly inject Base64 source into the cloned document's image
-            // This is the most reliable way to bypass CORS/timing issues for PDF generation.
-            const logoEl = clonedDoc.querySelector('.company-logo-img') as HTMLImageElement;
-            if (logoEl && displayLogoSrc && displayLogoSrc.startsWith('data:image')) {
-                logoEl.src = displayLogoSrc;
             }
         }
       });
@@ -248,7 +205,7 @@ const Reports = () => {
       pdf.save(`Ledger_${currentOutlet?.name || 'ERP'}_${reportMonth}.pdf`);
     } catch (err) { 
         console.error("PDF Error:", err); 
-        alert("PDF Generation Failed. Please use the Print option as a fallback.");
+        alert("PDF Generation Failed. This can happen if the logo image server has strict CORS policies. Please try using the Print option or check the browser console for more details.");
     } finally { 
         window.scrollTo(0, originalScrollPos);
         setIsGeneratingPDF(false); 
@@ -346,12 +303,13 @@ const Reports = () => {
                 <div className="flex items-center gap-6">
                     {/* Logo Section */}
                     <div className="w-24 h-24 shrink-0 flex items-center justify-center">
-                        {displayLogoSrc && !imgError ? (
+                        {logoUrl && !imgError ? (
                             <img 
-                                src={displayLogoSrc} 
+                                src={logoUrl} 
                                 alt="Company Logo" 
                                 className="w-full h-full object-contain company-logo-img"
                                 onError={() => setImgError(true)}
+                                crossOrigin="anonymous"
                             />
                         ) : (
                             <div className="w-full h-full bg-slate-900 text-white flex items-center justify-center rounded-xl">

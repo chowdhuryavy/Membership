@@ -18,9 +18,8 @@ import { RevenueEngine } from '../services/revenueEngine';
 import { format, endOfMonth, differenceInCalendarDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-import * as ReactRouterDOM from 'react-router-dom';
-
-const { Link } = ReactRouterDOM;
+// Fix: Use named import for Link from react-router-dom as per v6 convention.
+import { Link } from 'react-router-dom';
 
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 const parseISO = (dateString: string) => new Date(dateString);

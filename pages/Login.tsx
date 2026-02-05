@@ -2,10 +2,9 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Button, Card, CardContent } from '../components/ui';
-import * as ReactRouterDOM from 'react-router-dom';
+// Fix: Use named import for useNavigate from react-router-dom as per v6 convention.
+import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, Activity, ShieldCheck } from 'lucide-react';
-
-const { useNavigate } = ReactRouterDOM;
 
 const Login = () => {
   const [email, setEmail] = useState('');

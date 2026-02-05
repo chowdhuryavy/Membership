@@ -19,7 +19,8 @@ import {
   CheckCircle2,
   Activity,
   History,
-  Check
+  Check,
+  Building2
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Freeze } from '../types';
@@ -43,7 +44,7 @@ type MemberFormValues = z.infer<typeof memberSchema>;
 
 const Members = () => {
   const { user } = useAuth();
-  const { currentOutlet, formatMoney, hasPermission } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
   const [view, setView] = useState<'list' | 'form' | 'detail'>('list');
   const [members, setMembers] = useState<Member[]>([]);
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
@@ -172,10 +173,24 @@ const Members = () => {
     <div className="space-y-6">
       {view === 'list' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/60 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100">
+                <Building2 className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex flex-col items-start overflow-hidden text-left">
+                <span className="text-xs font-black tracking-widest w-full uppercase text-slate-400 leading-none mb-1">
+                    {currentProperty?.name || 'Facility Scope'}
+                </span>
+                <span className="text-base font-black text-slate-900 w-full leading-tight">
+                    {currentOutlet?.name || 'Select Outlet'}
+                </span>
+            </div>
+          </div>
+          
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div>
-                 <h1 className="text-3xl font-black text-slate-900 tracking-tight">Members</h1>
-                 <p className="text-sm font-medium text-slate-500 mt-1">Managing portfolio for <span className="text-indigo-600 font-bold">{currentOutlet?.name}</span></p>
+                 <h1 className="text-5xl font-black text-slate-900 tracking-tighter">Members</h1>
+                 <p className="text-sm font-medium text-slate-500 mt-2">Managing portfolio for <span className="text-indigo-600 font-bold">{currentOutlet?.name}</span></p>
             </div>
             
             <div className="flex items-center gap-3 w-full md:w-auto">
