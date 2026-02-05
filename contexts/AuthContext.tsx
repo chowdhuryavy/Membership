@@ -18,13 +18,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(() => {
-      const stored = localStorage.getItem('membership_session');
+      const stored = sessionStorage.getItem('membership_session');
       return stored ? JSON.parse(stored) : null;
   });
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshUser = async () => {
-      const storedUser = localStorage.getItem('membership_session');
+      const storedUser = sessionStorage.getItem('membership_session');
       if (storedUser) {
           const parsed = JSON.parse(storedUser);
           try {
@@ -32,7 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const freshUser = users.find(u => u.email.toLowerCase() === parsed.email.toLowerCase());
               if (freshUser) {
                   setUser(freshUser);
-                  localStorage.setItem('membership_session', JSON.stringify(freshUser));
+                  sessionStorage.setItem('membership_session', JSON.stringify(freshUser));
               }
           } catch (e) {
               console.warn("User state sync failed, using cached session.");
@@ -52,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { user: foundUser, error } = await db.login(email, password);
     if (foundUser) {
       setUser(foundUser);
-      localStorage.setItem('membership_session', JSON.stringify(foundUser));
+      sessionStorage.setItem('membership_session', JSON.stringify(foundUser));
       return null;
     }
     return error || 'Authentication failed.';
@@ -82,12 +82,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await db.updateUser(user.id, updates);
       const updatedUser = { ...user, ...updates };
       setUser(updatedUser);
-      localStorage.setItem('membership_session', JSON.stringify(updatedUser));
+      sessionStorage.setItem('membership_session', JSON.stringify(updatedUser));
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('membership_session');
+    sessionStorage.removeItem('membership_session');
     localStorage.removeItem('membership_last_outlet');
   };
 
