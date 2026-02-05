@@ -5,7 +5,7 @@ import { supabase } from '../services/supabase';
 import { UserProfile, Role, Outlet } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff, RefreshCcw, CheckCircle2, UserCheck, ExternalLink, ShieldAlert, ChevronRight, ServerCrash } from 'lucide-react';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff, RefreshCcw, UserCheck, ShieldAlert, ServerCrash } from 'lucide-react';
 
 const Users = () => {
   const { user: currentUser } = useAuth();
@@ -54,32 +54,46 @@ const Users = () => {
   }
 
   const callEdgeFunction = async (funcName: string, body: any) => {
-    // DIAGNOSTIC: Check if user is logged into the Supabase client
+    // 1. Get fresh session
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-        throw new Error("Local session expired. Please re-login to authorize management calls.");
+        throw new Error("Session expired. Please refresh the page or login again.");
     }
 
+    console.log(`[Frontend] Invoking ${funcName} with user: ${session.user.email}`);
+
+    // 2. Invoke with explicit Auth header
     const { data, error: funcError } = await supabase.functions.invoke(funcName, {
       body,
+      headers: {
+        // Explicitly force the header to ensure it's sent even if the client state is stale
+        Authorization: `Bearer ${session.access_token}`
+      }
     });
 
     if (funcError) {
+        console.error(`[Frontend] Function ${funcName} Failed:`, funcError);
+        
         let message = funcError.message;
-        // Attempt to extract detailed reason from response body
-        if ((funcError as any).context instanceof Response) {
-            const resp = (funcError as any).context;
-            if (resp.status === 404) {
-                message = `Function '${funcName}' not found. Deploy via Supabase CLI: 'npx supabase functions deploy ${funcName}'`;
-            } else {
-                try {
-                    const errorJson = await resp.json();
-                    if (errorJson.error) message = errorJson.error;
-                } catch {}
-            }
+        if (funcError instanceof Error && 'context' in funcError) {
+             const ctx = (funcError as any).context;
+             if (ctx instanceof Response) {
+                 // Try to read the body for more info
+                 try {
+                     const json = await ctx.json();
+                     if (json.error) message = json.error;
+                 } catch (e) {
+                     // If JSON parse fails, check status
+                     if (ctx.status === 404) message = `Function '${funcName}' not found (404). Check deployment.`;
+                     else if (ctx.status === 500) message = `Function '${funcName}' crashed (500). Check Supabase logs.`;
+                     else message = `Function Error: ${ctx.status} ${ctx.statusText}`;
+                 }
+             }
         }
-        throw new Error(message || `Engine call to ${funcName} failed.`);
+        throw new Error(message);
     }
+    
+    console.log(`[Frontend] Function ${funcName} Success:`, data);
     return data;
   };
 
@@ -129,8 +143,9 @@ const Users = () => {
                 if (Object.keys(updates).length > 0) {
                     try {
                         await callEdgeFunction('admin-reset-user', { userId: currentUserProfile.auth_id, ...updates });
+                        setDiagInfo("Success: Identity updated via secure Edge Function.");
                     } catch (err: any) {
-                        setDiagInfo(`Auth Sync Warning: ${err.message}. Local profile was updated, but master credentials may be out of sync.`);
+                        setDiagInfo(`Auth Sync Warning: ${err.message}. Local profile updated, but Auth login may be old.`);
                     }
                 }
             }

@@ -11,54 +11,64 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // 1. Log immediately for visibility in Supabase Dashboard
-  console.log(`[AdminReset] Request Received: ${req.method} ${new URL(req.url).pathname}`);
+  // 1. Log immediately
+  console.log(`[AdminReset] Request: ${req.method} ${req.url}`);
 
+  // 2. Handle CORS Preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { userId, email, password, name } = await req.json();
-    console.log(`[AdminReset] Target User ID: ${userId}`);
+    // 3. Parse Body
+    let body;
+    try {
+        body = await req.json();
+    } catch (e) {
+        throw new Error("Invalid JSON body");
+    }
+    
+    const { userId, email, password, name } = body;
+    console.log(`[AdminReset] Processing user: ${userId}`);
 
-    // 2. Initialize Client with caller's identity
+    // 4. Validate Auth Header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       throw new Error("Missing Authorization Header");
     }
 
+    // 5. Check Permissions
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    // 3. Verify the caller is an admin in the profiles table
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !user) {
-        console.error("[AdminReset] Auth Error:", authError);
-        return new Response(JSON.stringify({ error: 'Identity verification failed.' }), {
+        console.error("[AdminReset] Invalid Token:", authError);
+        return new Response(JSON.stringify({ error: 'Unauthorized: Invalid token' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 401,
         });
     }
 
-    const { data: profile, error: profileError } = await supabaseClient
+    // Verify Admin Role in DB
+    const { data: profile } = await supabaseClient
       .from('profiles')
       .select('role_id')
       .eq('auth_id', user.id)
       .single();
 
-    if (profileError || profile?.role_id !== 'admin') {
-      console.warn(`[AdminReset] Access Denied: User ${user.email} is not an admin.`);
-      return new Response(JSON.stringify({ error: 'Permission denied. Admin clearance required.' }), {
+    if (profile?.role_id !== 'admin') {
+      console.warn(`[AdminReset] 403 Forbidden: User ${user.email} is ${profile?.role_id}`);
+      return new Response(JSON.stringify({ error: 'Forbidden: Admin access required.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 403,
       });
     }
 
-    // 4. Use Service Role Client for management
+    // 6. Perform Admin Action
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -74,18 +84,15 @@ serve(async (req) => {
       updatePayload
     );
 
-    if (updateError) {
-      console.error("[AdminReset] Update Error:", updateError);
-      throw updateError;
-    }
+    if (updateError) throw updateError;
 
-    console.log(`[AdminReset] Successfully updated user: ${userId}`);
-    return new Response(JSON.stringify({ message: 'Identity synchronized successfully', user: updateData.user }), {
+    console.log(`[AdminReset] Success: ${userId}`);
+    return new Response(JSON.stringify({ message: 'Success', user: updateData.user }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
   } catch (error) {
-    console.error("[AdminReset] Critical Failure:", error.message);
+    console.error("[AdminReset] Error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
