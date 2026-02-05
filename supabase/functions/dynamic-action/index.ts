@@ -33,7 +33,7 @@ serve(async (req) => {
     if (!token && accessToken) token = accessToken;
 
     if (!token) {
-        return new Response(JSON.stringify({ error: 'Missing Token' }), { status: 401, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'Missing Token' }), { status: 200, headers: corsHeaders });
     }
 
     const supabaseClient = createClient(
@@ -47,7 +47,7 @@ serve(async (req) => {
         console.error(`[DynamicAction] Auth Error: ${authError?.message}`);
         return new Response(JSON.stringify({ error: `Auth Error: ${authError?.message}` }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 401,
+            status: 200,
         });
     }
 
@@ -60,7 +60,7 @@ serve(async (req) => {
     if (profile?.role_id !== 'admin') {
       return new Response(JSON.stringify({ error: 'Access denied.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 403,
+        status: 200,
       });
     }
 
@@ -81,14 +81,14 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({ error: 'Invalid action.' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
+      status: 200,
     });
 
   } catch (error) {
     console.error("[DynamicAction] Error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
+      status: 200,
     });
   }
 });

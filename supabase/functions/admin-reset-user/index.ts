@@ -13,7 +13,6 @@ const corsHeaders = {
 serve(async (req) => {
   console.log(`[AdminReset] Request: ${req.method} ${req.url}`);
 
-  // Handle CORS Preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -23,7 +22,6 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
     
     if (!supabaseUrl || !supabaseAnonKey) {
-        console.error("Missing Environment Variables");
         throw new Error("Server Configuration Error: Missing Supabase keys");
     }
 
@@ -31,7 +29,6 @@ serve(async (req) => {
     try {
         body = await req.json();
     } catch (e) {
-        console.error("JSON Parse Error:", e);
         throw new Error("Invalid JSON body");
     }
     
@@ -47,11 +44,14 @@ serve(async (req) => {
 
     if (!token) {
       console.error("[AdminReset] No token found in Header or Body");
+      // RETURN 200 to bubble error to UI
       return new Response(JSON.stringify({ error: 'Missing Authorization Token' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 401,
+            status: 200, 
       });
     }
+
+    console.log(`[AdminReset] Token Length: ${token.length}`);
 
     // Verify User with the provided token
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -62,9 +62,10 @@ serve(async (req) => {
 
     if (authError || !user) {
         console.error(`[AdminReset] Auth Failed: ${authError?.message}`);
+        // RETURN 200 to bubble error to UI
         return new Response(JSON.stringify({ error: `Auth Rejected: ${authError?.message || 'Unknown Error'}` }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 401,
+            status: 200, 
         });
     }
 
@@ -77,9 +78,10 @@ serve(async (req) => {
 
     if (profile?.role_id !== 'admin') {
       console.warn(`[AdminReset] Forbidden: ${user.email} (Role: ${profile?.role_id})`);
+      // RETURN 200 to bubble error to UI
       return new Response(JSON.stringify({ error: 'Forbidden: Admin privileges required.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 403,
+        status: 200, 
       });
     }
 
@@ -110,7 +112,7 @@ serve(async (req) => {
     console.error("[AdminReset] Internal Error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
+      status: 200, // Return 200 to allow frontend to parse error
     });
   }
 });

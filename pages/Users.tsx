@@ -62,15 +62,18 @@ const Users = () => {
 
     console.log(`[Frontend] Invoking ${funcName} for: ${session.user.email}`);
 
-    // 2. Invoke Function
-    // FIXED: Removed manual Authorization header to avoid conflict with SDK's auto-injection
-    // We still pass accessToken in body as a backup for the function logic
+    // 2. Invoke Function with explicit headers
     const { data, error: funcError } = await supabase.functions.invoke(funcName, {
-      body: { ...payload, accessToken: session.access_token }
+      body: { ...payload, accessToken: session.access_token },
+      headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+      }
     });
 
+    // 3. Handle Network/SDK Errors
     if (funcError) {
-        console.error(`[Frontend] Function ${funcName} Failed:`, funcError);
+        console.error(`[Frontend] Function ${funcName} Network/SDK Error:`, funcError);
         
         let message = funcError.message;
         if (funcError instanceof Error && 'context' in funcError) {
@@ -80,14 +83,17 @@ const Users = () => {
                      const json = await ctx.json();
                      if (json.error) message = `Server Error: ${json.error}`;
                  } catch (e) {
-                     if (ctx.status === 401) message = "Unauthorized: The system rejected your security token.";
-                     else if (ctx.status === 404) message = `Function '${funcName}' not found on server.`;
-                     else if (ctx.status === 500) message = "Internal Server Error. Check Edge Function logs.";
-                     else message = `Request failed with status ${ctx.status}`;
+                     message = `Request failed: ${ctx.status} ${ctx.statusText}`;
                  }
              }
         }
         throw new Error(message);
+    }
+
+    // 4. Handle Application Errors (Function returns 200 OK but with { error: ... })
+    if (data && data.error) {
+        console.error(`[Frontend] Function ${funcName} Application Error:`, data.error);
+        throw new Error(data.error);
     }
     
     return data;
