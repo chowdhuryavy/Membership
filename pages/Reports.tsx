@@ -60,32 +60,33 @@ const Reports = () => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   
   // Image handling state
-  const [logoBase64, setLogoBase64] = useState<string | null>(null);
+  const [logoSrc, setLogoSrc] = useState<string | null>(null);
 
   useEffect(() => { if (currentOutlet) loadData(); }, [reportMonth, currentOutlet]);
   
-  // Prepare Logo for PDF (Convert to Base64 to bypass CORS in html2canvas)
+  // Prepare Logo for PDF 
   const logoUrl = currentProperty?.logo_url || settings?.logo_url;
   
   useEffect(() => {
-    const convertImageToBase64 = async () => {
+    const prepareLogo = async () => {
         if (!logoUrl) {
-            setLogoBase64(null);
+            setLogoSrc(null);
             return;
         }
         try {
+            // Attempt to fetch as blob to convert to Base64 (solves CORS for PDF generation if server supports it)
             const response = await fetch(logoUrl);
             const blob = await response.blob();
             const reader = new FileReader();
-            reader.onloadend = () => setLogoBase64(reader.result as string);
+            reader.onloadend = () => setLogoSrc(reader.result as string);
             reader.readAsDataURL(blob);
         } catch (error) {
-            console.warn("Could not pre-convert logo to Base64 (likely CORS). PDF might miss logo.", error);
-            // Fallback: just use the URL and hope html2canvas useCORS works
-            setLogoBase64(logoUrl);
+            console.warn("Logo CORS fetch failed, falling back to direct URL. Note: PDF generation may skip this image if CORS is strict.", error);
+            // Fallback to direct URL so it at least shows in the DOM
+            setLogoSrc(logoUrl);
         }
     };
-    convertImageToBase64();
+    prepareLogo();
   }, [logoUrl]);
 
   const loadData = async () => {
@@ -313,49 +314,49 @@ const Reports = () => {
         <div ref={reportRef} className="bg-white p-12 md:p-16 rounded-[1rem] shadow-2xl max-w-[1300px] mx-auto min-h-screen print-container border border-slate-100 flex flex-col overflow-hidden">
             
             {/* Professional Letterhead Header */}
-            <div className="flex flex-row justify-between items-end border-b-4 border-slate-900 pb-8 mb-10 min-w-[1100px]">
-                <div className="flex items-center gap-8">
-                    {/* Logo Section - Uses Base64 for PDF reliability */}
-                    <div className="w-28 h-28 shrink-0 flex items-center justify-center">
-                        {logoBase64 ? (
+            <div className="flex flex-row justify-between items-center border-b-4 border-slate-900 pb-8 mb-10 min-w-[1100px]">
+                <div className="flex items-center gap-6">
+                    {/* Logo Section */}
+                    <div className="w-24 h-24 shrink-0 flex items-center justify-center">
+                        {logoSrc ? (
                             <img 
-                                src={logoBase64} 
+                                src={logoSrc} 
                                 alt="Company Logo" 
                                 className="w-full h-full object-contain"
-                                crossOrigin="anonymous" 
+                                // Note: Removed crossOrigin="anonymous" to ensure browser display works even for non-CORS images
                             />
                         ) : (
-                            <div className="w-full h-full bg-slate-900 text-white flex items-center justify-center rounded-lg">
-                                <Globe className="w-12 h-12" />
+                            <div className="w-full h-full bg-slate-900 text-white flex items-center justify-center rounded-xl">
+                                <Globe className="w-10 h-10" />
                             </div>
                         )}
                     </div>
                     
                     {/* Company Identity */}
-                    <div className="flex flex-col justify-end h-full">
-                        <h1 className="text-4xl font-serif font-bold text-slate-950 leading-tight mb-2 tracking-tight">
+                    <div className="flex flex-col justify-center h-full pt-2">
+                        <h1 className="text-4xl font-serif font-bold text-slate-950 leading-none mb-3 tracking-tight">
                             {currentProperty?.name || settings?.name || 'Corporate Ledger'}
                         </h1>
-                        <div className="space-y-0.5">
+                        <div className="flex flex-col gap-1">
                             <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
                                 {currentProperty?.address || settings?.address || 'Corporate Headquarters'}
                             </p>
-                            <p className="text-[11px] font-bold text-indigo-700 uppercase tracking-widest">
-                                Facility: {currentOutlet?.name || 'Authorized Facility'}
+                            <p className="text-[11px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-2">
+                                <Building2 className="w-3 h-3" /> Facility: {currentOutlet?.name || 'Authorized Facility'}
                             </p>
                         </div>
                     </div>
                 </div>
 
                 {/* Document Context */}
-                <div className="text-right">
+                <div className="text-right flex flex-col items-end">
                     <h2 className="text-5xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-2">
                         Financial Ledger
                     </h2>
                     <p className="text-lg font-medium text-slate-500 mb-4">
                         {format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
                     </p>
-                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded text-[10px] font-black uppercase tracking-widest text-slate-600">
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded text-[10px] font-black uppercase tracking-widest text-slate-600">
                         <ShieldCheck className="w-3 h-3"/> Verified Audit Trail
                     </div>
                 </div>
