@@ -468,6 +468,19 @@ class DatabaseService {
     } 
     return []; 
   }
+  
+  // New: Lifecycle History Retrieval
+  async getMemberHistory(membershipNumber: string): Promise<Member[]> {
+    if (this.isSupabase()) {
+        const { data } = await supabase
+            .from('members')
+            .select('*')
+            .eq('membership_number', membershipNumber)
+            .order('start_date', { ascending: false });
+        return data || [];
+    }
+    return [];
+  }
 }
 
 export const db = new DatabaseService();

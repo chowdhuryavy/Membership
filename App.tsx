@@ -1,7 +1,5 @@
 
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-// Fix: Use named imports for react-router-dom components as per v6.
 import { 
   HashRouter as Router, 
   Routes, 
@@ -22,74 +20,85 @@ import Reports from './pages/Reports';
 import Logs from './pages/Logs';
 import SettingsPage from './pages/Settings';
 import Profile from './pages/Profile';
-import { LayoutDashboard, Users, Tag, BarChart3, LogOut, Menu, X, Shield, Settings, Store, ChevronDown, History, UserCircle, Activity, Loader2, Building2, Check, Globe, ChevronsUpDown, Bell, Search, Info } from 'lucide-react';
+import { LayoutDashboard, Users, Tag, BarChart3, LogOut, Menu, X, Shield, Settings, Store, ChevronDown, History, UserCircle, Activity, Loader2, Building2, Check, Globe, ChevronsUpDown, Bell, Search, Info, Cpu, Zap, Radio, Sparkles } from 'lucide-react';
 import { Permission, Property } from './types';
 import { db } from './services/mockSupabase';
 
 const SplashLoading = () => {
   const { settings } = useSettings();
-  const displayTitle = (settings && settings.name) ? settings.name : "The Torch Hospitality";
   
   return (
-    <div className="fixed inset-0 z-[100000] bg-[#020617] flex flex-col items-center justify-center overflow-hidden selection:bg-indigo-500/30">
-      {/* Dynamic Background */}
+    <div className="fixed inset-0 z-[100000] bg-white flex flex-col items-center justify-center overflow-hidden">
+      {/* Dynamic Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-[-20%] left-[-20%] w-[70vw] h-[70vw] bg-indigo-600/10 rounded-full blur-[100px] animate-[pulse_8s_ease-in-out_infinite]" />
-          <div className="absolute bottom-[-20%] right-[-20%] w-[70vw] h-[70vw] bg-blue-600/10 rounded-full blur-[100px] animate-[pulse_10s_ease-in-out_infinite_reverse]" />
-          <div className="absolute inset-0 opacity-[0.03]" 
-               style={{ backgroundImage: 'linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)', backgroundSize: '60px 60px' }}>
-          </div>
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#020617_100%)]"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,_rgba(79,70,229,0.03)_0%,_transparent_50%)] animate-[pulse_6s_ease-in-out_infinite]"></div>
+        <div className="absolute inset-0 opacity-[0.01]" style={{ backgroundImage: 'radial-gradient(#4f46e5 1.5px, transparent 1.5px)', backgroundSize: '50px 50px' }}></div>
       </div>
 
-      <div className="relative z-10 flex flex-col items-center">
-        {/* Central Core Animation */}
-        <div className="relative w-48 h-48 flex items-center justify-center mb-12">
-            {/* Rotating Rings */}
-            <div className="absolute inset-0 rounded-full border border-indigo-500/10 animate-[spin_12s_linear_infinite]"></div>
-            <div className="absolute inset-0 rounded-full border-t border-indigo-400/40 animate-[spin_12s_linear_infinite]"></div>
-            
-            <div className="absolute inset-4 rounded-full border border-white/5 animate-[spin_15s_linear_infinite_reverse]"></div>
-            <div className="absolute inset-4 rounded-full border-b border-indigo-300/30 animate-[spin_15s_linear_infinite_reverse]"></div>
+      <div className="relative flex flex-col items-center justify-center">
+        
+        {/* UNIQUE ANIMATION STACK: The Helios Pulse */}
+        <div className="relative w-80 h-80 flex items-center justify-center">
+          
+          {/* Layer 1: Exterior Kinetic Rings (Radiant Pulse) */}
+          <div className="absolute inset-0 border-[0.5px] border-indigo-500/10 rounded-full animate-[radiate_4s_linear_infinite]"></div>
+          <div className="absolute inset-10 border-[0.5px] border-indigo-400/20 rounded-full animate-[radiate_4s_linear_infinite_1.3s]"></div>
+          <div className="absolute inset-20 border-[0.5px] border-indigo-300/30 rounded-full animate-[radiate_4s_linear_infinite_2.6s]"></div>
+          
+          {/* Layer 2: Magnetic Orbitals */}
+          <div className="absolute inset-0 animate-[spin_12s_linear_infinite]">
+             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-indigo-500 rounded-full blur-[2px]"></div>
+          </div>
+          <div className="absolute inset-4 animate-[spin_8s_linear_infinite_reverse]">
+             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-blue-400 rounded-full opacity-50"></div>
+          </div>
 
-            {/* Glowing Core */}
-            <div className="absolute inset-12 bg-indigo-500/10 blur-xl rounded-full animate-pulse"></div>
+          {/* Layer 3: Central Logo Vessel (The Main Event) */}
+          <div className="relative z-10 w-48 h-48 flex items-center justify-center">
+            {/* Liquid Glow Underlay */}
+            <div className="absolute inset-0 bg-indigo-600/5 blur-3xl rounded-full animate-pulse"></div>
             
-            <div className="relative w-24 h-24 bg-slate-900/80 backdrop-blur-2xl rounded-3xl border border-white/10 flex items-center justify-center shadow-[0_0_50px_-10px_rgba(79,70,229,0.3)] overflow-hidden group">
-                 {/* Shiny Swipe Effect */}
-                 <div className="absolute top-0 -left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent animate-[shimmer_2s_infinite] skew-x-12"></div>
-                 
-                 {settings?.logo_url ? (
-                    <img src={settings.logo_url} alt="Logo" className="w-14 h-14 object-contain relative z-10" />
-                 ) : (
-                    <Globe className="w-12 h-12 text-indigo-400 relative z-10" />
-                 )}
+            {/* HELIOS ANIMATION: Now accelerated to 3s for high-energy boot feel */}
+            <div className="w-full h-full flex items-center justify-center animate-[helios_3s_linear_infinite]">
+              {settings?.logo_url ? (
+                <img 
+                  src={settings.logo_url} 
+                  alt="Logo" 
+                  className="w-full h-full object-contain filter drop-shadow-[0_0_20px_rgba(79,70,229,0.2)]" 
+                />
+              ) : (
+                <div className="bg-indigo-600 w-24 h-24 rounded-[2.5rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-200">
+                  <Sparkles className="w-12 h-12" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Minimalist Visual Confirmation (No Name) */}
+        <div className="mt-8 flex flex-col items-center gap-4 opacity-0 animate-[fade-in_1.5s_ease-out_forwards_0.5s]">
+            <div className="flex gap-2">
+              <div className="w-1.5 h-1.5 bg-slate-200 rounded-full animate-[pulse_1s_infinite]"></div>
+              <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-[pulse_1s_infinite_0.2s]"></div>
+              <div className="w-1.5 h-1.5 bg-slate-200 rounded-full animate-[pulse_1s_infinite_0.4s]"></div>
             </div>
         </div>
-
-        {/* Typography */}
-        <div className="text-center space-y-4 z-10">
-           <h2 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 tracking-tighter uppercase animate-in fade-in slide-in-from-bottom-4 duration-700">
-             {displayTitle}
-           </h2>
-           
-           <div className="flex items-center justify-center gap-3 animate-in fade-in zoom-in duration-700 delay-150">
-              <div className="flex gap-1">
-                 <span className="w-1 h-1 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                 <span className="w-1 h-1 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                 <span className="w-1 h-1 bg-indigo-500 rounded-full animate-bounce"></span>
-              </div>
-              <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.3em]">
-                System Handshake
-              </span>
-           </div>
-        </div>
       </div>
-      
-      {/* Custom Styles for Shimmer */}
+
       <style>{`
-        @keyframes shimmer {
-          100% { left: 200%; }
+        @keyframes helios {
+          0% { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.1); }
+          100% { transform: rotate(360deg) scale(1); }
+        }
+        @keyframes radiate {
+          0% { transform: scale(0.5); opacity: 0; }
+          20% { opacity: 0.8; }
+          100% { transform: scale(2.5); opacity: 0; }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 0.6; transform: translateY(0); }
         }
       `}</style>
     </div>
@@ -114,7 +123,6 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
 
     const allowedOutlets = useMemo(() => {
         if (!user) return [];
-        // ADMIN OVERRIDE: Admins always see all outlets, fixing "No Access Scopes"
         if (user.role_id === 'admin') return outlets;
         return outlets.filter(o => user.allowed_outlets?.includes(o.id));
     }, [outlets, user]);
@@ -238,28 +246,8 @@ const TopHeader = () => {
 };
 
 const ProtectedLayout = () => {
-  const { user, isLoading: isAuthLoading } = useAuth();
-  const { isLoading: isSettingsLoading } = useSettings();
-  const [showSplash, setShowSplash] = useState(true);
-
-  const combinedLoading = isAuthLoading || isSettingsLoading;
-
-  useEffect(() => {
-    if (!combinedLoading) {
-      const timer = setTimeout(() => setShowSplash(false), 800);
-      return () => clearTimeout(timer);
-    }
-  }, [combinedLoading]);
+  const { user } = useAuth();
   
-  // PERSISTENT METADATA SYNC
-  // Ensures that Supabase Auth Dashboard is updated with the profile name whenever the user is active
-  useEffect(() => {
-    if (user && !combinedLoading) {
-      db.syncAuthMetadata(user).catch(console.warn);
-    }
-  }, [user, combinedLoading]);
-
-  if (showSplash) return <SplashLoading />;
   if (!user) return <Navigate to="/login" replace />;
   
   return (
@@ -310,7 +298,7 @@ const Sidebar = () => {
                         </div>
                     ) : (
                         <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100">
-                            <Globe className="w-6 h-6" />
+                            <Sparkles className="w-6 h-6" />
                         </div>
                     )}
                     <div className="overflow-hidden text-left">
@@ -379,7 +367,7 @@ const MobileHeader = () => {
                          </div>
                      ) : (
                          <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white">
-                             <Globe className="w-5 h-5" />
+                             <Sparkles className="w-5 h-5" />
                          </div>
                      )}
                      <div className="flex flex-col text-left">
@@ -417,25 +405,48 @@ const MobileHeader = () => {
     );
 };
 
+const AppContent = () => {
+  const { isLoading: isAuthLoading } = useAuth();
+  const { isLoading: isSettingsLoading } = useSettings();
+  const [showSplash, setShowSplash] = useState(true);
+
+  const combinedLoading = isAuthLoading || isSettingsLoading;
+
+  useEffect(() => {
+    if (!combinedLoading) {
+      // Boot duration to allow for a smooth visual experience
+      const timer = setTimeout(() => setShowSplash(false), 2500); 
+      return () => clearTimeout(timer);
+    }
+  }, [combinedLoading]);
+
+  // Initial boot sequence regardless of route
+  if (showSplash) return <SplashLoading />;
+
+  return (
+    <Router>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route element={<ProtectedLayout />}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/members" element={<Members />} />
+          <Route path="/categories" element={<Categories />} />
+          <Route path="/users" element={<UsersPage />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/logs" element={<Logs />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/profile" element={<Profile />} />
+        </Route>
+      </Routes>
+    </Router>
+  );
+};
+
 const App = () => {
   return (
     <AuthProvider>
       <SettingsProvider>
-        <Router>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route element={<ProtectedLayout />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/members" element={<Members />} />
-              <Route path="/categories" element={<Categories />} />
-              <Route path="/users" element={<UsersPage />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/logs" element={<Logs />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/profile" element={<Profile />} />
-            </Route>
-          </Routes>
-        </Router>
+        <AppContent />
       </SettingsProvider>
     </AuthProvider>
   );
