@@ -1,10 +1,11 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Button, Card, CardContent } from '../components/ui';
-import { useNavigate } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, Activity, ShieldCheck } from 'lucide-react';
+
+const { useNavigate } = ReactRouterDOM;
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -43,16 +44,15 @@ const Login = () => {
       <div className="w-full max-w-[460px] z-10">
         {/* Branding Section */}
         <div className="text-center mb-10 animate-in fade-in slide-in-from-bottom-8 duration-1000">
-           <div className="inline-flex p-5 rounded-[2.5rem] bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-3xl border border-white/20 shadow-2xl mb-8 relative group">
-               <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-blue-500 rounded-[2.6rem] blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
+           <div className="inline-flex mb-6 relative group">
                {settings?.logo_url ? (
                    <img 
                      src={settings.logo_url} 
                      alt="Company Logo" 
-                     className="h-14 w-auto object-contain relative z-10" 
+                     className="h-28 w-auto object-contain relative z-10 transition-transform duration-500 hover:scale-105" 
                    />
                ) : (
-                   <Activity className="w-12 h-12 text-indigo-400 relative z-10" />
+                   <Activity className="w-24 h-24 text-indigo-400 relative z-10" />
                )}
            </div>
            <h1 className="text-4xl font-black text-white tracking-tighter mb-3">

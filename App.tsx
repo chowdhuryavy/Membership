@@ -1,14 +1,5 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { 
-  HashRouter as Router, 
-  Routes, 
-  Route, 
-  Link, 
-  useLocation, 
-  Navigate, 
-  Outlet as RouterOutlet 
-} from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import Login from './pages/Login';
@@ -23,6 +14,16 @@ import Profile from './pages/Profile';
 import { LayoutDashboard, Users, Tag, BarChart3, LogOut, Menu, X, Shield, Settings, Store, ChevronDown, History, UserCircle, Activity, Loader2, Building2, Check, Globe, ChevronsUpDown, Bell, Search, Info } from 'lucide-react';
 import { Permission, Property } from './types';
 import { db } from './services/mockSupabase';
+
+const { 
+  HashRouter: Router, 
+  Routes, 
+  Route, 
+  Link, 
+  useLocation, 
+  Navigate, 
+  Outlet: RouterOutlet 
+} = ReactRouterDOM;
 
 const SplashLoading = () => {
   const { settings } = useSettings();
