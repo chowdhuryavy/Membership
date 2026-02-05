@@ -54,7 +54,6 @@ const Users = () => {
   }
 
   const callEdgeFunction = async (funcName: string, payload: any) => {
-    // 1. Get fresh session
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
         throw new Error("Session expired. Please refresh the page or login again.");
@@ -63,9 +62,6 @@ const Users = () => {
     console.log(`[Frontend] Invoking ${funcName} for: ${session.user.email}`);
 
     try {
-        // 2. Invoke Function using raw Fetch
-        // We use the ANON KEY in the header to pass the Gateway check
-        // We pass the USER TOKEN in the body for the function to verify identity
         const response = await fetch(`${supabaseUrl}/functions/v1/${funcName}`, {
             method: 'POST',
             headers: {
@@ -77,7 +73,6 @@ const Users = () => {
 
         const data = await response.json();
 
-        // 3. Handle Application Errors (Function returns 200 OK but with { error: ... })
         if (data && data.error) {
             console.error(`[Frontend] Function ${funcName} Application Error:`, data.error);
             throw new Error(data.error);
@@ -95,7 +90,15 @@ const Users = () => {
   };
 
   const canViewUsers = currentUser && hasPermission(currentUser.role_id, 'users:view');
-  const canManageUsers = currentUser && (hasPermission(currentUser.role_id, 'users:create') || hasPermission(currentUser.role_id, 'users:edit')); 
+  
+  // Specific Permissions
+  const canCreate = currentUser && hasPermission(currentUser.role_id, 'users:create');
+  const canEdit = currentUser && hasPermission(currentUser.role_id, 'users:edit');
+  const canDelete = currentUser && hasPermission(currentUser.role_id, 'users:delete');
+  
+  // Logical grouping for UI elements
+  const canModifyTable = canEdit || canDelete;
+  const canSeeForm = canCreate || (isEditing && canEdit);
   const canEditEmail = currentUser && (hasPermission(currentUser.role_id, 'users:edit_email') || !isEditing);
 
   if (!canViewUsers) {
@@ -112,7 +115,12 @@ const Users = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canManageUsers || isSubmitting) return;
+    if (isSubmitting) return;
+
+    // Strict Permission Check
+    if (isEditing && !canEdit) return;
+    if (!isEditing && !canCreate) return;
+
     setError('');
     setDiagInfo(null);
     
@@ -176,6 +184,7 @@ const Users = () => {
   };
 
   const handleEdit = (u: UserProfile) => {
+      if (!canEdit) return;
       setFormData({
           id: u.id,
           name: u.name,
@@ -191,7 +200,7 @@ const Users = () => {
   };
 
   const confirmDelete = async () => {
-    if (!deleteId) return;
+    if (!deleteId || !canDelete) return;
     setIsSubmitting(true);
     setError('');
 
@@ -246,7 +255,7 @@ const Users = () => {
       </div>
       
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-10 items-start">
-        <div className={canManageUsers ? "xl:col-span-2 space-y-8" : "xl:col-span-3 space-y-8"}>
+        <div className={canSeeForm ? "xl:col-span-2 space-y-8" : "xl:col-span-3 space-y-8"}>
             <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -256,7 +265,7 @@ const Users = () => {
                                 <th className="px-8 py-6 text-center">Sync Status</th>
                                 <th className="px-8 py-6">Security Tier</th>
                                 <th className="px-8 py-6">Access Scopes</th>
-                                {canManageUsers && <th className="px-8 py-6 text-right">Operations</th>}
+                                {canModifyTable && <th className="px-8 py-6 text-right">Operations</th>}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -302,13 +311,15 @@ const Users = () => {
                                                 )}
                                             </div>
                                         </td>
-                                        {canManageUsers && (
+                                        {canModifyTable && (
                                           <td className="px-8 py-6 text-right">
                                               <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                  <button type="button" onClick={() => handleEdit(u)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all">
-                                                      <Edit2 className="w-4 h-4" />
-                                                  </button>
-                                                  {u.id !== currentUser?.id && (
+                                                  {canEdit && (
+                                                    <button type="button" onClick={() => handleEdit(u)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all">
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                  )}
+                                                  {canDelete && u.id !== currentUser?.id && (
                                                       <button type="button" onClick={() => setDeleteId(u.id)} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all">
                                                           <Trash2 className="w-4 h-4" />
                                                       </button>
@@ -364,7 +375,7 @@ const Users = () => {
             </div>
         </div>
 
-        {canManageUsers && (
+        {canSeeForm && (
           <div className="space-y-6">
               <Card className="sticky top-8 rounded-[2rem] border-slate-200/60 shadow-2xl overflow-hidden">
                   <CardHeader className="bg-indigo-600 text-white p-8">

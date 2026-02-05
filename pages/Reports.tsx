@@ -7,7 +7,7 @@ import { RevenueEngine } from '../services/revenueEngine';
 import { format, endOfMonth, differenceInCalendarDays, addDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Activity, Building2, ReceiptText, Settings2, Check, X, ShieldCheck, FileText, Printer, FileDown } from 'lucide-react';
+import { Activity, Building2, ReceiptText, Settings2, Check, X, ShieldCheck, FileText, Printer, FileDown, Globe } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -37,13 +37,13 @@ interface ReportRow {
 const ALL_POSSIBLE_COLUMNS = [
     { key: 'sl_no', label: 'SL.', width: 'w-12', defaultVisible: true },
     { key: 'guest_name', label: 'GUEST NAME / PROFILE', width: 'min-w-[280px]', defaultVisible: true },
-    { key: 'from', label: 'START DATE', width: 'w-28', defaultVisible: true },
-    { key: 'to', label: 'END DATE', width: 'w-28', defaultVisible: true },
+    { key: 'from', label: 'START DATE', width: 'w-24', defaultVisible: true },
+    { key: 'to', label: 'END DATE', width: 'w-24', defaultVisible: true },
     { key: 'total_days', label: 'DAYS', width: 'w-16', defaultVisible: true },
-    { key: 'actual_fees', label: 'NET FEES', width: 'w-32', defaultVisible: true },
-    { key: 'carry_forward', label: 'PREV. ACCRUAL', width: 'w-32', defaultVisible: true },
-    { key: 'current_month_rev', label: 'PERIOD REVENUE', width: 'w-36', defaultVisible: true }, 
-    { key: 'balance', label: 'DEFERRED', width: 'w-32', defaultVisible: true },
+    { key: 'actual_fees', label: 'NET FEES', width: 'w-28', defaultVisible: true },
+    { key: 'carry_forward', label: 'PREV. ACCRUAL', width: 'w-28', defaultVisible: true },
+    { key: 'current_month_rev', label: 'PERIOD REV', width: 'w-32', defaultVisible: true }, 
+    { key: 'balance', label: 'DEFERRED', width: 'w-28', defaultVisible: true },
 ];
 
 const Reports = () => {
@@ -58,12 +58,35 @@ const Reports = () => {
   const [showConfig, setShowConfig] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [logoError, setLogoError] = useState(false);
+  
+  // Image handling state
+  const [logoBase64, setLogoBase64] = useState<string | null>(null);
 
   useEffect(() => { if (currentOutlet) loadData(); }, [reportMonth, currentOutlet]);
   
-  // Reset logo error when property changes
-  useEffect(() => { setLogoError(false); }, [currentProperty?.id]);
+  // Prepare Logo for PDF (Convert to Base64 to bypass CORS in html2canvas)
+  const logoUrl = currentProperty?.logo_url || settings?.logo_url;
+  
+  useEffect(() => {
+    const convertImageToBase64 = async () => {
+        if (!logoUrl) {
+            setLogoBase64(null);
+            return;
+        }
+        try {
+            const response = await fetch(logoUrl);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            reader.onloadend = () => setLogoBase64(reader.result as string);
+            reader.readAsDataURL(blob);
+        } catch (error) {
+            console.warn("Could not pre-convert logo to Base64 (likely CORS). PDF might miss logo.", error);
+            // Fallback: just use the URL and hope html2canvas useCORS works
+            setLogoBase64(logoUrl);
+        }
+    };
+    convertImageToBase64();
+  }, [logoUrl]);
 
   const loadData = async () => {
     if (!currentOutlet) return;
@@ -151,25 +174,29 @@ const Reports = () => {
     setIsGeneratingPDF(true);
     
     const element = reportRef.current;
+    
+    // Temporarily ensure the element is visible and styled for capture
     const originalScrollPos = window.scrollY;
     window.scrollTo(0, 0);
 
     try {
       const canvas = await html2canvas(element, { 
-        scale: 2.5,
+        scale: 2, // High resolution
         useCORS: true, 
+        allowTaint: true,
         backgroundColor: '#ffffff',
-        logging: false,
+        logging: true,
         width: 1300, 
+        windowWidth: 1300,
         onclone: (clonedDoc) => {
             const container = clonedDoc.querySelector('.print-container') as HTMLElement;
             if (container) {
+                // Force specific print styles for capture
                 container.style.boxShadow = 'none';
-                container.style.border = 'none';
-                container.style.borderRadius = '0';
                 container.style.margin = '0';
                 container.style.padding = '40px'; 
-                container.style.width = '1220px';
+                container.style.width = '1300px';
+                container.style.maxWidth = '1300px';
             }
         }
       });
@@ -177,6 +204,7 @@ const Reports = () => {
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
       
+      // Standard A4 Landscape ratio (approx)
       const pdf = new jsPDF('l', 'px', [imgWidth, (imgWidth * 0.707)]); 
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
@@ -193,18 +221,15 @@ const Reports = () => {
           const ctx = sectionCanvas.getContext('2d');
           if (ctx) {
               ctx.drawImage(canvas, 0, sourceY, imgWidth, sectionCanvas.height, 0, 0, imgWidth, sectionCanvas.height);
-              const imgData = sectionCanvas.toDataURL('image/jpeg', 1.0);
+              const imgData = sectionCanvas.toDataURL('image/jpeg', 0.95);
               pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, sectionCanvas.height * (pageWidth / imgWidth));
           }
-          
-          pdf.setFontSize(10);
-          pdf.setTextColor(180);
-          pdf.text(`Audit Trail • Facility Ledger • Page ${i + 1} of ${totalPages}`, 40, pageHeight - 20);
       }
       
       pdf.save(`Ledger_${currentOutlet?.name || 'ERP'}_${reportMonth}.pdf`);
     } catch (err) { 
         console.error("PDF Capture Pipeline Failure:", err); 
+        alert("Could not generate PDF. Please ensure images are accessible or try Printing to PDF.");
     } finally { 
         window.scrollTo(0, originalScrollPos);
         setIsGeneratingPDF(false); 
@@ -214,23 +239,12 @@ const Reports = () => {
   const canExport = hasPermission(user?.role_id || '', 'reports:export');
   let globalIndexCounter = 0;
 
-  // Reliable Logo Rendering with Fallback
-  // Ensure we don't block valid non-standard URLs
-  const isValidUrl = (url?: string) => {
-    return url && url.length > 5;
-  };
-
-  // Determine logo source with fallback to system settings
-  const logoToUse = (!logoError && isValidUrl(currentProperty?.logo_url)) 
-    ? currentProperty?.logo_url 
-    : (settings?.logo_url && isValidUrl(settings.logo_url)) ? settings.logo_url : null;
-
   return (
     <div className="space-y-6">
         <style>
           {`
             @media print {
-              @page { size: landscape; margin: 5mm; }
+              @page { size: landscape; margin: 0; }
               body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
               .print-container { 
                 margin: 0 !important; 
@@ -239,15 +253,11 @@ const Reports = () => {
                 border: none !important;
                 width: 100% !important;
                 max-width: 100% !important;
-                overflow: visible !important;
               }
               .no-print { display: none !important; }
-              .signature-block { page-break-inside: avoid !important; margin-top: 30mm !important; }
               thead { display: table-header-group !important; }
               tr { page-break-inside: avoid !important; }
             }
-            .deferred-text { color: #dc2626 !important; font-weight: 800 !important; }
-            .revenue-text { color: #4f46e5 !important; font-weight: 800 !important; }
           `}
         </style>
         
@@ -303,69 +313,61 @@ const Reports = () => {
         <div ref={reportRef} className="bg-white p-12 md:p-16 rounded-[1rem] shadow-2xl max-w-[1300px] mx-auto min-h-screen print-container border border-slate-100 flex flex-col overflow-hidden">
             
             {/* Professional Letterhead Header */}
-            <div className="flex flex-row justify-between items-start border-b-[6px] border-slate-950 pb-12 mb-10 min-w-[1100px]">
-                <div className="flex items-start">
-                    {/* Reliable Logo Rendering with Fallback */}
-                    <div className="mr-12">
-                        {logoToUse ? (
+            <div className="flex flex-row justify-between items-end border-b-4 border-slate-900 pb-8 mb-10 min-w-[1100px]">
+                <div className="flex items-center gap-8">
+                    {/* Logo Section - Uses Base64 for PDF reliability */}
+                    <div className="w-28 h-28 shrink-0 flex items-center justify-center">
+                        {logoBase64 ? (
                             <img 
-                                src={logoToUse} 
-                                // CORS attribute removed to allow non-compliant images to display on screen
-                                alt="Branding" 
-                                onError={(e) => {
-                                    // Prevent infinite loop if global logo also fails
-                                    if (logoToUse !== settings?.logo_url) {
-                                        setLogoError(true);
-                                    } else {
-                                        (e.currentTarget as HTMLImageElement).style.display = 'none'; // Hide if both fail
-                                    }
-                                }}
-                                className="h-32 w-auto object-contain block" 
-                                style={{ maxWidth: '300px' }}
+                                src={logoBase64} 
+                                alt="Company Logo" 
+                                className="w-full h-full object-contain"
+                                crossOrigin="anonymous" 
                             />
                         ) : (
-                            <div className="w-24 h-24 bg-slate-900 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-slate-200">
-                                <Building2 className="w-12 h-12" />
+                            <div className="w-full h-full bg-slate-900 text-white flex items-center justify-center rounded-lg">
+                                <Globe className="w-12 h-12" />
                             </div>
                         )}
                     </div>
-                    {/* Facility & Property Identity */}
-                    <div>
-                        <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-950 leading-[0.85] mb-4">
-                            {currentProperty?.name || settings?.name || 'Asset Group Management'}
+                    
+                    {/* Company Identity */}
+                    <div className="flex flex-col justify-end h-full">
+                        <h1 className="text-4xl font-serif font-bold text-slate-950 leading-tight mb-2 tracking-tight">
+                            {currentProperty?.name || settings?.name || 'Corporate Ledger'}
                         </h1>
-                        <p className="text-[12px] font-bold text-slate-400 uppercase tracking-[0.4em] mb-10">
-                            {currentProperty?.address || settings?.address || 'Corporate Headquarters'}
-                        </p>
-                        
-                        <div className="inline-block px-8 py-3 bg-indigo-50 border-[2px] border-indigo-600 rounded-xl shadow-sm">
-                            <span className="text-[14px] font-black uppercase tracking-[0.15em] text-indigo-950">
-                                Facility Context: {currentOutlet?.name || 'Operational Health Club'}
-                            </span>
+                        <div className="space-y-0.5">
+                            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                                {currentProperty?.address || settings?.address || 'Corporate Headquarters'}
+                            </p>
+                            <p className="text-[11px] font-bold text-indigo-700 uppercase tracking-widest">
+                                Facility: {currentOutlet?.name || 'Authorized Facility'}
+                            </p>
                         </div>
                     </div>
                 </div>
 
-                {/* Audit Context Details */}
+                {/* Document Context */}
                 <div className="text-right">
-                    <p className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-400 mb-2">Audit Statement Period</p>
-                    <h2 className="text-5xl font-black text-slate-950 tracking-tighter tabular-nums mb-4">
-                        {format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
+                    <h2 className="text-5xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-2">
+                        Financial Ledger
                     </h2>
-                    <div className="inline-flex items-center gap-2.5 px-5 py-2.5 bg-emerald-50 border-[2px] border-emerald-100 rounded-2xl text-[11px] font-black text-emerald-700 uppercase tracking-widest shadow-sm">
-                        <ShieldCheck className="w-4 h-4"/> Verified Audit Trail
+                    <p className="text-lg font-medium text-slate-500 mb-4">
+                        {format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
+                    </p>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded text-[10px] font-black uppercase tracking-widest text-slate-600">
+                        <ShieldCheck className="w-3 h-3"/> Verified Audit Trail
                     </div>
-                    <div className="mt-6 text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">RECON_ID: {reportMonth}-LEDGER-001</div>
                 </div>
             </div>
 
             {/* Financial Ledger Section */}
             <div className="flex-1">
-                <table className="w-full text-[11px] border-collapse min-w-[1100px]">
+                <table className="w-full text-[10px] border-collapse min-w-[1100px]">
                     <thead>
-                        <tr className="bg-[#0f172a] text-white">
+                        <tr className="bg-slate-950 text-white border-b-4 border-slate-950">
                             {activeColumns.map(col => (
-                                <th key={col.key} className={`px-4 py-5 text-center font-black uppercase tracking-widest border-r border-white/10 last:border-0 ${col.width}`}>
+                                <th key={col.key} className={`px-4 py-4 text-center font-bold uppercase tracking-widest border-r border-white/10 last:border-0 ${col.width}`}>
                                     {col.label}
                                 </th>
                             ))}
@@ -383,13 +385,13 @@ const Reports = () => {
 
                         return (
                             <React.Fragment key={catName}>
-                            <tr className="bg-slate-50/70 border-b border-slate-200">
-                                <td colSpan={activeColumns.length} className="px-6 py-5">
+                            <tr className="bg-slate-50 border-b border-slate-300">
+                                <td colSpan={activeColumns.length} className="px-6 py-4">
                                 <div className="flex items-center">
-                                    <ReceiptText className="w-5 h-5 text-indigo-600 mr-4" />
-                                    <span className="text-[14px] font-black uppercase tracking-widest text-slate-950 mr-6">{catName}</span>
-                                    <span className="px-3 py-1 bg-white border border-slate-200 rounded-full text-[9px] font-black text-slate-400 uppercase tracking-tighter">
-                                        {groupRows.length} Consolidated Accounts
+                                    <ReceiptText className="w-4 h-4 text-indigo-600 mr-3" />
+                                    <span className="text-[12px] font-black uppercase tracking-widest text-slate-900 mr-4">{catName}</span>
+                                    <span className="text-[9px] font-bold text-slate-500 uppercase">
+                                        ({groupRows.length} Records)
                                     </span>
                                 </div>
                                 </td>
@@ -398,12 +400,12 @@ const Reports = () => {
                             {groupRows.map((row) => {
                                 globalIndexCounter++;
                                 return (
-                                    <tr key={`${row.membership_no}-${row.sl_no}`} className="hover:bg-slate-50/50 transition-colors">
+                                    <tr key={`${row.membership_no}-${row.sl_no}`} className="hover:bg-slate-50/50">
                                         {activeColumns.map(col => (
-                                            <td key={col.key} className={`px-4 py-4 border-r border-slate-100 last:border-0 ${['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? 'text-right tabular-nums' : 'text-center'} ${col.key === 'guest_name' ? 'text-left font-bold text-slate-800' : ''}`}>
+                                            <td key={col.key} className={`px-4 py-3 border-r border-slate-100 last:border-0 ${['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? 'text-right tabular-nums' : 'text-center'} ${col.key === 'guest_name' ? 'text-left font-bold text-slate-800' : ''}`}>
                                                 <span className={`
-                                                    ${col.key === 'current_month_rev' ? 'revenue-text' : ''} 
-                                                    ${col.key === 'balance' && row.balance > 0 ? 'deferred-text' : ''}
+                                                    ${col.key === 'current_month_rev' ? 'text-indigo-700 font-bold' : ''} 
+                                                    ${col.key === 'balance' && row.balance > 0 ? 'text-red-600 font-black' : ''}
                                                     ${['actual_fees', 'carry_forward'].includes(col.key) ? 'text-slate-600' : ''}
                                                 `}>
                                                     {col.key === 'sl_no' ? globalIndexCounter : (
@@ -418,19 +420,19 @@ const Reports = () => {
                                 );
                             })}
 
-                            <tr className="bg-indigo-50/10 border-y border-indigo-100/50">
-                                <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-6 py-4 text-right">
-                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">
-                                        Subtotal Ledger: {catName}
+                            <tr className="bg-indigo-50/30 border-y-2 border-slate-200 font-bold">
+                                <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-6 py-3 text-right">
+                                    <span className="text-[9px] uppercase tracking-widest text-indigo-900">
+                                        Subtotal: {catName}
                                     </span>
                                 </td>
                                 {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
-                                    <td key={col.key} className={`px-4 py-4 text-right font-black border-x border-white ${col.key === 'current_month_rev' ? 'text-indigo-900 bg-indigo-50/40' : 'text-slate-800'}`}>
+                                    <td key={col.key} className={`px-4 py-3 text-right border-x border-white`}>
                                         {col.key === 'actual_fees' ? formatMoney(groupTotals.fees) : col.key === 'carry_forward' ? formatMoney(groupTotals.prev) : col.key === 'current_month_rev' ? formatMoney(groupTotals.current) : formatMoney(groupTotals.balance)}
                                     </td>
                                 ))}
                                 {activeColumns.slice(activeColumns.findIndex(c => c.key === 'balance') + 1).map(col => (
-                                    <td key={col.key} className="px-4 py-4"></td>
+                                    <td key={col.key} className="px-4 py-3"></td>
                                 ))}
                             </tr>
                             </React.Fragment>
@@ -439,17 +441,17 @@ const Reports = () => {
                     </tbody>
 
                     <tfoot>
-                        <tr className="bg-slate-950 text-white shadow-2xl">
-                        <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-8 py-8 text-right text-[12px] font-black uppercase tracking-[0.4em] border-r border-white/5">
-                            CONSOLIDATED AUDIT TOTALS
+                        <tr className="bg-slate-900 text-white shadow-2xl border-t-4 border-slate-950">
+                        <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-8 py-6 text-right text-[11px] font-black uppercase tracking-[0.3em] border-r border-white/10">
+                            Grand Totals
                         </td>
                         {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
-                            <td key={col.key} className={`px-4 py-8 text-right font-black border-r border-white/5 last:border-0 ${col.key === 'current_month_rev' ? 'bg-indigo-700' : ''}`}>
+                            <td key={col.key} className={`px-4 py-6 text-right font-black border-r border-white/10 last:border-0 text-xs ${col.key === 'current_month_rev' ? 'bg-indigo-600' : ''}`}>
                                 {col.key === 'actual_fees' ? formatMoney(totals.fees) : col.key === 'carry_forward' ? formatMoney(totals.prev) : col.key === 'current_month_rev' ? formatMoney(totals.current) : formatMoney(totals.balance)}
                             </td>
                         ))}
                         {activeColumns.slice(activeColumns.findIndex(c => c.key === 'balance') + 1).map(col => (
-                            <td key={col.key} className="px-4 py-8 border-l border-white/5"></td>
+                            <td key={col.key} className="px-4 py-6 border-l border-white/10"></td>
                         ))}
                         </tr>
                     </tfoot>
@@ -457,37 +459,36 @@ const Reports = () => {
             </div>
 
             {/* Authoritative Signatory Grid */}
-            <div className="signature-block mt-24 pt-16 border-t-[3px] border-slate-100 flex justify-between items-start gap-12 min-w-[1100px]">
-                <div className="flex-1 text-center space-y-12">
-                    <p className="text-[13px] font-black text-slate-950 uppercase tracking-[0.3em]">Prepared By:</p>
-                    <div className="pt-8 border-t border-slate-200 w-3/4 mx-auto">
-                      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">
+            <div className="signature-block mt-16 pt-12 border-t-2 border-slate-200 flex justify-between items-start gap-12 min-w-[1100px]">
+                <div className="flex-1 space-y-10">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Prepared By</p>
+                    <div className="border-b border-slate-300 pb-2"></div>
+                    <p className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">
                         {settings?.signatory_prepared_role || 'Income Auditor'}
-                      </p>
-                    </div>
+                    </p>
                 </div>
 
-                <div className="flex-1 text-center space-y-12">
-                    <p className="text-[13px] font-black text-slate-950 uppercase tracking-[0.3em]">Reviewed By:</p>
-                    <div className="pt-8 border-t border-slate-200 w-3/4 mx-auto">
-                      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">
+                <div className="flex-1 space-y-10">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Reviewed By</p>
+                    <div className="border-b border-slate-300 pb-2"></div>
+                    <p className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">
                         {settings?.signatory_reviewed_role || 'Financial Controller'}
-                      </p>
-                    </div>
+                    </p>
                 </div>
 
-                <div className="flex-1 text-center space-y-12">
-                    <p className="text-[13px] font-black text-slate-950 uppercase tracking-[0.3em]">Approved By:</p>
-                    <div className="pt-8 border-t border-slate-200 w-3/4 mx-auto">
-                      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">
+                <div className="flex-1 space-y-10">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Approved By</p>
+                    <div className="border-b border-slate-300 pb-2"></div>
+                    <p className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">
                         {settings?.signatory_approved_role || 'Director of Finance'}
-                      </p>
-                    </div>
+                    </p>
                 </div>
             </div>
             
-            <div className="mt-20 pt-6 border-t border-slate-50 text-center opacity-30">
-                <p className="text-[8px] font-black text-slate-300 uppercase tracking-[1em]">SYSTEM INTEGRITY VERIFICATION PROTOCOL • GENERATED {format(new Date(), 'PPpp')}</p>
+            <div className="mt-16 text-center opacity-40">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-[1em]">
+                    Generated {format(new Date(), 'dd MMM yyyy HH:mm')} • System Ver. 2.4.0
+                </p>
             </div>
         </div>
     </div>

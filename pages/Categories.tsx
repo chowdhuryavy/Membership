@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
@@ -10,7 +9,7 @@ import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock } from 'luci
 // This component manages membership categories/tiers for a facility
 const Categories = () => {
   const { user } = useAuth();
-  const { currentOutlet, hasPermission, formatMoney, currency } = useSettings();
+  const { currentOutlet, hasPermission, formatMoney } = useSettings();
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
   
   const [formData, setFormData] = useState({ id: '', name: '', duration_months: 1, base_rate: 0 });
@@ -28,7 +27,12 @@ const Categories = () => {
   };
 
   const canView = user && hasPermission(user.role_id, 'categories:view');
-  const canManage = user && (hasPermission(user.role_id, 'categories:create') || hasPermission(user.role_id, 'categories:edit'));
+  const canCreate = user && hasPermission(user.role_id, 'categories:create');
+  const canEdit = user && hasPermission(user.role_id, 'categories:edit');
+  const canDelete = user && hasPermission(user.role_id, 'categories:delete');
+  
+  // Can manage implies visibility of the management form
+  const canManage = canCreate || canEdit;
 
   if (!canView) {
     return (
@@ -50,13 +54,13 @@ const Categories = () => {
   };
 
   const handleEdit = (cat: MembershipCategory) => {
-      if (!canManage) return;
+      if (!canEdit) return;
       setFormData(cat);
       setIsEditing(true);
   };
 
   const confirmDelete = async () => {
-      if (deleteId && canManage) {
+      if (deleteId && canDelete) {
           await db.deleteCategory(deleteId);
           loadCats();
           setDeleteId(null);
@@ -65,16 +69,20 @@ const Categories = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canManage) return;
-    if (!formData.name || formData.base_rate <= 0 || !currentOutlet) return;
+    if (!currentOutlet) return;
     
-    if (isEditing && formData.id) {
-        await db.updateCategory(formData.id, {
-            name: formData.name,
-            duration_months: formData.duration_months,
-            base_rate: formData.base_rate
-        });
+    // Strict permission check based on action type
+    if (isEditing) {
+        if (!canEdit) return;
+        if (formData.id) {
+            await db.updateCategory(formData.id, {
+                name: formData.name,
+                duration_months: formData.duration_months,
+                base_rate: formData.base_rate
+            });
+        }
     } else {
+        if (!canCreate) return;
         await db.addCategory({
             outlet_id: currentOutlet.id,
             name: formData.name,
@@ -109,12 +117,12 @@ const Categories = () => {
                     <Card key={cat.id} className="relative group overflow-hidden border-slate-200/60 shadow-sm hover:shadow-xl transition-all duration-300 rounded-[2rem]">
                         <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
                             <div className="flex gap-2">
-                                {canManage && (
+                                {canEdit && (
                                     <button type="button" onClick={() => handleEdit(cat)} className="p-2 bg-white shadow-lg rounded-xl text-slate-400 hover:text-indigo-600 border border-slate-100 transition-colors">
                                         <Edit2 className="w-4 h-4" />
                                     </button>
                                 )}
-                                {canManage && (
+                                {canDelete && (
                                     <button type="button" onClick={() => setDeleteId(cat.id)} className="p-2 bg-white shadow-lg rounded-xl text-slate-400 hover:text-red-600 border border-slate-100 transition-colors">
                                         <Trash2 className="w-4 h-4" />
                                     </button>

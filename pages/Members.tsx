@@ -24,12 +24,10 @@ import {
 import { db } from '../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Freeze } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-// Fix: Verifying and ensuring correct named exports from date-fns, providing local fallback for parseISO
 import { format, differenceInCalendarDays, addDays } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 
-// Fix: Local implementation for parseISO to resolve environment-specific import errors
 const parseISO = (dateString: string) => new Date(dateString);
 
 const memberSchema = z.object({
@@ -72,25 +70,24 @@ const Members = () => {
     setMembers(m);
     setCategories(c);
     
-    // Refresh selected member if we are in detail view
     if (selectedMember) {
         const updated = m.find(mem => mem.id === selectedMember.id);
         if (updated) setSelectedMember(updated);
     }
   };
 
+  const canCreate = user && hasPermission(user.role_id, 'members:create');
+  const canEdit = user && hasPermission(user.role_id, 'members:edit');
+  const canDelete = user && hasPermission(user.role_id, 'members:delete');
+
   const confirmDelete = async () => {
-      if (deleteId) {
+      if (deleteId && canDelete) {
           await db.deleteMember(deleteId);
           loadData();
           setDeleteId(null);
           if (lastSavedMember?.id === deleteId) setLastSavedMember(null);
       }
   };
-
-  const canCreate = user && hasPermission(user.role_id, 'members:create');
-  const canEdit = user && hasPermission(user.role_id, 'members:edit');
-  const canDelete = user && hasPermission(user.role_id, 'members:delete');
 
   const handleEdit = (member: Member, e: React.MouseEvent) => {
       e.stopPropagation();
@@ -102,6 +99,7 @@ const Members = () => {
 
   const handleFreezeClick = (member: Member, e: React.MouseEvent) => {
       e.stopPropagation();
+      if (!canEdit) return;
       setSelectedMember(member);
       setAutoFreeze(true);
       setView('detail');
@@ -347,6 +345,8 @@ const Members = () => {
           currentOutletId={currentOutlet?.id || ''}
           onCancel={() => setView('list')} 
           onSuccess={handleFormSuccess} 
+          canCreate={canCreate}
+          canEdit={canEdit}
         />
       )}
 
@@ -362,7 +362,7 @@ const Members = () => {
   );
 };
 
-const MemberForm = ({ categories, existingMember, currentOutletId, onCancel, onSuccess }: { categories: MembershipCategory[], existingMember: Member | null, currentOutletId: string, onCancel: () => void, onSuccess: (m: Member) => void }) => {
+const MemberForm = ({ categories, existingMember, currentOutletId, onCancel, onSuccess, canCreate, canEdit }: { categories: MembershipCategory[], existingMember: Member | null, currentOutletId: string, onCancel: () => void, onSuccess: (m: Member) => void, canCreate: boolean | null, canEdit: boolean | null }) => {
   const { formatMoney, currency } = useSettings();
   const { register, handleSubmit, watch, formState: { errors } } = useForm<MemberFormValues>({
     resolver: zodResolver(memberSchema),
@@ -400,6 +400,10 @@ const MemberForm = ({ categories, existingMember, currentOutletId, onCancel, onS
   }
 
   const onSubmit = async (data: MemberFormValues) => {
+    // Strict permission guard
+    if (existingMember && !canEdit) return;
+    if (!existingMember && !canCreate) return;
+
     if (!selectedCategory || !endDateStr) return;
     const memberId = existingMember ? existingMember.id : `mem_${Date.now()}`;
     const memberData: Member = {
