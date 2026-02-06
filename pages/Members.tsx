@@ -476,9 +476,9 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
   const initialStartDate = useMemo(() => {
     if (isRenewal && existingMember) {
         const nextDay = addDays(parseISO(existingMember.current_end_date), 1);
-        return format(nextDay, 'dd-MM-yyyy');
+        return format(nextDay, 'yyyy-MM-dd');
     }
-    return format(new Date(), 'dd-MM-yyyy');
+    return format(new Date(), 'yyyy-MM-dd');
   }, [isRenewal, existingMember]);
 
   const { register, handleSubmit, watch, setValue, resetField, setError, formState: { errors } } = useForm<MemberFormValues>({
@@ -538,7 +538,7 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
         setValue('category_id', matchedMember.category_id);
         
         // Default to current date as requested
-        setValue('start_date', format(new Date(), 'dd-MM-yyyy'));
+        setValue('start_date', format(new Date(), 'yyyy-MM-dd'));
         
         // Feedback
         console.log(`Identity Sync: Found ${matchedMember.guest_name}. Start date defaulted to today.`);
@@ -548,7 +548,7 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
         resetField('category_id');
         resetField('discount');
         resetField('check_no');
-        setValue('start_date', format(new Date(), 'dd-MM-yyyy'));
+        setValue('start_date', format(new Date(), 'yyyy-MM-dd'));
     }
   }, [matchedMember, membershipNumber, setValue, resetField, existingMember, isRenewal]);
 
@@ -562,7 +562,7 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
   if (startDate && selectedCategory) {
     const start = parseISO(startDate);
     const end = RevenueEngine.calculateOriginalEndDate(start, selectedCategory.duration_months);
-    endDateStr = format(end, 'dd-MM-yyyy');
+    endDateStr = format(end, 'yyyy-MM-dd');
     dailyRate = RevenueEngine.calculateDailyRate(netAmount, start, end);
   }
 
@@ -804,7 +804,7 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
   const { user } = useAuth();
   const [freezes, setFreezes] = useState<Freeze[]>([]);
   const [showFreezeModal, setShowFreezeModal] = useState(initialFreeze);
-  const [freezeForm, setFreezeForm] = useState({ start_date: format(new Date(), 'dd-MM-yyyy'), end_date: '' });
+  const [freezeForm, setFreezeForm] = useState({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' });
   const [history, setHistory] = useState<Member[]>([]);
 
   useEffect(() => {
