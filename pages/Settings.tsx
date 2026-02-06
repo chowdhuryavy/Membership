@@ -282,7 +282,8 @@ const SettingsPage = () => {
     setIsSaving(true);
     try {
         if (editingOutlet) { await db.updateOutlet(editingOutlet.id, { name: newOutletName, property_id: outletPropertyId }); } 
-        else { await db.addOutlet(newOutletName, outletPropertyId); }
+        // Fix: Corrected the call to `db.addOutlet` by passing a single object argument as required, instead of two separate arguments.
+        else { await db.addOutlet({ name: newOutletName, property_id: outletPropertyId }); }
         setNewOutletName('');
         setOutletPropertyId('');
         setEditingOutlet(null);
