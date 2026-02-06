@@ -11,15 +11,20 @@ import {
   ShieldCheck, 
   ArrowUpRight,
   CalendarDays,
-  ChevronRight
+  ChevronRight,
+  Sparkles,
+  Zap,
+  BarChart4,
+  ArrowDownRight,
+  RefreshCw
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
-import { MemberStatus, Member } from '../types';
+import { MemberStatus, Member, Freeze } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, endOfMonth, differenceInCalendarDays } from 'date-fns';
+import { generateFinancialInsight } from '../services/geminiService';
+import { format, endOfMonth, differenceInCalendarDays, subDays, isSameDay } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-// Fix: Use named import for Link from react-router-dom as per v6 convention.
 import { Link } from 'react-router-dom';
 
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
@@ -32,9 +37,13 @@ const Dashboard = () => {
     totalMembers: 0,
     activeMembers: 0,
     frozenMembers: 0,
-    revenueThisMonth: 0
+    revenueThisMonth: 0,
+    totalDeferred: 0
   });
   const [expiringMembers, setExpiringMembers] = useState<Member[]>([]);
+  const [enrollmentTrend, setEnrollmentTrend] = useState<number[]>([]);
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -58,6 +67,7 @@ const Dashboard = () => {
     const frozen = members.filter(m => m.status === MemberStatus.FROZEN).length;
     
     let monthlyRev = 0;
+    let deferred = 0;
     const now = new Date();
     const start = startOfMonth(now);
     const end = endOfMonth(now);
@@ -66,6 +76,9 @@ const Dashboard = () => {
       const memberFreezes = freezes.filter(f => f.member_id === m.id);
       const earned = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, start, end);
       monthlyRev += earned;
+      
+      const totalEarnedToDate = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, parseISO(m.start_date), now);
+      deferred += Math.max(0, m.net_amount - totalEarnedToDate);
     });
 
     const expiring = members.filter(m => {
@@ -75,19 +88,37 @@ const Dashboard = () => {
         return days >= 0 && days <= 30;
     }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 4);
 
+    // Calculate trend for last 7 days
+    const trend = Array.from({ length: 7 }).map((_, i) => {
+        const day = subDays(now, 6 - i);
+        return members.filter(m => isSameDay(parseISO(m.created_at || m.start_date), day)).length;
+    });
+
     setStats({
       totalMembers: members.length,
       activeMembers: active,
       frozenMembers: frozen,
-      revenueThisMonth: monthlyRev
+      revenueThisMonth: monthlyRev,
+      totalDeferred: deferred
     });
     setExpiringMembers(expiring);
+    setEnrollmentTrend(trend);
+    
+    // Trigger AI analysis
+    getAIInsight(active, frozen, monthlyRev, expiring.length);
+  };
+
+  const getAIInsight = async (active: number, frozen: number, revenue: number, expiringCount: number) => {
+    setIsAiLoading(true);
+    const context = `Facility: ${currentOutlet?.name}. Active: ${active}, Frozen: ${frozen}, Expiring within 30 days: ${expiringCount}, Revenue this month: ${revenue}.`;
+    const insight = await generateFinancialInsight(context);
+    setAiInsight(insight);
+    setIsAiLoading(false);
   };
 
   const displayName = useMemo(() => {
       if (!user?.name) return 'Admin';
       const rawName = user.name.trim();
-      if (rawName.toLowerCase().includes('system administrator')) return 'Administrator';
       return rawName.split(/\s+/)[0];
   }, [user?.name]);
 
@@ -115,6 +146,7 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* Dynamic Welcome & Time Banner */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-lg transition-all duration-500">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-indigo-100/50 transition-colors duration-700"></div>
         <div className="relative z-10">
@@ -122,11 +154,11 @@ const Dashboard = () => {
             <span className="h-px w-6 bg-indigo-600 transition-all duration-300 group-hover:w-10"></span>
             <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em]">Operational Overview</span>
           </div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tighter">
+          <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-none">
             Welcome, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600">{displayName}</span>
           </h1>
-          <p className="text-slate-500 text-sm font-medium mt-1">
-            Analyzing metrics for <span className="font-bold text-slate-700">{currentOutlet?.name || 'Authorized Facility'}</span>.
+          <p className="text-slate-500 text-sm font-medium mt-2">
+            Managing facility integrity for <span className="font-bold text-slate-700">{currentOutlet?.name || 'Authorized Facility'}</span>.
           </p>
         </div>
         <div className="flex flex-col items-end relative z-10">
@@ -142,14 +174,51 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* AI Strategic Intelligence Panel */}
+      <Card className="border-none shadow-2xl rounded-[2.5rem] bg-indigo-600 text-white overflow-hidden group relative">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-indigo-700 to-blue-800 opacity-90"></div>
+          <div className="absolute top-0 right-0 p-8 opacity-20 group-hover:scale-110 transition-transform duration-700">
+              <Sparkles className="w-40 h-40" />
+          </div>
+          <CardContent className="p-10 relative z-10">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                  <div className="space-y-4 max-w-3xl">
+                      <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10">
+                          <Zap className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Strategic Insight Engine</span>
+                      </div>
+                      <h2 className="text-3xl font-black tracking-tight leading-tight">Executive Summary</h2>
+                      {isAiLoading ? (
+                          <div className="flex items-center gap-3 py-2">
+                              <RefreshCw className="w-5 h-5 animate-spin" />
+                              <p className="text-indigo-100/60 font-medium italic">Synthesizing operational data streams...</p>
+                          </div>
+                      ) : (
+                          <p className="text-indigo-50 text-lg font-medium leading-relaxed">
+                              {aiInsight || "Awaiting intelligence feed synchronization..."}
+                          </p>
+                      )}
+                  </div>
+                  <Button 
+                    onClick={() => loadStats()}
+                    className="shrink-0 h-14 px-8 rounded-2xl bg-white text-indigo-600 hover:bg-indigo-50 font-black text-xs uppercase tracking-widest shadow-xl active:scale-95"
+                  >
+                      Recalculate AI Pulse
+                  </Button>
+              </div>
+          </CardContent>
+      </Card>
+
+      {/* Primary Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatTile title="Total Portfolio" value={stats.totalMembers} icon={Users} color="bg-blue-600" trend="+12%" />
         <StatTile title="Active Capacity" value={stats.activeMembers} icon={TrendingUp} color="bg-emerald-600" trend="Healthy" />
         <StatTile title="Deferred/Frozen" value={stats.frozenMembers} icon={AlertCircle} color="bg-amber-600" />
-        <StatTile title="Recognized Revenue" value={formatMoney(stats.revenueThisMonth)} icon={CreditCard} color="bg-indigo-600" trend="On Track" />
+        <StatTile title="Earned (MTD)" value={formatMoney(stats.revenueThisMonth)} icon={CreditCard} color="bg-indigo-600" trend="On Track" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Retention Focus */}
         <Card className="lg:col-span-2 border-slate-200/60 shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-500 rounded-[2rem] overflow-hidden group">
           <CardHeader className="bg-white border-b border-slate-100 p-8 flex flex-row justify-between items-center">
              <div>
@@ -159,7 +228,7 @@ const Dashboard = () => {
                       <AlertCircle className="w-3 h-3"/> Action Required
                    </span>
                 </h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Memberships expiring within 30 days</p>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Upcoming expirations (30 day window)</p>
              </div>
              <div className="hidden sm:block">
                  <CalendarDays className="w-10 h-10 text-slate-100" />
@@ -210,34 +279,80 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/60 rounded-[2rem] hover:shadow-lg transition-all duration-500 hover:border-indigo-100/50 group">
-          <CardContent className="p-8">
-            <h3 className="text-xl font-black text-slate-900 tracking-tight mb-8">System Telemetry</h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between group/item hover:bg-slate-50 p-2 rounded-xl transition-colors -mx-2">
-                <div className="flex items-center gap-3">
-                   <div className="p-2 bg-emerald-100 rounded-lg group-hover/item:scale-110 transition-transform"><Activity className="w-4 h-4 text-emerald-600" /></div>
-                   <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Engine Status</span>
-                </div>
-                <span className="text-[10px] font-black text-emerald-600 uppercase bg-emerald-50 px-2 py-1 rounded shadow-sm">Optimal</span>
-              </div>
-              <div className="flex items-center justify-between group/item hover:bg-slate-50 p-2 rounded-xl transition-colors -mx-2">
-                <div className="flex items-center gap-3">
-                   <div className="p-2 bg-blue-100 rounded-lg group-hover/item:scale-110 transition-transform"><ShieldCheck className="w-4 h-4 text-blue-600" /></div>
-                   <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Sync Integrity</span>
-                </div>
-                <span className="text-[10px] font-black text-blue-600 uppercase bg-blue-50 px-2 py-1 rounded shadow-sm">100% Secure</span>
-              </div>
-              <div className="pt-6 border-t border-slate-100 mt-4">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 group-hover:text-indigo-500 transition-colors">Instance Details</p>
-                  <div className="space-y-3">
-                     <div className="flex justify-between text-[11px] font-bold"><span className="text-slate-500">Node Status</span><span className="text-slate-900">Active</span></div>
-                     <div className="flex justify-between text-[11px] font-bold"><span className="text-slate-500">Last Sync</span><span className="text-slate-900">{format(new Date(), 'HH:mm')}</span></div>
+        {/* Financial Liquidity Visual */}
+        <div className="space-y-8">
+            <Card className="border-slate-200/60 rounded-[2rem] shadow-sm hover:shadow-lg transition-all duration-500 bg-white">
+                <CardContent className="p-8">
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight mb-6 flex items-center gap-2">
+                        <BarChart4 className="w-5 h-5 text-indigo-600" /> Revenue Split
+                    </h3>
+                    
+                    <div className="space-y-8">
+                        <div>
+                            <div className="flex justify-between items-end mb-2">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Recognized (Earned)</span>
+                                <span className="text-sm font-black text-emerald-600">{formatMoney(stats.revenueThisMonth)}</span>
+                            </div>
+                            <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-emerald-500 rounded-full transition-all duration-1000" style={{ width: '65%' }}></div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between items-end mb-2">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deferred (Held)</span>
+                                <span className="text-sm font-black text-indigo-600">{formatMoney(stats.totalDeferred)}</span>
+                            </div>
+                            <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-indigo-500 rounded-full transition-all duration-1000" style={{ width: '85%' }}></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-10 p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Recent Enrollment Trend</p>
+                        <div className="flex items-end justify-between h-16 gap-1.5">
+                            {enrollmentTrend.map((count, i) => (
+                                <div key={i} className="flex-1 bg-indigo-100 rounded-t-lg transition-all duration-500 group relative hover:bg-indigo-600" style={{ height: `${Math.max(10, count * 20)}%` }}>
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-900 text-white text-[8px] font-black py-1 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                                        {count} New
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className="border-slate-200/60 rounded-[2rem] hover:shadow-lg transition-all duration-500 hover:border-indigo-100/50 group">
+              <CardContent className="p-8">
+                <h3 className="text-lg font-black text-slate-900 tracking-tight mb-8">System Telemetry</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between group/item hover:bg-slate-50 p-2 rounded-xl transition-colors -mx-2">
+                    <div className="flex items-center gap-3">
+                       <div className="p-2 bg-emerald-100 rounded-lg group-hover/item:scale-110 transition-transform"><Activity className="w-4 h-4 text-emerald-600" /></div>
+                       <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Engine Status</span>
+                    </div>
+                    <span className="text-[10px] font-black text-emerald-600 uppercase bg-emerald-50 px-2 py-1 rounded shadow-sm">Optimal</span>
                   </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                  <div className="flex items-center justify-between group/item hover:bg-slate-50 p-2 rounded-xl transition-colors -mx-2">
+                    <div className="flex items-center gap-3">
+                       <div className="p-2 bg-blue-100 rounded-lg group-hover/item:scale-110 transition-transform"><ShieldCheck className="w-4 h-4 text-blue-600" /></div>
+                       <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Sync Integrity</span>
+                    </div>
+                    <span className="text-[10px] font-black text-blue-600 uppercase bg-blue-50 px-2 py-1 rounded shadow-sm">Verified</span>
+                  </div>
+                  <div className="pt-6 border-t border-slate-100 mt-4">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 group-hover:text-indigo-50 transition-colors">Architecture</p>
+                      <div className="space-y-3">
+                         <div className="flex justify-between text-[11px] font-bold"><span className="text-slate-500">Instance</span><span className="text-slate-900">ERP-NODE-301</span></div>
+                         <div className="flex justify-between text-[11px] font-bold"><span className="text-slate-500">Last Sync</span><span className="text-slate-900">{format(new Date(), 'HH:mm')}</span></div>
+                      </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+        </div>
       </div>
     </div>
   );

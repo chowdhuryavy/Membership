@@ -1,4 +1,5 @@
 
+
 export type Permission = 
   | 'members:view' | 'members:create' | 'members:edit' | 'members:delete'
   | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete'
@@ -101,6 +102,8 @@ export interface Member {
   daily_rate: number;
   check_no?: string;
   status: MemberStatus;
+  // Added created_at to resolve TS error in Dashboard.tsx trend calculation
+  created_at?: string;
 }
 
 export interface Freeze {
