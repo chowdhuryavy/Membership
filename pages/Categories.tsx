@@ -5,12 +5,12 @@ import { db } from '../services/mockSupabase';
 import { MembershipCategory } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock, Plus, X } from 'lucide-react';
+import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock, Plus, X, Command } from 'lucide-react';
 
 // This component manages membership categories/tiers for a facility
 const Categories = () => {
   const { user } = useAuth();
-  const { currentOutlet, hasPermission, formatMoney } = useSettings();
+  const { currentOutlet, hasPermission, formatMoney, checkShortcut } = useSettings();
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
   
   const [formData, setFormData] = useState({ id: '', name: '', duration_months: 1, base_rate: 0 });
@@ -35,6 +35,29 @@ const Categories = () => {
   
   // Can manage implies visibility of the management form
   const canManage = canCreate || canEdit;
+
+  // Shortcuts
+  useEffect(() => {
+    const handleShortcuts = (e: KeyboardEvent) => {
+        if (showForm) {
+            if (checkShortcut(e, 'action_save')) {
+                e.preventDefault();
+                handleSubmit(e as any);
+            }
+            if (checkShortcut(e, 'action_cancel')) {
+                e.preventDefault();
+                handleCancel();
+            }
+        } else {
+            if (checkShortcut(e, 'action_create') && canCreate) {
+                e.preventDefault();
+                handleAddNew();
+            }
+        }
+    };
+    window.addEventListener('keydown', handleShortcuts);
+    return () => window.removeEventListener('keydown', handleShortcuts);
+  }, [showForm, canCreate, checkShortcut, formData, isEditing, currentOutlet]); // Depend on form state
 
   if (!canView) {
     return (
@@ -218,10 +241,13 @@ const Categories = () => {
                             </div>
                             <div className="flex gap-3 pt-4">
                                 <Button type="button" variant="secondary" onClick={handleCancel} className="flex-1 h-12 rounded-xl font-bold bg-white border-slate-200">
-                                    Cancel
+                                    <span className="flex items-center gap-2"><Command className="w-3 h-3 text-slate-400"/> Cancel</span>
                                 </Button>
                                 <Button type="submit" className="flex-1 h-12 rounded-xl font-black shadow-lg shadow-indigo-100">
-                                    {isEditing ? 'Commit Changes' : 'Deploy Tier'}
+                                    <span className="flex items-center gap-2">
+                                        {isEditing ? 'Commit Changes' : 'Deploy Tier'}
+                                        <Command className="w-3 h-3 opacity-50"/>
+                                    </span>
                                 </Button>
                             </div>
                         </form>

@@ -1,19 +1,19 @@
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabase';
 import { UserProfile, Role, Outlet } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Info, Lock, Eye, EyeOff, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2 } from 'lucide-react';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command } from 'lucide-react';
 
 const UserDetail = ({ user, roles, outlets, onBack, onEdit, onDelete }: { user: UserProfile, roles: Role[], outlets: Outlet[], onBack: () => void, onEdit: (user: UserProfile) => void, onDelete: (id: string) => void }) => {
     const getRoleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || 'Unknown';
     const isUnlinked = !user.auth_id;
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500 relative z-0">
             <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors"><ArrowLeft className="w-4 h-4" /> Back to Directory</button>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-1 space-y-6">
@@ -97,7 +97,7 @@ const UserDetail = ({ user, roles, outlets, onBack, onEdit, onDelete }: { user: 
 
 const Users = () => {
   const { user: currentUser } = useAuth();
-  const { roles, outlets, hasPermission } = useSettings();
+  const { roles, outlets, hasPermission, checkShortcut } = useSettings();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -172,6 +172,31 @@ const Users = () => {
   const canDelete = currentUser && hasPermission(currentUser.role_id, 'users:delete');
   const canModifyTable = canEdit || canDelete;
   const canEditEmail = currentUser && (hasPermission(currentUser.role_id, 'users:edit_email') || !isEditing);
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleShortcuts = (e: KeyboardEvent) => {
+        if (showForm) {
+            if (checkShortcut(e, 'action_save')) {
+                e.preventDefault();
+                handleSubmit(e as any);
+            }
+            if (checkShortcut(e, 'action_cancel')) {
+                e.preventDefault();
+                handleFormCancel();
+            }
+        } else {
+            // View shortcuts
+            if (checkShortcut(e, 'action_create') && canCreate) {
+                e.preventDefault();
+                handleAddNew();
+            }
+            // Add search focus logic here if search input ref is available
+        }
+    };
+    window.addEventListener('keydown', handleShortcuts);
+    return () => window.removeEventListener('keydown', handleShortcuts);
+  }, [showForm, canCreate, checkShortcut]); // Dependencies for closure freshness
 
   if (!canViewUsers) {
     return (
@@ -355,7 +380,7 @@ const Users = () => {
       )}
 
       {showForm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="w-full max-w-2xl relative">
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden animate-in zoom-in-95 duration-300">
                     <CardHeader className="bg-indigo-600 text-white p-8 relative">
@@ -402,8 +427,15 @@ const Users = () => {
                           </div>
                           {error && <div className="bg-red-50 text-red-600 text-[11px] font-bold p-4 rounded-2xl border border-red-100 flex items-start gap-3"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /><span className="leading-relaxed">{error}</span></div>}
                           <div className="flex gap-3 pt-4">
-                              <Button type="button" variant="secondary" onClick={handleFormCancel} className="flex-1 h-14 rounded-2xl font-bold bg-white border-slate-200">Cancel</Button>
-                              <Button type="submit" isLoading={isSubmitting} className="flex-1 h-14 rounded-2xl font-black text-base shadow-xl shadow-indigo-100">{isEditing ? 'Commit Sync' : 'Provision User'}</Button>
+                              <Button type="button" variant="secondary" onClick={handleFormCancel} className="flex-1 h-14 rounded-2xl font-bold bg-white border-slate-200">
+                                <span className="flex items-center gap-2"><Command className="w-3 h-3 text-slate-400"/> Cancel</span>
+                              </Button>
+                              <Button type="submit" isLoading={isSubmitting} className="flex-1 h-14 rounded-2xl font-black text-base shadow-xl shadow-indigo-100">
+                                <span className="flex items-center gap-2">
+                                    {isEditing ? 'Commit Sync' : 'Provision User'}
+                                    <Command className="w-3 h-3 opacity-50"/>
+                                </span>
+                              </Button>
                           </div>
                         </form>
                     </CardContent>

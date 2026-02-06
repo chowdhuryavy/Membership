@@ -41,7 +41,7 @@ import {
 import { db } from '../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Freeze } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, differenceInCalendarDays, addDays, isAfter, isBefore, isEqual } from 'date-fns';
+import { format, differenceInCalendarDays, addDays, isAfter, isBefore, isEqual, startOfDay } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -117,6 +117,24 @@ const Members = () => {
     return () => window.removeEventListener('keydown', handleShortcuts);
   }, [view, canCreate]);
 
+  // Helper to determine real-time status (handles auto-expiry)
+  const getEffectiveStatus = (member: Member) => {
+      // Frozen and Pending status override date logic
+      if (member.status === MemberStatus.FROZEN || member.status === MemberStatus.PENDING) {
+          return member.status;
+      }
+      
+      const end = parseISO(member.current_end_date);
+      const today = startOfDay(new Date());
+      
+      // If end date is before today (meaning it expired yesterday or earlier), treat as expired
+      if (isBefore(end, today)) {
+          return MemberStatus.EXPIRED;
+      }
+      
+      return MemberStatus.ACTIVE;
+  };
+
   const confirmDelete = async () => {
       if (deleteId && canDelete) {
           await db.deleteMember(deleteId);
@@ -179,13 +197,15 @@ const Members = () => {
         m.membership_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (m.check_no && m.check_no.toLowerCase().includes(searchTerm.toLowerCase()));
       
+      const effectiveStatus = getEffectiveStatus(m);
+
       let matchesStatus = false;
       if (statusFilter === 'All') {
           matchesStatus = true;
       } else if (statusFilter === 'Renewed') {
           matchesStatus = membershipCounts[m.membership_number] > 1;
       } else {
-          matchesStatus = m.status === statusFilter;
+          matchesStatus = effectiveStatus === statusFilter;
       }
       
       const matchesCategory = categoryFilter === 'All' || m.category_id === categoryFilter;
@@ -364,7 +384,9 @@ const Members = () => {
                             </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                            {group.members.map((member) => (
+                            {group.members.map((member) => {
+                                const effectiveStatus = getEffectiveStatus(member);
+                                return (
                                 <tr 
                                     key={member.id} 
                                     className="hover:bg-indigo-50/30 cursor-pointer transition-colors"
@@ -377,11 +399,11 @@ const Members = () => {
                                 </td>
                                 <td className="px-8 py-5">
                                     <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border
-                                    ${member.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                                        member.status === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 
-                                        member.status === 'Pending' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
-                                        member.status === 'Expired' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
-                                    {member.status}
+                                    ${effectiveStatus === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                                        effectiveStatus === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 
+                                        effectiveStatus === 'Pending' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                                        effectiveStatus === 'Expired' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
+                                    {effectiveStatus}
                                     </span>
                                 </td>
                                 <td className="px-8 py-5 text-slate-500 font-medium">{member.start_date}</td>
@@ -398,7 +420,7 @@ const Members = () => {
                                   </td>
                                 )}
                                 </tr>
-                            ))}
+                            )})}
                             </tbody>
                         </table>
                         </div>
@@ -438,6 +460,7 @@ const Members = () => {
           member={selectedMember} 
           categories={categories}
           initialFreeze={autoFreeze}
+          getEffectiveStatus={getEffectiveStatus}
           onBack={() => { setView('list'); setSelectedMember(null); setAutoFreeze(false); }}
           onUpdate={() => { loadData(); setAutoFreeze(false); }} 
           onRenew={() => { setIsRenewal(true); setView('form'); }}
@@ -453,9 +476,9 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
   const initialStartDate = useMemo(() => {
     if (isRenewal && existingMember) {
         const nextDay = addDays(parseISO(existingMember.current_end_date), 1);
-        return format(nextDay, 'yyyy-MM-dd');
+        return format(nextDay, 'dd-MM-yyyy');
     }
-    return format(new Date(), 'yyyy-MM-dd');
+    return format(new Date(), 'dd-MM-yyyy');
   }, [isRenewal, existingMember]);
 
   const { register, handleSubmit, watch, setValue, resetField, setError, formState: { errors } } = useForm<MemberFormValues>({
@@ -515,7 +538,7 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
         setValue('category_id', matchedMember.category_id);
         
         // Default to current date as requested
-        setValue('start_date', format(new Date(), 'yyyy-MM-dd'));
+        setValue('start_date', format(new Date(), 'dd-MM-yyyy'));
         
         // Feedback
         console.log(`Identity Sync: Found ${matchedMember.guest_name}. Start date defaulted to today.`);
@@ -525,7 +548,7 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
         resetField('category_id');
         resetField('discount');
         resetField('check_no');
-        setValue('start_date', format(new Date(), 'yyyy-MM-dd'));
+        setValue('start_date', format(new Date(), 'dd-MM-yyyy'));
     }
   }, [matchedMember, membershipNumber, setValue, resetField, existingMember, isRenewal]);
 
@@ -539,7 +562,7 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
   if (startDate && selectedCategory) {
     const start = parseISO(startDate);
     const end = RevenueEngine.calculateOriginalEndDate(start, selectedCategory.duration_months);
-    endDateStr = format(end, 'yyyy-MM-dd');
+    endDateStr = format(end, 'dd-MM-yyyy');
     dailyRate = RevenueEngine.calculateDailyRate(netAmount, start, end);
   }
 
@@ -776,12 +799,23 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
   );
 };
 
-const MemberDetail = ({ member, categories, initialFreeze, onBack, onUpdate, onRenew }: { member: Member, categories: MembershipCategory[], initialFreeze: boolean, onBack: () => void, onUpdate: () => void, onRenew: () => void }) => {
+const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, onBack, onUpdate, onRenew }: { member: Member, categories: MembershipCategory[], initialFreeze: boolean, getEffectiveStatus: (m: Member) => string, onBack: () => void, onUpdate: () => void, onRenew: () => void }) => {
   const { formatMoney, hasPermission } = useSettings();
   const { user } = useAuth();
   const [freezes, setFreezes] = useState<Freeze[]>([]);
   const [showFreezeModal, setShowFreezeModal] = useState(initialFreeze);
-  const [freezeForm, setFreezeForm] = useState({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' });
+  const [freezeForm, setFreezeForm] = useState({ start_date: format(new Date(), 'dd-MM-yyyy'), end_date: '' });
+  const [history, setHistory] = useState<Member[]>([]);
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      if (member.membership_number) {
+        const historyData = await db.getMemberHistory(member.membership_number);
+        setHistory(historyData);
+      }
+    };
+    loadHistory();
+  }, [member.membership_number]);
 
   useEffect(() => {
     loadFreezes();
@@ -838,6 +872,7 @@ const MemberDetail = ({ member, categories, initialFreeze, onBack, onUpdate, onR
 
   const catName = categories.find(c => c.id === member.category_id)?.name || 'Unknown Tier';
   const canEdit = user && hasPermission(user.role_id, 'members:edit');
+  const effectiveStatus = getEffectiveStatus(member);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
@@ -861,10 +896,10 @@ const MemberDetail = ({ member, categories, initialFreeze, onBack, onUpdate, onR
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">ID: {member.membership_number}</p>
                         
                         <div className="mt-6 flex flex-wrap justify-center gap-2">
-                             <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${member.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
-                                member.status === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
-                                member.status === 'Expired' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
-                                {member.status}
+                             <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${effectiveStatus === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
+                                effectiveStatus === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
+                                effectiveStatus === 'Expired' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
+                                {effectiveStatus}
                              </span>
                              <span className="px-4 py-1 bg-slate-50 text-slate-600 border border-slate-200 rounded-full text-[10px] font-black uppercase tracking-widest">
                                 {catName}
@@ -932,7 +967,7 @@ const MemberDetail = ({ member, categories, initialFreeze, onBack, onUpdate, onR
                                                     <Clock className="w-4 h-4 text-indigo-600" />
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs font-bold text-slate-700">{fz.start_date} → {fz.end_date}</p>
+                                                    <p className="text-xs font-bold text-slate-700">{fz.start_date} &rarr; {fz.end_date}</p>
                                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{fz.total_days} Total Days Deferred</p>
                                                 </div>
                                             </div>
@@ -948,6 +983,51 @@ const MemberDetail = ({ member, categories, initialFreeze, onBack, onUpdate, onR
                         </div>
                     </CardContent>
                 </Card>
+
+                {history.length > 1 && (
+                    <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg overflow-hidden">
+                        <CardHeader className="p-8 border-b border-slate-100 flex items-center justify-between">
+                            <CardTitle className="text-lg font-black tracking-tight flex items-center gap-3">
+                                <History className="w-5 h-5 text-indigo-600" /> Lifecycle History
+                            </CardTitle>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                {history.length} Total Records
+                            </span>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="divide-y divide-slate-100">
+                                {history.map(histMember => {
+                                    const isCurrent = histMember.id === member.id;
+                                    const histCatName = categories.find(c => c.id === histMember.category_id)?.name || 'Unknown Tier';
+                                    const histStatus = getEffectiveStatus(histMember);
+                                    return (
+                                        <div key={histMember.id} className={`p-6 flex items-center justify-between transition-colors ${isCurrent ? 'bg-indigo-50' : 'hover:bg-slate-50/70'}`}>
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm ${isCurrent ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200'}`}>
+                                                    <Layers className="w-5 h-5" />
+                                                </div>
+                                                <div>
+                                                    <h5 className="font-bold text-sm tracking-tight text-slate-800">{histCatName}</h5>
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                        {histMember.start_date} &rarr; {histMember.current_end_date}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
+                                                    histStatus === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                                                    histStatus === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                                                    histStatus === 'Expired' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                                }`}>{histStatus}</span>
+                                                <p className="font-black text-xs text-slate-600 mt-1.5 tabular-nums">{formatMoney(histMember.net_amount)}</p>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
         </div>
 
