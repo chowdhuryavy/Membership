@@ -19,7 +19,7 @@
     "clsx": "^2.1.1",
     "react-router-dom": "^7.13.0",
     "date-fns": "^4.1.0",
-    "jspdf": "^4.1.0",
+    "jspdf": "2.5.1",
     "tailwind-merge": "^3.4.0",
     "react-hook-form": "^7.71.1",
     "@hookform/resolvers": "^5.2.2",

@@ -5,7 +5,7 @@ import { db } from '../services/mockSupabase';
 
 interface AuthContextType {
   user: UserProfile | null;
-  login: (email: string, password: string) => Promise<string | null>;
+  login: (email: string, password: string) => Promise<{ error: string | null, requiresPasswordChange: boolean }>;
   register: (email: string, password: string, name: string) => Promise<string | null>;
   changePassword: (currentPass: string, newPass: string) => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
@@ -49,19 +49,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { user: foundUser, error } = await db.login(email, password);
+    const { user: foundUser, error, requiresPasswordChange } = await db.login(email, password);
     if (foundUser) {
       setUser(foundUser);
       sessionStorage.setItem('membership_session', JSON.stringify(foundUser));
-      return null;
+      return { error: null, requiresPasswordChange };
     }
-    return error || 'Authentication failed.';
+    return { error: error || 'Authentication failed.', requiresPasswordChange: false };
   };
 
   const register = async (email: string, password: string, name: string) => {
     const { user: createdUser, error } = await db.signUp(email, password, name);
     if (createdUser) {
-        return await login(email, password);
+        const loginRes = await login(email, password);
+        return loginRes.error;
     }
     return error || 'Registration failed';
   };
@@ -69,12 +70,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const changePassword = async (currentPass: string, newPass: string) => {
       if (!user) throw new Error("Not authenticated");
       await db.changePassword(user.id, currentPass, newPass);
+      // After password change, we should refresh the local user state as temp_password is now null
+      await refreshUser();
   };
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
       if (!user) throw new Error("Not authenticated");
       
-      // If email is changing, update Auth provider as well
       if (updates.email && updates.email !== user.email) {
           await db.updateEmail(updates.email);
       }

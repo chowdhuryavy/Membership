@@ -191,12 +191,11 @@ const Users = () => {
                 e.preventDefault();
                 handleAddNew();
             }
-            // Add search focus logic here if search input ref is available
         }
     };
     window.addEventListener('keydown', handleShortcuts);
     return () => window.removeEventListener('keydown', handleShortcuts);
-  }, [showForm, canCreate, checkShortcut]); // Dependencies for closure freshness
+  }, [showForm, canCreate, checkShortcut]);
 
   if (!canViewUsers) {
     return (
@@ -264,7 +263,7 @@ const Users = () => {
         await db.deleteUser(deleteId);
         await loadUsers();
         setDeleteId(null);
-        setView('list'); // Go back to list if deleting from detail view
+        setView('list'); 
     } catch (err: any) {
         setError(err.message || "Revocation failed.");
     } finally { setIsSubmitting(false); }
@@ -380,15 +379,15 @@ const Users = () => {
       )}
 
       {showForm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-2xl relative">
-                <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden animate-in zoom-in-95 duration-300">
-                    <CardHeader className="bg-indigo-600 text-white p-8 relative">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+            <div className="w-full max-w-2xl relative my-8">
+                <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
+                    <CardHeader className="bg-indigo-600 text-white p-6 md:p-8 relative shrink-0">
                         <CardTitle className="text-xl font-black tracking-tight">{isEditing ? 'Modify Identity' : 'Provision User'}</CardTitle>
                         <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mt-2">Security Lifecycle</p>
                         <button onClick={handleFormCancel} className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"><X className="w-5 h-5" /></button>
                     </CardHeader>
-                    <CardContent className="p-8">
+                    <CardContent className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
                         <form onSubmit={handleSubmit} className="space-y-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
@@ -416,7 +415,7 @@ const Users = () => {
                           </div>
                           <div className="space-y-2 pt-4 border-t border-slate-100">
                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Facility Access Scopes</label>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100 max-h-48 overflow-y-auto shadow-inner">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100 max-h-48 overflow-y-auto shadow-inner custom-scrollbar">
                                   {outlets.map(o => (
                                       <label key={o.id} className="flex items-center space-x-3 p-3 hover:bg-white rounded-xl cursor-pointer transition-all border border-transparent hover:border-slate-100 group">
                                           <input type="checkbox" checked={formData.allowed_outlets.includes(o.id)} onChange={() => toggleOutlet(o.id)} className="h-5 w-5 text-indigo-600 rounded-lg border-slate-300 focus:ring-indigo-500"/>

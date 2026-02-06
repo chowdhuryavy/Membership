@@ -8,7 +8,7 @@ import { format, endOfMonth, differenceInCalendarDays, addDays } from 'date-fns'
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Activity, Building2, ReceiptText, Settings2, Check, X, ShieldCheck, FileText, Printer, FileDown, Globe } from 'lucide-react';
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 const parseISO = (dateString: string) => new Date(dateString);

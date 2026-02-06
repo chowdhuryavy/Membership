@@ -4,7 +4,6 @@ import { supabase } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format } from 'date-fns';
 
-// Local implementation for parseISO to resolve environment-specific import errors
 const parseISO = (dateString: string) => new Date(dateString);
 
 const supabaseUrl = 'https://fqwfffkkaeknaqjorygy.supabase.co';
@@ -59,8 +58,8 @@ class DatabaseService {
     }
   }
 
-  async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null }> {
-    if (!this.isSupabase()) return { user: null, error: "Cloud sync offline." };
+  async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null, requiresPasswordChange: boolean }> {
+    if (!this.isSupabase()) return { user: null, error: "Cloud sync offline.", requiresPasswordChange: false };
     const cleanEmail = email.trim().toLowerCase();
     const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
 
@@ -82,38 +81,35 @@ class DatabaseService {
               if (msg.includes('confirm') || msg.includes('email') || signUpError.status === 500) {
                 return { 
                   user: null, 
-                  error: "SECURITY ERROR: Email Confirmations are blocking login. Please disable 'Email Confirmations' in Supabase Auth Settings." 
+                  error: "SECURITY ERROR: Email Confirmations are blocking login. Please disable 'Email Confirmations' in Supabase Auth Settings.",
+                  requiresPasswordChange: false
                 };
               }
-              if (msg.includes('already registered')) {
-                return { 
-                  user: null, 
-                  error: "IDENTITY CONFLICT: This email is already in the Auth system. Please clear the record in the Supabase Dashboard and try again." 
-                };
-              }
-              return { user: null, error: signUpError.message };
+              return { user: null, error: signUpError.message, requiresPasswordChange: false };
             }
 
             if (signUpData.user) {
-              await supabase.from('profiles').update({ auth_id: signUpData.user.id, temp_password: null }).eq('id', profile.id);
+              await supabase.from('profiles').update({ auth_id: signUpData.user.id }).eq('id', profile.id);
               const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
               await this.logAction('AUTH_SIGNUP', `Identity provisioned for ${profile.email}`);
-              return { user: refreshed, error: null };
+              return { user: refreshed, error: null, requiresPasswordChange: true };
             }
         }
-        return { user: null, error: authError?.message || "Invalid credentials." };
+        return { user: null, error: authError?.message || "Invalid credentials.", requiresPasswordChange: false };
     }
 
     if (authData.user && profile) {
         if (!profile.auth_id || profile.auth_id !== authData.user.id) {
-          await supabase.from('profiles').update({ auth_id: authData.user.id, temp_password: null }).eq('id', profile.id);
+          await supabase.from('profiles').update({ auth_id: authData.user.id }).eq('id', profile.id);
         }
         await this.syncAuthMetadata(profile);
         await this.logAction('AUTH_LOGIN', `Access authorized for ${profile.email}`);
-        return { user: profile, error: null };
+        
+        // If profile still has temp_password, it means they haven't completed the force-change flow
+        return { user: profile, error: null, requiresPasswordChange: !!profile.temp_password };
     }
 
-    return { user: null, error: "Identity profile not found. User may have been revoked." };
+    return { user: null, error: "Identity profile not found.", requiresPasswordChange: false };
   }
 
   async addUser(user: Omit<UserProfile, 'id'> & { password?: string }): Promise<UserProfile> {
@@ -131,7 +127,6 @@ class DatabaseService {
 
         if (authData?.user) {
             authId = authData.user.id;
-            tempPassword = null; 
         }
 
         const insertData = {
@@ -168,8 +163,6 @@ class DatabaseService {
             updated_at: new Date().toISOString()
         };
 
-        // FIXED: Do not unlink Auth ID. This preserves the link when Admins update via Edge Functions.
-        // Only set temp_password if there is no existing Auth link (unlinked/shadow user)
         if (!current.auth_id && updates.password) {
              finalUpdates.temp_password = updates.password;
         }
@@ -181,12 +174,10 @@ class DatabaseService {
     }
   }
 
-  // New method for users to update their own email via Supabase Auth
   async updateEmail(newEmail: string) {
       if (this.isSupabase()) {
           const { error } = await (supabase.auth as any).updateUser({ email: newEmail });
           if (error) throw new Error(error.message);
-          // Note: This often triggers a confirmation email to the new address
       }
   }
 
@@ -194,6 +185,10 @@ class DatabaseService {
     if (this.isSupabase()) {
         const { error } = await (supabase.auth as any).updateUser({ password: newPass });
         if (error) throw new Error(error.message);
+        
+        // Clear temp_password upon successful change
+        await supabase.from('profiles').update({ temp_password: null }).eq('id', userId);
+        
         await this.logAction('CHANGE_PASSWORD', `Credentials updated for user ID: ${userId}`);
     }
   }
@@ -217,7 +212,6 @@ class DatabaseService {
         const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle(); 
         if (data) return data; 
     } 
-    // Return default including empty shortcuts map
     return { 
         name: 'The Torch Hospitality', 
         logo_url: '', 
@@ -434,7 +428,7 @@ class DatabaseService {
         const { error } = await supabase.from('company_settings').upsert(payload, { onConflict: 'id' }); 
         if (error) {
             console.error("Schema Mismatch Warning:", error);
-            throw new Error(`Database Error: ${error.message}. Please run the latest SQL update in the Supabase Dashboard.`);
+            throw new Error(`Database Error: ${error.message}`);
         }
         await this.logAction('UPDATE_SETTINGS', 'Global framework configurations synchronized');
     } 
@@ -484,7 +478,6 @@ class DatabaseService {
     return []; 
   }
   
-  // New: Lifecycle History Retrieval
   async getMemberHistory(membershipNumber: string): Promise<Member[]> {
     if (this.isSupabase()) {
         const { data } = await supabase
