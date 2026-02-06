@@ -406,8 +406,8 @@ const Members = () => {
                                     {effectiveStatus}
                                     </span>
                                 </td>
-                                <td className="px-8 py-5 text-slate-500 font-medium">{member.start_date}</td>
-                                <td className="px-8 py-5 text-indigo-600 font-black tracking-tight">{member.current_end_date}</td>
+                                <td className="px-8 py-5 text-slate-500 font-medium">{format(parseISO(member.start_date), 'dd-MM-yyyy')}</td>
+                                <td className="px-8 py-5 text-indigo-600 font-black tracking-tight">{format(parseISO(member.current_end_date), 'dd-MM-yyyy')}</td>
                                 <td className="px-8 py-5 text-right font-black tabular-nums">{formatMoney(member.net_amount)}</td>
                                 {(canEdit || canDelete || canCreate) && (
                                   <td className="px-8 py-5">
@@ -629,7 +629,7 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
             {isInternalRenewal ? <RefreshCcw className="w-6 h-6 text-indigo-400 animate-in spin-in-180" /> : <UserPlus className="w-6 h-6 text-indigo-400" />}
           </div>
           <div>
-            <CardTitle className="text-2xl font-black tracking-tight">
+            <CardTitle className="text-2xl font-black tracking-tight text-white">
               {isRenewal ? 'Renew Membership' : matchedMember ? 'Process Re-Enrollment' : existingMember ? 'Edit Profile' : 'New Enrollment'}
             </CardTitle>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">Lifecycle Management Console</p>
@@ -655,7 +655,7 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
                            <Zap className="w-3 h-3 fill-emerald-600" /> Identity Matched
                         </h4>
                         <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-tighter">
-                            Guest History: Active from <span className="font-black underline">{matchedMember.start_date}</span> to <span className="font-black underline">{matchedMember.current_end_date}</span>
+                            Guest History: Active from <span className="font-black underline">{format(parseISO(matchedMember.start_date), 'dd-MM-yyyy')}</span> to <span className="font-black underline">{format(parseISO(matchedMember.current_end_date), 'dd-MM-yyyy')}</span>
                         </p>
                     </div>
                 </div>
@@ -756,7 +756,7 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
                       <h5 className="text-[10px] font-black uppercase tracking-widest mb-0.5">Timeline Integrity Audit</h5>
                       <p className="text-xs font-bold leading-none">
                           {continuityStatus.isGap ? `Retention Gap: ${continuityStatus.gapDays} days after previous record.` : 
-                           continuityStatus.isOverlap ? `Notice: Overlapping previous term (Exp: ${effectiveRefMember?.current_end_date})` : 
+                           continuityStatus.isOverlap ? `Notice: Overlapping previous term (Exp: ${format(parseISO(effectiveRefMember?.current_end_date || ''), 'dd-MM-yyyy')})` : 
                            'Secured: Continuity verified with previous profile.'}
                       </p>
                   </div>
@@ -774,7 +774,7 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
               </div>
               <div className="space-y-1">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Expected Expiry</p>
-                  <p className="text-sm font-black text-slate-900">{endDateStr || '---'}</p>
+                  <p className="text-sm font-black text-slate-900">{endDateStr ? format(parseISO(endDateStr), 'dd-MM-yyyy') : '---'}</p>
               </div>
               <div className="space-y-1">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Daily Accrual</p>
@@ -938,15 +938,15 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Enrollment Date</p>
-                                <p className="font-bold text-slate-900">{member.start_date}</p>
+                                <p className="font-bold text-slate-900">{format(parseISO(member.start_date), 'dd-MM-yyyy')}</p>
                             </div>
                             <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Original End Date</p>
-                                <p className="font-bold text-slate-900">{member.original_end_date}</p>
+                                <p className="font-bold text-slate-900">{format(parseISO(member.original_end_date), 'dd-MM-yyyy')}</p>
                             </div>
                             <div className="p-5 bg-indigo-50 rounded-2xl border border-indigo-100">
                                 <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Current Expiry</p>
-                                <p className="font-bold text-indigo-700">{member.current_end_date}</p>
+                                <p className="font-bold text-indigo-700">{format(parseISO(member.current_end_date), 'dd-MM-yyyy')}</p>
                             </div>
                         </div>
 
@@ -967,7 +967,7 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                                                     <Clock className="w-4 h-4 text-indigo-600" />
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs font-bold text-slate-700">{fz.start_date} &rarr; {fz.end_date}</p>
+                                                    <p className="text-xs font-bold text-slate-700">{format(parseISO(fz.start_date), 'dd-MM-yyyy')} &rarr; {format(parseISO(fz.end_date), 'dd-MM-yyyy')}</p>
                                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{fz.total_days} Total Days Deferred</p>
                                                 </div>
                                             </div>
@@ -1009,7 +1009,7 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                                                 <div>
                                                     <h5 className="font-bold text-sm tracking-tight text-slate-800">{histCatName}</h5>
                                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                        {histMember.start_date} &rarr; {histMember.current_end_date}
+                                                        {format(parseISO(histMember.start_date), 'dd-MM-yyyy')} &rarr; {format(parseISO(histMember.current_end_date), 'dd-MM-yyyy')}
                                                     </p>
                                                 </div>
                                             </div>
@@ -1035,7 +1035,7 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
                 <Card className="max-w-md w-full rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden animate-in zoom-in-95">
                     <CardHeader className="bg-slate-900 text-white p-6 relative">
-                        <CardTitle className="text-lg font-black tracking-tight">Freeze Account</CardTitle>
+                        <CardTitle className="text-lg font-black tracking-tight text-white">Freeze Account</CardTitle>
                         <button onClick={() => setShowFreezeModal(false)} className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"><X className="w-5 h-5"/></button>
                     </CardHeader>
                     <CardContent className="p-8">

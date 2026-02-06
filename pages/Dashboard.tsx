@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, Button } from '../components/ui';
 import { 
@@ -194,7 +195,7 @@ const Dashboard = () => {
                                           {daysLeft} Days Left
                                       </span>
                                    </div>
-                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Exp: {m.current_end_date}</p>
+                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Exp: {format(parseISO(m.current_end_date), 'dd-MM-yyyy')}</p>
                                </div>
                            </div>
                         );

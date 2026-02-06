@@ -37,8 +37,8 @@ interface ReportRow {
 const ALL_POSSIBLE_COLUMNS = [
     { key: 'sl_no', label: 'SL.', width: 'w-12', defaultVisible: true },
     { key: 'guest_name', label: 'GUEST NAME / PROFILE', width: 'min-w-[280px]', defaultVisible: true },
-    { key: 'from', label: 'START DATE', width: 'w-24', defaultVisible: true },
-    { key: 'to', label: 'END DATE', width: 'w-24', defaultVisible: true },
+    { key: 'from', label: 'START DATE', width: 'w-28', defaultVisible: true },
+    { key: 'to', label: 'END DATE', width: 'w-28', defaultVisible: true },
     { key: 'total_days', label: 'DAYS', width: 'w-16', defaultVisible: true },
     { key: 'actual_fees', label: 'NET FEES', width: 'w-28', defaultVisible: true },
     { key: 'carry_forward', label: 'PREV. ACCRUAL', width: 'w-28', defaultVisible: true },
@@ -97,8 +97,8 @@ const Reports = () => {
             return {
                 sl_no: idx + 1,
                 guest_name: m.guest_name,
-                from: format(parseISO(m.start_date), 'dd-MM-yy'),
-                to: format(parseISO(m.current_end_date), 'dd-MM-yy'),
+                from: format(parseISO(m.start_date), 'dd-MM-yyyy'),
+                to: format(parseISO(m.current_end_date), 'dd-MM-yyyy'),
                 total_days: totalDays,
                 original_fees: m.actual_rate, 
                 actual_fees: m.net_amount,
