@@ -251,99 +251,108 @@ const Users = () => {
 
   const getRoleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || 'Unknown';
 
-  if (view === 'detail' && selectedUser) {
-      return <UserDetail user={selectedUser} roles={roles} outlets={outlets} onBack={() => setView('list')} onEdit={handleEdit} onDelete={setDeleteId} />
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-xl shadow-indigo-100">
-                <Shield className="w-6 h-6" />
+      {view === 'detail' && selectedUser ? (
+        <UserDetail 
+            user={selectedUser} 
+            roles={roles} 
+            outlets={outlets} 
+            onBack={() => setView('list')} 
+            onEdit={handleEdit} 
+            onDelete={setDeleteId} 
+        />
+      ) : (
+        <>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div className="flex items-center gap-4">
+                <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-xl shadow-indigo-100">
+                    <Shield className="w-6 h-6" />
+                </div>
+                <div>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Identity Management</h1>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Authorized User Directory</p>
+                </div>
             </div>
-            <div>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Identity Management</h1>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Authorized User Directory</p>
-            </div>
-        </div>
-        <div className="flex gap-2">
-            <Button variant="outline" onClick={loadUsers} className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest border-slate-200">
-                <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh Data
-            </Button>
-            {canCreate && (
-                <Button onClick={handleAddNew} className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100">
-                    <Plus className="w-4 h-4 mr-2" /> Provision User
+            <div className="flex gap-2">
+                <Button variant="outline" onClick={loadUsers} className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest border-slate-200">
+                    <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh Data
                 </Button>
-            )}
-        </div>
-      </div>
-      
-      <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
-          <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                  <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] bg-slate-50 border-b">
-                      <tr>
-                          <th className="px-8 py-6">Profile</th>
-                          <th className="px-8 py-6 text-center">Sync Status</th>
-                          <th className="px-8 py-6">Security Tier</th>
-                          <th className="px-8 py-6">Access Scopes</th>
-                          {canModifyTable && <th className="px-8 py-6 text-right">Operations</th>}
-                      </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                      {users.map(u => (
-                          <tr key={u.id} onClick={() => { setSelectedUser(u); setView('detail'); }} className="bg-white hover:bg-slate-50 transition-colors group cursor-pointer">
-                              <td className="px-8 py-6">
-                                  <div className="font-black text-slate-900 tracking-tight text-base">{u.name}</div>
-                                  <div className="text-indigo-600 text-xs font-bold">{u.email}</div>
-                              </td>
-                              <td className="px-8 py-6 text-center">
-                                  {!u.auth_id ? (
-                                      <div className="inline-flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-100 w-fit">
-                                          <RefreshCcw className="w-3.5 h-3.5 animate-spin-slow" />
-                                          <span className="text-[9px] font-black uppercase tracking-widest">Shadow Profile</span>
-                                      </div>
-                                  ) : (
-                                      <div className="inline-flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 w-fit">
-                                          <UserCheck className="w-3.5 h-3.5" />
-                                          <span className="text-[9px] font-black uppercase tracking-widest">Auth Linked</span>
-                                      </div>
-                                  )}
-                              </td>
-                              <td className="px-8 py-6">
-                                  <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">
-                                      {getRoleName(u.role_id)}
-                                  </span>
-                              </td>
-                              <td className="px-8 py-6">
-                                  <div className="flex flex-wrap gap-2 max-w-xs">
-                                      {(!u.allowed_outlets || u.allowed_outlets.length === 0) ? (
-                                          <span className="text-red-500 text-[10px] font-black uppercase tracking-widest flex items-center bg-red-50 px-2.5 py-1 rounded-lg"><AlertTriangle className="w-3.5 h-3.5 mr-1.5"/> No Access</span>
-                                      ) : u.allowed_outlets.map(outId => {
-                                          const outName = outlets.find(o => o.id === outId)?.name;
-                                          return outName ? (
-                                              <span key={outId} className="text-[10px] font-black uppercase tracking-widest bg-white px-3 py-1 rounded-xl text-slate-500 flex items-center border border-slate-200 shadow-sm">
-                                                  <Store className="w-3 h-3 mr-1.5 text-slate-300"/> {outName}
-                                              </span>
-                                          ) : null;
-                                      })}
-                                  </div>
-                              </td>
-                              {canModifyTable && (
-                                <td className="px-8 py-6 text-right" onClick={e => e.stopPropagation()}>
-                                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {canEdit && <button onClick={() => handleEdit(u)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all"><Edit2 className="w-4 h-4" /></button>}
-                                        {canDelete && u.id !== currentUser?.id && <button onClick={() => setDeleteId(u.id)} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>}
-                                    </div>
-                                </td>
-                              )}
-                          </tr>
-                      ))}
-                  </tbody>
-              </table>
+                {canCreate && (
+                    <Button onClick={handleAddNew} className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100">
+                        <Plus className="w-4 h-4 mr-2" /> Provision User
+                    </Button>
+                )}
+            </div>
           </div>
-      </Card>
+          
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                      <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] bg-slate-50 border-b">
+                          <tr>
+                              <th className="px-8 py-6">Profile</th>
+                              <th className="px-8 py-6 text-center">Sync Status</th>
+                              <th className="px-8 py-6">Security Tier</th>
+                              <th className="px-8 py-6">Access Scopes</th>
+                              {canModifyTable && <th className="px-8 py-6 text-right">Operations</th>}
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                          {users.map(u => (
+                              <tr key={u.id} onClick={() => { setSelectedUser(u); setView('detail'); }} className="bg-white hover:bg-slate-50 transition-colors group cursor-pointer">
+                                  <td className="px-8 py-6">
+                                      <div className="font-black text-slate-900 tracking-tight text-base">{u.name}</div>
+                                      <div className="text-indigo-600 text-xs font-bold">{u.email}</div>
+                                  </td>
+                                  <td className="px-8 py-6 text-center">
+                                      {!u.auth_id ? (
+                                          <div className="inline-flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-100 w-fit">
+                                              <RefreshCcw className="w-3.5 h-3.5 animate-spin-slow" />
+                                              <span className="text-[9px] font-black uppercase tracking-widest">Shadow Profile</span>
+                                          </div>
+                                      ) : (
+                                          <div className="inline-flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 w-fit">
+                                              <UserCheck className="w-3.5 h-3.5" />
+                                              <span className="text-[9px] font-black uppercase tracking-widest">Auth Linked</span>
+                                          </div>
+                                      )}
+                                  </td>
+                                  <td className="px-8 py-6">
+                                      <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">
+                                          {getRoleName(u.role_id)}
+                                      </span>
+                                  </td>
+                                  <td className="px-8 py-6">
+                                      <div className="flex flex-wrap gap-2 max-w-xs">
+                                          {(!u.allowed_outlets || u.allowed_outlets.length === 0) ? (
+                                              <span className="text-red-500 text-[10px] font-black uppercase tracking-widest flex items-center bg-red-50 px-2.5 py-1 rounded-lg"><AlertTriangle className="w-3.5 h-3.5 mr-1.5"/> No Access</span>
+                                          ) : u.allowed_outlets.map(outId => {
+                                              const outName = outlets.find(o => o.id === outId)?.name;
+                                              return outName ? (
+                                                  <span key={outId} className="text-[10px] font-black uppercase tracking-widest bg-white px-3 py-1 rounded-xl text-slate-500 flex items-center border border-slate-200 shadow-sm">
+                                                      <Store className="w-3 h-3 mr-1.5 text-slate-300"/> {outName}
+                                                  </span>
+                                              ) : null;
+                                          })}
+                                      </div>
+                                  </td>
+                                  {canModifyTable && (
+                                    <td className="px-8 py-6 text-right" onClick={e => e.stopPropagation()}>
+                                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {canEdit && <button onClick={() => handleEdit(u)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all"><Edit2 className="w-4 h-4" /></button>}
+                                            {canDelete && u.id !== currentUser?.id && <button onClick={() => setDeleteId(u.id)} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>}
+                                        </div>
+                                    </td>
+                                  )}
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
+          </Card>
+        </>
+      )}
 
       {showForm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
