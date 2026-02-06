@@ -32,7 +32,9 @@ import {
   Lock,
   PieChart,
   History,
-  Users
+  Users,
+  Keyboard,
+  Command
 } from 'lucide-react';
 
 /**
@@ -86,7 +88,7 @@ const PERMISSION_REGISTRY = [
     },
     { 
         id: 'properties', 
-        label: 'Portfolio Assets', 
+        label: 'Properties', 
         icon: Building2,
         actions: [
             { id: 'view', label: 'View Properties', icon: Eye },
@@ -121,14 +123,24 @@ const PERMISSION_REGISTRY = [
     },
 ];
 
-type TabId = 'company' | 'properties' | 'roles' | 'currency' | 'outlets';
+type TabId = 'company' | 'properties' | 'roles' | 'currency' | 'outlets' | 'shortcuts';
+
+const SHORTCUT_DEFINITIONS = [
+    { id: 'nav_dashboard', label: 'Navigate to Dashboard', default: 'Alt+D' },
+    { id: 'nav_members', label: 'Navigate to Directory', default: 'Alt+M' },
+    { id: 'nav_settings', label: 'Navigate to Settings', default: 'Alt+S' },
+    { id: 'global_search', label: 'Focus Search Input', default: 'Alt+K' },
+    { id: 'action_create', label: 'Create New Record', default: 'Alt+N' },
+    { id: 'action_save', label: 'Save / Confirm Action', default: 'Alt+Enter' },
+    { id: 'action_cancel', label: 'Cancel / Close Modal', default: 'Escape' },
+];
 
 const SettingsPage = () => {
   const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission } = useSettings();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>('company');
 
-  const [companyForm, setCompanyForm] = useState<CompanySettings>({ name: '', logo_url: '', address: '', currency_id: '' });
+  const [companyForm, setCompanyForm] = useState<CompanySettings>({ name: '', logo_url: '', address: '', currency_id: '', keyboard_shortcuts: {} });
   const [newCurrency, setNewCurrency] = useState<Partial<Currency>>({ code: '', symbol: '', rate: 1, is_default: false });
   const [editingCurrencyId, setEditingCurrencyId] = useState<string | null>(null);
 
@@ -145,6 +157,7 @@ const SettingsPage = () => {
 
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [recordingKey, setRecordingKey] = useState<string | null>(null);
 
   const canEditSettings = user && hasPermission(user.role_id, 'settings:edit');
   const canViewProperties = user && hasPermission(user.role_id, 'properties:view');
@@ -157,10 +170,11 @@ const SettingsPage = () => {
   const availableTabs = useMemo(() => {
     const tabs: { id: TabId; label: string; visible: boolean }[] = [
       { id: 'company', label: 'Global Scope', visible: !!canViewSettings },
-      { id: 'properties', label: 'Portfolio', visible: !!canViewProperties },
+      { id: 'properties', label: 'Properties', visible: !!canViewProperties },
       { id: 'outlets', label: 'Facilities', visible: !!canViewOutlets },
       { id: 'roles', label: 'Security Matrix', visible: !!canManageRoles },
       { id: 'currency', label: 'Monetary', visible: !!canViewSettings },
+      { id: 'shortcuts', label: 'Keyboard', visible: !!canViewSettings },
     ];
     return tabs.filter(t => t.visible);
   }, [canViewSettings, canViewProperties, canViewOutlets, canManageRoles]);
@@ -190,6 +204,32 @@ const SettingsPage = () => {
     } finally {
         setIsSaving(false);
     }
+  };
+
+  const handleKeyRecord = (e: React.KeyboardEvent, actionId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const parts = [];
+      if (e.metaKey) parts.push('Meta');
+      if (e.ctrlKey) parts.push('Ctrl');
+      if (e.altKey) parts.push('Alt');
+      if (e.shiftKey) parts.push('Shift');
+      
+      // Ignore modifier keys solely
+      if (['Meta', 'Control', 'Alt', 'Shift'].includes(e.key)) return;
+
+      parts.push(e.key);
+      const shortcut = parts.join('+');
+      
+      setCompanyForm(prev => ({
+          ...prev,
+          keyboard_shortcuts: {
+              ...prev.keyboard_shortcuts,
+              [actionId]: shortcut
+          }
+      }));
+      setRecordingKey(null);
   };
 
   const handleSaveProperty = async () => {
@@ -445,6 +485,62 @@ const SettingsPage = () => {
           </div>
       )}
 
+      {/* KEYBOARD SHORTCUTS TAB */}
+      {activeTab === 'shortcuts' && canViewSettings && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+              <Card className="lg:col-span-2 rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
+                  <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
+                    <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3">
+                        <Keyboard className="w-5 h-5 text-indigo-600" /> Control Shortcuts
+                    </CardTitle>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Configure system-wide hotkeys for rapid operation.</p>
+                  </CardHeader>
+                  <CardContent className="p-8">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {SHORTCUT_DEFINITIONS.map(def => {
+                            const currentKey = companyForm.keyboard_shortcuts?.[def.id] || def.default;
+                            return (
+                                <div key={def.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group hover:border-indigo-200 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-white rounded-lg shadow-sm text-slate-400 group-hover:text-indigo-600 transition-colors">
+                                            <Command className="w-4 h-4"/>
+                                        </div>
+                                        <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">{def.label}</span>
+                                    </div>
+                                    <div className="relative">
+                                        {recordingKey === def.id ? (
+                                            <input 
+                                                autoFocus
+                                                readOnly
+                                                placeholder="Press keys..."
+                                                onKeyDown={(e) => handleKeyRecord(e, def.id)}
+                                                onBlur={() => setRecordingKey(null)}
+                                                className="w-32 h-10 text-center bg-indigo-600 text-white rounded-xl text-xs font-black shadow-lg shadow-indigo-200 focus:outline-none"
+                                            />
+                                        ) : (
+                                            <button 
+                                                onClick={() => canEditSettings && setRecordingKey(def.id)}
+                                                disabled={!canEditSettings}
+                                                className="w-32 h-10 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black hover:bg-slate-50 focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50"
+                                            >
+                                                {currentKey}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                     </div>
+                     {canEditSettings && (
+                        <div className="pt-8 mt-4 border-t border-slate-100">
+                            <Button onClick={saveCompany} isLoading={isSaving} className="h-14 px-10 rounded-2xl font-black shadow-xl shadow-indigo-100">Save Shortcut Configuration</Button>
+                        </div>
+                     )}
+                  </CardContent>
+              </Card>
+          </div>
+      )}
+
       {/* ROLES TAB - THE DYNAMIC ENGINE */}
       {activeTab === 'roles' && canManageRoles && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
@@ -574,7 +670,7 @@ const SettingsPage = () => {
                         <Input label="Asset Branding Name" value={propForm.name} onChange={e => setPropForm({...propForm, name: e.target.value})} className="h-12 rounded-xl font-bold" />
                         <Input label="Logo Endpoint (URL)" value={propForm.logo_url} onChange={e => setPropForm({...propForm, logo_url: e.target.value})} className="h-12 rounded-xl" />
                         <Input label="Physical Location" value={propForm.address} onChange={e => setPropForm({...propForm, address: e.target.value})} className="h-12 rounded-xl" />
-                        <Button onClick={handleSaveProperty} isLoading={isSaving} className="w-full h-14 rounded-2xl font-black mt-4">Sync Asset Portfolio</Button>
+                        <Button onClick={handleSaveProperty} isLoading={isSaving} className="w-full h-14 rounded-2xl font-black mt-4">Sync Properties</Button>
                     </CardContent>
                 </Card>
               )}
@@ -623,8 +719,8 @@ const SettingsPage = () => {
                         <CardContent className="p-8 space-y-6">
                             <Input label="Facility Designation" value={newOutletName} onChange={e => setNewOutletName(e.target.value)} className="h-12 rounded-xl font-bold" />
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Portfolio Hierarchy</label>
-                                <Select options={[{ value: '', label: 'Assign to Portfolio...' }, ...properties.map(p => ({ value: p.id, label: p.name }))]} value={outletPropertyId} onChange={e => setOutletPropertyId(e.target.value)} className="h-12 rounded-xl font-bold" />
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Property Hierarchy</label>
+                                <Select options={[{ value: '', label: 'Assign to Property...' }, ...properties.map(p => ({ value: p.id, label: p.name }))]} value={outletPropertyId} onChange={e => setOutletPropertyId(e.target.value)} className="h-12 rounded-xl font-bold" />
                             </div>
                             <Button onClick={handleSaveOutlet} isLoading={isSaving} className="w-full h-14 rounded-2xl font-black shadow-xl shadow-indigo-100 mt-4">Authorize Facility</Button>
                         </CardContent>
@@ -646,7 +742,7 @@ const SettingsPage = () => {
                                                 </div>
                                                 <div>
                                                     <div className="font-black text-slate-900 tracking-tight text-lg">{o.name}</div>
-                                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5">Assigned Portfolio: <span className="text-indigo-600 font-black">{parent?.name || 'Isolated'}</span></div>
+                                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5">Assigned Property: <span className="text-indigo-600 font-black">{parent?.name || 'Isolated'}</span></div>
                                                 </div>
                                             </div>
                                         </td>

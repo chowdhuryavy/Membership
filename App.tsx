@@ -7,7 +7,8 @@ import {
   Link, 
   useLocation, 
   Navigate, 
-  Outlet as RouterOutlet 
+  Outlet as RouterOutlet,
+  useNavigate
 } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
@@ -246,8 +247,48 @@ const TopHeader = () => {
 };
 
 const ProtectedLayout = () => {
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const { checkShortcut, isLoading: isSettingsLoading } = useSettings();
+  const [showSplash, setShowSplash] = useState(true);
+  const navigate = useNavigate();
+
+  const combinedLoading = isAuthLoading || isSettingsLoading;
+
+  useEffect(() => {
+    if (!combinedLoading) {
+      const timer = setTimeout(() => setShowSplash(false), 2000); 
+      return () => clearTimeout(timer);
+    }
+  }, [combinedLoading]);
   
+  useEffect(() => {
+    if (user && !combinedLoading) {
+      db.syncAuthMetadata(user).catch(console.warn);
+    }
+  }, [user, combinedLoading]);
+
+  // Global Shortcut Listener
+  useEffect(() => {
+    const handleGlobalShortcuts = (e: KeyboardEvent) => {
+        if (checkShortcut(e, 'nav_dashboard')) {
+            e.preventDefault();
+            navigate('/');
+        }
+        if (checkShortcut(e, 'nav_members')) {
+            e.preventDefault();
+            navigate('/members');
+        }
+        if (checkShortcut(e, 'nav_settings')) {
+            e.preventDefault();
+            navigate('/settings');
+        }
+    };
+
+    window.addEventListener('keydown', handleGlobalShortcuts);
+    return () => window.removeEventListener('keydown', handleGlobalShortcuts);
+  }, [checkShortcut, navigate]);
+
+  if (showSplash) return <SplashLoading />;
   if (!user) return <Navigate to="/login" replace />;
   
   return (
@@ -405,48 +446,25 @@ const MobileHeader = () => {
     );
 };
 
-const AppContent = () => {
-  const { isLoading: isAuthLoading } = useAuth();
-  const { isLoading: isSettingsLoading } = useSettings();
-  const [showSplash, setShowSplash] = useState(true);
-
-  const combinedLoading = isAuthLoading || isSettingsLoading;
-
-  useEffect(() => {
-    if (!combinedLoading) {
-      // Boot duration to allow for a smooth visual experience
-      const timer = setTimeout(() => setShowSplash(false), 2500); 
-      return () => clearTimeout(timer);
-    }
-  }, [combinedLoading]);
-
-  // Initial boot sequence regardless of route
-  if (showSplash) return <SplashLoading />;
-
-  return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route element={<ProtectedLayout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/members" element={<Members />} />
-          <Route path="/categories" element={<Categories />} />
-          <Route path="/users" element={<UsersPage />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/logs" element={<Logs />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/profile" element={<Profile />} />
-        </Route>
-      </Routes>
-    </Router>
-  );
-};
-
 const App = () => {
   return (
     <AuthProvider>
       <SettingsProvider>
-        <AppContent />
+        <Router>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route element={<ProtectedLayout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/members" element={<Members />} />
+              <Route path="/categories" element={<Categories />} />
+              <Route path="/users" element={<UsersPage />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/logs" element={<Logs />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/profile" element={<Profile />} />
+            </Route>
+          </Routes>
+        </Router>
       </SettingsProvider>
     </AuthProvider>
   );

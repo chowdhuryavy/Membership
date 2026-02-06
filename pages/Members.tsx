@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -35,7 +35,8 @@ import {
   RotateCcw,
   ShieldCheck,
   UserSearch,
-  XCircle
+  XCircle,
+  Command
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Freeze } from '../types';
@@ -59,7 +60,7 @@ type MemberFormValues = z.infer<typeof memberSchema>;
 
 const Members = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, hasPermission, checkShortcut } = useSettings();
   const [view, setView] = useState<'list' | 'form' | 'detail'>('list');
   const [members, setMembers] = useState<Member[]>([]);
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
@@ -73,6 +74,7 @@ const Members = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [autoFreeze, setAutoFreeze] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (currentOutlet) loadData();
@@ -96,6 +98,24 @@ const Members = () => {
   const canCreate = user && hasPermission(user.role_id, 'members:create');
   const canEdit = user && hasPermission(user.role_id, 'members:edit');
   const canDelete = user && hasPermission(user.role_id, 'members:delete');
+
+  // Shortcut Listener for List View
+  useEffect(() => {
+    const handleShortcuts = (e: KeyboardEvent) => {
+        if (view === 'list') {
+            if (checkShortcut(e, 'action_create')) {
+                e.preventDefault();
+                handleAddNew();
+            }
+            if (checkShortcut(e, 'global_search')) {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            }
+        }
+    };
+    window.addEventListener('keydown', handleShortcuts);
+    return () => window.removeEventListener('keydown', handleShortcuts);
+  }, [view, canCreate]);
 
   const confirmDelete = async () => {
       if (deleteId && canDelete) {
@@ -238,6 +258,7 @@ const Members = () => {
               <div className="relative group flex-1 md:min-w-[320px]">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                 <input 
+                    ref={searchInputRef}
                     placeholder="Search name, ID, or reference..." 
                     className="w-full h-12 pl-12 pr-4 rounded-2xl bg-white border border-slate-200 shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-bold placeholder:text-slate-400"
                     value={searchTerm}
@@ -252,7 +273,7 @@ const Members = () => {
               
               {canCreate && (
                 <Button onClick={handleAddNew} className="h-12 px-6 rounded-2xl shadow-xl shadow-indigo-100 font-black tracking-tight">
-                    <Plus className="w-5 h-5 mr-1" /> Enrollment
+                    <Plus className="w-5 h-5 mr-1" /> Add Members
                 </Button>
               )}
             </div>
@@ -427,7 +448,7 @@ const Members = () => {
 };
 
 const MemberForm = ({ categories, members, existingMember, isRenewal, currentOutletId, onCancel, onSuccess, canCreate, canEdit }: { categories: MembershipCategory[], members: Member[], existingMember: Member | null, isRenewal?: boolean, currentOutletId: string, onCancel: () => void, onSuccess: (m: Member) => void, canCreate: boolean | null, canEdit: boolean | null }) => {
-  const { formatMoney, currency } = useSettings();
+  const { formatMoney, currency, checkShortcut } = useSettings();
   
   const initialStartDate = useMemo(() => {
     if (isRenewal && existingMember) {
@@ -453,6 +474,22 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
       start_date: initialStartDate
     }
   });
+
+  // Form Shortcuts
+  useEffect(() => {
+    const handleFormShortcuts = (e: KeyboardEvent) => {
+        if (checkShortcut(e, 'action_save')) {
+            e.preventDefault();
+            handleSubmit(onSubmit)();
+        }
+        if (checkShortcut(e, 'action_cancel')) {
+            e.preventDefault();
+            onCancel();
+        }
+    };
+    window.addEventListener('keydown', handleFormShortcuts);
+    return () => window.removeEventListener('keydown', handleFormShortcuts);
+  }, [handleSubmit, onCancel]);
 
   const categoryId = watch('category_id');
   const startDate = watch('start_date');
@@ -723,9 +760,14 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
           </div>
 
           <div className="flex gap-4 pt-4">
-            <Button type="button" variant="secondary" onClick={onCancel} className="flex-1 h-14 rounded-2xl font-bold bg-white border-slate-200">Cancel</Button>
+            <Button type="button" variant="secondary" onClick={onCancel} className="flex-1 h-14 rounded-2xl font-bold bg-white border-slate-200">
+                <span className="flex items-center gap-2"><Command className="w-3 h-3 text-slate-400"/> Cancel</span>
+            </Button>
             <Button type="submit" className={`flex-1 h-14 rounded-2xl font-black text-base shadow-xl transition-all ${isInternalRenewal ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100' : 'shadow-indigo-100'}`}>
-              {isRenewal ? 'Commit Renewal' : matchedMember ? 'Finalize Re-Enrollment' : existingMember ? 'Sync Profile' : 'Confirm Enrollment'}
+              <span className="flex items-center gap-2">
+                {isRenewal ? 'Commit Renewal' : matchedMember ? 'Finalize Re-Enrollment' : existingMember ? 'Sync Profile' : 'Confirm Enrollment'}
+                <Command className="w-3 h-3 opacity-50"/>
+              </span>
             </Button>
           </div>
         </form>
@@ -766,7 +808,7 @@ const MemberDetail = ({ member, categories, initialFreeze, onBack, onUpdate, onR
     const isOverlap = RevenueEngine.checkFreezeOverlap(start, end, freezes);
     
     if (isOverlap) {
-        alert("This period overlaps with an existing suspension.");
+        alert("This period overlaps with an existing Freezing.");
         return;
     }
 
@@ -843,7 +885,7 @@ const MemberDetail = ({ member, categories, initialFreeze, onBack, onUpdate, onR
                         {canEdit && (
                             <div className="mt-8 flex gap-2">
                                 <Button onClick={onRenew} className="flex-1 rounded-xl font-bold h-11 text-xs">Renew</Button>
-                                <Button variant="outline" onClick={() => setShowFreezeModal(true)} className="flex-1 rounded-xl font-bold h-11 text-xs border-slate-200">Suspend</Button>
+                                <Button variant="outline" onClick={() => setShowFreezeModal(true)} className="flex-1 rounded-xl font-bold h-11 text-xs border-slate-200">Freeze</Button>
                             </div>
                         )}
                     </CardContent>
@@ -875,11 +917,11 @@ const MemberDetail = ({ member, categories, initialFreeze, onBack, onUpdate, onR
 
                         <div className="space-y-4">
                             <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-                                <Snowflake className="w-4 h-4 text-indigo-600" /> Suspension Ledger
+                                <Snowflake className="w-4 h-4 text-indigo-600" /> Freezing Ledger
                             </h4>
                             {freezes.length === 0 ? (
                                 <div className="p-10 text-center bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
-                                    <p className="text-xs font-medium text-slate-400">No suspension history recorded for this account.</p>
+                                    <p className="text-xs font-medium text-slate-400">No Freezing history recorded for this account.</p>
                                 </div>
                             ) : (
                                 <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden">
@@ -913,26 +955,26 @@ const MemberDetail = ({ member, categories, initialFreeze, onBack, onUpdate, onR
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
                 <Card className="max-w-md w-full rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden animate-in zoom-in-95">
                     <CardHeader className="bg-slate-900 text-white p-6 relative">
-                        <CardTitle className="text-lg font-black tracking-tight">Suspend Account</CardTitle>
+                        <CardTitle className="text-lg font-black tracking-tight">Freeze Account</CardTitle>
                         <button onClick={() => setShowFreezeModal(false)} className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"><X className="w-5 h-5"/></button>
                     </CardHeader>
                     <CardContent className="p-8">
                         <form onSubmit={handleAddFreeze} className="space-y-6">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Start Suspension</label>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Start Freezing</label>
                                 <Input type="date" value={freezeForm.start_date} onChange={e => setFreezeForm({...freezeForm, start_date: e.target.value})} className="h-12 rounded-xl" />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">End Suspension</label>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">End Freezing</label>
                                 <Input type="date" value={freezeForm.end_date} onChange={e => setFreezeForm({...freezeForm, end_date: e.target.value})} className="h-12 rounded-xl" />
                             </div>
                             <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-3">
                                 <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                                 <p className="text-[10px] font-bold text-amber-800 leading-relaxed uppercase tracking-tight">
-                                    Suspensions automatically extend the membership expiry date by the total number of days deferred.
+                                    Freezing automatically extend the membership expiry date by the total number of days deferred.
                                 </p>
                             </div>
-                            <Button type="submit" className="w-full h-14 rounded-2xl font-black shadow-xl shadow-indigo-100">Commit Suspension</Button>
+                            <Button type="submit" className="w-full h-14 rounded-2xl font-black shadow-xl shadow-indigo-100">Commit Freezing</Button>
                         </form>
                     </CardContent>
                 </Card>

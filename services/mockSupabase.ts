@@ -215,9 +215,24 @@ class DatabaseService {
   async getSettings(): Promise<CompanySettings> { 
     if (this.isSupabase()) { 
         const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle(); 
-        if (data && data.name) return data; 
+        if (data) return data; 
     } 
-    return { name: 'The Torch Hospitality', logo_url: '', address: '', currency_id: 'default' }; 
+    // Return default including empty shortcuts map
+    return { 
+        name: 'The Torch Hospitality', 
+        logo_url: '', 
+        address: '', 
+        currency_id: 'default',
+        keyboard_shortcuts: {
+            'nav_dashboard': 'Alt+D',
+            'nav_members': 'Alt+M',
+            'nav_settings': 'Alt+S',
+            'global_search': 'Alt+K',
+            'action_create': 'Alt+N',
+            'action_save': 'Alt+Enter',
+            'action_cancel': 'Escape'
+        }
+    }; 
   }
   
   async getRoles(): Promise<Role[]> { if (this.isSupabase()) { const { data } = await supabase.from('roles').select('*'); if (data && data.length > 0) return data; } return [{ id: 'admin', name: 'Administrator', permissions: ['members:view', 'members:create', 'members:edit', 'members:delete', 'categories:view', 'categories:create', 'categories:edit', 'categories:delete', 'users:view', 'users:create', 'users:edit', 'users:delete', 'settings:view', 'settings:edit', 'reports:view', 'reports:export', 'logs:view', 'properties:view', 'properties:edit', 'outlets:view', 'outlets:edit'], is_system: true }]; }
@@ -412,7 +427,7 @@ class DatabaseService {
 
   async updateSettings(updates: Partial<CompanySettings>): Promise<void> { 
     if (this.isSupabase()) { 
-        const validKeys = ['name', 'logo_url', 'address', 'currency_id', 'signatory_prepared_role', 'signatory_reviewed_role', 'signatory_approved_role'];
+        const validKeys = ['name', 'logo_url', 'address', 'currency_id', 'signatory_prepared_role', 'signatory_reviewed_role', 'signatory_approved_role', 'keyboard_shortcuts'];
         const payload: any = { id: 'global' };
         validKeys.forEach(k => { if ((updates as any)[k] !== undefined) payload[k] = (updates as any)[k]; });
 

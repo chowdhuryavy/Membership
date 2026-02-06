@@ -76,6 +76,7 @@ export interface CompanySettings {
   signatory_prepared_role?: string;
   signatory_reviewed_role?: string;
   signatory_approved_role?: string;
+  keyboard_shortcuts?: Record<string, string>;
 }
 
 export enum MemberStatus {

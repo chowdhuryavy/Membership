@@ -17,6 +17,7 @@ interface SettingsContextType {
   refreshSettings: () => Promise<void>;
   formatMoney: (amount: number) => string;
   hasPermission: (userRoleId: string, permission: Permission) => boolean;
+  checkShortcut: (e: KeyboardEvent, actionId: string) => boolean;
   isLoading: boolean;
 }
 
@@ -113,6 +114,45 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return role.permissions.includes(permission);
   };
 
+  const checkShortcut = (e: KeyboardEvent, actionId: string): boolean => {
+    if (!settings?.keyboard_shortcuts) return false;
+    
+    // Default shortcuts if not configured
+    const defaults: Record<string, string> = {
+        'nav_dashboard': 'Alt+D',
+        'nav_members': 'Alt+M',
+        'nav_settings': 'Alt+S',
+        'global_search': 'Alt+K',
+        'action_create': 'Alt+N',
+        'action_save': 'Alt+Enter',
+        'action_cancel': 'Escape'
+    };
+    
+    const config = settings.keyboard_shortcuts[actionId] || defaults[actionId];
+    if (!config) return false;
+
+    const parts = config.toLowerCase().split('+');
+    const key = parts[parts.length - 1];
+    
+    // Check modifiers
+    const meta = parts.includes('meta') || parts.includes('cmd') || parts.includes('command');
+    const ctrl = parts.includes('ctrl') || parts.includes('control');
+    const alt = parts.includes('alt') || parts.includes('option');
+    const shift = parts.includes('shift');
+
+    // Logic: Match if modifiers align AND key matches
+    // Note: e.key can be 'Enter', 'Escape', 'd', 'D', etc. We normalize to lowercase.
+    const eventKey = e.key.toLowerCase();
+    
+    const matchMeta = meta === e.metaKey;
+    const matchCtrl = ctrl === e.ctrlKey;
+    const matchAlt = alt === e.altKey;
+    const matchShift = shift === e.shiftKey;
+    const matchKey = key === eventKey;
+
+    return matchMeta && matchCtrl && matchAlt && matchShift && matchKey;
+  };
+
   return (
     <SettingsContext.Provider value={{ 
       settings, 
@@ -127,6 +167,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       refreshSettings, 
       formatMoney,
       hasPermission,
+      checkShortcut,
       isLoading
     }}>
       {children}
