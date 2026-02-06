@@ -1,4 +1,3 @@
-
 -- ==========================================
 -- MEMBERSHIP ERP - CORE SCHEMA V10.0
 -- ==========================================
@@ -115,6 +114,11 @@ CREATE TABLE IF NOT EXISTS public.company_settings (
     signatory_approved_role TEXT DEFAULT 'Cluster Ex- Assist. Director of Finance',
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add columns for outlet-specific signatories
+ALTER TABLE public.outlets ADD COLUMN IF NOT EXISTS signatory_prepared_role TEXT;
+ALTER TABLE public.outlets ADD COLUMN IF NOT EXISTS signatory_reviewed_role TEXT;
+ALTER TABLE public.outlets ADD COLUMN IF NOT EXISTS signatory_approved_role TEXT;
 
 -- Fix: Add columns if table already existed without them
 ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS signatory_prepared_role TEXT DEFAULT 'Cluster Income Auditor';

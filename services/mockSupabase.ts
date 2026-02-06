@@ -291,14 +291,14 @@ class DatabaseService {
     }
   }
 
-  async addOutlet(name: string, propertyId: string): Promise<Outlet> { 
+  async addOutlet(outlet: Omit<Outlet, 'id'>): Promise<Outlet> { 
     const id = crypto.randomUUID(); 
     if (this.isSupabase()) { 
-        const { error } = await supabase.from('outlets').insert([{ id, name, property_id: propertyId }]); 
+        const { error } = await supabase.from('outlets').insert([{ ...outlet, id }]); 
         if (error) throw new Error(error.message); 
-        await this.logAction('CREATE_FACILITY', `Commissioned new facility: ${name}`);
+        await this.logAction('CREATE_FACILITY', `Commissioned new facility: ${outlet.name}`);
     } 
-    return { id, name, property_id: propertyId }; 
+    return { ...outlet, id }; 
   }
 
   async updateOutlet(id: string, updates: Partial<Outlet>) { 

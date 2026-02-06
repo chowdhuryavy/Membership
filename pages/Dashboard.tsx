@@ -17,7 +17,9 @@ import {
   BarChart4,
   ArrowDownRight,
   RefreshCw,
-  Search
+  Search,
+  UserPlus,
+  Database
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { MemberStatus, Member, Freeze } from '../types';
@@ -36,9 +38,10 @@ const Dashboard = () => {
   const [stats, setStats] = useState({
     totalMembers: 0,
     activeMembers: 0,
-    frozenMembers: 0,
     revenueThisMonth: 0,
-    totalDeferred: 0
+    totalDeferred: 0,
+    newMembersThisMonth: 0,
+    dailyAccrual: 0,
   });
   const [expiringMembers, setExpiringMembers] = useState<Member[]>([]);
   const [enrollmentTrend, setEnrollmentTrend] = useState<number[]>([]);
@@ -61,14 +64,14 @@ const Dashboard = () => {
     const members = await db.getMembers(currentOutlet.id);
     const freezes = await db.getFreezes(); 
     
-    const active = members.filter(m => m.status === MemberStatus.ACTIVE).length;
-    const frozen = members.filter(m => m.status === MemberStatus.FROZEN).length;
-    
-    let monthlyRev = 0;
-    let deferred = 0;
     const now = new Date();
     const start = startOfMonth(now);
     const end = endOfMonth(now);
+
+    const activeMembersList = members.filter(m => m.status === MemberStatus.ACTIVE);
+    
+    let monthlyRev = 0;
+    let deferred = 0;
     
     members.forEach(m => {
       const memberFreezes = freezes.filter(f => f.member_id === m.id);
@@ -78,6 +81,13 @@ const Dashboard = () => {
       const totalEarnedToDate = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, parseISO(m.start_date), now);
       deferred += Math.max(0, m.net_amount - totalEarnedToDate);
     });
+
+    const newMembersThisMonth = members.filter(m => {
+        const startDate = parseISO(m.created_at || m.start_date);
+        return startDate >= start && startDate <= end;
+    }).length;
+
+    const dailyAccrual = activeMembersList.reduce((acc, member) => acc + member.daily_rate, 0);
 
     const expiring = members.filter(m => {
         if (m.status !== MemberStatus.ACTIVE) return false;
@@ -94,10 +104,11 @@ const Dashboard = () => {
 
     setStats({
       totalMembers: members.length,
-      activeMembers: active,
-      frozenMembers: frozen,
+      activeMembers: activeMembersList.length,
       revenueThisMonth: monthlyRev,
-      totalDeferred: deferred
+      totalDeferred: deferred,
+      newMembersThisMonth: newMembersThisMonth,
+      dailyAccrual: dailyAccrual,
     });
     setExpiringMembers(expiring);
     setEnrollmentTrend(trend);
@@ -162,11 +173,13 @@ const Dashboard = () => {
       </div>
 
       {/* Primary Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatTile title="Total Portfolio" value={stats.totalMembers} icon={Users} color="bg-blue-600" trend="+12%" />
-        <StatTile title="Active Capacity" value={stats.activeMembers} icon={TrendingUp} color="bg-emerald-600" trend="Healthy" />
-        <StatTile title="Deferred/Frozen" value={stats.frozenMembers} icon={AlertCircle} color="bg-amber-600" />
-        <StatTile title="Earned (MTD)" value={formatMoney(stats.revenueThisMonth)} icon={CreditCard} color="bg-indigo-600" trend="On Track" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <StatTile title="Total Portfolio" value={stats.totalMembers} icon={Users} color="bg-blue-600" />
+        <StatTile title="Active Members" value={stats.activeMembers} icon={TrendingUp} color="bg-emerald-600" />
+        <StatTile title="New Enrollments (MTD)" value={stats.newMembersThisMonth} icon={UserPlus} color="bg-cyan-600" />
+        <StatTile title="Earned Revenue (MTD)" value={formatMoney(stats.revenueThisMonth)} icon={CreditCard} color="bg-indigo-600" />
+        <StatTile title="Daily Accrual" value={formatMoney(stats.dailyAccrual)} icon={Activity} color="bg-rose-600" />
+        <StatTile title="Total Deferred" value={formatMoney(stats.totalDeferred)} icon={Database} color="bg-orange-600" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

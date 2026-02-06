@@ -60,12 +60,33 @@ const Reports = () => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   
   const logoUrl = currentProperty?.logo_url || settings?.logo_url;
-  const [imgError, setImgError] = useState(false);
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
 
   useEffect(() => { if (currentOutlet) loadData(); }, [reportMonth, currentOutlet]);
   
   useEffect(() => {
-    setImgError(false);
+    // Fetches the logo and converts it to a Data URL to bypass CORS issues in html2canvas
+    if (logoUrl) {
+      setLogoDataUrl(null); // Set to loading state
+      fetch(logoUrl)
+        .then(response => {
+          if (!response.ok) throw new Error('Network response was not ok');
+          return response.blob();
+        })
+        .then(blob => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setLogoDataUrl(reader.result as string);
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(error => {
+          console.error('Failed to fetch and convert logo, falling back.', error);
+          setLogoDataUrl(''); // Set to error/fallback state
+        });
+    } else {
+      setLogoDataUrl(''); // No logo URL provided
+    }
   }, [logoUrl]);
 
   const loadData = async () => {
@@ -138,6 +159,16 @@ const Reports = () => {
   const activeColumns = useMemo(() => 
     ALL_POSSIBLE_COLUMNS.filter(col => visibleColumnKeys.includes(col.key))
   , [visibleColumnKeys]);
+
+  const preparedBy = useMemo(() => 
+    currentOutlet?.signatory_prepared_role || settings?.signatory_prepared_role || 'Income Auditor'
+  , [currentOutlet, settings]);
+  const reviewedBy = useMemo(() => 
+    currentOutlet?.signatory_reviewed_role || settings?.signatory_reviewed_role || 'Financial Controller'
+  , [currentOutlet, settings]);
+  const approvedBy = useMemo(() => 
+    currentOutlet?.signatory_approved_role || settings?.signatory_approved_role || 'Director of Finance'
+  , [currentOutlet, settings]);
 
   const toggleColumn = (key: string) => {
     setVisibleColumnKeys(prev => 
@@ -303,14 +334,14 @@ const Reports = () => {
                 <div className="flex items-center gap-6">
                     {/* Logo Section */}
                     <div className="w-24 h-24 shrink-0 flex items-center justify-center">
-                        {logoUrl && !imgError ? (
+                        {logoDataUrl ? (
                             <img 
-                                src={logoUrl} 
+                                src={logoDataUrl} 
                                 alt="Company Logo" 
                                 className="w-full h-full object-contain company-logo-img"
-                                onError={() => setImgError(true)}
-                                crossOrigin="anonymous"
                             />
+                        ) : logoDataUrl === null ? (
+                            <div className="w-full h-full bg-slate-100 animate-pulse rounded-xl"></div>
                         ) : (
                             <div className="w-full h-full bg-slate-900 text-white flex items-center justify-center rounded-xl">
                                 <Globe className="w-10 h-10" />
@@ -451,7 +482,7 @@ const Reports = () => {
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Prepared By</p>
                     <div className="border-b border-slate-300 pb-2"></div>
                     <p className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">
-                        {settings?.signatory_prepared_role || 'Income Auditor'}
+                        {preparedBy}
                     </p>
                 </div>
 
@@ -459,7 +490,7 @@ const Reports = () => {
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Reviewed By</p>
                     <div className="border-b border-slate-300 pb-2"></div>
                     <p className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">
-                        {settings?.signatory_reviewed_role || 'Financial Controller'}
+                        {reviewedBy}
                     </p>
                 </div>
 
@@ -467,7 +498,7 @@ const Reports = () => {
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Approved By</p>
                     <div className="border-b border-slate-300 pb-2"></div>
                     <p className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">
-                        {settings?.signatory_approved_role || 'Director of Finance'}
+                        {approvedBy}
                     </p>
                 </div>
             </div>

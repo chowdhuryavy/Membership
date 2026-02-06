@@ -28,6 +28,9 @@ export interface Outlet {
   id: string;
   name: string;
   property_id: string;
+  signatory_prepared_role?: string;
+  signatory_reviewed_role?: string;
+  signatory_approved_role?: string;
 }
 
 // Fixed: Added missing MembershipCategory interface to resolve multi-file import errors
