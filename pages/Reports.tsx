@@ -474,7 +474,7 @@ const Reports = () => {
             
             <div className="mt-16 text-center opacity-40">
                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-[1em]">
-                    Generated {format(new Date(), 'dd MMM yyyy HH:mm')} • System Ver. 2.4.0
+                    &copy; {new Date().getFullYear()} saavar group. All Rights Reserved.
                 </p>
             </div>
         </div>

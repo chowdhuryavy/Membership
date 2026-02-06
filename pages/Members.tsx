@@ -808,8 +808,11 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
   const [history, setHistory] = useState<Member[]>([]);
 
   useEffect(() => {
+    // This effect ensures that if the user navigates back to the list and selects a *different* member,
+    // the detail view resets to show the newly selected member, not the last historical one they clicked.
+    // It triggers only when the top-level member prop changes.
     setDisplayedMember(member);
-  }, [member]);
+  }, [member.id]);
 
   useEffect(() => {
     const loadHistory = async () => {

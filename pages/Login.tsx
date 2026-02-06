@@ -95,7 +95,7 @@ const Login = () => {
 
           <div className="relative z-10 pt-12 border-t border-white/10">
               <p className="text-indigo-300/50 text-[10px] font-black uppercase tracking-widest">
-                  Secure Synchronization &copy; {new Date().getFullYear()}
+                  &copy; {new Date().getFullYear()} saavar group. All Rights Reserved.
               </p>
           </div>
         </div>
