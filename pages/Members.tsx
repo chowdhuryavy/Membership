@@ -153,10 +153,9 @@ const Members = () => {
       setView('form');
   };
 
-  const handleRenew = (member: Member, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleRenew = (memberToRenew: Member) => {
     if (!canCreate) return;
-    setSelectedMember(member);
+    setSelectedMember(memberToRenew);
     setIsEditing(false);
     setIsRenewal(true);
     setView('form');
@@ -412,7 +411,7 @@ const Members = () => {
                                 {(canEdit || canDelete || canCreate) && (
                                   <td className="px-8 py-5">
                                       <div className="flex justify-center gap-1" onClick={e => e.stopPropagation()}>
-                                          {canCreate && <button type="button" title="Renew Membership" onClick={(e) => handleRenew(member, e)} className="p-2 text-slate-400 hover:text-emerald-600 rounded-xl hover:bg-white border border-transparent hover:border-slate-200 transition-all"><RefreshCcw className="w-4 h-4" /></button>}
+                                          {canCreate && <button type="button" title="Renew Membership" onClick={(e) => handleRenew(member)} className="p-2 text-slate-400 hover:text-emerald-600 rounded-xl hover:bg-white border border-transparent hover:border-slate-200 transition-all"><RefreshCcw className="w-4 h-4" /></button>}
                                           {canEdit && <button type="button" title="Freeze Account" onClick={(e) => handleFreezeClick(member, e)} className="p-2 text-slate-400 hover:text-indigo-600 rounded-xl hover:bg-white border border-transparent hover:border-slate-200 transition-all"><Snowflake className="w-4 h-4" /></button>}
                                           {canEdit && <button type="button" title="Edit Profile" onClick={(e) => handleEdit(member, e)} className="p-2 text-slate-400 hover:text-indigo-600 rounded-xl hover:bg-white border border-transparent hover:border-slate-200 transition-all"><Edit2 className="w-4 h-4" /></button>}
                                           {canDelete && <button type="button" title="Delete Profile" onClick={(e) => { setDeleteId(member.id); }} className="p-2 text-slate-400 hover:text-red-600 rounded-xl hover:bg-white border border-transparent hover:border-slate-200 transition-all"><Trash2 className="w-4 h-4" /></button>}
@@ -463,7 +462,7 @@ const Members = () => {
           getEffectiveStatus={getEffectiveStatus}
           onBack={() => { setView('list'); setSelectedMember(null); setAutoFreeze(false); }}
           onUpdate={() => { loadData(); setAutoFreeze(false); }} 
-          onRenew={() => { setIsRenewal(true); setView('form'); }}
+          onRenew={handleRenew}
         />
       )}
     </div>
@@ -799,13 +798,18 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
   );
 };
 
-const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, onBack, onUpdate, onRenew }: { member: Member, categories: MembershipCategory[], initialFreeze: boolean, getEffectiveStatus: (m: Member) => string, onBack: () => void, onUpdate: () => void, onRenew: () => void }) => {
+const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, onBack, onUpdate, onRenew }: { member: Member, categories: MembershipCategory[], initialFreeze: boolean, getEffectiveStatus: (m: Member) => string, onBack: () => void, onUpdate: () => void, onRenew: (m: Member) => void }) => {
   const { formatMoney, hasPermission } = useSettings();
   const { user } = useAuth();
+  const [displayedMember, setDisplayedMember] = useState<Member>(member);
   const [freezes, setFreezes] = useState<Freeze[]>([]);
   const [showFreezeModal, setShowFreezeModal] = useState(initialFreeze);
   const [freezeForm, setFreezeForm] = useState({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' });
   const [history, setHistory] = useState<Member[]>([]);
+
+  useEffect(() => {
+    setDisplayedMember(member);
+  }, [member]);
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -819,10 +823,10 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
 
   useEffect(() => {
     loadFreezes();
-  }, [member.id]);
+  }, [displayedMember.id]);
 
   const loadFreezes = async () => {
-    const f = await db.getFreezes(member.id);
+    const f = await db.getFreezes(displayedMember.id);
     setFreezes(f);
   };
 
@@ -848,7 +852,7 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
 
     const freeze: Freeze = {
         id: crypto.randomUUID(),
-        member_id: member.id,
+        member_id: displayedMember.id,
         start_date: freezeForm.start_date,
         end_date: freezeForm.end_date,
         total_days: totalDays
@@ -857,8 +861,13 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
     try {
         await db.addFreeze(freeze);
         setShowFreezeModal(false);
-        loadFreezes();
+        setFreezeForm({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' });
         onUpdate();
+        // Manually update displayed member after freeze
+        const updatedMembers = await db.getMembers();
+        const freshMember = updatedMembers.find(m => m.id === displayedMember.id);
+        if(freshMember) setDisplayedMember(freshMember);
+
     } catch (err) {
         console.error(err);
     }
@@ -866,13 +875,21 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
 
   const deleteFreeze = async (id: string) => {
     await db.deleteFreeze(id);
-    loadFreezes();
     onUpdate();
+    const updatedMembers = await db.getMembers();
+    const freshMember = updatedMembers.find(m => m.id === displayedMember.id);
+    if(freshMember) setDisplayedMember(freshMember);
   };
 
-  const catName = categories.find(c => c.id === member.category_id)?.name || 'Unknown Tier';
+  const handleRenewClick = () => {
+    const latestMember = history.length > 0 ? history[0] : member;
+    onRenew(latestMember);
+  };
+
+  const catName = categories.find(c => c.id === displayedMember.category_id)?.name || 'Unknown Tier';
+  const canRenew = user && hasPermission(user.role_id, 'members:create');
   const canEdit = user && hasPermission(user.role_id, 'members:edit');
-  const effectiveStatus = getEffectiveStatus(member);
+  const effectiveStatus = getEffectiveStatus(displayedMember);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
@@ -886,22 +903,22 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                     <div className="h-32 bg-slate-900 w-full relative">
                         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '16px 16px' }}></div>
                     </div>
-                    <CardContent className="px-8 pb-8 -mt-12 text-center relative z-10">
+                    <CardContent className="px-8 pb-8 -mt-16 text-center relative z-10">
                         <div className="inline-flex p-1.5 bg-white rounded-3xl shadow-xl mb-4">
                             <div className="w-24 h-24 bg-indigo-600 rounded-[1.8rem] flex items-center justify-center text-white text-4xl font-black">
-                                {member.guest_name.charAt(0)}
+                                {displayedMember.guest_name.charAt(0)}
                             </div>
                         </div>
-                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">{member.guest_name}</h3>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">ID: {member.membership_number}</p>
+                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">{displayedMember.guest_name}</h3>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">ID: {displayedMember.membership_number}</p>
                         
                         <div className="mt-6 flex flex-wrap justify-center gap-2">
-                             <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${effectiveStatus === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
+                             <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${effectiveStatus === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
                                 effectiveStatus === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
                                 effectiveStatus === 'Expired' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
                                 {effectiveStatus}
                              </span>
-                             <span className="px-4 py-1 bg-slate-50 text-slate-600 border border-slate-200 rounded-full text-[10px] font-black uppercase tracking-widest">
+                             <span className="px-4 py-1.5 bg-slate-50 text-slate-600 border border-slate-200 rounded-full text-[10px] font-black uppercase tracking-widest">
                                 {catName}
                              </span>
                         </div>
@@ -909,18 +926,18 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                         <div className="mt-8 pt-8 border-t border-slate-100 grid grid-cols-2 gap-4">
                             <div className="text-center">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Recognition</p>
-                                <p className="text-xs font-black text-slate-900">{formatMoney(member.daily_rate)}/Day</p>
+                                <p className="text-sm font-black text-slate-900">{formatMoney(displayedMember.daily_rate)}/Day</p>
                             </div>
                             <div className="text-center">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Net Fees</p>
-                                <p className="text-xs font-black text-indigo-600">{formatMoney(member.net_amount)}</p>
+                                <p className="text-sm font-black text-indigo-600">{formatMoney(displayedMember.net_amount)}</p>
                             </div>
                         </div>
 
-                        {canEdit && (
+                        {(canRenew || canEdit) && (
                             <div className="mt-8 flex gap-2">
-                                <Button onClick={onRenew} className="flex-1 rounded-xl font-bold h-11 text-xs">Renew</Button>
-                                <Button variant="outline" onClick={() => setShowFreezeModal(true)} className="flex-1 rounded-xl font-bold h-11 text-xs border-slate-200">Freeze</Button>
+                                {canRenew && <Button onClick={handleRenewClick} className="flex-1 rounded-xl font-bold h-11 text-xs">Renew</Button>}
+                                {canEdit && <Button variant="outline" onClick={() => setShowFreezeModal(true)} className="flex-1 rounded-xl font-bold h-11 text-xs border-slate-200">Freeze</Button>}
                             </div>
                         )}
                     </CardContent>
@@ -936,17 +953,17 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                     </CardHeader>
                     <CardContent className="p-8 space-y-8">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                            <div className="p-5 bg-slate-50/70 rounded-2xl border border-slate-100">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Enrollment Date</p>
-                                <p className="font-bold text-slate-900">{format(parseISO(member.start_date), 'dd-MM-yyyy')}</p>
+                                <p className="font-bold text-slate-900">{format(parseISO(displayedMember.start_date), 'dd-MM-yyyy')}</p>
                             </div>
-                            <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                            <div className="p-5 bg-slate-50/70 rounded-2xl border border-slate-100">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Original End Date</p>
-                                <p className="font-bold text-slate-900">{format(parseISO(member.original_end_date), 'dd-MM-yyyy')}</p>
+                                <p className="font-bold text-slate-900">{format(parseISO(displayedMember.original_end_date), 'dd-MM-yyyy')}</p>
                             </div>
                             <div className="p-5 bg-indigo-50 rounded-2xl border border-indigo-100">
                                 <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Current Expiry</p>
-                                <p className="font-bold text-indigo-700">{format(parseISO(member.current_end_date), 'dd-MM-yyyy')}</p>
+                                <p className="font-bold text-indigo-700">{format(parseISO(displayedMember.current_end_date), 'dd-MM-yyyy')}</p>
                             </div>
                         </div>
 
@@ -955,7 +972,7 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                                 <Snowflake className="w-4 h-4 text-indigo-600" /> Freezing Ledger
                             </h4>
                             {freezes.length === 0 ? (
-                                <div className="p-10 text-center bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
+                                <div className="p-10 text-center bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
                                     <p className="text-xs font-medium text-slate-400">No Freezing history recorded for this account.</p>
                                 </div>
                             ) : (
@@ -984,7 +1001,7 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                     </CardContent>
                 </Card>
 
-                {history.length > 1 && (
+                {history.length > 0 && (
                     <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg overflow-hidden">
                         <CardHeader className="p-8 border-b border-slate-100 flex items-center justify-between">
                             <CardTitle className="text-lg font-black tracking-tight flex items-center gap-3">
@@ -994,16 +1011,20 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                                 {history.length} Total Records
                             </span>
                         </CardHeader>
-                        <CardContent className="p-0">
+                        <CardContent className="p-2">
                             <div className="divide-y divide-slate-100">
                                 {history.map(histMember => {
-                                    const isCurrent = histMember.id === member.id;
+                                    const isSelected = histMember.id === displayedMember.id;
                                     const histCatName = categories.find(c => c.id === histMember.category_id)?.name || 'Unknown Tier';
                                     const histStatus = getEffectiveStatus(histMember);
                                     return (
-                                        <div key={histMember.id} className={`p-6 flex items-center justify-between transition-colors ${isCurrent ? 'bg-indigo-50' : 'hover:bg-slate-50/70'}`}>
+                                        <button 
+                                            key={histMember.id} 
+                                            onClick={() => setDisplayedMember(histMember)}
+                                            className={`w-full p-6 flex items-center justify-between transition-all rounded-2xl text-left ${isSelected ? 'bg-indigo-50' : 'hover:bg-slate-50/70'}`}
+                                        >
                                             <div className="flex items-center gap-4">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm ${isCurrent ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200'}`}>
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm ${isSelected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200'}`}>
                                                     <Layers className="w-5 h-5" />
                                                 </div>
                                                 <div>
@@ -1014,14 +1035,14 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
-                                                    histStatus === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                                                    histStatus === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
-                                                    histStatus === 'Expired' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                                <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
+                                                    histStatus === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                                                    histStatus === 'Frozen' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
+                                                    histStatus === 'Expired' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-slate-50 text-slate-700 border-slate-200'
                                                 }`}>{histStatus}</span>
                                                 <p className="font-black text-xs text-slate-600 mt-1.5 tabular-nums">{formatMoney(histMember.net_amount)}</p>
                                             </div>
-                                        </div>
+                                        </button>
                                     )
                                 })}
                             </div>
