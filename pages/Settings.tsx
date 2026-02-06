@@ -157,9 +157,9 @@ const SettingsPage = () => {
   const [newRole, setNewRole] = useState<{ name: string, permissions: Permission[] }>({ name: '', permissions: [] });
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   
-  const [newOutletName, setNewOutletName] = useState('');
-  const [outletPropertyId, setOutletPropertyId] = useState('');
-  const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null);
+  const initialOutletFormState = { name: '', property_id: '', signatory_prepared_role: '', signatory_reviewed_role: '', signatory_approved_role: '' };
+  const [outletForm, setOutletForm] = useState<Partial<Outlet>>(initialOutletFormState);
+  const [editingOutletId, setEditingOutletId] = useState<string | null>(null);
 
   const [propForm, setPropForm] = useState<Omit<Property, 'id'>>({ name: '', logo_url: '', address: '' });
   const [editingPropId, setEditingPropId] = useState<string | null>(null);
@@ -278,19 +278,33 @@ const SettingsPage = () => {
   };
 
   const handleSaveOutlet = async () => {
-    if (!canEditOutlets || !newOutletName || !outletPropertyId) return;
+    if (!canEditOutlets || !outletForm.name || !outletForm.property_id) return;
     setIsSaving(true);
     try {
-        if (editingOutlet) { await db.updateOutlet(editingOutlet.id, { name: newOutletName, property_id: outletPropertyId }); } 
-        // Fix: Corrected the call to `db.addOutlet` by passing a single object argument as required, instead of two separate arguments.
-        else { await db.addOutlet({ name: newOutletName, property_id: outletPropertyId }); }
-        setNewOutletName('');
-        setOutletPropertyId('');
-        setEditingOutlet(null);
+        const payload: Partial<Outlet> = {
+            name: outletForm.name,
+            property_id: outletForm.property_id,
+            signatory_prepared_role: outletForm.signatory_prepared_role || undefined,
+            signatory_reviewed_role: outletForm.signatory_reviewed_role || undefined,
+            signatory_approved_role: outletForm.signatory_approved_role || undefined,
+        };
+
+        if (editingOutletId) {
+            await db.updateOutlet(editingOutletId, payload);
+        } else {
+            await db.addOutlet(payload as Omit<Outlet, 'id'>);
+        }
+        
+        setEditingOutletId(null);
+        setOutletForm(initialOutletFormState);
+
         await refreshSettings();
         showStatus('Facility context saved.');
-    } catch (e: any) { showStatus(`Facility sync failed: ${e.message}`, 'error'); } 
-    finally { setIsSaving(false); }
+    } catch (e: any) { 
+        showStatus(`Facility sync failed: ${e.message}`, 'error'); 
+    } finally { 
+        setIsSaving(false); 
+    }
   };
 
   const handleTogglePermission = (permission: Permission) => {
@@ -544,7 +558,7 @@ const SettingsPage = () => {
                                           </div>
                                       </div>
                                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button onClick={() => { setEditingOutlet(o); setNewOutletName(o.name); setOutletPropertyId(o.property_id); }} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
+                                          <button onClick={() => { setEditingOutletId(o.id); setOutletForm({ name: o.name, property_id: o.property_id, signatory_prepared_role: o.signatory_prepared_role || '', signatory_reviewed_role: o.signatory_reviewed_role || '', signatory_approved_role: o.signatory_approved_role || '' }); }} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
                                           <button onClick={() => setItemToDelete({ type: 'outlet', id: o.id, name: o.name })} className="p-2 text-slate-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
                                       </div>
                                   </div>
@@ -556,28 +570,36 @@ const SettingsPage = () => {
 
               <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
                   <CardHeader className="bg-slate-900 text-white p-8">
-                      <CardTitle className="text-xl font-black tracking-tight">{editingOutlet ? 'Modify Facility' : 'Commission New Facility'}</CardTitle>
+                      <CardTitle className="text-xl font-black tracking-tight">{editingOutletId ? 'Modify Facility' : 'Commission New Facility'}</CardTitle>
                   </CardHeader>
                   <CardContent className="p-8 space-y-6">
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Facility Name</label>
-                        <Input value={newOutletName} onChange={e => setNewOutletName(e.target.value)} className="h-12 rounded-xl font-bold" />
+                        <Input value={outletForm.name} onChange={e => setOutletForm({...outletForm, name: e.target.value})} className="h-12 rounded-xl font-bold" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assign to Property Asset</label>
                         <Select 
                             options={[{ value: '', label: 'Select Property...' }, ...properties.map(p => ({ value: p.id, label: p.name }))]} 
-                            value={outletPropertyId} 
-                            onChange={e => setOutletPropertyId(e.target.value)}
+                            value={outletForm.property_id} 
+                            onChange={e => setOutletForm({...outletForm, property_id: e.target.value})}
                             className="h-12 rounded-xl font-bold"
                         />
                       </div>
+                      <div className="space-y-4 pt-4 border-t border-slate-100">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Facility-Specific Signatories (Optional)</label>
+                          <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                             <Input label="Prepared By Role" value={outletForm.signatory_prepared_role} onChange={e => setOutletForm({...outletForm, signatory_prepared_role: e.target.value})} className="h-10 rounded-lg text-xs" placeholder="Defaults to Global Setting"/>
+                             <Input label="Reviewed By Role" value={outletForm.signatory_reviewed_role} onChange={e => setOutletForm({...outletForm, signatory_reviewed_role: e.target.value})} className="h-10 rounded-lg text-xs" placeholder="Defaults to Global Setting"/>
+                             <Input label="Approved By Role" value={outletForm.signatory_approved_role} onChange={e => setOutletForm({...outletForm, signatory_approved_role: e.target.value})} className="h-10 rounded-lg text-xs" placeholder="Defaults to Global Setting"/>
+                          </div>
+                      </div>
                       <div className="flex gap-3 pt-4">
-                          {editingOutlet && (
-                              <Button variant="secondary" onClick={() => { setEditingOutlet(null); setNewOutletName(''); setOutletPropertyId(''); }} className="h-14 rounded-2xl font-bold flex-1">Cancel</Button>
+                          {editingOutletId && (
+                              <Button variant="secondary" onClick={() => { setEditingOutletId(null); setOutletForm(initialOutletFormState); }} className="h-14 rounded-2xl font-bold flex-1">Cancel</Button>
                           )}
                           <Button onClick={handleSaveOutlet} isLoading={isSaving} className="h-14 rounded-2xl font-black flex-1 shadow-lg shadow-indigo-100">
-                             {editingOutlet ? 'Sync Facility' : 'Commission Facility'}
+                             {editingOutletId ? 'Sync Facility' : 'Commission Facility'}
                           </Button>
                       </div>
                   </CardContent>
