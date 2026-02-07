@@ -25,7 +25,21 @@ export const RevenueEngine = {
   },
 
   calculateOriginalEndDate: (startDate: Date, durationMonths: number): Date => {
-    return addDays(addMonths(startDate, durationMonths), -1);
+    const originalDay = startDate.getDate();
+    
+    const futureDate = addMonths(startDate, durationMonths);
+    const futureDay = futureDate.getDate();
+
+    // If date-fns clamped the date to the end of a shorter month
+    // e.g., Jan 31st + 1 month becomes Feb 28th. (31 > 28)
+    // The membership should end on the last day of that future month.
+    if (originalDay > futureDay) {
+        return futureDate;
+    }
+
+    // Otherwise, it's a normal month transition, so subtract one day for an inclusive period.
+    // e.g., Jan 15th + 1 month becomes Feb 15th. We subtract one day to make the end date Feb 14th.
+    return addDays(futureDate, -1);
   },
 
   checkFreezeOverlap: (newStart: Date, newEnd: Date, existingFreezes: Freeze[]): boolean => {

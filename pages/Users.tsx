@@ -1,12 +1,12 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabase';
 import { UserProfile, Role, Outlet } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command } from 'lucide-react';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command, Search, Filter } from 'lucide-react';
 
 const UserDetail = ({ user, roles, outlets, onBack, onEdit, onDelete }: { user: UserProfile, roles: Role[], outlets: Outlet[], onBack: () => void, onEdit: (user: UserProfile) => void, onDelete: (id: string) => void }) => {
     const getRoleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || 'Unknown';
@@ -112,6 +112,10 @@ const Users = () => {
   const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Search & Filter State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
 
   useEffect(() => { loadUsers(); }, []);
 
@@ -172,6 +176,15 @@ const Users = () => {
   const canDelete = currentUser && hasPermission(currentUser.role_id, 'users:delete');
   const canModifyTable = canEdit || canDelete;
   const canEditEmail = currentUser && (hasPermission(currentUser.role_id, 'users:edit_email') || !isEditing);
+
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => {
+      const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            u.email.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesRole = roleFilter === 'all' || u.role_id === roleFilter;
+      return matchesSearch && matchesRole;
+    });
+  }, [users, searchTerm, roleFilter]);
 
   // Keyboard Shortcuts
   useEffect(() => {
@@ -288,7 +301,7 @@ const Users = () => {
         />
       ) : (
         <>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
             <div className="flex items-center gap-4">
                 <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-xl shadow-indigo-100">
                     <Shield className="w-6 h-6" />
@@ -298,15 +311,42 @@ const Users = () => {
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Authorized User Directory</p>
                 </div>
             </div>
-            <div className="flex gap-2">
-                <Button variant="outline" onClick={loadUsers} className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest border-slate-200">
-                    <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh Data
-                </Button>
-                {canCreate && (
-                    <Button onClick={handleAddNew} className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100">
-                        <Plus className="w-4 h-4 mr-2" /> Provision User
+            
+            <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
+                <div className="relative group flex-1 sm:w-64">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                    <input 
+                        placeholder="Search name or email..." 
+                        className="w-full h-11 pl-11 pr-4 rounded-xl bg-white border border-slate-200 shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-bold placeholder:text-slate-400"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                
+                <div className="relative flex-1 sm:w-48">
+                    <Filter className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <select 
+                        className="w-full h-11 pl-11 pr-8 rounded-xl bg-white border border-slate-200 shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-bold appearance-none cursor-pointer text-slate-700"
+                        value={roleFilter}
+                        onChange={(e) => setRoleFilter(e.target.value)}
+                    >
+                        <option value="all">All Roles</option>
+                        {roles.map(r => (
+                            <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={loadUsers} className="rounded-xl h-11 px-4 font-black border-slate-200" title="Refresh">
+                        <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                     </Button>
-                )}
+                    {canCreate && (
+                        <Button onClick={handleAddNew} className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 whitespace-nowrap">
+                            <Plus className="w-4 h-4 mr-2" /> Provision
+                        </Button>
+                    )}
+                </div>
             </div>
           </div>
           
@@ -323,7 +363,19 @@ const Users = () => {
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                          {users.map(u => (
+                          {filteredUsers.length === 0 ? (
+                              <tr>
+                                  <td colSpan={canModifyTable ? 5 : 4} className="px-8 py-24 text-center">
+                                      <div className="flex flex-col items-center">
+                                          <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                                              <Search className="w-6 h-6 text-slate-300" />
+                                          </div>
+                                          <p className="font-bold text-slate-900">No users found</p>
+                                          <p className="text-xs text-slate-500 mt-1">Try adjusting your search filters.</p>
+                                      </div>
+                                  </td>
+                              </tr>
+                          ) : filteredUsers.map(u => (
                               <tr key={u.id} onClick={() => { setSelectedUser(u); setView('detail'); }} className="bg-white hover:bg-slate-50 transition-colors group cursor-pointer">
                                   <td className="px-8 py-6">
                                       <div className="font-black text-slate-900 tracking-tight text-base">{u.name}</div>

@@ -1,11 +1,11 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
 import { MembershipCategory } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock, Plus, X, Command, Snowflake } from 'lucide-react';
+import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock, Plus, X, Command, Snowflake, Search, SearchCode } from 'lucide-react';
 
 // This component manages membership categories/tiers for a facility
 const Categories = () => {
@@ -17,6 +17,7 @@ const Categories = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if(currentOutlet) loadCats();
@@ -58,6 +59,12 @@ const Categories = () => {
     window.addEventListener('keydown', handleShortcuts);
     return () => window.removeEventListener('keydown', handleShortcuts);
   }, [showForm, canCreate, checkShortcut, formData, isEditing, currentOutlet]); // Depend on form state
+
+  const filteredCategories = useMemo(() => {
+    return categories.filter(cat => 
+        cat.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [categories, searchTerm]);
 
   if (!canView) {
     return (
@@ -136,7 +143,7 @@ const Categories = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <span className="h-px w-6 bg-indigo-600"></span>
@@ -147,65 +154,90 @@ const Categories = () => {
             <Store className="w-3.5 h-3.5 text-slate-400"/> Managing assets for <span className="text-slate-900 font-bold underline decoration-indigo-500 underline-offset-4">{currentOutlet?.name}</span>
           </p>
         </div>
-        {canCreate && (
-            <Button onClick={handleAddNew} className="rounded-xl font-black h-12 px-6 shadow-xl shadow-indigo-100">
-                <Plus className="w-4 h-4 mr-2" /> Create New category
-            </Button>
-        )}
+        
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            <div className="relative group flex-1 sm:w-64">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                <input 
+                    placeholder="Search tiers..." 
+                    className="w-full h-12 pl-11 pr-4 rounded-xl bg-white border border-slate-200 shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-bold placeholder:text-slate-400"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+            {canCreate && (
+                <Button onClick={handleAddNew} className="rounded-xl font-black h-12 px-6 shadow-xl shadow-indigo-100 whitespace-nowrap">
+                    <Plus className="w-4 h-4 mr-2" /> Create Tier
+                </Button>
+            )}
+        </div>
       </div>
       
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {categories.map(cat => (
-              <Card key={cat.id} className="relative group overflow-hidden border-slate-200/60 shadow-sm hover:shadow-xl transition-all duration-300 rounded-[2rem]">
-                  <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                      <div className="flex gap-2">
-                          {canEdit && (
-                              <button type="button" onClick={() => handleEdit(cat)} className="p-2 bg-white shadow-lg rounded-xl text-slate-400 hover:text-indigo-600 border border-slate-100 transition-colors">
-                                  <Edit2 className="w-4 h-4" />
-                              </button>
-                          )}
-                          {canDelete && (
-                              <button type="button" onClick={() => setDeleteId(cat.id)} className="p-2 bg-white shadow-lg rounded-xl text-slate-400 hover:text-red-600 border border-slate-100 transition-colors">
-                                  <Trash2 className="w-4 h-4" />
-                              </button>
-                          )}
-                      </div>
-                  </div>
-                  <CardContent className="p-8">
-                      <div className="flex items-start gap-4 mb-6">
-                          <div className="p-3 bg-indigo-50 rounded-2xl">
-                              <Layers className="w-6 h-6 text-indigo-600" />
-                          </div>
-                          <div>
-                              <h3 className="font-black text-xl text-slate-900 tracking-tight leading-none mb-2">{cat.name}</h3>
-                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Revenue ID: {cat.id.split('_')[1] || cat.id}</span>
-                          </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-3 gap-4">
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                  <CalendarClock className="w-3 h-3"/> Term
-                              </p>
-                              <p className="text-sm font-black text-slate-800 tracking-tight">{cat.duration_months} Months</p>
-                          </div>
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                  <Snowflake className="w-3 h-3"/> Max Freeze
-                              </p>
-                              <p className="text-sm font-black text-slate-800 tracking-tight">{cat.max_freeze_days} Days</p>
-                          </div>
-                          <div className="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-100">
-                              <p className="text-[9px] font-black opacity-60 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                  <Coins className="w-3 h-3"/> Base Rate
-                              </p>
-                              <p className="text-lg font-black">{formatMoney(cat.base_rate)}</p>
+      {filteredCategories.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center bg-white rounded-[2.5rem] border border-dashed border-slate-200">
+              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                  <SearchCode className="w-8 h-8 text-slate-300" />
+              </div>
+              <h3 className="text-lg font-black text-slate-900 tracking-tight">No Tiers Found</h3>
+              <p className="text-sm text-slate-500 mt-1 max-w-xs">No membership categories match your search criteria.</p>
+              {searchTerm && (
+                  <button onClick={() => setSearchTerm('')} className="mt-4 text-xs font-black text-indigo-600 uppercase tracking-widest border-b-2 border-indigo-100 hover:border-indigo-600 transition-colors">Clear Search</button>
+              )}
+          </div>
+      ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredCategories.map(cat => (
+                  <Card key={cat.id} className="relative group overflow-hidden border-slate-200/60 shadow-sm hover:shadow-xl transition-all duration-300 rounded-[2rem]">
+                      <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          <div className="flex gap-2">
+                              {canEdit && (
+                                  <button type="button" onClick={() => handleEdit(cat)} className="p-2 bg-white shadow-lg rounded-xl text-slate-400 hover:text-indigo-600 border border-slate-100 transition-colors">
+                                      <Edit2 className="w-4 h-4" />
+                                  </button>
+                              )}
+                              {canDelete && (
+                                  <button type="button" onClick={() => setDeleteId(cat.id)} className="p-2 bg-white shadow-lg rounded-xl text-slate-400 hover:text-red-600 border border-slate-100 transition-colors">
+                                      <Trash2 className="w-4 h-4" />
+                                  </button>
+                              )}
                           </div>
                       </div>
-                  </CardContent>
-              </Card>
-          ))}
-      </div>
+                      <CardContent className="p-8">
+                          <div className="flex items-start gap-4 mb-6">
+                              <div className="p-3 bg-indigo-50 rounded-2xl">
+                                  <Layers className="w-6 h-6 text-indigo-600" />
+                              </div>
+                              <div>
+                                  <h3 className="font-black text-xl text-slate-900 tracking-tight leading-none mb-2">{cat.name}</h3>
+                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Revenue ID: {cat.id.split('_')[1] || cat.id}</span>
+                              </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-3 gap-4">
+                              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                      <CalendarClock className="w-3 h-3"/> Term
+                                  </p>
+                                  <p className="text-sm font-black text-slate-800 tracking-tight">{cat.duration_months} Months</p>
+                              </div>
+                              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                      <Snowflake className="w-3 h-3"/> Max Freeze
+                                  </p>
+                                  <p className="text-sm font-black text-slate-800 tracking-tight">{cat.max_freeze_days} Days</p>
+                              </div>
+                              <div className="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-100">
+                                  <p className="text-[9px] font-black opacity-60 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                      <Coins className="w-3 h-3"/> Base Rate
+                                  </p>
+                                  <p className="text-lg font-black">{formatMoney(cat.base_rate)}</p>
+                              </div>
+                          </div>
+                      </CardContent>
+                  </Card>
+              ))}
+          </div>
+      )}
 
       {showForm && canManage && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
