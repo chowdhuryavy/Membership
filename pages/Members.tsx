@@ -802,7 +802,9 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
   const [displayedMember, setDisplayedMember] = useState<Member>(member);
   const [freezes, setFreezes] = useState<Freeze[]>([]);
   const [showFreezeModal, setShowFreezeModal] = useState(initialFreeze);
-  const [freezeForm, setFreezeForm] = useState({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' });
+  const [isEditingFreeze, setIsEditingFreeze] = useState(false);
+  const [freezeToDeleteId, setFreezeToDeleteId] = useState<string | null>(null);
+  const [freezeForm, setFreezeForm] = useState({ id: '', start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' });
   const [history, setHistory] = useState<Member[]>([]);
 
   useEffect(() => {
@@ -842,30 +844,41 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
     }
 
     const totalDays = differenceInCalendarDays(end, start) + 1;
-    const isOverlap = RevenueEngine.checkFreezeOverlap(start, end, freezes);
+    // Check overlap excluding current editing freeze
+    const otherFreezes = isEditingFreeze ? freezes.filter(f => f.id !== freezeForm.id) : freezes;
+    const isOverlap = RevenueEngine.checkFreezeOverlap(start, end, otherFreezes);
     
     if (isOverlap) {
         alert("This period overlaps with an existing Freezing.");
         return;
     }
 
-    const freeze: Freeze = {
-        id: crypto.randomUUID(),
-        member_id: displayedMember.id,
-        start_date: freezeForm.start_date,
-        end_date: freezeForm.end_date,
-        total_days: totalDays
-    };
-
     try {
-        await db.addFreeze(freeze);
+        if (isEditingFreeze && freezeForm.id) {
+            await db.updateFreeze(freezeForm.id, {
+                start_date: freezeForm.start_date,
+                end_date: freezeForm.end_date,
+                total_days: totalDays
+            });
+        } else {
+            const freeze: Freeze = {
+                id: crypto.randomUUID(),
+                member_id: displayedMember.id,
+                start_date: freezeForm.start_date,
+                end_date: freezeForm.end_date,
+                total_days: totalDays
+            };
+            await db.addFreeze(freeze);
+        }
+
         setShowFreezeModal(false);
-        setFreezeForm({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' });
+        setIsEditingFreeze(false);
+        setFreezeForm({ id: '', start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' });
         
-        // Trigger parent refresh
+        // Trigger parent refresh and local refresh
         await onUpdate();
+        await loadFreezes();
         
-        // Re-fetch internal detail state to ensure immediate UI feedback
         const updatedMembers = await db.getMembers();
         const freshMember = updatedMembers.find(m => m.id === displayedMember.id);
         if(freshMember) setDisplayedMember(freshMember);
@@ -875,9 +888,22 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
     }
   };
 
-  const deleteFreeze = async (id: string) => {
-    await db.deleteFreeze(id);
+  const handleEditFreeze = (fz: Freeze) => {
+      setFreezeForm({
+          id: fz.id,
+          start_date: fz.start_date,
+          end_date: fz.end_date
+      });
+      setIsEditingFreeze(true);
+      setShowFreezeModal(true);
+  };
+
+  const confirmDeleteFreeze = async () => {
+    if (!freezeToDeleteId) return;
+    await db.deleteFreeze(freezeToDeleteId);
+    setFreezeToDeleteId(null);
     await onUpdate();
+    await loadFreezes();
     const updatedMembers = await db.getMembers();
     const freshMember = updatedMembers.find(m => m.id === displayedMember.id);
     if(freshMember) setDisplayedMember(freshMember);
@@ -939,7 +965,7 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                         {(canRenew || canEdit) && (
                             <div className="mt-8 flex gap-2">
                                 {canRenew && <Button onClick={handleRenewClick} className="flex-1 rounded-xl font-bold h-11 text-xs">Renew</Button>}
-                                {canEdit && <Button variant="outline" onClick={() => setShowFreezeModal(true)} className="flex-1 rounded-xl font-bold h-11 text-xs border-slate-200">Freeze</Button>}
+                                {canEdit && <Button variant="outline" onClick={() => { setIsEditingFreeze(false); setFreezeForm({id: '', start_date: format(new Date(), 'yyyy-MM-dd'), end_date: ''}); setShowFreezeModal(true); }} className="flex-1 rounded-xl font-bold h-11 text-xs border-slate-200">Freeze</Button>}
                             </div>
                         )}
                     </CardContent>
@@ -980,7 +1006,7 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                             ) : (
                                 <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden">
                                     {freezes.map(fz => (
-                                        <div key={fz.id} className="p-5 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                                        <div key={fz.id} className="p-5 flex items-center justify-between hover:bg-slate-50 transition-colors group">
                                             <div className="flex items-center gap-4">
                                                 <div className="p-2 bg-white shadow-sm border border-slate-100 rounded-lg">
                                                     <Clock className="w-4 h-4 text-indigo-600" />
@@ -991,9 +1017,14 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                                                 </div>
                                             </div>
                                             {canEdit && (
-                                                <button onClick={() => deleteFreeze(fz.id)} className="p-2 text-slate-300 hover:text-red-600 transition-colors">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => handleEditFreeze(fz)} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors">
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={() => setFreezeToDeleteId(fz.id)} className="p-2 text-slate-300 hover:text-red-600 transition-colors">
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     ))}
@@ -1058,7 +1089,7 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
                 <Card className="max-w-md w-full rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden animate-in zoom-in-95">
                     <CardHeader className="bg-slate-900 text-white p-6 relative">
-                        <CardTitle className="text-lg font-black tracking-tight text-white">Freeze Account</CardTitle>
+                        <CardTitle className="text-lg font-black tracking-tight text-white">{isEditingFreeze ? 'Adjust Suspension' : 'Freeze Account'}</CardTitle>
                         <button onClick={() => setShowFreezeModal(false)} className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"><X className="w-5 h-5"/></button>
                     </CardHeader>
                     <CardContent className="p-8">
@@ -1077,12 +1108,24 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                                     Freezing automatically extend the membership expiry date by the total number of days deferred.
                                 </p>
                             </div>
-                            <Button type="submit" className="w-full h-14 rounded-2xl font-black shadow-xl shadow-indigo-100">Commit Freezing</Button>
+                            <Button type="submit" className="w-full h-14 rounded-2xl font-black shadow-xl shadow-indigo-100">
+                                {isEditingFreeze ? 'Commit Adjustments' : 'Commit Freezing'}
+                            </Button>
                         </form>
                     </CardContent>
                 </Card>
             </div>
         )}
+
+        <ConfirmationModal 
+            isOpen={!!freezeToDeleteId}
+            onClose={() => setFreezeToDeleteId(null)}
+            onConfirm={confirmDeleteFreeze}
+            title="Revoke Suspension"
+            description="Are you sure you want to delete this freezing record? This will retract the membership extension by the number of days previously granted."
+            confirmText="Delete Record"
+            isDestructive={true}
+        />
     </div>
   );
 };
