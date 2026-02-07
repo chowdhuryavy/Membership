@@ -59,55 +59,56 @@ const Reports = () => {
   const reportRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   
+  // Ref to store the Base64 image for PDF generation
+  const logoBase64Ref = useRef<string | null>(null);
+  
   const logoUrl = currentProperty?.logo_url || settings?.logo_url;
-  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
 
   useEffect(() => { if (currentOutlet) loadData(); }, [reportMonth, currentOutlet]);
 
-  // Enhanced Logo Loader with Proxy Fallback
+  // Background Logo Converter: Fetches image as blob to bypass CORS during PDF generation only
   useEffect(() => {
     if (!logoUrl) {
-        setLogoDataUrl('');
+        logoBase64Ref.current = null;
         return;
     }
 
-    let isMounted = true;
-    
     const fetchImage = async () => {
         try {
-            // Attempt 1: Direct Fetch (works if server allows CORS)
+            // Attempt 1: Direct Fetch
+            // We use 'cors' mode. If it fails, it throws, and we catch it.
             const response = await fetch(logoUrl, { mode: 'cors' });
-            if (!response.ok) throw new Error('Direct fetch failed');
-            const blob = await response.blob();
-            if (!isMounted) return;
-            const reader = new FileReader();
-            reader.onloadend = () => isMounted && setLogoDataUrl(reader.result as string);
-            reader.readAsDataURL(blob);
-        } catch (err) {
-            console.warn("Direct logo fetch failed (likely CORS), attempting proxy bypass...");
-            // Attempt 2: Public CORS Proxy
-            try {
-                // Using allorigins as a fallback proxy to get raw bytes
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(logoUrl)}`;
-                const proxyResponse = await fetch(proxyUrl);
-                if (!proxyResponse.ok) throw new Error('Proxy fetch failed');
-                const proxyBlob = await proxyResponse.blob();
-                if (!isMounted) return;
+            if (response.ok) {
+                const blob = await response.blob();
                 const reader = new FileReader();
-                reader.onloadend = () => isMounted && setLogoDataUrl(reader.result as string);
-                reader.readAsDataURL(proxyBlob);
-            } catch (proxyErr) {
-                console.warn("Logo CORS bypass failed. PDF export may lack logo.", proxyErr);
-                // Fallback to URL. Browser will show it in DOM, but PDF might miss it.
-                if (isMounted) setLogoDataUrl(logoUrl); 
+                reader.onloadend = () => {
+                    logoBase64Ref.current = reader.result as string;
+                };
+                reader.readAsDataURL(blob);
+                return; // Success
             }
+        } catch (err) {
+            // Silent catch for direct fetch failure
+        }
+
+        // Attempt 2: Proxy
+        try {
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(logoUrl)}`;
+            const proxyResponse = await fetch(proxyUrl);
+            if (proxyResponse.ok) {
+                const proxyBlob = await proxyResponse.blob();
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    logoBase64Ref.current = reader.result as string;
+                };
+                reader.readAsDataURL(proxyBlob);
+            }
+        } catch (proxyErr) {
+            console.warn("PDF Logo: Proxy fetch failed. The logo may not appear in the PDF export.", proxyErr);
         }
     };
 
-    setLogoDataUrl(null); // Reset to loading
     fetchImage();
-
-    return () => { isMounted = false; };
   }, [logoUrl]);
 
   const loadData = async () => {
@@ -227,6 +228,15 @@ const Reports = () => {
                 container.style.width = '1300px';
                 container.style.maxWidth = '1300px';
             }
+            
+            // Critical: Inject the pre-fetched Base64 logo for PDF rendering
+            if (logoBase64Ref.current) {
+                const img = clonedDoc.querySelector('.company-logo-img') as HTMLImageElement;
+                if (img) {
+                    img.src = logoBase64Ref.current;
+                    img.removeAttribute('crossorigin'); // Clean up attributes for local data URL
+                }
+            }
         }
       });
       
@@ -257,7 +267,7 @@ const Reports = () => {
       pdf.save(`Ledger_${currentOutlet?.name || 'ERP'}_${reportMonth}.pdf`);
     } catch (err) { 
         console.error("PDF Error:", err); 
-        alert("PDF Generation Failed. This can happen if the logo image server has strict CORS policies. Please try using the Print option or check the browser console for more details.");
+        alert("PDF Generation Failed. This often happens with strict image security policies. Please use the 'Print' button as a fallback.");
     } finally { 
         window.scrollTo(0, originalScrollPos);
         setIsGeneratingPDF(false); 
@@ -355,20 +365,14 @@ const Reports = () => {
                 <div className="flex items-center gap-6">
                     {/* Logo Section */}
                     <div className="w-24 h-24 shrink-0 flex items-center justify-center">
-                        {logoDataUrl ? (
+                        {logoUrl ? (
                             <img
-                                src={logoDataUrl}
+                                src={logoUrl}
                                 alt="Company Logo"
                                 className="w-full h-full object-contain company-logo-img"
-                                onError={(e) => {
-                                    // If base64/proxy load fails, revert to original URL so it shows in browser (though PDF might miss it)
-                                    if (logoDataUrl !== logoUrl) {
-                                        setLogoDataUrl(logoUrl);
-                                    }
-                                }}
+                                // Standard img tag ensures visibility in browser. 
+                                // PDF generation uses the Base64 version injected via onclone.
                             />
-                        ) : logoDataUrl === null && logoUrl ? (
-                            <div className="w-full h-full bg-slate-100 animate-pulse rounded-xl"></div>
                         ) : (
                             <div className="w-full h-full bg-slate-900 text-white flex items-center justify-center rounded-xl">
                                 <Globe className="w-10 h-10" />
