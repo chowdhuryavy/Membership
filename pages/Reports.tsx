@@ -85,13 +85,13 @@ const Reports = () => {
             });
         };
 
-        // Strategy: Use a reliable CORS proxy first, then fallback to direct fetch.
-        // We do NOT modify the DOM <img> tag, so browser security is happy.
-        // We only use this fetched data for the PDF generation (html2canvas injection).
-
+        // Strategy: Use 'wsrv.nl' (Weserv) as the primary image proxy.
+        // It's highly reliable, supports SSL, and adds proper CORS headers.
+        
         try {
-            // Attempt 1: corsproxy.io (High reliability for images)
-            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(logoUrl)}`;
+            // Attempt 1: Weserv Global Image Cache
+            // We pass the URL encoded. We request output=png to ensure compatibility.
+            const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(logoUrl)}&output=png`;
             const response = await fetch(proxyUrl);
             if (response.ok) {
                 const blob = await response.blob();
@@ -99,18 +99,31 @@ const Reports = () => {
                 return;
             }
         } catch (e) {
-            console.warn("PDF Logo: Primary proxy failed, attempting fallback...");
+            console.warn("PDF Logo: Weserv proxy failed, trying AllOrigins...");
         }
 
         try {
-            // Attempt 2: Direct Fetch (Might work if server allows CORS)
+            // Attempt 2: AllOrigins (Raw JSON proxy)
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(logoUrl)}`;
+            const response = await fetch(proxyUrl);
+            if (response.ok) {
+                const blob = await response.blob();
+                logoBase64Ref.current = await blobToBase64(blob);
+                return;
+            }
+        } catch (e) {
+             console.warn("PDF Logo: All fallback proxies failed.");
+        }
+
+        // Final Fallback: Direct Fetch (Only works if the source already supports CORS)
+        try {
             const response = await fetch(logoUrl, { mode: 'cors' });
             if (response.ok) {
                 const blob = await response.blob();
                 logoBase64Ref.current = await blobToBase64(blob);
             }
         } catch (e) {
-            console.warn("PDF Logo: Direct fetch failed. Logo will be missing from PDF.");
+            console.warn("PDF Logo: Direct fetch failed. Logo will be hidden in PDF to prevent errors.");
         }
     };
 
