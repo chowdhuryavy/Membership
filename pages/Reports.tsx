@@ -60,8 +60,35 @@ const Reports = () => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   
   const logoUrl = currentProperty?.logo_url || settings?.logo_url;
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
 
   useEffect(() => { if (currentOutlet) loadData(); }, [reportMonth, currentOutlet]);
+
+  // Robust Logo Loader: Fetches image as blob to bypass CORS during PDF generation
+  useEffect(() => {
+    if (logoUrl) {
+      setLogoDataUrl(null); // Set to loading state
+      fetch(logoUrl)
+        .then(response => {
+          if (!response.ok) throw new Error('Network response was not ok');
+          return response.blob();
+        })
+        .then(blob => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setLogoDataUrl(reader.result as string);
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(error => {
+          console.error('Logo fetch failed (likely CORS), falling back to direct URL:', error);
+          // Fallback: Use direct URL. PDF might fail, but browser will show it.
+          setLogoDataUrl(logoUrl); 
+        });
+    } else {
+      setLogoDataUrl(''); // No logo URL provided
+    }
+  }, [logoUrl]);
 
   const loadData = async () => {
     if (!currentOutlet) return;
@@ -308,13 +335,14 @@ const Reports = () => {
                 <div className="flex items-center gap-6">
                     {/* Logo Section */}
                     <div className="w-24 h-24 shrink-0 flex items-center justify-center">
-                        {logoUrl ? (
+                        {logoDataUrl ? (
                             <img
-                                src={logoUrl}
+                                src={logoDataUrl}
                                 alt="Company Logo"
-                                crossOrigin="anonymous"
                                 className="w-full h-full object-contain company-logo-img"
                             />
+                        ) : logoDataUrl === null && logoUrl ? (
+                            <div className="w-full h-full bg-slate-100 animate-pulse rounded-xl"></div>
                         ) : (
                             <div className="w-full h-full bg-slate-900 text-white flex items-center justify-center rounded-xl">
                                 <Globe className="w-10 h-10" />
