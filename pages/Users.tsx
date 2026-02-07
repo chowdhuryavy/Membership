@@ -97,7 +97,7 @@ const UserDetail = ({ user, roles, outlets, onBack, onEdit, onDelete }: { user: 
 
 const Users = () => {
   const { user: currentUser } = useAuth();
-  const { roles, outlets, hasPermission, checkShortcut } = useSettings();
+  const { roles, outlets, properties, hasPermission, checkShortcut } = useSettings();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -468,12 +468,18 @@ const Users = () => {
                           <div className="space-y-2 pt-4 border-t border-slate-100">
                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Facility Access Scopes</label>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100 max-h-48 overflow-y-auto shadow-inner custom-scrollbar">
-                                  {outlets.map(o => (
-                                      <label key={o.id} className="flex items-center space-x-3 p-3 hover:bg-white rounded-xl cursor-pointer transition-all border border-transparent hover:border-slate-100 group">
-                                          <input type="checkbox" checked={formData.allowed_outlets.includes(o.id)} onChange={() => toggleOutlet(o.id)} className="h-5 w-5 text-indigo-600 rounded-lg border-slate-300 focus:ring-indigo-500"/>
-                                          <span className="text-xs font-black text-slate-600 uppercase tracking-tight group-hover:text-indigo-600">{o.name}</span>
-                                      </label>
-                                  ))}
+                                  {outlets.map(o => {
+                                      const property = properties.find(p => p.id === o.property_id);
+                                      return (
+                                        <label key={o.id} className="flex items-start space-x-3 p-3 hover:bg-white rounded-xl cursor-pointer transition-all border border-transparent hover:border-slate-100 group">
+                                            <input type="checkbox" checked={formData.allowed_outlets.includes(o.id)} onChange={() => toggleOutlet(o.id)} className="h-5 w-5 text-indigo-600 rounded-lg border-slate-300 focus:ring-indigo-500 shrink-0 mt-0.5"/>
+                                            <div>
+                                                <span className="text-xs font-black text-slate-600 uppercase tracking-tight group-hover:text-indigo-600 block">{o.name}</span>
+                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter block">{property?.name || 'Unassigned'}</span>
+                                            </div>
+                                        </label>
+                                      );
+                                  })}
                               </div>
                           </div>
                           {error && <div className="bg-red-50 text-red-600 text-[11px] font-bold p-4 rounded-2xl border border-red-100 flex items-start gap-3"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /><span className="leading-relaxed">{error}</span></div>}
