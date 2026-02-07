@@ -63,7 +63,7 @@ const Members = () => {
   const [members, setMembers] = useState<Member[]>([]);
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<MemberStatus | 'All' | 'Renewed'>('All');
+  const [statusFilter, setStatusFilter] = useState<MemberStatus | 'All' | 'Renewed'>(MemberStatus.ACTIVE);
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [lastSavedMember, setLastSavedMember] = useState<Member | null>(null);
