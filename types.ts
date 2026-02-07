@@ -40,6 +40,7 @@ export interface MembershipCategory {
   name: string;
   duration_months: number;
   base_rate: number;
+  max_freeze_days: number;
 }
 
 export interface UserProfile {

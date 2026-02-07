@@ -5,7 +5,7 @@ import { db } from '../services/mockSupabase';
 import { MembershipCategory } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock, Plus, X, Command } from 'lucide-react';
+import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock, Plus, X, Command, Snowflake } from 'lucide-react';
 
 // This component manages membership categories/tiers for a facility
 const Categories = () => {
@@ -13,7 +13,7 @@ const Categories = () => {
   const { currentOutlet, hasPermission, formatMoney, checkShortcut } = useSettings();
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
   
-  const [formData, setFormData] = useState({ id: '', name: '', duration_months: 1, base_rate: 0 });
+  const [formData, setFormData] = useState({ id: '', name: '', duration_months: 1, base_rate: 0, max_freeze_days: 0 });
   const [isEditing, setIsEditing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -74,7 +74,7 @@ const Categories = () => {
   }
 
   const resetForm = () => {
-      setFormData({ id: '', name: '', duration_months: 1, base_rate: 0 });
+      setFormData({ id: '', name: '', duration_months: 1, base_rate: 0, max_freeze_days: 0 });
       setIsEditing(false);
   };
   
@@ -115,7 +115,8 @@ const Categories = () => {
             await db.updateCategory(formData.id, {
                 name: formData.name,
                 duration_months: formData.duration_months,
-                base_rate: formData.base_rate
+                base_rate: formData.base_rate,
+                max_freeze_days: formData.max_freeze_days
             });
         }
     } else {
@@ -124,7 +125,8 @@ const Categories = () => {
             outlet_id: currentOutlet.id,
             name: formData.name,
             duration_months: formData.duration_months,
-            base_rate: formData.base_rate
+            base_rate: formData.base_rate,
+            max_freeze_days: formData.max_freeze_days
         });
     }
     
@@ -180,12 +182,18 @@ const Categories = () => {
                           </div>
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
                           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
                                   <CalendarClock className="w-3 h-3"/> Term
                               </p>
                               <p className="text-sm font-black text-slate-800 tracking-tight">{cat.duration_months} Months</p>
+                          </div>
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                  <Snowflake className="w-3 h-3"/> Max Freeze
+                              </p>
+                              <p className="text-sm font-black text-slate-800 tracking-tight">{cat.max_freeze_days} Days</p>
                           </div>
                           <div className="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-100">
                               <p className="text-[9px] font-black opacity-60 uppercase tracking-widest mb-1 flex items-center gap-1">
@@ -221,14 +229,25 @@ const Categories = () => {
                                     className="h-12 rounded-xl"
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Validity (Months)</label>
-                                <Input 
-                                    type="number" 
-                                    value={formData.duration_months} 
-                                    onChange={e => setFormData({...formData, duration_months: parseInt(e.target.value) || 0})} 
-                                    className="h-12 rounded-xl"
-                                />
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Validity (Months)</label>
+                                    <Input 
+                                        type="number" 
+                                        value={formData.duration_months} 
+                                        onChange={e => setFormData({...formData, duration_months: parseInt(e.target.value) || 0})} 
+                                        className="h-12 rounded-xl"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Max Freeze (Days)</label>
+                                    <Input 
+                                        type="number" 
+                                        value={formData.max_freeze_days} 
+                                        onChange={e => setFormData({...formData, max_freeze_days: parseInt(e.target.value) || 0})} 
+                                        className="h-12 rounded-xl"
+                                    />
+                                </div>
                             </div>
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Base Revenue Rate</label>

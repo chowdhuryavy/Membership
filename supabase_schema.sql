@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS public.membership_categories (
     name TEXT NOT NULL,
     duration_months INTEGER NOT NULL,
     base_rate NUMERIC(15,2) NOT NULL,
+    max_freeze_days INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -124,6 +125,7 @@ ALTER TABLE public.outlets ADD COLUMN IF NOT EXISTS signatory_approved_role TEXT
 ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS signatory_prepared_role TEXT DEFAULT 'Cluster Income Auditor';
 ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS signatory_reviewed_role TEXT DEFAULT 'Cluster Assist. Financial Controller';
 ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS signatory_approved_role TEXT DEFAULT 'Cluster Ex- Assist. Director of Finance';
+ALTER TABLE public.membership_categories ADD COLUMN IF NOT EXISTS max_freeze_days INTEGER NOT NULL DEFAULT 0;
 
 -- 3. ENABLE RLS AND CREATE MASTER POLICIES
 DO $$ 

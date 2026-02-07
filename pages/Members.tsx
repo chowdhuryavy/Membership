@@ -220,7 +220,7 @@ const Members = () => {
     const orphanMembers = filteredMembers.filter(m => !categories.find(c => c.id === m.category_id));
     if (orphanMembers.length > 0) {
         groups.push({
-            category: { id: 'unknown', name: 'Uncategorized', base_rate: 0, duration_months: 0, outlet_id: currentOutlet?.id },
+            category: { id: 'unknown', name: 'Uncategorized', base_rate: 0, duration_months: 0, outlet_id: currentOutlet?.id, max_freeze_days: 0 },
             members: orphanMembers
         });
     }
@@ -844,10 +844,20 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
     }
 
     const totalDays = differenceInCalendarDays(end, start) + 1;
-    // Check overlap excluding current editing freeze
+
+    // Freeze Limit Enforcement
+    const memberCategory = categories.find(c => c.id === displayedMember.category_id);
+    const maxFreezeDays = memberCategory?.max_freeze_days || 0;
+
     const otherFreezes = isEditingFreeze ? freezes.filter(f => f.id !== freezeForm.id) : freezes;
+    const usedFreezeDays = otherFreezes.reduce((sum, f) => sum + f.total_days, 0);
+
+    if (usedFreezeDays + totalDays > maxFreezeDays) {
+        alert(`Freeze limit exceeded. This tier allows a maximum of ${maxFreezeDays} days. You have ${maxFreezeDays - usedFreezeDays} days remaining.`);
+        return;
+    }
+
     const isOverlap = RevenueEngine.checkFreezeOverlap(start, end, otherFreezes);
-    
     if (isOverlap) {
         alert("This period overlaps with an existing Freezing.");
         return;
@@ -915,6 +925,10 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
   };
 
   const catName = categories.find(c => c.id === displayedMember.category_id)?.name || 'Unknown Tier';
+  const memberCategory = categories.find(c => c.id === displayedMember.category_id);
+  const maxFreezeDays = memberCategory?.max_freeze_days || 0;
+  const usedFreezeDays = freezes.reduce((sum, f) => sum + f.total_days, 0);
+  const remainingFreezeDays = Math.max(0, maxFreezeDays - usedFreezeDays);
   const canRenew = user && hasPermission(user.role_id, 'members:create');
   const canEdit = user && hasPermission(user.role_id, 'members:edit');
   const effectiveStatus = getEffectiveStatus(displayedMember);
@@ -1105,7 +1119,7 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                             <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-3">
                                 <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                                 <p className="text-[10px] font-bold text-amber-800 leading-relaxed uppercase tracking-tight">
-                                    Freezing automatically extend the membership expiry date by the total number of days deferred.
+                                    Tier Policy: {maxFreezeDays} max days ({usedFreezeDays} used, {remainingFreezeDays} left). Freezing extends expiry by the deferred period.
                                 </p>
                             </div>
                             <Button type="submit" className="w-full h-14 rounded-2xl font-black shadow-xl shadow-indigo-100">

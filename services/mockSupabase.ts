@@ -2,7 +2,7 @@
 import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
-import { addDays, format, parseISO } from 'date-fns';
+import { addDays, format, parseISO, startOfDay } from 'date-fns';
 
 class DatabaseService {
   private isSupabase() {
@@ -19,33 +19,55 @@ class DatabaseService {
     });
   }
 
-  // Internal helper to ensure member end dates are always synced with the freeze ledger
+  /**
+   * REVENUE INTEGRITY ENGINE: syncMemberEndDate
+   * Ensures the member's expiry date is a pure function of (Original End Date + Sum of All Freezes).
+   * This is called automatically after any mutation to the 'freezes' table.
+   */
   private async syncMemberEndDate(memberId: string) {
     if (!this.isSupabase()) return;
 
-    // 1. Fetch current member record and all their freezes
-    const [{ data: m }, { data: freezes }] = await Promise.all([
-      supabase.from('members').select('*').eq('id', memberId).single(),
-      supabase.from('freezes').select('total_days').eq('member_id', memberId)
-    ]);
+    try {
+        // 1. Fetch fresh baseline and all associated freezes
+        // We use 'select *' to ensure we have the most current 'original_end_date' from the DB
+        const [{ data: m, error: mErr }, { data: freezes, error: fErr }] = await Promise.all([
+          supabase.from('members').select('id, original_end_date, status').eq('id', memberId).single(),
+          supabase.from('freezes').select('total_days').eq('member_id', memberId)
+        ]);
 
-    if (!m) return;
+        if (mErr || !m) {
+            console.error("Sync Engine Error: Member not found during recalculation", mErr);
+            return;
+        }
 
-    // 2. Calculate total deferred days
-    const totalDeferred = (freezes || []).reduce((sum, f) => sum + f.total_days, 0);
+        // 2. Calculate absolute deferred sum
+        const totalDeferred = (freezes || []).reduce((sum, f) => sum + (Number(f.total_days) || 0), 0);
 
-    // 3. Derived current_end_date = original_end_date + totalDeferred
-    // This ensures we always calculate from the baseline to prevent drift
-    const newEndDate = format(addDays(parseISO(m.original_end_date), totalDeferred), 'yyyy-MM-dd');
-    
-    // 4. Update member status and end date
-    const status = totalDeferred > 0 ? MemberStatus.FROZEN : MemberStatus.ACTIVE;
-    await supabase.from('members').update({ 
-      status, 
-      current_end_date: newEndDate 
-    }).eq('id', memberId);
+        // 3. Derive the new current_end_date
+        // We parse the original baseline and add the total days
+        const baselineDate = startOfDay(parseISO(m.original_end_date));
+        const calculatedEndDate = addDays(baselineDate, totalDeferred);
+        const newEndDateStr = format(calculatedEndDate, 'yyyy-MM-dd');
+        
+        // 4. Determine lifecycle status
+        // A member is 'Frozen' in the system if they have active freeze records
+        const newStatus = totalDeferred > 0 ? MemberStatus.FROZEN : MemberStatus.ACTIVE;
 
-    return newEndDate;
+        // 5. Atomic Update
+        const { error: updateErr } = await supabase
+            .from('members')
+            .update({ 
+                status: newStatus, 
+                current_end_date: newEndDateStr 
+            })
+            .eq('id', memberId);
+
+        if (updateErr) throw updateErr;
+
+        return newEndDateStr;
+    } catch (err) {
+        console.error("Critical Revenue Recalculation Failure:", err);
+    }
   }
 
   async logAction(action: string, details: string, outlet_id?: string) {
@@ -291,6 +313,7 @@ class DatabaseService {
   async addFreeze(freeze: Freeze) {
     if (this.isSupabase()) {
       await supabase.from('freezes').insert([freeze]);
+      // Critical: Await recalculation to ensure DB is consistent before UI refresh
       await this.syncMemberEndDate(freeze.member_id);
       await this.logAction('CREATE_FREEZE', `Account suspension applied for member ID: ${freeze.member_id}`);
     }
@@ -300,6 +323,7 @@ class DatabaseService {
     if (this.isSupabase()) {
       const { data: f } = await supabase.from('freezes').select('member_id').eq('id', id).single();
       await supabase.from('freezes').update(updates).eq('id', id);
+      // Critical: Await recalculation to ensure DB is consistent before UI refresh
       if (f) await this.syncMemberEndDate(f.member_id);
       await this.logAction('UPDATE_FREEZE', `Suspension record adjusted: ${id}`);
     }
@@ -309,6 +333,7 @@ class DatabaseService {
     if (this.isSupabase()) {
       const { data: f } = await supabase.from('freezes').select('member_id').eq('id', id).single();
       await supabase.from('freezes').delete().eq('id', id);
+      // Critical: Await recalculation to ensure DB is consistent before UI refresh
       if (f) await this.syncMemberEndDate(f.member_id);
       await this.logAction('DELETE_FREEZE', `Suspension record revoked: ${id}`);
     }

@@ -347,7 +347,7 @@ const Sidebar = () => {
                             {settings?.name || 'System Identity'}
                         </h1>
                         <span className="block text-[9px] text-slate-400 uppercase tracking-[0.2em] font-black mt-1 whitespace-nowrap">
-                            Corporate Solution
+                            Designed by Perfection
                         </span>
                     </div>
                 </div>
