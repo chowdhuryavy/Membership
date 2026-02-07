@@ -95,7 +95,7 @@ const Login = () => {
 
           <div className="relative z-10 pt-12 border-t border-white/10">
               <p className="text-indigo-300/50 text-[10px] font-black uppercase tracking-widest">
-                  &copy; {new Date().getFullYear()} saavar group. All Rights Reserved.
+                  &copy; {new Date().getFullYear()} Perfection. All Rights Reserved.
               </p>
           </div>
         </div>
@@ -121,7 +121,7 @@ const Login = () => {
             <div className="flex items-center justify-center gap-3">
               <div className="h-px w-8 bg-slate-200"></div>
               <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] whitespace-nowrap">
-                {mustChangePassword ? 'Security Protocol' : 'Internal Control'}
+                {mustChangePassword ? 'Security Protocol' : 'Product of Perfection BD'}
               </p>
               <div className="h-px w-8 bg-slate-200"></div>
             </div>
