@@ -64,30 +64,50 @@ const Reports = () => {
 
   useEffect(() => { if (currentOutlet) loadData(); }, [reportMonth, currentOutlet]);
 
-  // Robust Logo Loader: Fetches image as blob to bypass CORS during PDF generation
+  // Enhanced Logo Loader with Proxy Fallback
   useEffect(() => {
-    if (logoUrl) {
-      setLogoDataUrl(null); // Set to loading state
-      fetch(logoUrl)
-        .then(response => {
-          if (!response.ok) throw new Error('Network response was not ok');
-          return response.blob();
-        })
-        .then(blob => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setLogoDataUrl(reader.result as string);
-          };
-          reader.readAsDataURL(blob);
-        })
-        .catch(error => {
-          console.error('Logo fetch failed (likely CORS), falling back to direct URL:', error);
-          // Fallback: Use direct URL. PDF might fail, but browser will show it.
-          setLogoDataUrl(logoUrl); 
-        });
-    } else {
-      setLogoDataUrl(''); // No logo URL provided
+    if (!logoUrl) {
+        setLogoDataUrl('');
+        return;
     }
+
+    let isMounted = true;
+    
+    const fetchImage = async () => {
+        try {
+            // Attempt 1: Direct Fetch (works if server allows CORS)
+            const response = await fetch(logoUrl, { mode: 'cors' });
+            if (!response.ok) throw new Error('Direct fetch failed');
+            const blob = await response.blob();
+            if (!isMounted) return;
+            const reader = new FileReader();
+            reader.onloadend = () => isMounted && setLogoDataUrl(reader.result as string);
+            reader.readAsDataURL(blob);
+        } catch (err) {
+            console.warn("Direct logo fetch failed (likely CORS), attempting proxy bypass...");
+            // Attempt 2: Public CORS Proxy
+            try {
+                // Using allorigins as a fallback proxy to get raw bytes
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(logoUrl)}`;
+                const proxyResponse = await fetch(proxyUrl);
+                if (!proxyResponse.ok) throw new Error('Proxy fetch failed');
+                const proxyBlob = await proxyResponse.blob();
+                if (!isMounted) return;
+                const reader = new FileReader();
+                reader.onloadend = () => isMounted && setLogoDataUrl(reader.result as string);
+                reader.readAsDataURL(proxyBlob);
+            } catch (proxyErr) {
+                console.warn("Logo CORS bypass failed. PDF export may lack logo.", proxyErr);
+                // Fallback to URL. Browser will show it in DOM, but PDF might miss it.
+                if (isMounted) setLogoDataUrl(logoUrl); 
+            }
+        }
+    };
+
+    setLogoDataUrl(null); // Reset to loading
+    fetchImage();
+
+    return () => { isMounted = false; };
   }, [logoUrl]);
 
   const loadData = async () => {
@@ -339,6 +359,7 @@ const Reports = () => {
                             <img
                                 src={logoDataUrl}
                                 alt="Company Logo"
+                                crossOrigin="anonymous" 
                                 className="w-full h-full object-contain company-logo-img"
                             />
                         ) : logoDataUrl === null && logoUrl ? (
