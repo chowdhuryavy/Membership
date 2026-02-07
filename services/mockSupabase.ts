@@ -35,6 +35,7 @@ class DatabaseService {
     const totalDeferred = (freezes || []).reduce((sum, f) => sum + f.total_days, 0);
 
     // 3. Derived current_end_date = original_end_date + totalDeferred
+    // This ensures we always calculate from the baseline to prevent drift
     const newEndDate = format(addDays(parseISO(m.original_end_date), totalDeferred), 'yyyy-MM-dd');
     
     // 4. Update member status and end date
@@ -211,7 +212,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Completed signUp method to correctly initialize newUser and return profile
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
     const { data: authData, error: authError } = await (supabase.auth as any).signUp({ 
         email, password: passwordAttempt, options: { data: { name, full_name: name, display_name: name } } 
@@ -225,7 +225,6 @@ class DatabaseService {
     return { user: null, error: 'Registration failed' };
   }
 
-  // Generic Getters
   async getUsers(): Promise<UserProfile[]> {
     if (this.isSupabase()) {
       const { data } = await supabase.from('profiles').select('*');
@@ -317,7 +316,7 @@ class DatabaseService {
 
   async getCategories(outletId: string): Promise<MembershipCategory[]> {
     if (this.isSupabase()) {
-      const { data } = await supabase.from('categories').select('*').eq('outlet_id', outletId);
+      const { data } = await supabase.from('membership_categories').select('*').eq('outlet_id', outletId);
       return (data || []) as MembershipCategory[];
     }
     return [];
@@ -326,33 +325,44 @@ class DatabaseService {
   async addCategory(cat: Omit<MembershipCategory, 'id'>) {
     if (this.isSupabase()) {
       const newCat = { ...cat, id: `cat_${crypto.randomUUID()}` };
-      await supabase.from('categories').insert([newCat]);
+      await supabase.from('membership_categories').insert([newCat]);
     }
   }
 
   async updateCategory(id: string, updates: Partial<MembershipCategory>) {
     if (this.isSupabase()) {
-      await supabase.from('categories').update(updates).eq('id', id);
+      await supabase.from('membership_categories').update(updates).eq('id', id);
     }
   }
 
   async deleteCategory(id: string) {
     if (this.isSupabase()) {
-      await supabase.from('categories').delete().eq('id', id);
+      await supabase.from('membership_categories').delete().eq('id', id);
     }
   }
 
   async getSettings(): Promise<CompanySettings> {
+    const defaultSettings: CompanySettings = {
+        name: 'The Torch Hospitality',
+        logo_url: '',
+        address: '',
+        currency_id: 'default'
+    };
+
     if (this.isSupabase()) {
-      const { data } = await supabase.from('settings').select('*').single();
-      return data as CompanySettings;
+      try {
+        const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
+        return (data as CompanySettings) || defaultSettings;
+      } catch (e) {
+        return defaultSettings;
+      }
     }
-    return {} as CompanySettings;
+    return defaultSettings;
   }
 
   async updateSettings(settings: CompanySettings) {
     if (this.isSupabase()) {
-      await supabase.from('settings').update(settings).eq('id', '1'); // Fixed: Ensuring settings ID is handled as string
+      await supabase.from('company_settings').update(settings).eq('id', 'global');
     }
   }
 
@@ -475,5 +485,4 @@ class DatabaseService {
   }
 }
 
-// Fix: Exporting the db instance to resolve multi-file import errors
 export const db = new DatabaseService();

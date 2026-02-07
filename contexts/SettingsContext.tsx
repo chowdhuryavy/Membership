@@ -52,7 +52,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setProperties(p);
         
         // Logic: Primary choice is global setting, secondary is flagged 'is_default' in table, tertiary is first available.
-        const activeCurr = c.find(curr => curr.id === s.currency_id) || 
+        const activeCurr = (s && c.find(curr => curr.id === s.currency_id)) || 
                           c.find(curr => curr.is_default) || 
                           c[0];
                           
@@ -141,7 +141,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const shift = parts.includes('shift');
 
     // Logic: Match if modifiers align AND key matches
-    // Note: e.key can be 'Enter', 'Escape', 'd', 'D', etc. We normalize to lowercase.
     const eventKey = e.key.toLowerCase();
     
     const matchMeta = meta === e.metaKey;
