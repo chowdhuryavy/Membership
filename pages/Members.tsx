@@ -41,11 +41,9 @@ import {
 import { db } from '../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Freeze } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, differenceInCalendarDays, addDays, isAfter, isBefore, isEqual, startOfDay } from 'date-fns';
+import { format, differenceInCalendarDays, addDays, isAfter, isBefore, isEqual, startOfDay, parseISO } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-
-const parseISO = (dateString: string) => new Date(dateString);
 
 const memberSchema = z.object({
   membership_number: z.string().min(1, "Required"),
@@ -808,11 +806,9 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
   const [history, setHistory] = useState<Member[]>([]);
 
   useEffect(() => {
-    // This effect ensures that if the user navigates back to the list and selects a *different* member,
-    // the detail view resets to show the newly selected member, not the last historical one they clicked.
-    // It triggers only when the top-level member prop changes.
+    // Sync local state when the prop object changes (including internal property updates)
     setDisplayedMember(member);
-  }, [member.id]);
+  }, [member]);
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -865,8 +861,11 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
         await db.addFreeze(freeze);
         setShowFreezeModal(false);
         setFreezeForm({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' });
-        onUpdate();
-        // Manually update displayed member after freeze
+        
+        // Trigger parent refresh
+        await onUpdate();
+        
+        // Re-fetch internal detail state to ensure immediate UI feedback
         const updatedMembers = await db.getMembers();
         const freshMember = updatedMembers.find(m => m.id === displayedMember.id);
         if(freshMember) setDisplayedMember(freshMember);
@@ -878,7 +877,7 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
 
   const deleteFreeze = async (id: string) => {
     await db.deleteFreeze(id);
-    onUpdate();
+    await onUpdate();
     const updatedMembers = await db.getMembers();
     const freshMember = updatedMembers.find(m => m.id === displayedMember.id);
     if(freshMember) setDisplayedMember(freshMember);

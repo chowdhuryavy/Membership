@@ -1,13 +1,9 @@
 
 import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission } from '../types';
-import { supabase } from './supabase';
+// Fixed: Added supabaseUrl and supabaseAnonKey to the imports from ./supabase to fix undefined variable errors.
+import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
-import { addDays, format } from 'date-fns';
-
-const parseISO = (dateString: string) => new Date(dateString);
-
-const supabaseUrl = 'https://fqwfffkkaeknaqjorygy.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxd2ZmZmtrYWVrbmFxam9yeWd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4ODgxNjgsImV4cCI6MjA4NTQ2NDE2OH0.ntOUbYdxrge-0imvDduz1uA01tgHDttU5fNdxbxMm9A';
+import { addDays, format, parseISO } from 'date-fns';
 
 class DatabaseService {
   private isSupabase() {
