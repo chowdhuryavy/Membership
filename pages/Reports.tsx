@@ -359,8 +359,13 @@ const Reports = () => {
                             <img
                                 src={logoDataUrl}
                                 alt="Company Logo"
-                                crossOrigin="anonymous" 
                                 className="w-full h-full object-contain company-logo-img"
+                                onError={(e) => {
+                                    // If base64/proxy load fails, revert to original URL so it shows in browser (though PDF might miss it)
+                                    if (logoDataUrl !== logoUrl) {
+                                        setLogoDataUrl(logoUrl);
+                                    }
+                                }}
                             />
                         ) : logoDataUrl === null && logoUrl ? (
                             <div className="w-full h-full bg-slate-100 animate-pulse rounded-xl"></div>
