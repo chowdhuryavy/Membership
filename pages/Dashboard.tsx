@@ -144,32 +144,33 @@ const Dashboard = () => {
     }
     setPerformanceTrendData(performanceTrend);
 
-    const expiring = members.filter(m => {
+    const today = new Date();
+    const urgentMembers = members.filter(m => {
         const mEnd = parseISO(m.current_end_date);
         const mStart = parseISO(m.start_date);
-        if (auditPoint < mStart || auditPoint > mEnd) return false;
+        if (today < mStart || today > mEnd) return false;
+
         const memberFreezes = freezes.filter(f => f.member_id === m.id);
-        const isFrozenAtPoint = memberFreezes.some(f => auditPoint >= parseISO(f.start_date) && auditPoint <= parseISO(f.end_date));
-        if (isFrozenAtPoint) return false;
-        const daysLeft = differenceInCalendarDays(mEnd, auditPoint);
+        const isFrozenToday = memberFreezes.some(f => today >= parseISO(f.start_date) && today <= parseISO(f.end_date));
+        if (isFrozenToday) return false;
+
+        const daysLeft = differenceInCalendarDays(mEnd, today);
         return daysLeft >= 0 && daysLeft <= 30;
     }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 5);
-    
+
+    const urgentMemberIds = new Set(urgentMembers.map(m => m.id));
+
     const monthlyExpiring = members.filter(m => {
+        if (urgentMemberIds.has(m.id)) return false;
+
         const mEnd = parseISO(m.current_end_date);
         const mStart = parseISO(m.start_date);
 
-        // The member must expire in the selected month.
-        if (!isSameMonth(mEnd, viewDate)) {
-            return false;
-        }
+        if (!isSameMonth(mEnd, viewDate)) return false;
 
-        // The member's term must overlap with the month to be considered.
         const monthStart = startOfMonth(viewDate);
         const monthEnd = endOfMonth(viewDate);
-        if (mStart > monthEnd || mEnd < monthStart) {
-            return false;
-        }
+        if (mStart > monthEnd || mEnd < monthStart) return false;
         
         return true;
     }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 5);
@@ -194,7 +195,7 @@ const Dashboard = () => {
       newMembersThisMonth: monthEnrollments, dailyAccrual: totalDailyAccrual, revenueThisMonth: mtdRevenue,
       futureRevenue: deferredRevenueAtPoint, projectedEndMonth: projectedMonthEnd
     });
-    setExpiringMembers(expiring);
+    setExpiringMembers(urgentMembers);
     setMonthlyExpiringMembers(monthlyExpiring);
   };
 
@@ -320,14 +321,14 @@ const Dashboard = () => {
             <Card className="rounded-[2.5rem] border-slate-200/60 shadow-sm bg-white overflow-hidden group">
                 <CardHeader className="p-6 border-b border-slate-100 flex items-center justify-between">
                     <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-rose-600"/> Immediate Retention Targets
+                        <AlertCircle className="w-4 h-4 text-rose-600"/> Urgent: Expiring in 30 Days
                     </h3>
                 </CardHeader>
                 <CardContent className="p-2">
                     {expiringMembers.length === 0 ? (
                         <div className="py-10 text-center">
                             <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                            <p className="text-xs font-bold text-slate-500">Portfolio Stable</p>
+                            <p className="text-xs font-bold text-slate-500">No immediate risks.</p>
                         </div>
                     ) : (
                         <div className="space-y-1">
@@ -361,14 +362,14 @@ const Dashboard = () => {
             <Card className="rounded-[2.5rem] border-slate-200/60 shadow-sm bg-white overflow-hidden group">
                 <CardHeader className="p-6 border-b border-slate-100 flex items-center justify-between">
                     <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-amber-600"/> Current Month Expiries
+                        <Calendar className="w-4 h-4 text-amber-600"/> Expiring Later This Month
                     </h3>
                 </CardHeader>
                 <CardContent className="p-2">
                     {monthlyExpiringMembers.length === 0 ? (
                         <div className="py-10 text-center">
                             <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                            <p className="text-xs font-bold text-slate-500">No expiries this month.</p>
+                            <p className="text-xs font-bold text-slate-500">No other expiries this month.</p>
                         </div>
                     ) : (
                         <div className="space-y-1">
