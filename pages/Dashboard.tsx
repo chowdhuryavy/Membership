@@ -129,12 +129,20 @@ const Dashboard = () => {
     }
     setPerformanceTrendData(performanceTrend);
     
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize for date-only comparison
+
     const monthlyExpiring = members.filter(m => {
         const mEnd = parseISO(m.current_end_date);
         const mStart = parseISO(m.start_date);
 
+        // Membership must expire within the selected month
         if (!isSameMonth(mEnd, viewDate)) return false;
+        
+        // Member must not have already expired
+        if (mEnd < today) return false;
 
+        // Membership term must overlap with the selected month to be relevant
         const monthStart = startOfMonth(viewDate);
         const monthEnd = endOfMonth(viewDate);
         if (mStart > monthEnd || mEnd < monthStart) return false;
@@ -284,7 +292,7 @@ const Dashboard = () => {
                     {monthlyExpiringMembers.length === 0 ? (
                         <div className="py-10 text-center">
                             <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                            <p className="text-xs font-bold text-slate-500">No expiries this month.</p>
+                            <p className="text-xs font-bold text-slate-500">No upcoming expiries this month.</p>
                         </div>
                     ) : (
                         <div className="space-y-1">
@@ -306,7 +314,7 @@ const Dashboard = () => {
                                         </div>
                                     </div>
                                     <span className={`text-[9px] font-black px-2 py-1 rounded-md border whitespace-nowrap bg-amber-50 text-amber-600 border-amber-100`}>
-                                        {daysLeft >= 0 ? `${daysLeft} Days Left` : 'Expired'}
+                                        {`${daysLeft} Days Left`}
                                     </span>
                                 </button>
                                 )}
