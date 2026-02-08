@@ -216,7 +216,7 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
 const TopHeader = () => {
     const { user } = useAuth();
     return (
-        <header className="hidden md:flex h-20 items-center justify-between px-8 bg-white border-b border-slate-200 sticky top-0 z-40 print:hidden">
+        <header className="hidden md:flex h-20 items-center justify-between px-8 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 sticky top-0 z-[40] print:hidden shadow-sm">
             <div className="flex items-center gap-4">
                 <PortfolioSelector />
                 <div className="h-6 w-px bg-slate-200 mx-2"></div>
@@ -294,7 +294,7 @@ const ProtectedLayout = () => {
   return (
     <div className="flex min-h-screen bg-slate-50">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <TopHeader />
         <MobileHeader />
         <main className="flex-1 p-4 md:p-8 overflow-y-auto print:p-0 print:overflow-visible custom-scrollbar">
@@ -399,7 +399,7 @@ const MobileHeader = () => {
     };
 
     return (
-        <div className="md:hidden bg-white border-b border-slate-200 px-6 py-4 flex flex-col sticky top-0 z-50 print:hidden shadow-sm">
+        <div className="md:hidden bg-white/90 backdrop-blur-xl border-b border-slate-200/60 px-6 py-4 flex flex-col sticky top-0 z-[50] print:hidden shadow-sm">
             <div className="flex justify-between items-center w-full mb-3">
                 <div className="flex items-center gap-3">
                      {settings?.logo_url ? (

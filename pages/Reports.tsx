@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Button } from '../components/ui';
 import { db } from '../services/mockSupabase';
@@ -214,16 +215,12 @@ const Reports = () => {
             -webkit-print-color-adjust: exact !important; 
             print-color-adjust: exact !important; 
           }
-          /* Hide non-report layout elements */
           aside, header, .no-print { display: none !important; }
-          
-          /* Reset main layout for full width printing */
           main { 
             padding: 0 !important; 
             margin: 0 !important; 
             overflow: visible !important;
           }
-          
           .print-container { 
             position: absolute !important;
             left: 0 !important;
@@ -293,117 +290,120 @@ const Reports = () => {
         </div>
       </div>
 
-      <div ref={reportRef} className="bg-white p-12 md:p-16 rounded-[1rem] shadow-2xl max-w-[1300px] mx-auto min-h-screen print-container border border-slate-100 flex flex-col overflow-hidden">
-        <div className="flex flex-row justify-between items-center border-b-4 border-slate-900 pb-8 mb-10 min-w-[1100px]">
-          <div className="flex items-center gap-6">
-            <div className="w-24 h-24 shrink-0 flex items-center justify-center">
-              {logoUrl ? <img src={logoUrl} alt="Logo" className="w-full h-full object-contain company-logo-img" referrerPolicy="no-referrer" /> : <div className="w-full h-full bg-slate-900 text-white flex items-center justify-center rounded-xl"><Globe className="w-10 h-10" /></div>}
-            </div>
-            <div className="flex flex-col justify-center h-full pt-2">
-              <h1 className="text-4xl font-serif font-bold text-slate-950 leading-none mb-3 tracking-tight">
-                {currentProperty?.name || settings?.name || 'Corporate Ledger'}
-              </h1>
-              <div className="flex flex-col gap-1">
-                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{currentProperty?.address || settings?.address || 'Corporate Headquarters'}</p>
-                <p className="text-[11px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-2"><Building2 className="w-3 h-3" /> Facility: {currentOutlet?.name || 'Authorized Facility'}</p>
+      {/* WEB VIEW FIX: Added overflow-x-auto parent and set fixed w-[1300px] on report container */}
+      <div className="w-full overflow-x-auto custom-scrollbar pb-12 no-print-overflow">
+        <div ref={reportRef} className="bg-white p-12 md:p-16 rounded-[1rem] shadow-2xl w-[1300px] mx-auto min-h-screen print-container border border-slate-100 flex flex-col">
+          <div className="flex flex-row justify-between items-center border-b-4 border-slate-900 pb-8 mb-10 min-w-[1100px]">
+            <div className="flex items-center gap-6">
+              <div className="w-24 h-24 shrink-0 flex items-center justify-center">
+                {logoUrl ? <img src={logoUrl} alt="Logo" className="w-full h-full object-contain company-logo-img" referrerPolicy="no-referrer" /> : <div className="w-full h-full bg-slate-900 text-white flex items-center justify-center rounded-xl"><Globe className="w-10 h-10" /></div>}
+              </div>
+              <div className="flex flex-col justify-center h-full pt-2">
+                <h1 className="text-4xl font-serif font-bold text-slate-950 leading-none mb-3 tracking-tight">
+                  {currentProperty?.name || settings?.name || 'Corporate Ledger'}
+                </h1>
+                <div className="flex flex-col gap-1">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{currentProperty?.address || settings?.address || 'Corporate Headquarters'}</p>
+                  <p className="text-[11px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-2"><Building2 className="w-3 h-3" /> Facility: {currentOutlet?.name || 'Authorized Facility'}</p>
+                </div>
               </div>
             </div>
+            <div className="text-right flex flex-col items-end">
+              <h2 className="text-5xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-2">Financial Ledger</h2>
+              <p className="text-lg font-medium text-slate-500 mb-4">{format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}</p>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded text-[10px] font-black uppercase tracking-widest text-slate-600"><ShieldCheck className="w-3 h-3"/> Verified Audit Trail</div>
+            </div>
           </div>
-          <div className="text-right flex flex-col items-end">
-            <h2 className="text-5xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-2">Financial Ledger</h2>
-            <p className="text-lg font-medium text-slate-500 mb-4">{format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}</p>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded text-[10px] font-black uppercase tracking-widest text-slate-600"><ShieldCheck className="w-3 h-3"/> Verified Audit Trail</div>
-          </div>
-        </div>
 
-        <div className="flex-1">
-          <table className="w-full text-[10px] border-collapse min-w-[1100px]">
-            <thead>
-              <tr className="bg-slate-950 text-white border-b-4 border-slate-950">
-                {activeColumns.map(col => (
-                  <th key={col.key} className={`px-4 py-4 text-center font-bold uppercase tracking-widest border-r border-white/10 last:border-0 ${col.width}`}>{col.label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {Object.keys(groupedRows).map(catName => { 
-                const groupRows = groupedRows[catName]; 
-                const groupTotals = groupRows.reduce((acc, r) => ({ fees: acc.fees + r.actual_fees, prev: acc.prev + r.carry_forward, current: acc.current + r.current_month_rev, balance: acc.balance + r.balance }), { fees: 0, prev: 0, current: 0, balance: 0 }); 
-                return (
-                  <React.Fragment key={catName}>
-                    <tr className="bg-slate-50 border-b border-slate-300">
-                      <td colSpan={activeColumns.length} className="px-6 py-4">
-                        <div className="flex items-center">
-                          <ReceiptText className="w-4 h-4 text-indigo-600 mr-3" />
-                          <span className="text-[12px] font-black uppercase tracking-widest text-slate-900 mr-4">{catName}</span>
-                          <span className="text-[9px] font-bold text-slate-500 uppercase">({groupRows.length} Records)</span>
-                        </div>
-                      </td>
-                    </tr>
-                    {groupRows.map((row) => { 
-                      globalIndexCounter++; 
-                      return (
-                        <tr key={`${row.membership_no}-${row.sl_no}`} className="hover:bg-slate-50/50">
-                          {activeColumns.map(col => (
-                            <td key={col.key} className={`px-4 py-3 border-r border-slate-100 last:border-0 ${['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? 'text-right tabular-nums' : 'text-center'} ${col.key === 'guest_name' ? 'text-left font-bold text-slate-800' : ''}`}>
-                              <span className={`${col.key === 'current_month_rev' ? 'text-indigo-700 font-bold' : ''} ${col.key === 'balance' && row.balance > 0 ? 'text-red-600 font-black' : ''} ${['actual_fees', 'carry_forward'].includes(col.key) ? 'text-slate-600' : ''}`}>
-                                {col.key === 'sl_no' ? globalIndexCounter : (['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? formatMoney(row[col.key as keyof ReportRow] as number) : row[col.key as keyof ReportRow])}
-                              </span>
-                            </td>
-                          ))}
-                        </tr>
-                      ); 
-                    })}
-                    <tr className="bg-indigo-50/30 border-y-2 border-slate-200 font-bold">
-                      <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-6 py-3 text-right">
-                        <span className="text-[9px] uppercase tracking-widest text-indigo-900">Subtotal: {catName}</span>
-                      </td>
-                      {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
-                        <td key={col.key} className={`px-4 py-3 text-right border-x border-white`}>{col.key === 'actual_fees' ? formatMoney(groupTotals.fees) : col.key === 'carry_forward' ? formatMoney(groupTotals.prev) : col.key === 'current_month_rev' ? formatMoney(groupTotals.current) : formatMoney(groupTotals.balance)}</td>
-                      ))}
-                      {activeColumns.slice(activeColumns.findIndex(c => c.key === 'balance') + 1).map(col => (
-                        <td key={col.key} className="px-4 py-3"></td>
-                      ))}
-                    </tr>
-                  </React.Fragment>
-                ); 
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="bg-slate-900 text-white shadow-2xl border-t-4 border-slate-950">
-                <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-8 py-6 text-right text-[11px] font-black uppercase tracking-[0.3em] border-r border-white/10">Grand Totals</td>
-                {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
-                  <td key={col.key} className={`px-4 py-6 text-right font-black border-r border-white/10 last:border-0 text-xs ${col.key === 'current_month_rev' ? 'bg-indigo-600' : ''}`}>
-                    {col.key === 'actual_fees' ? formatMoney(totals.fees) : col.key === 'carry_forward' ? formatMoney(totals.prev) : col.key === 'current_month_rev' ? formatMoney(totals.current) : formatMoney(totals.balance)}
-                  </td>
-                ))}
-                {activeColumns.slice(activeColumns.findIndex(c => c.key === 'balance') + 1).map(col => (
-                  <td key={col.key} className="px-4 py-6 border-l border-white/10"></td>
-                ))}
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+          <div className="flex-1">
+            <table className="w-full text-[10px] border-collapse min-w-[1100px]">
+              <thead>
+                <tr className="bg-slate-950 text-white border-b-4 border-slate-950">
+                  {activeColumns.map(col => (
+                    <th key={col.key} className={`px-4 py-4 text-center font-bold uppercase tracking-widest border-r border-white/10 last:border-0 ${col.width}`}>{col.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {Object.keys(groupedRows).map(catName => { 
+                  const groupRows = groupedRows[catName]; 
+                  const groupTotals = groupRows.reduce((acc, r) => ({ fees: acc.fees + r.actual_fees, prev: acc.prev + r.carry_forward, current: acc.current + r.current_month_rev, balance: acc.balance + r.balance }), { fees: 0, prev: 0, current: 0, balance: 0 }); 
+                  return (
+                    <React.Fragment key={catName}>
+                      <tr className="bg-slate-50 border-b border-slate-300">
+                        <td colSpan={activeColumns.length} className="px-6 py-4">
+                          <div className="flex items-center">
+                            <ReceiptText className="w-4 h-4 text-indigo-600 mr-3" />
+                            <span className="text-[12px] font-black uppercase tracking-widest text-slate-900 mr-4">{catName}</span>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase">({groupRows.length} Records)</span>
+                          </div>
+                        </td>
+                      </tr>
+                      {groupRows.map((row) => { 
+                        globalIndexCounter++; 
+                        return (
+                          <tr key={`${row.membership_no}-${row.sl_no}`} className="hover:bg-slate-50/50">
+                            {activeColumns.map(col => (
+                              <td key={col.key} className={`px-4 py-3 border-r border-slate-100 last:border-0 ${['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? 'text-right tabular-nums' : 'text-center'} ${col.key === 'guest_name' ? 'text-left font-bold text-slate-800' : ''}`}>
+                                <span className={`${col.key === 'current_month_rev' ? 'text-indigo-700 font-bold' : ''} ${col.key === 'balance' && row.balance > 0 ? 'text-red-600 font-black' : ''} ${['actual_fees', 'carry_forward'].includes(col.key) ? 'text-slate-600' : ''}`}>
+                                  {col.key === 'sl_no' ? globalIndexCounter : (['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? formatMoney(row[col.key as keyof ReportRow] as number) : row[col.key as keyof ReportRow])}
+                                </span>
+                              </td>
+                            ))}
+                          </tr>
+                        ); 
+                      })}
+                      <tr className="bg-indigo-50/30 border-y-2 border-slate-200 font-bold">
+                        <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-6 py-3 text-right">
+                          <span className="text-[9px] uppercase tracking-widest text-indigo-900">Subtotal: {catName}</span>
+                        </td>
+                        {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
+                          <td key={col.key} className={`px-4 py-3 text-right border-x border-white`}>{col.key === 'actual_fees' ? formatMoney(groupTotals.fees) : col.key === 'carry_forward' ? formatMoney(groupTotals.prev) : col.key === 'current_month_rev' ? formatMoney(groupTotals.current) : formatMoney(groupTotals.balance)}</td>
+                        ))}
+                        {activeColumns.slice(activeColumns.findIndex(c => c.key === 'balance') + 1).map(col => (
+                          <td key={col.key} className="px-4 py-3"></td>
+                        ))}
+                      </tr>
+                    </React.Fragment>
+                  ); 
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-900 text-white shadow-2xl border-t-4 border-slate-950">
+                  <td colSpan={activeColumns.findIndex(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key))} className="px-8 py-6 text-right text-[11px] font-black uppercase tracking-[0.3em] border-r border-white/10">Grand Totals</td>
+                  {activeColumns.filter(c => ['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(c.key)).map(col => (
+                    <td key={col.key} className={`px-4 py-6 text-right font-black border-r border-white/10 last:border-0 text-xs ${col.key === 'current_month_rev' ? 'bg-indigo-600' : ''}`}>
+                      {col.key === 'actual_fees' ? formatMoney(totals.fees) : col.key === 'carry_forward' ? formatMoney(totals.prev) : col.key === 'current_month_rev' ? formatMoney(totals.current) : formatMoney(totals.balance)}
+                    </td>
+                  ))}
+                  {activeColumns.slice(activeColumns.findIndex(c => c.key === 'balance') + 1).map(col => (
+                    <td key={col.key} className="px-4 py-6 border-l border-white/10"></td>
+                  ))}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
 
-        <div className="signature-block mt-16 pt-12 border-t-2 border-slate-200 flex justify-between items-start gap-12 min-w-[1100px]">
-          <div className="flex-1 space-y-10">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Prepared By</p>
-            <div className="border-b border-slate-300 pb-2"></div>
-            <p className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">{preparedBy}</p>
+          <div className="signature-block mt-16 pt-12 border-t-2 border-slate-200 flex justify-between items-start gap-12 min-w-[1100px]">
+            <div className="flex-1 space-y-10">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Prepared By</p>
+              <div className="border-b border-slate-300 pb-2"></div>
+              <p className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">{preparedBy}</p>
+            </div>
+            <div className="flex-1 space-y-10">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Reviewed By</p>
+              <div className="border-b border-slate-300 pb-2"></div>
+              <p className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">{reviewedBy}</p>
+            </div>
+            <div className="flex-1 space-y-10">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Approved By</p>
+              <div className="border-b border-slate-300 pb-2"></div>
+              <p className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">{approvedBy}</p>
+            </div>
           </div>
-          <div className="flex-1 space-y-10">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Reviewed By</p>
-            <div className="border-b border-slate-300 pb-2"></div>
-            <p className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">{reviewedBy}</p>
+          <div className="mt-16 text-center opacity-40">
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-[1em]">&copy; {new Date().getFullYear()} saavar group. All Rights Reserved.</p>
           </div>
-          <div className="flex-1 space-y-10">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Approved By</p>
-            <div className="border-b border-slate-300 pb-2"></div>
-            <p className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">{approvedBy}</p>
-          </div>
-        </div>
-        <div className="mt-16 text-center opacity-40">
-          <p className="text-[8px] font-black text-slate-400 uppercase tracking-[1em]">&copy; {new Date().getFullYear()} saavar group. All Rights Reserved.</p>
         </div>
       </div>
     </div>
