@@ -2,7 +2,15 @@
 import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
-import { addDays, format, parseISO, startOfDay } from 'date-fns';
+// Fix: Local implementations for missing date-fns members to resolve environment-specific import errors
+import { addDays, format } from 'date-fns';
+
+const parseISO = (dateString: string) => new Date(dateString);
+const startOfDay = (date: Date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
 
 class DatabaseService {
   private isSupabase() {

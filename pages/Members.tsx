@@ -41,9 +41,16 @@ import {
 import { db } from '../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Freeze } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, differenceInCalendarDays, addDays, isAfter, isBefore, isEqual, startOfDay, parseISO } from 'date-fns';
+import { format, differenceInCalendarDays, addDays, isAfter, isBefore, isEqual } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
+
+const parseISO = (dateString: string) => new Date(dateString);
+const startOfDay = (date: Date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
 
 const memberSchema = z.object({
   membership_number: z.string().min(1, "Required"),
@@ -117,19 +124,14 @@ const Members = () => {
 
   // Helper to determine real-time status (handles auto-expiry)
   const getEffectiveStatus = (member: Member) => {
-      // Frozen and Pending status override date logic
       if (member.status === MemberStatus.FROZEN || member.status === MemberStatus.PENDING) {
           return member.status;
       }
-      
       const end = parseISO(member.current_end_date);
       const today = startOfDay(new Date());
-      
-      // If end date is before today (meaning it expired yesterday or earlier), treat as expired
       if (isBefore(end, today)) {
           return MemberStatus.EXPIRED;
       }
-      
       return MemberStatus.ACTIVE;
   };
 
@@ -182,7 +184,6 @@ const Members = () => {
   };
 
   const filteredMembers = useMemo(() => {
-    // Pre-calculate membership frequency for the "Renewed" filter
     const membershipCounts = members.reduce((acc, m) => {
         acc[m.membership_number] = (acc[m.membership_number] || 0) + 1;
         return acc;
@@ -518,29 +519,21 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
 
   // SMART RETRIEVAL LOGIC
   const matchedMember = useMemo(() => {
-    // We only pull data if we are NOT in edit mode (except for manual renewal typing)
     if (existingMember && !isRenewal) return null; 
     if (!membershipNumber || membershipNumber.trim().length < 2) return null;
     return members.find(m => m.membership_number.trim().toLowerCase() === membershipNumber.trim().toLowerCase());
   }, [membershipNumber, members, existingMember, isRenewal]);
 
-  // EFFECT: Handle Auto-Sync and Auto-Reset
   useEffect(() => {
-    // If we're editing a specific record (not renewal), don't trigger auto-sync
     if (existingMember && !isRenewal) return;
-
     if (matchedMember) {
-        // ID Matched: Pull Data
         setValue('guest_name', matchedMember.guest_name);
         setValue('category_id', matchedMember.category_id);
         
-        // Default to current date as requested
-        setValue('start_date', format(new Date(), 'yyyy-MM-dd'));
-        
-        // Feedback
-        console.log(`Identity Sync: Found ${matchedMember.guest_name}. Start date defaulted to today.`);
+        // REFRESH START DATE: Should be day after previous membership to ensure history integrity
+        const nextDay = addDays(parseISO(matchedMember.current_end_date), 1);
+        setValue('start_date', format(nextDay, 'yyyy-MM-dd'));
     } else if (!membershipNumber || membershipNumber.trim() === '') {
-        // ID Cleared: Perform Clean Slate Reset
         resetField('guest_name');
         resetField('category_id');
         resetField('discount');
@@ -581,13 +574,6 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
 
   const onSubmit = async (data: MemberFormValues) => {
     if (!currentOutletId) return;
-    
-    // Safety check for renewals (warning only, but allowing manual override since "can change")
-    if (isInternalRenewal && effectiveRefMember) {
-        const currentEnd = parseISO(effectiveRefMember.current_end_date);
-        const newStart = parseISO(data.start_date);
-    }
-
     const isEditMode = existingMember && !isRenewal;
     const payload: Member = {
       id: isEditMode ? existingMember.id : crypto.randomUUID(),
@@ -639,8 +625,6 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
       
       <CardContent className="p-8">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-          
-          {/* Identity Sync Indicator */}
           {matchedMember && (
             <div className="bg-emerald-50 border border-emerald-100 rounded-[1.8rem] p-6 flex flex-col md:flex-row justify-between items-center gap-4 animate-in zoom-in-95 duration-500">
                 <div className="flex items-center gap-4">
@@ -672,11 +656,6 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
               <div className="space-y-2">
                  <div className="flex justify-between items-center mb-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Membership No. / ID</label>
-                    {!membershipNumber && (
-                        <span className="flex items-center gap-1 text-[8px] font-bold text-slate-400 uppercase tracking-tighter">
-                           Type ID to pull profile
-                        </span>
-                    )}
                  </div>
                  <div className="relative">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2">
@@ -690,7 +669,6 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
                     />
                  </div>
               </div>
-              
               <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Guest Profile Name</label>
                  <Input 
@@ -700,10 +678,8 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
                     className={`h-12 rounded-xl font-bold transition-all ${matchedMember ? 'bg-slate-50 border-indigo-200 text-slate-600' : ''}`} 
                  />
               </div>
-
               <Input label="Reference / Check No. (Audit)" {...register('check_no')} className="h-12 rounded-xl font-bold" />
             </div>
-            
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Membership Tier</label>
@@ -715,18 +691,12 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 {errors.category_id && <p className="text-xs text-red-500">{errors.category_id.message}</p>}
-                {matchedMember && matchedMember.category_id !== categoryId && categoryId && (
-                    <div className="flex items-center gap-1.5 text-[9px] font-bold text-amber-600 uppercase mt-1">
-                        <Info className="w-3 h-3" /> Tier adjustment selected for re-enrollment
-                    </div>
-                )}
               </div>
-
               <div className="space-y-2">
                 <div className="flex justify-between items-center mb-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Effective Start Date</label>
                     {isInternalRenewal && effectiveRefMember && (
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Defaulted to Today</span>
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Optimized Sequence</span>
                     )}
                 </div>
                 <input 
@@ -736,7 +706,6 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
                 />
                 {errors.start_date && <p className="text-xs text-red-500 mt-1">{errors.start_date.message}</p>}
               </div>
-
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Discount Allocation ({currency?.symbol || '$'})</label>
                 <Input type="number" step="0.01" {...register('discount', { valueAsNumber: true })} className="h-12 rounded-xl font-bold" />
@@ -808,7 +777,6 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
   const [history, setHistory] = useState<Member[]>([]);
 
   useEffect(() => {
-    // Sync local state when the prop object changes (including internal property updates)
     setDisplayedMember(member);
   }, [member]);
 
@@ -834,76 +802,44 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
   const handleAddFreeze = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!freezeForm.start_date || !freezeForm.end_date) return;
-    
     const start = parseISO(freezeForm.start_date);
     const end = parseISO(freezeForm.end_date);
-    
     if (end < start) {
         alert("End date cannot be before start date");
         return;
     }
-
     const totalDays = differenceInCalendarDays(end, start) + 1;
-
-    // Freeze Limit Enforcement
     const memberCategory = categories.find(c => c.id === displayedMember.category_id);
     const maxFreezeDays = memberCategory?.max_freeze_days || 0;
-
     const otherFreezes = isEditingFreeze ? freezes.filter(f => f.id !== freezeForm.id) : freezes;
     const usedFreezeDays = otherFreezes.reduce((sum, f) => sum + f.total_days, 0);
-
     if (usedFreezeDays + totalDays > maxFreezeDays) {
-        alert(`Freeze limit exceeded. This tier allows a maximum of ${maxFreezeDays} days. You have ${maxFreezeDays - usedFreezeDays} days remaining.`);
+        alert(`Freeze limit exceeded. Maximum: ${maxFreezeDays} days. Used: ${usedFreezeDays}. Remaining: ${maxFreezeDays - usedFreezeDays}.`);
         return;
     }
-
-    const isOverlap = RevenueEngine.checkFreezeOverlap(start, end, otherFreezes);
-    if (isOverlap) {
+    if (RevenueEngine.checkFreezeOverlap(start, end, otherFreezes)) {
         alert("This period overlaps with an existing Freezing.");
         return;
     }
-
     try {
         if (isEditingFreeze && freezeForm.id) {
-            await db.updateFreeze(freezeForm.id, {
-                start_date: freezeForm.start_date,
-                end_date: freezeForm.end_date,
-                total_days: totalDays
-            });
+            await db.updateFreeze(freezeForm.id, { start_date: freezeForm.start_date, end_date: freezeForm.end_date, total_days: totalDays });
         } else {
-            const freeze: Freeze = {
-                id: crypto.randomUUID(),
-                member_id: displayedMember.id,
-                start_date: freezeForm.start_date,
-                end_date: freezeForm.end_date,
-                total_days: totalDays
-            };
-            await db.addFreeze(freeze);
+            await db.addFreeze({ id: crypto.randomUUID(), member_id: displayedMember.id, start_date: freezeForm.start_date, end_date: freezeForm.end_date, total_days: totalDays });
         }
-
         setShowFreezeModal(false);
         setIsEditingFreeze(false);
         setFreezeForm({ id: '', start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' });
-        
-        // Trigger parent refresh and local refresh
         await onUpdate();
         await loadFreezes();
-        
         const updatedMembers = await db.getMembers();
         const freshMember = updatedMembers.find(m => m.id === displayedMember.id);
         if(freshMember) setDisplayedMember(freshMember);
-
-    } catch (err) {
-        console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const handleEditFreeze = (fz: Freeze) => {
-      setFreezeForm({
-          id: fz.id,
-          start_date: fz.start_date,
-          end_date: fz.end_date
-      });
+      setFreezeForm({ id: fz.id, start_date: fz.start_date, end_date: fz.end_date });
       setIsEditingFreeze(true);
       setShowFreezeModal(true);
   };
@@ -920,8 +856,7 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
   };
 
   const handleRenewClick = () => {
-    const latestMember = history.length > 0 ? history[0] : member;
-    onRenew(latestMember);
+    onRenew(history.length > 0 ? history[0] : member);
   };
 
   const catName = categories.find(c => c.id === displayedMember.category_id)?.name || 'Unknown Tier';
@@ -953,18 +888,14 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                         </div>
                         <h3 className="text-2xl font-black text-slate-900 tracking-tight">{displayedMember.guest_name}</h3>
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">ID: {displayedMember.membership_number}</p>
-                        
                         <div className="mt-6 flex flex-wrap justify-center gap-2">
-                             <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${effectiveStatus === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-                                effectiveStatus === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
-                                effectiveStatus === 'Expired' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
+                             <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${effectiveStatus === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : effectiveStatus === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : effectiveStatus === 'Expired' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
                                 {effectiveStatus}
                              </span>
                              <span className="px-4 py-1.5 bg-slate-50 text-slate-600 border border-slate-200 rounded-full text-[10px] font-black uppercase tracking-widest">
                                 {catName}
                              </span>
                         </div>
-
                         <div className="mt-8 pt-8 border-t border-slate-100 grid grid-cols-2 gap-4">
                             <div className="text-center">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Recognition</p>
@@ -975,7 +906,6 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                                 <p className="text-sm font-black text-indigo-600">{formatMoney(displayedMember.net_amount)}</p>
                             </div>
                         </div>
-
                         {(canRenew || canEdit) && (
                             <div className="mt-8 flex gap-2">
                                 {canRenew && <Button onClick={handleRenewClick} className="flex-1 rounded-xl font-bold h-11 text-xs">Renew</Button>}
@@ -985,7 +915,6 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                     </CardContent>
                 </Card>
             </div>
-
             <div className="lg:col-span-2 space-y-8">
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg overflow-hidden">
                     <CardHeader className="p-8 border-b border-slate-100 flex items-center justify-between">
@@ -1008,14 +937,13 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                                 <p className="font-bold text-indigo-700">{format(parseISO(displayedMember.current_end_date), 'dd-MM-yyyy')}</p>
                             </div>
                         </div>
-
                         <div className="space-y-4">
                             <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
                                 <Snowflake className="w-4 h-4 text-indigo-600" /> Freezing Ledger
                             </h4>
                             {freezes.length === 0 ? (
                                 <div className="p-10 text-center bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
-                                    <p className="text-xs font-medium text-slate-400">No Freezing history recorded for this account.</p>
+                                    <p className="text-xs font-medium text-slate-400">No Freezing history recorded.</p>
                                 </div>
                             ) : (
                                 <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden">
@@ -1032,12 +960,8 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                                             </div>
                                             {canEdit && (
                                                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => handleEditFreeze(fz)} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors">
-                                                        <Edit2 className="w-4 h-4" />
-                                                    </button>
-                                                    <button onClick={() => setFreezeToDeleteId(fz.id)} className="p-2 text-slate-300 hover:text-red-600 transition-colors">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    <button onClick={() => handleEditFreeze(fz)} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
+                                                    <button onClick={() => setFreezeToDeleteId(fz.id)} className="p-2 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
                                                 </div>
                                             )}
                                         </div>
@@ -1047,16 +971,12 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                         </div>
                     </CardContent>
                 </Card>
-
                 {history.length > 0 && (
                     <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg overflow-hidden">
                         <CardHeader className="p-8 border-b border-slate-100 flex items-center justify-between">
                             <CardTitle className="text-lg font-black tracking-tight flex items-center gap-3">
                                 <History className="w-5 h-5 text-indigo-600" /> Lifecycle History
                             </CardTitle>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                                {history.length} Total Records
-                            </span>
                         </CardHeader>
                         <CardContent className="p-2">
                             <div className="divide-y divide-slate-100">
@@ -1065,28 +985,16 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                                     const histCatName = categories.find(c => c.id === histMember.category_id)?.name || 'Unknown Tier';
                                     const histStatus = getEffectiveStatus(histMember);
                                     return (
-                                        <button 
-                                            key={histMember.id} 
-                                            onClick={() => setDisplayedMember(histMember)}
-                                            className={`w-full p-6 flex items-center justify-between transition-all rounded-2xl text-left ${isSelected ? 'bg-indigo-50' : 'hover:bg-slate-50/70'}`}
-                                        >
+                                        <button key={histMember.id} onClick={() => setDisplayedMember(histMember)} className={`w-full p-6 flex items-center justify-between transition-all rounded-2xl text-left ${isSelected ? 'bg-indigo-50' : 'hover:bg-slate-50/70'}`}>
                                             <div className="flex items-center gap-4">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm ${isSelected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200'}`}>
-                                                    <Layers className="w-5 h-5" />
-                                                </div>
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm ${isSelected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200'}`}><Layers className="w-5 h-5" /></div>
                                                 <div>
                                                     <h5 className="font-bold text-sm tracking-tight text-slate-800">{histCatName}</h5>
-                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                        {format(parseISO(histMember.start_date), 'dd-MM-yyyy')} &rarr; {format(parseISO(histMember.current_end_date), 'dd-MM-yyyy')}
-                                                    </p>
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{format(parseISO(histMember.start_date), 'dd-MM-yyyy')} &rarr; {format(parseISO(histMember.current_end_date), 'dd-MM-yyyy')}</p>
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
-                                                    histStatus === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-                                                    histStatus === 'Frozen' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                                                    histStatus === 'Expired' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-slate-50 text-slate-700 border-slate-200'
-                                                }`}>{histStatus}</span>
+                                                <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border ${histStatus === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : histStatus === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : histStatus === 'Expired' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>{histStatus}</span>
                                                 <p className="font-black text-xs text-slate-600 mt-1.5 tabular-nums">{formatMoney(histMember.net_amount)}</p>
                                             </div>
                                         </button>
@@ -1108,38 +1016,16 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                     </CardHeader>
                     <CardContent className="p-8">
                         <form onSubmit={handleAddFreeze} className="space-y-6">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Start Freezing</label>
-                                <Input type="date" value={freezeForm.start_date} onChange={e => setFreezeForm({...freezeForm, start_date: e.target.value})} className="h-12 rounded-xl" />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">End Freezing</label>
-                                <Input type="date" value={freezeForm.end_date} onChange={e => setFreezeForm({...freezeForm, end_date: e.target.value})} className="h-12 rounded-xl" />
-                            </div>
-                            <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-3">
-                                <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                                <p className="text-[10px] font-bold text-amber-800 leading-relaxed uppercase tracking-tight">
-                                    Tier Policy: {maxFreezeDays} max days ({usedFreezeDays} used, {remainingFreezeDays} left). Freezing extends expiry by the deferred period.
-                                </p>
-                            </div>
-                            <Button type="submit" className="w-full h-14 rounded-2xl font-black shadow-xl shadow-indigo-100">
-                                {isEditingFreeze ? 'Commit Adjustments' : 'Commit Freezing'}
-                            </Button>
+                            <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Start Freezing</label><Input type="date" value={freezeForm.start_date} onChange={e => setFreezeForm({...freezeForm, start_date: e.target.value})} className="h-12 rounded-xl" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">End Freezing</label><Input type="date" value={freezeForm.end_date} onChange={e => setFreezeForm({...freezeForm, end_date: e.target.value})} className="h-12 rounded-xl" /></div>
+                            <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-3"><Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" /><p className="text-[10px] font-bold text-amber-800 leading-relaxed uppercase tracking-tight">Policy: {maxFreezeDays} max days ({usedFreezeDays} used, {remainingFreezeDays} left).</p></div>
+                            <Button type="submit" className="w-full h-14 rounded-2xl font-black shadow-xl shadow-indigo-100">{isEditingFreeze ? 'Commit Adjustments' : 'Commit Freezing'}</Button>
                         </form>
                     </CardContent>
                 </Card>
             </div>
         )}
-
-        <ConfirmationModal 
-            isOpen={!!freezeToDeleteId}
-            onClose={() => setFreezeToDeleteId(null)}
-            onConfirm={confirmDeleteFreeze}
-            title="Revoke Suspension"
-            description="Are you sure you want to delete this freezing record? This will retract the membership extension by the number of days previously granted."
-            confirmText="Delete Record"
-            isDestructive={true}
-        />
+        <ConfirmationModal isOpen={!!freezeToDeleteId} onClose={() => setFreezeToDeleteId(null)} onConfirm={confirmDeleteFreeze} title="Revoke Suspension" description="Confirm revocation of this extension record?" confirmText="Delete Record" isDestructive={true} />
     </div>
   );
 };

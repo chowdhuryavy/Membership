@@ -24,13 +24,19 @@ import {
 import { db } from '../services/mockSupabase';
 import { MemberStatus, Member, Freeze } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, endOfMonth, differenceInCalendarDays, subDays, isSameDay } from 'date-fns';
+// Fix: Local implementation for subDays to resolve environment-specific import errors
+import { format, endOfMonth, differenceInCalendarDays, isSameDay } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 const parseISO = (dateString: string) => new Date(dateString);
+const subDays = (date: Date, amount: number) => {
+  const result = new Date(date);
+  result.setDate(result.getDate() - amount);
+  return result;
+};
 
 const Dashboard = () => {
   const { user } = useAuth();
