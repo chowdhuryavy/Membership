@@ -62,6 +62,7 @@ const Dashboard = () => {
   });
   
   const [expiringMembers, setExpiringMembers] = useState<Member[]>([]);
+  const [monthlyExpiringMembers, setMonthlyExpiringMembers] = useState<Member[]>([]);
   const [performanceTrendData, setPerformanceTrendData] = useState<PerformanceTrendData[]>([]);
 
   useEffect(() => {
@@ -151,6 +152,11 @@ const Dashboard = () => {
         return false;
     }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 5);
     
+    const monthlyExpiring = members.filter(m => {
+        const endDate = parseISO(m.current_end_date);
+        return m.status === MemberStatus.ACTIVE && isSameMonth(endDate, now);
+    }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 5);
+
     const expiringSoonCount = members.filter(m => {
         const days = differenceInCalendarDays(parseISO(m.current_end_date), now);
         return m.status === MemberStatus.ACTIVE && days >= 0 && days <= 7;
@@ -166,6 +172,7 @@ const Dashboard = () => {
       futureRevenue: deferredRevenueAtPoint, projectedEndMonth: projectedMonthEnd
     });
     setExpiringMembers(expiring);
+    setMonthlyExpiringMembers(monthlyExpiring);
   };
 
   const displayName = useMemo(() => {
@@ -290,7 +297,7 @@ const Dashboard = () => {
             <Card className="rounded-[2.5rem] border-slate-200/60 shadow-sm bg-white overflow-hidden group">
                 <CardHeader className="p-6 border-b border-slate-100 flex items-center justify-between">
                     <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-rose-600"/> Retention Targets
+                        <AlertCircle className="w-4 h-4 text-rose-600"/> Immediate Retention Targets
                     </h3>
                 </CardHeader>
                 <CardContent className="p-2">
@@ -320,6 +327,47 @@ const Dashboard = () => {
                                     </div>
                                     <span className={`text-[9px] font-black px-2 py-1 rounded-md border whitespace-nowrap ${daysLeft < 0 ? 'bg-red-100 text-red-700 border-red-200' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
                                         {daysLeft < 0 ? 'EXPIRED' : `${daysLeft} Days Left`}
+                                    </span>
+                                </button>
+                                )}
+                            )}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-sm bg-white overflow-hidden group">
+                <CardHeader className="p-6 border-b border-slate-100 flex items-center justify-between">
+                    <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-amber-600"/> Current Month Expiries
+                    </h3>
+                </CardHeader>
+                <CardContent className="p-2">
+                    {monthlyExpiringMembers.length === 0 ? (
+                        <div className="py-10 text-center">
+                            <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                            <p className="text-xs font-bold text-slate-500">No expiries this month.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-1">
+                            {monthlyExpiringMembers.map(m => {
+                                const daysLeft = differenceInCalendarDays(parseISO(m.current_end_date), new Date());
+                                return (
+                                <button 
+                                    key={m.id} 
+                                    onClick={() => navigate('/members', { state: { selectedMemberId: m.id } })}
+                                    className="w-full text-left p-4 flex items-center justify-between hover:bg-indigo-50/70 transition-colors rounded-2xl"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-black text-xs">
+                                            {m.guest_name.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-slate-700 text-xs">{m.guest_name}</h4>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{m.membership_number}</p>
+                                        </div>
+                                    </div>
+                                    <span className={`text-[9px] font-black px-2 py-1 rounded-md border whitespace-nowrap bg-amber-50 text-amber-600 border-amber-100`}>
+                                        {daysLeft >= 0 ? `${daysLeft} Days Left` : 'Expired'}
                                     </span>
                                 </button>
                                 )}
