@@ -47,6 +47,7 @@ const Dashboard = () => {
   
   const [dashboardMonth, setDashboardMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [auditPointDate, setAuditPointDate] = useState(new Date());
 
   const canViewFinances = user ? hasPermission(user.role_id, 'reports:view') : false;
 
@@ -90,6 +91,7 @@ const Dashboard = () => {
     
     const contextStart = startOfMonth(viewDate);
     const auditPoint = isCurrentMonth ? now : endOfMonth(viewDate);
+    setAuditPointDate(auditPoint);
     
     let activeAtPointCount = 0;
     let frozenAtPointCount = 0;
@@ -323,7 +325,7 @@ const Dashboard = () => {
                     ) : (
                         <div className="space-y-1">
                             {expiringMembers.map(m => {
-                                const daysLeft = differenceInCalendarDays(parseISO(m.current_end_date), new Date());
+                                const daysLeft = differenceInCalendarDays(parseISO(m.current_end_date), auditPointDate);
                                 return (
                                 <button 
                                     key={m.id} 
@@ -364,7 +366,7 @@ const Dashboard = () => {
                     ) : (
                         <div className="space-y-1">
                             {monthlyExpiringMembers.map(m => {
-                                const daysLeft = differenceInCalendarDays(parseISO(m.current_end_date), new Date());
+                                const daysLeft = differenceInCalendarDays(parseISO(m.current_end_date), auditPointDate);
                                 return (
                                 <button 
                                     key={m.id} 
