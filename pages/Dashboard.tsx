@@ -145,16 +145,13 @@ const Dashboard = () => {
     setPerformanceTrendData(performanceTrend);
 
     const expiring = members.filter(m => {
-        // Show active members expiring soon, or any member already expired
         const daysLeft = differenceInCalendarDays(parseISO(m.current_end_date), now);
-        if (daysLeft < 0) return true;
-        if (m.status === MemberStatus.ACTIVE && daysLeft <= 30) return true;
-        return false;
+        return m.status === MemberStatus.ACTIVE && daysLeft >= 0 && daysLeft <= 30;
     }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 5);
     
     const monthlyExpiring = members.filter(m => {
         const endDate = parseISO(m.current_end_date);
-        return m.status === MemberStatus.ACTIVE && isSameMonth(endDate, now);
+        return m.status === MemberStatus.ACTIVE && isSameMonth(endDate, now) && differenceInCalendarDays(endDate, now) >= 0;
     }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 5);
 
     const expiringSoonCount = members.filter(m => {
