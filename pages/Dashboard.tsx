@@ -128,7 +128,7 @@ const Dashboard = () => {
         const monthStart = startOfMonth(targetMonthDate);
         const monthEnd = endOfMonth(targetMonthDate);
         
-        const intakeInMonth = members.filter(m => isSameMonth(parseISO(m.created_at || m.start_date), targetMonthDate)).length;
+        const intakeInMonth = members.filter(m => isSameMonth(parseISO(m.start_date), targetMonthDate)).length;
 
         let revenueInMonth = 0;
         members.forEach(m => {
