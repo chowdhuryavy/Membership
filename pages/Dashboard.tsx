@@ -3,34 +3,23 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader } from '../components/ui';
 import { 
   Users, 
-  AlertCircle, 
   Clock, 
   Activity, 
   ShieldCheck, 
   BarChart4, 
-  UserPlus, 
   Database, 
-  Layers, 
-  FileText, 
-  History, 
-  Info, 
   TrendingUp,
   Calendar,
-  Snowflake,
-  UserCheck,
-  TrendingDown,
-  AreaChart,
-  FileEdit,
-  Trash2
+  Snowflake
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
-import { MemberStatus, Member } from '../types';
+import { Member } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, endOfMonth, differenceInCalendarDays, isSameMonth, startOfMonth, subMonths, formatDistanceToNow } from 'date-fns';
+import { format, endOfMonth, differenceInCalendarDays, isSameMonth, startOfMonth, subMonths } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 const parseISO = (dateString: string) => new Date(dateString);
 
@@ -48,12 +37,9 @@ const Dashboard = () => {
   const [dashboardMonth, setDashboardMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  const canViewFinances = user ? hasPermission(user.role_id, 'reports:view') : false;
-
   const [stats, setStats] = useState({
     activeMembers: 0,
     frozenMembers: 0,
-    expiringSoon: 0,
     newMembersThisMonth: 0,
     dailyAccrual: 0,
     revenueThisMonth: 0,
@@ -61,7 +47,6 @@ const Dashboard = () => {
     projectedEndMonth: 0,
   });
   
-  const [expiringMembers, setExpiringMembers] = useState<Member[]>([]);
   const [monthlyExpiringMembers, setMonthlyExpiringMembers] = useState<Member[]>([]);
   const [performanceTrendData, setPerformanceTrendData] = useState<PerformanceTrendData[]>([]);
 
@@ -143,26 +128,8 @@ const Dashboard = () => {
         performanceTrend.push({ month: format(targetMonthDate, 'MMM'), revenue: revenueInMonth, intake: intakeInMonth });
     }
     setPerformanceTrendData(performanceTrend);
-
-    const today = new Date();
-    const urgentMembers = members.filter(m => {
-        const mEnd = parseISO(m.current_end_date);
-        const mStart = parseISO(m.start_date);
-        if (today < mStart || today > mEnd) return false;
-
-        const memberFreezes = freezes.filter(f => f.member_id === m.id);
-        const isFrozenToday = memberFreezes.some(f => today >= parseISO(f.start_date) && today <= parseISO(f.end_date));
-        if (isFrozenToday) return false;
-
-        const daysLeft = differenceInCalendarDays(mEnd, today);
-        return daysLeft >= 0 && daysLeft <= 30;
-    }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 5);
-
-    const urgentMemberIds = new Set(urgentMembers.map(m => m.id));
-
+    
     const monthlyExpiring = members.filter(m => {
-        if (urgentMemberIds.has(m.id)) return false;
-
         const mEnd = parseISO(m.current_end_date);
         const mStart = parseISO(m.start_date);
 
@@ -173,29 +140,17 @@ const Dashboard = () => {
         if (mStart > monthEnd || mEnd < monthStart) return false;
         
         return true;
-    }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 5);
-
-    const expiringSoonCount = members.filter(m => {
-        const mEnd = parseISO(m.current_end_date);
-        const mStart = parseISO(m.start_date);
-        if (auditPoint < mStart || auditPoint > mEnd) return false;
-        const memberFreezes = freezes.filter(f => f.member_id === m.id);
-        const isFrozenAtPoint = memberFreezes.some(f => auditPoint >= parseISO(f.start_date) && auditPoint <= parseISO(f.end_date));
-        if (isFrozenAtPoint) return false;
-        const days = differenceInCalendarDays(mEnd, auditPoint);
-        return days >= 0 && days <= 7;
-    }).length;
+    }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 10);
     
     const endOfMonthDate = endOfMonth(viewDate);
     const daysRemaining = Math.max(0, differenceInCalendarDays(endOfMonthDate, auditPoint));
     const projectedMonthEnd = mtdRevenue + (totalDailyAccrual * daysRemaining);
 
     setStats({
-      activeMembers: activeAtPointCount, frozenMembers: frozenAtPointCount, expiringSoon: expiringSoonCount,
+      activeMembers: activeAtPointCount, frozenMembers: frozenAtPointCount,
       newMembersThisMonth: monthEnrollments, dailyAccrual: totalDailyAccrual, revenueThisMonth: mtdRevenue,
       futureRevenue: deferredRevenueAtPoint, projectedEndMonth: projectedMonthEnd
     });
-    setExpiringMembers(urgentMembers);
     setMonthlyExpiringMembers(monthlyExpiring);
   };
 
@@ -318,58 +273,18 @@ const Dashboard = () => {
                     </div>
                 </CardContent>
             </Card>
+            
             <Card className="rounded-[2.5rem] border-slate-200/60 shadow-sm bg-white overflow-hidden group">
                 <CardHeader className="p-6 border-b border-slate-100 flex items-center justify-between">
                     <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-rose-600"/> Urgent: Expiring in 30 Days
-                    </h3>
-                </CardHeader>
-                <CardContent className="p-2">
-                    {expiringMembers.length === 0 ? (
-                        <div className="py-10 text-center">
-                            <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                            <p className="text-xs font-bold text-slate-500">No immediate risks.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-1">
-                            {expiringMembers.map(m => {
-                                const daysLeft = differenceInCalendarDays(parseISO(m.current_end_date), new Date());
-                                return (
-                                <button 
-                                    key={m.id} 
-                                    onClick={() => navigate('/members', { state: { selectedMemberId: m.id } })}
-                                    className="w-full text-left p-4 flex items-center justify-between hover:bg-indigo-50/70 transition-colors rounded-2xl"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-black text-xs">
-                                            {m.guest_name.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-700 text-xs">{m.guest_name}</h4>
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{m.membership_number}</p>
-                                        </div>
-                                    </div>
-                                    <span className={`text-[9px] font-black px-2 py-1 rounded-md border whitespace-nowrap ${daysLeft < 0 ? 'bg-red-100 text-red-700 border-red-200' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
-                                        {daysLeft < 0 ? 'EXPIRED' : `${daysLeft} Days Left`}
-                                    </span>
-                                </button>
-                                )}
-                            )}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-sm bg-white overflow-hidden group">
-                <CardHeader className="p-6 border-b border-slate-100 flex items-center justify-between">
-                    <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-amber-600"/> Expiring Later This Month
+                        <Calendar className="w-4 h-4 text-amber-600"/> Current Month Expiries
                     </h3>
                 </CardHeader>
                 <CardContent className="p-2">
                     {monthlyExpiringMembers.length === 0 ? (
                         <div className="py-10 text-center">
                             <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                            <p className="text-xs font-bold text-slate-500">No other expiries this month.</p>
+                            <p className="text-xs font-bold text-slate-500">No expiries this month.</p>
                         </div>
                     ) : (
                         <div className="space-y-1">
