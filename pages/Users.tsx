@@ -400,17 +400,35 @@ const Users = () => {
                                       </span>
                                   </td>
                                   <td className="px-8 py-6">
-                                      <div className="flex flex-wrap gap-2 max-w-xs">
-                                          {(!u.allowed_outlets || u.allowed_outlets.length === 0) ? (
-                                              <span className="text-red-500 text-[10px] font-black uppercase tracking-widest flex items-center bg-red-50 px-2.5 py-1 rounded-lg"><AlertTriangle className="w-3.5 h-3.5 mr-1.5"/> No Access</span>
-                                          ) : u.allowed_outlets.map(outId => {
-                                              const outName = outlets.find(o => o.id === outId)?.name;
-                                              return outName ? (
-                                                  <span key={outId} className="text-[10px] font-black uppercase tracking-widest bg-white px-3 py-1 rounded-xl text-slate-500 flex items-center border border-slate-200 shadow-sm">
-                                                      <Store className="w-3 h-3 mr-1.5 text-slate-300"/> {outName}
-                                                  </span>
-                                              ) : null;
-                                          })}
+                                      <div className="flex flex-wrap gap-1.5 max-w-[300px]">
+                                          {(() => {
+                                              const validOutlets = (u.allowed_outlets || [])
+                                                  .map(id => outlets.find(o => o.id === id))
+                                                  .filter(Boolean);
+                                              
+                                              if (validOutlets.length === 0) {
+                                                  return <span className="text-red-500 text-[10px] font-black uppercase tracking-widest flex items-center bg-red-50 px-2.5 py-1 rounded-lg"><AlertTriangle className="w-3.5 h-3.5 mr-1.5"/> No Access</span>;
+                                              }
+
+                                              const displayLimit = 2;
+                                              const visible = validOutlets.slice(0, displayLimit);
+                                              const remaining = validOutlets.length - displayLimit;
+
+                                              return (
+                                                  <>
+                                                      {visible.map(o => (
+                                                          <span key={o!.id} className="text-[9px] font-black uppercase tracking-tight bg-white px-2.5 py-0.5 rounded-lg text-slate-500 flex items-center border border-slate-200 shadow-sm whitespace-nowrap">
+                                                              <Store className="w-2.5 h-2.5 mr-1.5 text-slate-300"/> {o!.name}
+                                                          </span>
+                                                      ))}
+                                                      {remaining > 0 && (
+                                                          <span className="text-[9px] font-black uppercase tracking-tight bg-indigo-50 px-2.5 py-0.5 rounded-lg text-indigo-600 border border-indigo-100 whitespace-nowrap shadow-sm">
+                                                              +{remaining} more
+                                                          </span>
+                                                      )}
+                                                  </>
+                                              );
+                                          })()}
                                       </div>
                                   </td>
                                   {canModifyTable && (
@@ -443,17 +461,17 @@ const Users = () => {
                         <form onSubmit={handleSubmit} className="space-y-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Legal Name</label>
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Legal Name</label>
                                 <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="John Doe" className="h-12 rounded-xl" />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Work Email</label>
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Work Email</label>
                                 <Input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="user@enterprise.com" className={`h-12 rounded-xl ${!canEditEmail ? 'bg-slate-50 text-slate-500' : ''}`} disabled={!canEditEmail} />
                             </div>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{isEditing ? 'Override Key' : 'Initial Access Key'}</label>
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">{isEditing ? 'Override Key' : 'Initial Access Key'}</label>
                                 <div className="relative group">
                                   <div className="absolute left-4 top-1/2 -translate-y-1/2"><Lock className="w-4 h-4 text-slate-400" /></div>
                                   <input type={showPassword ? "text" : "password"} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder={isEditing ? "Leave blank to preserve" : "••••••••"} className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50" />
@@ -461,12 +479,12 @@ const Users = () => {
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Security Tier</label>
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Security Tier</label>
                                 <Select options={[{ value: '', label: 'Select Tier...' }, ...roles.map(r => ({ value: r.id, label: r.name }))]} value={formData.role_id} onChange={e => setFormData({...formData, role_id: e.target.value})} className="h-12 rounded-xl" />
                             </div>
                           </div>
                           <div className="space-y-2 pt-4 border-t border-slate-100">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Facility Access Scopes</label>
+                              <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1 mb-2 block">Facility Access Scopes</label>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100 max-h-48 overflow-y-auto shadow-inner custom-scrollbar">
                                   {outlets.map(o => {
                                       const property = properties.find(p => p.id === o.property_id);

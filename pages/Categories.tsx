@@ -253,7 +253,7 @@ const Categories = () => {
                     <CardContent className="p-8">
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tier Designation</label>
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Tier Designation</label>
                                 <Input 
                                     value={formData.name} 
                                     onChange={e => setFormData({...formData, name: e.target.value})} 
@@ -263,7 +263,7 @@ const Categories = () => {
                             </div>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Validity (Months)</label>
+                                    <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Validity (Months)</label>
                                     <Input 
                                         type="number" 
                                         value={formData.duration_months} 
@@ -272,7 +272,7 @@ const Categories = () => {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Max Freeze (Days)</label>
+                                    <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Max Freeze (Days)</label>
                                     <Input 
                                         type="number" 
                                         value={formData.max_freeze_days} 
@@ -282,7 +282,7 @@ const Categories = () => {
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Base Revenue Rate</label>
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Base Revenue Rate</label>
                                 <Input 
                                     type="number" 
                                     value={formData.base_rate} 

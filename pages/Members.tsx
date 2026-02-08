@@ -471,10 +471,26 @@ const Members = () => {
 const MemberForm = ({ categories, members, existingMember, isRenewal, currentOutletId, onCancel, onSuccess, canCreate, canEdit }: { categories: MembershipCategory[], members: Member[], existingMember: Member | null, isRenewal?: boolean, currentOutletId: string, onCancel: () => void, onSuccess: (m: Member) => void, canCreate: boolean | null, canEdit: boolean | null }) => {
   const { formatMoney, currency, checkShortcut } = useSettings();
   
+  // Helper to calculate the smart starting point for a new membership term
+  const calculateSmartStartDate = (expiryDateStr: string) => {
+    const expiryDate = parseISO(expiryDateStr);
+    const today = startOfDay(new Date());
+    const dayAfterExpiry = addDays(expiryDate, 1);
+    
+    // If the membership has already expired (ended before today)
+    // the new term should start TODAY.
+    if (isBefore(expiryDate, today)) {
+        return format(today, 'yyyy-MM-dd');
+    }
+    
+    // If the membership is still active or ends today, 
+    // maintain continuity by starting the next term immediately after.
+    return format(dayAfterExpiry, 'yyyy-MM-dd');
+  };
+
   const initialStartDate = useMemo(() => {
     if (isRenewal && existingMember) {
-        const nextDay = addDays(parseISO(existingMember.current_end_date), 1);
-        return format(nextDay, 'yyyy-MM-dd');
+        return calculateSmartStartDate(existingMember.current_end_date);
     }
     return format(new Date(), 'yyyy-MM-dd');
   }, [isRenewal, existingMember]);
@@ -530,9 +546,9 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
         setValue('guest_name', matchedMember.guest_name);
         setValue('category_id', matchedMember.category_id);
         
-        // REFRESH START DATE: Should be day after previous membership to ensure history integrity
-        const nextDay = addDays(parseISO(matchedMember.current_end_date), 1);
-        setValue('start_date', format(nextDay, 'yyyy-MM-dd'));
+        // REFRESH START DATE: Use the smart logic to determine if we start today or day after exp
+        const smartStart = calculateSmartStartDate(matchedMember.current_end_date);
+        setValue('start_date', smartStart);
     } else if (!membershipNumber || membershipNumber.trim() === '') {
         resetField('guest_name');
         resetField('category_id');
@@ -563,12 +579,18 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
       if (!isInternalRenewal || !effectiveRefMember || !startDate) return null;
       const currentEnd = parseISO(effectiveRefMember.current_end_date);
       const newStart = parseISO(startDate);
-      const idealStart = addDays(currentEnd, 1);
+      const dayAfterExp = addDays(currentEnd, 1);
+      const today = startOfDay(new Date());
+
+      const isContinuous = isEqual(newStart, dayAfterExp) || (isBefore(currentEnd, today) && isEqual(newStart, today));
+      const isOverlap = isBefore(newStart, currentEnd) || isEqual(newStart, currentEnd);
+      const isGap = isAfter(newStart, dayAfterExp) && !(isBefore(currentEnd, today) && isEqual(newStart, today));
+
       return { 
-        isContinuous: isEqual(newStart, idealStart),
-        isGap: isAfter(newStart, idealStart),
-        isOverlap: isBefore(newStart, currentEnd) || isEqual(newStart, currentEnd),
-        gapDays: differenceInCalendarDays(newStart, idealStart)
+        isContinuous,
+        isGap,
+        isOverlap,
+        gapDays: differenceInCalendarDays(newStart, dayAfterExp)
       };
   }, [isInternalRenewal, effectiveRefMember, startDate]);
 
@@ -655,7 +677,7 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
             <div className="space-y-6">
               <div className="space-y-2">
                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Membership No. / ID</label>
+                    <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Membership No. / ID</label>
                  </div>
                  <div className="relative">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2">
@@ -670,7 +692,7 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
                  </div>
               </div>
               <div className="space-y-2">
-                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Guest Profile Name</label>
+                 <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Guest Profile Name</label>
                  <Input 
                     {...register('guest_name')} 
                     readOnly={isRenewal || !!matchedMember} 
@@ -678,11 +700,14 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
                     className={`h-12 rounded-xl font-bold transition-all ${matchedMember ? 'bg-slate-50 border-indigo-200 text-slate-600' : ''}`} 
                  />
               </div>
-              <Input label="Reference / Check No. (Audit)" {...register('check_no')} className="h-12 rounded-xl font-bold" />
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Reference / Check No. (Audit)</label>
+                <Input {...register('check_no')} className="h-12 rounded-xl font-bold" />
+              </div>
             </div>
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Membership Tier</label>
+                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Membership Tier</label>
                 <select 
                   {...register('category_id')} 
                   className={`flex h-12 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all ${matchedMember ? 'border-indigo-200' : ''} ${errors.category_id ? 'border-red-500' : ''}`}
@@ -694,7 +719,7 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between items-center mb-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Effective Start Date</label>
+                    <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Effective Start Date</label>
                     {isInternalRenewal && effectiveRefMember && (
                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Optimized Sequence</span>
                     )}
@@ -707,14 +732,14 @@ const MemberForm = ({ categories, members, existingMember, isRenewal, currentOut
                 {errors.start_date && <p className="text-xs text-red-500 mt-1">{errors.start_date.message}</p>}
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Discount Allocation ({currency?.symbol || '$'})</label>
+                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Discount Allocation ({currency?.symbol || '$'})</label>
                 <Input type="number" step="0.01" {...register('discount', { valueAsNumber: true })} className="h-12 rounded-xl font-bold" />
               </div>
             </div>
           </div>
 
           {continuityStatus && (
-              <div className={`p-5 rounded-[2rem] flex items-center gap-4 border shadow-sm animate-in slide-in-from-top-2 duration-500 ${continuityStatus.isOverlap ? 'bg-red-50 border-red-100 text-red-700' : continuityStatus.isGap ? 'bg-amber-50 border-amber-100 text-amber-700' : 'bg-indigo-50 border-indigo-100 text-indigo-700'}`}>
+              <div className={`p-5 rounded-[2rem] flex items-center gap-4 border shadow-sm animate-in slide-in-top-2 duration-500 ${continuityStatus.isOverlap ? 'bg-red-50 border-red-100 text-red-700' : continuityStatus.isGap ? 'bg-amber-50 border-amber-100 text-amber-700' : 'bg-indigo-50 border-indigo-100 text-indigo-700'}`}>
                   <div className={`p-2 rounded-xl ${continuityStatus.isOverlap ? 'bg-red-100' : continuityStatus.isGap ? 'bg-amber-100' : 'bg-indigo-100'}`}>
                     {continuityStatus.isGap ? <Clock className="w-5 h-5"/> : continuityStatus.isOverlap ? <AlertCircle className="w-5 h-5"/> : <ShieldCheck className="w-5 h-5"/>}
                   </div>
@@ -1016,8 +1041,8 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
                     </CardHeader>
                     <CardContent className="p-8">
                         <form onSubmit={handleAddFreeze} className="space-y-6">
-                            <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Start Freezing</label><Input type="date" value={freezeForm.start_date} onChange={e => setFreezeForm({...freezeForm, start_date: e.target.value})} className="h-12 rounded-xl" /></div>
-                            <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">End Freezing</label><Input type="date" value={freezeForm.end_date} onChange={e => setFreezeForm({...freezeForm, end_date: e.target.value})} className="h-12 rounded-xl" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Start Freezing</label><Input type="date" value={freezeForm.start_date} onChange={e => setFreezeForm({...freezeForm, start_date: e.target.value})} className="h-12 rounded-xl" /></div>
+                            <div className="space-y-2"><label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">End Freezing</label><Input type="date" value={freezeForm.end_date} onChange={e => setFreezeForm({...freezeForm, end_date: e.target.value})} className="h-12 rounded-xl" /></div>
                             <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-3"><Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" /><p className="text-[10px] font-bold text-amber-800 leading-relaxed uppercase tracking-tight">Policy: {maxFreezeDays} max days ({usedFreezeDays} used, {remainingFreezeDays} left).</p></div>
                             <Button type="submit" className="w-full h-14 rounded-2xl font-black shadow-xl shadow-indigo-100">{isEditingFreeze ? 'Commit Adjustments' : 'Commit Freezing'}</Button>
                         </form>
