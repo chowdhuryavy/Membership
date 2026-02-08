@@ -145,18 +145,35 @@ const Dashboard = () => {
     setPerformanceTrendData(performanceTrend);
 
     const expiring = members.filter(m => {
-        const daysLeft = differenceInCalendarDays(parseISO(m.current_end_date), now);
-        return m.status === MemberStatus.ACTIVE && daysLeft >= 0 && daysLeft <= 30;
+        const mEnd = parseISO(m.current_end_date);
+        const mStart = parseISO(m.start_date);
+        if (auditPoint < mStart || auditPoint > mEnd) return false;
+        const memberFreezes = freezes.filter(f => f.member_id === m.id);
+        const isFrozenAtPoint = memberFreezes.some(f => auditPoint >= parseISO(f.start_date) && auditPoint <= parseISO(f.end_date));
+        if (isFrozenAtPoint) return false;
+        const daysLeft = differenceInCalendarDays(mEnd, auditPoint);
+        return daysLeft >= 0 && daysLeft <= 30;
     }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 5);
     
     const monthlyExpiring = members.filter(m => {
-        const endDate = parseISO(m.current_end_date);
-        return m.status === MemberStatus.ACTIVE && isSameMonth(endDate, now) && differenceInCalendarDays(endDate, now) >= 0;
+        const mEnd = parseISO(m.current_end_date);
+        const mStart = parseISO(m.start_date);
+        if (auditPoint < mStart || auditPoint > mEnd) return false;
+        const memberFreezes = freezes.filter(f => f.member_id === m.id);
+        const isFrozenAtPoint = memberFreezes.some(f => auditPoint >= parseISO(f.start_date) && auditPoint <= parseISO(f.end_date));
+        if (isFrozenAtPoint) return false;
+        return isSameMonth(mEnd, viewDate) && differenceInCalendarDays(mEnd, auditPoint) >= 0;
     }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 5);
 
     const expiringSoonCount = members.filter(m => {
-        const days = differenceInCalendarDays(parseISO(m.current_end_date), now);
-        return m.status === MemberStatus.ACTIVE && days >= 0 && days <= 7;
+        const mEnd = parseISO(m.current_end_date);
+        const mStart = parseISO(m.start_date);
+        if (auditPoint < mStart || auditPoint > mEnd) return false;
+        const memberFreezes = freezes.filter(f => f.member_id === m.id);
+        const isFrozenAtPoint = memberFreezes.some(f => auditPoint >= parseISO(f.start_date) && auditPoint <= parseISO(f.end_date));
+        if (isFrozenAtPoint) return false;
+        const days = differenceInCalendarDays(mEnd, auditPoint);
+        return days >= 0 && days <= 7;
     }).length;
     
     const endOfMonthDate = endOfMonth(viewDate);
