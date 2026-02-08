@@ -160,11 +160,20 @@ const Dashboard = () => {
     const monthlyExpiring = members.filter(m => {
         const mEnd = parseISO(m.current_end_date);
         const mStart = parseISO(m.start_date);
-        if (auditPoint < mStart || auditPoint > mEnd) return false;
-        const memberFreezes = freezes.filter(f => f.member_id === m.id);
-        const isFrozenAtPoint = memberFreezes.some(f => auditPoint >= parseISO(f.start_date) && auditPoint <= parseISO(f.end_date));
-        if (isFrozenAtPoint) return false;
-        return isSameMonth(mEnd, viewDate) && differenceInCalendarDays(mEnd, auditPoint) >= 0;
+
+        // The member must expire in the selected month.
+        if (!isSameMonth(mEnd, viewDate)) {
+            return false;
+        }
+
+        // The member's term must overlap with the month to be considered.
+        const monthStart = startOfMonth(viewDate);
+        const monthEnd = endOfMonth(viewDate);
+        if (mStart > monthEnd || mEnd < monthStart) {
+            return false;
+        }
+        
+        return true;
     }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 5);
 
     const expiringSoonCount = members.filter(m => {
