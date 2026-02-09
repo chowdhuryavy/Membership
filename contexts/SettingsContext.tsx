@@ -2,7 +2,7 @@
 import { CompanySettings, Currency, Role, Permission, Outlet, Property } from '../types';
 import { db } from '../services/mockSupabase';
 import { useAuth } from './AuthContext';
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 
 interface SettingsContextType {
   settings: CompanySettings | null;
@@ -51,7 +51,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setOutlets(o);
         setProperties(p);
         
-        // Logic: Primary choice is global setting, secondary is flagged 'is_default' in table, tertiary is first available.
         const activeCurr = (s && c.find(curr => curr.id === s.currency_id)) || 
                           c.find(curr => curr.is_default) || 
                           c[0];
@@ -114,10 +113,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return role.permissions.includes(permission);
   };
 
-  const checkShortcut = (e: KeyboardEvent, actionId: string): boolean => {
-    if (!settings?.keyboard_shortcuts) return false;
-    
-    // Default shortcuts if not configured
+  const checkShortcut = useCallback((e: KeyboardEvent, actionId: string): boolean => {
     const defaults: Record<string, string> = {
         'nav_dashboard': 'Alt+D',
         'nav_members': 'Alt+M',
@@ -128,29 +124,32 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         'action_cancel': 'Escape'
     };
     
-    const config = settings.keyboard_shortcuts[actionId] || defaults[actionId];
+    // Retrieve configuration either from settings or the system defaults
+    const config = settings?.keyboard_shortcuts?.[actionId] || defaults[actionId];
     if (!config) return false;
 
     const parts = config.toLowerCase().split('+');
     const key = parts[parts.length - 1];
     
-    // Check modifiers
+    // Check modifiers defined in the shortcut string
     const meta = parts.includes('meta') || parts.includes('cmd') || parts.includes('command');
     const ctrl = parts.includes('ctrl') || parts.includes('control');
     const alt = parts.includes('alt') || parts.includes('option');
     const shift = parts.includes('shift');
 
-    // Logic: Match if modifiers align AND key matches
+    // Strict Modifier Matching: Ensure only requested modifiers are pressed
     const eventKey = e.key.toLowerCase();
     
     const matchMeta = meta === e.metaKey;
     const matchCtrl = ctrl === e.ctrlKey;
     const matchAlt = alt === e.altKey;
     const matchShift = shift === e.shiftKey;
+    
+    // For single keys like 'Escape', 'Enter' or letters
     const matchKey = key === eventKey;
 
     return matchMeta && matchCtrl && matchAlt && matchShift && matchKey;
-  };
+  }, [settings]);
 
   return (
     <SettingsContext.Provider value={{ 
