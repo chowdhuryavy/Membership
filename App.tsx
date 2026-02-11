@@ -21,7 +21,8 @@ import Reports from './pages/Reports';
 import Logs from './pages/Logs';
 import SettingsPage from './pages/Settings';
 import Profile from './pages/Profile';
-import { LayoutDashboard, Users, Tag, BarChart3, LogOut, Menu, X, Shield, Settings, Store, ChevronDown, History, UserCircle, Activity, Loader2, Building2, Check, Globe, ChevronsUpDown, Bell, Search, Info, Cpu, Zap, Radio, Sparkles } from 'lucide-react';
+import MassageScheduling from './massage-scheduling/MassageScheduling'; // Import NEW feature
+import { LayoutDashboard, Users, Tag, BarChart3, LogOut, Menu, X, Shield, Settings, Store, ChevronDown, History, UserCircle, Activity, Loader2, Building2, Check, Globe, ChevronsUpDown, Bell, Search, Info, Cpu, Zap, Radio, Sparkles, CalendarClock } from 'lucide-react';
 import { Permission, Property } from './types';
 import { db } from './services/mockSupabase';
 
@@ -30,23 +31,17 @@ const SplashLoading = () => {
   
   return (
     <div className="fixed inset-0 z-[100000] bg-white flex flex-col items-center justify-center overflow-hidden">
-      {/* Dynamic Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,_rgba(79,70,229,0.03)_0%,_transparent_50%)] animate-[pulse_6s_ease-in-out_infinite]"></div>
         <div className="absolute inset-0 opacity-[0.01]" style={{ backgroundImage: 'radial-gradient(#4f46e5 1.5px, transparent 1.5px)', backgroundSize: '50px 50px' }}></div>
       </div>
 
       <div className="relative flex flex-col items-center justify-center">
-        
-        {/* UNIQUE ANIMATION STACK: The Helios Pulse */}
         <div className="relative w-80 h-80 flex items-center justify-center">
-          
-          {/* Layer 1: Exterior Kinetic Rings (Radiant Pulse) */}
           <div className="absolute inset-0 border-[0.5px] border-indigo-500/10 rounded-full animate-[radiate_4s_linear_infinite]"></div>
           <div className="absolute inset-10 border-[0.5px] border-indigo-400/20 rounded-full animate-[radiate_4s_linear_infinite_1.3s]"></div>
           <div className="absolute inset-20 border-[0.5px] border-indigo-300/30 rounded-full animate-[radiate_4s_linear_infinite_2.6s]"></div>
           
-          {/* Layer 2: Magnetic Orbitals */}
           <div className="absolute inset-0 animate-[spin_12s_linear_infinite]">
              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-indigo-500 rounded-full blur-[2px]"></div>
           </div>
@@ -54,12 +49,8 @@ const SplashLoading = () => {
              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-blue-400 rounded-full opacity-50"></div>
           </div>
 
-          {/* Layer 3: Central Logo Vessel (The Main Event) */}
           <div className="relative z-10 w-48 h-48 flex items-center justify-center">
-            {/* Liquid Glow Underlay */}
             <div className="absolute inset-0 bg-indigo-600/5 blur-3xl rounded-full animate-pulse"></div>
-            
-            {/* HELIOS ANIMATION: Now accelerated to 3s for high-energy boot feel */}
             <div className="w-full h-full flex items-center justify-center animate-[helios_3s_linear_infinite]">
               {settings?.logo_url ? (
                 <img 
@@ -68,7 +59,7 @@ const SplashLoading = () => {
                   className="w-full h-full object-contain filter drop-shadow-[0_0_20px_rgba(79,70,229,0.2)]" 
                 />
               ) : (
-                <div className="bg-indigo-600 w-24 h-24 rounded-[2.5rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-200">
+                <div className="bg-indigo-600 w-24 h-24 rounded-[2.5rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-100">
                   <Sparkles className="w-12 h-12" />
                 </div>
               )}
@@ -76,7 +67,6 @@ const SplashLoading = () => {
           </div>
         </div>
 
-        {/* Minimalist Visual Confirmation (No Name) */}
         <div className="mt-8 flex flex-col items-center gap-4 opacity-0 animate-[fade-in_1.5s_ease-out_forwards_0.5s]">
             <div className="flex gap-2">
               <div className="w-1.5 h-1.5 bg-slate-200 rounded-full animate-[pulse_1s_infinite]"></div>
@@ -267,7 +257,6 @@ const ProtectedLayout = () => {
     }
   }, [user, combinedLoading]);
 
-  // Global Shortcut Listener
   useEffect(() => {
     const handleGlobalShortcuts = (e: KeyboardEvent) => {
         if (checkShortcut(e, 'nav_dashboard')) {
@@ -356,6 +345,7 @@ const Sidebar = () => {
             <nav className="flex-1 space-y-1.5 px-4 mt-4 overflow-y-auto custom-scrollbar pb-8">
                 <NavItem to="/" icon={LayoutDashboard} label="Dashboard" />
                 <NavItem to="/members" icon={Users} label="Members" permission="members:view" />
+                <NavItem to="/bookings" icon={CalendarClock} label="Booking" permission="bookings:view" />
                 <NavItem to="/categories" icon={Tag} label="Membership Tiers" permission="categories:view" />
                 <NavItem to="/users" icon={Shield} label="Users & Security" permission="users:view" />
                 <NavItem to="/reports" icon={BarChart3} label="Financial Reports" permission="reports:view" />
@@ -429,6 +419,7 @@ const MobileHeader = () => {
                 <div className="absolute top-full left-0 w-full bg-white border-b border-slate-200 shadow-2xl p-6 flex flex-col gap-2 z-50 animate-in slide-in-from-top-4 duration-300 max-h-[calc(100vh-140px)] overflow-y-auto custom-scrollbar">
                     <MobileNavItem to="/" icon={LayoutDashboard} label="Dashboard" />
                     <MobileNavItem to="/members" icon={Users} label="Members" permission="members:view" />
+                    <MobileNavItem to="/bookings" icon={CalendarClock} label="Booking" permission="bookings:view" />
                     <MobileNavItem to="/categories" icon={Tag} label="Membership Tiers" permission="categories:view" />
                     <MobileNavItem to="/users" icon={Shield} label="Users & Security" permission="users:view" />
                     <MobileNavItem to="/reports" icon={BarChart3} label="Financial Reports" permission="reports:view" />
@@ -456,6 +447,7 @@ const App = () => {
             <Route element={<ProtectedLayout />}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/members" element={<Members />} />
+              <Route path="/bookings" element={<MassageScheduling />} />
               <Route path="/categories" element={<Categories />} />
               <Route path="/users" element={<UsersPage />} />
               <Route path="/reports" element={<Reports />} />

@@ -1,8 +1,6 @@
-
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
-// Fix: Local implementations for missing date-fns members to resolve environment-specific import errors
 import { addDays, format } from 'date-fns';
 
 const parseISO = (dateString: string) => new Date(dateString);
@@ -27,50 +25,27 @@ class DatabaseService {
     });
   }
 
-  /**
-   * REVENUE INTEGRITY ENGINE: syncMemberEndDate
-   * Ensures the member's expiry date is a pure function of (Original End Date + Sum of All Freezes).
-   * This is called automatically after any mutation to the 'freezes' table.
-   */
   private async syncMemberEndDate(memberId: string) {
     if (!this.isSupabase()) return;
 
     try {
-        // 1. Fetch fresh baseline and all associated freezes
-        // We use 'select *' to ensure we have the most current 'original_end_date' from the DB
         const [{ data: m, error: mErr }, { data: freezes, error: fErr }] = await Promise.all([
           supabase.from('members').select('id, original_end_date, status').eq('id', memberId).single(),
           supabase.from('freezes').select('total_days').eq('member_id', memberId)
         ]);
 
-        if (mErr || !m) {
-            console.error("Sync Engine Error: Member not found during recalculation", mErr);
-            return;
-        }
+        if (mErr || !m) return;
 
-        // 2. Calculate absolute deferred sum
         const totalDeferred = (freezes || []).reduce((sum, f) => sum + (Number(f.total_days) || 0), 0);
-
-        // 3. Derive the new current_end_date
-        // We parse the original baseline and add the total days
         const baselineDate = startOfDay(parseISO(m.original_end_date));
         const calculatedEndDate = addDays(baselineDate, totalDeferred);
         const newEndDateStr = format(calculatedEndDate, 'yyyy-MM-dd');
-        
-        // 4. Determine lifecycle status
-        // A member is 'Frozen' in the system if they have active freeze records
         const newStatus = totalDeferred > 0 ? MemberStatus.FROZEN : MemberStatus.ACTIVE;
 
-        // 5. Atomic Update
-        const { error: updateErr } = await supabase
+        await supabase
             .from('members')
-            .update({ 
-                status: newStatus, 
-                current_end_date: newEndDateStr 
-            })
+            .update({ status: newStatus, current_end_date: newEndDateStr })
             .eq('id', memberId);
-
-        if (updateErr) throw updateErr;
 
         return newEndDateStr;
     } catch (err) {
@@ -92,10 +67,9 @@ class DatabaseService {
     };
     if (this.isSupabase()) {
         try { 
-          const { error } = await supabase.from('system_logs').insert([logEntry]); 
-          if (error) console.error("Log Injection Failed:", error);
+          await supabase.from('system_logs').insert([logEntry]); 
         } catch (e) {
-          console.error("Critical Log Error:", e);
+          console.error("Log Error:", e);
         }
     }
   }
@@ -130,17 +104,7 @@ class DatabaseService {
                 options: { data: { full_name: profile.name, display_name: profile.name, name: profile.name } }
             });
 
-            if (signUpError) {
-              const msg = signUpError.message.toLowerCase();
-              if (msg.includes('confirm') || msg.includes('email') || signUpError.status === 500) {
-                return { 
-                  user: null, 
-                  error: "SECURITY ERROR: Email Confirmations are blocking login. Please disable 'Email Confirmations' in Supabase Auth Settings.",
-                  requiresPasswordChange: false
-                };
-              }
-              return { user: null, error: signUpError.message, requiresPasswordChange: false };
-            }
+            if (signUpError) return { user: null, error: signUpError.message, requiresPasswordChange: false };
 
             if (signUpData.user) {
               await supabase.from('profiles').update({ auth_id: signUpData.user.id }).eq('id', profile.id);
@@ -171,33 +135,29 @@ class DatabaseService {
     
     if (this.isSupabase()) {
         const shadow = this.getShadowClient();
-        const { data: authData, error: authError } = await (shadow.auth as any).signUp({
+        const { data: authData } = await (shadow.auth as any).signUp({
             email: cleanEmail,
             password: tempPassword,
             options: { data: { full_name: user.name, name: user.name, display_name: user.name } }
         });
 
-        if (authData?.user) {
-            authId = authData.user.id;
-        }
+        if (authData?.user) authId = authData.user.id;
 
-        const insertData = {
-            email: cleanEmail,
-            name: user.name,
-            role_id: user.role_id,
-            allowed_outlets: user.allowed_outlets || [],
-            temp_password: tempPassword,
-            auth_id: authId,
-            updated_at: new Date().toISOString()
-        };
-
-        const { data, error: dbError } = await supabase
+        const { data, error } = await supabase
             .from('profiles')
-            .upsert([insertData], { onConflict: 'email' })
+            .upsert([{
+                email: cleanEmail,
+                name: user.name,
+                role_id: user.role_id,
+                allowed_outlets: user.allowed_outlets || [],
+                temp_password: tempPassword,
+                auth_id: authId,
+                updated_at: new Date().toISOString()
+            }], { onConflict: 'email' })
             .select()
             .single();
 
-        if (dbError) throw new Error(`Profile Sync Failed: ${dbError.message}`);
+        if (error) throw error;
         await this.logAction('CREATE_USER', `Identity provisioned: ${user.name} (${user.email})`);
         return data as UserProfile;
     }
@@ -214,29 +174,22 @@ class DatabaseService {
             allowed_outlets: updates.allowed_outlets,
             updated_at: new Date().toISOString()
         };
-
-        if (!current.auth_id && updates.password) {
-             finalUpdates.temp_password = updates.password;
-        }
-
+        if (!current.auth_id && updates.password) finalUpdates.temp_password = updates.password;
         Object.keys(finalUpdates).forEach(k => finalUpdates[k] === undefined && delete finalUpdates[k]);
-        const { error } = await supabase.from('profiles').update(finalUpdates).eq('id', id);
-        if (error) throw new Error(error.message);
+        await supabase.from('profiles').update(finalUpdates).eq('id', id);
         await this.logAction('UPDATE_USER', `Identity modified for ${current.name} (${current.email})`);
     }
   }
 
   async updateEmail(newEmail: string) {
       if (this.isSupabase()) {
-          const { error } = await (supabase.auth as any).updateUser({ email: newEmail });
-          if (error) throw new Error(error.message);
+          await (supabase.auth as any).updateUser({ email: newEmail });
       }
   }
 
   async changePassword(userId: string, currentPass: string, newPass: string) {
     if (this.isSupabase()) {
-        const { error } = await (supabase.auth as any).updateUser({ password: newPass });
-        if (error) throw new Error(error.message);
+        await (supabase.auth as any).updateUser({ password: newPass });
         await supabase.from('profiles').update({ temp_password: null }).eq('id', userId);
         await this.logAction('CHANGE_PASSWORD', `Credentials updated for user ID: ${userId}`);
     }
@@ -264,9 +217,7 @@ class DatabaseService {
   }
 
   async deleteUser(id: string) {
-    if (this.isSupabase()) {
-      await supabase.from('profiles').delete().eq('id', id);
-    }
+    if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id);
   }
 
   async getMembers(outletId?: string): Promise<Member[]> {
@@ -300,14 +251,6 @@ class DatabaseService {
     }
   }
 
-  async getMemberHistory(membershipNumber: string): Promise<Member[]> {
-    if (this.isSupabase()) {
-      const { data } = await supabase.from('members').select('*').eq('membership_number', membershipNumber).order('start_date', { ascending: false });
-      return (data || []) as Member[];
-    }
-    return [];
-  }
-
   async getFreezes(memberId?: string): Promise<Freeze[]> {
     if (this.isSupabase()) {
       let query = supabase.from('freezes').select('*');
@@ -321,7 +264,6 @@ class DatabaseService {
   async addFreeze(freeze: Freeze) {
     if (this.isSupabase()) {
       await supabase.from('freezes').insert([freeze]);
-      // Critical: Await recalculation to ensure DB is consistent before UI refresh
       await this.syncMemberEndDate(freeze.member_id);
       await this.logAction('CREATE_FREEZE', `Account suspension applied for member ID: ${freeze.member_id}`);
     }
@@ -331,7 +273,6 @@ class DatabaseService {
     if (this.isSupabase()) {
       const { data: f } = await supabase.from('freezes').select('member_id').eq('id', id).single();
       await supabase.from('freezes').update(updates).eq('id', id);
-      // Critical: Await recalculation to ensure DB is consistent before UI refresh
       if (f) await this.syncMemberEndDate(f.member_id);
       await this.logAction('UPDATE_FREEZE', `Suspension record adjusted: ${id}`);
     }
@@ -341,7 +282,6 @@ class DatabaseService {
     if (this.isSupabase()) {
       const { data: f } = await supabase.from('freezes').select('member_id').eq('id', id).single();
       await supabase.from('freezes').delete().eq('id', id);
-      // Critical: Await recalculation to ensure DB is consistent before UI refresh
       if (f) await this.syncMemberEndDate(f.member_id);
       await this.logAction('DELETE_FREEZE', `Suspension record revoked: ${id}`);
     }
@@ -359,36 +299,31 @@ class DatabaseService {
     if (this.isSupabase()) {
       const newCat = { ...cat, id: `cat_${crypto.randomUUID()}` };
       await supabase.from('membership_categories').insert([newCat]);
+      await this.logAction('CREATE_CATEGORY', `New tier created: ${cat.name}`, cat.outlet_id);
     }
   }
 
   async updateCategory(id: string, updates: Partial<MembershipCategory>) {
     if (this.isSupabase()) {
       await supabase.from('membership_categories').update(updates).eq('id', id);
+      await this.logAction('UPDATE_CATEGORY', `Tier modified: ${id}`);
     }
   }
 
   async deleteCategory(id: string) {
     if (this.isSupabase()) {
       await supabase.from('membership_categories').delete().eq('id', id);
+      await this.logAction('DELETE_CATEGORY', `Tier decommissioned: ${id}`);
     }
   }
 
   async getSettings(): Promise<CompanySettings> {
-    const defaultSettings: CompanySettings = {
-        name: 'The Torch Hospitality',
-        logo_url: '',
-        address: '',
-        currency_id: 'default'
-    };
-
+    const defaultSettings: CompanySettings = { name: 'The Torch Hospitality', logo_url: '', address: '', currency_id: 'default' };
     if (this.isSupabase()) {
       try {
         const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
         return (data as CompanySettings) || defaultSettings;
-      } catch (e) {
-        return defaultSettings;
-      }
+      } catch (e) { return defaultSettings; }
     }
     return defaultSettings;
   }
@@ -396,6 +331,7 @@ class DatabaseService {
   async updateSettings(settings: CompanySettings) {
     if (this.isSupabase()) {
       await supabase.from('company_settings').update(settings).eq('id', 'global');
+      await this.logAction('UPDATE_SETTINGS', 'Global system configuration mutated.');
     }
   }
 
@@ -409,20 +345,22 @@ class DatabaseService {
 
   async addCurrency(curr: Omit<Currency, 'id'>) {
     if (this.isSupabase()) {
-      const newCurr = { ...curr, id: crypto.randomUUID() };
-      await supabase.from('currencies').insert([newCurr]);
+      await supabase.from('currencies').insert([{ ...curr, id: crypto.randomUUID() }]);
+      await this.logAction('CREATE_CURRENCY', `Monetary standard added: ${curr.code}`);
     }
   }
 
   async updateCurrency(id: string, updates: Partial<Currency>) {
     if (this.isSupabase()) {
       await supabase.from('currencies').update(updates).eq('id', id);
+      await this.logAction('UPDATE_CURRENCY', `Monetary standard modified: ${id}`);
     }
   }
 
   async deleteCurrency(id: string) {
     if (this.isSupabase()) {
       await supabase.from('currencies').delete().eq('id', id);
+      await this.logAction('DELETE_CURRENCY', `Monetary standard purged: ${id}`);
     }
   }
 
@@ -436,20 +374,22 @@ class DatabaseService {
 
   async addRole(role: Omit<Role, 'id'>) {
     if (this.isSupabase()) {
-      const newRole = { ...role, id: role.name.toLowerCase().replace(/\s+/g, '_') };
-      await supabase.from('roles').insert([newRole]);
+      await supabase.from('roles').insert([{ ...role, id: role.name.toLowerCase().replace(/\s+/g, '_') }]);
+      await this.logAction('CREATE_ROLE', `Security protocol tier created: ${role.name}`);
     }
   }
 
   async updateRole(id: string, updates: Partial<Role>) {
     if (this.isSupabase()) {
       await supabase.from('roles').update(updates).eq('id', id);
+      await this.logAction('UPDATE_ROLE', `Security protocol adjusted: ${id}`);
     }
   }
 
   async deleteRole(id: string) {
     if (this.isSupabase()) {
       await supabase.from('roles').delete().eq('id', id);
+      await this.logAction('DELETE_ROLE', `Security protocol purged: ${id}`);
     }
   }
 
@@ -463,20 +403,22 @@ class DatabaseService {
 
   async addOutlet(outlet: Omit<Outlet, 'id'>) {
     if (this.isSupabase()) {
-      const newOutlet = { ...outlet, id: crypto.randomUUID() };
-      await supabase.from('outlets').insert([newOutlet]);
+      await supabase.from('outlets').insert([{ ...outlet, id: crypto.randomUUID() }]);
+      await this.logAction('CREATE_OUTLET', `Facility context commissioned: ${outlet.name}`);
     }
   }
 
   async updateOutlet(id: string, updates: Partial<Outlet>) {
     if (this.isSupabase()) {
       await supabase.from('outlets').update(updates).eq('id', id);
+      await this.logAction('UPDATE_OUTLET', `Facility context modified: ${id}`);
     }
   }
 
   async deleteOutlet(id: string) {
     if (this.isSupabase()) {
       await supabase.from('outlets').delete().eq('id', id);
+      await this.logAction('DELETE_OUTLET', `Facility context decommissioned: ${id}`);
     }
   }
 
@@ -490,31 +432,210 @@ class DatabaseService {
 
   async addProperty(prop: Omit<Property, 'id'>) {
     if (this.isSupabase()) {
-      const newProp = { ...prop, id: crypto.randomUUID() };
-      await supabase.from('properties').insert([newProp]);
+      await supabase.from('properties').insert([{ ...prop, id: crypto.randomUUID() }]);
+      await this.logAction('CREATE_PROPERTY', `Property asset registered: ${prop.name}`);
     }
   }
 
   async updateProperty(id: string, updates: Partial<Property>) {
     if (this.isSupabase()) {
       await supabase.from('properties').update(updates).eq('id', id);
+      await this.logAction('UPDATE_PROPERTY', `Property asset modified: ${id}`);
     }
   }
 
   async deleteProperty(id: string) {
     if (this.isSupabase()) {
       await supabase.from('properties').delete().eq('id', id);
+      await this.logAction('DELETE_PROPERTY', `Property asset purged: ${id}`);
     }
   }
 
-  async getLogs(outletId?: string): Promise<SystemLog[]> {
+  async getLogs(outlet_id?: string): Promise<SystemLog[]> {
     if (this.isSupabase()) {
       let query = supabase.from('system_logs').select('*').order('timestamp', { ascending: false });
-      if (outletId) query = query.eq('outlet_id', outletId);
+      if (outlet_id) query = query.eq('outlet_id', outlet_id);
       const { data } = await query;
       return (data || []) as SystemLog[];
     }
     return [];
+  }
+
+  // --- MASSAGE SCHEDULING MODULE METHODS (PROPERTY-BASED) ---
+
+  async getGuests(propertyId: string): Promise<Guest[]> {
+    if (this.isSupabase()) {
+      const { data, error } = await supabase
+        .from('guests')
+        .select('*')
+        .eq('property_id', propertyId)
+        .order('name');
+      if (error) throw error;
+      return (data || []) as Guest[];
+    }
+    return [];
+  }
+
+  async saveGuest(guest: Omit<Guest, 'id' | 'created_at'>): Promise<Guest> {
+    if (this.isSupabase()) {
+      let existing: Guest | null = null;
+      const { data: dataByPhone } = await supabase
+        .from('guests')
+        .select('*')
+        .eq('phone', guest.phone)
+        .eq('property_id', guest.property_id)
+        .maybeSingle();
+      
+      if (dataByPhone) existing = dataByPhone as Guest;
+
+      if (!existing && guest.email) {
+        const { data: dataByEmail } = await supabase
+          .from('guests')
+          .select('*')
+          .eq('email', guest.email)
+          .eq('property_id', guest.property_id)
+          .maybeSingle();
+        if (dataByEmail) existing = dataByEmail as Guest;
+      }
+
+      if (existing) {
+        const { data, error } = await supabase
+          .from('guests')
+          .update({ name: guest.name, email: guest.email })
+          .eq('id', existing.id)
+          .select()
+          .single();
+        if (error) throw error;
+        await this.logAction('SYNC_GUEST', `Guest identity synchronized: ${guest.name}`);
+        return data as Guest;
+      } else {
+        const { data, error } = await supabase
+          .from('guests')
+          .insert([{ ...guest, id: crypto.randomUUID(), created_at: new Date().toISOString() }])
+          .select()
+          .single();
+        if (error) throw error;
+        await this.logAction('CREATE_GUEST', `New guest record provisioned: ${guest.name}`);
+        return data as Guest;
+      }
+    }
+    return { ...guest, id: crypto.randomUUID(), created_at: new Date().toISOString() } as Guest;
+  }
+
+  async updateGuest(id: string, updates: Partial<Guest>) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('guests').update(updates).eq('id', id);
+      if (error) throw error;
+      await this.logAction('UPDATE_GUEST', `Guest profile modified: ${id}`);
+    }
+  }
+
+  async deleteGuest(id: string) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('guests').delete().eq('id', id);
+      if (error) throw error;
+      await this.logAction('DELETE_GUEST', `Guest record purged: ${id}`);
+    }
+  }
+
+  async getTherapists(propertyId: string): Promise<Therapist[]> {
+    if (this.isSupabase()) {
+      const { data, error } = await supabase.from('therapists').select('*').eq('property_id', propertyId);
+      if (error) throw error;
+      return (data || []) as Therapist[];
+    }
+    return [];
+  }
+
+  async addTherapist(therapist: Omit<Therapist, 'id'>) {
+    if (this.isSupabase()) {
+        console.debug("DB Service: Validating Property Reference ID", therapist.property_id);
+        const { data: propExists } = await supabase.from('properties').select('id, name').eq('id', therapist.property_id).maybeSingle();
+        
+        if (!propExists) {
+            console.error("DB Service Critical: Found orphaned ID reference for property_id", therapist.property_id);
+            throw new Error(`Data Integrity Error: The target property (${therapist.property_id}) is not registered in the system. Ensure the Property is created in Settings first.`);
+        }
+
+        const { error } = await supabase.from('therapists').insert([{ ...therapist, id: crypto.randomUUID() }]);
+        if (error) throw error;
+        await this.logAction('CREATE_THERAPIST', `Staff specialist onboarded to ${propExists.name}: ${therapist.name}`);
+    }
+  }
+
+  async deleteTherapist(id: string) {
+    if (this.isSupabase()) {
+        const { error } = await supabase.from('therapists').delete().eq('id', id);
+        if (error) throw error;
+        await this.logAction('DELETE_THERAPIST', `Staff specialist decommissioned: ${id}`);
+    }
+  }
+
+  async getMassageTypes(propertyId?: string): Promise<MassageType[]> {
+    if (this.isSupabase()) {
+      let query = supabase.from('massage_types').select('*');
+      if (propertyId) query = query.eq('property_id', propertyId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as MassageType[];
+    }
+    return [];
+  }
+
+  async addMassageType(type: Omit<MassageType, 'id'>) {
+    if (this.isSupabase()) {
+        console.debug("DB Service: Validating Property Reference ID", type.property_id);
+        const { data: propExists } = await supabase.from('properties').select('id, name').eq('id', type.property_id).maybeSingle();
+        
+        if (!propExists) {
+            throw new Error(`Data Integrity Error: The target property (${type.property_id}) is not registered in the system.`);
+        }
+
+        const { error } = await supabase.from('massage_types').insert([{ ...type, id: crypto.randomUUID() }]);
+        if (error) throw error;
+        await this.logAction('CREATE_TREATMENT', `New treatment authorized for ${propExists.name}: ${type.name}`);
+    }
+  }
+
+  async deleteMassageType(id: string) {
+    if (this.isSupabase()) {
+        const { error } = await supabase.from('massage_types').delete().eq('id', id);
+        if (error) throw error;
+        await this.logAction('DELETE_TREATMENT', `Treatment service decommissioned: ${id}`);
+    }
+  }
+
+  async getMassageBookings(propertyId: string): Promise<MassageBooking[]> {
+    if (this.isSupabase()) {
+      const { data, error } = await supabase.from('massage_bookings').select('*').eq('property_id', propertyId).order('date', { ascending: false });
+      if (error) throw error;
+      return (data || []) as MassageBooking[];
+    }
+    return [];
+  }
+
+  async addMassageBooking(booking: Omit<MassageBooking, 'id' | 'created_at'>) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('massage_bookings').insert([{ ...booking, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
+      if (error) throw error;
+      await this.logAction('CREATE_BOOKING', `Service reservation finalized for Guest ID: ${booking.guest_id}`);
+    }
+  }
+
+  async updateMassageBooking(id: string, updates: Partial<MassageBooking>) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
+      if (error) throw error;
+      await this.logAction('UPDATE_BOOKING', `Reservation parameters adjusted: ${id}`);
+    }
+  }
+
+  async updateMassageBookingStatus(id: string, status: MassageBooking['status']) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('massage_bookings').update({ status }).eq('id', id);
+      if (error) throw error;
+      await this.logAction('UPDATE_BOOKING_STATUS', `Reservation lifecycle updated to ${status.toUpperCase()} for ID: ${id}`);
+    }
   }
 }
 

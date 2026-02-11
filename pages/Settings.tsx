@@ -12,46 +12,74 @@ import {
   Edit2, 
   X, 
   Shield, 
+  ShieldCheck,
   Eye, 
   PlusSquare, 
   FileEdit, 
   Trash, 
   Download, 
   Building2, 
-  Activity, 
-  Coins, 
-  Globe, 
-  Key, 
   Settings, 
   AlertTriangle, 
-  RefreshCcw, 
-  UserCircle2, 
-  Mail,
-  ShieldCheck,
   Zap,
-  Lock,
-  PieChart,
+  Save,
+  PenTool,
+  Globe,
   History,
   Users,
   Keyboard,
   Command,
-  Database,
-  FileJson,
+  ArrowRight,
+  ScrollText,
+  ListChecks,
+  PieChart,
+  CalendarClock,
+  LayoutDashboard,
   Plus,
-  Save,
-  PenTool,
-  BadgeCheck
+  Coins,
+  Eraser,
+  DollarSign,
+  Printer,
+  Snowflake,
+  RefreshCcw,
+  EyeOff,
+  Briefcase
 } from 'lucide-react';
 
 const PERMISSION_REGISTRY = [
+    { 
+        id: 'dashboard', 
+        label: 'Intelligence Terminal', 
+        icon: LayoutDashboard,
+        actions: [
+            { id: 'view', label: 'Monitor Dashboard', icon: Eye },
+            { id: 'view_financials', label: 'Financial Data Visibility', icon: DollarSign }
+        ] 
+    },
+    { 
+        id: 'bookings', 
+        label: 'Resource Scheduling', 
+        icon: CalendarClock,
+        actions: [
+            { id: 'view', label: 'View Service Grid', icon: Eye },
+            { id: 'create', label: 'Authorized Booking', icon: PlusSquare },
+            { id: 'edit', label: 'Modify Reservation', icon: FileEdit },
+            { id: 'delete', label: 'Cancel Reservation', icon: Trash },
+            { id: 'manage_resources', label: 'Manage Staff & Portfolio', icon: Briefcase }
+        ] 
+    },
     { 
         id: 'members', 
         label: 'Membership Engine', 
         icon: Users,
         actions: [
             { id: 'view', label: 'Directory Access', icon: Eye },
+            { id: 'view_contact_info', label: 'View Sensitive Info (Phone/Email)', icon: EyeOff },
             { id: 'create', label: 'Enrollment Power', icon: PlusSquare },
             { id: 'edit', label: 'Profile Modification', icon: FileEdit },
+            { id: 'renew', label: 'Process Renewal', icon: RefreshCcw },
+            { id: 'freeze', label: 'Manage Freezes', icon: Snowflake },
+            { id: 'print_contract', label: 'Print Agreements', icon: Printer },
             { id: 'delete', label: 'Record Purging', icon: Trash }
         ] 
     },
@@ -74,7 +102,7 @@ const PERMISSION_REGISTRY = [
             { id: 'view', label: 'Audit Userbase', icon: Eye },
             { id: 'create', label: 'Provision Users', icon: PlusSquare },
             { id: 'edit', label: 'Modify Profiles', icon: FileEdit },
-            { id: 'edit_email', label: 'Primary Email Sync', icon: Mail },
+            { id: 'edit_email', label: 'Primary Email Sync', icon: Zap },
             { id: 'delete', label: 'Revoke Identity', icon: Trash }
         ] 
     },
@@ -124,7 +152,7 @@ const PERMISSION_REGISTRY = [
     },
 ];
 
-type TabId = 'company' | 'properties' | 'roles' | 'currency' | 'outlets' | 'shortcuts' | 'maintenance';
+type TabId = 'company' | 'properties' | 'roles' | 'currency' | 'outlets' | 'shortcuts' | 'documents' | 'maintenance';
 
 const SHORTCUT_DEFINITIONS = [
     { id: 'nav_dashboard', label: 'Navigate to Dashboard', default: 'Alt+D' },
@@ -132,24 +160,21 @@ const SHORTCUT_DEFINITIONS = [
     { id: 'nav_settings', label: 'Navigate to Settings', default: 'Alt+S' },
     { id: 'global_search', label: 'Focus Search Input', default: 'Alt+K' },
     { id: 'action_create', label: 'Create New Record', default: 'Alt+N' },
+    { id: 'action_view_contract', label: 'Preview Member Contract', default: 'Alt+P' },
     { id: 'action_save', label: 'Save / Confirm Action', default: 'Alt+Enter' },
     { id: 'action_cancel', label: 'Cancel / Close Modal', default: 'Escape' },
 ];
 
 const SettingsPage = () => {
-  const { settings, currencies, roles, outlets, properties, currentOutlet, refreshSettings, hasPermission } = useSettings();
+  const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission } = useSettings();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>('company');
 
   const [companyForm, setCompanyForm] = useState<CompanySettings>({ 
-      name: '', 
-      logo_url: '', 
-      address: '', 
-      currency_id: '', 
-      keyboard_shortcuts: {},
-      signatory_prepared_role: '',
-      signatory_reviewed_role: '',
-      signatory_approved_role: ''
+      name: '', logo_url: '', address: '', currency_id: '', 
+      keyboard_shortcuts: {}, signatory_prepared_role: '', 
+      signatory_reviewed_role: '', signatory_approved_role: '', 
+      contract_template: '' 
   });
   const [newCurrency, setNewCurrency] = useState<Partial<Currency>>({ code: '', symbol: '', rate: 1, is_default: false });
   const [editingCurrencyId, setEditingCurrencyId] = useState<string | null>(null);
@@ -157,7 +182,7 @@ const SettingsPage = () => {
   const [newRole, setNewRole] = useState<{ name: string, permissions: Permission[] }>({ name: '', permissions: [] });
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   
-  const initialOutletFormState = { name: '', property_id: '', signatory_prepared_role: '', signatory_reviewed_role: '', signatory_approved_role: '' };
+  const initialOutletFormState = { name: '', property_id: '', signatory_prepared_role: '', signatory_reviewed_role: '', signatory_approved_role: '', contract_template: '', conditions: '' };
   const [outletForm, setOutletForm] = useState<Partial<Outlet>>(initialOutletFormState);
   const [editingOutletId, setEditingOutletId] = useState<string | null>(null);
 
@@ -185,24 +210,20 @@ const SettingsPage = () => {
       { id: 'roles', label: 'Security Matrix', visible: !!canManageRoles },
       { id: 'currency', label: 'Monetary', visible: !!canViewSettings },
       { id: 'shortcuts', label: 'Keyboard', visible: !!canViewSettings },
+      { id: 'documents', label: 'Global Defaults', visible: !!canViewSettings },
       { id: 'maintenance', label: 'Maintenance', visible: !!canEditSettings },
     ];
     return tabs.filter(t => t.visible);
   }, [canViewSettings, canViewProperties, canViewOutlets, canManageRoles, canEditSettings]);
 
-  useEffect(() => {
-    if (availableTabs.length > 0 && !availableTabs.find(t => t.id === activeTab)) {
-      setActiveTab(availableTabs[0].id);
-    }
-  }, [availableTabs]);
-
   useEffect(() => { 
       if (settings) {
           setCompanyForm({
               ...settings,
-              signatory_prepared_role: settings.signatory_prepared_role || 'Cluster Income Auditor',
-              signatory_reviewed_role: settings.signatory_reviewed_role || 'Cluster Assist. Financial Controller',
-              signatory_approved_role: settings.signatory_approved_role || 'Cluster Ex- Assist. Director of Finance'
+              signatory_prepared_role: settings.signatory_prepared_role || 'Income Auditor',
+              signatory_reviewed_role: settings.signatory_reviewed_role || 'Financial Controller',
+              signatory_approved_role: settings.signatory_approved_role || 'Director of Finance',
+              contract_template: settings.contract_template || ''
           }); 
       }
   }, [settings]);
@@ -210,57 +231,6 @@ const SettingsPage = () => {
   const showStatus = (text: string, type: 'success' | 'error' = 'success') => {
     setMessage({ text, type });
     setTimeout(() => setMessage(null), 8000);
-  };
-
-  const saveCompany = async () => {
-    if (!canEditSettings) return;
-    setIsSaving(true);
-    try {
-        await db.updateSettings(companyForm);
-        await refreshSettings();
-        showStatus('Framework successfully updated.');
-    } catch (e: any) {
-        showStatus(`Update failed: ${e.message}`, 'error');
-    } finally {
-        setIsSaving(false);
-    }
-  };
-
-  const handleExportData = async () => {
-      setIsSaving(true);
-      try {
-          const members = await db.getMembers(currentOutlet?.id);
-          const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(members, null, 2));
-          const downloadAnchorNode = document.createElement('a');
-          downloadAnchorNode.setAttribute("href", dataStr);
-          downloadAnchorNode.setAttribute("download", `MemberExport_${currentOutlet?.name || 'Global'}_${new Date().toISOString().split('T')[0]}.json`);
-          document.body.appendChild(downloadAnchorNode);
-          downloadAnchorNode.click();
-          downloadAnchorNode.remove();
-          showStatus('System data backup successful.');
-      } catch (e) {
-          showStatus('Export failed. Check console for details.', 'error');
-      } finally {
-          setIsSaving(false);
-      }
-  };
-
-  const handleKeyRecord = (e: React.KeyboardEvent, actionId: string) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const parts = [];
-      if (e.metaKey) parts.push('Meta');
-      if (e.ctrlKey) parts.push('Ctrl');
-      if (e.altKey) parts.push('Alt');
-      if (e.shiftKey) parts.push('Shift');
-      if (['Meta', 'Control', 'Alt', 'Shift'].includes(e.key)) return;
-      parts.push(e.key);
-      const shortcut = parts.join('+');
-      setCompanyForm(prev => ({
-          ...prev,
-          keyboard_shortcuts: { ...prev.keyboard_shortcuts, [actionId]: shortcut }
-      }));
-      setRecordingKey(null);
   };
 
   const handleSaveProperty = async () => {
@@ -281,39 +251,14 @@ const SettingsPage = () => {
     if (!canEditOutlets || !outletForm.name || !outletForm.property_id) return;
     setIsSaving(true);
     try {
-        const payload: Partial<Outlet> = {
-            name: outletForm.name,
-            property_id: outletForm.property_id,
-            signatory_prepared_role: outletForm.signatory_prepared_role || undefined,
-            signatory_reviewed_role: outletForm.signatory_reviewed_role || undefined,
-            signatory_approved_role: outletForm.signatory_approved_role || undefined,
-        };
-
-        if (editingOutletId) {
-            await db.updateOutlet(editingOutletId, payload);
-        } else {
-            await db.addOutlet(payload as Omit<Outlet, 'id'>);
-        }
-        
+        if (editingOutletId) { await db.updateOutlet(editingOutletId, outletForm); } 
+        else { await db.addOutlet(outletForm as Omit<Outlet, 'id'>); }
         setEditingOutletId(null);
         setOutletForm(initialOutletFormState);
-
         await refreshSettings();
-        showStatus('Facility context saved.');
-    } catch (e: any) { 
-        showStatus(`Facility sync failed: ${e.message}`, 'error'); 
-    } finally { 
-        setIsSaving(false); 
-    }
-  };
-
-  const handleTogglePermission = (permission: Permission) => {
-    setNewRole(prev => ({
-      ...prev,
-      permissions: prev.permissions.includes(permission)
-        ? prev.permissions.filter(p => p !== permission)
-        : [...prev.permissions, permission]
-    }));
+        showStatus('Facility contexts updated.');
+    } catch (e: any) { showStatus(`Facility error: ${e.message}`, 'error'); } 
+    finally { setIsSaving(false); }
   };
 
   const saveRole = async () => {
@@ -352,12 +297,18 @@ const SettingsPage = () => {
           if (itemToDelete.type === 'role') await db.deleteRole(itemToDelete.id);
           if (itemToDelete.type === 'currency') await db.deleteCurrency(itemToDelete.id);
           await refreshSettings();
-          showStatus(`${itemToDelete.type.charAt(0).toUpperCase() + itemToDelete.type.slice(1)} removed.`);
-      } catch (e: any) {
-          showStatus(`Removal failed: ${e.message}`, 'error');
-      } finally {
-          setItemToDelete(null);
-      }
+          showStatus(`${itemToDelete.type} removed.`);
+      } catch (e: any) { showStatus(`Removal failed: ${e.message}`, 'error'); } 
+      finally { setItemToDelete(null); }
+  };
+
+  const handleTogglePermission = (permission: Permission) => {
+    setNewRole(prev => ({
+      ...prev,
+      permissions: prev.permissions.includes(permission)
+        ? prev.permissions.filter(p => p !== permission)
+        : [...prev.permissions, permission]
+    }));
   };
 
   return (
@@ -387,522 +338,221 @@ const SettingsPage = () => {
       </div>
 
       {message && (
-        <div className={`${message.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'} p-5 rounded-3xl text-xs font-black border animate-in fade-in zoom-in flex items-center gap-3 shadow-sm`}>
-            {message.type === 'success' ? <ShieldCheck className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5 shrink-0"/>} 
-            <span className="leading-relaxed">{message.text}</span>
+        <div className={`${message.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'} p-4 rounded-xl text-xs font-black border animate-in fade-in zoom-in flex items-center gap-3 shadow-sm`}>
+            {message.type === 'success' ? <ShieldCheck className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5"/>} 
+            <span>{message.text}</span>
         </div>
       )}
 
-      {/* GLOBAL SCOPE TAB */}
+      {/* --- GLOBAL SCOPE TAB --- */}
       {activeTab === 'company' && canViewSettings && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-              <div className="lg:col-span-2 space-y-8">
-                  <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
-                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
-                        <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3">
-                            <Globe className="w-5 h-5 text-indigo-600" /> Identity Branding
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-8 space-y-8">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Company / Group Name</label>
-                                <Input value={companyForm.name} onChange={e => setCompanyForm({...companyForm, name: e.target.value})} className="h-12 rounded-xl font-bold" />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Corporate Logo Endpoint (URL)</label>
-                                <Input value={companyForm.logo_url} onChange={e => setCompanyForm({...companyForm, logo_url: e.target.value})} className="h-12 rounded-xl font-medium" />
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Legal Headquarters Address</label>
-                            <Input value={companyForm.address} onChange={e => setCompanyForm({...companyForm, address: e.target.value})} className="h-12 rounded-xl font-medium" />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Default Reporting Currency</label>
-                            <Select 
-                                options={currencies.map(c => ({ value: c.id, label: `${c.code} (${c.symbol}) - System Standard` }))} 
-                                value={companyForm.currency_id} 
-                                onChange={e => setCompanyForm({...companyForm, currency_id: e.target.value})}
-                                className="h-12 rounded-xl font-bold"
-                            />
-                          </div>
-                      </CardContent>
-                  </Card>
-
-                  <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
-                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
-                        <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3">
-                            <PenTool className="w-5 h-5 text-indigo-600" /> Signatory Configuration
-                        </CardTitle>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Designated roles for financial reports</p>
-                      </CardHeader>
-                      <CardContent className="p-8 space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Prepared By Role</label>
-                                <Input value={companyForm.signatory_prepared_role} onChange={e => setCompanyForm({...companyForm, signatory_prepared_role: e.target.value})} className="h-12 rounded-xl" placeholder="e.g. Income Auditor" />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reviewed By Role</label>
-                                <Input value={companyForm.signatory_reviewed_role} onChange={e => setCompanyForm({...companyForm, signatory_reviewed_role: e.target.value})} className="h-12 rounded-xl" placeholder="e.g. Financial Controller" />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Approved By Role</label>
-                                <Input value={companyForm.signatory_approved_role} onChange={e => setCompanyForm({...companyForm, signatory_approved_role: e.target.value})} className="h-12 rounded-xl" placeholder="e.g. Director of Finance" />
-                            </div>
-                        </div>
-                      </CardContent>
-                      <div className="bg-slate-50 p-6 flex justify-end">
-                        <Button onClick={saveCompany} isLoading={isSaving} className="h-12 px-8 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-indigo-100">
-                           <Save className="w-4 h-4 mr-2" /> Sync Framework
-                        </Button>
-                      </div>
-                  </Card>
-              </div>
-
-              <div className="space-y-6">
-                  <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden text-white">
-                    <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '20px 20px' }}></div>
-                    <h4 className="text-xl font-black tracking-tight mb-4 relative z-10">Asset Integrity</h4>
-                    <p className="text-slate-400 text-xs font-bold leading-relaxed mb-6 relative z-10">
-                        Changes to the Global Scope propagate across all facilities and financial ledgers. Ensure Legal Identity and Currency standards align with corporate requirements.
-                    </p>
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-[10px] font-black uppercase tracking-widest">
-                       <BadgeCheck className="w-3 h-3 text-emerald-400" /> Authorized Administrator
-                    </div>
-                  </div>
-              </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
+                  <CardHeader className="bg-slate-50 p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900">Identity Branding</CardTitle></CardHeader>
+                  <CardContent className="p-8 space-y-6">
+                      <Input label="Company Name" value={companyForm.name} onChange={e => setCompanyForm({...companyForm, name: e.target.value})} className="h-12 rounded-xl font-bold" />
+                      <Input label="Logo URL" value={companyForm.logo_url} onChange={e => setCompanyForm({...companyForm, logo_url: e.target.value})} className="h-12 rounded-xl" />
+                      <Input label="Headquarters Address" value={companyForm.address} onChange={e => setCompanyForm({...companyForm, address: e.target.value})} className="h-12 rounded-xl" />
+                      <Select label="Reporting Currency" options={currencies.map(c => ({ value: c.id, label: `${c.code} (${c.symbol})` }))} value={companyForm.currency_id} onChange={e => setCompanyForm({...companyForm, currency_id: e.target.value})} className="h-12 rounded-xl font-bold" />
+                      <Button onClick={() => { db.updateSettings(companyForm); showStatus('Branding updated.'); }} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-100">Sync Branding</Button>
+                  </CardContent>
+              </Card>
           </div>
       )}
 
-      {/* PROPERTIES TAB */}
+      {/* --- PROPERTIES TAB --- */}
       {activeTab === 'properties' && canViewProperties && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
-                  <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
-                      <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3">
-                          <Building2 className="w-5 h-5 text-indigo-600" /> Asset Management
-                      </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-8">
-                      <div className="space-y-6">
-                          {properties.map(p => (
-                              <div key={p.id} className="flex items-center justify-between p-5 bg-slate-50 rounded-3xl border border-slate-100 group">
-                                  <div className="flex items-center gap-4">
-                                      {p.logo_url ? (
-                                          <img src={p.logo_url} className="w-12 h-12 rounded-xl object-contain bg-white border shadow-sm" alt="" />
-                                      ) : (
-                                          <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center border text-slate-300">
-                                              <Building2 className="w-6 h-6" />
-                                          </div>
-                                      )}
-                                      <div>
-                                          <h4 className="font-black text-slate-900 uppercase tracking-tight">{p.name}</h4>
-                                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate max-w-[200px]">{p.address}</p>
-                                      </div>
-                                  </div>
-                                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <button onClick={() => { setPropForm(p); setEditingPropId(p.id); }} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
-                                      <button onClick={() => setItemToDelete({ type: 'property', id: p.id, name: p.name })} className="p-2 text-slate-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                                  </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
+                  <CardHeader className="bg-slate-50 p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900">Managed Assets</CardTitle></CardHeader>
+                  <CardContent className="p-8 space-y-4">
+                      {properties.map(p => (
+                          <div key={p.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm group">
+                              <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black text-xs">{p.name.charAt(0)}</div>
+                                  <div><h4 className="font-black text-slate-900 uppercase text-xs tracking-tight">{p.name}</h4><p className="text-[9px] font-bold text-slate-400 uppercase">{p.address}</p></div>
                               </div>
-                          ))}
-                      </div>
+                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => { setEditingPropId(p.id); setPropForm(p); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4" /></button>
+                                  <button onClick={() => setItemToDelete({ type: 'property', id: p.id, name: p.name })} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                          </div>
+                      ))}
                   </CardContent>
               </Card>
-
-              <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
-                  <CardHeader className="bg-indigo-600 text-white p-8">
-                      <CardTitle className="text-xl font-black tracking-tight">{editingPropId ? 'Modify Asset' : 'Add Property Asset'}</CardTitle>
-                  </CardHeader>
+              <Card className="rounded-[2rem] border-slate-200/60 shadow-xl h-fit">
+                  <CardHeader className="bg-indigo-600 text-white p-8"><CardTitle className="text-xl font-black">{editingPropId ? 'Modify Asset' : 'Register Asset'}</CardTitle></CardHeader>
                   <CardContent className="p-8 space-y-6">
-                      <Input label="Asset Name" value={propForm.name} onChange={e => setPropForm({...propForm, name: e.target.value})} className="h-12 rounded-xl font-bold" />
-                      <Input label="Logo Endpoint (URL)" value={propForm.logo_url} onChange={e => setPropForm({...propForm, logo_url: e.target.value})} className="h-12 rounded-xl" />
-                      <Input label="Asset Location / Address" value={propForm.address} onChange={e => setPropForm({...propForm, address: e.target.value})} className="h-12 rounded-xl" />
-                      <div className="flex gap-3 pt-4">
-                          {editingPropId && (
-                              <Button variant="secondary" onClick={() => { setEditingPropId(null); setPropForm({name:'', logo_url:'', address:''}); }} className="h-14 rounded-2xl font-bold flex-1">Cancel</Button>
-                          )}
-                          <Button onClick={handleSaveProperty} isLoading={isSaving} className="h-14 rounded-2xl font-black flex-1 shadow-lg shadow-indigo-100">
-                             {editingPropId ? 'Sync Updates' : 'Add Asset'}
-                          </Button>
-                      </div>
+                      <Input label="Name" value={propForm.name} onChange={e => setPropForm({...propForm, name: e.target.value})} className="h-12 rounded-xl" />
+                      <Input label="Address" value={propForm.address} onChange={e => setPropForm({...propForm, address: e.target.value})} className="h-12 rounded-xl" />
+                      <Input label="Logo URL" value={propForm.logo_url} onChange={e => setPropForm({...propForm, logo_url: e.target.value})} className="h-12 rounded-xl" />
+                      <Button onClick={handleSaveProperty} isLoading={isSaving} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest">Commit Asset</Button>
                   </CardContent>
               </Card>
           </div>
       )}
 
-      {/* OUTLETS TAB */}
+      {/* --- FACILITIES TAB --- */}
       {activeTab === 'outlets' && canViewOutlets && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
-                  <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
-                      <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3">
-                          <Store className="w-5 h-5 text-indigo-600" /> Facility Contexts
-                      </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-8">
-                      <div className="space-y-4">
-                          {outlets.map(o => {
-                              const prop = properties.find(p => p.id === o.property_id);
-                              return (
-                                  <div key={o.id} className="flex items-center justify-between p-5 bg-white rounded-3xl border border-slate-100 group shadow-sm">
-                                      <div className="flex items-center gap-4">
-                                          <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black text-xs">
-                                              {o.name.charAt(0)}
-                                          </div>
-                                          <div>
-                                              <h4 className="font-black text-slate-900 uppercase tracking-tight text-sm">{o.name}</h4>
-                                              <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest">{prop?.name || 'Unassigned'}</span>
-                                          </div>
-                                      </div>
-                                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button onClick={() => { setEditingOutletId(o.id); setOutletForm({ name: o.name, property_id: o.property_id, signatory_prepared_role: o.signatory_prepared_role || '', signatory_reviewed_role: o.signatory_reviewed_role || '', signatory_approved_role: o.signatory_approved_role || '' }); }} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
-                                          <button onClick={() => setItemToDelete({ type: 'outlet', id: o.id, name: o.name })} className="p-2 text-slate-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                                      </div>
-                                  </div>
-                              );
-                          })}
-                      </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
+                  <CardHeader className="bg-slate-50 p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900">Active Facilities</CardTitle></CardHeader>
+                  <CardContent className="p-8 space-y-4">
+                      {outlets.map(o => (
+                          <div key={o.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm group">
+                              <div><h4 className="font-black text-slate-900 uppercase text-xs">{o.name}</h4><span className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest">{properties.find(p => p.id === o.property_id)?.name}</span></div>
+                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => { setEditingOutletId(o.id); setOutletForm(o); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4" /></button>
+                                  <button onClick={() => setItemToDelete({ type: 'outlet', id: o.id, name: o.name })} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                          </div>
+                      ))}
                   </CardContent>
               </Card>
-
-              <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
-                  <CardHeader className="bg-slate-900 text-white p-8">
-                      <CardTitle className="text-xl font-black tracking-tight">{editingOutletId ? 'Modify Facility' : 'Commission New Facility'}</CardTitle>
-                  </CardHeader>
+              <Card className="rounded-[2rem] border-slate-200/60 shadow-xl h-fit">
+                  <CardHeader className="bg-slate-900 text-white p-8"><CardTitle className="text-xl font-black">{editingOutletId ? 'Edit Facility' : 'New Facility'}</CardTitle></CardHeader>
                   <CardContent className="p-8 space-y-6">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Facility Name</label>
-                        <Input value={outletForm.name} onChange={e => setOutletForm({...outletForm, name: e.target.value})} className="h-12 rounded-xl font-bold" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Assign to Property Asset</label>
-                        <Select 
-                            options={[{ value: '', label: 'Select Property...' }, ...properties.map(p => ({ value: p.id, label: p.name }))]} 
-                            value={outletForm.property_id} 
-                            onChange={e => setOutletForm({...outletForm, property_id: e.target.value})}
-                            className="h-12 rounded-xl font-bold"
-                        />
-                      </div>
-                      <div className="space-y-4 pt-4 border-t border-slate-100">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Facility-Specific Signatories (Optional)</label>
-                          <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                             <Input label="Prepared By Role" value={outletForm.signatory_prepared_role} onChange={e => setOutletForm({...outletForm, signatory_prepared_role: e.target.value})} className="h-10 rounded-lg text-xs" placeholder="Defaults to Global Setting"/>
-                             <Input label="Reviewed By Role" value={outletForm.signatory_reviewed_role} onChange={e => setOutletForm({...outletForm, signatory_reviewed_role: e.target.value})} className="h-10 rounded-lg text-xs" placeholder="Defaults to Global Setting"/>
-                             <Input label="Approved By Role" value={outletForm.signatory_approved_role} onChange={e => setOutletForm({...outletForm, signatory_approved_role: e.target.value})} className="h-10 rounded-lg text-xs" placeholder="Defaults to Global Setting"/>
-                          </div>
-                      </div>
-                      <div className="flex gap-3 pt-4">
-                          {editingOutletId && (
-                              <Button variant="secondary" onClick={() => { setEditingOutletId(null); setOutletForm(initialOutletFormState); }} className="h-14 rounded-2xl font-bold flex-1">Cancel</Button>
-                          )}
-                          <Button onClick={handleSaveOutlet} isLoading={isSaving} className="h-14 rounded-2xl font-black flex-1 shadow-lg shadow-indigo-100">
-                             {editingOutletId ? 'Sync Facility' : 'Commission Facility'}
-                          </Button>
-                      </div>
+                      <Input label="Facility Name" value={outletForm.name} onChange={e => setOutletForm({...outletForm, name: e.target.value})} className="h-12 rounded-xl" />
+                      <Select label="Property Mapping" options={[{value:'', label:'Select...'}, ...properties.map(p => ({value:p.id, label:p.name}))]} value={outletForm.property_id} onChange={e => setOutletForm({...outletForm, property_id: e.target.value})} className="h-12 rounded-xl" />
+                      <Button onClick={handleSaveOutlet} isLoading={isSaving} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest">Commission Context</Button>
                   </CardContent>
               </Card>
           </div>
       )}
 
-      {/* SECURITY MATRIX (ROLES) TAB */}
+      {/* --- SECURITY MATRIX TAB --- */}
       {activeTab === 'roles' && canManageRoles && (
-          <div className="space-y-8">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                  <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
-                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
-                          <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3">
-                              <Shield className="w-5 h-5 text-indigo-600" /> Security Directory
-                          </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-8">
-                          <div className="space-y-4">
-                              {roles.map(r => (
-                                  <div key={r.id} className="flex items-center justify-between p-5 bg-white rounded-3xl border border-slate-100 group shadow-sm transition-all hover:border-indigo-200">
-                                      <div className="flex items-center gap-4">
-                                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${r.is_system ? 'bg-indigo-600 shadow-indigo-100' : 'bg-slate-900 shadow-slate-100'} shadow-lg`}>
-                                              <Lock className="w-4 h-4" />
-                                          </div>
-                                          <div>
-                                              <div className="flex items-center gap-2">
-                                                  <h4 className="font-black text-slate-900 uppercase tracking-tight text-sm">{r.name}</h4>
-                                                  {r.is_system && <span className="text-[8px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase">Protected</span>}
-                                              </div>
-                                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{r.permissions.length} Authorized Protocols</span>
-                                          </div>
-                                      </div>
-                                      <div className="flex gap-2">
-                                          <button onClick={() => { setEditingRoleId(r.id); setNewRole({ name: r.name, permissions: r.permissions }); }} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
-                                          {!r.is_system && (
-                                              <button onClick={() => setItemToDelete({ type: 'role', id: r.id, name: r.name })} className="p-2 text-slate-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                                          )}
-                                      </div>
-                                  </div>
-                              ))}
-                          </div>
-                      </CardContent>
-                  </Card>
-
-                  <div className="space-y-8">
-                      <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
-                          <CardHeader className="bg-slate-900 text-white p-8 flex justify-between items-center">
-                              <div>
-                                  <CardTitle className="text-xl font-black tracking-tight">{editingRoleId ? 'Modify Protocol' : 'Provision Security Tier'}</CardTitle>
-                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Matrix Policy Designer</p>
-                              </div>
-                              <ShieldCheck className="w-8 h-8 text-indigo-400 opacity-50" />
-                          </CardHeader>
-                          <CardContent className="p-8 space-y-6">
-                              <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tier Name</label>
-                                <Input value={newRole.name} onChange={e => setNewRole({...newRole, name: e.target.value})} className="h-12 rounded-xl font-bold" placeholder="e.g. Senior Auditor" />
-                              </div>
-                              
-                              <div className="pt-4 border-t border-slate-100">
-                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-4 block">Authorized Protocol Scopes</label>
-                                  <div className="grid grid-cols-1 gap-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                                      {PERMISSION_REGISTRY.map(group => (
-                                          <div key={group.id} className="space-y-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                              <div className="flex items-center gap-2 mb-3">
-                                                  <group.icon className="w-4 h-4 text-indigo-600" />
-                                                  <span className="text-[10px] font-black uppercase text-slate-900 tracking-wider">{group.label}</span>
-                                              </div>
-                                              <div className="grid grid-cols-2 gap-2">
-                                                  {group.actions.map(action => {
-                                                      const permId = `${group.id}:${action.id}` as Permission;
-                                                      const isChecked = newRole.permissions.includes(permId);
-                                                      return (
-                                                          <button 
-                                                              key={action.id}
-                                                              onClick={() => handleTogglePermission(permId)}
-                                                              className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${isChecked ? 'bg-white border-indigo-200 text-indigo-600 shadow-sm ring-2 ring-indigo-500/5' : 'bg-slate-100 border-transparent text-slate-400 grayscale hover:grayscale-0'}`}
-                                                          >
-                                                              <action.icon className="w-3.5 h-3.5" />
-                                                              <span className="text-[9px] font-black uppercase tracking-tighter">{action.label}</span>
-                                                          </button>
-                                                      );
-                                                  })}
-                                              </div>
-                                          </div>
-                                      ))}
-                                  </div>
-                              </div>
-
-                              <div className="flex gap-3 pt-6">
-                                  {editingRoleId && (
-                                      <Button variant="secondary" onClick={() => { setEditingRoleId(null); setNewRole({name:'', permissions:[]}); }} className="h-14 rounded-2xl font-bold flex-1">Cancel</Button>
-                                  )}
-                                  <Button onClick={saveRole} isLoading={isSaving} className="h-14 rounded-2xl font-black flex-1 shadow-lg shadow-indigo-100">
-                                     {editingRoleId ? 'Apply Protocols' : 'Deploy Tier'}
-                                  </Button>
-                              </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-1 space-y-4">
+                  {roles.map(r => (
+                      <Card key={r.id} onClick={() => { setEditingRoleId(r.id); setNewRole(r); }} className={`cursor-pointer transition-all ${editingRoleId === r.id ? 'ring-2 ring-indigo-600 shadow-xl' : 'hover:bg-slate-50'}`}>
+                          <CardContent className="p-6 flex items-center justify-between">
+                              <div><h4 className="font-black text-slate-900 uppercase text-xs">{r.name}</h4><p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{r.permissions.length} PERMISSIONS</p></div>
+                              {!r.is_system && <button onClick={(e) => { e.stopPropagation(); setItemToDelete({type:'role', id:r.id, name:r.name}); }} className="p-2 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4"/></button>}
                           </CardContent>
                       </Card>
-                  </div>
+                  ))}
+                  <Button onClick={() => { setEditingRoleId(null); setNewRole({name:'', permissions:[]}); }} variant="outline" className="w-full h-14 rounded-2xl font-black uppercase tracking-widest border-dashed border-2 border-slate-300"><Plus className="w-4 h-4 mr-2"/> NEW SECURITY TIER</Button>
               </div>
-          </div>
-      )}
 
-      {/* CURRENCY TAB */}
-      {activeTab === 'currency' && canViewSettings && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
-                  <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
-                      <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3">
-                          <Coins className="w-5 h-5 text-indigo-600" /> Monetary Standards
-                      </CardTitle>
+              <Card className="lg:col-span-2 rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden h-fit">
+                  <CardHeader className="bg-slate-900 text-white p-8 flex flex-row items-center justify-between">
+                      <div><CardTitle className="text-xl font-black tracking-tight">{editingRoleId ? 'Modify Policy' : 'New Security Policy'}</CardTitle><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Granular Permission Matrix</p></div>
+                      <Shield className="w-8 h-8 text-slate-700" />
                   </CardHeader>
-                  <CardContent className="p-8">
-                      <div className="space-y-4">
-                          {currencies.map(c => (
-                              <div key={c.id} className="flex items-center justify-between p-5 bg-white rounded-3xl border border-slate-100 group shadow-sm transition-all hover:border-indigo-200">
-                                  <div className="flex items-center gap-4">
-                                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm ${c.is_default ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'} shadow-md`}>
-                                          {c.symbol}
-                                      </div>
-                                      <div>
-                                          <div className="flex items-center gap-2">
-                                              <h4 className="font-black text-slate-900 uppercase tracking-tight text-sm">{c.code}</h4>
-                                              {c.is_default && <span className="text-[8px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase">Standard</span>}
-                                          </div>
-                                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Rate: {c.rate} Units/USD</span>
-                                      </div>
+                  <CardContent className="p-8 space-y-8">
+                      <Input label="Role Designation" value={newRole.name} onChange={e => setNewRole({...newRole, name: e.target.value})} className="h-12 rounded-xl font-black" />
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          {PERMISSION_REGISTRY.map(module => (
+                              <div key={module.id} className="space-y-3">
+                                  <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-4">
+                                      <module.icon className="w-4 h-4 text-indigo-600" />
+                                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-900">{module.label}</span>
                                   </div>
-                                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <button onClick={() => { setEditingCurrencyId(c.id); setNewCurrency(c); }} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
-                                      <button onClick={() => setItemToDelete({ type: 'currency', id: c.id, name: c.code })} className="p-2 text-slate-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                  <div className="grid grid-cols-1 gap-2">
+                                      {module.actions.map(action => {
+                                          const permId = `${module.id}:${action.id}` as Permission;
+                                          const isActive = newRole.permissions.includes(permId);
+                                          return (
+                                              <button key={permId} onClick={() => handleTogglePermission(permId)} className={`flex items-center justify-between px-4 py-3 rounded-xl border text-[10px] font-black uppercase transition-all ${isActive ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}>
+                                                  <div className="flex items-center gap-2"><action.icon className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-600' : 'text-slate-300'}`} /> {action.label}</div>
+                                                  {isActive && <Check className="w-3 h-3" />}
+                                              </button>
+                                          );
+                                      })}
                                   </div>
                               </div>
                           ))}
                       </div>
+                      <Button onClick={saveRole} isLoading={isSaving} className="w-full h-16 rounded-3xl font-black uppercase tracking-widest text-sm shadow-2xl shadow-indigo-200">Authorize Policy Changes</Button>
                   </CardContent>
               </Card>
+          </div>
+      )}
 
-              <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
-                  <CardHeader className="bg-indigo-600 text-white p-8">
-                      <CardTitle className="text-xl font-black tracking-tight">{editingCurrencyId ? 'Update Standard' : 'Define Monetary Standard'}</CardTitle>
-                  </CardHeader>
+      {/* --- MONETARY TAB --- */}
+      {activeTab === 'currency' && canViewSettings && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <Card className="rounded-[2rem] border-slate-200/60 shadow-xl h-fit">
+                  <CardHeader className="p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3"><Coins className="w-5 h-5 text-indigo-600"/> Currency Standards</CardTitle></CardHeader>
+                  <CardContent className="p-8 space-y-4">
+                      {currencies.map(c => (
+                          <div key={c.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 group shadow-sm">
+                              <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-black text-sm">{c.symbol}</div>
+                                  <div><h4 className="font-black text-slate-900 uppercase text-xs">{c.code}</h4><p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Rate: {c.rate}</p></div>
+                              </div>
+                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => { setEditingCurrencyId(c.id); setNewCurrency(c); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4" /></button>
+                                  {!c.is_default && <button onClick={() => setItemToDelete({type:'currency', id:c.id, name:c.code})} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>}
+                              </div>
+                          </div>
+                      ))}
+                  </CardContent>
+              </Card>
+              <Card className="rounded-[2rem] border-slate-200/60 shadow-xl h-fit">
+                  <CardHeader className="bg-indigo-600 text-white p-8"><CardTitle className="text-xl font-black">{editingCurrencyId ? 'Update Rate' : 'New Currency'}</CardTitle></CardHeader>
                   <CardContent className="p-8 space-y-6">
-                      <div className="grid grid-cols-2 gap-6">
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ISO Code</label>
-                            <Input value={newCurrency.code} onChange={e => setNewCurrency({...newCurrency, code: e.target.value.toUpperCase()})} className="h-12 rounded-xl font-bold" placeholder="USD" />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Glyph (Symbol)</label>
-                            <Input value={newCurrency.symbol} onChange={e => setNewCurrency({...newCurrency, symbol: e.target.value})} className="h-12 rounded-xl font-black" placeholder="$" />
-                          </div>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Base Exchange Rate</label>
-                        <Input type="number" step="0.000001" value={newCurrency.rate} onChange={e => setNewCurrency({...newCurrency, rate: parseFloat(e.target.value) || 1})} className="h-12 rounded-xl font-bold" />
-                      </div>
-                      <div className="flex items-center space-x-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer group" onClick={() => setNewCurrency({...newCurrency, is_default: !newCurrency.is_default})}>
-                          <div className={`w-6 h-6 rounded-lg border-2 transition-all flex items-center justify-center ${newCurrency.is_default ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}>
-                              {newCurrency.is_default && <Check className="w-4 h-4 text-white" />}
-                          </div>
-                          <span className="text-xs font-black text-slate-600 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Set as Default Financial Standard</span>
-                      </div>
-                      <div className="flex gap-3 pt-4">
-                          {editingCurrencyId && (
-                              <Button variant="secondary" onClick={() => { setEditingCurrencyId(null); setNewCurrency({code:'', symbol:'', rate:1, is_default:false}); }} className="h-14 rounded-2xl font-bold flex-1">Cancel</Button>
-                          )}
-                          <Button onClick={handleSaveCurrency} isLoading={isSaving} className="h-14 rounded-2xl font-black flex-1 shadow-lg shadow-indigo-100">
-                             {editingCurrencyId ? 'Update Standard' : 'Deploy Standard'}
-                          </Button>
-                      </div>
+                      <div className="grid grid-cols-2 gap-4"><Input label="ISO Code" value={newCurrency.code} onChange={e => setNewCurrency({...newCurrency, code: e.target.value.toUpperCase()})} /><Input label="Symbol" value={newCurrency.symbol} onChange={e => setNewCurrency({...newCurrency, symbol: e.target.value})} /></div>
+                      <Input label="Exchange Rate (Base)" type="number" step="0.0001" value={newCurrency.rate} onChange={e => setNewCurrency({...newCurrency, rate: parseFloat(e.target.value)})} />
+                      <Button onClick={handleSaveCurrency} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest">Save Standard</Button>
                   </CardContent>
               </Card>
           </div>
       )}
 
-      {/* SHORTCUTS TAB */}
+      {/* --- KEYBOARD TAB --- */}
       {activeTab === 'shortcuts' && canViewSettings && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
-                  <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
-                      <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3">
-                          <Keyboard className="w-5 h-5 text-indigo-600" /> Kinetic Accelerators
-                      </CardTitle>
-                      <Command className="w-6 h-6 text-slate-300" />
-                  </CardHeader>
-                  <CardContent className="p-8">
-                      <div className="space-y-3">
-                          {SHORTCUT_DEFINITIONS.map(def => {
-                              const configured = companyForm.keyboard_shortcuts?.[def.id] || def.default;
-                              const isRecording = recordingKey === def.id;
-                              return (
-                                  <div key={def.id} className="flex items-center justify-between p-5 bg-white rounded-3xl border border-slate-100 shadow-sm">
-                                      <span className="text-xs font-black text-slate-600 uppercase tracking-widest">{def.label}</span>
-                                      <button 
-                                        onClick={() => setRecordingKey(isRecording ? null : def.id)}
-                                        onKeyDown={(e) => isRecording && handleKeyRecord(e, def.id)}
-                                        className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] transition-all ${isRecording ? 'bg-indigo-600 text-white animate-pulse shadow-lg ring-4 ring-indigo-500/20' : 'bg-slate-100 text-indigo-600 hover:bg-slate-200'}`}
-                                      >
-                                          {isRecording ? 'Press Key...' : configured}
-                                      </button>
-                                  </div>
-                              );
-                          })}
-                      </div>
-                  </CardContent>
-                  <div className="bg-slate-50 p-6 flex justify-end">
-                    <Button onClick={saveCompany} isLoading={isSaving} className="h-12 px-8 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-indigo-100">
-                        <Save className="w-4 h-4 mr-2" /> Commit Accelerators
-                    </Button>
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden max-w-4xl mx-auto h-fit">
+              <CardHeader className="bg-slate-900 text-white p-8 flex items-center justify-between">
+                  <div><CardTitle className="text-xl font-black tracking-tight">Macro Configuration</CardTitle><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Accelerated Workflow Mappings</p></div>
+                  <Keyboard className="w-8 h-8 text-slate-700" />
+              </CardHeader>
+              <CardContent className="p-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                      {SHORTCUT_DEFINITIONS.map(def => (
+                          <div key={def.id} className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100 group transition-all hover:bg-white hover:shadow-lg">
+                              <div><h4 className="text-[10px] font-black uppercase tracking-widest text-slate-900">{def.label}</h4><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Action Identifier: {def.id}</p></div>
+                              <button onClick={() => setRecordingKey(def.id)} onKeyDown={(e) => recordingKey === def.id && (e.preventDefault(), e.stopPropagation(), setCompanyForm(prev => ({...prev, keyboard_shortcuts: {...prev.keyboard_shortcuts, [def.id]: `${e.altKey ? 'Alt+' : ''}${e.key.toUpperCase()}`}})), setRecordingKey(null))} className={`min-w-[80px] h-10 px-4 rounded-xl font-black text-xs border-2 transition-all flex items-center justify-center gap-2 ${recordingKey === def.id ? 'bg-indigo-600 border-indigo-600 text-white animate-pulse' : 'bg-white border-slate-200 text-indigo-600'}`}>
+                                  {recordingKey === def.id ? 'REC...' : companyForm.keyboard_shortcuts?.[def.id] || def.default}
+                              </button>
+                          </div>
+                      ))}
                   </div>
-              </Card>
-
-              <div className="space-y-6">
-                <div className="bg-indigo-900 p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden text-white">
-                    <div className="absolute top-0 right-0 p-10 opacity-10">
-                        <Zap className="w-40 h-40" />
-                    </div>
-                    <h4 className="text-2xl font-black tracking-tighter mb-4 relative z-10 leading-none">Operational Speed</h4>
-                    <p className="text-indigo-200 text-sm font-medium leading-relaxed mb-8 relative z-10">
-                        Configure custom keyboard triggers to bypass navigation and accelerate record entry. Ideal for high-volume audit environments.
-                    </p>
-                    <div className="space-y-4 relative z-10">
-                        <div className="flex items-center gap-3">
-                            <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></div>
-                            <span className="text-[10px] font-black uppercase tracking-widest">Supports Meta, Alt, Shift combos</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></div>
-                            <span className="text-[10px] font-black uppercase tracking-widest">Instant Global Availability</span>
-                        </div>
-                    </div>
-                </div>
-              </div>
-          </div>
+                  <Button onClick={() => { db.updateSettings(companyForm); showStatus('Macros synchronized.'); }} className="w-full h-16 rounded-3xl font-black uppercase tracking-widest text-sm shadow-2xl shadow-indigo-100 mt-10">Deploy Macro Framework</Button>
+              </CardContent>
+          </Card>
       )}
 
-      {/* MAINTENANCE TAB */}
-      {activeTab === 'maintenance' && canEditSettings && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+      {/* --- GLOBAL DEFAULTS TAB --- */}
+      {activeTab === 'documents' && canViewSettings && (
+          <div className="space-y-8">
               <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
-                  <CardHeader className="bg-slate-900 text-white p-8">
-                    <CardTitle className="text-xl font-black tracking-tight flex items-center gap-3">
-                        <Database className="w-5 h-5 text-indigo-400" /> System Integrity
-                    </CardTitle>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Data Portability & Migration Tools</p>
-                  </CardHeader>
-                  <CardContent className="p-8 space-y-8">
-                      <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-6">
-                          <div className="flex items-center gap-4">
-                              <div className="p-3 bg-white rounded-2xl shadow-sm">
-                                  <FileJson className="w-6 h-6 text-indigo-600" />
-                              </div>
-                              <div>
-                                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">Bulk Export</h4>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">Full member repository backup</p>
-                              </div>
-                          </div>
-                          <Button onClick={handleExportData} isLoading={isSaving} className="h-12 px-6 rounded-xl font-black text-xs uppercase shadow-lg shadow-indigo-100">
-                             Download JSON
-                          </Button>
-                      </div>
-
-                      <div className="p-6 bg-red-50/50 rounded-3xl border border-red-100/50 flex items-start gap-4">
-                          <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                          <div>
-                              <h4 className="text-sm font-black text-red-900 uppercase tracking-tight">Security Warning</h4>
-                              <p className="text-xs font-medium text-red-700/70 leading-relaxed mt-1 italic">
-                                Exports contain sensitive guest information and financial history. Handle backups in accordance with GDPR and corporate privacy protocols.
-                              </p>
-                          </div>
-                      </div>
+                  <CardHeader className="bg-slate-50 p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3"><ScrollText className="w-5 h-5 text-indigo-600"/> Agreement Framework</CardTitle></CardHeader>
+                  <CardContent className="p-8 space-y-4">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Standard Legal Template (HTML/Markdown)</p>
+                      <textarea value={companyForm.contract_template} onChange={e => setCompanyForm({...companyForm, contract_template: e.target.value})} className="w-full h-96 p-6 rounded-3xl bg-slate-50 border border-slate-100 font-mono text-[11px] focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none resize-none" placeholder="Enter base contract structure... Use {{placeholder}} for dynamic injection." />
+                      <Button onClick={() => { db.updateSettings(companyForm); showStatus('Global template synchronized.'); }} className="h-14 px-12 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-100">Commit Global Format</Button>
                   </CardContent>
               </Card>
-
-              <div className="space-y-6">
-                <div className="bg-indigo-900 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden text-white h-fit">
-                    <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
-                    <History className="absolute top-[-10%] right-[-5%] w-48 h-48 opacity-10" />
-                    <h4 className="text-xl font-black tracking-tight mb-4 relative z-10">Audit Readiness</h4>
-                    <p className="text-indigo-200 text-xs font-bold leading-relaxed mb-6 relative z-10">
-                      The maintenance suite is designed for cluster administrators to ensure facility data parity. Frequent backups are recommended before performing major tier adjustments or user re-provisioning.
-                    </p>
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 rounded-xl border border-white/5 text-[10px] font-black uppercase tracking-widest">
-                       <ShieldCheck className="w-3 h-3 text-indigo-400" /> System Tier: {user?.role_id}
-                    </div>
-                 </div>
-              </div>
           </div>
       )}
 
-      {/* DELETE CONFIRMATION MODAL */}
-      <ConfirmationModal 
-          isOpen={!!itemToDelete}
-          onClose={() => setItemToDelete(null)}
-          onConfirm={handleDeleteConfirmed}
-          title={`Revoke ${itemToDelete?.type}`}
-          description={`Are you sure you want to remove '${itemToDelete?.name}'? This action is permanent and may impact associated facility mappings.`}
-          confirmText={`Confirm Removal`}
-          isDestructive={true}
-      />
+      {/* --- MAINTENANCE TAB --- */}
+      {activeTab === 'maintenance' && canEditSettings && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <Card className="rounded-[2.5rem] border-red-200/60 bg-red-50/20 shadow-xl h-fit border overflow-hidden">
+                  <CardHeader className="bg-red-600 text-white p-8 flex items-center gap-3"><Eraser className="w-6 h-6"/><CardTitle className="text-xl font-black">Memory Purge</CardTitle></CardHeader>
+                  <CardContent className="p-8 space-y-6">
+                      <p className="text-slate-600 text-sm font-medium">Resetting audit buffers will permanently remove historical system logs. This action is audited and irreversible.</p>
+                      <Button variant="danger" className="w-full h-14 rounded-2xl font-black uppercase tracking-widest">Execute Buffer Reset</Button>
+                  </CardContent>
+              </Card>
+          </div>
+      )}
+
+      <ConfirmationModal isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} onConfirm={handleDeleteConfirmed} title={`Revoke ${itemToDelete?.type}`} description={`Are you sure you want to remove '${itemToDelete?.name}'? This action is permanent and will be logged.`} confirmText={`Confirm Removal`} isDestructive={true} />
     </div>
   );
 };

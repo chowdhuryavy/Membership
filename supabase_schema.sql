@@ -1,153 +1,88 @@
 -- ==========================================
--- MEMBERSHIP ERP - CORE SCHEMA V10.0
+-- DATABASE INTEGRITY REPAIR: MASSAGE MODULE V14.6
 -- ==========================================
 
--- 1. AGGRESSIVE CLEANUP OF EXISTING POLICIES
+-- 1. ADD PROPERTY_ID TO GUESTS TABLE IF NOT EXISTS
+-- Using TEXT type to ensure compatibility with existing properties.id (which is text based on previous error)
 DO $$ 
-DECLARE
-    pol_record RECORD;
-BEGIN
-    FOR pol_record IN (SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public') LOOP
-        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(pol_record.policyname) || ' ON ' || quote_ident(pol_record.tablename);
-    END LOOP;
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='guests' AND column_name='property_id') THEN
+        ALTER TABLE public.guests ADD COLUMN property_id TEXT;
+    ELSE
+        BEGIN
+            ALTER TABLE public.guests ALTER COLUMN property_id TYPE TEXT;
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END;
+    END IF;
 END $$;
 
--- 2. TABLE INITIALIZATION
-CREATE TABLE IF NOT EXISTS public.roles (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    permissions TEXT[] NOT NULL DEFAULT '{}',
-    is_system BOOLEAN DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.properties (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    logo_url TEXT,
-    address TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.outlets (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    property_id TEXT REFERENCES public.properties(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.profiles (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    auth_id UUID UNIQUE, 
-    email TEXT UNIQUE NOT NULL,
-    name TEXT,
-    role_id TEXT REFERENCES public.roles(id),
-    allowed_outlets TEXT[] DEFAULT '{}',
-    temp_password TEXT,
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.currencies (
-    id TEXT PRIMARY KEY,
-    code TEXT NOT NULL,
-    symbol TEXT NOT NULL,
-    rate NUMERIC(15,6) DEFAULT 1,
-    is_default BOOLEAN DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.membership_categories (
-    id TEXT PRIMARY KEY,
-    outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    duration_months INTEGER NOT NULL,
-    base_rate NUMERIC(15,2) NOT NULL,
-    max_freeze_days INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.members (
-    id TEXT PRIMARY KEY,
-    outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE,
-    membership_number TEXT NOT NULL,
-    guest_name TEXT NOT NULL,
-    category_id TEXT REFERENCES public.membership_categories(id),
-    start_date DATE NOT NULL,
-    original_end_date DATE NOT NULL,
-    current_end_date DATE NOT NULL,
-    actual_rate NUMERIC(15,2) NOT NULL,
-    discount NUMERIC(15,2) DEFAULT 0,
-    net_amount NUMERIC(15,2) NOT NULL,
-    daily_rate NUMERIC(15,4) NOT NULL,
-    check_no TEXT,
-    status TEXT DEFAULT 'Active',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.freezes (
-    id TEXT PRIMARY KEY,
-    member_id TEXT REFERENCES public.members(id) ON DELETE CASCADE,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    total_days INTEGER NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.system_logs (
-    id TEXT PRIMARY KEY,
-    timestamp TIMESTAMPTZ DEFAULT NOW(),
-    user_id TEXT,
-    user_name TEXT,
-    action TEXT,
-    details TEXT,
-    outlet_id TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.company_settings (
-    id TEXT PRIMARY KEY DEFAULT 'global',
-    name TEXT NOT NULL DEFAULT 'The Torch Hospitality',
-    logo_url TEXT,
-    address TEXT,
-    currency_id TEXT,
-    signatory_prepared_role TEXT DEFAULT 'Cluster Income Auditor',
-    signatory_reviewed_role TEXT DEFAULT 'Cluster Assist. Financial Controller',
-    signatory_approved_role TEXT DEFAULT 'Cluster Ex- Assist. Director of Finance',
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Add columns for outlet-specific signatories
-ALTER TABLE public.outlets ADD COLUMN IF NOT EXISTS signatory_prepared_role TEXT;
-ALTER TABLE public.outlets ADD COLUMN IF NOT EXISTS signatory_reviewed_role TEXT;
-ALTER TABLE public.outlets ADD COLUMN IF NOT EXISTS signatory_approved_role TEXT;
-
--- Fix: Add columns if table already existed without them
-ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS signatory_prepared_role TEXT DEFAULT 'Cluster Income Auditor';
-ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS signatory_reviewed_role TEXT DEFAULT 'Cluster Assist. Financial Controller';
-ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS signatory_approved_role TEXT DEFAULT 'Cluster Ex- Assist. Director of Finance';
-ALTER TABLE public.membership_categories ADD COLUMN IF NOT EXISTS max_freeze_days INTEGER NOT NULL DEFAULT 0;
-
--- 3. ENABLE RLS AND CREATE MASTER POLICIES
+-- 2. DROP ALL POTENTIAL CONSTRAINTS (LEGACY AND NEW)
 DO $$ 
-DECLARE
-    t text;
-BEGIN
-    FOR t IN (SELECT table_name FROM information_schema.tables WHERE table_schema = 'public') LOOP
-        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
-        EXECUTE format('CREATE POLICY "Master Access %s" ON public.%I FOR ALL TO public USING (true) WITH CHECK (true)', t, t);
-    END LOOP;
+BEGIN 
+    ALTER TABLE IF EXISTS public.guests DROP CONSTRAINT IF EXISTS guests_property_id_fkey;
+    ALTER TABLE IF EXISTS public.outlets DROP CONSTRAINT IF EXISTS outlets_property_id_fkey;
+    ALTER TABLE IF EXISTS public.therapists DROP CONSTRAINT IF EXISTS therapists_property_id_fkey;
+    ALTER TABLE IF EXISTS public.massage_types DROP CONSTRAINT IF EXISTS massage_types_property_id_fkey;
+    ALTER TABLE IF EXISTS public.massage_bookings DROP CONSTRAINT IF EXISTS massage_bookings_property_id_fkey;
 END $$;
 
--- 4. PERMISSIONS GRANTS
+-- 3. RECONCILE PARENT RECORDS (THE DEEP HEALER)
+INSERT INTO public.properties (id, name, address, logo_url)
+SELECT DISTINCT pid, 'Recovered Property ' || SUBSTR(pid, 1, 8), 'Auto-generated during integrity repair', ''
+FROM (
+    SELECT property_id::text as pid FROM public.outlets WHERE property_id IS NOT NULL
+    UNION
+    SELECT property_id::text as pid FROM public.therapists WHERE property_id IS NOT NULL
+    UNION
+    SELECT property_id::text as pid FROM public.massage_types WHERE property_id IS NOT NULL
+    UNION
+    SELECT property_id::text as pid FROM public.massage_bookings WHERE property_id IS NOT NULL
+    UNION
+    SELECT property_id::text as pid FROM public.guests WHERE property_id IS NOT NULL
+) AS all_referenced_properties
+WHERE NOT EXISTS (
+    SELECT 1 FROM public.properties p 
+    WHERE p.id::text = all_referenced_properties.pid
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- 4. RE-ESTABLISH ALL CONSTRAINTS SAFELY
+ALTER TABLE public.guests ADD CONSTRAINT guests_property_id_fkey 
+FOREIGN KEY (property_id) REFERENCES public.properties(id) ON DELETE CASCADE;
+
+ALTER TABLE public.outlets ADD CONSTRAINT outlets_property_id_fkey 
+FOREIGN KEY (property_id) REFERENCES public.properties(id) ON DELETE CASCADE;
+
+ALTER TABLE public.therapists ADD CONSTRAINT therapists_property_id_fkey 
+FOREIGN KEY (property_id) REFERENCES public.properties(id) ON DELETE CASCADE;
+
+ALTER TABLE public.massage_types ADD CONSTRAINT massage_types_property_id_fkey 
+FOREIGN KEY (property_id) REFERENCES public.properties(id) ON DELETE CASCADE;
+
+ALTER TABLE public.massage_bookings ADD CONSTRAINT massage_bookings_property_id_fkey 
+FOREIGN KEY (property_id) REFERENCES public.properties(id) ON DELETE CASCADE;
+
+-- 5. REFINE GUEST UNIQUENESS FOR MULTI-PROPERTY ARCHITECTURE
+ALTER TABLE public.guests DROP CONSTRAINT IF EXISTS guests_phone_key;
+ALTER TABLE public.guests DROP CONSTRAINT IF EXISTS guests_phone_property_id_unique; -- Drop new one too just in case
+ALTER TABLE public.guests ADD CONSTRAINT guests_phone_property_id_unique UNIQUE (phone, property_id);
+
+-- 6. ADD DISCOUNT COLUMN TO MASSAGE_BOOKINGS
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='massage_bookings' AND column_name='discount') THEN
+        ALTER TABLE public.massage_bookings ADD COLUMN discount NUMERIC DEFAULT 0;
+    END IF;
+END $$;
+
+-- 7. ENSURE RLS DOES NOT BLOCK SYSTEM OPERATIONS
+ALTER TABLE public.properties DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.outlets DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.therapists DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.massage_types DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.massage_bookings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.guests DISABLE ROW LEVEL SECURITY;
+
+-- 8. GRANT PERMISSIONS
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, postgres;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, postgres;
-GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated, postgres;
-
--- 5. SEED CORE DATA
-INSERT INTO public.roles (id, name, permissions, is_system)
-VALUES 
-('admin', 'Administrator', '{"members:view", "members:create", "members:edit", "members:delete", "categories:view", "categories:create", "categories:edit", "categories:delete", "users:view", "users:create", "users:edit", "users:delete", "settings:view", "settings:edit", "reports:view", "reports:export", "logs:view", "properties:view", "properties:edit", "outlets:view", "outlets:edit"}', true),
-('viewer', 'Viewer / Staff', '{"members:view", "categories:view", "reports:view"}', true)
-ON CONFLICT (id) DO UPDATE SET permissions = EXCLUDED.permissions;
-
-INSERT INTO public.company_settings (id, name) VALUES ('global', 'The Torch Hospitality') ON CONFLICT (id) DO NOTHING;

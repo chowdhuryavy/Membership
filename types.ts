@@ -1,14 +1,15 @@
 
-
 export type Permission = 
-  | 'members:view' | 'members:create' | 'members:edit' | 'members:delete'
+  | 'dashboard:view' | 'dashboard:view_financials'
+  | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:renew' | 'members:print_contract'
   | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete'
   | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email'
   | 'settings:view' | 'settings:edit'
   | 'reports:view' | 'reports:export'
   | 'logs:view'
   | 'properties:view' | 'properties:edit'
-  | 'outlets:view' | 'outlets:edit';
+  | 'outlets:view' | 'outlets:edit'
+  | 'bookings:view' | 'bookings:create' | 'bookings:edit' | 'bookings:delete' | 'bookings:manage_resources'; 
 
 export interface Role {
   id: string;
@@ -31,9 +32,10 @@ export interface Outlet {
   signatory_prepared_role?: string;
   signatory_reviewed_role?: string;
   signatory_approved_role?: string;
+  contract_template?: string; 
+  conditions?: string; 
 }
 
-// Fixed: Added missing MembershipCategory interface to resolve multi-file import errors
 export interface MembershipCategory {
   id: string;
   outlet_id: string;
@@ -45,12 +47,12 @@ export interface MembershipCategory {
 
 export interface UserProfile {
   id: string;
-  auth_id?: string | null; // Links to Supabase Auth ID
+  auth_id?: string | null;
   email: string;
   role_id: string;
   name: string;
   allowed_outlets: string[];
-  temp_password?: string | null; // Store for shadow sync
+  temp_password?: string | null;
 }
 
 export interface SystemLog {
@@ -82,6 +84,7 @@ export interface CompanySettings {
   signatory_reviewed_role?: string;
   signatory_approved_role?: string;
   keyboard_shortcuts?: Record<string, string>;
+  contract_template?: string; 
 }
 
 export enum MemberStatus {
@@ -106,8 +109,19 @@ export interface Member {
   daily_rate: number;
   check_no?: string;
   status: MemberStatus;
-  // Added created_at to resolve TS error in Dashboard.tsx trend calculation
   created_at?: string;
+  nationality?: string;
+  dob?: string;
+  email?: string;
+  phone?: string;
+  is_married?: boolean;
+  package_type?: 'Single' | 'Couple' | 'Family';
+  access_type?: 'Pool' | 'Spa' | 'Both';
+  membership_type?: 'New' | 'Renew';
+  spouse_name?: string;
+  spouse_dob?: string;
+  kids?: { name: string; dob: string }[];
+  remarks?: string;
 }
 
 export interface Freeze {
@@ -116,4 +130,45 @@ export interface Freeze {
   start_date: string;
   end_date: string;
   total_days: number;
+}
+
+export interface Guest {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  property_id: string;
+  created_at: string;
+}
+
+export interface Therapist {
+  id: string;
+  name: string;
+  specialty: string;
+  country: string;
+  property_id: string;
+}
+
+export interface MassageType {
+  id: string;
+  property_id: string;
+  name: string;
+  price: number;
+  duration_minutes: number;
+}
+
+export interface MassageBooking {
+  id: string;
+  property_id: string;
+  guest_id: string;
+  therapist_id: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  massage_type_id: string;
+  additional_service_ids?: string[];
+  price: number;
+  status: 'confirmed' | 'cancelled' | 'completed' | 'no-show';
+  created_at: string;
+  discount?: number;
 }

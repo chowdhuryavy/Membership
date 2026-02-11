@@ -121,34 +121,49 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         'global_search': 'Alt+K',
         'action_create': 'Alt+N',
         'action_save': 'Alt+Enter',
-        'action_cancel': 'Escape'
+        'action_cancel': 'Escape',
+        'action_view_contract': 'Alt+P'
     };
     
-    // Retrieve configuration either from settings or the system defaults
     const config = settings?.keyboard_shortcuts?.[actionId] || defaults[actionId];
     if (!config) return false;
 
-    const parts = config.toLowerCase().split('+');
-    const key = parts[parts.length - 1];
+    // Standardize input config
+    const parts = config.toLowerCase().split('+').map(p => p.trim());
+    const targetKey = parts[parts.length - 1];
     
-    // Check modifiers defined in the shortcut string
-    const meta = parts.includes('meta') || parts.includes('cmd') || parts.includes('command');
-    const ctrl = parts.includes('ctrl') || parts.includes('control');
-    const alt = parts.includes('alt') || parts.includes('option');
-    const shift = parts.includes('shift');
+    const needsMeta = parts.includes('meta') || parts.includes('cmd') || parts.includes('command');
+    const needsCtrl = parts.includes('ctrl') || parts.includes('control');
+    const needsAlt = parts.includes('alt') || parts.includes('option');
+    const needsShift = parts.includes('shift');
 
-    // Strict Modifier Matching: Ensure only requested modifiers are pressed
+    // Modifiers must match exactly
+    if (needsMeta !== e.metaKey) return false;
+    if (needsCtrl !== e.ctrlKey) return false;
+    if (needsAlt !== e.altKey) return false;
+    if (needsShift !== e.shiftKey) return false;
+
+    // Key matching logic
     const eventKey = e.key.toLowerCase();
-    
-    const matchMeta = meta === e.metaKey;
-    const matchCtrl = ctrl === e.ctrlKey;
-    const matchAlt = alt === e.altKey;
-    const matchShift = shift === e.shiftKey;
-    
-    // For single keys like 'Escape', 'Enter' or letters
-    const matchKey = key === eventKey;
+    const eventCode = e.code.toLowerCase();
 
-    return matchMeta && matchCtrl && matchAlt && matchShift && matchKey;
+    // 1. Direct key match (e.g., 'escape', 'enter')
+    if (targetKey === eventKey) return true;
+
+    // 2. Physical key match (Crucial for Alt+Key combinations where Alt changes the character)
+    if (targetKey.length === 1) {
+        const isLetter = /^[a-z]$/.test(targetKey);
+        const isDigit = /^[0-9]$/.test(targetKey);
+        
+        if (isLetter && eventCode === `key${targetKey}`) return true;
+        if (isDigit && eventCode === `digit${targetKey}`) return true;
+    }
+
+    // 3. Common aliases
+    if (targetKey === 'enter' && eventCode === 'numpadenter') return true;
+    if (targetKey === 'alt' && (eventCode === 'altleft' || eventCode === 'altright')) return true;
+
+    return false;
   }, [settings]);
 
   return (

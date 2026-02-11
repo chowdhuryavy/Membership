@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -24,7 +25,7 @@ export const CardHeader = React.forwardRef<HTMLDivElement, CardProps>(({ childre
 CardHeader.displayName = "CardHeader";
 
 export const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(({ children, className, ...props }, ref) => (
-  <h3 ref={ref} className={cn("text-lg font-semibold text-slate-900", className)} {...props}>{children}</h3>
+  <h3 ref={ref} className={cn("text-lg font-semibold", className)} {...props}>{children}</h3>
 ));
 CardTitle.displayName = "CardTitle";
 

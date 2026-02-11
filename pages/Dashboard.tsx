@@ -10,12 +10,17 @@ import {
   Database, 
   TrendingUp,
   Calendar,
-  Snowflake
+  Snowflake,
+  Zap,
+  CheckCircle2,
+  CalendarClock,
+  Sparkles,
+  Lock
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
-import { Member } from '../types';
+import { Member, MassageBooking } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, endOfMonth, differenceInCalendarDays, isSameMonth, startOfMonth, subMonths } from 'date-fns';
+import { format, endOfMonth, differenceInCalendarDays, isSameMonth, startOfMonth, subMonths, isSameDay, isAfter } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -32,7 +37,7 @@ interface PerformanceTrendData {
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { currentOutlet, formatMoney, hasPermission } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
   
   const [dashboardMonth, setDashboardMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -45,10 +50,13 @@ const Dashboard = () => {
     revenueThisMonth: 0,
     futureRevenue: 0,
     projectedEndMonth: 0,
+    bookingCount: 0,
+    bookingYield: 0
   });
   
   const [monthlyExpiringMembers, setMonthlyExpiringMembers] = useState<Member[]>([]);
   const [performanceTrendData, setPerformanceTrendData] = useState<PerformanceTrendData[]>([]);
+  const [upcomingBookings, setUpcomingBookings] = useState<MassageBooking[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -59,17 +67,19 @@ const Dashboard = () => {
     if(currentOutlet) {
       loadStats();
     }
-  }, [currentOutlet, dashboardMonth]);
+  }, [currentOutlet, currentProperty, dashboardMonth]);
 
   const loadStats = async () => {
-    if (!currentOutlet) return;
+    if (!currentOutlet || !currentProperty) return;
     
-    const [members, freezes] = await Promise.all([
+    const [members, freezes, bookings] = await Promise.all([
       db.getMembers(currentOutlet.id),
       db.getFreezes(),
+      db.getMassageBookings(currentProperty.id)
     ]);
     
     const now = new Date();
+    const todayStr = format(now, 'yyyy-MM-dd');
     const viewDate = parseISO(dashboardMonth + '-01');
     const isCurrentMonth = isSameMonth(viewDate, now);
     
@@ -130,26 +140,21 @@ const Dashboard = () => {
     setPerformanceTrendData(performanceTrend);
     
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize for date-only comparison
+    today.setHours(0, 0, 0, 0);
 
     const monthlyExpiring = members.filter(m => {
         const mEnd = parseISO(m.current_end_date);
-        const mStart = parseISO(m.start_date);
-
-        // Membership must expire within the selected month
         if (!isSameMonth(mEnd, viewDate)) return false;
-        
-        // Member must not have already expired
         if (mEnd < today) return false;
-
-        // Membership term must overlap with the selected month to be relevant
-        const monthStart = startOfMonth(viewDate);
-        const monthEnd = endOfMonth(viewDate);
-        if (mStart > monthEnd || mEnd < monthStart) return false;
-        
         return true;
     }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 10);
     
+    // Booking Logic
+    const todayBookings = bookings.filter(b => b.date === todayStr && b.status !== 'cancelled');
+    const upcoming = bookings.filter(b => (b.date === todayStr || isAfter(parseISO(b.date), today)) && b.status === 'confirmed')
+                             .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`))
+                             .slice(0, 5);
+
     const endOfMonthDate = endOfMonth(viewDate);
     const daysRemaining = Math.max(0, differenceInCalendarDays(endOfMonthDate, auditPoint));
     const projectedMonthEnd = mtdRevenue + (totalDailyAccrual * daysRemaining);
@@ -157,9 +162,12 @@ const Dashboard = () => {
     setStats({
       activeMembers: activeAtPointCount, frozenMembers: frozenAtPointCount,
       newMembersThisMonth: monthEnrollments, dailyAccrual: totalDailyAccrual, revenueThisMonth: mtdRevenue,
-      futureRevenue: deferredRevenueAtPoint, projectedEndMonth: projectedMonthEnd
+      futureRevenue: deferredRevenueAtPoint, projectedEndMonth: projectedMonthEnd,
+      bookingCount: todayBookings.length,
+      bookingYield: todayBookings.filter(b => b.status === 'completed').length
     });
     setMonthlyExpiringMembers(monthlyExpiring);
+    setUpcomingBookings(upcoming);
   };
 
   const displayName = useMemo(() => {
@@ -167,12 +175,30 @@ const Dashboard = () => {
       return user.name.trim().split(/\s+/)[0];
   }, [user?.name]);
   
+  const canViewDashboard = user && hasPermission(user.role_id, 'dashboard:view');
+  const canViewFinancials = user && hasPermission(user.role_id, 'dashboard:view_financials');
+
   const kpiData = [
-    { title: "Active Members", value: stats.activeMembers, icon: Users, color: "text-emerald-600" },
-    { title: "Frozen Members", value: stats.frozenMembers, icon: Snowflake, color: "text-indigo-600" },
-    { title: "MTD Earned Rev.", value: formatMoney(stats.revenueThisMonth), icon: BarChart4, color: "text-blue-600" },
-    { title: "Daily Accrual Rate", value: formatMoney(stats.dailyAccrual), icon: Activity, color: "text-amber-600" },
+    { title: "Active Portfolio", value: stats.activeMembers, icon: Users, color: "text-emerald-600" },
+    { title: "Service Occupancy", value: `${stats.bookingCount} Services`, icon: Zap, color: "text-indigo-600" },
+    // Only show financial KPIs if permitted
+    ...(canViewFinancials ? [
+        { title: "MTD Recognition", value: formatMoney(stats.revenueThisMonth), icon: BarChart4, color: "text-blue-600" },
+        { title: "Daily Accrual", value: formatMoney(stats.dailyAccrual), icon: Activity, color: "text-amber-600" }
+    ] : [])
   ];
+
+  if (!canViewDashboard) {
+      return (
+          <div className="flex items-center justify-center h-screen">
+              <Card className="max-w-md text-center p-8 border-red-100 bg-red-50/30 rounded-[2rem]">
+                  <ShieldCheck className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight uppercase">Operational Block</h3>
+                  <p className="text-slate-500 mt-2 text-sm">Your security clearance does not allow access to high-level dashboard intelligence.</p>
+              </Card>
+          </div>
+      );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -183,7 +209,7 @@ const Dashboard = () => {
             Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600">{displayName}</span>
           </h1>
           <p className="text-slate-500 text-sm font-medium mt-2">
-            Audit context for <span className="font-bold text-slate-700">{format(parseISO(dashboardMonth+'-01'), 'MMMM yyyy')}</span>.
+            Operational context for <span className="font-bold text-slate-700">{format(parseISO(dashboardMonth+'-01'), 'MMMM yyyy')}</span>.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-end relative z-10 gap-3">
@@ -217,6 +243,14 @@ const Dashboard = () => {
                 </CardContent>
             </Card>
         ))}
+        {!canViewFinancials && (
+            <Card className="border-dashed border-slate-300 bg-slate-50/50 shadow-none">
+                <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center opacity-60">
+                    <Lock className="w-6 h-6 text-slate-400 mb-2" />
+                    <p className="text-[10px] font-black uppercase text-slate-400">Financial Data Restricted</p>
+                </CardContent>
+            </Card>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -226,24 +260,29 @@ const Dashboard = () => {
                     <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-3">
                         <TrendingUp className="w-5 h-5 text-indigo-600" /> 6-Month Performance Review
                     </h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Revenue Recognition vs. New Member Intake</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Recognition Curve vs. New Member Intake</p>
                 </CardHeader>
                 <CardContent className="p-8 h-[400px]">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={performanceTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                             <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
-                            <YAxis yAxisId="left" tickFormatter={(val) => formatMoney(val).split(' ')[1]} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
+                            <YAxis yAxisId="left" tickFormatter={(val) => canViewFinancials ? formatMoney(val).split(' ')[1] : '***'} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
                             <YAxis yAxisId="right" orientation="right" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
                             <Tooltip
                                 contentStyle={{ background: '#1e293b', border: 'none', borderRadius: '1rem', color: 'white', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                                 labelStyle={{ fontWeight: 'bold', textTransform: 'uppercase' }}
                                 itemStyle={{ fontWeight: 'bold' }}
+                                formatter={(value: any, name: any) => {
+                                    if (name === 'Revenue' && !canViewFinancials) return ['***', name];
+                                    if (name === 'Revenue') return [formatMoney(value), name];
+                                    return [value, name];
+                                }}
                                 cursor={{ fill: 'rgba(79, 70, 229, 0.05)' }}
                             />
                             <Legend wrapperStyle={{fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", paddingTop: "20px"}} iconType="circle" />
                             <Bar yAxisId="right" dataKey="intake" name="New Members" fill="#a5b4fc" radius={[6, 6, 0, 0]} barSize={20} />
-                            <Bar yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" fill="#4f46e5" radius={[6, 6, 0, 0]} barSize={20} />
+                            {canViewFinancials && <Bar yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" fill="#4f46e5" radius={[6, 6, 0, 0]} barSize={20} />}
                         </BarChart>
                     </ResponsiveContainer>
                 </CardContent>
@@ -254,45 +293,51 @@ const Dashboard = () => {
             <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg">
                 <CardHeader className="p-8 border-b border-slate-100">
                     <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-3">
-                        <Database className="w-5 h-5 text-indigo-600" /> Financial Snapshot
+                        <CalendarClock className="w-5 h-5 text-indigo-600" /> Upcoming Reservations
                     </h3>
                 </CardHeader>
-                <CardContent className="p-8 space-y-6">
-                    <div>
-                        <div className="flex justify-between items-baseline mb-2">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">MTD Earned</span>
-                            <span className="text-base font-black text-indigo-600">{formatMoney(stats.revenueThisMonth)}</span>
+                <CardContent className="p-4 space-y-1">
+                    {upcomingBookings.length === 0 ? (
+                        <div className="py-10 text-center">
+                            <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No pending sessions.</p>
                         </div>
-                        <div className="w-full bg-slate-100 rounded-full h-2.5">
-                            <div className="bg-indigo-500 h-2.5 rounded-full" style={{ width: `${stats.projectedEndMonth > 0 ? (stats.revenueThisMonth / stats.projectedEndMonth) * 100 : 0}%` }}></div>
-                        </div>
-                    </div>
-                     <div>
-                        <div className="flex justify-between items-baseline">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Projected Month-End</span>
-                            <span className="text-base font-black text-emerald-600">{formatMoney(stats.projectedEndMonth)}</span>
-                        </div>
-                    </div>
-                     <div className="pt-4 border-t border-slate-100">
-                        <div className="flex justify-between items-baseline">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deferred Value</span>
-                            <span className="text-base font-black text-amber-600">{formatMoney(stats.futureRevenue)}</span>
-                        </div>
-                    </div>
+                    ) : (
+                        upcomingBookings.map(b => (
+                            <div key={b.id} className="flex items-center justify-between p-4 hover:bg-slate-50 rounded-2xl transition-colors border border-transparent hover:border-slate-100 group">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-xs">
+                                        <Clock className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{b.start_time}</p>
+                                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{format(parseISO(b.date), 'dd MMM')}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-slate-600 uppercase">Confirmed</p>
+                                    <p className="text-[8px] font-bold text-indigo-600 uppercase tracking-widest">Staff Assigned</p>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                    <button onClick={() => navigate('/bookings')} className="w-full mt-4 py-3 text-[9px] font-black text-indigo-600 uppercase tracking-widest border-t border-slate-100 hover:bg-indigo-50/50 rounded-b-2xl transition-colors">
+                        View Service Grid
+                    </button>
                 </CardContent>
             </Card>
             
             <Card className="rounded-[2.5rem] border-slate-200/60 shadow-sm bg-white overflow-hidden group">
                 <CardHeader className="p-6 border-b border-slate-100 flex items-center justify-between">
                     <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-amber-600"/> Current Month Expiries
+                        <Calendar className="w-4 h-4 text-amber-600"/> Expiring Members
                     </h3>
                 </CardHeader>
                 <CardContent className="p-2">
                     {monthlyExpiringMembers.length === 0 ? (
                         <div className="py-10 text-center">
                             <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                            <p className="text-xs font-bold text-slate-500">No upcoming expiries this month.</p>
+                            <p className="text-xs font-bold text-slate-500">No upcoming expiries.</p>
                         </div>
                     ) : (
                         <div className="space-y-1">
@@ -314,7 +359,7 @@ const Dashboard = () => {
                                         </div>
                                     </div>
                                     <span className={`text-[9px] font-black px-2 py-1 rounded-md border whitespace-nowrap bg-amber-50 text-amber-600 border-amber-100`}>
-                                        {`${daysLeft} Days Left`}
+                                        {`${daysLeft}d`}
                                     </span>
                                 </button>
                                 )}
