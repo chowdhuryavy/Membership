@@ -264,7 +264,7 @@ const MemberForm = ({
                  <div className={`w-2.5 h-2.5 rounded-full ${step === 2 ? 'bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.5)]' : 'bg-indigo-900'}`}></div>
               </div>
               <button onClick={onCancel} className="p-2 rounded-full hover:bg-white/10 transition-colors text-white/40 hover:text-white"><X className="w-5 h-5" /></button>
-        </div>
+           </div>
         </div>
       </CardHeader>
       
@@ -726,7 +726,7 @@ const Members = () => {
   const [members, setMembers] = useState<Member[]>([]);
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'All' | MemberStatus>('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | MemberStatus>(MemberStatus.ACTIVE);
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [groupingKey, setGroupingKey] = useState<'category' | 'none'>('category');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
