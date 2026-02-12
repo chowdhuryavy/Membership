@@ -23,7 +23,9 @@ import {
   PlusCircle,
   MinusCircle,
   Search,
-  UserPlus
+  UserPlus,
+  Percent,
+  Coins
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { 
@@ -70,7 +72,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
     date: new Date().toISOString().split('T')[0],
     start_time: '10:00',
     end_time: '11:00',
-    discount: 0
+    discount: 0,
+    discount_mode: 'amount' as 'amount' | 'percent'
   });
 
   const [showSuggestions, setShowSuggestions] = useState<'name' | 'phone' | null>(null);
@@ -87,7 +90,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
         date: initialBooking.date,
         start_time: initialBooking.start_time,
         end_time: initialBooking.end_time,
-        discount: initialBooking.discount || 0
+        discount: initialBooking.discount || 0,
+        discount_mode: 'amount' // Defaults to amount for editing existing
       });
     }
   }, [initialBooking, guests]);
@@ -151,7 +155,15 @@ const BookingForm: React.FC<BookingFormProps> = ({
   }, [bookingData.massage_type_id, bookingData.additional_service_ids, massageTypes]);
 
   const grossPrice = useMemo(() => selectedServices.reduce((acc, s) => acc + Number(s.price), 0), [selectedServices]);
-  const netPrice = useMemo(() => Math.max(0, grossPrice - (bookingData.discount || 0)), [grossPrice, bookingData.discount]);
+  
+  const calculatedDiscountValue = useMemo(() => {
+    if (bookingData.discount_mode === 'percent') {
+      return (grossPrice * (bookingData.discount || 0)) / 100;
+    }
+    return (bookingData.discount || 0);
+  }, [grossPrice, bookingData.discount, bookingData.discount_mode]);
+
+  const netPrice = useMemo(() => Math.max(0, grossPrice - calculatedDiscountValue), [grossPrice, calculatedDiscountValue]);
 
   const availableTherapists = useMemo(() => {
     return therapists.filter(t => {
@@ -189,7 +201,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
         massage_type_id: bookingData.massage_type_id,
         additional_service_ids: bookingData.additional_service_ids.filter(Boolean),
         price: netPrice,
-        discount: bookingData.discount
+        discount: calculatedDiscountValue // Always store the absolute currency value in DB
       };
       if (initialBooking) { await db.updateMassageBooking(initialBooking.id, payload); } 
       else { await db.addMassageBooking({ ...payload, property_id: currentProperty.id, status: 'confirmed' }); }
@@ -272,23 +284,42 @@ const BookingForm: React.FC<BookingFormProps> = ({
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                     <div className="md:col-span-1">
                         <Select label="Primary Service *" options={[{ value: '', label: 'Select Type...' }, ...massageTypes.map(m => ({ value: m.id, label: `${m.name} (${m.duration_minutes}m)` }))]} value={bookingData.massage_type_id} onChange={e => setBookingData({...bookingData, massage_type_id: e.target.value})} className="h-11 rounded-xl text-xs" />
                     </div>
+                    <div className="space-y-1.5">
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Reduction Logic</label>
+                        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 h-11">
+                            <button 
+                                type="button"
+                                onClick={() => setBookingData(prev => ({...prev, discount_mode: 'amount'}))}
+                                className={`flex-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center justify-center gap-1 ${bookingData.discount_mode === 'amount' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-400'}`}
+                            >
+                                <Coins className="w-2.5 h-2.5" /> Fixed
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={() => setBookingData(prev => ({...prev, discount_mode: 'percent'}))}
+                                className={`flex-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center justify-center gap-1 ${bookingData.discount_mode === 'percent' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-400'}`}
+                            >
+                                <Percent className="w-2.5 h-2.5" /> %
+                            </button>
+                        </div>
+                    </div>
                     <div>
                          <Input 
-                            label="Discount" 
+                            label={bookingData.discount_mode === 'amount' ? "Discount Amount" : "Reduction (%)"} 
                             type="number" 
                             value={bookingData.discount} 
                             onChange={e => setBookingData({...bookingData, discount: Number(e.target.value) || 0})}
-                            className="h-11 rounded-xl text-xs" 
-                            placeholder="e.g. 50"
+                            className="h-11 rounded-xl text-xs font-bold" 
+                            placeholder={bookingData.discount_mode === 'amount' ? "e.g. 50" : "e.g. 10"}
                         />
                     </div>
-                    <div className="bg-slate-50 px-4 py-2 rounded-xl flex items-center justify-between border border-slate-100 h-11">
-                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Total Fee</span>
-                        <span className="text-sm font-black text-indigo-600">{formatMoney(netPrice)}</span>
+                    <div className="bg-slate-950 text-white px-4 py-2 rounded-xl flex items-center justify-between h-11 shadow-lg shadow-slate-200">
+                        <span className="text-[7px] font-black opacity-60 uppercase tracking-widest">Total Fee</span>
+                        <span className="text-xs font-black text-indigo-400 tracking-tighter">{formatMoney(netPrice)}</span>
                     </div>
                 </div>
                 

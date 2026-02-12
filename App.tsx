@@ -21,8 +21,38 @@ import Reports from './pages/Reports';
 import Logs from './pages/Logs';
 import SettingsPage from './pages/Settings';
 import Profile from './pages/Profile';
-import MassageScheduling from './massage-scheduling/MassageScheduling'; // Import NEW feature
-import { LayoutDashboard, Users, Tag, BarChart3, LogOut, Menu, X, Shield, Settings, Store, ChevronDown, History, UserCircle, Activity, Loader2, Building2, Check, Globe, ChevronsUpDown, Bell, Search, Info, Cpu, Zap, Radio, Sparkles, CalendarClock } from 'lucide-react';
+import MassageScheduling from './massage-scheduling/MassageScheduling'; 
+import Sales from './pages/Sales'; 
+import { 
+  LayoutDashboard, 
+  Users, 
+  Tag, 
+  BarChart3, 
+  LogOut, 
+  Menu, 
+  X, 
+  Shield, 
+  Settings, 
+  Store, 
+  ChevronDown, 
+  History, 
+  UserCircle, 
+  Activity, 
+  Loader2, 
+  Building2, 
+  Check, 
+  Globe, 
+  ChevronsUpDown, 
+  Bell, 
+  Search, 
+  Info, 
+  Cpu, 
+  Zap, 
+  Radio, 
+  Sparkles, 
+  CalendarClock, 
+  ShoppingBag 
+} from 'lucide-react';
 import { Permission, Property } from './types';
 import { db } from './services/mockSupabase';
 
@@ -299,6 +329,25 @@ const Sidebar = () => {
     const { settings, hasPermission } = useSettings();
     const location = useLocation();
 
+    // Defined all possible sidebar items
+    const ALL_NAV_ITEMS = useMemo(() => [
+        { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+        { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
+        { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
+        { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
+        { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
+        { id: 'users', to: '/users', icon: Shield, label: 'Users & Security', permission: 'users:view' as Permission },
+        { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
+        { id: 'logs', to: '/logs', icon: History, label: 'Audit Logs', permission: 'logs:view' as Permission },
+        { id: 'settings', to: '/settings', icon: Settings, label: 'System Settings', permission: 'settings:view' as Permission },
+    ], []);
+
+    // Sort items based on settings or fallback to default order
+    const orderedNavItems = useMemo(() => {
+        const order = settings?.navigation_order || ALL_NAV_ITEMS.map(item => item.id);
+        return order.map(id => ALL_NAV_ITEMS.find(item => item.id === id)).filter(Boolean);
+    }, [settings?.navigation_order, ALL_NAV_ITEMS]);
+
     const NavItem = ({ to, icon: Icon, label, permission }: { to: string, icon: any, label: string, permission?: Permission }) => {
         if (permission && user && !hasPermission(user.role_id, permission)) return null;
         
@@ -343,14 +392,9 @@ const Sidebar = () => {
             </div>
             
             <nav className="flex-1 space-y-1.5 px-4 mt-4 overflow-y-auto custom-scrollbar pb-8">
-                <NavItem to="/" icon={LayoutDashboard} label="Dashboard" />
-                <NavItem to="/members" icon={Users} label="Members" permission="members:view" />
-                <NavItem to="/bookings" icon={CalendarClock} label="Booking" permission="bookings:view" />
-                <NavItem to="/categories" icon={Tag} label="Membership Tiers" permission="categories:view" />
-                <NavItem to="/users" icon={Shield} label="Users & Security" permission="users:view" />
-                <NavItem to="/reports" icon={BarChart3} label="Financial Reports" permission="reports:view" />
-                <NavItem to="/logs" icon={History} label="Audit Logs" permission="logs:view" />
-                <NavItem to="/settings" icon={Settings} label="System Settings" permission="settings:view" />
+                {orderedNavItems.map((item: any) => (
+                    <NavItem key={item.id} to={item.to} icon={item.icon} label={item.label} permission={item.permission} />
+                ))}
             </nav>
 
             <div className="p-6 border-t-2 border-slate-100 bg-slate-50/50 shrink-0">
@@ -371,6 +415,24 @@ const MobileHeader = () => {
     const { user, logout } = useAuth();
     const { settings, hasPermission } = useSettings();
     const location = useLocation();
+
+    // Defined all possible sidebar items
+    const ALL_NAV_ITEMS = useMemo(() => [
+        { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+        { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
+        { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
+        { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
+        { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
+        { id: 'users', to: '/users', icon: Shield, label: 'Users & Security', permission: 'users:view' as Permission },
+        { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
+        { id: 'logs', to: '/logs', icon: History, label: 'Audit Logs', permission: 'logs:view' as Permission },
+        { id: 'settings', to: '/settings', icon: Settings, label: 'System Settings', permission: 'settings:view' as Permission },
+    ], []);
+
+    const orderedNavItems = useMemo(() => {
+        const order = settings?.navigation_order || ALL_NAV_ITEMS.map(item => item.id);
+        return order.map(id => ALL_NAV_ITEMS.find(item => item.id === id)).filter(Boolean);
+    }, [settings?.navigation_order, ALL_NAV_ITEMS]);
 
     const MobileNavItem = ({ to, icon: Icon, label, permission }: { to: string, icon: any, label: string, permission?: Permission }) => {
         if (permission && user && !hasPermission(user.role_id, permission)) return null;
@@ -417,14 +479,9 @@ const MobileHeader = () => {
 
             {isOpen && (
                 <div className="absolute top-full left-0 w-full bg-white border-b border-slate-200 shadow-2xl p-6 flex flex-col gap-2 z-50 animate-in slide-in-from-top-4 duration-300 max-h-[calc(100vh-140px)] overflow-y-auto custom-scrollbar">
-                    <MobileNavItem to="/" icon={LayoutDashboard} label="Dashboard" />
-                    <MobileNavItem to="/members" icon={Users} label="Members" permission="members:view" />
-                    <MobileNavItem to="/bookings" icon={CalendarClock} label="Booking" permission="bookings:view" />
-                    <MobileNavItem to="/categories" icon={Tag} label="Membership Tiers" permission="categories:view" />
-                    <MobileNavItem to="/users" icon={Shield} label="Users & Security" permission="users:view" />
-                    <MobileNavItem to="/reports" icon={BarChart3} label="Financial Reports" permission="reports:view" />
-                    <MobileNavItem to="/logs" icon={History} label="Audit Logs" permission="logs:view" />
-                    <MobileNavItem to="/settings" icon={Settings} label="System Settings" permission="settings:view" />
+                    {orderedNavItems.map((item: any) => (
+                        <MobileNavItem key={item.id} to={item.to} icon={item.icon} label={item.label} permission={item.permission} />
+                    ))}
                     <div className="h-px bg-slate-100 my-4 shrink-0" />
                     <MobileNavItem to="/profile" icon={UserCircle} label="My Profile" />
                     <button onClick={logout} className="p-5 text-left text-red-600 bg-red-50 rounded-2xl font-black uppercase tracking-widest flex items-center gap-4 transition-colors shrink-0">
@@ -448,6 +505,7 @@ const App = () => {
               <Route path="/" element={<Dashboard />} />
               <Route path="/members" element={<Members />} />
               <Route path="/bookings" element={<MassageScheduling />} />
+              <Route path="/sales" element={<Sales />} />
               <Route path="/categories" element={<Categories />} />
               <Route path="/users" element={<UsersPage />} />
               <Route path="/reports" element={<Reports />} />

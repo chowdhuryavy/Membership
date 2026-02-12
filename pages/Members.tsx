@@ -26,7 +26,8 @@ import {
   Heart,
   Activity,
   ArrowLeft,
-  Users
+  Users,
+  EyeOff
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Freeze } from '../types';
@@ -495,7 +496,8 @@ const MemberDetail = ({
   onUpdate: () => void,
   onRenew: (m: Member) => void
 }) => {
-  const { formatMoney } = useSettings();
+  const { user } = useAuth();
+  const { formatMoney, hasPermission } = useSettings();
   const [freezes, setFreezes] = useState<Freeze[]>([]);
   const [showFreezeForm, setShowFreezeForm] = useState(initialFreeze);
   const [newFreeze, setNewFreeze] = useState({ 
@@ -508,6 +510,16 @@ const MemberDetail = ({
   useEffect(() => {
     db.getFreezes(member.id).then(setFreezes);
   }, [member.id]);
+
+  const canRenew = user && hasPermission(user.role_id, 'members:renew');
+  const canFreeze = user && hasPermission(user.role_id, 'members:freeze');
+  const canViewContact = user && hasPermission(user.role_id, 'members:view_contact_info');
+
+  const maskInfo = (info?: string) => {
+    if (canViewContact) return info || '--';
+    if (!info) return '--';
+    return info.substring(0, 3) + '****' + (info.length > 7 ? info.substring(info.length - 2) : '');
+  };
 
   const handleAddFreeze = async () => {
     setIsFreezing(true);
@@ -566,7 +578,7 @@ const MemberDetail = ({
                     </div>
                   </div>
                 </div>
-                <Button onClick={() => onRenew(member)} variant="secondary" className="rounded-xl font-black text-[10px] uppercase h-10 px-6">Renew Now</Button>
+                {canRenew && <Button onClick={() => onRenew(member)} variant="secondary" className="rounded-xl font-black text-[10px] uppercase h-10 px-6">Renew Now</Button>}
               </div>
             </CardHeader>
             <CardContent className="p-8">
@@ -596,9 +608,11 @@ const MemberDetail = ({
               <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-3">
                 <History className="w-5 h-5 text-indigo-600" /> Suspension History
               </h3>
-              <Button onClick={() => setShowFreezeForm(true)} size="sm" className="rounded-xl font-black text-[10px] uppercase">
-                <Plus className="w-4 h-4 mr-1" /> Add Freeze
-              </Button>
+              {canFreeze && (
+                <Button onClick={() => setShowFreezeForm(true)} size="sm" className="rounded-xl font-black text-[10px] uppercase">
+                  <Plus className="w-4 h-4 mr-1" /> Add Freeze
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="p-0">
               {freezes.length === 0 ? (
@@ -614,7 +628,7 @@ const MemberDetail = ({
                         <th className="px-8 py-4">From</th>
                         <th className="px-8 py-4">To</th>
                         <th className="px-8 py-4">Total Days</th>
-                        <th className="px-8 py-4 text-right">Actions</th>
+                        {canFreeze && <th className="px-8 py-4 text-right">Actions</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -623,9 +637,11 @@ const MemberDetail = ({
                           <td className="px-8 py-4 font-bold text-slate-700">{format(parseISO(f.start_date), 'dd-MM-yyyy')}</td>
                           <td className="px-8 py-4 font-bold text-slate-700">{format(parseISO(f.end_date), 'dd-MM-yyyy')}</td>
                           <td className="px-8 py-4 font-black text-indigo-600">{f.total_days} Days</td>
-                          <td className="px-8 py-4 text-right">
-                            <button onClick={() => setDeleteFreezeId(f.id)} className="p-2 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4"/></button>
-                          </td>
+                          {canFreeze && (
+                            <td className="px-8 py-4 text-right">
+                                <button onClick={() => setDeleteFreezeId(f.id)} className="p-2 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4"/></button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -650,11 +666,17 @@ const MemberDetail = ({
                </div>
                <div className="flex justify-between items-center">
                   <span className="text-[10px] font-bold text-slate-500 uppercase">Phone</span>
-                  <span className="text-[11px] font-black text-slate-900">{member.phone || '--'}</span>
+                  <span className="text-[11px] font-black text-slate-900 flex items-center gap-2">
+                    {maskInfo(member.phone)}
+                    {!canViewContact && <EyeOff className="w-3 h-3 text-slate-300" />}
+                  </span>
                </div>
                <div className="flex justify-between items-center">
                   <span className="text-[10px] font-bold text-slate-500 uppercase">Email</span>
-                  <span className="text-[11px] font-black text-indigo-600 truncate max-w-[150px]">{member.email || '--'}</span>
+                  <span className="text-[11px] font-black text-indigo-600 truncate max-w-[150px] flex items-center justify-end gap-2">
+                    {maskInfo(member.email)}
+                    {!canViewContact && <EyeOff className="w-3 h-3 text-slate-300" />}
+                  </span>
                </div>
             </div>
           </Card>
@@ -766,6 +788,8 @@ const Members = () => {
   const canCreate = user && hasPermission(user.role_id, 'members:create');
   const canEdit = user && hasPermission(user.role_id, 'members:edit');
   const canDelete = user && hasPermission(user.role_id, 'members:delete');
+  const canPrint = user && hasPermission(user.role_id, 'members:print_contract');
+  const canRenew = user && hasPermission(user.role_id, 'members:renew');
 
   const getEffectiveStatus = (member: Member) => {
       if (member.status === MemberStatus.FROZEN || member.status === MemberStatus.PENDING) {
@@ -788,7 +812,7 @@ const Members = () => {
   };
 
   const handleRenew = (memberToRenew: Member) => {
-    if (!canCreate) return;
+    if (!canRenew) return;
     setSelectedMember(memberToRenew);
     setIsEditing(false);
     setIsRenewal(true);
@@ -871,7 +895,7 @@ const Members = () => {
                                 <th className="px-8 py-4">Status</th>
                                 <th className="px-8 py-4">Package</th>
                                 <th className="px-8 py-4">Expiry Date</th>
-                                {(canEdit || canDelete || canCreate) && <th className="px-8 py-4 text-center">Operations</th>}
+                                {(canEdit || canDelete || canCreate || canPrint) && <th className="px-8 py-4 text-center">Operations</th>}
                             </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -891,10 +915,10 @@ const Members = () => {
                                 <td className="px-8 py-5 text-indigo-600 font-black tracking-tight">{format(parseISO(member.current_end_date), 'dd-MM-yyyy')}</td>
                                 <td className="px-8 py-5">
                                     <div className="flex justify-center gap-1" onClick={e => e.stopPropagation()}>
-                                        <button onClick={() => setInstantContractMember(member)} className="p-2 text-slate-400 hover:text-indigo-600"><FileText className="w-4 h-4" /></button>
-                                        <button onClick={() => handleRenew(member)} className="p-2 text-slate-400 hover:text-emerald-600"><RefreshCcw className="w-4 h-4" /></button>
-                                        <button onClick={() => { setSelectedMember(member); setIsEditing(true); setIsRenewal(false); setView('form'); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4" /></button>
-                                        <button onClick={() => setDeleteId(member.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                                        {canPrint && <button onClick={() => setInstantContractMember(member)} className="p-2 text-slate-400 hover:text-indigo-600" title="Print Agreement"><FileText className="w-4 h-4" /></button>}
+                                        {canRenew && <button onClick={() => handleRenew(member)} className="p-2 text-slate-400 hover:text-emerald-600" title="Process Renewal"><RefreshCcw className="w-4 h-4" /></button>}
+                                        {canEdit && <button onClick={() => { setSelectedMember(member); setIsEditing(true); setIsRenewal(false); setView('form'); }} className="p-2 text-slate-400 hover:text-indigo-600" title="Edit Profile"><Edit2 className="w-4 h-4" /></button>}
+                                        {canDelete && <button onClick={() => setDeleteId(member.id)} className="p-2 text-slate-400 hover:text-red-600" title="Purge Record"><Trash2 className="w-4 h-4" /></button>}
                                     </div>
                                 </td>
                                 </tr>

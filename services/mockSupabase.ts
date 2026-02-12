@@ -1,4 +1,5 @@
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking } from '../types';
+
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, InventoryItem } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format } from 'date-fns';
@@ -461,6 +462,92 @@ class DatabaseService {
     return [];
   }
 
+  // --- INVENTORY METHODS ---
+  async getInventory(propertyId: string): Promise<InventoryItem[]> {
+    if (this.isSupabase()) {
+        const { data, error } = await supabase.from('inventory').select('*').eq('property_id', propertyId).order('name');
+        if (error) throw error;
+        return (data || []) as InventoryItem[];
+    }
+    return [];
+  }
+
+  async addInventoryItem(item: Omit<InventoryItem, 'id' | 'created_at'>) {
+    if (this.isSupabase()) {
+        const { error } = await supabase.from('inventory').insert([{ ...item, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
+        if (error) throw error;
+        await this.logAction('CREATE_INVENTORY', `Defined item: ${item.name}`);
+    }
+  }
+
+  async updateInventoryItem(id: string, updates: Partial<InventoryItem>) {
+    if (this.isSupabase()) {
+        const { error } = await supabase.from('inventory').update(updates).eq('id', id);
+        if (error) throw error;
+        await this.logAction('UPDATE_INVENTORY', `Modified item: ${id}`);
+    }
+  }
+
+  async deleteInventoryItem(id: string) {
+    if (this.isSupabase()) {
+        const { error } = await supabase.from('inventory').delete().eq('id', id);
+        if (error) throw error;
+        await this.logAction('DELETE_INVENTORY', `Removed item: ${id}`);
+    }
+  }
+
+  // --- POS / SALES MODULE METHODS ---
+
+  async getSales(propertyId: string): Promise<Sale[]> {
+    if (this.isSupabase()) {
+        const { data, error } = await supabase
+            .from('sales')
+            .select('*')
+            .eq('property_id', propertyId)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return (data || []) as Sale[];
+    }
+    return [];
+  }
+
+  async addSale(sale: Omit<Sale, 'id' | 'created_at'>) {
+    if (this.isSupabase()) {
+        // Transactional logic for inventory tracking
+        if (sale.item_id) {
+            const { data: item } = await supabase.from('inventory').select('track_inventory, stock_quantity').eq('id', sale.item_id).single();
+            if (item && item.track_inventory) {
+                if (item.stock_quantity < sale.quantity) {
+                    throw new Error(`Insufficient stock for ${sale.item_name}. Available: ${item.stock_quantity}`);
+                }
+                // Decrement stock
+                await supabase.from('inventory').update({ stock_quantity: item.stock_quantity - sale.quantity }).eq('id', sale.item_id);
+            }
+        }
+
+        const { error } = await supabase.from('sales').insert([{ ...sale, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
+        if (error) throw error;
+        await this.logAction('POS_SALE', `Transaction finalized: ${sale.item_name} for ${sale.guest_name}`);
+    }
+  }
+
+  async deleteSale(id: string) {
+    if (this.isSupabase()) {
+        // Reverse inventory if necessary
+        const { data: sale } = await supabase.from('sales').select('*').eq('id', id).single();
+        if (sale && sale.item_id) {
+            const { data: item } = await supabase.from('inventory').select('track_inventory, stock_quantity').eq('id', sale.item_id).single();
+            if (item && item.track_inventory) {
+                await supabase.from('inventory').update({ stock_quantity: item.stock_quantity + sale.quantity }).eq('id', sale.item_id);
+            }
+        }
+
+        const { error } = await supabase.from('sales').delete().eq('id', id);
+        if (error) throw error;
+        await this.logAction('POS_VOID', `Transaction voided: ${id}`);
+    }
+  }
+
   // --- MASSAGE SCHEDULING MODULE METHODS (PROPERTY-BASED) ---
 
   async getGuests(propertyId: string): Promise<Guest[]> {
@@ -565,7 +652,7 @@ class DatabaseService {
 
   async deleteTherapist(id: string) {
     if (this.isSupabase()) {
-        const { error } = await supabase.from('therapists').delete().eq('id', id);
+        const { error = null } = await supabase.from('therapists').delete().eq('id', id);
         if (error) throw error;
         await this.logAction('DELETE_THERAPIST', `Staff specialist decommissioned: ${id}`);
     }
@@ -599,7 +686,7 @@ class DatabaseService {
 
   async deleteMassageType(id: string) {
     if (this.isSupabase()) {
-        const { error } = await supabase.from('massage_types').delete().eq('id', id);
+        const { error = null } = await supabase.from('massage_types').delete().eq('id', id);
         if (error) throw error;
         await this.logAction('DELETE_TREATMENT', `Treatment service decommissioned: ${id}`);
     }

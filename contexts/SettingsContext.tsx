@@ -35,7 +35,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshSettings = async () => {
-    setIsLoading(true);
+    // Note: Removed full setIsLoading(true) here to prevent jarring splash screen on simple updates
     try {
         const [s, c, r, o, p] = await Promise.all([
             db.getSettings(), 
@@ -45,11 +45,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             db.getProperties()
         ]);
         
-        setSettings(s);
-        setCurrencies(c);
-        setRoles(r);
-        setOutlets(o);
-        setProperties(p);
+        // Ensure we create a fresh object to trigger React re-renders
+        setSettings({ ...s });
+        setCurrencies([...c]);
+        setRoles([...r]);
+        setOutlets([...o]);
+        setProperties([...p]);
         
         const activeCurr = (s && c.find(curr => curr.id === s.currency_id)) || 
                           c.find(curr => curr.is_default) || 

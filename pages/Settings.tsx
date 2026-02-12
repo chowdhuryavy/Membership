@@ -43,7 +43,15 @@ import {
   Snowflake,
   RefreshCcw,
   EyeOff,
-  Briefcase
+  Briefcase,
+  ShoppingBag,
+  PackageSearch,
+  ChevronUp,
+  ChevronDown,
+  Navigation,
+  // Fix: Added missing icon imports for Tag and BarChart3
+  Tag,
+  BarChart3
 } from 'lucide-react';
 
 const PERMISSION_REGISTRY = [
@@ -69,6 +77,26 @@ const PERMISSION_REGISTRY = [
         ] 
     },
     { 
+        id: 'sales', 
+        label: 'POS & Retail Engine', 
+        icon: ShoppingBag,
+        actions: [
+            { id: 'view', label: 'View Sales Ledger', icon: Eye },
+            { id: 'create', label: 'Record Transaction', icon: PlusSquare },
+            { id: 'edit', label: 'Modify Transaction', icon: FileEdit },
+            { id: 'delete', label: 'Void Transaction', icon: Trash }
+        ] 
+    },
+    { 
+        id: 'inventory', 
+        label: 'Inventory & Tracking', 
+        icon: PackageSearch,
+        actions: [
+            { id: 'view', label: 'Audit Stockpile', icon: Eye },
+            { id: 'manage', label: 'Master Item Management', icon: FileEdit }
+        ] 
+    },
+    { 
         id: 'members', 
         label: 'Membership Engine', 
         icon: Users,
@@ -81,6 +109,22 @@ const PERMISSION_REGISTRY = [
             { id: 'freeze', label: 'Manage Freezes', icon: Snowflake },
             { id: 'print_contract', label: 'Print Agreements', icon: Printer },
             { id: 'delete', label: 'Record Purging', icon: Trash }
+        ] 
+    },
+    { 
+        id: 'settings_tabs', 
+        label: 'Framework View Control', 
+        icon: Settings,
+        actions: [
+            { id: 'view_global', label: 'View Global Scope Tab', icon: Globe },
+            { id: 'view_properties', label: 'View Properties Tab', icon: Building2 },
+            { id: 'view_outlets', label: 'View Facilities Tab', icon: Store },
+            { id: 'view_roles', label: 'View Security Matrix Tab', icon: ShieldCheck },
+            { id: 'view_currency', label: 'View Monetary Tab', icon: Coins },
+            { id: 'view_shortcuts', label: 'View Keyboard Tab', icon: Keyboard },
+            { id: 'view_documents', label: 'View Global Defaults Tab', icon: ScrollText },
+            { id: 'view_maintenance', label: 'View Maintenance Tab', icon: Eraser },
+            { id: 'view_navigation', label: 'View Navigation Tab', icon: Navigation }
         ] 
     },
     { 
@@ -116,26 +160,8 @@ const PERMISSION_REGISTRY = [
         ] 
     },
     { 
-        id: 'properties', 
-        label: 'Properties', 
-        icon: Building2,
-        actions: [
-            { id: 'view', label: 'View Properties', icon: Eye },
-            { id: 'edit', label: 'Asset Management', icon: FileEdit }
-        ] 
-    },
-    { 
-        id: 'outlets', 
-        label: 'Facility Contexts', 
-        icon: Store,
-        actions: [
-            { id: 'view', label: 'View Outlets', icon: Eye },
-            { id: 'edit', label: 'Facility Control', icon: FileEdit }
-        ] 
-    },
-    { 
         id: 'settings', 
-        label: 'System Framework', 
+        label: 'System Framework Mutation', 
         icon: Settings,
         actions: [
             { id: 'view', label: 'Core Config View', icon: Eye },
@@ -152,7 +178,7 @@ const PERMISSION_REGISTRY = [
     },
 ];
 
-type TabId = 'company' | 'properties' | 'roles' | 'currency' | 'outlets' | 'shortcuts' | 'documents' | 'maintenance';
+type TabId = 'company' | 'properties' | 'roles' | 'currency' | 'outlets' | 'shortcuts' | 'documents' | 'maintenance' | 'navigation';
 
 const SHORTCUT_DEFINITIONS = [
     { id: 'nav_dashboard', label: 'Navigate to Dashboard', default: 'Alt+D' },
@@ -165,6 +191,18 @@ const SHORTCUT_DEFINITIONS = [
     { id: 'action_cancel', label: 'Cancel / Close Modal', default: 'Escape' },
 ];
 
+const NAV_METADATA = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'members', label: 'Members', icon: Users },
+    { id: 'bookings', label: 'Booking', icon: CalendarClock },
+    { id: 'sales', label: 'Sales & Retail', icon: ShoppingBag },
+    { id: 'categories', label: 'Membership Tiers', icon: Tag },
+    { id: 'users', label: 'Users & Security', icon: Shield },
+    { id: 'reports', label: 'Financial Reports', icon: BarChart3 },
+    { id: 'logs', label: 'Audit Logs', icon: History },
+    { id: 'settings', label: 'System Settings', icon: Settings },
+];
+
 const SettingsPage = () => {
   const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission } = useSettings();
   const { user } = useAuth();
@@ -174,8 +212,12 @@ const SettingsPage = () => {
       name: '', logo_url: '', address: '', currency_id: '', 
       keyboard_shortcuts: {}, signatory_prepared_role: '', 
       signatory_reviewed_role: '', signatory_approved_role: '', 
-      contract_template: '' 
+      contract_template: '',
+      navigation_order: []
   });
+
+  const [navOrder, setNavOrder] = useState<string[]>([]);
+
   const [newCurrency, setNewCurrency] = useState<Partial<Currency>>({ code: '', symbol: '', rate: 1, is_default: false });
   const [editingCurrencyId, setEditingCurrencyId] = useState<string | null>(null);
 
@@ -195,38 +237,49 @@ const SettingsPage = () => {
   const [recordingKey, setRecordingKey] = useState<string | null>(null);
 
   const canEditSettings = user && hasPermission(user.role_id, 'settings:edit');
-  const canViewProperties = user && hasPermission(user.role_id, 'properties:view');
+  const canViewProperties = user && hasPermission(user.role_id, 'settings:view_properties');
   const canEditProperties = user && hasPermission(user.role_id, 'properties:edit');
-  const canViewOutlets = user && hasPermission(user.role_id, 'outlets:view');
+  const canViewOutlets = user && hasPermission(user.role_id, 'settings:view_outlets');
   const canEditOutlets = user && hasPermission(user.role_id, 'outlets:edit');
-  const canManageRoles = user && hasPermission(user.role_id, 'users:edit');
-  const canViewSettings = user && hasPermission(user.role_id, 'settings:view');
+  const canManageRoles = user && (hasPermission(user.role_id, 'settings:view_roles') || hasPermission(user.role_id, 'users:edit'));
 
   const availableTabs = useMemo(() => {
     const tabs: { id: TabId; label: string; visible: boolean }[] = [
-      { id: 'company', label: 'Global Scope', visible: !!canViewSettings },
-      { id: 'properties', label: 'Properties', visible: !!canViewProperties },
-      { id: 'outlets', label: 'Facilities', visible: !!canViewOutlets },
-      { id: 'roles', label: 'Security Matrix', visible: !!canManageRoles },
-      { id: 'currency', label: 'Monetary', visible: !!canViewSettings },
-      { id: 'shortcuts', label: 'Keyboard', visible: !!canViewSettings },
-      { id: 'documents', label: 'Global Defaults', visible: !!canViewSettings },
-      { id: 'maintenance', label: 'Maintenance', visible: !!canEditSettings },
+      { id: 'company', label: 'Global Scope', visible: !!(user && hasPermission(user.role_id, 'settings:view_global')) },
+      { id: 'navigation', label: 'Navigation', visible: !!(user && hasPermission(user.role_id, 'settings:view_navigation')) },
+      { id: 'properties', label: 'Properties', visible: !!(user && hasPermission(user.role_id, 'settings:view_properties')) },
+      { id: 'outlets', label: 'Facilities', visible: !!(user && hasPermission(user.role_id, 'settings:view_outlets')) },
+      { id: 'roles', label: 'Security Matrix', visible: !!(user && hasPermission(user.role_id, 'settings:view_roles')) },
+      { id: 'currency', label: 'Monetary', visible: !!(user && hasPermission(user.role_id, 'settings:view_currency')) },
+      { id: 'shortcuts', label: 'Keyboard', visible: !!(user && hasPermission(user.role_id, 'settings:view_shortcuts')) },
+      { id: 'documents', label: 'Global Defaults', visible: !!(user && hasPermission(user.role_id, 'settings:view_documents')) },
+      { id: 'maintenance', label: 'Maintenance', visible: !!(user && hasPermission(user.role_id, 'settings:view_maintenance')) },
     ];
     return tabs.filter(t => t.visible);
-  }, [canViewSettings, canViewProperties, canViewOutlets, canManageRoles, canEditSettings]);
+  }, [user, roles]);
 
   useEffect(() => { 
       if (settings) {
+          const defaultOrder = NAV_METADATA.map(m => m.id);
+          const currentOrder = settings.navigation_order || defaultOrder;
+          
           setCompanyForm({
               ...settings,
               signatory_prepared_role: settings.signatory_prepared_role || 'Income Auditor',
               signatory_reviewed_role: settings.signatory_reviewed_role || 'Financial Controller',
               signatory_approved_role: settings.signatory_approved_role || 'Director of Finance',
-              contract_template: settings.contract_template || ''
+              contract_template: settings.contract_template || '',
+              navigation_order: currentOrder
           }); 
+          setNavOrder(currentOrder);
       }
   }, [settings]);
+
+  useEffect(() => {
+    if (availableTabs.length > 0 && !availableTabs.find(t => t.id === activeTab)) {
+        setActiveTab(availableTabs[0].id);
+    }
+  }, [availableTabs]);
 
   const showStatus = (text: string, type: 'success' | 'error' = 'success') => {
     setMessage({ text, type });
@@ -262,7 +315,7 @@ const SettingsPage = () => {
   };
 
   const saveRole = async () => {
-    if (!canManageRoles || !newRole.name) return;
+    if (!user || !hasPermission(user.role_id, 'users:edit') || !newRole.name) return;
     setIsSaving(true);
     try {
         if (editingRoleId) { await db.updateRole(editingRoleId, newRole); } 
@@ -302,12 +355,38 @@ const SettingsPage = () => {
       finally { setItemToDelete(null); }
   };
 
-  const handleTogglePermission = (permission: Permission) => {
+  const moveNavItem = (index: number, direction: 'up' | 'down') => {
+      const newOrder = [...navOrder];
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      
+      if (targetIndex < 0 || targetIndex >= newOrder.length) return;
+      
+      const [movedItem] = newOrder.splice(index, 1);
+      newOrder.splice(targetIndex, 0, movedItem);
+      setNavOrder(newOrder);
+  };
+
+  const handleSaveNavOrder = async () => {
+      if (!canEditSettings) return;
+      setIsSaving(true);
+      try {
+          await db.updateSettings({ ...companyForm, navigation_order: navOrder });
+          await refreshSettings();
+          showStatus('Navigation architecture synchronized.');
+      } catch (e: any) {
+          showStatus(`Sync error: ${e.message}`, 'error');
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
+  const handleTogglePermission = (permission: string) => {
+    const perm = (permission.startsWith('settings_tabs:') ? permission.replace('settings_tabs:', 'settings:') : permission) as Permission;
     setNewRole(prev => ({
       ...prev,
-      permissions: prev.permissions.includes(permission)
-        ? prev.permissions.filter(p => p !== permission)
-        : [...prev.permissions, permission]
+      permissions: prev.permissions.includes(perm)
+        ? prev.permissions.filter(p => p !== perm)
+        : [...prev.permissions, perm]
     }));
   };
 
@@ -345,7 +424,7 @@ const SettingsPage = () => {
       )}
 
       {/* --- GLOBAL SCOPE TAB --- */}
-      {activeTab === 'company' && canViewSettings && (
+      {activeTab === 'company' && user && hasPermission(user.role_id, 'settings:view_global') && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
                   <CardHeader className="bg-slate-50 p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900">Identity Branding</CardTitle></CardHeader>
@@ -360,8 +439,60 @@ const SettingsPage = () => {
           </div>
       )}
 
+      {/* --- NAVIGATION TAB --- */}
+      {activeTab === 'navigation' && user && hasPermission(user.role_id, 'settings:view_navigation') && (
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden max-w-2xl mx-auto h-fit">
+              <CardHeader className="bg-slate-900 text-white p-8 flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-xl font-black tracking-tight">Sidebar Architecture</CardTitle>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Hierarchical Priority Management</p>
+                  </div>
+                  <Navigation className="w-8 h-8 text-slate-700" />
+              </CardHeader>
+              <CardContent className="p-8">
+                  <div className="space-y-2 mb-10">
+                      {navOrder.map((id, index) => {
+                          const meta = NAV_METADATA.find(m => m.id === id);
+                          if (!meta) return null;
+                          return (
+                              <div key={id} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-2xl group hover:bg-white hover:shadow-xl transition-all">
+                                  <div className="flex items-center gap-4">
+                                      <div className="w-8 h-8 rounded-lg bg-white border border-slate-100 flex items-center justify-center shadow-sm">
+                                          <meta.icon className="w-4 h-4 text-indigo-600" />
+                                      </div>
+                                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-900">{meta.label}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                                      <button 
+                                          onClick={() => moveNavItem(index, 'up')} 
+                                          disabled={index === 0}
+                                          className={`p-2 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-colors ${index === 0 ? 'cursor-not-allowed opacity-30' : ''}`}
+                                      >
+                                          <ChevronUp className="w-4 h-4" />
+                                      </button>
+                                      <button 
+                                          onClick={() => moveNavItem(index, 'down')} 
+                                          disabled={index === navOrder.length - 1}
+                                          className={`p-2 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-colors ${index === navOrder.length - 1 ? 'cursor-not-allowed opacity-30' : ''}`}
+                                      >
+                                          <ChevronDown className="w-4 h-4" />
+                                      </button>
+                                  </div>
+                              </div>
+                          );
+                      })}
+                  </div>
+                  {canEditSettings && (
+                      <Button onClick={handleSaveNavOrder} isLoading={isSaving} className="w-full h-16 rounded-3xl font-black uppercase tracking-widest text-sm shadow-2xl shadow-indigo-200">
+                        Commit Navigation Priority
+                      </Button>
+                  )}
+              </CardContent>
+          </Card>
+      )}
+
       {/* --- PROPERTIES TAB --- */}
-      {activeTab === 'properties' && canViewProperties && (
+      {activeTab === 'properties' && user && hasPermission(user.role_id, 'settings:view_properties') && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
                   <CardHeader className="bg-slate-50 p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900">Managed Assets</CardTitle></CardHeader>
@@ -373,27 +504,29 @@ const SettingsPage = () => {
                                   <div><h4 className="font-black text-slate-900 uppercase text-xs tracking-tight">{p.name}</h4><p className="text-[9px] font-bold text-slate-400 uppercase">{p.address}</p></div>
                               </div>
                               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => { setEditingPropId(p.id); setPropForm(p); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4" /></button>
-                                  <button onClick={() => setItemToDelete({ type: 'property', id: p.id, name: p.name })} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                                  {canEditProperties && <button onClick={() => { setEditingPropId(p.id); setPropForm(p); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4" /></button>}
+                                  {canEditProperties && <button onClick={() => setItemToDelete({ type: 'property', id: p.id, name: p.name })} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>}
                               </div>
                           </div>
                       ))}
                   </CardContent>
               </Card>
-              <Card className="rounded-[2rem] border-slate-200/60 shadow-xl h-fit">
-                  <CardHeader className="bg-indigo-600 text-white p-8"><CardTitle className="text-xl font-black">{editingPropId ? 'Modify Asset' : 'Register Asset'}</CardTitle></CardHeader>
-                  <CardContent className="p-8 space-y-6">
-                      <Input label="Name" value={propForm.name} onChange={e => setPropForm({...propForm, name: e.target.value})} className="h-12 rounded-xl" />
-                      <Input label="Address" value={propForm.address} onChange={e => setPropForm({...propForm, address: e.target.value})} className="h-12 rounded-xl" />
-                      <Input label="Logo URL" value={propForm.logo_url} onChange={e => setPropForm({...propForm, logo_url: e.target.value})} className="h-12 rounded-xl" />
-                      <Button onClick={handleSaveProperty} isLoading={isSaving} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest">Commit Asset</Button>
-                  </CardContent>
-              </Card>
+              {canEditProperties && (
+                <Card className="rounded-[2rem] border-slate-200/60 shadow-xl h-fit">
+                    <CardHeader className="bg-indigo-600 text-white p-8"><CardTitle className="text-xl font-black">{editingPropId ? 'Modify Asset' : 'Register Asset'}</CardTitle></CardHeader>
+                    <CardContent className="p-8 space-y-6">
+                        <Input label="Name" value={propForm.name} onChange={e => setPropForm({...propForm, name: e.target.value})} className="h-12 rounded-xl" />
+                        <Input label="Address" value={propForm.address} onChange={e => setPropForm({...propForm, address: e.target.value})} className="h-12 rounded-xl" />
+                        <Input label="Logo URL" value={propForm.logo_url} onChange={e => setPropForm({...propForm, logo_url: e.target.value})} className="h-12 rounded-xl" />
+                        <Button onClick={handleSaveProperty} isLoading={isSaving} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest">Commit Asset</Button>
+                    </CardContent>
+                </Card>
+              )}
           </div>
       )}
 
       {/* --- FACILITIES TAB --- */}
-      {activeTab === 'outlets' && canViewOutlets && (
+      {activeTab === 'outlets' && user && hasPermission(user.role_id, 'settings:view_outlets') && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
                   <CardHeader className="bg-slate-50 p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900">Active Facilities</CardTitle></CardHeader>
@@ -402,37 +535,39 @@ const SettingsPage = () => {
                           <div key={o.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm group">
                               <div><h4 className="font-black text-slate-900 uppercase text-xs">{o.name}</h4><span className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest">{properties.find(p => p.id === o.property_id)?.name}</span></div>
                               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => { setEditingOutletId(o.id); setOutletForm(o); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4" /></button>
-                                  <button onClick={() => setItemToDelete({ type: 'outlet', id: o.id, name: o.name })} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                                  {canEditOutlets && <button onClick={() => { setEditingOutletId(o.id); setOutletForm(o); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4" /></button>}
+                                  {canEditOutlets && <button onClick={() => setItemToDelete({ type: 'outlet', id: o.id, name: o.name })} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>}
                               </div>
                           </div>
                       ))}
                   </CardContent>
               </Card>
-              <Card className="rounded-[2rem] border-slate-200/60 shadow-xl h-fit">
-                  <CardHeader className="bg-slate-900 text-white p-8"><CardTitle className="text-xl font-black">{editingOutletId ? 'Edit Facility' : 'New Facility'}</CardTitle></CardHeader>
-                  <CardContent className="p-8 space-y-6">
-                      <Input label="Facility Name" value={outletForm.name} onChange={e => setOutletForm({...outletForm, name: e.target.value})} className="h-12 rounded-xl" />
-                      <Select label="Property Mapping" options={[{value:'', label:'Select...'}, ...properties.map(p => ({value:p.id, label:p.name}))]} value={outletForm.property_id} onChange={e => setOutletForm({...outletForm, property_id: e.target.value})} className="h-12 rounded-xl" />
-                      <Button onClick={handleSaveOutlet} isLoading={isSaving} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest">Commission Context</Button>
-                  </CardContent>
-              </Card>
+              {canEditOutlets && (
+                <Card className="rounded-[2rem] border-slate-200/60 shadow-xl h-fit">
+                    <CardHeader className="bg-slate-900 text-white p-8"><CardTitle className="text-xl font-black">{editingOutletId ? 'Edit Facility' : 'New Facility'}</CardTitle></CardHeader>
+                    <CardContent className="p-8 space-y-6">
+                        <Input label="Facility Name" value={outletForm.name} onChange={e => setOutletForm({...outletForm, name: e.target.value})} className="h-12 rounded-xl" />
+                        <Select label="Property Mapping" options={[{value:'', label:'Select...'}, ...properties.map(p => ({value:p.id, label:p.name}))]} value={outletForm.property_id} onChange={e => setOutletForm({...outletForm, property_id: e.target.value})} className="h-12 rounded-xl" />
+                        <Button onClick={handleSaveOutlet} isLoading={isSaving} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest">Commission Context</Button>
+                    </CardContent>
+                </Card>
+              )}
           </div>
       )}
 
       {/* --- SECURITY MATRIX TAB --- */}
-      {activeTab === 'roles' && canManageRoles && (
+      {activeTab === 'roles' && user && hasPermission(user.role_id, 'settings:view_roles') && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-1 space-y-4">
                   {roles.map(r => (
                       <Card key={r.id} onClick={() => { setEditingRoleId(r.id); setNewRole(r); }} className={`cursor-pointer transition-all ${editingRoleId === r.id ? 'ring-2 ring-indigo-600 shadow-xl' : 'hover:bg-slate-50'}`}>
                           <CardContent className="p-6 flex items-center justify-between">
                               <div><h4 className="font-black text-slate-900 uppercase text-xs">{r.name}</h4><p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{r.permissions.length} PERMISSIONS</p></div>
-                              {!r.is_system && <button onClick={(e) => { e.stopPropagation(); setItemToDelete({type:'role', id:r.id, name:r.name}); }} className="p-2 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4"/></button>}
+                              {!r.is_system && user && hasPermission(user.role_id, 'users:edit') && <button onClick={(e) => { e.stopPropagation(); setItemToDelete({type:'role', id:r.id, name:r.name}); }} className="p-2 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4"/></button>}
                           </CardContent>
                       </Card>
                   ))}
-                  <Button onClick={() => { setEditingRoleId(null); setNewRole({name:'', permissions:[]}); }} variant="outline" className="w-full h-14 rounded-2xl font-black uppercase tracking-widest border-dashed border-2 border-slate-300"><Plus className="w-4 h-4 mr-2"/> NEW SECURITY TIER</Button>
+                  {user && hasPermission(user.role_id, 'users:edit') && <Button onClick={() => { setEditingRoleId(null); setNewRole({name:'', permissions:[]}); }} variant="outline" className="w-full h-14 rounded-2xl font-black uppercase tracking-widest border-dashed border-2 border-slate-300"><Plus className="w-4 h-4 mr-2"/> NEW SECURITY TIER</Button>}
               </div>
 
               <Card className="lg:col-span-2 rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden h-fit">
@@ -452,10 +587,11 @@ const SettingsPage = () => {
                                   </div>
                                   <div className="grid grid-cols-1 gap-2">
                                       {module.actions.map(action => {
-                                          const permId = `${module.id}:${action.id}` as Permission;
-                                          const isActive = newRole.permissions.includes(permId);
+                                          const basePerm = `${module.id}:${action.id}`;
+                                          const finalPerm = (basePerm.startsWith('settings_tabs:') ? basePerm.replace('settings_tabs:', 'settings:') : basePerm) as Permission;
+                                          const isActive = newRole.permissions.includes(finalPerm);
                                           return (
-                                              <button key={permId} onClick={() => handleTogglePermission(permId)} className={`flex items-center justify-between px-4 py-3 rounded-xl border text-[10px] font-black uppercase transition-all ${isActive ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}>
+                                              <button key={basePerm} onClick={() => handleTogglePermission(basePerm)} className={`flex items-center justify-between px-4 py-3 rounded-xl border text-[10px] font-black uppercase transition-all ${isActive ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}>
                                                   <div className="flex items-center gap-2"><action.icon className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-600' : 'text-slate-300'}`} /> {action.label}</div>
                                                   {isActive && <Check className="w-3 h-3" />}
                                               </button>
@@ -465,14 +601,14 @@ const SettingsPage = () => {
                               </div>
                           ))}
                       </div>
-                      <Button onClick={saveRole} isLoading={isSaving} className="w-full h-16 rounded-3xl font-black uppercase tracking-widest text-sm shadow-2xl shadow-indigo-200">Authorize Policy Changes</Button>
+                      {user && hasPermission(user.role_id, 'users:edit') && <Button onClick={saveRole} isLoading={isSaving} className="w-full h-16 rounded-3xl font-black uppercase tracking-widest text-sm shadow-2xl shadow-indigo-200">Authorize Policy Changes</Button>}
                   </CardContent>
               </Card>
           </div>
       )}
 
       {/* --- MONETARY TAB --- */}
-      {activeTab === 'currency' && canViewSettings && (
+      {activeTab === 'currency' && user && hasPermission(user.role_id, 'settings:view_currency') && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <Card className="rounded-[2rem] border-slate-200/60 shadow-xl h-fit">
                   <CardHeader className="p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3"><Coins className="w-5 h-5 text-indigo-600"/> Currency Standards</CardTitle></CardHeader>
@@ -484,26 +620,28 @@ const SettingsPage = () => {
                                   <div><h4 className="font-black text-slate-900 uppercase text-xs">{c.code}</h4><p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Rate: {c.rate}</p></div>
                               </div>
                               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => { setEditingCurrencyId(c.id); setNewCurrency(c); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4" /></button>
-                                  {!c.is_default && <button onClick={() => setItemToDelete({type:'currency', id:c.id, name:c.code})} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>}
+                                  {canEditSettings && <button onClick={() => { setEditingCurrencyId(c.id); setNewCurrency(c); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4" /></button>}
+                                  {!c.is_default && canEditSettings && <button onClick={() => setItemToDelete({type:'currency', id:c.id, name:c.code})} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>}
                               </div>
                           </div>
                       ))}
                   </CardContent>
               </Card>
-              <Card className="rounded-[2rem] border-slate-200/60 shadow-xl h-fit">
-                  <CardHeader className="bg-indigo-600 text-white p-8"><CardTitle className="text-xl font-black">{editingCurrencyId ? 'Update Rate' : 'New Currency'}</CardTitle></CardHeader>
-                  <CardContent className="p-8 space-y-6">
-                      <div className="grid grid-cols-2 gap-4"><Input label="ISO Code" value={newCurrency.code} onChange={e => setNewCurrency({...newCurrency, code: e.target.value.toUpperCase()})} /><Input label="Symbol" value={newCurrency.symbol} onChange={e => setNewCurrency({...newCurrency, symbol: e.target.value})} /></div>
-                      <Input label="Exchange Rate (Base)" type="number" step="0.0001" value={newCurrency.rate} onChange={e => setNewCurrency({...newCurrency, rate: parseFloat(e.target.value)})} />
-                      <Button onClick={handleSaveCurrency} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest">Save Standard</Button>
-                  </CardContent>
-              </Card>
+              {canEditSettings && (
+                <Card className="rounded-[2rem] border-slate-200/60 shadow-xl h-fit">
+                    <CardHeader className="bg-indigo-600 text-white p-8"><CardTitle className="text-xl font-black">{editingCurrencyId ? 'Update Rate' : 'New Currency'}</CardTitle></CardHeader>
+                    <CardContent className="p-8 space-y-6">
+                        <div className="grid grid-cols-2 gap-4"><Input label="ISO Code" value={newCurrency.code} onChange={e => setNewCurrency({...newCurrency, code: e.target.value.toUpperCase()})} /><Input label="Symbol" value={newCurrency.symbol} onChange={e => setNewCurrency({...newCurrency, symbol: e.target.value})} /></div>
+                        <Input label="Exchange Rate (Base)" type="number" step="0.0001" value={newCurrency.rate} onChange={e => setNewCurrency({...newCurrency, rate: parseFloat(e.target.value)})} />
+                        <Button onClick={handleSaveCurrency} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest">Save Standard</Button>
+                    </CardContent>
+                </Card>
+              )}
           </div>
       )}
 
       {/* --- KEYBOARD TAB --- */}
-      {activeTab === 'shortcuts' && canViewSettings && (
+      {activeTab === 'shortcuts' && user && hasPermission(user.role_id, 'settings:view_shortcuts') && (
           <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden max-w-4xl mx-auto h-fit">
               <CardHeader className="bg-slate-900 text-white p-8 flex items-center justify-between">
                   <div><CardTitle className="text-xl font-black tracking-tight">Macro Configuration</CardTitle><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Accelerated Workflow Mappings</p></div>
@@ -514,39 +652,39 @@ const SettingsPage = () => {
                       {SHORTCUT_DEFINITIONS.map(def => (
                           <div key={def.id} className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100 group transition-all hover:bg-white hover:shadow-lg">
                               <div><h4 className="text-[10px] font-black uppercase tracking-widest text-slate-900">{def.label}</h4><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Action Identifier: {def.id}</p></div>
-                              <button onClick={() => setRecordingKey(def.id)} onKeyDown={(e) => recordingKey === def.id && (e.preventDefault(), e.stopPropagation(), setCompanyForm(prev => ({...prev, keyboard_shortcuts: {...prev.keyboard_shortcuts, [def.id]: `${e.altKey ? 'Alt+' : ''}${e.key.toUpperCase()}`}})), setRecordingKey(null))} className={`min-w-[80px] h-10 px-4 rounded-xl font-black text-xs border-2 transition-all flex items-center justify-center gap-2 ${recordingKey === def.id ? 'bg-indigo-600 border-indigo-600 text-white animate-pulse' : 'bg-white border-slate-200 text-indigo-600'}`}>
+                              <button onClick={() => canEditSettings && setRecordingKey(def.id)} onKeyDown={(e) => recordingKey === def.id && (e.preventDefault(), e.stopPropagation(), setCompanyForm(prev => ({...prev, keyboard_shortcuts: {...prev.keyboard_shortcuts, [def.id]: `${e.altKey ? 'Alt+' : ''}${e.key.toUpperCase()}`}})), setRecordingKey(null))} className={`min-w-[80px] h-10 px-4 rounded-xl font-black text-xs border-2 transition-all flex items-center justify-center gap-2 ${recordingKey === def.id ? 'bg-indigo-600 border-indigo-600 text-white animate-pulse' : 'bg-white border-slate-200 text-indigo-600'}`}>
                                   {recordingKey === def.id ? 'REC...' : companyForm.keyboard_shortcuts?.[def.id] || def.default}
                               </button>
                           </div>
                       ))}
                   </div>
-                  <Button onClick={() => { db.updateSettings(companyForm); showStatus('Macros synchronized.'); }} className="w-full h-16 rounded-3xl font-black uppercase tracking-widest text-sm shadow-2xl shadow-indigo-100 mt-10">Deploy Macro Framework</Button>
+                  {canEditSettings && <Button onClick={() => { db.updateSettings(companyForm); showStatus('Macros synchronized.'); }} className="w-full h-16 rounded-3xl font-black uppercase tracking-widest text-sm shadow-2xl shadow-indigo-200 mt-10">Deploy Macro Framework</Button>}
               </CardContent>
           </Card>
       )}
 
       {/* --- GLOBAL DEFAULTS TAB --- */}
-      {activeTab === 'documents' && canViewSettings && (
+      {activeTab === 'documents' && user && hasPermission(user.role_id, 'settings:view_documents') && (
           <div className="space-y-8">
               <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
                   <CardHeader className="bg-slate-50 p-8 border-b border-slate-100"><CardTitle className="text-xl font-black text-slate-900 flex items-center gap-3"><ScrollText className="w-5 h-5 text-indigo-600"/> Agreement Framework</CardTitle></CardHeader>
                   <CardContent className="p-8 space-y-4">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Standard Legal Template (HTML/Markdown)</p>
-                      <textarea value={companyForm.contract_template} onChange={e => setCompanyForm({...companyForm, contract_template: e.target.value})} className="w-full h-96 p-6 rounded-3xl bg-slate-50 border border-slate-100 font-mono text-[11px] focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none resize-none" placeholder="Enter base contract structure... Use {{placeholder}} for dynamic injection." />
-                      <Button onClick={() => { db.updateSettings(companyForm); showStatus('Global template synchronized.'); }} className="h-14 px-12 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-100">Commit Global Format</Button>
+                      <textarea readOnly={!canEditSettings} value={companyForm.contract_template} onChange={e => setCompanyForm({...companyForm, contract_template: e.target.value})} className="w-full h-96 p-6 rounded-3xl bg-slate-50 border border-slate-100 font-mono text-[11px] focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none resize-none" placeholder="Enter base contract structure... Use {{placeholder}} for dynamic injection." />
+                      {canEditSettings && <Button onClick={() => { db.updateSettings(companyForm); showStatus('Global template synchronized.'); }} className="h-14 px-12 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-100">Commit Global Format</Button>}
                   </CardContent>
               </Card>
           </div>
       )}
 
       {/* --- MAINTENANCE TAB --- */}
-      {activeTab === 'maintenance' && canEditSettings && (
+      {activeTab === 'maintenance' && user && hasPermission(user.role_id, 'settings:view_maintenance') && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <Card className="rounded-[2.5rem] border-red-200/60 bg-red-50/20 shadow-xl h-fit border overflow-hidden">
                   <CardHeader className="bg-red-600 text-white p-8 flex items-center gap-3"><Eraser className="w-6 h-6"/><CardTitle className="text-xl font-black">Memory Purge</CardTitle></CardHeader>
                   <CardContent className="p-8 space-y-6">
                       <p className="text-slate-600 text-sm font-medium">Resetting audit buffers will permanently remove historical system logs. This action is audited and irreversible.</p>
-                      <Button variant="danger" className="w-full h-14 rounded-2xl font-black uppercase tracking-widest">Execute Buffer Reset</Button>
+                      {canEditSettings && <Button variant="danger" className="w-full h-14 rounded-2xl font-black uppercase tracking-widest">Execute Buffer Reset</Button>}
                   </CardContent>
               </Card>
           </div>

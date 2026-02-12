@@ -4,12 +4,15 @@ export type Permission =
   | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:renew' | 'members:print_contract'
   | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete'
   | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email'
-  | 'settings:view' | 'settings:edit'
+  | 'settings:view' | 'settings:edit' 
+  | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_maintenance' | 'settings:view_navigation'
   | 'reports:view' | 'reports:export'
   | 'logs:view'
   | 'properties:view' | 'properties:edit'
   | 'outlets:view' | 'outlets:edit'
-  | 'bookings:view' | 'bookings:create' | 'bookings:edit' | 'bookings:delete' | 'bookings:manage_resources'; 
+  | 'bookings:view' | 'bookings:create' | 'bookings:edit' | 'bookings:delete' | 'bookings:manage_resources'
+  | 'sales:view' | 'sales:create' | 'sales:edit' | 'sales:delete'
+  | 'inventory:view' | 'inventory:manage'; 
 
 export interface Role {
   id: string;
@@ -85,6 +88,7 @@ export interface CompanySettings {
   signatory_approved_role?: string;
   keyboard_shortcuts?: Record<string, string>;
   contract_template?: string; 
+  navigation_order?: string[];
 }
 
 export enum MemberStatus {
@@ -171,4 +175,36 @@ export interface MassageBooking {
   status: 'confirmed' | 'cancelled' | 'completed' | 'no-show';
   created_at: string;
   discount?: number;
+}
+
+export type SaleCategory = 'Retail' | 'Personal Training' | 'Entrance Fee' | 'Other';
+
+export interface Sale {
+  id: string;
+  property_id: string;
+  guest_id?: string; 
+  guest_name: string; 
+  category: SaleCategory;
+  item_id?: string; // Reference to predefined item
+  item_name: string;
+  quantity: number;
+  unit_price: number;
+  gross_amount: number;
+  discount_amount: number;
+  net_amount: number;
+  payment_method: string;
+  status: 'completed' | 'refunded' | 'void';
+  created_at: string;
+  remarks?: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  property_id: string;
+  name: string;
+  category: SaleCategory;
+  price: number;
+  stock_quantity: number;
+  track_inventory: boolean;
+  created_at: string;
 }

@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { 
   Card, 
@@ -40,14 +41,16 @@ import {
   Phone,
   Filter,
   Layers,
-  LayoutGrid
+  LayoutGrid,
+  ShoppingBag
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { 
   MassageBooking, 
   Guest, 
   Therapist, 
-  MassageType 
+  MassageType,
+  Sale
 } from '../types';
 import { format, addDays, startOfDay, isSameDay } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
@@ -76,6 +79,13 @@ const GuestHistoryView = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'confirmed' | 'cancelled' | 'no-show'>('all');
   const [groupBy, setGroupBy] = useState<'none' | 'month'>('none');
+  const [guestSales, setGuestSales] = useState<Sale[]>([]);
+
+  useEffect(() => {
+    db.getSales(guest.property_id).then(allSales => {
+        setGuestSales(allSales.filter(s => s.guest_id === guest.id));
+    });
+  }, [guest.id, guest.property_id]);
 
   // Base list of guest bookings
   const guestBookings = useMemo(() => 
@@ -112,14 +122,16 @@ const GuestHistoryView = ({
   }, [filteredBookings, groupBy]);
 
   const stats = useMemo(() => {
-    const completed = guestBookings.filter(b => b.status === 'completed');
-    const totalSpent = completed.reduce((sum, b) => sum + Number(b.price), 0);
+    const completedServices = guestBookings.filter(b => b.status === 'completed');
+    const serviceRevenue = completedServices.reduce((sum, b) => sum + Number(b.price), 0);
+    const saleRevenue = guestSales.filter(s => s.status === 'completed').reduce((sum, s) => sum + Number(s.net_amount), 0);
+    
     return {
-      visits: completed.length,
-      ltv: totalSpent,
+      visits: completedServices.length + guestSales.length,
+      ltv: serviceRevenue + saleRevenue,
       noShows: guestBookings.filter(b => b.status === 'no-show').length
     };
-  }, [guestBookings]);
+  }, [guestBookings, guestSales]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
@@ -155,14 +167,32 @@ const GuestHistoryView = ({
 
           <div className="grid grid-cols-2 gap-4">
               <Card className="rounded-3xl border-slate-200/60 shadow-sm p-5 bg-emerald-50/30">
-                 <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1">Lifetime Value</p>
+                 <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1">Lifetime Value (POS+SVC)</p>
                  <h4 className="text-lg font-black text-emerald-700">{formatMoney(stats.ltv)}</h4>
               </Card>
               <Card className="rounded-3xl border-slate-200/60 shadow-sm p-5 bg-indigo-50/30">
-                 <p className="text-[8px] font-black text-indigo-600 uppercase tracking-widest mb-1">Total Visits</p>
-                 <h4 className="text-lg font-black text-indigo-700">{stats.visits} Sessions</h4>
+                 <p className="text-[8px] font-black text-indigo-600 uppercase tracking-widest mb-1">Engagements</p>
+                 <h4 className="text-lg font-black text-indigo-700">{stats.visits} Total</h4>
               </Card>
           </div>
+
+          {guestSales.length > 0 && (
+              <Card className="rounded-[2rem] border-slate-200/60 shadow-lg p-6 bg-slate-50/50">
+                  <div className="flex items-center gap-2 mb-4">
+                      <ShoppingBag className="w-4 h-4 text-indigo-600" />
+                      <h4 className="text-[10px] font-black uppercase tracking-widest">Recent Retail & POS</h4>
+                  </div>
+                  <div className="space-y-3">
+                      {guestSales.slice(0, 3).map(s => (
+                          <div key={s.id} className="flex justify-between items-center text-[10px] font-bold">
+                              <span className="text-slate-500">{s.item_name}</span>
+                              <span className="text-slate-900">{formatMoney(s.net_amount)}</span>
+                          </div>
+                      ))}
+                      {guestSales.length > 3 && <p className="text-[8px] text-indigo-600 font-black uppercase text-right mt-2">+{guestSales.length - 3} more records</p>}
+                  </div>
+              </Card>
+          )}
         </div>
 
         <div className="lg:col-span-2">
@@ -307,7 +337,7 @@ const GuestHistoryView = ({
 
 const MassageScheduling = () => {
   const { user } = useAuth();
-  const { currentProperty, formatMoney } = useSettings();
+  const { currentProperty, formatMoney, hasPermission } = useSettings();
   const [activeTab, setActiveTab] = useState<'bookings' | 'treatments' | 'therapists' | 'guests'>('bookings');
   const [viewDate, setViewDate] = useState(new Date());
   
@@ -333,6 +363,7 @@ const MassageScheduling = () => {
   const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest', name: string} | null>(null);
 
   const isAdmin = user?.role_id === 'admin';
+  const canManageResources = user && hasPermission(user.role_id, 'bookings:manage_resources');
 
   useEffect(() => {
     if (currentProperty) {
@@ -510,8 +541,8 @@ const MassageScheduling = () => {
           <div className="flex bg-slate-200 p-1 rounded-xl border border-slate-300 shadow-inner overflow-x-auto">
             <button onClick={() => setActiveTab('bookings')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'bookings' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Service Grid</button>
             <button onClick={() => setActiveTab('guests')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'guests' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Guest Ledger</button>
-            <button onClick={() => setActiveTab('treatments')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'treatments' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Portfolio</button>
-            <button onClick={() => setActiveTab('therapists')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'therapists' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Staffing</button>
+            {canManageResources && <button onClick={() => setActiveTab('treatments')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'treatments' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Portfolio</button>}
+            {canManageResources && <button onClick={() => setActiveTab('therapists')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'therapists' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Staffing</button>}
           </div>
           <Button onClick={() => { setEditingBooking(null); setShowBookingForm(true); }} className="h-10 px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100">
             <Plus className="w-4 h-4 mr-2" /> Authorized Booking
@@ -698,7 +729,7 @@ const MassageScheduling = () => {
       )}
 
       {/* --- PORTFOLIO TAB --- */}
-      {activeTab === 'treatments' && (
+      {activeTab === 'treatments' && canManageResources && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2">
                   <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
@@ -756,7 +787,7 @@ const MassageScheduling = () => {
       )}
 
       {/* --- STAFFING TAB --- */}
-      {activeTab === 'therapists' && (
+      {activeTab === 'therapists' && canManageResources && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2">
                   <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
