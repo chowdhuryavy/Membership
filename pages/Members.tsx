@@ -832,7 +832,90 @@ const Members = () => {
             <div className="flex flex-col md:flex-row items-center gap-3 w-full xl:w-auto relative z-10"><div className="relative group flex-1 md:min-w-[320px] w-full"><Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" /><input placeholder="Search ID or Name..." className="w-full h-12 pl-12 pr-4 rounded-2xl border border-slate-200 font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div><div className="flex gap-2 w-full md:w-auto"><Select options={[{ value: 'All', label: 'All Statuses' }, ...Object.values(MemberStatus).map(s => ({ value: s, label: s }))]} value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="h-12 w-full md:w-40 rounded-xl font-bold text-[11px] uppercase" /><Select options={[{ value: 'All', label: 'All Tiers' }, ...categories.map(c => ({ value: c.id, label: c.name }))]} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="h-12 w-full md:w-40 rounded-xl font-bold text-[11px] uppercase" /></div>{canCreate && <Button onClick={() => { setSelectedMember(null); setIsEditing(false); setIsRenewal(false); setView('form'); }} className="h-12 px-8 rounded-2xl font-black whitespace-nowrap shadow-xl shadow-indigo-100"><Plus className="w-5 h-5 mr-2" /> New Member</Button>}</div>
           </div>
           <div className="flex items-center gap-3 bg-slate-100 p-1.5 rounded-2xl w-fit border border-slate-200/50 mb-2"><button onClick={() => setGroupingKey('category')} className={`flex items-center gap-2 px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${groupingKey === 'category' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><LayoutGrid className="w-3.5 h-3.5" /> Group by Tier</button><button onClick={() => setGroupingKey('none')} className={`flex items-center gap-2 px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${groupingKey === 'none' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><ListFilter className="w-3.5 h-3.5" /> Flat List</button></div>
-          <Card className="overflow-hidden border-slate-200/60 shadow-xl rounded-[2.5rem] bg-white"><div className="overflow-x-auto"><table className="w-full text-sm text-left border-collapse"><thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] bg-slate-50 border-b"><tr><th className="px-8 py-5">Membership #</th><th className="px-8 py-5">Guest Profile</th><th className="px-8 py-5">Status</th><th className="px-8 py-5">Contact Scope</th><th className="px-8 py-5">Deferred Expiry</th><th className="px-8 py-5 text-center">Actions</th></tr></thead><tbody className="divide-y divide-slate-50">{Object.keys(groupedMembers).length === 0 ? (<tr><td colSpan={6} className="px-8 py-20 text-center text-slate-400 font-bold">Zero records detected in current scope.</td></tr>) : Object.keys(groupedMembers).map(groupName => (<React.Fragment key={groupName}>{groupingKey !== 'none' && (<tr className="bg-slate-50/50 border-y border-slate-100"><td colSpan={6} className="px-8 py-4"><div className="flex items-center gap-3"><Tag className="w-3.5 h-3.5 text-indigo-600" /><span className="text-[11px] font-black uppercase tracking-widest text-slate-900">{groupName}</span><span className="text-[9px] font-bold text-slate-400 uppercase bg-white px-2 py-0.5 rounded-full border border-slate-200">{groupedMembers[groupName].length} Records</span></div></td></tr>)}{groupedMembers[groupName].map((member) => { const status = getEffectiveStatus(member); return (<tr key={member.id} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onClick={() => { setSelectedMember(member); setView('detail'); }}><td className="px-8 py-6"><span className="font-black text-slate-900 tracking-tight text-base">{member.membership_number}</span></td><td className="px-8 py-6"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs">{member.guest_name.charAt(0)}</div><span className="font-black text-slate-700 tracking-tight uppercase text-xs">{member.guest_name}</span></div></td><td className="px-8 py-6"><span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border shadow-sm ${status === MemberStatus.ACTIVE ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : status === MemberStatus.FROZEN ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{status}</span></td><td className="px-8 py-6"><div className="flex items-center gap-2 text-[10px] font-bold text-slate-500">{canViewContact ? (<div className="flex flex-col gap-0.5"><span>{member.phone}</span><span className="text-[9px] lowercase opacity-60">{member.email || 'no email'}</span></div>) : (<span className="flex items-center gap-1.5 opacity-50 bg-slate-100 px-2 py-1 rounded-md text-[9px] uppercase tracking-widest"><EyeOff className="w-3 h-3" /> Encrypted Access</span>)}</div></td><td className="px-8 py-6"><div className="flex flex-col gap-0.5"><span className="text-indigo-600 font-black text-sm">{format(parseISO(member.current_end_date), 'dd-MM-yyyy')}</span>{member.current_end_date !== member.original_end_date && <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest line-through">Org: {format(parseISO(member.original_end_date), 'dd-MM-yyyy')}</span>}</div></td><td className="px-8 py-6"><div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>{canPrint && <button onClick={() => handlePrint(member)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Print Contract"><FileText className="w-4 h-4" /></button>}{canRenew && <button onClick={() => { setSelectedMember(member); setIsEditing(false); setIsRenewal(true); setView('form'); }} className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Process Renewal"><RefreshCcw className="w-4 h-4" /></button>}{canEdit && <button onClick={() => { setSelectedMember(member); setIsEditing(true); setIsRenewal(false); setView('form'); }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Modify Identity"><Edit2 className="w-4 h-4" /></button>}{canDelete && <button onClick={() => setDeleteId(member.id)} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Purge Record"><Trash2 className="w-4 h-4" /></button>}</div></td></tr>);})}</React.Fragment>))}</tbody></table></div></Card>
+          <Card className="overflow-hidden border-slate-200/60 shadow-xl rounded-[2.5rem] bg-white">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left border-collapse">
+                <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] bg-slate-50 border-b">
+                  <tr>
+                    <th className="px-8 py-5">Membership #</th>
+                    <th className="px-8 py-5">Guest Profile</th>
+                    <th className="px-8 py-5">Status</th>
+                    <th className="px-8 py-5">Contact Scope</th>
+                    <th className="px-8 py-5">Deferred Expiry</th>
+                    <th className="px-8 py-5 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {Object.keys(groupedMembers).length === 0 ? (
+                    <tr><td colSpan={6} className="px-8 py-20 text-center text-slate-400 font-bold">Zero records detected in current scope.</td></tr>
+                  ) : Object.keys(groupedMembers).map(groupName => (
+                    <React.Fragment key={groupName}>
+                      {groupingKey !== 'none' && (
+                        <tr className="bg-indigo-50/50 border-y border-slate-100 border-l-4 border-l-indigo-600">
+                          <td colSpan={6} className="px-8 py-5">
+                            <div className="flex items-center gap-3">
+                              <Tag className="w-4 h-4 text-indigo-700" />
+                              <span className="text-[12px] font-black uppercase tracking-widest text-indigo-950">{groupName}</span>
+                              <span className="text-[9px] font-black text-indigo-400 uppercase bg-white px-2.5 py-1 rounded-lg border border-indigo-100 shadow-sm">{groupedMembers[groupName].length} Records</span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      {groupedMembers[groupName].map((member) => { 
+                        const status = getEffectiveStatus(member); 
+                        return (
+                          <tr key={member.id} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onClick={() => { setSelectedMember(member); setView('detail'); }}>
+                            <td className="px-8 py-6">
+                              <span className="font-black text-slate-900 tracking-tight text-base">{member.membership_number}</span>
+                            </td>
+                            <td className="px-8 py-6">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs uppercase">{member.guest_name.charAt(0)}</div>
+                                <span className="font-black text-slate-700 tracking-tight uppercase text-xs">{member.guest_name}</span>
+                              </div>
+                            </td>
+                            <td className="px-8 py-6">
+                              <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border shadow-sm ${status === MemberStatus.ACTIVE ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : status === MemberStatus.FROZEN ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{status}</span>
+                            </td>
+                            <td className="px-8 py-6">
+                              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
+                                {canViewContact ? (
+                                  <div className="flex flex-col gap-0.5">
+                                    <span>{member.phone}</span>
+                                    <span className="text-[9px] lowercase opacity-60">{member.email || 'no email'}</span>
+                                  </div>
+                                ) : (
+                                  <span className="flex items-center gap-1.5 opacity-50 bg-slate-100 px-2 py-1 rounded-md text-[9px] uppercase tracking-widest">
+                                    <EyeOff className="w-3 h-3" /> Encrypted Access
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-8 py-6">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-indigo-600 font-black text-sm">{format(parseISO(member.current_end_date), 'dd-MM-yyyy')}</span>
+                                {member.current_end_date !== member.original_end_date && (
+                                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest line-through">Org: {format(parseISO(member.original_end_date), 'dd-MM-yyyy')}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-8 py-6">
+                              <div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                                {canPrint && <button onClick={() => handlePrint(member)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Print Contract"><FileText className="w-4 h-4" /></button>}
+                                {canRenew && <button onClick={() => { setSelectedMember(member); setIsEditing(false); setIsRenewal(true); setView('form'); }} className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Process Renewal"><RefreshCcw className="w-4 h-4" /></button>}
+                                {canEdit && <button onClick={() => { setSelectedMember(member); setIsEditing(true); setIsRenewal(false); setView('form'); }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Modify Identity"><Edit2 className="w-4 h-4" /></button>}
+                                {canDelete && <button onClick={() => setDeleteId(member.id)} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Purge Record"><Trash2 className="w-4 h-4" /></button>}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
           <ConfirmationModal isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={async () => { if (deleteId && canDelete) { await db.deleteMember(deleteId); loadData(); } }} title="Delete Member Record" description="Irreversible removal of guest profile." confirmText="Execute Purge" isDestructive={true} />
         </div>
       )}
