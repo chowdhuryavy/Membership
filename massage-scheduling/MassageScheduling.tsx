@@ -44,7 +44,8 @@ import {
   LayoutGrid,
   ShoppingBag,
   CalendarClock,
-  Settings2
+  Settings2,
+  User
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { 
@@ -107,18 +108,6 @@ const GuestHistoryView = ({
       })
       .sort((a, b) => `${b.date} ${b.start_time}`.localeCompare(`${a.date} ${a.start_time}`));
   }, [guestBookings, massageTypes, therapists, searchTerm, statusFilter]);
-
-  const groupedBookings = useMemo(() => {
-    if (groupBy === 'none') {
-        return { 'All Records': filteredBookings };
-    }
-    return filteredBookings.reduce((groups, booking) => {
-        const month = format(new Date(booking.date), 'MMMM yyyy');
-        if (!groups[month]) groups[month] = [];
-        groups[month].push(booking);
-        return groups;
-    }, {} as Record<string, MassageBooking[]>);
-  }, [filteredBookings, groupBy]);
 
   const stats = useMemo(() => {
     const completedServices = guestBookings.filter(b => b.status === 'completed');
@@ -314,9 +303,7 @@ const MassageScheduling = () => {
       ]);
       setBookings(b || []);
       setGuests(g || []);
-      // Explicit Alphabetical Sorting for Specialists
       setTherapists((t || []).sort((x, y) => x.name.localeCompare(y.name)));
-      // Explicit Duration Sorting for Portfolio
       setMassageTypes((m || []).sort((x, y) => {
           const durX = Number(x.duration_minutes) || 0;
           const durY = Number(y.duration_minutes) || 0;
@@ -347,27 +334,8 @@ const MassageScheduling = () => {
     }
   };
 
-  const handleUpdateGuest = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!editingGuest || !canEdit) return;
-      setIsSubmitting(true);
-      try {
-          await db.updateGuest(editingGuest.id, {
-              name: editingGuest.name,
-              phone: editingGuest.phone,
-              email: editingGuest.email
-          });
-          showStatus('Guest profile modified successfully.');
-          setEditingGuest(null);
-          loadData();
-      } catch (e: any) {
-          showStatus(e.message || 'Update failed.', 'error');
-      } finally {
-          setIsSubmitting(false);
-      }
-  };
-
-  const handleSaveMassageType = async () => {
+  const handleSaveMassageType = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!currentProperty || !newType.name || !canManageResources) return;
     setIsSubmitting(true);
     try {
@@ -388,7 +356,8 @@ const MassageScheduling = () => {
     }
   };
 
-  const handleSaveTherapist = async () => {
+  const handleSaveTherapist = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!currentProperty || !newTherapist.name || !canManageResources) return;
     setIsSubmitting(true);
     try {
@@ -411,16 +380,11 @@ const MassageScheduling = () => {
 
   const handleDeleteConfirmed = async () => {
       if (!itemToDelete) return;
-      const isResource = itemToDelete.type === 'treatment' || itemToDelete.type === 'therapist';
-      if (isResource && !canManageResources) return;
-      if (itemToDelete.type === 'guest' && !canDelete) return;
-
       try {
           if (itemToDelete.type === 'treatment') await db.deleteMassageType(itemToDelete.id);
           else if (itemToDelete.type === 'therapist') await db.deleteTherapist(itemToDelete.id);
           else if (itemToDelete.type === 'guest') await db.deleteGuest(itemToDelete.id);
-          
-          showStatus(`Resource record purged.`);
+          showStatus(`Record purged.`);
           loadData();
       } catch (e: any) {
           showStatus(`Removal failed: ${e.message}`, 'error');
@@ -460,7 +424,7 @@ const MassageScheduling = () => {
           <div className="flex items-center justify-center h-96">
               <Card className="max-w-md text-center p-8 rounded-[2rem] border-red-100 bg-red-50/30">
                   <CalendarClock className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight">Access Restricted</h3>
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight uppercase">Access Restricted</h3>
                   <p className="text-slate-500 mt-2 text-sm">Security clearance insufficient to view resource scheduling grid.</p>
               </Card>
           </div>
@@ -489,15 +453,15 @@ const MassageScheduling = () => {
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="flex bg-slate-200 p-1 rounded-xl border border-slate-300 shadow-inner overflow-x-auto">
-            <button onClick={() => {setActiveTab('bookings'); setIsEditingResource(false);}} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'bookings' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Service Grid</button>
-            <button onClick={() => {setActiveTab('guests'); setIsEditingResource(false);}} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'guests' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Guest Ledger</button>
-            {canManageResources && <button onClick={() => {setActiveTab('treatments'); setIsEditingResource(false);}} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'treatments' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Portfolio</button>}
-            {canManageResources && <button onClick={() => {setActiveTab('therapists'); setIsEditingResource(false);}} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'therapists' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Staffing</button>}
+          <div className="flex bg-[#e2e8f0]/40 p-1.5 rounded-2xl border border-slate-200/60 shadow-inner overflow-x-auto">
+            <button onClick={() => {setActiveTab('bookings'); setIsEditingResource(false);}} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'bookings' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Service Grid</button>
+            <button onClick={() => {setActiveTab('guests'); setIsEditingResource(false);}} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'guests' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Guest Ledger</button>
+            <button onClick={() => {setActiveTab('treatments'); setIsEditingResource(false);}} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'treatments' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Portfolio</button>
+            <button onClick={() => {setActiveTab('therapists'); setIsEditingResource(false);}} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'therapists' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Staffing</button>
           </div>
           {canCreate && (
-              <Button onClick={() => { setEditingBooking(null); setShowBookingForm(true); }} className="h-10 px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100">
-                <Plus className="w-4 h-4 mr-2" /> Authorized Booking
+              <Button onClick={() => { setEditingBooking(null); setShowBookingForm(true); }} className="h-12 px-8 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-indigo-100">
+                <Plus className="w-5 h-5 mr-2" /> Authorized Booking
               </Button>
           )}
         </div>
@@ -505,29 +469,29 @@ const MassageScheduling = () => {
 
       {activeTab === 'bookings' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-sm gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-[1.5rem] border border-slate-200 shadow-sm gap-4">
             <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
-              <button onClick={() => setViewDate(addDays(viewDate, -1))} className="p-1.5 hover:bg-slate-50 rounded-lg border border-slate-100"><ChevronLeft className="w-4 h-4 text-slate-400"/></button>
-              <div className="flex flex-col items-center min-w-[150px]">
-                <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">{format(viewDate, 'EEEE')}</span>
-                <span className="text-sm font-black text-slate-900 tracking-tight">{format(viewDate, 'MMMM dd, yyyy')}</span>
+              <button onClick={() => setViewDate(addDays(viewDate, -1))} className="p-2 hover:bg-slate-50 rounded-xl border border-slate-100"><ChevronLeft className="w-5 h-5 text-slate-400"/></button>
+              <div className="flex flex-col items-center min-w-[180px]">
+                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{format(viewDate, 'EEEE')}</span>
+                <span className="text-base font-black text-slate-900 tracking-tight">{format(viewDate, 'MMMM dd, yyyy')}</span>
               </div>
-              <button onClick={() => setViewDate(addDays(viewDate, 1))} className="p-1.5 hover:bg-slate-50 rounded-lg border border-slate-100"><ChevronRight className="w-4 h-4 text-slate-400"/></button>
+              <button onClick={() => setViewDate(addDays(viewDate, 1))} className="p-2 hover:bg-slate-50 rounded-xl border border-slate-100"><ChevronRight className="w-5 h-5 text-slate-400"/></button>
             </div>
-            <div className="relative flex-1 sm:w-48">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                <input placeholder="Filter roster..." value={therapistFilter} onChange={(e) => setTherapistFilter(e.target.value)} className="h-9 w-full pl-9 pr-3 rounded-xl bg-slate-50 border border-slate-200 text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+            <div className="relative flex-1 sm:w-64">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input placeholder="Filter roster..." value={therapistFilter} onChange={(e) => setTherapistFilter(e.target.value)} className="h-11 w-full pl-11 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
             </div>
           </div>
 
-          <Card className="rounded-[1.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-slate-50">
+          <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden bg-slate-50">
             <div className="overflow-x-auto">
               <div className="min-w-[900px] flex">
-                <div className="w-14 shrink-0 border-r border-slate-200 bg-white">
-                    <div className="h-10 border-b border-slate-200 flex items-center justify-center"><Clock className="w-3 h-3 text-slate-300" /></div>
+                <div className="w-16 shrink-0 border-r border-slate-200 bg-white">
+                    <div className="h-12 border-b border-slate-200 flex items-center justify-center"><Clock className="w-4 h-4 text-slate-300" /></div>
                     {HOURS.map(hour => (
                         <div key={hour} style={{ height: SLOT_HEIGHT }} className="relative">
-                            <span className="absolute -top-2 left-0 right-0 text-center text-[8px] font-black text-slate-400">{hour > 12 ? `${hour-12}P` : hour === 12 ? '12P' : `${hour}A`}</span>
+                            <span className="absolute -top-2.5 left-0 right-0 text-center text-[9px] font-black text-slate-400 uppercase">{hour > 12 ? `${hour-12}P` : hour === 12 ? '12P' : `${hour}A`}</span>
                         </div>
                     ))}
                 </div>
@@ -535,16 +499,17 @@ const MassageScheduling = () => {
                     {therapists.filter(t => !therapistFilter || t.name.toLowerCase().includes(therapistFilter.toLowerCase())).map(therapist => {
                       const therapistBookings = filteredTodayBookings.filter(b => b.therapist_id === therapist.id);
                       return (
-                        <div key={therapist.id} className="flex-1 border-r border-slate-200 relative bg-white/50 min-w-[150px]">
-                          <div className="h-10 bg-white border-b border-slate-200 flex flex-col items-center justify-center sticky top-0 z-10 px-1">
-                            <span className="text-[9px] font-black text-slate-900 uppercase truncate w-full text-center">{therapist.name}</span>
+                        <div key={therapist.id} className="flex-1 border-r border-slate-200 relative bg-white/50 min-w-[160px]">
+                          <div className="h-12 bg-white border-b border-slate-200 flex flex-col items-center justify-center sticky top-0 z-10 px-1">
+                            <span className="text-[10px] font-black text-slate-900 uppercase truncate w-full text-center tracking-tight">{therapist.name}</span>
                           </div>
                           {HOURS.map(hour => <div key={hour} style={{ height: SLOT_HEIGHT }} className="border-b border-slate-100/50"></div>)}
                           {therapistBookings.map(booking => {
                             const { top, height } = calculatePosition(booking.start_time, booking.end_time);
                             return (
-                              <button key={booking.id} onClick={() => setSelectedBooking(booking)} style={{ top: top + 40, height: height - 1 }} className={`absolute left-0.5 right-0.5 p-1 rounded border-l-2 text-left shadow-md text-white transition-all hover:z-20 overflow-hidden bg-indigo-600 border-indigo-700`}>
-                                <div className="text-[8px] font-black uppercase leading-tight truncate">{getGuestName(booking.guest_id)}</div>
+                              <button key={booking.id} onClick={() => setSelectedBooking(booking)} style={{ top: top + 48, height: height - 1 }} className={`absolute left-1 right-1 p-2 rounded-lg border-l-4 text-left shadow-lg text-white transition-all hover:z-20 overflow-hidden bg-indigo-600 border-indigo-700 group hover:scale-[1.02]`}>
+                                <div className="text-[9px] font-black uppercase leading-tight truncate">{getGuestName(booking.guest_id)}</div>
+                                <div className="text-[7px] font-bold text-indigo-200 uppercase tracking-widest mt-0.5">{booking.start_time} - {booking.end_time}</div>
                               </button>
                             );
                           })}
@@ -559,29 +524,32 @@ const MassageScheduling = () => {
       )}
 
       {activeTab === 'guests' && (
-          <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden">
-              <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                  <div className="relative w-full max-w-md">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input value={guestSearchTerm} onChange={e => setGuestSearchTerm(e.target.value)} placeholder="Search guests..." className="h-11 w-full pl-11 pr-4 rounded-xl border border-slate-200 font-bold text-xs" />
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
+              <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                  <div className="relative w-full max-w-md group">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+                      <input value={guestSearchTerm} onChange={e => setGuestSearchTerm(e.target.value)} placeholder="Search guest profile directory..." className="h-12 w-full pl-11 pr-4 rounded-xl border border-slate-200 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all" />
                   </div>
               </div>
               <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                       <thead className="bg-slate-50 border-b border-slate-100">
                           <tr>
-                              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase">Guest Profile</th>
-                              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase text-right">Actions</th>
+                              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Guest Profile Identity</th>
+                              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
                           </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-50">
+                      <tbody className="divide-y divide-slate-100">
                           {filteredGuests.map(g => (
                               <tr key={g.id} onClick={() => setSelectedGuestForHistory(g)} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer">
-                                  <td className="px-8 py-5 font-black text-slate-900 uppercase">{g.name}</td>
-                                  <td className="px-8 py-5 text-right" onClick={e => e.stopPropagation()}>
-                                      <div className="flex justify-end gap-1">
-                                        {canEdit && <button onClick={() => setEditingGuest(g)} className="p-2 text-slate-400 hover:text-indigo-600"><Edit3 className="w-4 h-4" /></button>}
-                                        {canDelete && <button onClick={() => setItemToDelete({ id: g.id, type: 'guest', name: g.name })} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>}
+                                  <td className="px-8 py-6 flex items-center gap-4">
+                                      <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 font-black text-xs group-hover:bg-indigo-600 group-hover:text-white transition-colors uppercase">{g.name.charAt(0)}</div>
+                                      <span className="font-black text-slate-900 uppercase tracking-tight">{g.name}</span>
+                                  </td>
+                                  <td className="px-8 py-6 text-right" onClick={e => e.stopPropagation()}>
+                                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => setEditingGuest(g)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100"><Edit3 className="w-4 h-4" /></button>
+                                        <button onClick={() => setItemToDelete({ id: g.id, type: 'guest', name: g.name })} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100"><Trash2 className="w-4 h-4" /></button>
                                       </div>
                                   </td>
                               </tr>
@@ -592,70 +560,194 @@ const MassageScheduling = () => {
           </Card>
       )}
 
-      {activeTab === 'treatments' && canManageResources && (
-          <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden">
-              <div className="p-8 space-y-6">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-black uppercase">{isEditingResource ? 'Modify Treatment' : 'Service Portfolio'}</h3>
-                    <div className="flex gap-2">
-                        <Input value={newType.name} onChange={e => setNewType({...newType, name: e.target.value})} placeholder="Service Name" className="h-10 text-xs w-48" />
-                        <Input type="number" value={newType.price} onChange={e => setNewType({...newType, price: parseFloat(e.target.value) || 0})} placeholder="Fee" className="h-10 text-xs w-24" />
-                        <Button onClick={handleSaveMassageType} className="h-10 text-[10px] uppercase font-black">{isEditingResource ? 'Sync' : 'Add'}</Button>
-                        {isEditingResource && <Button variant="secondary" onClick={() => { setIsEditingResource(false); setNewType({ id:'', name:'', price:0, duration_minutes:60 }); }} className="h-10 px-3"><X className="w-4 h-4"/></Button>}
-                    </div>
-                </div>
-                <table className="w-full text-left">
-                    <tbody className="divide-y divide-slate-100">
-                        {massageTypes.map(t => (
-                            <tr key={t.id} className="hover:bg-slate-50 group">
-                                <td className="py-4 font-black uppercase text-xs">{t.name} <span className="ml-2 opacity-30">({t.duration_minutes}m)</span></td>
-                                <td className="py-4 text-right">
-                                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => { setIsEditingResource(true); setNewType(t); }} className="p-2 text-slate-300 hover:text-indigo-600"><Edit3 className="w-4 h-4"/></button>
-                                        <button onClick={() => setItemToDelete({id: t.id, type: 'treatment', name: t.name})} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+      {activeTab === 'treatments' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in slide-in-from-bottom-4">
+              <div className="lg:col-span-8">
+                  <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-full">
+                      <CardHeader className="p-8 border-b border-slate-100 flex items-center gap-3">
+                          <Zap className="w-5 h-5 text-indigo-600" />
+                          <CardTitle className="text-sm font-black uppercase tracking-[0.2em] text-slate-900">Authorized Treatments</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                          <table className="w-full text-left">
+                              <thead className="bg-slate-50/50 border-b border-slate-100">
+                                  <tr>
+                                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Service</th>
+                                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Duration</th>
+                                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Base Fee</th>
+                                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                  {massageTypes.map(t => (
+                                      <tr key={t.id} className="hover:bg-slate-50 group transition-colors">
+                                          <td className="px-8 py-6 font-black uppercase text-xs text-slate-900 tracking-tight">{t.name}</td>
+                                          <td className="px-8 py-6 text-center text-slate-500 font-bold text-xs uppercase whitespace-nowrap">{t.duration_minutes} Minutes</td>
+                                          <td className="px-8 py-6 text-center font-black text-indigo-600 text-xs tabular-nums">{formatMoney(t.price)}</td>
+                                          <td className="px-8 py-6 text-right">
+                                              <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                  <button onClick={() => { setIsEditingResource(true); setNewType(t); }} className="p-2 text-slate-300 hover:text-indigo-600"><Edit3 className="w-4 h-4"/></button>
+                                                  <button onClick={() => setItemToDelete({id: t.id, type: 'treatment', name: t.name})} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
+                                              </div>
+                                          </td>
+                                      </tr>
+                                  ))}
+                              </tbody>
+                          </table>
+                      </CardContent>
+                  </Card>
               </div>
-          </Card>
+
+              <div className="lg:col-span-4">
+                  <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit sticky top-24">
+                      <CardHeader className="bg-indigo-600 text-white p-6 border-b border-indigo-700/30">
+                          <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                             <Plus className="w-4 h-4" /> {isEditingResource ? 'Modify Treatment' : 'New Service Tier'}
+                          </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-8 space-y-6">
+                          <form onSubmit={handleSaveMassageType} className="space-y-5">
+                              <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Treatment Designation</label>
+                                  <input 
+                                    value={newType.name} 
+                                    onChange={e => setNewType({...newType, name: e.target.value})} 
+                                    placeholder="e.g. Deep Tissue" 
+                                    className="w-full h-14 px-6 rounded-2xl bg-white border-2 border-slate-100 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600/50 transition-all" 
+                                  />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-2">
+                                      <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1">Fee</label>
+                                      <input 
+                                        type="number" 
+                                        value={newType.price} 
+                                        onChange={e => setNewType({...newType, price: parseFloat(e.target.value) || 0})} 
+                                        className="w-full h-14 px-6 rounded-2xl bg-white border-2 border-slate-100 font-black text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600/50 transition-all" 
+                                      />
+                                  </div>
+                                  <div className="space-y-2">
+                                      <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1">Mins</label>
+                                      <input 
+                                        type="number" 
+                                        value={newType.duration_minutes} 
+                                        onChange={e => setNewType({...newType, duration_minutes: parseInt(e.target.value) || 60})} 
+                                        className="w-full h-14 px-6 rounded-2xl bg-white border-2 border-slate-100 font-black text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600/50 transition-all" 
+                                      />
+                                  </div>
+                              </div>
+                              <div className="pt-4 flex flex-col gap-3">
+                                  <Button type="submit" isLoading={isSubmitting} className="w-full h-14 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-indigo-100 bg-indigo-600 hover:bg-indigo-700">
+                                      {isEditingResource ? 'Sync Protocol' : 'Commit to Portfolio'}
+                                  </Button>
+                                  {isEditingResource && (
+                                      <button type="button" onClick={() => { setIsEditingResource(false); setNewType({ id:'', name:'', price:0, duration_minutes:60 }); }} className="w-full h-12 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-600 transition-colors">Discard Adjustments</button>
+                                  )}
+                              </div>
+                          </form>
+                      </CardContent>
+                  </Card>
+              </div>
+          </div>
       )}
 
-      {activeTab === 'therapists' && canManageResources && (
-          <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden">
-              <div className="p-8 space-y-6">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-black uppercase">{isEditingResource ? 'Modify Staff Profile' : 'Specialist Roster'}</h3>
-                    <div className="flex gap-2">
-                        <Input value={newTherapist.name} onChange={e => setNewTherapist({...newTherapist, name: e.target.value})} placeholder="Name" className="h-10 text-xs w-48" />
-                        <Button onClick={handleSaveTherapist} className="h-10 text-[10px] uppercase font-black">{isEditingResource ? 'Sync' : 'Onboard'}</Button>
-                        {isEditingResource && <Button variant="secondary" onClick={() => { setIsEditingResource(false); setNewTherapist({ id:'', name:'', specialty:'', country:'' }); }} className="h-10 px-3"><X className="w-4 h-4"/></Button>}
-                    </div>
-                </div>
-                <table className="w-full text-left">
-                    <tbody className="divide-y divide-slate-100">
-                        {therapists.map(t => (
-                            <tr key={t.id} className="hover:bg-slate-50 group">
-                                <td className="py-4 font-black uppercase text-xs">{t.name}</td>
-                                <td className="py-4 text-right">
-                                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => { setIsEditingResource(true); setNewTherapist(t); }} className="p-2 text-slate-300 hover:text-indigo-600"><Edit3 className="w-4 h-4"/></button>
-                                        <button onClick={() => setItemToDelete({id: t.id, type: 'therapist', name: t.name})} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+      {activeTab === 'therapists' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in slide-in-from-bottom-4">
+              <div className="lg:col-span-8">
+                  <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-full">
+                      <CardHeader className="p-8 border-b border-slate-100 flex items-center gap-3">
+                          <Users2 className="w-5 h-5 text-indigo-600" />
+                          <CardTitle className="text-sm font-black uppercase tracking-[0.2em] text-slate-900">Specialist Roster</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                          <table className="w-full text-left">
+                              <thead className="bg-slate-50/50 border-b border-slate-100">
+                                  <tr>
+                                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Specialist</th>
+                                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Focus</th>
+                                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Origin</th>
+                                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                  {therapists.map(t => (
+                                      <tr key={t.id} className="hover:bg-slate-50 group transition-colors">
+                                          <td className="px-8 py-6">
+                                              <div className="flex items-center gap-4">
+                                                  <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black text-[10px] uppercase">{t.name.charAt(0)}</div>
+                                                  <span className="font-black text-slate-900 uppercase text-xs tracking-tight">{t.name}</span>
+                                              </div>
+                                          </td>
+                                          <td className="px-8 py-6 text-center text-slate-500 font-bold text-xs uppercase">{t.specialty || '--'}</td>
+                                          <td className="px-8 py-6 text-center text-slate-400 font-black text-[10px] uppercase tracking-widest">{t.country || '--'}</td>
+                                          <td className="px-8 py-6 text-right">
+                                              <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                  <button onClick={() => { setIsEditingResource(true); setNewTherapist(t); }} className="p-2 text-slate-300 hover:text-indigo-600"><Edit3 className="w-4 h-4"/></button>
+                                                  <button onClick={() => setItemToDelete({id: t.id, type: 'therapist', name: t.name})} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
+                                              </div>
+                                          </td>
+                                      </tr>
+                                  ))}
+                              </tbody>
+                          </table>
+                      </CardContent>
+                  </Card>
               </div>
-          </Card>
+
+              <div className="lg:col-span-4">
+                  <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden h-fit sticky top-24">
+                      <CardHeader className="bg-slate-950 text-white p-6 border-b border-slate-900">
+                          <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                             <UserPlus className="w-4 h-4" /> {isEditingResource ? 'Update Profile' : 'Specialist Onboarding'}
+                          </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-8 space-y-6">
+                          <form onSubmit={handleSaveTherapist} className="space-y-5">
+                              <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Full Name</label>
+                                  <input 
+                                    value={newTherapist.name} 
+                                    onChange={e => setNewTherapist({...newTherapist, name: e.target.value})} 
+                                    placeholder="e.g. Elena Petrova" 
+                                    className="w-full h-14 px-6 rounded-2xl bg-white border-2 border-slate-100 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600/50 transition-all" 
+                                  />
+                              </div>
+                              <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Core Specialty</label>
+                                  <input 
+                                    value={newTherapist.specialty} 
+                                    onChange={e => setNewTherapist({...newTherapist, specialty: e.target.value})} 
+                                    placeholder="e.g. Sports Therapy" 
+                                    className="w-full h-14 px-6 rounded-2xl bg-white border-2 border-slate-100 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600/50 transition-all" 
+                                  />
+                              </div>
+                              <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Country of Origin</label>
+                                  <input 
+                                    value={newTherapist.country} 
+                                    onChange={e => setNewTherapist({...newTherapist, country: e.target.value})} 
+                                    placeholder="e.g. Russia" 
+                                    className="w-full h-14 px-6 rounded-2xl bg-white border-2 border-slate-100 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600/50 transition-all" 
+                                  />
+                              </div>
+                              <div className="pt-4 flex flex-col gap-3">
+                                  <Button type="submit" isLoading={isSubmitting} className="w-full h-14 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-indigo-100 bg-indigo-600 hover:bg-indigo-700">
+                                      {isEditingResource ? 'Authorize Profile' : 'Authorize Staffing'}
+                                  </Button>
+                                  {isEditingResource && (
+                                      <button type="button" onClick={() => { setIsEditingResource(false); setNewTherapist({ id:'', name:'', specialty:'', country:'' }); }} className="w-full h-12 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-600 transition-colors">Discard Onboarding</button>
+                                  )}
+                              </div>
+                          </form>
+                      </CardContent>
+                  </Card>
+              </div>
+          </div>
       )}
 
       {selectedBooking && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-            <Card className="w-full max-w-md rounded-[2rem] border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <Card className="w-full max-w-md rounded-[2.5rem] border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
                 <CardHeader className="bg-indigo-600 text-white p-6">
                     <div className="flex justify-between items-start">
                         <CardTitle className="text-xl font-black uppercase">{getGuestName(selectedBooking.guest_id)}</CardTitle>
