@@ -42,7 +42,9 @@ import {
   Filter,
   Layers,
   LayoutGrid,
-  ShoppingBag
+  ShoppingBag,
+  CalendarClock,
+  Settings2
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { 
@@ -87,12 +89,10 @@ const GuestHistoryView = ({
     });
   }, [guest.id, guest.property_id]);
 
-  // Base list of guest bookings
   const guestBookings = useMemo(() => 
     bookings.filter(b => b.guest_id === guest.id)
   , [bookings, guest.id]);
 
-  // Filtered and Sorted list
   const filteredBookings = useMemo(() => {
     return guestBookings
       .filter(b => {
@@ -108,7 +108,6 @@ const GuestHistoryView = ({
       .sort((a, b) => `${b.date} ${b.start_time}`.localeCompare(`${a.date} ${a.start_time}`));
   }, [guestBookings, massageTypes, therapists, searchTerm, statusFilter]);
 
-  // Grouping Logic
   const groupedBookings = useMemo(() => {
     if (groupBy === 'none') {
         return { 'All Records': filteredBookings };
@@ -175,24 +174,6 @@ const GuestHistoryView = ({
                  <h4 className="text-lg font-black text-indigo-700">{stats.visits} Total</h4>
               </Card>
           </div>
-
-          {guestSales.length > 0 && (
-              <Card className="rounded-[2rem] border-slate-200/60 shadow-lg p-6 bg-slate-50/50">
-                  <div className="flex items-center gap-2 mb-4">
-                      <ShoppingBag className="w-4 h-4 text-indigo-600" />
-                      <h4 className="text-[10px] font-black uppercase tracking-widest">Recent Retail & POS</h4>
-                  </div>
-                  <div className="space-y-3">
-                      {guestSales.slice(0, 3).map(s => (
-                          <div key={s.id} className="flex justify-between items-center text-[10px] font-bold">
-                              <span className="text-slate-500">{s.item_name}</span>
-                              <span className="text-slate-900">{formatMoney(s.net_amount)}</span>
-                          </div>
-                      ))}
-                      {guestSales.length > 3 && <p className="text-[8px] text-indigo-600 font-black uppercase text-right mt-2">+{guestSales.length - 3} more records</p>}
-                  </div>
-              </Card>
-          )}
         </div>
 
         <div className="lg:col-span-2">
@@ -230,103 +211,49 @@ const GuestHistoryView = ({
                            <option value="cancelled">Cancelled</option>
                            <option value="no-show">No-Show</option>
                        </select>
-                       <div className="flex bg-white rounded-xl border border-slate-200 p-1">
-                           <button 
-                                onClick={() => setGroupBy('none')}
-                                className={`px-3 rounded-lg text-[10px] font-black uppercase transition-all ${groupBy === 'none' ? 'bg-slate-100 text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
-                           >
-                               <LayoutGrid className="w-3.5 h-3.5" />
-                           </button>
-                           <button 
-                                onClick={() => setGroupBy('month')}
-                                className={`px-3 rounded-lg text-[10px] font-black uppercase transition-all ${groupBy === 'month' ? 'bg-slate-100 text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
-                           >
-                               <Calendar className="w-3.5 h-3.5" />
-                           </button>
-                       </div>
                    </div>
                </div>
             </CardHeader>
             
             <CardContent className="p-0 flex-1 overflow-y-auto max-h-[600px] custom-scrollbar">
-              {Object.keys(groupedBookings).length === 0 ? (
-                <div className="py-24 text-center">
-                  <Zap className="w-10 h-10 text-slate-200 mx-auto mb-4" />
-                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No booking records match your criteria.</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                    {Object.entries(groupedBookings).map(([group, groupItems]: [string, MassageBooking[]]) => (
-                        <div key={group}>
-                            {groupBy === 'month' && (
-                                <div className="px-8 py-3 bg-slate-50/50 border-y border-slate-100 flex items-center gap-2 sticky top-0 backdrop-blur-sm z-10">
-                                    <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{group}</span>
-                                    <span className="text-[9px] font-bold text-slate-300 ml-auto">{groupItems.length} Events</span>
-                                </div>
-                            )}
-                            <table className="w-full text-left">
-                                {groupBy === 'none' && (
-                                    <thead className="bg-slate-50/50 border-b border-slate-100 sticky top-0 z-10">
-                                        <tr>
-                                            <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Date / Time</th>
-                                            <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Service Type</th>
-                                            <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Specialist</th>
-                                            <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Fee</th>
-                                            <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
-                                        </tr>
-                                    </thead>
-                                )}
-                                <tbody className="divide-y divide-slate-50">
-                                    {groupItems.map(b => {
-                                        const type = massageTypes.find(m => m.id === b.massage_type_id);
-                                        const therapist = therapists.find(t => t.id === b.therapist_id);
-                                        const discount = b.discount || 0;
-                                        const gross = b.price + discount;
-                                        
-                                        return (
-                                        <tr key={b.id} className="hover:bg-indigo-50/30 transition-colors group">
-                                            <td className="px-8 py-4">
-                                                <div className="text-[11px] font-black text-slate-900">{format(new Date(b.date), 'dd MMM yyyy')}</div>
-                                                <div className="text-[9px] font-bold text-slate-400 uppercase">{b.start_time} - {b.end_time}</div>
-                                            </td>
-                                            <td className="px-8 py-4">
-                                                <div className="text-[11px] font-black text-indigo-600 uppercase tracking-tight">{type?.name || 'Standard Service'}</div>
-                                                {(b.additional_service_ids?.length || 0) > 0 && (
-                                                    <div className="flex items-center gap-1 mt-1">
-                                                        <span className="text-[8px] font-bold bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100 uppercase tracking-tighter">
-                                                            +{b.additional_service_ids?.length} Add-on
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-8 py-4">
-                                                <div className="text-[11px] font-black text-slate-700 uppercase">{therapist?.name || 'Staff'}</div>
-                                            </td>
-                                            <td className="px-8 py-4 text-right">
-                                                <div className="text-[11px] font-black text-slate-900">{formatMoney(Number(b.price))}</div>
-                                                {discount > 0 && (
-                                                    <div className="text-[8px] font-bold text-red-400 line-through decoration-red-400/50">{formatMoney(gross)}</div>
-                                                )}
-                                            </td>
-                                            <td className="px-8 py-4 text-center">
-                                                <span className={`inline-flex px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-widest border
-                                                    ${b.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
-                                                    b.status === 'confirmed' ? 'bg-blue-50 text-blue-700 border-blue-100' : 
-                                                    b.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-100' : 
-                                                    'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                                                    {b.status}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    ))}
-                </div>
-              )}
+                <table className="w-full text-left">
+                    <thead className="bg-slate-50/50 border-b border-slate-100 sticky top-0 z-10">
+                        <tr>
+                            <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Date / Time</th>
+                            <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Service Type</th>
+                            <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Fee</th>
+                            <th className="px-8 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                        {filteredBookings.map(b => {
+                            const type = massageTypes.find(m => m.id === b.massage_type_id);
+                            return (
+                            <tr key={b.id} className="hover:bg-indigo-50/30 transition-colors group">
+                                <td className="px-8 py-4">
+                                    <div className="text-[11px] font-black text-slate-900">{format(new Date(b.date), 'dd MMM yyyy')}</div>
+                                    <div className="text-[9px] font-bold text-slate-400 uppercase">{b.start_time} - {b.end_time}</div>
+                                </td>
+                                <td className="px-8 py-4">
+                                    <div className="text-[11px] font-black text-indigo-600 uppercase tracking-tight">{type?.name || 'Standard Service'}</div>
+                                </td>
+                                <td className="px-8 py-4 text-right font-black text-slate-900">
+                                    {formatMoney(Number(b.price))}
+                                </td>
+                                <td className="px-8 py-4 text-center">
+                                    <span className={`inline-flex px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-widest border
+                                        ${b.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
+                                        b.status === 'confirmed' ? 'bg-blue-50 text-blue-700 border-blue-100' : 
+                                        b.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-100' : 
+                                        'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                                        {b.status}
+                                    </span>
+                                </td>
+                            </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
             </CardContent>
           </Card>
         </div>
@@ -356,13 +283,17 @@ const MassageScheduling = () => {
   const [guestSearchTerm, setGuestSearchTerm] = useState('');
   const [therapistFilter, setTherapistFilter] = useState('');
   
-  const [newType, setNewType] = useState({ name: '', price: 0, duration_minutes: 60 });
-  const [newTherapist, setNewTherapist] = useState({ name: '', specialty: '', country: '' });
+  const [newType, setNewType] = useState({ id: '', name: '', price: 0, duration_minutes: 60 });
+  const [newTherapist, setNewTherapist] = useState({ id: '', name: '', specialty: '', country: '' });
+  const [isEditingResource, setIsEditingResource] = useState(false);
   
   const [message, setMessage] = useState<{text: string, type: 'success' | 'error'} | null>(null);
   const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest', name: string} | null>(null);
 
-  const isAdmin = user?.role_id === 'admin';
+  const canView = user && hasPermission(user.role_id, 'bookings:view');
+  const canCreate = user && hasPermission(user.role_id, 'bookings:create');
+  const canEdit = user && hasPermission(user.role_id, 'bookings:edit');
+  const canDelete = user && hasPermission(user.role_id, 'bookings:delete');
   const canManageResources = user && hasPermission(user.role_id, 'bookings:manage_resources');
 
   useEffect(() => {
@@ -383,8 +314,15 @@ const MassageScheduling = () => {
       ]);
       setBookings(b || []);
       setGuests(g || []);
-      setTherapists(t || []);
-      setMassageTypes(m || []);
+      // Explicit Alphabetical Sorting for Specialists
+      setTherapists((t || []).sort((x, y) => x.name.localeCompare(y.name)));
+      // Explicit Duration Sorting for Portfolio
+      setMassageTypes((m || []).sort((x, y) => {
+          const durX = Number(x.duration_minutes) || 0;
+          const durY = Number(y.duration_minutes) || 0;
+          if (durX !== durY) return durX - durY;
+          return x.name.localeCompare(y.name);
+      }));
     } catch (e) {
       console.error("Failed to load booking data", e);
     } finally {
@@ -398,6 +336,7 @@ const MassageScheduling = () => {
   };
 
   const handleUpdateStatus = async (id: string, status: MassageBooking['status']) => {
+    if (!canEdit) return;
     try {
       await db.updateMassageBookingStatus(id, status);
       showStatus(`Booking marked as ${status.toUpperCase()}`);
@@ -410,7 +349,7 @@ const MassageScheduling = () => {
 
   const handleUpdateGuest = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!editingGuest) return;
+      if (!editingGuest || !canEdit) return;
       setIsSubmitting(true);
       try {
           await db.updateGuest(editingGuest.id, {
@@ -428,13 +367,19 @@ const MassageScheduling = () => {
       }
   };
 
-  const handleAddMassageType = async () => {
-    if (!currentProperty || !newType.name) return;
+  const handleSaveMassageType = async () => {
+    if (!currentProperty || !newType.name || !canManageResources) return;
     setIsSubmitting(true);
     try {
-      await db.addMassageType({ ...newType, property_id: currentProperty.id });
-      showStatus('Treatment added to portfolio.');
-      setNewType({ name: '', price: 0, duration_minutes: 60 });
+      if (isEditingResource && newType.id) {
+          await (db as any).updateMassageType(newType.id, { name: newType.name, price: newType.price, duration_minutes: newType.duration_minutes });
+          showStatus('Treatment adjusted.');
+      } else {
+          await db.addMassageType({ ...newType, property_id: currentProperty.id });
+          showStatus('Treatment added to portfolio.');
+      }
+      setNewType({ id: '', name: '', price: 0, duration_minutes: 60 });
+      setIsEditingResource(false);
       loadData();
     } catch (e: any) {
       showStatus(e.message || 'Failed to save treatment.', 'error');
@@ -443,13 +388,19 @@ const MassageScheduling = () => {
     }
   };
 
-  const handleAddTherapist = async () => {
-    if (!currentProperty || !newTherapist.name) return;
+  const handleSaveTherapist = async () => {
+    if (!currentProperty || !newTherapist.name || !canManageResources) return;
     setIsSubmitting(true);
     try {
-      await db.addTherapist({ ...newTherapist, property_id: currentProperty.id });
-      showStatus('Therapist onboarded successfully.');
-      setNewTherapist({ name: '', specialty: '', country: '' });
+      if (isEditingResource && newTherapist.id) {
+          await (db as any).updateTherapist(newTherapist.id, { name: newTherapist.name, specialty: newTherapist.specialty, country: newTherapist.country });
+          showStatus('Therapist profile updated.');
+      } else {
+          await db.addTherapist({ ...newTherapist, property_id: currentProperty.id });
+          showStatus('Therapist onboarded successfully.');
+      }
+      setNewTherapist({ id: '', name: '', specialty: '', country: '' });
+      setIsEditingResource(false);
       loadData();
     } catch (e: any) {
       showStatus(e.message || 'Failed to onboard staff.', 'error');
@@ -460,12 +411,16 @@ const MassageScheduling = () => {
 
   const handleDeleteConfirmed = async () => {
       if (!itemToDelete) return;
+      const isResource = itemToDelete.type === 'treatment' || itemToDelete.type === 'therapist';
+      if (isResource && !canManageResources) return;
+      if (itemToDelete.type === 'guest' && !canDelete) return;
+
       try {
           if (itemToDelete.type === 'treatment') await db.deleteMassageType(itemToDelete.id);
           else if (itemToDelete.type === 'therapist') await db.deleteTherapist(itemToDelete.id);
           else if (itemToDelete.type === 'guest') await db.deleteGuest(itemToDelete.id);
           
-          showStatus(`${itemToDelete.type === 'guest' ? 'Guest record' : itemToDelete.type === 'treatment' ? 'Service' : 'Staff'} record removed.`);
+          showStatus(`Resource record purged.`);
           loadData();
       } catch (e: any) {
           showStatus(`Removal failed: ${e.message}`, 'error');
@@ -475,17 +430,6 @@ const MassageScheduling = () => {
   };
 
   const getGuestName = (id: string) => guests.find(g => g.id === id)?.name || 'Unknown Guest';
-  const getMassageType = (id: string) => massageTypes.find(m => m.id === id);
-
-  const getBookingColor = (typeId: string, status: string) => {
-    if (status === 'no-show' || status === 'cancelled') return 'bg-slate-400 border-slate-500';
-    const type = getMassageType(typeId);
-    const name = type?.name.toLowerCase() || '';
-    if (name.includes('swedish') || name.includes('balinese')) return 'bg-emerald-600 border-emerald-700';
-    if (name.includes('deep') || name.includes('tissue')) return 'bg-indigo-600 border-indigo-700';
-    if (name.includes('sports') || name.includes('rehab')) return 'bg-purple-600 border-purple-700';
-    return 'bg-blue-600 border-blue-700';
-  };
 
   const calculatePosition = (startTime: string, endTime: string) => {
     const [sH, sM] = startTime.split(':').map(Number);
@@ -501,11 +445,6 @@ const MassageScheduling = () => {
     return bookings.filter(b => b.date === dateStr);
   }, [bookings, viewDate]);
 
-  const visibleTherapists = useMemo(() => {
-      if (!therapistFilter) return therapists;
-      return therapists.filter(t => t.name.toLowerCase().includes(therapistFilter.toLowerCase()));
-  }, [therapists, therapistFilter]);
-
   const filteredGuests = useMemo(() => {
     if (!guestSearchTerm) return guests;
     const q = guestSearchTerm.toLowerCase();
@@ -515,6 +454,18 @@ const MassageScheduling = () => {
       (g.email && g.email.toLowerCase().includes(q))
     );
   }, [guests, guestSearchTerm]);
+
+  if (!canView) {
+      return (
+          <div className="flex items-center justify-center h-96">
+              <Card className="max-w-md text-center p-8 rounded-[2rem] border-red-100 bg-red-50/30">
+                  <CalendarClock className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight">Access Restricted</h3>
+                  <p className="text-slate-500 mt-2 text-sm">Security clearance insufficient to view resource scheduling grid.</p>
+              </Card>
+          </div>
+      );
+  }
 
   if (selectedGuestForHistory) {
     return (
@@ -539,25 +490,19 @@ const MassageScheduling = () => {
         
         <div className="flex items-center gap-4">
           <div className="flex bg-slate-200 p-1 rounded-xl border border-slate-300 shadow-inner overflow-x-auto">
-            <button onClick={() => setActiveTab('bookings')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'bookings' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Service Grid</button>
-            <button onClick={() => setActiveTab('guests')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'guests' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Guest Ledger</button>
-            {canManageResources && <button onClick={() => setActiveTab('treatments')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'treatments' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Portfolio</button>}
-            {canManageResources && <button onClick={() => setActiveTab('therapists')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'therapists' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Staffing</button>}
+            <button onClick={() => {setActiveTab('bookings'); setIsEditingResource(false);}} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'bookings' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Service Grid</button>
+            <button onClick={() => {setActiveTab('guests'); setIsEditingResource(false);}} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'guests' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Guest Ledger</button>
+            {canManageResources && <button onClick={() => {setActiveTab('treatments'); setIsEditingResource(false);}} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'treatments' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Portfolio</button>}
+            {canManageResources && <button onClick={() => {setActiveTab('therapists'); setIsEditingResource(false);}} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'therapists' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Staffing</button>}
           </div>
-          <Button onClick={() => { setEditingBooking(null); setShowBookingForm(true); }} className="h-10 px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100">
-            <Plus className="w-4 h-4 mr-2" /> Authorized Booking
-          </Button>
+          {canCreate && (
+              <Button onClick={() => { setEditingBooking(null); setShowBookingForm(true); }} className="h-10 px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100">
+                <Plus className="w-4 h-4 mr-2" /> Authorized Booking
+              </Button>
+          )}
         </div>
       </div>
 
-      {message && (
-        <div className={`p-4 rounded-xl border flex items-center gap-3 animate-in fade-in zoom-in duration-300 ${message.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
-          {message.type === 'success' ? <CheckCircle2 className="w-5 h-5"/> : <AlertTriangle className="w-5 h-5"/>}
-          <span className="text-[10px] font-black uppercase tracking-widest">{message.text}</span>
-        </div>
-      )}
-
-      {/* --- SERVICE GRID TAB --- */}
       {activeTab === 'bookings' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-sm gap-4">
@@ -569,17 +514,9 @@ const MassageScheduling = () => {
               </div>
               <button onClick={() => setViewDate(addDays(viewDate, 1))} className="p-1.5 hover:bg-slate-50 rounded-lg border border-slate-100"><ChevronRight className="w-4 h-4 text-slate-400"/></button>
             </div>
-            
-            <div className="flex items-center gap-4 w-full sm:w-auto">
-                <div className="relative flex-1 sm:w-48">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                    <input 
-                        placeholder="Filter specialists..."
-                        value={therapistFilter}
-                        onChange={(e) => setTherapistFilter(e.target.value)}
-                        className="h-9 w-full pl-9 pr-3 rounded-xl bg-slate-50 border border-slate-200 text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                    />
-                </div>
+            <div className="relative flex-1 sm:w-48">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input placeholder="Filter roster..." value={therapistFilter} onChange={(e) => setTherapistFilter(e.target.value)} className="h-9 w-full pl-9 pr-3 rounded-xl bg-slate-50 border border-slate-200 text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
             </div>
           </div>
 
@@ -587,139 +524,66 @@ const MassageScheduling = () => {
             <div className="overflow-x-auto">
               <div className="min-w-[900px] flex">
                 <div className="w-14 shrink-0 border-r border-slate-200 bg-white">
-                    <div className="h-10 border-b border-slate-200 flex items-center justify-center">
-                        <Clock className="w-3 h-3 text-slate-300" />
-                    </div>
+                    <div className="h-10 border-b border-slate-200 flex items-center justify-center"><Clock className="w-3 h-3 text-slate-300" /></div>
                     {HOURS.map(hour => (
                         <div key={hour} style={{ height: SLOT_HEIGHT }} className="relative">
-                            <span className="absolute -top-2 left-0 right-0 text-center text-[8px] font-black text-slate-400">
-                                {hour > 12 ? `${hour-12}P` : hour === 12 ? '12P' : `${hour}A`}
-                            </span>
-                            <div className="absolute inset-0 border-b border-slate-100/30"></div>
+                            <span className="absolute -top-2 left-0 right-0 text-center text-[8px] font-black text-slate-400">{hour > 12 ? `${hour-12}P` : hour === 12 ? '12P' : `${hour}A`}</span>
                         </div>
                     ))}
                 </div>
-
-                {therapists.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center py-40">
-                    <Users2 className="w-10 h-10 text-slate-300 mb-4" />
-                    <p className="text-slate-400 font-black uppercase text-[9px]">No staff on roster for this property</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-1">
-                    {visibleTherapists.length === 0 ? (
-                        <div className="w-full py-20 flex flex-col items-center justify-center text-center">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No specialists match filter</p>
-                        </div>
-                    ) : visibleTherapists.map(therapist => {
+                <div className="flex flex-1">
+                    {therapists.filter(t => !therapistFilter || t.name.toLowerCase().includes(therapistFilter.toLowerCase())).map(therapist => {
                       const therapistBookings = filteredTodayBookings.filter(b => b.therapist_id === therapist.id);
                       return (
-                        <div key={therapist.id} className="flex-1 border-r border-slate-200 last:border-0 relative bg-white/50 min-w-[150px]">
-                          <div className="h-10 bg-white border-b border-slate-200 flex flex-col items-center justify-center sticky top-0 z-10 shadow-sm px-1">
-                            <span className="text-[9px] font-black text-slate-900 tracking-tight uppercase leading-none truncate w-full text-center">{therapist.name}</span>
-                            <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-0.5">{therapist.country}</span>
+                        <div key={therapist.id} className="flex-1 border-r border-slate-200 relative bg-white/50 min-w-[150px]">
+                          <div className="h-10 bg-white border-b border-slate-200 flex flex-col items-center justify-center sticky top-0 z-10 px-1">
+                            <span className="text-[9px] font-black text-slate-900 uppercase truncate w-full text-center">{therapist.name}</span>
                           </div>
-                          {HOURS.map(hour => (
-                             <div key={hour} style={{ height: SLOT_HEIGHT }} className="border-b border-slate-100/50"></div>
-                          ))}
+                          {HOURS.map(hour => <div key={hour} style={{ height: SLOT_HEIGHT }} className="border-b border-slate-100/50"></div>)}
                           {therapistBookings.map(booking => {
                             const { top, height } = calculatePosition(booking.start_time, booking.end_time);
-                            const type = getMassageType(booking.massage_type_id);
                             return (
-                              <button
-                                key={booking.id}
-                                onClick={() => setSelectedBooking(booking)}
-                                style={{ top: top + 40, height: height - 1 }}
-                                className={`absolute left-0.5 right-0.5 p-1 rounded border-l-2 text-left shadow-md text-white transition-all hover:scale-[1.02] hover:z-20 group overflow-hidden ${getBookingColor(booking.massage_type_id, booking.status)}`}
-                              >
-                                <div className="flex justify-between items-start gap-1">
-                                    <div className="text-[8px] font-black uppercase leading-tight truncate">{getGuestName(booking.guest_id)}</div>
-                                    {booking.status === 'completed' && <CheckCircle className="w-2 h-2 text-emerald-300" />}
-                                    {booking.status === 'no-show' && <UserX className="w-2 h-2 text-red-200" />}
-                                </div>
-                                <div className="text-[7px] font-bold opacity-80 uppercase truncate tracking-tighter mt-0.5">{type?.name}</div>
+                              <button key={booking.id} onClick={() => setSelectedBooking(booking)} style={{ top: top + 40, height: height - 1 }} className={`absolute left-0.5 right-0.5 p-1 rounded border-l-2 text-left shadow-md text-white transition-all hover:z-20 overflow-hidden bg-indigo-600 border-indigo-700`}>
+                                <div className="text-[8px] font-black uppercase leading-tight truncate">{getGuestName(booking.guest_id)}</div>
                               </button>
                             );
                           })}
                         </div>
                       );
                     })}
-                  </div>
-                )}
+                </div>
               </div>
             </div>
           </Card>
         </div>
       )}
 
-      {/* --- GUEST LEDGER TAB --- */}
       {activeTab === 'guests' && (
           <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden">
               <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                   <div className="relative w-full max-w-md">
                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input 
-                        value={guestSearchTerm} 
-                        onChange={e => setGuestSearchTerm(e.target.value)} 
-                        placeholder="Search guests by name or phone..." 
-                        className="h-11 w-full pl-11 pr-4 rounded-xl border border-slate-200 font-bold text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all" 
-                      />
+                      <input value={guestSearchTerm} onChange={e => setGuestSearchTerm(e.target.value)} placeholder="Search guests..." className="h-11 w-full pl-11 pr-4 rounded-xl border border-slate-200 font-bold text-xs" />
                   </div>
               </div>
               <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                       <thead className="bg-slate-50 border-b border-slate-100">
                           <tr>
-                              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Guest Profile</th>
-                              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone</th>
-                              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Email</th>
-                              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Registered</th>
-                              {isAdmin && <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>}
+                              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase">Guest Profile</th>
+                              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase text-right">Actions</th>
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                          {filteredGuests.length === 0 ? (
-                            <tr>
-                              <td colSpan={isAdmin ? 5 : 4} className="px-8 py-20 text-center">
-                                <div className="flex flex-col items-center gap-2">
-                                  <Users2 className="w-8 h-8 text-slate-200" />
-                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No guest identities discovered.</p>
-                                </div>
-                              </td>
-                            </tr>
-                          ) : filteredGuests.map(g => (
-                              <tr 
-                                key={g.id} 
-                                onClick={() => setSelectedGuestForHistory(g)}
-                                className="hover:bg-indigo-50/30 transition-colors group cursor-pointer"
-                              >
-                                  <td className="px-8 py-5">
-                                      <div className="flex items-center gap-3">
-                                          <div className="w-8 h-8 rounded-lg bg-slate-100 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center font-black text-xs transition-colors">{g.name.charAt(0)}</div>
-                                          <span className="font-black text-slate-900 tracking-tight uppercase">{g.name}</span>
+                          {filteredGuests.map(g => (
+                              <tr key={g.id} onClick={() => setSelectedGuestForHistory(g)} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer">
+                                  <td className="px-8 py-5 font-black text-slate-900 uppercase">{g.name}</td>
+                                  <td className="px-8 py-5 text-right" onClick={e => e.stopPropagation()}>
+                                      <div className="flex justify-end gap-1">
+                                        {canEdit && <button onClick={() => setEditingGuest(g)} className="p-2 text-slate-400 hover:text-indigo-600"><Edit3 className="w-4 h-4" /></button>}
+                                        {canDelete && <button onClick={() => setItemToDelete({ id: g.id, type: 'guest', name: g.name })} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>}
                                       </div>
                                   </td>
-                                  <td className="px-8 py-5 text-slate-600 font-bold text-xs">{g.phone}</td>
-                                  <td className="px-8 py-5 text-indigo-600 font-bold text-xs">{g.email || '--'}</td>
-                                  <td className="px-8 py-5 text-center text-slate-400 font-bold text-[10px] uppercase tracking-tighter">{format(new Date(g.created_at), 'dd MMM yyyy')}</td>
-                                  {isAdmin && (
-                                    <td className="px-8 py-5 text-right" onClick={e => e.stopPropagation()}>
-                                      <div className="flex justify-end gap-1">
-                                        <button 
-                                          onClick={() => setEditingGuest(g)}
-                                          className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
-                                        >
-                                          <Edit3 className="w-4 h-4" />
-                                        </button>
-                                        <button 
-                                          onClick={() => setItemToDelete({ id: g.id, type: 'guest', name: g.name })}
-                                          className="p-2 text-slate-400 hover:text-red-600 transition-colors"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
-                                      </div>
-                                    </td>
-                                  )}
                               </tr>
                           ))}
                       </tbody>
@@ -728,254 +592,108 @@ const MassageScheduling = () => {
           </Card>
       )}
 
-      {/* --- PORTFOLIO TAB --- */}
       {activeTab === 'treatments' && canManageResources && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2">
-                  <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
-                      <CardHeader className="bg-slate-50 p-6 border-b border-slate-100">
-                          <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
-                              <Zap className="w-4 h-4 text-indigo-600" /> Authorized Treatments
-                          </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-0">
-                          <div className="overflow-x-auto">
-                              <table className="w-full text-left">
-                                  <thead className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b">
-                                      <tr>
-                                          <th className="px-8 py-4">Service</th>
-                                          <th className="px-8 py-4">Duration</th>
-                                          <th className="px-8 py-4">Base Fee</th>
-                                          <th className="px-8 py-4 text-right">Action</th>
-                                      </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-slate-50">
-                                      {massageTypes.map(t => (
-                                          <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                                              <td className="px-8 py-5 font-black text-slate-900 tracking-tight text-xs uppercase">{t.name}</td>
-                                              <td className="px-8 py-5 font-bold text-slate-500 text-xs">{t.duration_minutes} Minutes</td>
-                                              <td className="px-8 py-5 font-black text-indigo-600 text-xs">{formatMoney(t.price)}</td>
-                                              <td className="px-8 py-5 text-right">
-                                                  <button onClick={() => setItemToDelete({id: t.id, type: 'treatment', name: t.name})} className="p-2 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4"/></button>
-                                              </td>
-                                          </tr>
-                                      ))}
-                                  </tbody>
-                              </table>
-                          </div>
-                      </CardContent>
-                  </Card>
+          <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden">
+              <div className="p-8 space-y-6">
+                <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-black uppercase">{isEditingResource ? 'Modify Treatment' : 'Service Portfolio'}</h3>
+                    <div className="flex gap-2">
+                        <Input value={newType.name} onChange={e => setNewType({...newType, name: e.target.value})} placeholder="Service Name" className="h-10 text-xs w-48" />
+                        <Input type="number" value={newType.price} onChange={e => setNewType({...newType, price: parseFloat(e.target.value) || 0})} placeholder="Fee" className="h-10 text-xs w-24" />
+                        <Button onClick={handleSaveMassageType} className="h-10 text-[10px] uppercase font-black">{isEditingResource ? 'Sync' : 'Add'}</Button>
+                        {isEditingResource && <Button variant="secondary" onClick={() => { setIsEditingResource(false); setNewType({ id:'', name:'', price:0, duration_minutes:60 }); }} className="h-10 px-3"><X className="w-4 h-4"/></Button>}
+                    </div>
+                </div>
+                <table className="w-full text-left">
+                    <tbody className="divide-y divide-slate-100">
+                        {massageTypes.map(t => (
+                            <tr key={t.id} className="hover:bg-slate-50 group">
+                                <td className="py-4 font-black uppercase text-xs">{t.name} <span className="ml-2 opacity-30">({t.duration_minutes}m)</span></td>
+                                <td className="py-4 text-right">
+                                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => { setIsEditingResource(true); setNewType(t); }} className="p-2 text-slate-300 hover:text-indigo-600"><Edit3 className="w-4 h-4"/></button>
+                                        <button onClick={() => setItemToDelete({id: t.id, type: 'treatment', name: t.name})} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
               </div>
-              <div>
-                  <Card className="rounded-[2rem] border-slate-200/60 shadow-xl h-fit">
-                      <CardHeader className="bg-indigo-600 text-white p-6">
-                          <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
-                              <Plus className="w-4 h-4" /> New Service Tier
-                          </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-6 space-y-4">
-                          <Input label="Treatment Designation" value={newType.name} onChange={e => setNewType({...newType, name: e.target.value})} className="h-12 rounded-xl text-xs" placeholder="e.g. Deep Tissue" />
-                          <div className="grid grid-cols-2 gap-4">
-                              <Input label="Fee" type="number" value={newType.price} onChange={e => setNewType({...newType, price: parseFloat(e.target.value)})} className="h-12 rounded-xl text-xs" />
-                              <Input label="Mins" type="number" value={newType.duration_minutes} onChange={e => setNewType({...newType, duration_minutes: parseInt(e.target.value)})} className="h-12 rounded-xl text-xs" />
-                          </div>
-                          <Button onClick={handleAddMassageType} isLoading={isSubmitting} className="w-full h-12 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-100">Commit to Portfolio</Button>
-                      </CardContent>
-                  </Card>
-              </div>
-          </div>
+          </Card>
       )}
 
-      {/* --- STAFFING TAB --- */}
       {activeTab === 'therapists' && canManageResources && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2">
-                  <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden h-fit">
-                      <CardHeader className="bg-slate-50 p-6 border-b border-slate-100">
-                          <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
-                              <Users2 className="w-4 h-4 text-indigo-600" /> Specialist Roster
-                          </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-0">
-                          <div className="overflow-x-auto">
-                              <table className="w-full text-left">
-                                  <thead className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b">
-                                      <tr>
-                                          <th className="px-8 py-4">Specialist</th>
-                                          <th className="px-8 py-4">Focus</th>
-                                          <th className="px-8 py-4">Origin</th>
-                                          <th className="px-8 py-4 text-right">Action</th>
-                                      </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-slate-50">
-                                      {therapists.map(t => (
-                                          <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                                              <td className="px-8 py-5">
-                                                  <div className="flex items-center gap-3">
-                                                      <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-[10px]">{t.name.charAt(0)}</div>
-                                                      <span className="font-black text-slate-900 tracking-tight text-xs uppercase">{t.name}</span>
-                                                  </div>
-                                              </td>
-                                              <td className="px-8 py-5 font-bold text-slate-500 text-xs">{t.specialty}</td>
-                                              <td className="px-8 py-5 font-black text-indigo-600 text-[10px] uppercase tracking-widest">{t.country}</td>
-                                              <td className="px-8 py-5 text-right">
-                                                  <button onClick={() => setItemToDelete({id: t.id, type: 'therapist', name: t.name})} className="p-2 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4"/></button>
-                                              </td>
-                                          </tr>
-                                      ))}
-                                  </tbody>
-                              </table>
-                          </div>
-                      </CardContent>
-                  </Card>
+          <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden">
+              <div className="p-8 space-y-6">
+                <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-black uppercase">{isEditingResource ? 'Modify Staff Profile' : 'Specialist Roster'}</h3>
+                    <div className="flex gap-2">
+                        <Input value={newTherapist.name} onChange={e => setNewTherapist({...newTherapist, name: e.target.value})} placeholder="Name" className="h-10 text-xs w-48" />
+                        <Button onClick={handleSaveTherapist} className="h-10 text-[10px] uppercase font-black">{isEditingResource ? 'Sync' : 'Onboard'}</Button>
+                        {isEditingResource && <Button variant="secondary" onClick={() => { setIsEditingResource(false); setNewTherapist({ id:'', name:'', specialty:'', country:'' }); }} className="h-10 px-3"><X className="w-4 h-4"/></Button>}
+                    </div>
+                </div>
+                <table className="w-full text-left">
+                    <tbody className="divide-y divide-slate-100">
+                        {therapists.map(t => (
+                            <tr key={t.id} className="hover:bg-slate-50 group">
+                                <td className="py-4 font-black uppercase text-xs">{t.name}</td>
+                                <td className="py-4 text-right">
+                                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => { setIsEditingResource(true); setNewTherapist(t); }} className="p-2 text-slate-300 hover:text-indigo-600"><Edit3 className="w-4 h-4"/></button>
+                                        <button onClick={() => setItemToDelete({id: t.id, type: 'therapist', name: t.name})} className="p-2 text-slate-300 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
               </div>
-              <div>
-                  <Card className="rounded-[2rem] border-slate-200/60 shadow-xl h-fit">
-                      <CardHeader className="bg-slate-900 text-white p-6">
-                          <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
-                              <UserPlus className="w-4 h-4" /> Specialist Onboarding
-                          </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-6 space-y-4">
-                          <Input label="Full Name" value={newTherapist.name} onChange={e => setNewTherapist({...newTherapist, name: e.target.value})} className="h-12 rounded-xl text-xs" placeholder="e.g. Elena Petrova" />
-                          <Input label="Core Specialty" value={newTherapist.specialty} onChange={e => setNewTherapist({...newTherapist, specialty: e.target.value})} className="h-12 rounded-xl text-xs" placeholder="e.g. Sports Therapy" />
-                          <Input label="Country of Origin" value={newTherapist.country} onChange={e => setNewTherapist({...newTherapist, country: e.target.value})} className="h-12 rounded-xl text-xs" placeholder="e.g. Russia" />
-                          <Button onClick={handleAddTherapist} isLoading={isSubmitting} className="w-full h-12 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-100">Authorize Staffing</Button>
-                      </CardContent>
-                  </Card>
-              </div>
-          </div>
+          </Card>
       )}
 
-      {/* --- MODALS & DETAILS --- */}
       {selectedBooking && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
             <Card className="w-full max-w-md rounded-[2rem] border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-                <CardHeader className={`${getBookingColor(selectedBooking.massage_type_id, selectedBooking.status)} text-white p-6`}>
+                <CardHeader className="bg-indigo-600 text-white p-6">
                     <div className="flex justify-between items-start">
-                        <div>
-                            <CardTitle className="text-xl font-black tracking-tight">{getGuestName(selectedBooking.guest_id)}</CardTitle>
-                            <p className="text-[9px] font-black opacity-60 uppercase tracking-[0.2em] mt-1">Property Session Detail</p>
-                        </div>
-                        <button onClick={() => setSelectedBooking(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-5 h-5"/></button>
+                        <CardTitle className="text-xl font-black uppercase">{getGuestName(selectedBooking.guest_id)}</CardTitle>
+                        <button onClick={() => setSelectedBooking(null)} className="p-2 hover:bg-white/10 rounded-full"><X className="w-5 h-5"/></button>
                     </div>
                 </CardHeader>
                 <CardContent className="p-6 space-y-6">
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-1 col-span-2">
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Services</span>
-                            <div className="text-sm font-black text-slate-900 space-y-1">
-                                {[selectedBooking.massage_type_id, ...(selectedBooking.additional_service_ids || [])]
-                                    .map(id => getMassageType(id))
-                                    .filter(Boolean)
-                                    .map(type => (
-                                        <p key={type!.id}>{type!.name}</p>
-                                    ))
-                                }
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Therapist</span>
-                            <p className="text-sm font-black text-slate-900">{therapists.find(t => t.id === selectedBooking.therapist_id)?.name}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Time Slot</span>
-                            <p className="text-sm font-black text-slate-900">{selectedBooking.start_time} - {selectedBooking.end_time}</p>
-                        </div>
-                    </div>
-                    
-                    <div className="pt-6 border-t border-slate-100 space-y-3">
-                        <div className="flex justify-between items-center">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Gross Price</span>
-                            <span className="text-xs font-bold text-slate-500">{formatMoney(selectedBooking.price + (selectedBooking.discount || 0))}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Discount</span>
-                            <span className="text-xs font-bold text-red-500">- {formatMoney(selectedBooking.discount || 0)}</span>
-                        </div>
-                        <div className="flex justify-between items-center border-t border-dashed border-slate-200 pt-3 mt-3">
-                            <span className="text-sm font-black text-slate-900 uppercase">Net Revenue</span>
-                            <p className="text-lg font-black text-indigo-600">{formatMoney(selectedBooking.price)}</p>
-                        </div>
-                    </div>
-
-                    <div className="pt-6 border-t border-slate-100">
-                        <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest mb-4 block">Lifecycle Management</span>
-                        <div className="grid grid-cols-1 gap-3">
-                            {selectedBooking.status === 'confirmed' && (
-                                <>
-                                    <button onClick={() => handleUpdateStatus(selectedBooking.id, 'completed')} className="w-full h-11 rounded-xl bg-emerald-600 text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-100 flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all"><CheckCircle className="w-4 h-4" /> Guest Arrived & Served</button>
-                                    <button onClick={() => handleUpdateStatus(selectedBooking.id, 'no-show')} className="w-full h-11 rounded-xl border-2 border-slate-200 text-slate-600 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"><UserX className="w-4 h-4" /> Mark as No-Show</button>
-                                </>
-                            )}
-                            <button onClick={() => handleUpdateStatus(selectedBooking.id, 'cancelled')} className="w-full h-11 rounded-xl border-2 border-red-50 text-red-600 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-red-50 transition-all"><Trash2 className="w-4 h-4" /> Cancel Booking</button>
-                        </div>
+                    <div className="flex flex-col gap-3">
+                        {selectedBooking.status === 'confirmed' && canEdit && (
+                            <>
+                                <button onClick={() => handleUpdateStatus(selectedBooking.id, 'completed')} className="w-full h-11 rounded-xl bg-emerald-600 text-white font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg"><CheckCircle className="w-4 h-4" /> Served</button>
+                                <button onClick={() => { setEditingBooking(selectedBooking); setShowBookingForm(true); setSelectedBooking(null); }} className="w-full h-11 rounded-xl border-2 border-indigo-100 text-indigo-600 font-black text-[10px] uppercase flex items-center justify-center gap-2"><Settings2 className="w-4 h-4" /> Reschedule / Modify</button>
+                                <button onClick={() => handleUpdateStatus(selectedBooking.id, 'no-show')} className="w-full h-11 rounded-xl border-2 border-slate-200 text-slate-600 font-black text-[10px] uppercase flex items-center justify-center gap-2"><UserX className="w-4 h-4" /> No-Show</button>
+                            </>
+                        )}
+                        {canDelete && (
+                            <button onClick={() => handleUpdateStatus(selectedBooking.id, 'cancelled')} className="w-full h-11 rounded-xl border-2 border-red-50 text-red-600 font-black text-[10px] uppercase flex items-center justify-center gap-2"><Trash2 className="w-4 h-4" /> Cancel Session</button>
+                        )}
                     </div>
                 </CardContent>
             </Card>
         </div>
       )}
 
-      {/* --- GUEST EDIT MODAL --- */}
-      {editingGuest && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-          <Card className="w-full max-w-md rounded-[2rem] border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-            <CardHeader className="bg-slate-900 text-white p-6 relative">
-              <CardTitle className="text-xl font-black tracking-tight uppercase">Modify Guest Identity</CardTitle>
-              <button onClick={() => setEditingGuest(null)} className="absolute top-5 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"><X className="w-5 h-5"/></button>
-            </CardHeader>
-            <CardContent className="p-8 space-y-6">
-              <form onSubmit={handleUpdateGuest} className="space-y-4">
-                <Input 
-                  label="Legal Name" 
-                  value={editingGuest.name} 
-                  onChange={e => setEditingGuest({...editingGuest, name: e.target.value})} 
-                  className="h-12 rounded-xl"
-                />
-                <Input 
-                  label="Phone Number" 
-                  value={editingGuest.phone} 
-                  onChange={e => setEditingGuest({...editingGuest, phone: e.target.value})} 
-                  className="h-12 rounded-xl"
-                />
-                <Input 
-                  label="Email Address" 
-                  value={editingGuest.email || ''} 
-                  onChange={e => setEditingGuest({...editingGuest, email: e.target.value})} 
-                  className="h-12 rounded-xl"
-                />
-                <div className="flex gap-3 pt-4">
-                  <Button type="button" variant="secondary" onClick={() => setEditingGuest(null)} className="flex-1 h-12 rounded-xl font-black text-[10px] uppercase tracking-widest">Discard</Button>
-                  <Button type="submit" isLoading={isSubmitting} className="flex-1 h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100">Commit Changes</Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
       {showBookingForm && (
-        <BookingForm 
-          onClose={() => { setShowBookingForm(false); setEditingBooking(null); }} 
-          onSuccess={() => { setShowBookingForm(false); loadData(); }}
-          onGoToManagement={(tab) => { setActiveTab(tab); setShowBookingForm(false); }}
-          therapists={therapists}
-          massageTypes={massageTypes}
-          existingBookings={bookings}
-          guests={guests}
-          initialBooking={editingBooking || undefined}
-        />
+          <BookingForm 
+            onClose={() => { setShowBookingForm(false); setEditingBooking(null); }}
+            onSuccess={() => { setShowBookingForm(false); setEditingBooking(null); loadData(); showStatus('Reservation synchronized.'); }}
+            onGoToManagement={() => {}}
+            therapists={therapists}
+            massageTypes={massageTypes}
+            existingBookings={bookings}
+            guests={guests}
+            initialBooking={editingBooking || undefined}
+          />
       )}
 
-      <ConfirmationModal 
-          isOpen={!!itemToDelete}
-          onClose={() => setItemToDelete(null)}
-          onConfirm={handleDeleteConfirmed}
-          title={`Revoke ${itemToDelete?.type === 'treatment' ? 'Service' : itemToDelete?.type === 'therapist' ? 'Staff' : 'Guest Identity'}`}
-          description={`Are you sure you want to remove '${itemToDelete?.name}'? This action is permanent and will be logged in the audit trail.`}
-          confirmText={`Confirm Removal`}
-          isDestructive={true}
-      />
+      <ConfirmationModal isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} onConfirm={handleDeleteConfirmed} title="Purge Record" description={`Permanently remove ${itemToDelete?.name}?`} confirmText="Confirm Removal" isDestructive={true} />
     </div>
   );
 };

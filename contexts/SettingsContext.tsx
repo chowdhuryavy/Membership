@@ -1,4 +1,3 @@
-
 import { CompanySettings, Currency, Role, Permission, Outlet, Property } from '../types';
 import { db } from '../services/mockSupabase';
 import { useAuth } from './AuthContext';
@@ -15,7 +14,7 @@ interface SettingsContextType {
   currentProperty: Property | null;
   setCurrentOutlet: (outlet: Outlet) => void;
   refreshSettings: () => Promise<void>;
-  formatMoney: (amount: number) => string;
+  formatMoney: (amount: number | undefined | null) => string;
   hasPermission: (userRoleId: string, permission: Permission) => boolean;
   checkShortcut: (e: KeyboardEvent, actionId: string) => boolean;
   isLoading: boolean;
@@ -35,7 +34,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshSettings = async () => {
-    // Note: Removed full setIsLoading(true) here to prevent jarring splash screen on simple updates
     try {
         const [s, c, r, o, p] = await Promise.all([
             db.getSettings(), 
@@ -45,7 +43,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             db.getProperties()
         ]);
         
-        // Ensure we create a fresh object to trigger React re-renders
         setSettings({ ...s });
         setCurrencies([...c]);
         setRoles([...r]);
@@ -100,17 +97,25 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [user, outlets]);
 
-  const formatMoney = (amount: number) => {
-    const value = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatMoney = (amount: number | undefined | null) => {
+    const safeAmount = (amount === null || amount === undefined || isNaN(Number(amount))) ? 0 : Number(amount);
+    const value = safeAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (!currency) return value;
     const isRtl = /[\u0600-\u06FF]/.test(currency.symbol);
     return isRtl ? `${value} ${currency.symbol}` : `${currency.symbol} ${value}`;
   };
 
   const hasPermission = (userRoleId: string, permission: Permission): boolean => {
-    if (userRoleId === 'admin') return true;
+    // SECURITY PATCH: Removed hardcoded 'admin' bypass.
+    // All permission validation is now strictly looked up from the database role permissions matrix.
+    // If a role ID (including 'admin') is found in the database, we respect its permission checklist.
     const role = roles.find(r => r.id === userRoleId);
-    if (!role) return false;
+    if (!role) {
+        // Fallback: If roles haven't loaded yet, or role is unknown, deny access.
+        // Special case: If userRoleId is 'admin' and roles list is empty (bootstrapping), allow critical actions.
+        if (userRoleId === 'admin' && roles.length === 0) return true;
+        return false;
+    }
     return role.permissions.includes(permission);
   };
 
@@ -129,7 +134,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const config = settings?.keyboard_shortcuts?.[actionId] || defaults[actionId];
     if (!config) return false;
 
-    // Standardize input config
     const parts = config.toLowerCase().split('+').map(p => p.trim());
     const targetKey = parts[parts.length - 1];
     
@@ -138,29 +142,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const needsAlt = parts.includes('alt') || parts.includes('option');
     const needsShift = parts.includes('shift');
 
-    // Modifiers must match exactly
     if (needsMeta !== e.metaKey) return false;
     if (needsCtrl !== e.ctrlKey) return false;
     if (needsAlt !== e.altKey) return false;
     if (needsShift !== e.shiftKey) return false;
 
-    // Key matching logic
     const eventKey = e.key.toLowerCase();
     const eventCode = e.code.toLowerCase();
 
-    // 1. Direct key match (e.g., 'escape', 'enter')
     if (targetKey === eventKey) return true;
-
-    // 2. Physical key match (Crucial for Alt+Key combinations where Alt changes the character)
     if (targetKey.length === 1) {
         const isLetter = /^[a-z]$/.test(targetKey);
         const isDigit = /^[0-9]$/.test(targetKey);
-        
         if (isLetter && eventCode === `key${targetKey}`) return true;
         if (isDigit && eventCode === `digit${targetKey}`) return true;
     }
-
-    // 3. Common aliases
     if (targetKey === 'enter' && eventCode === 'numpadenter') return true;
     if (targetKey === 'alt' && (eventCode === 'altleft' || eventCode === 'altright')) return true;
 
