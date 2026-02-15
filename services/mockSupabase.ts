@@ -231,6 +231,18 @@ class DatabaseService {
     return [];
   }
 
+  async getMemberHistory(membershipNumber: string): Promise<Member[]> {
+    if (this.isSupabase()) {
+        const { data } = await supabase
+            .from('members')
+            .select('*')
+            .eq('membership_number', membershipNumber)
+            .order('start_date', { ascending: false });
+        return (data || []) as Member[];
+    }
+    return [];
+  }
+
   async addMember(member: Member) {
     if (this.isSupabase()) {
       await supabase.from('members').insert([member]);
