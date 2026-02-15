@@ -34,7 +34,8 @@ import {
   Heart,
   Baby,
   Clock,
-  ArrowRightCircle
+  ArrowRightCircle,
+  Coins
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Freeze } from '../types';
@@ -305,6 +306,17 @@ const MemberForm = ({
               <div className="space-y-1.5">
                   <label className="text-[8px] font-black text-slate-900 uppercase tracking-widest ml-1">Authorized Start Date</label>
                   <input type="date" {...register('start_date')} className="w-full h-11 px-4 rounded-xl bg-white border-2 border-slate-50 text-[10px] font-black tracking-tight" />
+              </div>
+              <div className="space-y-1.5">
+                  <label className="text-[8px] font-black text-slate-900 uppercase tracking-widest ml-1">Discount Amount</label>
+                  <div className="relative group">
+                      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-indigo-600"><Coins className="w-3.5 h-3.5" /></div>
+                      <input type="number" step="0.01" {...register('discount', { valueAsNumber: true })} className="w-full h-11 pl-10 pr-4 rounded-xl border-2 border-slate-50 text-sm font-black focus:outline-none focus:border-indigo-600 transition-all bg-white" placeholder="0.00" />
+                  </div>
+              </div>
+              <div className="space-y-1.5">
+                  <label className="text-[8px] font-black text-slate-900 uppercase tracking-widest ml-1">Check / Ref Number</label>
+                  <input {...register('check_no')} className="w-full h-11 px-4 rounded-xl bg-white border-2 border-slate-50 text-[10px] font-black tracking-tight" placeholder="N/A" />
               </div>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
