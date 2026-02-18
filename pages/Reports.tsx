@@ -754,7 +754,7 @@ const Reports = () => {
                   <div ref={reportRef} className="p-12 md:p-16 flex flex-col bg-white">
                       <div className="flex justify-between items-start mb-16">
                           <div className="flex items-center gap-6">
-                              {currentProperty?.logo_url && <img src={currentProperty.logo_url} className="h-20 w-auto object-contain filter grayscale" />}
+                              {currentProperty?.logo_url && <img src={currentProperty.logo_url} className="h-20 w-auto object-contain" />}
                               <div className="h-16 w-px bg-slate-200"></div>
                               <div>
                                   <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-2">{currentProperty?.name || settings?.name}</h2>
