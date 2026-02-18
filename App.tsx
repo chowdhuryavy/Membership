@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   HashRouter as Router, 
@@ -354,7 +353,7 @@ const Sidebar = () => {
         return [...sortedItems, ...missingItems];
     }, [settings?.navigation_order, ALL_NAV_ITEMS]);
 
-    const NavItem = ({ to, icon: Icon, label, permission }: { to: string, icon: any, label: string, permission?: Permission }) => {
+    const NavItem: React.FC<{ to: string, icon: any, label: string, permission?: Permission }> = ({ to, icon: Icon, label, permission }) => {
         if (permission && user && !hasPermission(user.role_id, permission)) return null;
         
         const isActive = location.pathname === to;
@@ -444,7 +443,7 @@ const MobileHeader = () => {
         return [...sortedItems, ...missingItems];
     }, [settings?.navigation_order, ALL_NAV_ITEMS]);
 
-    const MobileNavItem = ({ to, icon: Icon, label, permission }: { to: string, icon: any, label: string, permission?: Permission }) => {
+    const MobileNavItem: React.FC<{ to: string, icon: any, label: string, permission?: Permission }> = ({ to, icon: Icon, label, permission }) => {
         if (permission && user && !hasPermission(user.role_id, permission)) return null;
         const isActive = location.pathname === to;
         return (

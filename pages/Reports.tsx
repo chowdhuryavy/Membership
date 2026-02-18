@@ -2,9 +2,9 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '../components/ui';
 import { db } from '../services/mockSupabase';
-import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest } from '../types';
+import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval } from 'date-fns';
+import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO as dateFnsParseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { 
@@ -21,13 +21,20 @@ import {
   Filter,
   Activity,
   Award,
-  Shield
+  Shield,
+  LayoutGrid,
+  TrendingUp,
+  CreditCard,
+  Building2
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 const parseISO = (dateString: string) => new Date(dateString);
 const startOfMonthLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+
+// Report Types
+type ReportType = 'revenue_recognition' | 'daily_sales' | 'incentives';
 
 interface ReportRow {
   sl_no: number;
@@ -39,6 +46,7 @@ interface ReportRow {
   type_of_membership?: string;
   item_name: string;
   therapist_name?: string;
+  status?: string;
   
   // Revenue
   actual_price: number;
@@ -46,7 +54,7 @@ interface ReportRow {
   discount_amount: number;
   net_revenue: number;
   
-  // Incentive Breakdowns (Excel Style)
+  // Incentive Breakdowns (Excel Style) - Only used for Incentive Report
   inc_total: number;
   inc_discount_percent: number;
   inc_discount_val: number;
@@ -56,14 +64,31 @@ interface ReportRow {
   staff_splits: Record<string, number>; // Staff ID -> Payout
 }
 
+// Interface for Revenue Recognition Row
+interface RevenueRow {
+    id: string;
+    sl_no: number;
+    guest_name: string;
+    start_date: string;
+    end_date: string;
+    total_days: number;
+    net_fees: number;
+    prev_accrual: number;
+    period_rev: number;
+    deferred: number;
+    category_name: string;
+}
+
 const Reports = () => {
   const { user } = useAuth();
   const { settings, currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
-  const [reportType, setReportType] = useState<'membership' | 'daily_sales' | 'incentives'>('incentives');
+  const [reportType, setReportType] = useState<ReportType>('revenue_recognition');
   const [incentiveDept, setIncentiveDept] = useState<'Massage' | 'Membership' | 'Retail'>('Massage');
-  const [groupingKey, setGroupingKey] = useState<'none' | 'category' | 'staff'>('none');
   const [reportMonth, setReportMonth] = useState(format(new Date(), 'yyyy-MM'));
-  const [rows, setRows] = useState<ReportRow[]>([]);
+  
+  // Data States
+  const [rows, setRows] = useState<ReportRow[]>([]); // For Incentives & Sales
+  const [revenueRows, setRevenueRows] = useState<RevenueRow[]>([]); // For Revenue Recog
   const [activeStaffList, setActiveStaffList] = useState<Staff[]>([]);
   const [showConfig, setShowConfig] = useState(true);
   const reportRef = useRef<HTMLDivElement>(null);
@@ -106,7 +131,7 @@ const Reports = () => {
       const start = startOfMonthLocal(parseISO(reportMonth + '-01'));
       const end = endOfMonth(start);
       
-      const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests] = await Promise.all([
+      const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests, freezes] = await Promise.all([
           db.getIncentiveRules(currentProperty.id, currentOutlet.id),
           db.getMassageBookings(currentProperty.id),
           db.getMembers(currentOutlet.id),
@@ -115,157 +140,277 @@ const Reports = () => {
           db.getMassageTypes(currentProperty.id),
           db.getCategories(currentOutlet.id),
           db.getStaff(currentOutlet.id),
-          db.getGuests(currentProperty.id)
+          db.getGuests(currentProperty.id),
+          db.getFreezes()
       ]);
 
       setActiveStaffList(staffList.filter(s => s.is_active));
-      const records: ReportRow[] = [];
-      let sl = 1;
+      
+      if (reportType === 'revenue_recognition') {
+          // --- REVENUE RECOGNITION (AMORTIZATION) LOGIC ---
+          const revData: RevenueRow[] = [];
+          let sl = 1;
 
-      if (incentiveDept === 'Massage') {
-          bookings.filter(b => b.status === 'completed' && parseISO(b.date) >= start && parseISO(b.date) <= end)
-          .forEach(b => {
-              const type = mTypes.find(m => m.id === b.massage_type_id);
-              if (!type) return;
-              const rule = findBestRule(rules, 'Massage', b.massage_type_id, type.price, type.duration_minutes);
-              if (!rule) return;
-
-              const actualPrice = type.price;
-              const discountAmt = b.discount || 0;
-              const netRev = actualPrice - discountAmt;
-              const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
-
-              const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-              const incDiscVal = (baseInc * discPercent) / 100;
-              const incNet = baseInc - incDiscVal;
-
-              const staffSplits: Record<string, number> = {};
-              if (rule.distribution_type === 'Shared') {
-                  const available = staffList.filter(s => s.is_active && (s.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(s, b.date));
-                  if (available.length > 0) {
-                      const share = incNet / available.length;
-                      available.forEach(s => staffSplits[s.id] = share);
-                  }
-              } else {
-                  if (b.therapist_id) staffSplits[b.therapist_id] = incNet;
+          members.filter(m => m.status !== MemberStatus.TENTATIVE).forEach(m => {
+              const mStart = parseISO(m.start_date);
+              const mEnd = parseISO(m.current_end_date);
+              
+              // Only include if the membership overlaps with the report history or is currently active/deferred
+              // Specifically: Start Date <= Report End Date AND End Date >= Report Start Date (Standard Overlap)
+              // OR if we want to show historicals, we might check differently. 
+              // For Accrual reports, we usually only care about active revenue streams.
+              // Let's stick to standard intersection.
+              
+              // NOTE: Screenshot implies showing active revenue recognition. 
+              // Even if fully recognized in past, usually not shown unless "Period Rev" is > 0 or it's active.
+              // Let's filter for: Has Revenue in this period OR Has Deferred Revenue remaining.
+              
+              const memberFreezes = freezes.filter(f => f.member_id === m.id);
+              
+              // 1. Calculate Prev Accrual (Start -> Before Period)
+              let prevAccrual = 0;
+              if (mStart < start) {
+                  prevAccrual = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, subDays(start, 1));
               }
 
-              records.push({
-                  sl_no: sl++,
-                  date: format(parseISO(b.date), 'dd-MMM-yy'),
-                  guest_name: guests.find(g => g.id === b.guest_id)?.name || 'Guest',
-                  duration: `${type.duration_minutes}m`,
-                  check_no: '#---',
-                  item_name: type.name,
-                  therapist_name: therapists.find(t => t.id === b.therapist_id)?.name || 'N/A',
-                  actual_price: actualPrice,
-                  discount_percent: discPercent,
-                  discount_amount: discountAmt,
-                  net_revenue: netRev,
-                  inc_total: baseInc,
-                  inc_discount_percent: discPercent,
-                  inc_discount_val: incDiscVal,
-                  inc_net: incNet,
-                  remarks: discPercent > 50 ? 'Complimentary' : '',
-                  staff_splits: staffSplits
-              });
-          });
-      } else if (incentiveDept === 'Membership') {
-          members.filter(m => m.status !== MemberStatus.TENTATIVE && parseISO(m.start_date) >= start && parseISO(m.start_date) <= end)
-          .forEach(m => {
-              const cat = mCats.find(c => c.id === m.category_id);
-              if (!cat) return;
-              const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0);
-              if (!rule) return;
+              // 2. Calculate Period Revenue (Period Start -> Period End)
+              const periodRev = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, start, end);
 
-              const actualPrice = m.actual_rate;
-              const discountAmt = m.discount;
-              const netRev = m.net_amount;
-              const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+              // 3. Calculate Deferred (Total - (Prev + Period))
+              // Ensuring we don't go below zero due to floating point math
+              let deferred = m.net_amount - (prevAccrual + periodRev);
+              if (deferred < 0.01) deferred = 0; // Floating point tolerance
 
-              const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-              const incDiscVal = (baseInc * discPercent) / 100;
-              const incNet = baseInc - incDiscVal;
+              // Only show if there is activity in this period or remaining deferred revenue
+              // OR if the membership is strictly active within this month
+              const isActiveInPeriod = (mStart <= end && mEnd >= start);
+              
+              if (isActiveInPeriod || deferred > 0) {
+                  const cat = mCats.find(c => c.id === m.category_id);
+                  const totalDays = differenceInCalendarDays(mEnd, mStart) + 1;
 
-              const staffSplits: Record<string, number> = {};
-              if (rule.distribution_type === 'Shared') {
-                  const available = staffList.filter(s => s.is_active && (s.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(s, m.start_date));
-                  if (available.length > 0) {
-                      const share = incNet / available.length;
-                      available.forEach(s => staffSplits[s.id] = share);
-                  }
-              } else {
-                  if (m.sales_rep_id) staffSplits[m.sales_rep_id] = incNet;
+                  revData.push({
+                      id: m.id,
+                      sl_no: 0, // Will assign after sort
+                      guest_name: m.guest_name,
+                      start_date: format(mStart, 'dd-MM-yyyy'),
+                      end_date: format(mEnd, 'dd-MM-yyyy'),
+                      total_days: totalDays,
+                      net_fees: m.net_amount,
+                      prev_accrual: prevAccrual,
+                      period_rev: periodRev,
+                      deferred: deferred,
+                      category_name: cat ? cat.name.toUpperCase() : 'UNCATEGORIZED'
+                  });
               }
-
-              records.push({
-                  sl_no: sl++,
-                  date: format(parseISO(m.start_date), 'dd-MMM-yy'),
-                  guest_name: m.guest_name,
-                  type_of_membership: m.package_type || 'Single',
-                  duration: `${cat.duration_months} Months`,
-                  check_no: m.check_no || '#---',
-                  mode_of_payment: 'Cash/Card',
-                  item_name: cat.name,
-                  actual_price: actualPrice,
-                  discount_percent: discPercent,
-                  discount_amount: discountAmt,
-                  net_revenue: netRev,
-                  inc_total: baseInc,
-                  inc_discount_percent: discPercent,
-                  inc_discount_val: incDiscVal,
-                  inc_net: incNet,
-                  remarks: m.remarks || '',
-                  staff_splits: staffSplits
-              });
           });
-      } else if (incentiveDept === 'Retail') {
-          sales.filter(s => s.status === 'completed' && parseISO(s.created_at) >= start && parseISO(s.created_at) <= end)
-          .forEach(s => {
-              const rule = findBestRule(rules, 'Sale', s.category, s.net_amount, 0);
-              if (!rule) return;
 
-              const actualPrice = s.gross_amount;
-              const discountAmt = s.discount_amount;
-              const netRev = s.net_amount;
-              const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+          // Sort by Category then Name
+          revData.sort((a, b) => {
+              if (a.category_name < b.category_name) return -1;
+              if (a.category_name > b.category_name) return 1;
+              return a.guest_name.localeCompare(b.guest_name);
+          });
 
-              const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-              const incDiscVal = (baseInc * discPercent) / 100;
-              const incNet = baseInc - incDiscVal;
+          // Assign SL
+          revData.forEach((row, i) => row.sl_no = i + 1);
+          setRevenueRows(revData);
 
-              const staffSplits: Record<string, number> = {};
-              if (rule.distribution_type === 'Shared') {
-                  const available = staffList.filter(staff => staff.is_active && (staff.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(staff, s.created_at));
-                  if (available.length > 0) {
-                      const share = incNet / available.length;
-                      available.forEach(staff => staffSplits[staff.id] = share);
-                  }
-              } else {
-                  if (s.sold_by_id) staffSplits[s.sold_by_id] = incNet;
+      } else {
+          // --- STANDARD ROWS FOR SALES & INCENTIVES ---
+          const records: ReportRow[] = [];
+          let sl = 1;
+
+          if (reportType === 'daily_sales') {
+              // --- DAILY SALES LEDGER (POS + BOOKINGS) ---
+              const combined = [
+                  ...sales.filter(s => s.status === 'completed' && parseISO(s.created_at) >= start && parseISO(s.created_at) <= end).map(s => ({
+                      date: s.created_at,
+                      name: s.guest_name,
+                      item: s.item_name,
+                      gross: s.gross_amount,
+                      disc: s.discount_amount,
+                      net: s.net_amount,
+                      type: 'Retail',
+                      method: s.payment_method
+                  })),
+                  ...bookings.filter(b => b.status === 'completed' && parseISO(b.date) >= start && parseISO(b.date) <= end).map(b => ({
+                      date: `${b.date}T${b.start_time}`,
+                      name: guests.find(g => g.id === b.guest_id)?.name || 'Guest',
+                      item: mTypes.find(t => t.id === b.massage_type_id)?.name || 'Service',
+                      gross: Number(b.price) + (b.discount || 0),
+                      disc: b.discount || 0,
+                      net: Number(b.price),
+                      type: 'Service',
+                      method: 'Service'
+                  }))
+              ].sort((a, b) => a.date.localeCompare(b.date));
+
+              combined.forEach(c => {
+                  records.push({
+                      sl_no: sl++,
+                      date: format(parseISO(c.date), 'dd-MMM-yy'),
+                      guest_name: c.name,
+                      item_name: c.item,
+                      mode_of_payment: c.method,
+                      check_no: c.type === 'Retail' ? '#POS' : '#SVC',
+                      actual_price: c.gross,
+                      discount_percent: c.gross > 0 ? (c.disc / c.gross * 100) : 0,
+                      discount_amount: c.disc,
+                      net_revenue: c.net,
+                      inc_total: 0, inc_discount_percent: 0, inc_discount_val: 0, inc_net: 0, staff_splits: {},
+                      remarks: c.type
+                  });
+              });
+
+          } else if (reportType === 'incentives') {
+              // --- INCENTIVE AUDIT LOGIC ---
+              if (incentiveDept === 'Massage') {
+                  bookings.filter(b => b.status === 'completed' && parseISO(b.date) >= start && parseISO(b.date) <= end)
+                  .forEach(b => {
+                      const type = mTypes.find(m => m.id === b.massage_type_id);
+                      if (!type) return;
+                      const rule = findBestRule(rules, 'Massage', b.massage_type_id, type.price, type.duration_minutes);
+                      if (!rule) return;
+
+                      const actualPrice = type.price;
+                      const discountAmt = b.discount || 0;
+                      const netRev = actualPrice - discountAmt;
+                      const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+                      const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+                      const incDiscVal = (baseInc * discPercent) / 100;
+                      const incNet = baseInc - incDiscVal;
+
+                      const staffSplits: Record<string, number> = {};
+                      if (rule.distribution_type === 'Shared') {
+                          const available = staffList.filter(s => s.is_active && (s.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(s, b.date));
+                          if (available.length > 0) {
+                              const share = incNet / available.length;
+                              available.forEach(s => staffSplits[s.id] = share);
+                          }
+                      } else {
+                          if (b.therapist_id) staffSplits[b.therapist_id] = incNet;
+                      }
+
+                      records.push({
+                          sl_no: sl++,
+                          date: format(parseISO(b.date), 'dd-MMM-yy'),
+                          guest_name: guests.find(g => g.id === b.guest_id)?.name || 'Guest',
+                          duration: `${type.duration_minutes}m`,
+                          check_no: '#---',
+                          item_name: type.name,
+                          therapist_name: therapists.find(t => t.id === b.therapist_id)?.name || 'N/A',
+                          actual_price: actualPrice,
+                          discount_percent: discPercent,
+                          discount_amount: discountAmt,
+                          net_revenue: netRev,
+                          inc_total: baseInc,
+                          inc_discount_percent: discPercent,
+                          inc_discount_val: incDiscVal,
+                          inc_net: incNet,
+                          remarks: discPercent > 50 ? 'Complimentary' : '',
+                          staff_splits: staffSplits
+                      });
+                  });
+              } else if (incentiveDept === 'Membership') {
+                  members.filter(m => m.status !== MemberStatus.TENTATIVE && parseISO(m.start_date) >= start && parseISO(m.start_date) <= end)
+                  .forEach(m => {
+                      const cat = mCats.find(c => c.id === m.category_id);
+                      if (!cat) return;
+                      const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0);
+                      if (!rule) return;
+
+                      const actualPrice = m.actual_rate;
+                      const discountAmt = m.discount;
+                      const netRev = m.net_amount;
+                      const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+                      const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+                      const incDiscVal = (baseInc * discPercent) / 100;
+                      const incNet = baseInc - incDiscVal;
+
+                      const staffSplits: Record<string, number> = {};
+                      if (rule.distribution_type === 'Shared') {
+                          const available = staffList.filter(s => s.is_active && (s.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(s, m.start_date));
+                          if (available.length > 0) {
+                              const share = incNet / available.length;
+                              available.forEach(s => staffSplits[s.id] = share);
+                          }
+                      } else {
+                          if (m.sales_rep_id) staffSplits[m.sales_rep_id] = incNet;
+                      }
+
+                      records.push({
+                          sl_no: sl++,
+                          date: format(parseISO(m.start_date), 'dd-MMM-yy'),
+                          guest_name: m.guest_name,
+                          type_of_membership: m.package_type || 'Single',
+                          duration: `${cat.duration_months} Months`,
+                          check_no: m.check_no || '#---',
+                          mode_of_payment: 'Cash/Card',
+                          item_name: cat.name,
+                          actual_price: actualPrice,
+                          discount_percent: discPercent,
+                          discount_amount: discountAmt,
+                          net_revenue: netRev,
+                          inc_total: baseInc,
+                          inc_discount_percent: discPercent,
+                          inc_discount_val: incDiscVal,
+                          inc_net: incNet,
+                          remarks: m.remarks || '',
+                          staff_splits: staffSplits
+                      });
+                  });
+              } else if (incentiveDept === 'Retail') {
+                  sales.filter(s => s.status === 'completed' && parseISO(s.created_at) >= start && parseISO(s.created_at) <= end)
+                  .forEach(s => {
+                      const rule = findBestRule(rules, 'Sale', s.category, s.net_amount, 0);
+                      if (!rule) return;
+
+                      const actualPrice = s.gross_amount;
+                      const discountAmt = s.discount_amount;
+                      const netRev = s.net_amount;
+                      const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+                      const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+                      const incDiscVal = (baseInc * discPercent) / 100;
+                      const incNet = baseInc - incDiscVal;
+
+                      const staffSplits: Record<string, number> = {};
+                      if (rule.distribution_type === 'Shared') {
+                          const available = staffList.filter(staff => staff.is_active && (staff.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(staff, s.created_at));
+                          if (available.length > 0) {
+                              const share = incNet / available.length;
+                              available.forEach(staff => staffSplits[staff.id] = share);
+                          }
+                      } else {
+                          if (s.sold_by_id) staffSplits[s.sold_by_id] = incNet;
+                      }
+
+                      records.push({
+                          sl_no: sl++,
+                          date: format(parseISO(s.created_at), 'dd-MMM-yy'),
+                          guest_name: s.guest_name,
+                          duration: `x${s.quantity}`,
+                          check_no: '#POS',
+                          item_name: s.item_name,
+                          actual_price: actualPrice,
+                          discount_percent: discPercent,
+                          discount_amount: discountAmt,
+                          net_revenue: netRev,
+                          inc_total: baseInc,
+                          inc_discount_percent: discPercent,
+                          inc_discount_val: incDiscVal,
+                          inc_net: incNet,
+                          remarks: s.remarks || '',
+                          staff_splits: staffSplits
+                      });
+                  });
               }
-
-              records.push({
-                  sl_no: sl++,
-                  date: format(parseISO(s.created_at), 'dd-MMM-yy'),
-                  guest_name: s.guest_name,
-                  duration: `x${s.quantity}`,
-                  check_no: '#POS',
-                  item_name: s.item_name,
-                  actual_price: actualPrice,
-                  discount_percent: discPercent,
-                  discount_amount: discountAmt,
-                  net_revenue: netRev,
-                  inc_total: baseInc,
-                  inc_discount_percent: discPercent,
-                  inc_discount_val: incDiscVal,
-                  inc_net: incNet,
-                  remarks: s.remarks || '',
-                  staff_splits: staffSplits
-              });
-          });
+          }
+          setRows(records);
       }
-      setRows(records);
     } catch (e) { console.error(e); }
   };
 
@@ -277,7 +422,7 @@ const Reports = () => {
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('l', 'mm', 'a4');
       pdf.addImage(imgData, 'PNG', 0, 0, 297, (canvas.height * 297) / canvas.width);
-      pdf.save(`Yield_Audit_${incentiveDept}_${reportMonth}.pdf`);
+      pdf.save(`Report_${reportType}_${reportMonth}.pdf`);
     } catch (e) { console.error(e); } finally { setIsGeneratingPDF(false); }
   };
 
@@ -293,11 +438,99 @@ const Reports = () => {
       );
   }
 
-  const RenderTable = () => {
-    const isMassage = incentiveDept === 'Massage';
-    const isMembership = incentiveDept === 'Membership';
-    const isRetail = incentiveDept === 'Retail';
+  const RenderRevenueTable = () => {
+      // Group by Category
+      const grouped = revenueRows.reduce((acc, row) => {
+          if (!acc[row.category_name]) acc[row.category_name] = [];
+          acc[row.category_name].push(row);
+          return acc;
+      }, {} as Record<string, RevenueRow[]>);
 
+      let grandNetFees = 0;
+      let grandPrevAccrual = 0;
+      let grandPeriodRev = 0;
+      let grandDeferred = 0;
+
+      return (
+          <div className="w-full text-[10px] font-medium text-slate-900">
+              {/* Header */}
+              <div className="grid grid-cols-12 bg-slate-950 text-white font-black uppercase tracking-widest py-4 px-2 mb-1">
+                  <div className="col-span-1">SL.</div>
+                  <div className="col-span-3">Guest Name / Profile</div>
+                  <div className="col-span-1">Start Date</div>
+                  <div className="col-span-1">End Date</div>
+                  <div className="col-span-1 text-center">Days</div>
+                  <div className="col-span-1 text-right">Net Fees</div>
+                  <div className="col-span-1 text-right">Prev. Accrual</div>
+                  <div className="col-span-2 text-right">Period Rev</div>
+                  <div className="col-span-1 text-right">Deferred</div>
+              </div>
+
+              {Object.entries(grouped).map(([category, groupRowsData]) => {
+                  const groupRows = groupRowsData as RevenueRow[];
+                  const subNetFees = groupRows.reduce((s, r) => s + r.net_fees, 0);
+                  const subPrevAccrual = groupRows.reduce((s, r) => s + r.prev_accrual, 0);
+                  const subPeriodRev = groupRows.reduce((s, r) => s + r.period_rev, 0);
+                  const subDeferred = groupRows.reduce((s, r) => s + r.deferred, 0);
+
+                  grandNetFees += subNetFees;
+                  grandPrevAccrual += subPrevAccrual;
+                  grandPeriodRev += subPeriodRev;
+                  grandDeferred += subDeferred;
+
+                  return (
+                      <div key={category} className="mb-6">
+                          {/* Group Header */}
+                          <div className="flex items-center gap-3 bg-white py-3 border-b border-slate-200 mt-4 mb-2">
+                              <Layers className="w-4 h-4 text-indigo-500" />
+                              <span className="font-black text-slate-900 uppercase tracking-tight text-xs">{category}</span>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">({groupRows.length} Ledger Events)</span>
+                          </div>
+
+                          {/* Rows */}
+                          {groupRows.map((row, idx) => (
+                              <div key={row.id} className="grid grid-cols-12 py-3 px-2 border-b border-slate-100 hover:bg-slate-50 transition-colors items-center">
+                                  <div className="col-span-1 text-slate-500">{idx + 1}</div>
+                                  <div className="col-span-3 font-black text-slate-800">{row.guest_name}</div>
+                                  <div className="col-span-1 text-slate-600">{row.start_date}</div>
+                                  <div className="col-span-1 text-slate-600">{row.end_date}</div>
+                                  <div className="col-span-1 text-center text-slate-500">{row.total_days}</div>
+                                  <div className="col-span-1 text-right text-slate-500">{formatMoney(row.net_fees)}</div>
+                                  <div className="col-span-1 text-right text-slate-400">{formatMoney(row.prev_accrual)}</div>
+                                  <div className="col-span-2 text-right font-black text-indigo-700">{formatMoney(row.period_rev)}</div>
+                                  <div className="col-span-1 text-right font-bold text-red-500">{formatMoney(row.deferred)}</div>
+                              </div>
+                          ))}
+
+                          {/* Subtotal */}
+                          <div className="grid grid-cols-12 py-3 px-2 bg-indigo-50/50 mt-1 border-t-2 border-indigo-100 items-center">
+                              <div className="col-span-7 text-right pr-4 font-black uppercase text-indigo-900 text-[9px] tracking-widest">Cluster Subtotal: {category}</div>
+                              <div className="col-span-1 text-right font-black text-indigo-900">{formatMoney(subNetFees)}</div>
+                              <div className="col-span-1 text-right font-black text-indigo-900">{formatMoney(subPrevAccrual)}</div>
+                              <div className="col-span-2 text-right font-black text-indigo-900">{formatMoney(subPeriodRev)}</div>
+                              <div className="col-span-1 text-right font-black text-indigo-900">{formatMoney(subDeferred)}</div>
+                          </div>
+                      </div>
+                  );
+              })}
+
+              {/* Grand Total */}
+              <div className="grid grid-cols-12 py-4 px-2 bg-slate-900 text-white mt-8 mb-4 items-center rounded-lg shadow-xl">
+                  <div className="col-span-7 text-right pr-4 font-black uppercase tracking-[0.2em] text-xs">Verified Portfolio Total</div>
+                  <div className="col-span-1 text-right font-bold text-xs">{formatMoney(grandNetFees)}</div>
+                  <div className="col-span-1 text-right font-bold text-xs opacity-70">{formatMoney(grandPrevAccrual)}</div>
+                  <div className="col-span-2 text-right font-black text-sm text-indigo-400">{formatMoney(grandPeriodRev)}</div>
+                  <div className="col-span-1 text-right font-bold text-xs text-red-400">{formatMoney(grandDeferred)}</div>
+              </div>
+          </div>
+      );
+  };
+
+  const RenderStandardTable = () => {
+    const isIncentiveReport = reportType === 'incentives';
+    const isDailySales = reportType === 'daily_sales';
+
+    // Calculation variables
     let totalActual = 0;
     let totalDiscount = 0;
     let totalNetRev = 0;
@@ -311,35 +544,39 @@ const Reports = () => {
                     <tr className="bg-sky-100 text-black font-bold">
                         <th rowSpan={2} className="border border-black px-2 py-3 w-8">Sl.No.</th>
                         <th rowSpan={2} className="border border-black px-2 py-3 w-20">Date</th>
-                        <th rowSpan={2} className="border border-black px-2 py-3 min-w-[120px]">Guest Name</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 min-w-[120px]">Guest / Member</th>
                         
-                        {isMembership && <th rowSpan={2} className="border border-black px-2 py-3">Type of Membership</th>}
-                        <th rowSpan={2} className="border border-black px-2 py-3 w-16">{isRetail ? 'Qty' : 'Duration'}</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 w-16">{isDailySales ? 'Reference' : 'Duration'}</th>
                         <th rowSpan={2} className="border border-black px-2 py-3 w-16">Check No.</th>
-                        {isMembership && <th rowSpan={2} className="border border-black px-2 py-3">Mode of Payment</th>}
-                        {!isMembership && <th rowSpan={2} className="border border-black px-2 py-3">{isMassage ? 'Treatment' : 'Asset Item'}</th>}
-                        {isMassage && <th rowSpan={2} className="border border-black px-2 py-3">Therapist</th>}
+                        {(isDailySales) && <th rowSpan={2} className="border border-black px-2 py-3">Payment Mode</th>}
+                        <th rowSpan={2} className="border border-black px-2 py-3">Item / Service</th>
+                        {incentiveDept === 'Massage' && isIncentiveReport && <th rowSpan={2} className="border border-black px-2 py-3">Therapist</th>}
                         
-                        <th rowSpan={2} className="border border-black px-2 py-3 text-right">{isMembership ? 'Original Rate' : 'Actual Prices'}</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 text-right">Gross Amount</th>
                         <th rowSpan={2} className="border border-black px-2 py-3 text-center">Disc %</th>
-                        <th rowSpan={2} className="border border-black px-2 py-3 text-right">Discounted Amount</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 text-right">Discount Amt</th>
                         <th rowSpan={2} className="border border-black px-2 py-3 text-right">Net Revenue</th>
                         
-                        <th colSpan={4} className="border border-black px-2 py-1 text-center bg-amber-100">Incentive Breakdown</th>
+                        {/* Incentive Columns only for Incentive Report */}
+                        {isIncentiveReport && <th colSpan={4} className="border border-black px-2 py-1 text-center bg-amber-100">Incentive Breakdown</th>}
                         
                         <th rowSpan={2} className="border border-black px-2 py-3 min-w-[100px]">Remarks</th>
                         
-                        {activeStaffList.map(s => (
+                        {isIncentiveReport && activeStaffList.map(s => (
                             <th key={s.id} rowSpan={2} className="border border-black px-1 py-3 w-16 bg-slate-50 text-center">
                                 <div className="rotate-180" style={{ writingMode: 'vertical-rl' }}>{s.name.toUpperCase()}</div>
                             </th>
                         ))}
                     </tr>
                     <tr className="bg-amber-50">
-                        <th className="border border-black px-2 py-1 w-14 text-center">Total</th>
-                        <th className="border border-black px-2 py-1 w-14 text-center">Disc %</th>
-                        <th className="border border-black px-2 py-1 w-14 text-center">Disc. Inc</th>
-                        <th className="border border-black px-2 py-1 w-14 text-center">Net</th>
+                        {isIncentiveReport && (
+                            <>
+                                <th className="border border-black px-2 py-1 w-14 text-center">Total</th>
+                                <th className="border border-black px-2 py-1 w-14 text-center">Disc %</th>
+                                <th className="border border-black px-2 py-1 w-14 text-center">Disc. Inc</th>
+                                <th className="border border-black px-2 py-1 w-14 text-center">Net</th>
+                            </>
+                        )}
                     </tr>
                 </thead>
                 <tbody>
@@ -354,26 +591,30 @@ const Reports = () => {
                                 <td className="border border-black px-2 py-1 text-center font-bold">{row.sl_no}</td>
                                 <td className="border border-black px-2 py-1 text-center whitespace-nowrap">{row.date}</td>
                                 <td className="border border-black px-2 py-1 font-black text-slate-700">{row.guest_name}</td>
-                                {isMembership && <td className="border border-black px-2 py-1 text-center font-bold text-slate-600">{row.type_of_membership}</td>}
-                                <td className="border border-black px-2 py-1 text-center">{row.duration}</td>
+                                
+                                <td className="border border-black px-2 py-1 text-center">{row.duration || '-'}</td>
                                 <td className="border border-black px-2 py-1 text-center text-slate-400">{row.check_no}</td>
-                                {isMembership && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
-                                {!isMembership && <td className="border border-black px-2 py-1">{row.item_name}</td>}
-                                {isMassage && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
+                                {(isDailySales) && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
+                                <td className="border border-black px-2 py-1">{row.item_name}</td>
+                                {incentiveDept === 'Massage' && isIncentiveReport && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
                                 
                                 <td className="border border-black px-2 py-1 text-right">{row.actual_price.toFixed(2)}</td>
                                 <td className="border border-black px-2 py-1 text-center text-slate-400">{row.discount_percent > 0 ? `${row.discount_percent.toFixed(0)}%` : ''}</td>
                                 <td className="border border-black px-2 py-1 text-right">{row.discount_amount.toFixed(2)}</td>
                                 <td className="border border-black px-2 py-1 text-right font-black bg-slate-50">{row.net_revenue.toFixed(2)}</td>
                                 
-                                <td className="border border-black px-2 py-1 text-right bg-amber-50/20">{row.inc_total.toFixed(2)}</td>
-                                <td className="border border-black px-2 py-1 text-center bg-amber-50/20 text-slate-400">{row.inc_discount_percent > 0 ? `${row.inc_discount_percent.toFixed(0)}%` : ''}</td>
-                                <td className="border border-black px-2 py-1 text-right bg-amber-50/20">{row.inc_discount_val.toFixed(2)}</td>
-                                <td className="border border-black px-2 py-1 text-right font-black bg-amber-100/30">{row.inc_net.toFixed(2)}</td>
+                                {isIncentiveReport && (
+                                    <>
+                                        <td className="border border-black px-2 py-1 text-right bg-amber-50/20">{row.inc_total.toFixed(2)}</td>
+                                        <td className="border border-black px-2 py-1 text-center bg-amber-50/20 text-slate-400">{row.inc_discount_percent > 0 ? `${row.inc_discount_percent.toFixed(0)}%` : ''}</td>
+                                        <td className="border border-black px-2 py-1 text-right bg-amber-50/20">{row.inc_discount_val.toFixed(2)}</td>
+                                        <td className="border border-black px-2 py-1 text-right font-black bg-amber-100/30">{row.inc_net.toFixed(2)}</td>
+                                    </>
+                                )}
                                 
                                 <td className="border border-black px-2 py-1 text-[8px] text-slate-400 italic truncate max-w-[120px]">{row.remarks}</td>
                                 
-                                {activeStaffList.map(s => {
+                                {isIncentiveReport && activeStaffList.map(s => {
                                     const val = row.staff_splits[s.id] || 0;
                                     staffTotals[s.id] = (staffTotals[s.id] || 0) + val;
                                     return (
@@ -386,64 +627,28 @@ const Reports = () => {
                         );
                     })}
                     <tr className="bg-slate-900 text-white font-black text-[10px]">
-                        <td colSpan={isMembership ? 7 : (isMassage ? 8 : 7)} className="border border-black px-4 py-3 text-right uppercase tracking-widest">Aggregate Portfolio Totals</td>
+                        <td colSpan={isDailySales ? 6 : (incentiveDept === 'Massage' ? 8 : 7)} className="border border-black px-4 py-3 text-right uppercase tracking-widest">Aggregate Portfolio Totals</td>
                         <td className="border border-black px-2 py-3 text-right">{totalActual.toFixed(2)}</td>
                         <td className="border border-black"></td>
                         <td className="border border-black px-2 py-3 text-right text-indigo-300">{totalDiscount.toFixed(2)}</td>
                         <td className="border border-black px-2 py-3 text-right">{totalNetRev.toFixed(2)}</td>
-                        <td colSpan={3} className="border border-black"></td>
-                        <td className="border border-black px-2 py-3 text-right bg-indigo-600 font-bold">{totalIncNet.toFixed(2)}</td>
-                        <td className="border border-black"></td>
-                        {activeStaffList.map(s => (
-                            <td key={s.id} className="border border-black px-1 py-3 text-right text-indigo-200">
-                                {(staffTotals[s.id] || 0).toFixed(2)}
-                            </td>
-                        ))}
+                        
+                        {isIncentiveReport && (
+                            <>
+                                <td colSpan={3} className="border border-black"></td>
+                                <td className="border border-black px-2 py-3 text-right bg-indigo-600 font-bold">{totalIncNet.toFixed(2)}</td>
+                                <td className="border border-black"></td>
+                                {activeStaffList.map(s => (
+                                    <td key={s.id} className="border border-black px-1 py-3 text-right text-indigo-200">
+                                        {(staffTotals[s.id] || 0).toFixed(2)}
+                                    </td>
+                                ))}
+                            </>
+                        )}
+                        {!isIncentiveReport && <td className="border border-black"></td>}
                     </tr>
                 </tbody>
             </table>
-
-            <div className="mt-16 grid grid-cols-12 gap-10">
-                <div className="col-span-5">
-                    <table className="w-full border-collapse border-2 border-black font-black text-[10px]">
-                        <tbody>
-                            <tr className="bg-amber-50">
-                                <td className="border border-black px-5 py-3 uppercase text-slate-600">Total Incentive Yield</td>
-                                <td className="border border-black px-5 py-3 text-right text-indigo-600 text-sm">{formatMoney(totalIncNet)}</td>
-                            </tr>
-                            <tr className="bg-white">
-                                <td className="border border-black px-5 py-3 uppercase text-slate-600">Portfolio Gross Revenue</td>
-                                <td className="border border-black px-5 py-3 text-right text-sm">{formatMoney(totalActual)}</td>
-                            </tr>
-                            <tr className="bg-white">
-                                <td className="border border-black px-5 py-3 uppercase text-slate-600">Total Reduction / Discount</td>
-                                <td className="border border-black px-5 py-3 text-right text-red-500 text-sm">{formatMoney(totalDiscount)}</td>
-                            </tr>
-                            <tr className="bg-sky-100 border-t-4 border-black">
-                                <td className="border border-black px-5 py-4 uppercase text-slate-900 text-xs">Certified Net Revenue</td>
-                                <td className="border border-black px-5 py-4 text-right text-indigo-700 text-sm">{formatMoney(totalNetRev)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div className="col-span-7 grid grid-cols-2 gap-10 items-end pb-4">
-                    <div className="space-y-12">
-                        <div className="h-px bg-black w-full"></div>
-                        <div className="text-center uppercase">
-                            <p className="font-black text-xs text-slate-900">Prepared By:</p>
-                            <p className="text-[10px] font-bold text-slate-400 mt-1">{currentOutlet?.signatory_prepared_role || 'Accountant / Controller'}</p>
-                        </div>
-                    </div>
-                    <div className="space-y-12">
-                        <div className="h-px bg-black w-full"></div>
-                        <div className="text-center uppercase">
-                            <p className="font-black text-xs text-slate-900">Approved By:</p>
-                            <p className="text-[10px] font-bold text-slate-400 mt-1">{currentOutlet?.signatory_approved_role || 'General Manager'}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     );
   };
@@ -454,7 +659,7 @@ const Reports = () => {
         <div className="flex items-center gap-6">
             <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-indigo-100"><FileText className="w-7 h-7" /></div>
             <div>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none">Financial Yield Audit</h1>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none">Financial Audit Center</h1>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2">Executive Ledger System</p>
             </div>
         </div>
@@ -477,39 +682,58 @@ const Reports = () => {
                           </CardTitle>
                       </CardHeader>
                       <CardContent className="p-8 space-y-10">
+                          
+                          {/* 1. REPORT TYPE SWITCHER */}
                           <div className="space-y-4">
                               <div className="flex items-center gap-2 mb-1">
-                                  <Award className="w-3.5 h-3.5 text-indigo-600"/>
-                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Reward Department</label>
+                                  <LayoutGrid className="w-3.5 h-3.5 text-indigo-600"/>
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Report Type</label>
                               </div>
                               <div className="grid grid-cols-1 gap-2">
-                                  {(['Massage', 'Membership', 'Retail'] as const).map(dept => (
+                                  {[
+                                      { id: 'revenue_recognition', label: 'Revenue Recognition', icon: UserCheck },
+                                      { id: 'incentives', label: 'Incentive Audit', icon: Award },
+                                      { id: 'daily_sales', label: 'Daily Sales Ledger', icon: CreditCard }
+                                  ].map(type => (
                                       <button 
-                                        key={dept} 
-                                        onClick={() => setIncentiveDept(dept)} 
-                                        className={`w-full px-5 py-4 rounded-2xl text-left text-[11px] font-black uppercase tracking-widest transition-all border-2 ${
-                                          incentiveDept === dept 
+                                        key={type.id} 
+                                        onClick={() => setReportType(type.id as any)} 
+                                        className={`w-full px-5 py-4 rounded-2xl text-left text-[10px] font-black uppercase tracking-widest transition-all border-2 flex items-center gap-3 ${
+                                          reportType === type.id 
                                           ? 'bg-indigo-600 border-indigo-600 text-white shadow-xl shadow-indigo-100 scale-[1.02]' 
                                           : 'bg-slate-50 border-slate-100 text-slate-400 hover:bg-white hover:border-slate-200 hover:text-slate-600'
                                         }`}
                                       >
-                                          {dept}
+                                          <type.icon className="w-4 h-4 opacity-70" /> {type.label}
                                       </button>
                                   ))}
                               </div>
                           </div>
 
-                          <div className="space-y-4 pt-8 border-t border-slate-100">
-                              <div className="flex items-center gap-2 mb-1">
-                                  <Layers className="w-3.5 h-3.5 text-indigo-600"/>
-                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Report Grouping</label>
+                          {/* 2. REWARD DEPARTMENT (Only for Incentives) */}
+                          {reportType === 'incentives' && (
+                              <div className="space-y-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
+                                  <div className="flex items-center gap-2 mb-1">
+                                      <Award className="w-3.5 h-3.5 text-indigo-600"/>
+                                      <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Reward Department</label>
+                                  </div>
+                                  <div className="grid grid-cols-1 gap-2">
+                                      {(['Massage', 'Membership', 'Retail'] as const).map(dept => (
+                                          <button 
+                                            key={dept} 
+                                            onClick={() => setIncentiveDept(dept)} 
+                                            className={`w-full px-5 py-3 rounded-2xl text-left text-[9px] font-black uppercase tracking-widest transition-all border ${
+                                              incentiveDept === dept 
+                                              ? 'bg-indigo-50 border-indigo-200 text-indigo-600' 
+                                              : 'bg-white border-transparent text-slate-400 hover:bg-slate-50'
+                                            }`}
+                                          >
+                                              {dept}
+                                          </button>
+                                      ))}
+                                  </div>
                               </div>
-                              <div className="grid grid-cols-1 gap-2">
-                                  {['none', 'category', 'staff'].map(key => (
-                                      <button key={key} onClick={() => setGroupingKey(key as any)} className={`w-full px-5 py-3 rounded-xl text-left text-[10px] font-black uppercase transition-all border ${groupingKey === key ? 'bg-slate-900 border-slate-900 text-white shadow-lg' : 'bg-slate-50 border-slate-100 text-slate-400 hover:text-slate-600'}`}>{key}</button>
-                                  ))}
-                              </div>
-                          </div>
+                          )}
 
                           <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100">
                               <div className="flex items-center gap-3 mb-2 text-indigo-600">
@@ -535,17 +759,77 @@ const Reports = () => {
                               <div>
                                   <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-2">{currentProperty?.name || settings?.name}</h2>
                                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.5em] leading-none">{currentOutlet?.name} &bull; ISO-9001 CERTIFIED</p>
+                                  <div className="flex items-center gap-2 mt-4 text-indigo-600">
+                                      <ShieldCheck className="w-4 h-4" />
+                                      <span className="text-[9px] font-black uppercase tracking-widest">Internal Verification Protocol</span>
+                                  </div>
                               </div>
                           </div>
                           <div className="text-right flex flex-col items-end gap-3">
-                              <h3 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">{incentiveDept} YIELD LEDGER</h3>
+                              <h3 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">
+                                {reportType === 'incentives' ? `${incentiveDept} YIELD LEDGER` : reportType === 'revenue_recognition' ? 'REVENUE RECOGNITION' : 'DAILY SALES LEDGER'}
+                              </h3>
                               <div className="bg-slate-950 text-white px-6 py-3 rounded-2xl shadow-2xl">
                                   <span className="text-[9px] font-black uppercase opacity-60 block tracking-widest">Audit Period</span>
                                   <span className="text-sm font-black uppercase">{format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}</span>
                               </div>
+                              <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-lg">
+                                  <Shield className="w-3 h-3 text-slate-400"/>
+                                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Verified Audit Trail</span>
+                              </div>
                           </div>
                       </div>
-                      <div className="flex-1"><RenderTable /></div>
+                      
+                      <div className="flex-1">
+                          {reportType === 'revenue_recognition' ? <RenderRevenueTable /> : <RenderStandardTable />}
+                      </div>
+
+                      {reportType !== 'revenue_recognition' && (
+                        <div className="mt-16 grid grid-cols-12 gap-10">
+                            <div className="col-span-5">
+                                <table className="w-full border-collapse border-2 border-black font-black text-[10px]">
+                                    <tbody>
+                                        {reportType === 'incentives' && (
+                                            <tr className="bg-amber-50">
+                                                <td className="border border-black px-5 py-3 uppercase text-slate-600">Total Incentive Yield</td>
+                                                <td className="border border-black px-5 py-3 text-right text-indigo-600 text-sm">{formatMoney(rows.reduce((sum, row) => sum + row.inc_net, 0))}</td>
+                                            </tr>
+                                        )}
+                                        <tr className="bg-white">
+                                            <td className="border border-black px-5 py-3 uppercase text-slate-600">Portfolio Gross Revenue</td>
+                                            <td className="border border-black px-5 py-3 text-right text-sm">{formatMoney(rows.reduce((sum, row) => sum + row.actual_price, 0))}</td>
+                                        </tr>
+                                        <tr className="bg-white">
+                                            <td className="border border-black px-5 py-3 uppercase text-slate-600">Total Reduction / Discount</td>
+                                            <td className="border border-black px-5 py-3 text-right text-red-500 text-sm">{formatMoney(rows.reduce((sum, row) => sum + row.discount_amount, 0))}</td>
+                                        </tr>
+                                        <tr className="bg-sky-100 border-t-4 border-black">
+                                            <td className="border border-black px-5 py-4 uppercase text-slate-900 text-xs">Certified Net Revenue</td>
+                                            <td className="border border-black px-5 py-4 text-right text-indigo-700 text-sm">{formatMoney(rows.reduce((sum, row) => sum + row.net_revenue, 0))}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="col-span-7 grid grid-cols-2 gap-10 items-end pb-4">
+                                <div className="space-y-12">
+                                    <div className="h-px bg-black w-full"></div>
+                                    <div className="text-center uppercase">
+                                        <p className="font-black text-xs text-slate-900">Prepared By:</p>
+                                        <p className="text-[10px] font-bold text-slate-400 mt-1">{currentOutlet?.signatory_prepared_role || 'Accountant / Controller'}</p>
+                                    </div>
+                                </div>
+                                <div className="space-y-12">
+                                    <div className="h-px bg-black w-full"></div>
+                                    <div className="text-center uppercase">
+                                        <p className="font-black text-xs text-slate-900">Approved By:</p>
+                                        <p className="text-[10px] font-bold text-slate-400 mt-1">{currentOutlet?.signatory_approved_role || 'General Manager'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                      )}
+
                       <div className="mt-12 flex justify-end">
                           <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Page 1 of 1 &bull; System ID: {currentOutlet?.id?.substring(0,8)}</span>
                       </div>
