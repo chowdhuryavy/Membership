@@ -31,8 +31,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const users = await db.getUsers();
               const freshUser = users.find(u => u.email.toLowerCase() === parsed.email.toLowerCase());
               if (freshUser) {
-                  setUser(freshUser);
-                  sessionStorage.setItem('membership_session', JSON.stringify(freshUser));
+                  // CRITICAL: Hydrate overrides during refresh to maintain custom permissions
+                  const overrides = await db.getPermissionOverrides(freshUser.id);
+                  const hydrated = { ...freshUser, overrides };
+                  setUser(hydrated);
+                  sessionStorage.setItem('membership_session', JSON.stringify(hydrated));
               }
           } catch (e) {
               console.warn("User state sync failed, using cached session.");
@@ -70,7 +73,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const changePassword = async (currentPass: string, newPass: string) => {
       if (!user) throw new Error("Not authenticated");
       await db.changePassword(user.id, currentPass, newPass);
-      // After password change, we should refresh the local user state as temp_password is now null
       await refreshUser();
   };
 

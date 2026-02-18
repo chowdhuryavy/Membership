@@ -1,377 +1,568 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { Button, Card, CardContent } from '../components/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle } from '../components/ui';
 import { db } from '../services/mockSupabase';
-import { MembershipCategory, Member, Freeze, Sale, MassageBooking, MassageType, Guest } from '../types';
+import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isSameDay } from 'date-fns';
+import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-  Building2, 
-  ReceiptText, 
-  Settings2, 
-  Check, 
-  X, 
   ShieldCheck, 
   FileText, 
   Printer, 
   FileDown, 
   Globe,
-  LayoutGrid,
-  ShoppingBag,
-  Calendar,
-  CalendarDays,
-  Activity,
-  Zap,
-  Tag,
-  Coins,
-  ArrowRight,
+  Layers,
+  UserCheck,
+  Settings2,
   ListFilter,
-  Layers
+  CheckCircle2,
+  Filter,
+  Activity,
+  Award,
+  Shield
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 const parseISO = (dateString: string) => new Date(dateString);
 const startOfMonthLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
-const subDaysLocal = (date: Date, amount: number) => addDays(date, -amount);
 
 interface ReportRow {
   sl_no: number;
+  date: string;
   guest_name: string;
-  from?: string;
-  to?: string;
-  total_days?: number;
-  actual_fees: number;
-  carry_forward?: number;
-  daily?: number;
-  current_month_rev?: number;
-  controll?: number;
-  balance?: number;
+  duration?: string;
+  check_no?: string;
+  mode_of_payment?: string;
+  type_of_membership?: string;
+  item_name: string;
+  therapist_name?: string;
+  
+  // Revenue
+  actual_price: number;
+  discount_percent: number;
+  discount_amount: number;
+  net_revenue: number;
+  
+  // Incentive Breakdowns (Excel Style)
+  inc_total: number;
+  inc_discount_percent: number;
+  inc_discount_val: number;
+  inc_net: number;
+  
   remarks: string;
-  membership_no?: string;
-  category_id?: string;
-  category_name: string;
-  item_name?: string;
-  quantity?: number;
-  payment_method: string;
-  time?: string;
+  staff_splits: Record<string, number>; // Staff ID -> Payout
 }
-
-const MEMBERSHIP_COLUMNS = [
-  { key: 'sl_no', label: 'SL.', width: 'w-12', defaultVisible: true },
-  { key: 'guest_name', label: 'GUEST NAME / PROFILE', width: 'min-w-[280px]', defaultVisible: true },
-  { key: 'from', label: 'START DATE', width: 'w-28', defaultVisible: true },
-  { key: 'to', label: 'END DATE', width: 'w-28', defaultVisible: true },
-  { key: 'total_days', label: 'DAYS', width: 'w-16', defaultVisible: true },
-  { key: 'actual_fees', label: 'NET FEES', width: 'w-28', defaultVisible: true },
-  { key: 'carry_forward', label: 'PREV. ACCRUAL', width: 'w-28', defaultVisible: true },
-  { key: 'current_month_rev', label: 'PERIOD REV', width: 'w-32', defaultVisible: true }, 
-  { key: 'balance', label: 'DEFERRED', width: 'w-28', defaultVisible: true },
-];
-
-const SALES_COLUMNS = [
-  { key: 'sl_no', label: 'SL.', width: 'w-12', defaultVisible: true },
-  { key: 'time', label: 'TIME', width: 'w-20', defaultVisible: true },
-  { key: 'guest_name', label: 'CUSTOMER PROFILE', width: 'min-w-[250px]', defaultVisible: true },
-  { key: 'item_name', label: 'ITEM / SERVICE DESCRIPTION', width: 'flex-1', defaultVisible: true },
-  { key: 'quantity', label: 'QTY', width: 'w-16', defaultVisible: true },
-  { key: 'actual_fees', label: 'AMOUNT', width: 'w-32', defaultVisible: true },
-  { key: 'payment_method', label: 'SETTLEMENT', width: 'w-32', defaultVisible: true },
-  { key: 'remarks', label: 'AUDIT REMARKS', width: 'w-40', defaultVisible: true },
-];
-
-type GroupingType = 'category' | 'payment' | 'none';
 
 const Reports = () => {
   const { user } = useAuth();
   const { settings, currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
-  const [reportType, setReportType] = useState<'membership' | 'daily_sales'>('membership');
-  const [groupingKey, setGroupingKey] = useState<GroupingType>('category');
+  const [reportType, setReportType] = useState<'membership' | 'daily_sales' | 'incentives'>('incentives');
+  const [incentiveDept, setIncentiveDept] = useState<'Massage' | 'Membership' | 'Retail'>('Massage');
+  const [groupingKey, setGroupingKey] = useState<'none' | 'category' | 'staff'>('none');
   const [reportMonth, setReportMonth] = useState(format(new Date(), 'yyyy-MM'));
-  const [reportDate, setReportDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [rows, setRows] = useState<ReportRow[]>([]);
-  const [categories, setCategories] = useState<MembershipCategory[]>([]);
-  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>([]);
-  const [showConfig, setShowConfig] = useState(false);
+  const [activeStaffList, setActiveStaffList] = useState<Staff[]>([]);
+  const [showConfig, setShowConfig] = useState(true);
   const reportRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const logoBase64Ref = useRef<string | null>(null);
-  const logoUrl = currentProperty?.logo_url || settings?.logo_url;
+
+  // Page-Level Security Check
+  const canView = user && hasPermission(user.role_id, 'reports:view');
 
   useEffect(() => {
-    const cols = reportType === 'membership' ? MEMBERSHIP_COLUMNS : SALES_COLUMNS;
-    setVisibleColumnKeys(cols.filter(c => c.defaultVisible).map(c => c.key));
-  }, [reportType]);
+    if (currentOutlet && currentProperty && canView) loadData();
+  }, [reportMonth, reportType, incentiveDept, currentOutlet, currentProperty, canView]);
 
-  useEffect(() => { if (currentOutlet && currentProperty) loadData(); }, [reportMonth, reportDate, reportType, currentOutlet, currentProperty]);
+  const findBestRule = (rules: IncentiveRule[], applies_to: IncentiveRule['applies_to'], target_id: string, price: number, duration: number) => {
+    const candidates = rules.filter(r => r.is_active && r.applies_to === applies_to);
+    const sorted = candidates.sort((a, b) => {
+        if (a.target_id !== 'all' && b.target_id === 'all') return -1;
+        const scopeOrder = { 'Outlet': 0, 'Property': 1, 'Global': 2 };
+        return scopeOrder[a.scope as keyof typeof scopeOrder] - scopeOrder[b.scope as keyof typeof scopeOrder];
+    });
+    return sorted.find(r => {
+        if (r.target_id !== 'all' && r.target_id !== target_id) return false;
+        if (price < (r.min_price || 0) || price > (r.max_price || 999999)) return false;
+        return true;
+    });
+  };
 
-  useEffect(() => {
-    if (!logoUrl) { logoBase64Ref.current = null; return; }
-    const fetchImage = async () => {
-      const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(logoUrl)}&output=png`;
+  const isStaffOnLeaveOnDate = (s: Staff, targetDateStr: string) => {
+      if (!s.leave_start_date || !s.leave_end_date) return false;
       try {
-        const response = await fetch(proxyUrl);
-        if (response.ok) {
-          const blob = await response.blob();
-          const reader = new FileReader();
-          reader.onloadend = () => { logoBase64Ref.current = reader.result as string; };
-          reader.readAsDataURL(blob);
-        }
-      } catch (e) { console.warn("Logo Proxy Failed"); }
-    };
-    fetchImage();
-  }, [logoUrl]);
+          const target = startOfDay(new Date(targetDateStr));
+          const start = startOfDay(new Date(s.leave_start_date));
+          const end = startOfDay(new Date(s.leave_end_date));
+          return isWithinInterval(target, { start, end });
+      } catch (e) { return false; }
+  };
 
   const loadData = async () => {
     if (!currentOutlet || !currentProperty) return;
     try {
-      if (reportType === 'membership') {
-        const [members, cats, freezes] = await Promise.all([db.getMembers(currentOutlet.id), db.getCategories(currentOutlet.id), db.getFreezes()]);
-        setCategories(cats);
-        const startOfReport = startOfMonthLocal(parseISO(reportMonth + '-01'));
-        const endOfReport = endOfMonth(startOfReport);
-        const prevMonthEnd = subDaysLocal(startOfReport, 1);
-        const reportRows: ReportRow[] = members.filter(m => {
-          const mEnd = parseISO(m.current_end_date);
-          const mStart = parseISO(m.start_date);
-          return mEnd >= startOfReport && mStart <= endOfReport;
-        }).map((m, idx) => {
-          const memFreezes = freezes.filter(f => f.member_id === m.id);
-          const carryForward = RevenueEngine.calculateRevenuePeriod(m, memFreezes, parseISO(m.start_date), prevMonthEnd);
-          const currentRev = RevenueEngine.calculateRevenuePeriod(m, memFreezes, startOfReport, endOfReport);
-          const totalDays = differenceInCalendarDays(parseISO(m.current_end_date), parseISO(m.start_date)) + 1;
-          const controll = carryForward + currentRev;
-          return {
-            sl_no: idx + 1,
-            guest_name: m.guest_name,
-            from: format(parseISO(m.start_date), 'dd-MM-yyyy'),
-            to: format(parseISO(m.current_end_date), 'dd-MM-yyyy'),
-            total_days: totalDays,
-            actual_fees: Number(m.net_amount) || 0,
-            carry_forward: carryForward,
-            daily: m.daily_rate,
-            current_month_rev: currentRev,
-            controll: controll,
-            balance: Math.max(0, m.net_amount - controll),
-            remarks: m.check_no || '',
-            membership_no: m.membership_number,
-            category_id: m.category_id,
-            category_name: cats.find(c => c.id === m.category_id)?.name || 'Uncategorized',
-            payment_method: 'Advance'
-          };
-        });
-        setRows(reportRows);
-      } else {
-        const [sales, bookings, guests, massageTypes] = await Promise.all([db.getSales(currentProperty.id), db.getMassageBookings(currentProperty.id), db.getGuests(currentProperty.id), db.getMassageTypes(currentProperty.id)]);
-        const targetDate = reportDate;
-        const salesRows: ReportRow[] = sales.filter(s => format(new Date(s.created_at), 'yyyy-MM-dd') === targetDate).map((s, idx) => ({
-            sl_no: idx + 1,
-            time: format(new Date(s.created_at), 'HH:mm'),
-            guest_name: s.guest_name,
-            category_name: s.category || 'Retail',
-            item_name: s.item_name,
-            quantity: s.quantity,
-            actual_fees: Number(s.net_amount) || 0,
-            payment_method: s.payment_method,
-            remarks: s.remarks || ''
-        }));
-        const bookingRows: ReportRow[] = bookings.filter(b => b.date === targetDate && b.status === 'completed').map((b, idx) => {
-            const type = massageTypes.find(t => t.id === b.massage_type_id);
-            const guest = guests.find(g => g.id === b.guest_id);
-            return {
-                sl_no: salesRows.length + idx + 1,
-                time: b.start_time,
-                guest_name: guest?.name || 'Guest',
-                category_name: 'Massage',
-                item_name: type?.name || 'Treatment',
-                quantity: 1,
-                actual_fees: Number(b.price) || 0,
-                payment_method: 'Service Charge',
-                remarks: `Specialist: ${b.therapist_id}`
-            };
-        });
-        setRows([...salesRows, ...bookingRows]);
+      const start = startOfMonthLocal(parseISO(reportMonth + '-01'));
+      const end = endOfMonth(start);
+      
+      const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests] = await Promise.all([
+          db.getIncentiveRules(currentProperty.id, currentOutlet.id),
+          db.getMassageBookings(currentProperty.id),
+          db.getMembers(currentOutlet.id),
+          db.getSales(currentProperty.id),
+          db.getTherapists(currentProperty.id),
+          db.getMassageTypes(currentProperty.id),
+          db.getCategories(currentOutlet.id),
+          db.getStaff(currentOutlet.id),
+          db.getGuests(currentProperty.id)
+      ]);
+
+      setActiveStaffList(staffList.filter(s => s.is_active));
+      const records: ReportRow[] = [];
+      let sl = 1;
+
+      if (incentiveDept === 'Massage') {
+          bookings.filter(b => b.status === 'completed' && parseISO(b.date) >= start && parseISO(b.date) <= end)
+          .forEach(b => {
+              const type = mTypes.find(m => m.id === b.massage_type_id);
+              if (!type) return;
+              const rule = findBestRule(rules, 'Massage', b.massage_type_id, type.price, type.duration_minutes);
+              if (!rule) return;
+
+              const actualPrice = type.price;
+              const discountAmt = b.discount || 0;
+              const netRev = actualPrice - discountAmt;
+              const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+              const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+              const incDiscVal = (baseInc * discPercent) / 100;
+              const incNet = baseInc - incDiscVal;
+
+              const staffSplits: Record<string, number> = {};
+              if (rule.distribution_type === 'Shared') {
+                  const available = staffList.filter(s => s.is_active && (s.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(s, b.date));
+                  if (available.length > 0) {
+                      const share = incNet / available.length;
+                      available.forEach(s => staffSplits[s.id] = share);
+                  }
+              } else {
+                  if (b.therapist_id) staffSplits[b.therapist_id] = incNet;
+              }
+
+              records.push({
+                  sl_no: sl++,
+                  date: format(parseISO(b.date), 'dd-MMM-yy'),
+                  guest_name: guests.find(g => g.id === b.guest_id)?.name || 'Guest',
+                  duration: `${type.duration_minutes}m`,
+                  check_no: '#---',
+                  item_name: type.name,
+                  therapist_name: therapists.find(t => t.id === b.therapist_id)?.name || 'N/A',
+                  actual_price: actualPrice,
+                  discount_percent: discPercent,
+                  discount_amount: discountAmt,
+                  net_revenue: netRev,
+                  inc_total: baseInc,
+                  inc_discount_percent: discPercent,
+                  inc_discount_val: incDiscVal,
+                  inc_net: incNet,
+                  remarks: discPercent > 50 ? 'Complimentary' : '',
+                  staff_splits: staffSplits
+              });
+          });
+      } else if (incentiveDept === 'Membership') {
+          members.filter(m => m.status !== MemberStatus.TENTATIVE && parseISO(m.start_date) >= start && parseISO(m.start_date) <= end)
+          .forEach(m => {
+              const cat = mCats.find(c => c.id === m.category_id);
+              if (!cat) return;
+              const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0);
+              if (!rule) return;
+
+              const actualPrice = m.actual_rate;
+              const discountAmt = m.discount;
+              const netRev = m.net_amount;
+              const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+              const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+              const incDiscVal = (baseInc * discPercent) / 100;
+              const incNet = baseInc - incDiscVal;
+
+              const staffSplits: Record<string, number> = {};
+              if (rule.distribution_type === 'Shared') {
+                  const available = staffList.filter(s => s.is_active && (s.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(s, m.start_date));
+                  if (available.length > 0) {
+                      const share = incNet / available.length;
+                      available.forEach(s => staffSplits[s.id] = share);
+                  }
+              } else {
+                  if (m.sales_rep_id) staffSplits[m.sales_rep_id] = incNet;
+              }
+
+              records.push({
+                  sl_no: sl++,
+                  date: format(parseISO(m.start_date), 'dd-MMM-yy'),
+                  guest_name: m.guest_name,
+                  type_of_membership: m.package_type || 'Single',
+                  duration: `${cat.duration_months} Months`,
+                  check_no: m.check_no || '#---',
+                  mode_of_payment: 'Cash/Card',
+                  item_name: cat.name,
+                  actual_price: actualPrice,
+                  discount_percent: discPercent,
+                  discount_amount: discountAmt,
+                  net_revenue: netRev,
+                  inc_total: baseInc,
+                  inc_discount_percent: discPercent,
+                  inc_discount_val: incDiscVal,
+                  inc_net: incNet,
+                  remarks: m.remarks || '',
+                  staff_splits: staffSplits
+              });
+          });
+      } else if (incentiveDept === 'Retail') {
+          sales.filter(s => s.status === 'completed' && parseISO(s.created_at) >= start && parseISO(s.created_at) <= end)
+          .forEach(s => {
+              const rule = findBestRule(rules, 'Sale', s.category, s.net_amount, 0);
+              if (!rule) return;
+
+              const actualPrice = s.gross_amount;
+              const discountAmt = s.discount_amount;
+              const netRev = s.net_amount;
+              const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+              const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+              const incDiscVal = (baseInc * discPercent) / 100;
+              const incNet = baseInc - incDiscVal;
+
+              const staffSplits: Record<string, number> = {};
+              if (rule.distribution_type === 'Shared') {
+                  const available = staffList.filter(staff => staff.is_active && (staff.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(staff, s.created_at));
+                  if (available.length > 0) {
+                      const share = incNet / available.length;
+                      available.forEach(staff => staffSplits[staff.id] = share);
+                  }
+              } else {
+                  if (s.sold_by_id) staffSplits[s.sold_by_id] = incNet;
+              }
+
+              records.push({
+                  sl_no: sl++,
+                  date: format(parseISO(s.created_at), 'dd-MMM-yy'),
+                  guest_name: s.guest_name,
+                  duration: `x${s.quantity}`,
+                  check_no: '#POS',
+                  item_name: s.item_name,
+                  actual_price: actualPrice,
+                  discount_percent: discPercent,
+                  discount_amount: discountAmt,
+                  net_revenue: netRev,
+                  inc_total: baseInc,
+                  inc_discount_percent: discPercent,
+                  inc_discount_val: incDiscVal,
+                  inc_net: incNet,
+                  remarks: s.remarks || '',
+                  staff_splits: staffSplits
+              });
+          });
       }
+      setRows(records);
     } catch (e) { console.error(e); }
   };
 
-  const groupedRows = useMemo(() => {
-    if (groupingKey === 'none') return { 'Ledger Entries': rows };
-    const groups: { [groupValue: string]: ReportRow[] } = {};
-    rows.forEach(row => {
-      const key = groupingKey === 'category' ? row.category_name : row.payment_method;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(row);
-    });
-    return groups;
-  }, [rows, groupingKey]);
-
-  const totals = useMemo(() => {
-    return rows.reduce((acc, row) => ({
-      fees: acc.fees + (Number(row.actual_fees) || 0),
-      prev: acc.prev + (Number(row.carry_forward) || 0),
-      current: acc.current + (Number(row.current_month_rev) || 0),
-      balance: acc.balance + (Number(row.balance) || 0)
-    }), { fees: 0, prev: 0, current: 0, balance: 0 });
-  }, [rows]);
-
-  const activeColumns = useMemo(() => {
-      const pool = reportType === 'membership' ? MEMBERSHIP_COLUMNS : SALES_COLUMNS;
-      return pool.filter(col => visibleColumnKeys.includes(col.key));
-  }, [visibleColumnKeys, reportType]);
-
-  const preparedBy = currentOutlet?.signatory_prepared_role || settings?.signatory_prepared_role || 'Income Auditor';
-  const reviewedBy = currentOutlet?.signatory_reviewed_role || settings?.signatory_reviewed_role || 'Financial Controller';
-  const approvedBy = currentOutlet?.signatory_approved_role || settings?.signatory_approved_role || 'Director of Finance';
-
-  const toggleColumn = (key: string) => setVisibleColumnKeys(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
-  const handlePrint = () => window.print();
-
-  const handleDownloadPDF = async () => {
+  const handleExportPDF = async () => {
     if (!reportRef.current) return;
     setIsGeneratingPDF(true);
-    window.scrollTo(0, 0);
     try {
-      const canvas = await html2canvas(reportRef.current, { 
-        scale: 2, 
-        useCORS: true, 
-        backgroundColor: '#ffffff', 
-        width: 1300, 
-        windowWidth: 1300, 
-        onclone: (clonedDoc) => {
-          const container = clonedDoc.querySelector('.print-container') as HTMLElement;
-          if (container) { container.style.boxShadow = 'none'; container.style.margin = '0'; container.style.padding = '40px'; container.style.width = '1300px'; container.style.maxWidth = '1300px'; }
-          if (logoBase64Ref.current) { 
-            const img = clonedDoc.querySelector('.company-logo-img') as HTMLImageElement; 
-            if (img) { img.src = logoBase64Ref.current; img.removeAttribute('crossorigin'); } 
-          }
-        }
-      });
-      const pdf = new jsPDF('l', 'px', [canvas.width, (canvas.width * 0.707)]);
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const totalPages = Math.ceil(canvas.height / pageHeight);
-      for (let i = 0; i < totalPages; i++) {
-        if (i > 0) pdf.addPage();
-        const sourceY = i * pageHeight;
-        const sectionCanvas = document.createElement('canvas');
-        sectionCanvas.width = canvas.width;
-        sectionCanvas.height = Math.min(pageHeight, canvas.height - sourceY);
-        sectionCanvas.getContext('2d')?.drawImage(canvas, 0, sourceY, canvas.width, sectionCanvas.height, 0, 0, canvas.width, sectionCanvas.height);
-        pdf.addImage(sectionCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, pageWidth, sectionCanvas.height * (pageWidth / canvas.width));
-      }
-      pdf.save(`Ledger_${reportType.toUpperCase()}_${currentOutlet?.name || 'ERP'}_${reportType === 'membership' ? reportMonth : reportDate}.pdf`);
-    } catch (err) { console.error(err); } finally { setIsGeneratingPDF(false); }
+      const canvas = await html2canvas(reportRef.current, { scale: 2 });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('l', 'mm', 'a4');
+      pdf.addImage(imgData, 'PNG', 0, 0, 297, (canvas.height * 297) / canvas.width);
+      pdf.save(`Yield_Audit_${incentiveDept}_${reportMonth}.pdf`);
+    } catch (e) { console.error(e); } finally { setIsGeneratingPDF(false); }
   };
 
-  let globalIndexCounter = 0;
+  if (!canView) {
+      return (
+          <div className="flex items-center justify-center h-screen">
+              <Card className="max-w-md text-center p-8 border-red-100 bg-red-50/30 rounded-[2rem]">
+                  <Shield className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight uppercase">Operational Security Lock</h3>
+                  <p className="text-slate-500 mt-2 text-sm font-bold uppercase tracking-tight">Access to financial audit templates is restricted to authorized personnel only.</p>
+              </Card>
+          </div>
+      );
+  }
+
+  const RenderTable = () => {
+    const isMassage = incentiveDept === 'Massage';
+    const isMembership = incentiveDept === 'Membership';
+    const isRetail = incentiveDept === 'Retail';
+
+    let totalActual = 0;
+    let totalDiscount = 0;
+    let totalNetRev = 0;
+    let totalIncNet = 0;
+    const staffTotals: Record<string, number> = {};
+
+    return (
+        <div className="w-full">
+            <table className="w-full border-collapse text-[9px] border-2 border-black">
+                <thead>
+                    <tr className="bg-sky-100 text-black font-bold">
+                        <th rowSpan={2} className="border border-black px-2 py-3 w-8">Sl.No.</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 w-20">Date</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 min-w-[120px]">Guest Name</th>
+                        
+                        {isMembership && <th rowSpan={2} className="border border-black px-2 py-3">Type of Membership</th>}
+                        <th rowSpan={2} className="border border-black px-2 py-3 w-16">{isRetail ? 'Qty' : 'Duration'}</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 w-16">Check No.</th>
+                        {isMembership && <th rowSpan={2} className="border border-black px-2 py-3">Mode of Payment</th>}
+                        {!isMembership && <th rowSpan={2} className="border border-black px-2 py-3">{isMassage ? 'Treatment' : 'Asset Item'}</th>}
+                        {isMassage && <th rowSpan={2} className="border border-black px-2 py-3">Therapist</th>}
+                        
+                        <th rowSpan={2} className="border border-black px-2 py-3 text-right">{isMembership ? 'Original Rate' : 'Actual Prices'}</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 text-center">Disc %</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 text-right">Discounted Amount</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 text-right">Net Revenue</th>
+                        
+                        <th colSpan={4} className="border border-black px-2 py-1 text-center bg-amber-100">Incentive Breakdown</th>
+                        
+                        <th rowSpan={2} className="border border-black px-2 py-3 min-w-[100px]">Remarks</th>
+                        
+                        {activeStaffList.map(s => (
+                            <th key={s.id} rowSpan={2} className="border border-black px-1 py-3 w-16 bg-slate-50 text-center">
+                                <div className="rotate-180" style={{ writingMode: 'vertical-rl' }}>{s.name.toUpperCase()}</div>
+                            </th>
+                        ))}
+                    </tr>
+                    <tr className="bg-amber-50">
+                        <th className="border border-black px-2 py-1 w-14 text-center">Total</th>
+                        <th className="border border-black px-2 py-1 w-14 text-center">Disc %</th>
+                        <th className="border border-black px-2 py-1 w-14 text-center">Disc. Inc</th>
+                        <th className="border border-black px-2 py-1 w-14 text-center">Net</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((row, idx) => {
+                        totalActual += row.actual_price;
+                        totalDiscount += row.discount_amount;
+                        totalNetRev += row.net_revenue;
+                        totalIncNet += row.inc_net;
+
+                        return (
+                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                <td className="border border-black px-2 py-1 text-center font-bold">{row.sl_no}</td>
+                                <td className="border border-black px-2 py-1 text-center whitespace-nowrap">{row.date}</td>
+                                <td className="border border-black px-2 py-1 font-black text-slate-700">{row.guest_name}</td>
+                                {isMembership && <td className="border border-black px-2 py-1 text-center font-bold text-slate-600">{row.type_of_membership}</td>}
+                                <td className="border border-black px-2 py-1 text-center">{row.duration}</td>
+                                <td className="border border-black px-2 py-1 text-center text-slate-400">{row.check_no}</td>
+                                {isMembership && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
+                                {!isMembership && <td className="border border-black px-2 py-1">{row.item_name}</td>}
+                                {isMassage && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
+                                
+                                <td className="border border-black px-2 py-1 text-right">{row.actual_price.toFixed(2)}</td>
+                                <td className="border border-black px-2 py-1 text-center text-slate-400">{row.discount_percent > 0 ? `${row.discount_percent.toFixed(0)}%` : ''}</td>
+                                <td className="border border-black px-2 py-1 text-right">{row.discount_amount.toFixed(2)}</td>
+                                <td className="border border-black px-2 py-1 text-right font-black bg-slate-50">{row.net_revenue.toFixed(2)}</td>
+                                
+                                <td className="border border-black px-2 py-1 text-right bg-amber-50/20">{row.inc_total.toFixed(2)}</td>
+                                <td className="border border-black px-2 py-1 text-center bg-amber-50/20 text-slate-400">{row.inc_discount_percent > 0 ? `${row.inc_discount_percent.toFixed(0)}%` : ''}</td>
+                                <td className="border border-black px-2 py-1 text-right bg-amber-50/20">{row.inc_discount_val.toFixed(2)}</td>
+                                <td className="border border-black px-2 py-1 text-right font-black bg-amber-100/30">{row.inc_net.toFixed(2)}</td>
+                                
+                                <td className="border border-black px-2 py-1 text-[8px] text-slate-400 italic truncate max-w-[120px]">{row.remarks}</td>
+                                
+                                {activeStaffList.map(s => {
+                                    const val = row.staff_splits[s.id] || 0;
+                                    staffTotals[s.id] = (staffTotals[s.id] || 0) + val;
+                                    return (
+                                        <td key={s.id} className={`border border-black px-1 py-1 text-right font-black ${val > 0 ? 'bg-indigo-50 text-indigo-700' : 'text-slate-100'}`}>
+                                            {val > 0 ? val.toFixed(2) : '0.00'}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        );
+                    })}
+                    <tr className="bg-slate-900 text-white font-black text-[10px]">
+                        <td colSpan={isMembership ? 7 : (isMassage ? 8 : 7)} className="border border-black px-4 py-3 text-right uppercase tracking-widest">Aggregate Portfolio Totals</td>
+                        <td className="border border-black px-2 py-3 text-right">{totalActual.toFixed(2)}</td>
+                        <td className="border border-black"></td>
+                        <td className="border border-black px-2 py-3 text-right text-indigo-300">{totalDiscount.toFixed(2)}</td>
+                        <td className="border border-black px-2 py-3 text-right">{totalNetRev.toFixed(2)}</td>
+                        <td colSpan={3} className="border border-black"></td>
+                        <td className="border border-black px-2 py-3 text-right bg-indigo-600 font-bold">{totalIncNet.toFixed(2)}</td>
+                        <td className="border border-black"></td>
+                        {activeStaffList.map(s => (
+                            <td key={s.id} className="border border-black px-1 py-3 text-right text-indigo-200">
+                                {(staffTotals[s.id] || 0).toFixed(2)}
+                            </td>
+                        ))}
+                    </tr>
+                </tbody>
+            </table>
+
+            <div className="mt-16 grid grid-cols-12 gap-10">
+                <div className="col-span-5">
+                    <table className="w-full border-collapse border-2 border-black font-black text-[10px]">
+                        <tbody>
+                            <tr className="bg-amber-50">
+                                <td className="border border-black px-5 py-3 uppercase text-slate-600">Total Incentive Yield</td>
+                                <td className="border border-black px-5 py-3 text-right text-indigo-600 text-sm">{formatMoney(totalIncNet)}</td>
+                            </tr>
+                            <tr className="bg-white">
+                                <td className="border border-black px-5 py-3 uppercase text-slate-600">Portfolio Gross Revenue</td>
+                                <td className="border border-black px-5 py-3 text-right text-sm">{formatMoney(totalActual)}</td>
+                            </tr>
+                            <tr className="bg-white">
+                                <td className="border border-black px-5 py-3 uppercase text-slate-600">Total Reduction / Discount</td>
+                                <td className="border border-black px-5 py-3 text-right text-red-500 text-sm">{formatMoney(totalDiscount)}</td>
+                            </tr>
+                            <tr className="bg-sky-100 border-t-4 border-black">
+                                <td className="border border-black px-5 py-4 uppercase text-slate-900 text-xs">Certified Net Revenue</td>
+                                <td className="border border-black px-5 py-4 text-right text-indigo-700 text-sm">{formatMoney(totalNetRev)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div className="col-span-7 grid grid-cols-2 gap-10 items-end pb-4">
+                    <div className="space-y-12">
+                        <div className="h-px bg-black w-full"></div>
+                        <div className="text-center uppercase">
+                            <p className="font-black text-xs text-slate-900">Prepared By:</p>
+                            <p className="text-[10px] font-bold text-slate-400 mt-1">{currentOutlet?.signatory_prepared_role || 'Accountant / Controller'}</p>
+                        </div>
+                    </div>
+                    <div className="space-y-12">
+                        <div className="h-px bg-black w-full"></div>
+                        <div className="text-center uppercase">
+                            <p className="font-black text-xs text-slate-900">Approved By:</p>
+                            <p className="text-[10px] font-bold text-slate-400 mt-1">{currentOutlet?.signatory_approved_role || 'General Manager'}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-in fade-in duration-700 pb-20 no-print">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-xl">
+        <div className="flex items-center gap-6">
+            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-indigo-100"><FileText className="w-7 h-7" /></div>
+            <div>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none">Financial Yield Audit</h1>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2">Executive Ledger System</p>
+            </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+            <div className="flex items-center gap-3 bg-white border border-slate-200 px-5 py-3 rounded-2xl shadow-sm">
+                <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer" />
+            </div>
+            <Button variant="outline" onClick={() => setShowConfig(!showConfig)} className={`h-12 px-5 rounded-2xl border-slate-200 ${showConfig ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-inner' : ''}`}><Settings2 className="w-4 h-4 mr-2" /> <span className="text-[10px] font-black uppercase tracking-widest">Layout Config</span></Button>
+            <Button onClick={handleExportPDF} isLoading={isGeneratingPDF} className="h-12 px-8 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 transition-all active:scale-95"><FileDown className="w-4 h-4 mr-2" /> Export Audit</Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {showConfig && (
+              <div className="lg:col-span-3 animate-in slide-in-from-left-6 duration-500">
+                  <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl sticky top-24 overflow-hidden bg-white">
+                      <CardHeader className="bg-slate-950 text-white p-8 border-b border-slate-800">
+                          <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-3">
+                              <ListFilter className="w-4 h-4 text-indigo-400" /> Layout Engine
+                          </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-8 space-y-10">
+                          <div className="space-y-4">
+                              <div className="flex items-center gap-2 mb-1">
+                                  <Award className="w-3.5 h-3.5 text-indigo-600"/>
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Reward Department</label>
+                              </div>
+                              <div className="grid grid-cols-1 gap-2">
+                                  {(['Massage', 'Membership', 'Retail'] as const).map(dept => (
+                                      <button 
+                                        key={dept} 
+                                        onClick={() => setIncentiveDept(dept)} 
+                                        className={`w-full px-5 py-4 rounded-2xl text-left text-[11px] font-black uppercase tracking-widest transition-all border-2 ${
+                                          incentiveDept === dept 
+                                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-xl shadow-indigo-100 scale-[1.02]' 
+                                          : 'bg-slate-50 border-slate-100 text-slate-400 hover:bg-white hover:border-slate-200 hover:text-slate-600'
+                                        }`}
+                                      >
+                                          {dept}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+
+                          <div className="space-y-4 pt-8 border-t border-slate-100">
+                              <div className="flex items-center gap-2 mb-1">
+                                  <Layers className="w-3.5 h-3.5 text-indigo-600"/>
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Report Grouping</label>
+                              </div>
+                              <div className="grid grid-cols-1 gap-2">
+                                  {['none', 'category', 'staff'].map(key => (
+                                      <button key={key} onClick={() => setGroupingKey(key as any)} className={`w-full px-5 py-3 rounded-xl text-left text-[10px] font-black uppercase transition-all border ${groupingKey === key ? 'bg-slate-900 border-slate-900 text-white shadow-lg' : 'bg-slate-50 border-slate-100 text-slate-400 hover:text-slate-600'}`}>{key}</button>
+                                  ))}
+                              </div>
+                          </div>
+
+                          <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100">
+                              <div className="flex items-center gap-3 mb-2 text-indigo-600">
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  <span className="text-[10px] font-black uppercase tracking-widest">Audit Status</span>
+                              </div>
+                              <p className="text-[9px] font-bold text-indigo-700 leading-relaxed uppercase">
+                                  Table view adheres to Certified Audit Standards. All values converted at system base rate.
+                              </p>
+                          </div>
+                      </CardContent>
+                  </Card>
+              </div>
+          )}
+
+          <div className={`${showConfig ? 'lg:col-span-9' : 'lg:col-span-12'} transition-all duration-700`}>
+              <Card className="rounded-[3.5rem] border-slate-200 shadow-2xl overflow-hidden bg-white min-h-[1200px] print:shadow-none print:rounded-none">
+                  <div ref={reportRef} className="p-12 md:p-16 flex flex-col bg-white">
+                      <div className="flex justify-between items-start mb-16">
+                          <div className="flex items-center gap-6">
+                              {currentProperty?.logo_url && <img src={currentProperty.logo_url} className="h-20 w-auto object-contain filter grayscale" />}
+                              <div className="h-16 w-px bg-slate-200"></div>
+                              <div>
+                                  <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-2">{currentProperty?.name || settings?.name}</h2>
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.5em] leading-none">{currentOutlet?.name} &bull; ISO-9001 CERTIFIED</p>
+                              </div>
+                          </div>
+                          <div className="text-right flex flex-col items-end gap-3">
+                              <h3 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">{incentiveDept} YIELD LEDGER</h3>
+                              <div className="bg-slate-950 text-white px-6 py-3 rounded-2xl shadow-2xl">
+                                  <span className="text-[9px] font-black uppercase opacity-60 block tracking-widest">Audit Period</span>
+                                  <span className="text-sm font-black uppercase">{format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}</span>
+                              </div>
+                          </div>
+                      </div>
+                      <div className="flex-1"><RenderTable /></div>
+                      <div className="mt-12 flex justify-end">
+                          <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Page 1 of 1 &bull; System ID: {currentOutlet?.id?.substring(0,8)}</span>
+                      </div>
+                  </div>
+              </Card>
+          </div>
+      </div>
+
       <style>{`
         @media print {
-          @page { size: landscape; margin: 0; }
-          body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          aside, header, .no-print { display: none !important; }
-          main { padding: 0 !important; margin: 0 !important; overflow: visible !important; }
-          .print-container { position: absolute !important; left: 0 !important; top: 0 !important; margin: 0 !important; padding: 40px !important; width: 1300px !important; min-width: 1300px !important; max-width: 1300px !important; box-shadow: none !important; border: none !important; border-radius: 0 !important; background: white !important; transform: scale(0.8); transform-origin: top left; }
-          thead { display: table-header-group !important; }
-          tr { page-break-inside: avoid !important; }
-          thead tr { background-color: #020617 !important; color: white !important; }
+            body * { visibility: hidden !important; background: white !important; }
+            #root, main { overflow: visible !important; height: auto !important; position: static !important; }
+            div[ref] { visibility: visible !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; padding: 5mm !important; }
+            div[ref] * { visibility: visible !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            @page { size: A4 landscape; margin: 0; }
         }
       `}</style>
-      
-      <div className="flex flex-col xl:flex-row justify-between items-center bg-white p-6 rounded-[2rem] shadow-sm no-print border border-slate-100 gap-6">
-        <div className="flex items-center gap-6 w-full xl:w-auto">
-          <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
-             <button onClick={() => setReportType('membership')} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${reportType === 'membership' ? 'bg-white text-indigo-600 shadow-lg' : 'text-slate-500 hover:text-slate-700'}`}><LayoutGrid className="w-4 h-4" /> Membership Recognition</button>
-             <button onClick={() => setReportType('daily_sales')} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${reportType === 'daily_sales' ? 'bg-white text-indigo-600 shadow-lg' : 'text-slate-500 hover:text-slate-700'}`}><ShoppingBag className="w-4 h-4" /> Daily Sales & Services</button>
-          </div>
-          <div className="h-10 w-px bg-slate-200"></div>
-          {reportType === 'membership' ? (
-              <div className="flex items-center gap-3"><Calendar className="w-4 h-4 text-slate-400" /><input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="h-11 px-4 rounded-xl border border-slate-200 font-black text-xs uppercase bg-slate-50 outline-none shadow-sm focus:ring-4 focus:ring-indigo-500/10 transition-all" /></div>
-          ) : (
-              <div className="flex items-center gap-3"><CalendarDays className="w-4 h-4 text-slate-400" /><input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} className="h-11 px-4 rounded-xl border border-slate-200 font-black text-xs uppercase bg-slate-50 outline-none shadow-sm focus:ring-4 focus:ring-indigo-500/10 transition-all" /></div>
-          )}
-          <div className="h-10 w-px bg-slate-200"></div>
-          <div className="flex items-center gap-3">
-            <ListFilter className="w-4 h-4 text-slate-400" />
-            <select value={groupingKey} onChange={e => setGroupingKey(e.target.value as any)} className="h-11 px-4 rounded-xl border border-slate-200 font-black text-xs uppercase bg-slate-50 outline-none shadow-sm focus:ring-4 focus:ring-indigo-500/10 transition-all cursor-pointer">
-              <option value="category">Group by Department</option>
-              <option value="payment">Group by Settlement</option>
-              <option value="none">Flat Audit List</option>
-            </select>
-          </div>
-        </div>
-        <div className="flex gap-2 w-full xl:w-auto">
-          <Button variant="outline" className="flex-1 sm:flex-none rounded-xl font-bold text-[10px] uppercase h-11 px-6 border-slate-200" onClick={() => setShowConfig(!showConfig)}><Settings2 className="w-4 h-4 mr-2" /> Columns</Button>
-          {showConfig && (
-            <div className="absolute top-24 right-48 mt-2 bg-white border border-slate-200 rounded-xl shadow-2xl p-4 z-[100] w-64 animate-in fade-in zoom-in-95">
-              <div className="flex justify-between items-center mb-3 pb-2 border-b"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Toggle Column Visibility</span><button onClick={() => setShowConfig(false)} className="text-slate-400 p-1 hover:bg-slate-50 rounded-lg"><X className="w-4 h-4"/></button></div>
-              <div className="space-y-1">
-                {(reportType === 'membership' ? MEMBERSHIP_COLUMNS : SALES_COLUMNS).map(col => (
-                  <button key={col.key} onClick={() => toggleColumn(col.key)} className={`w-full flex items-center justify-between p-2.5 rounded-lg text-left text-[10px] font-bold transition-all ${visibleColumnKeys.includes(col.key) ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>{col.label} {visibleColumnKeys.includes(col.key) && <Check className="w-3.5 h-3.5"/>}</button>
-                ))}
-              </div>
-            </div>
-          )}
-          <Button variant="outline" className="flex-1 sm:flex-none rounded-xl font-bold text-[10px] uppercase h-11 px-6 border-indigo-100 text-indigo-600 hover:bg-indigo-50" onClick={handlePrint}><Printer className="w-4 h-4 mr-2" /> Print</Button>
-          {hasPermission(user?.role_id || '', 'reports:export') && (
-            <Button className="flex-1 sm:flex-none rounded-xl font-black text-[10px] uppercase h-11 px-8 shadow-xl shadow-indigo-100" onClick={handleDownloadPDF} isLoading={isGeneratingPDF}>{isGeneratingPDF ? 'Syncing...' : 'Export Authority PDF'} <FileDown className="w-4 h-4 ml-2" /></Button>
-          )}
-        </div>
-      </div>
-
-      <div className="w-full overflow-x-auto custom-scrollbar pb-12 no-print-overflow">
-        <div ref={reportRef} className="bg-white p-12 md:p-16 rounded-[1rem] shadow-2xl w-[1300px] mx-auto min-h-screen print-container border border-slate-100 flex flex-col">
-          <div className="flex flex-row justify-between items-center border-b-4 border-slate-900 pb-8 mb-10 min-w-[1100px]">
-            <div className="flex items-center gap-6">
-              <div className="w-24 h-24 shrink-0 flex items-center justify-center">{logoUrl ? <img src={logoUrl} alt="Logo" className="w-full h-full object-contain company-logo-img" referrerPolicy="no-referrer" /> : <div className="w-full h-full bg-slate-900 text-white flex items-center justify-center rounded-xl"><Globe className="w-10 h-10" /></div>}</div>
-              <div className="flex flex-col justify-center h-full pt-2">
-                <h1 className="text-4xl font-serif font-bold text-slate-950 leading-none mb-3 tracking-tight">{currentProperty?.name || settings?.name || 'Corporate Ledger'}</h1>
-                <div className="flex flex-col gap-1">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{currentProperty?.address || settings?.address || 'Corporate Headquarters'}</p>
-                  <p className="text-[11px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-2"><ShieldCheck className="w-3 h-3" /> Internal Verification Protocol</p>
-                </div>
-              </div>
-            </div>
-            <div className="text-right flex flex-col items-end">
-              <h2 className="text-5xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-2">{reportType === 'membership' ? 'Revenue Recognition' : 'Daily Sales Ledger'}</h2>
-              <p className="text-lg font-medium text-slate-500 mb-4">{reportType === 'membership' ? format(parseISO(reportMonth + '-01'), 'MMMM yyyy') : format(parseISO(reportDate), 'EEEE, MMMM dd, yyyy')}</p>
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-600 border border-slate-200"><ShieldCheck className="w-3.5 h-3.5 text-indigo-600"/> Verified Audit Trail</div>
-            </div>
-          </div>
-
-          <div className="flex-1">
-            <table className="w-full text-[10px] border-collapse min-w-[1100px]">
-              <thead><tr className="bg-slate-950 text-white border-b-4 border-slate-950">{activeColumns.map(col => (<th key={col.key} className={`px-4 py-5 text-center font-bold uppercase tracking-widest border-r border-white/10 last:border-0 ${col.width}`}>{col.label}</th>))}</tr></thead>
-              <tbody className="divide-y divide-slate-200">
-                {Object.keys(groupedRows).length === 0 ? (<tr><td colSpan={activeColumns.length} className="px-8 py-32 text-center"><Activity className="w-12 h-12 text-slate-100 mx-auto mb-4" /><p className="text-[13px] font-black uppercase tracking-[0.3em] text-slate-300">No synchronized entries discovery</p></td></tr>) : Object.keys(groupedRows).map(groupName => { 
-                  const groupRows = groupedRows[groupName]; 
-                  const groupTotals = groupRows.reduce((acc, r) => ({ fees: acc.fees + (Number(r.actual_fees) || 0), prev: acc.prev + (Number(r.carry_forward) || 0), current: acc.current + (Number(r.current_month_rev) || 0), balance: acc.balance + (Number(r.balance) || 0) }), { fees: 0, prev: 0, current: 0, balance: 0 }); 
-                  return (
-                    <React.Fragment key={groupName}>
-                      {groupingKey !== 'none' && (<tr className="bg-slate-50/80 border-b border-slate-300"><td colSpan={activeColumns.length} className="px-6 py-4"><div className="flex items-center">{groupingKey === 'payment' ? <Coins className="w-4 h-4 text-indigo-600 mr-3" /> : <Layers className="w-4 h-4 text-indigo-600 mr-3" />}<span className="text-[12px] font-black uppercase tracking-widest text-slate-900 mr-4">{groupName}</span><span className="text-[9px] font-bold text-slate-500 uppercase">({groupRows.length} Ledger Events)</span></div></td></tr>)}
-                      {groupRows.map((row) => { globalIndexCounter++; return (<tr key={`${row.sl_no}-${globalIndexCounter}`} className="hover:bg-slate-50/50 transition-colors">{activeColumns.map(col => (<td key={col.key} className={`px-4 py-4 border-r border-slate-100 last:border-0 ${['actual_fees', 'carry_forward', 'current_month_rev', 'balance', 'quantity'].includes(col.key) ? 'text-right tabular-nums' : 'text-center'} ${col.key === 'guest_name' || col.key === 'item_name' ? 'text-left font-bold text-slate-800' : ''}`}><span className={`${col.key === 'current_month_rev' || (reportType === 'daily_sales' && col.key === 'actual_fees') ? 'text-indigo-700 font-black' : ''} ${col.key === 'balance' && (Number(row.balance) || 0) > 0 ? 'text-red-600 font-black' : ''} ${['actual_fees', 'carry_forward'].includes(col.key) && reportType === 'membership' ? 'text-slate-600' : ''} ${col.key === 'payment_method' ? 'bg-slate-100 px-2 py-1 rounded text-[9px] font-black uppercase' : ''}`}>{col.key === 'sl_no' ? globalIndexCounter : (['actual_fees', 'carry_forward', 'current_month_rev', 'balance'].includes(col.key) ? formatMoney(row[col.key as keyof ReportRow] as number) : row[col.key as keyof ReportRow])}</span></td>))}</tr>); })}
-                      {groupingKey !== 'none' && (<tr className="bg-indigo-50/40 border-y-2 border-slate-200 font-black"><td colSpan={activeColumns.findIndex(c => c.key === 'actual_fees')} className="px-6 py-4 text-right"><span className="text-[10px] uppercase tracking-widest text-indigo-900">Cluster Subtotal: {groupName}</span></td><td className="px-4 py-4 text-right border-x border-white text-indigo-700">{formatMoney(groupTotals.fees)}</td>{activeColumns.slice(activeColumns.findIndex(c => c.key === 'actual_fees') + 1).map(col => { if (reportType === 'membership') { if (col.key === 'carry_forward') return <td key={col.key} className="px-4 py-4 text-right border-x border-white">{formatMoney(groupTotals.prev)}</td>; if (col.key === 'current_month_rev') return <td key={col.key} className="px-4 py-4 text-right border-x border-white">{formatMoney(groupTotals.current)}</td>; if (col.key === 'balance') return <td key={col.key} className="px-4 py-4 text-right border-x border-white">{formatMoney(groupTotals.balance)}</td>; } return <td key={col.key} className="px-4 py-4"></td>; })}</tr>)}
-                    </React.Fragment>
-                  ); 
-                })}
-              </tbody>
-              <tfoot><tr className="bg-slate-900 text-white shadow-2xl border-t-4 border-slate-950"><td colSpan={activeColumns.findIndex(c => c.key === 'actual_fees')} className="px-8 py-7 text-right text-[12px] font-black uppercase tracking-[0.4em] border-r border-white/10">GRAND PORTFOLIO TOTAL</td><td className={`px-4 py-7 text-right font-black border-r border-white/10 text-xs ${reportType === 'daily_sales' ? 'bg-indigo-600' : ''}`}>{formatMoney(totals.fees)}</td>{activeColumns.slice(activeColumns.findIndex(c => c.key === 'actual_fees') + 1).map(col => { if (reportType === 'membership') { if (col.key === 'carry_forward') return <td key={col.key} className="px-4 py-7 text-right font-black border-r border-white/10">{formatMoney(totals.prev)}</td>; if (col.key === 'current_month_rev') return <td key={col.key} className="px-4 py-7 text-right font-black border-r border-white/10 bg-indigo-600">{formatMoney(totals.current)}</td>; if (col.key === 'balance') return <td key={col.key} className="px-4 py-7 text-right font-black border-r border-white/10">{formatMoney(totals.balance)}</td>; } return <td key={col.key} className="px-4 py-7 border-r border-white/10 last:border-0"></td>; })}</tr></tfoot>
-            </table>
-          </div>
-
-          <div className="signature-block mt-20 pt-12 border-t-2 border-slate-200 flex justify-between items-start gap-16 min-w-[1100px]">
-            <div className="flex-1 space-y-12"><p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-10">Prepared By</p><div className="border-b-2 border-slate-300 pb-3"></div><p className="text-[12px] font-black text-slate-900 uppercase tracking-widest">{preparedBy}</p><p className="text-[9px] font-bold text-slate-400 uppercase">Authorized Signature & Date</p></div>
-            <div className="flex-1 space-y-12"><p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-10">Reviewed By</p><div className="border-b-2 border-slate-300 pb-3"></div><p className="text-[12px] font-black text-slate-900 uppercase tracking-widest">{reviewedBy}</p><p className="text-[9px] font-bold text-slate-400 uppercase">Internal Control Verification</p></div>
-            <div className="flex-1 space-y-12"><p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-10">Approved By</p><div className="border-b-2 border-slate-300 pb-3"></div><p className="text-[12px] font-black text-slate-900 uppercase tracking-widest">{approvedBy}</p><p className="text-[9px] font-bold text-slate-400 uppercase">Executive Financial Authorization</p></div>
-          </div>
-          <div className="mt-20 pt-8 border-t border-slate-100 flex justify-between items-center opacity-40"><p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.8em]">&copy; {new Date().getFullYear()} perfection corporate erp solutions</p><div className="flex items-center gap-2"><ShieldCheck className="w-3 h-3" /><span className="text-[8px] font-bold uppercase tracking-widest">Document Integrity Hash: {crypto.randomUUID().substring(0, 8).toUpperCase()}</span></div></div>
-        </div>
-      </div>
     </div>
   );
 };

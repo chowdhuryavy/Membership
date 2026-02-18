@@ -1,4 +1,5 @@
-import { CompanySettings, Currency, Role, Permission, Outlet, Property } from '../types';
+
+import { CompanySettings, Currency, Role, Permission, Outlet, Property, UserPermissionOverride, PermissionGroup } from '../types';
 import { db } from '../services/mockSupabase';
 import { useAuth } from './AuthContext';
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
@@ -15,9 +16,10 @@ interface SettingsContextType {
   setCurrentOutlet: (outlet: Outlet) => void;
   refreshSettings: () => Promise<void>;
   formatMoney: (amount: number | undefined | null) => string;
-  hasPermission: (userRoleId: string, permission: Permission) => boolean;
+  hasPermission: (userRoleId: string, permission: Permission, userId?: string) => boolean;
   checkShortcut: (e: KeyboardEvent, actionId: string) => boolean;
   isLoading: boolean;
+  permissionRegistry: PermissionGroup[];
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -32,6 +34,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [currency, setCurrency] = useState<Currency | null>(null);
   const [currentOutlet, setCurrentOutletState] = useState<Outlet | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const permissionRegistry = useMemo(() => db.getPermissionRegistry(), []);
 
   const refreshSettings = async () => {
     try {
@@ -79,7 +83,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     if (user && outlets.length > 0) {
-      const allowed = user.role_id === 'admin' 
+      const allowed = (user.role_id?.toLowerCase() === 'admin')
           ? outlets 
           : outlets.filter(o => user.allowed_outlets?.includes(o.id));
 
@@ -105,19 +109,36 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return isRtl ? `${value} ${currency.symbol}` : `${currency.symbol} ${value}`;
   };
 
-  const hasPermission = (userRoleId: string, permission: Permission): boolean => {
-    // SECURITY PATCH: Removed hardcoded 'admin' bypass.
-    // All permission validation is now strictly looked up from the database role permissions matrix.
-    // If a role ID (including 'admin') is found in the database, we respect its permission checklist.
-    const role = roles.find(r => r.id === userRoleId);
-    if (!role) {
-        // Fallback: If roles haven't loaded yet, or role is unknown, deny access.
-        // Special case: If userRoleId is 'admin' and roles list is empty (bootstrapping), allow critical actions.
-        if (userRoleId === 'admin' && roles.length === 0) return true;
-        return false;
+  /**
+   * Performance-Critical Hybrid Permission Resolver
+   * REFINED: Strictly follows DB roles and user overrides.
+   */
+  const hasPermission = useCallback((userRoleId: string, permission: Permission, userId?: string): boolean => {
+    if (!userRoleId) return false;
+    const normalizedRoleId = userRoleId.toLowerCase();
+    
+    // 1. USER-SPECIFIC OVERRIDES (Highest Priority)
+    const targetUser = (userId === user?.id || !userId) ? user : null;
+    if (targetUser?.overrides) {
+        const override = targetUser.overrides.find(o => o.permission_key === permission);
+        if (override !== undefined) return override.is_granted;
     }
-    return role.permissions.includes(permission);
-  };
+
+    // 2. ROLE-BASED DEFINITIONS
+    const role = roles.find(r => r.id.toLowerCase() === normalizedRoleId || r.name.toLowerCase() === normalizedRoleId);
+    
+    // If the role is found in the database, use its permissions strictly.
+    if (role) {
+        return role.permissions.includes(permission);
+    }
+
+    // 3. SYSTEM EMERGENCY BYPASS
+    // Only allow absolute bypass for the system 'admin' ID if NO role metadata exists yet (Bootstrapping).
+    // Once roles are configured, this should ideally not be hit.
+    if (normalizedRoleId === 'admin' && roles.length === 0) return true;
+
+    return false;
+  }, [roles, user]);
 
   const checkShortcut = useCallback((e: KeyboardEvent, actionId: string): boolean => {
     const defaults: Record<string, string> = {
@@ -178,7 +199,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       formatMoney,
       hasPermission,
       checkShortcut,
-      isLoading
+      isLoading,
+      permissionRegistry
     }}>
       {children}
     </SettingsContext.Provider>

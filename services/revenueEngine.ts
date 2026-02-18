@@ -9,7 +9,7 @@ import {
   format,
   addMonths
 } from 'date-fns';
-import { Member, Freeze } from '../types';
+import { Member, Freeze, MemberStatus } from '../types';
 
 // Fix: Local implementations for missing date-fns members to resolve environment-specific import errors
 const parseISO = (dateString: string) => new Date(dateString);
@@ -63,6 +63,9 @@ export const RevenueEngine = {
     periodStart: Date,
     periodEnd: Date
   ): number => {
+    // TENTATIVE memberships do not recognize revenue
+    if (member.status === MemberStatus.TENTATIVE) return 0;
+
     const memStart = parseISO(member.start_date);
     const memEnd = parseISO(member.current_end_date);
 

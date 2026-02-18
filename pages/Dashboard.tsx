@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Card, CardContent, CardHeader } from '../components/ui';
+// Fix: Added Button to imports from components/ui
+import { Card, CardContent, CardHeader, Button } from '../components/ui';
 import { 
   Users, 
   Clock, 
@@ -15,16 +16,20 @@ import {
   CheckCircle2,
   CalendarClock,
   Sparkles,
-  Lock
+  Lock,
+  ShoppingBag,
+  Contact2,
+  PieChart as PieChartIcon,
+  ChevronRight
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
-import { Member, MassageBooking } from '../types';
+import { Member, MassageBooking, Sale, Staff, MemberStatus } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, endOfMonth, differenceInCalendarDays, isSameMonth, startOfMonth, subMonths, isSameDay, isAfter } from 'date-fns';
+import { format, endOfMonth, differenceInCalendarDays, isSameMonth, startOfMonth, subMonths, isSameDay, isAfter, startOfDay, isWithinInterval } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 
 const parseISO = (dateString: string) => new Date(dateString);
 
@@ -51,12 +56,17 @@ const Dashboard = () => {
     futureRevenue: 0,
     projectedEndMonth: 0,
     bookingCount: 0,
-    bookingYield: 0
+    bookingYield: 0,
+    todaySalesTotal: 0,
+    todaySalesCount: 0,
+    staffActive: 0,
+    staffOnLeave: 0
   });
   
   const [monthlyExpiringMembers, setMonthlyExpiringMembers] = useState<Member[]>([]);
   const [performanceTrendData, setPerformanceTrendData] = useState<PerformanceTrendData[]>([]);
   const [upcomingBookings, setUpcomingBookings] = useState<MassageBooking[]>([]);
+  const [revenueMix, setRevenueMix] = useState<{name: string, value: number, color: string}[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -64,7 +74,7 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    if(currentOutlet) {
+    if(currentOutlet && currentProperty) {
       loadStats();
     }
   }, [currentOutlet, currentProperty, dashboardMonth]);
@@ -72,23 +82,25 @@ const Dashboard = () => {
   const loadStats = async () => {
     if (!currentOutlet || !currentProperty) return;
     
-    const [members, freezes, bookings] = await Promise.all([
-      db.getMembers(currentOutlet.id),
-      db.getFreezes(),
-      db.getMassageBookings(currentProperty.id)
-    ]);
-    
     const now = new Date();
     const todayStr = format(now, 'yyyy-MM-dd');
     const viewDate = parseISO(dashboardMonth + '-01');
     const isCurrentMonth = isSameMonth(viewDate, now);
-    
     const contextStart = startOfMonth(viewDate);
     const auditPoint = isCurrentMonth ? now : endOfMonth(viewDate);
+
+    const [members, freezes, bookings, sales, staff] = await Promise.all([
+      db.getMembers(currentOutlet.id),
+      db.getFreezes(),
+      db.getMassageBookings(currentProperty.id),
+      db.getSales(currentProperty.id),
+      db.getStaff(currentOutlet.id)
+    ]);
     
+    // 1. Membership Logic
     let activeAtPointCount = 0;
     let frozenAtPointCount = 0;
-    let mtdRevenue = 0;
+    let mtdMembershipRevenue = 0;
     let deferredRevenueAtPoint = 0;
     let monthEnrollments = 0;
     let totalDailyAccrual = 0;
@@ -101,7 +113,7 @@ const Dashboard = () => {
       if (isSameMonth(enrollmentDate, viewDate)) monthEnrollments++;
       
       const memberFreezes = freezes.filter(f => f.member_id === m.id);
-      mtdRevenue += RevenueEngine.calculateRevenuePeriod(m, memberFreezes, contextStart, auditPoint);
+      mtdMembershipRevenue += RevenueEngine.calculateRevenuePeriod(m, memberFreezes, contextStart, auditPoint);
       const earnedLifetimeToPoint = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, auditPoint);
       deferredRevenueAtPoint += Math.max(0, m.net_amount - earnedLifetimeToPoint);
 
@@ -118,30 +130,64 @@ const Dashboard = () => {
       }
     });
 
+    // 2. Performance Trend (6 months)
     const performanceTrend: PerformanceTrendData[] = [];
     for (let i = 5; i >= 0; i--) {
         const targetMonthDate = subMonths(viewDate, i);
         const monthStart = startOfMonth(targetMonthDate);
         const monthEnd = endOfMonth(targetMonthDate);
-        
         const intakeInMonth = members.filter(m => isSameMonth(parseISO(m.start_date), targetMonthDate)).length;
 
-        let revenueInMonth = 0;
+        let totalRevInMonth = 0;
+        // Member Rev
         members.forEach(m => {
             const mStart = parseISO(m.start_date);
             const mEnd = parseISO(m.current_end_date);
             if (mEnd >= monthStart && mStart <= monthEnd) {
                 const memberFreezes = freezes.filter(f => f.member_id === m.id);
-                revenueInMonth += RevenueEngine.calculateRevenuePeriod(m, memberFreezes, monthStart, monthEnd);
+                totalRevInMonth += RevenueEngine.calculateRevenuePeriod(m, memberFreezes, monthStart, monthEnd);
             }
         });
-        performanceTrend.push({ month: format(targetMonthDate, 'MMM'), revenue: revenueInMonth, intake: intakeInMonth });
+        // Sales Rev
+        sales.filter(s => {
+            const d = new Date(s.created_at);
+            return s.status === 'completed' && d >= monthStart && d <= monthEnd;
+        }).forEach(s => totalRevInMonth += Number(s.net_amount));
+        // Booking Rev
+        bookings.filter(b => {
+            const d = parseISO(b.date);
+            return b.status === 'completed' && d >= monthStart && d <= monthEnd;
+        }).forEach(b => totalRevInMonth += Number(b.price));
+
+        performanceTrend.push({ month: format(targetMonthDate, 'MMM'), revenue: totalRevInMonth, intake: intakeInMonth });
     }
     setPerformanceTrendData(performanceTrend);
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
+    // 3. Daily Stats (Sales & Staff)
+    const todaySales = sales.filter(s => s.status === 'completed' && format(new Date(s.created_at), 'yyyy-MM-dd') === todayStr);
+    const staffOnLeaveCount = staff.filter(s => {
+        if (!s.leave_start_date || !s.leave_end_date) return false;
+        const today = startOfDay(new Date());
+        return isWithinInterval(today, { start: startOfDay(new Date(s.leave_start_date)), end: startOfDay(new Date(s.leave_end_date)) });
+    }).length;
+
+    // 4. Revenue Mix (MTD)
+    let mtdServiceRevenue = 0;
+    bookings.filter(b => b.status === 'completed' && isSameMonth(parseISO(b.date), viewDate))
+            .forEach(b => mtdServiceRevenue += Number(b.price));
+    
+    let mtdSalesRevenue = 0;
+    sales.filter(s => s.status === 'completed' && isSameMonth(new Date(s.created_at), viewDate))
+         .forEach(s => mtdSalesRevenue += Number(s.net_amount));
+
+    setRevenueMix([
+        { name: 'Membership', value: mtdMembershipRevenue, color: '#4f46e5' },
+        { name: 'Treatments', value: mtdServiceRevenue, color: '#8b5cf6' },
+        { name: 'Retail POS', value: mtdSalesRevenue, color: '#0ea5e9' }
+    ]);
+
+    // 5. Expiries & Upcoming
+    const today = startOfDay(new Date());
     const monthlyExpiring = members.filter(m => {
         const mEnd = parseISO(m.current_end_date);
         if (!isSameMonth(mEnd, viewDate)) return false;
@@ -149,23 +195,27 @@ const Dashboard = () => {
         return true;
     }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 10);
     
-    // Booking Logic
     const todayBookings = bookings.filter(b => b.date === todayStr && b.status !== 'cancelled');
     const upcoming = bookings.filter(b => (b.date === todayStr || isAfter(parseISO(b.date), today)) && b.status === 'confirmed')
                              .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`))
                              .slice(0, 5);
 
-    const endOfMonthDate = endOfMonth(viewDate);
-    const daysRemaining = Math.max(0, differenceInCalendarDays(endOfMonthDate, auditPoint));
-    const projectedMonthEnd = mtdRevenue + (totalDailyAccrual * daysRemaining);
-
     setStats({
-      activeMembers: activeAtPointCount, frozenMembers: frozenAtPointCount,
-      newMembersThisMonth: monthEnrollments, dailyAccrual: totalDailyAccrual, revenueThisMonth: mtdRevenue,
-      futureRevenue: deferredRevenueAtPoint, projectedEndMonth: projectedMonthEnd,
+      activeMembers: activeAtPointCount, 
+      frozenMembers: frozenAtPointCount,
+      newMembersThisMonth: monthEnrollments, 
+      dailyAccrual: totalDailyAccrual, 
+      revenueThisMonth: mtdMembershipRevenue + mtdServiceRevenue + mtdSalesRevenue,
+      futureRevenue: deferredRevenueAtPoint, 
+      projectedEndMonth: mtdMembershipRevenue + (totalDailyAccrual * Math.max(0, differenceInCalendarDays(endOfMonth(viewDate), auditPoint))),
       bookingCount: todayBookings.length,
-      bookingYield: todayBookings.filter(b => b.status === 'completed').length
+      bookingYield: todayBookings.filter(b => b.status === 'completed').length,
+      todaySalesTotal: todaySales.reduce((acc, s) => acc + s.net_amount, 0),
+      todaySalesCount: todaySales.length,
+      staffActive: staff.filter(s => s.is_active).length - staffOnLeaveCount,
+      staffOnLeave: staffOnLeaveCount
     });
+
     setMonthlyExpiringMembers(monthlyExpiring);
     setUpcomingBookings(upcoming);
   };
@@ -180,11 +230,10 @@ const Dashboard = () => {
 
   const kpiData = [
     { title: "Active Portfolio", value: stats.activeMembers, icon: Users, color: "text-emerald-600" },
-    { title: "Service Occupancy", value: `${stats.bookingCount} Services`, icon: Zap, color: "text-indigo-600" },
-    // Only show financial KPIs if permitted
+    { title: "Service Load", value: `${stats.bookingCount} Sessions`, icon: Zap, color: "text-indigo-600" },
+    { title: "Staff Status", value: `${stats.staffActive} Active`, icon: Contact2, color: "text-amber-600", sub: `${stats.staffOnLeave} on leave` },
     ...(canViewFinancials ? [
-        { title: "MTD Recognition", value: formatMoney(stats.revenueThisMonth), icon: BarChart4, color: "text-blue-600" },
-        { title: "Daily Accrual", value: formatMoney(stats.dailyAccrual), icon: Activity, color: "text-amber-600" }
+        { title: "POS Volume", value: formatMoney(stats.todaySalesTotal), icon: ShoppingBag, color: "text-blue-600", sub: `${stats.todaySalesCount} txns today` }
     ] : [])
   ];
 
@@ -201,173 +250,210 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-lg transition-all duration-500">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-indigo-100/50 transition-colors duration-700"></div>
         <div className="relative z-10">
-          <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-none">
-            Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600">{displayName}</span>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-none uppercase">
+            Hello, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600">{displayName}</span>
           </h1>
-          <p className="text-slate-500 text-sm font-medium mt-2">
-            Operational context for <span className="font-bold text-slate-700">{format(parseISO(dashboardMonth+'-01'), 'MMMM yyyy')}</span>.
+          <p className="text-slate-500 text-xs font-black uppercase tracking-widest mt-2">
+            Intelligence Center &bull; <span className="text-indigo-600 font-bold">{format(parseISO(dashboardMonth+'-01'), 'MMMM yyyy')}</span>
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-end relative z-10 gap-3">
             <div className="flex items-center gap-3 bg-white border border-slate-200 p-2 pl-4 rounded-2xl shadow-sm">
                 <Calendar className="w-4 h-4 text-indigo-600" />
-                <input 
-                    type="month" 
-                    value={dashboardMonth} 
-                    onChange={e => setDashboardMonth(e.target.value)} 
-                    className="h-8 border-none outline-none font-black text-xs uppercase bg-transparent w-36 cursor-pointer" 
-                />
+                <input type="month" value={dashboardMonth} onChange={e => setDashboardMonth(e.target.value)} className="h-8 border-none outline-none font-black text-[10px] uppercase bg-transparent w-36 cursor-pointer" />
             </div>
           <div className="flex items-center gap-3 bg-slate-950 text-white px-5 py-3 rounded-2xl shadow-xl shadow-slate-200 group-hover:shadow-2xl group-hover:scale-105 transition-all duration-300">
              <Clock className="w-5 h-5 text-indigo-400" />
-             <span className="text-xl font-black tracking-tighter tabular-nums">
-               {format(currentTime, 'HH:mm:ss')}
-             </span>
+             <span className="text-xl font-black tracking-tighter tabular-nums">{format(currentTime, 'HH:mm:ss')}</span>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         {kpiData.map((kpi) => (
-            <Card key={kpi.title} className="border-slate-200/60 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <Card key={kpi.title} className="border-slate-200/60 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 rounded-[1.8rem]">
                 <CardContent className="p-6">
                     <div className="flex items-center justify-between mb-4">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{kpi.title}</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">{kpi.title}</p>
                         <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
                     </div>
-                    <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{kpi.value}</h3>
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">{kpi.value}</h3>
+                    {kpi.sub && <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{kpi.sub}</p>}
                 </CardContent>
             </Card>
         ))}
-        {!canViewFinancials && (
-            <Card className="border-dashed border-slate-300 bg-slate-50/50 shadow-none">
-                <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center opacity-60">
-                    <Lock className="w-6 h-6 text-slate-400 mb-2" />
-                    <p className="text-[10px] font-black uppercase text-slate-400">Financial Data Restricted</p>
-                </CardContent>
-            </Card>
-        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg h-full">
-                <CardHeader className="p-8 border-b border-slate-100">
-                    <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-3">
-                        <TrendingUp className="w-5 h-5 text-indigo-600" /> 6-Month Performance Review
-                    </h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Recognition Curve vs. New Member Intake</p>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-8 space-y-8">
+            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
+                <CardHeader className="p-8 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                        <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-3">
+                            <TrendingUp className="w-5 h-5 text-indigo-600" /> Executive Performance Curve
+                        </h3>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Consolidated Gross Yield & Intake</p>
+                    </div>
                 </CardHeader>
-                <CardContent className="p-8 h-[400px]">
+                <CardContent className="p-8 h-[380px]">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={performanceTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                            <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
-                            <YAxis yAxisId="left" tickFormatter={(val) => canViewFinancials ? formatMoney(val).split(' ')[1] : '***'} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
-                            <YAxis yAxisId="right" orientation="right" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
+                            <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
+                            <YAxis yAxisId="left" tickFormatter={(val) => canViewFinancials ? formatMoney(val).split(' ')[1] : '***'} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
+                            <YAxis yAxisId="right" orientation="right" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
                             <Tooltip
-                                contentStyle={{ background: '#1e293b', border: 'none', borderRadius: '1rem', color: 'white', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                labelStyle={{ fontWeight: 'bold', textTransform: 'uppercase' }}
-                                itemStyle={{ fontWeight: 'bold' }}
+                                contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '1rem', color: 'white' }}
+                                labelStyle={{ fontWeight: 'black', fontSize: '10px', textTransform: 'uppercase', marginBottom: '4px' }}
+                                itemStyle={{ fontWeight: 'bold', fontSize: '12px' }}
                                 formatter={(value: any, name: any) => {
                                     if (name === 'Revenue' && !canViewFinancials) return ['***', name];
                                     if (name === 'Revenue') return [formatMoney(value), name];
                                     return [value, name];
                                 }}
-                                cursor={{ fill: 'rgba(79, 70, 229, 0.05)' }}
                             />
-                            <Legend wrapperStyle={{fontSize: "10px", fontWeight: "bold", textTransform: "uppercase", paddingTop: "20px"}} iconType="circle" />
-                            <Bar yAxisId="right" dataKey="intake" name="New Members" fill="#a5b4fc" radius={[6, 6, 0, 0]} barSize={20} />
-                            {canViewFinancials && <Bar yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" fill="#4f46e5" radius={[6, 6, 0, 0]} barSize={20} />}
+                            <Legend wrapperStyle={{fontSize: "9px", fontWeight: "900", textTransform: "uppercase", paddingTop: "20px"}} iconType="circle" />
+                            <Bar yAxisId="right" dataKey="intake" name="New Members" fill="#a5b4fc" radius={[4, 4, 0, 0]} barSize={18} />
+                            {canViewFinancials && <Bar yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={18} />}
                         </BarChart>
                     </ResponsiveContainer>
                 </CardContent>
             </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
+                    <CardHeader className="p-6 border-b border-slate-100">
+                        <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
+                            <PieChartIcon className="w-4 h-4 text-indigo-600" /> Revenue Mix (MTD)
+                        </h3>
+                    </CardHeader>
+                    <CardContent className="p-0 h-[260px] flex items-center">
+                        <div className="flex-1 h-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie data={revenueMix} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                        {revenueMix.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                                    </Pie>
+                                    <Tooltip formatter={(val: number) => formatMoney(val)} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <div className="w-40 pr-8 space-y-3">
+                            {revenueMix.map(item => (
+                                <div key={item.name} className="space-y-0.5">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{backgroundColor: item.color}}></div>
+                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{item.name}</span>
+                                    </div>
+                                    <p className="text-xs font-black text-slate-900 pl-4">{formatMoney(item.value)}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
+                    <CardHeader className="p-6 border-b border-slate-100 flex items-center justify-between">
+                        <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
+                            <Clock className="w-4 h-4 text-amber-600" /> Expiry Sentinel
+                        </h3>
+                        <span className="text-[8px] font-black text-slate-400 uppercase">Next 30 Days</span>
+                    </CardHeader>
+                    <CardContent className="p-2 max-h-[260px] overflow-y-auto custom-scrollbar">
+                        {monthlyExpiringMembers.length === 0 ? (
+                            <div className="py-20 text-center opacity-40">
+                                <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                                <p className="text-[10px] font-black uppercase">No immediate expiries</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-1">
+                                {monthlyExpiringMembers.map(m => {
+                                    const daysLeft = differenceInCalendarDays(parseISO(m.current_end_date), new Date());
+                                    return (
+                                        <button key={m.id} onClick={() => navigate('/members', { state: { selectedMemberId: m.id } })} className="w-full text-left p-3 flex items-center justify-between hover:bg-slate-50 transition-colors rounded-2xl group">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 font-black text-[9px] uppercase">{m.guest_name.charAt(0)}</div>
+                                                <div>
+                                                    <h4 className="font-black text-slate-700 text-[10px] uppercase tracking-tight">{m.guest_name}</h4>
+                                                    <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">{m.membership_number}</p>
+                                                </div>
+                                            </div>
+                                            <span className={`text-[8px] font-black px-2 py-1 rounded-md border whitespace-nowrap bg-amber-50 text-amber-600 border-amber-100 group-hover:bg-amber-600 group-hover:text-white transition-colors`}>
+                                                {daysLeft}d Remaining
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
         </div>
         
-        <div className="space-y-8">
-            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg">
-                <CardHeader className="p-8 border-b border-slate-100">
-                    <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-3">
-                        <CalendarClock className="w-5 h-5 text-indigo-600" /> Upcoming Reservations
+        <div className="lg:col-span-4 space-y-8">
+            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden h-full flex flex-col">
+                <CardHeader className="p-8 border-b border-slate-100 bg-slate-50/50">
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-3 uppercase">
+                        <CalendarClock className="w-5 h-5 text-indigo-600" /> Reservation Grid
                     </h3>
                 </CardHeader>
-                <CardContent className="p-4 space-y-1">
-                    {upcomingBookings.length === 0 ? (
-                        <div className="py-10 text-center">
-                            <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No pending sessions.</p>
-                        </div>
-                    ) : (
-                        upcomingBookings.map(b => (
-                            <div key={b.id} className="flex items-center justify-between p-4 hover:bg-slate-50 rounded-2xl transition-colors border border-transparent hover:border-slate-100 group">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-xs">
-                                        <Clock className="w-4 h-4" />
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{b.start_time}</p>
-                                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{format(parseISO(b.date), 'dd MMM')}</p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] font-black text-slate-600 uppercase">Confirmed</p>
-                                    <p className="text-[8px] font-bold text-indigo-600 uppercase tracking-widest">Staff Assigned</p>
-                                </div>
+                <CardContent className="p-6 flex-1 flex flex-col">
+                    <div className="space-y-3 flex-1">
+                        {upcomingBookings.length === 0 ? (
+                            <div className="py-20 text-center flex flex-col items-center">
+                                <div className="p-5 bg-indigo-50 rounded-3xl mb-4"><Calendar className="w-8 h-8 text-indigo-200" /></div>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">No confirmed sessions</p>
                             </div>
-                        ))
-                    )}
-                    <button onClick={() => navigate('/bookings')} className="w-full mt-4 py-3 text-[9px] font-black text-indigo-600 uppercase tracking-widest border-t border-slate-100 hover:bg-indigo-50/50 rounded-b-2xl transition-colors">
-                        View Service Grid
-                    </button>
-                </CardContent>
-            </Card>
-            
-            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-sm bg-white overflow-hidden group">
-                <CardHeader className="p-6 border-b border-slate-100 flex items-center justify-between">
-                    <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-amber-600"/> Expiring Members
-                    </h3>
-                </CardHeader>
-                <CardContent className="p-2">
-                    {monthlyExpiringMembers.length === 0 ? (
-                        <div className="py-10 text-center">
-                            <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                            <p className="text-xs font-bold text-slate-500">No upcoming expiries.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-1">
-                            {monthlyExpiringMembers.map(m => {
-                                const daysLeft = differenceInCalendarDays(parseISO(m.current_end_date), new Date());
-                                return (
-                                <button 
-                                    key={m.id} 
-                                    onClick={() => navigate('/members', { state: { selectedMemberId: m.id } })}
-                                    className="w-full text-left p-4 flex items-center justify-between hover:bg-indigo-50/70 transition-colors rounded-2xl"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-black text-xs">
-                                            {m.guest_name.charAt(0)}
+                        ) : (
+                            upcomingBookings.map(b => (
+                                <div key={b.id} className="flex items-center justify-between p-5 bg-slate-50/50 hover:bg-white hover:shadow-xl hover:-translate-y-1 transition-all rounded-[1.8rem] border border-transparent hover:border-slate-100 group cursor-pointer">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-indigo-600 shadow-sm border border-slate-100 font-black text-xs">
+                                            <Clock className="w-4 h-4" />
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-slate-700 text-xs">{m.guest_name}</h4>
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{m.membership_number}</p>
+                                            <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{b.start_time} - {b.end_time}</p>
+                                            <p className="text-[8px] font-black text-indigo-600 uppercase tracking-widest">{format(parseISO(b.date), 'EEEE, dd MMM')}</p>
                                         </div>
                                     </div>
-                                    <span className={`text-[9px] font-black px-2 py-1 rounded-md border whitespace-nowrap bg-amber-50 text-amber-600 border-amber-100`}>
-                                        {`${daysLeft}d`}
-                                    </span>
-                                </button>
-                                )}
-                            )}
-                        </div>
-                    )}
+                                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 transition-colors" />
+                                </div>
+                            ))
+                        )}
+                    </div>
+                    <Button onClick={() => navigate('/bookings')} variant="secondary" className="w-full mt-8 h-14 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] bg-slate-100 hover:bg-indigo-600 hover:text-white transition-all">
+                        Full Service Grid
+                    </Button>
                 </CardContent>
             </Card>
+
+            {canViewFinancials && (
+                <Card className="rounded-[2.5rem] border-indigo-200 bg-indigo-900 shadow-2xl overflow-hidden group">
+                    <CardContent className="p-8 relative">
+                        <div className="absolute -right-8 -bottom-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                            <Sparkles className="w-40 h-40 text-white" />
+                        </div>
+                        <div className="relative z-10">
+                            <p className="text-[9px] font-black text-indigo-300 uppercase tracking-[0.3em] mb-4">Financial Health Check</p>
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-end border-b border-indigo-800 pb-4">
+                                    <span className="text-white/60 text-xs font-bold">Daily Accrual Rate</span>
+                                    <span className="text-white font-black text-xl tracking-tighter">{formatMoney(stats.dailyAccrual)}</span>
+                                </div>
+                                <div className="flex justify-between items-end">
+                                    <span className="text-white/60 text-xs font-bold">Projected Month End</span>
+                                    <span className="text-indigo-400 font-black text-xl tracking-tighter">{formatMoney(stats.projectedEndMonth)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
         </div>
       </div>
     </div>

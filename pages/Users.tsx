@@ -3,14 +3,49 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabase';
-import { UserProfile, Role, Outlet } from '../types';
+import { UserProfile, Role, Outlet, Permission, UserPermissionOverride } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command, Search, Filter } from 'lucide-react';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command, Search, Filter, ShieldAlert, Check, ChevronRight } from 'lucide-react';
 
-const UserDetail = ({ user, roles, outlets, onBack, onEdit, onDelete }: { user: UserProfile, roles: Role[], outlets: Outlet[], onBack: () => void, onEdit: (user: UserProfile) => void, onDelete: (id: string) => void }) => {
+const UserDetail = ({ 
+  user, 
+  roles, 
+  outlets, 
+  onBack, 
+  onEdit, 
+  onDelete,
+  onRefresh
+}: { 
+  user: UserProfile, 
+  roles: Role[], 
+  outlets: Outlet[], 
+  onBack: () => void, 
+  onEdit: (user: UserProfile) => void, 
+  onDelete: (id: string) => void,
+  onRefresh: () => void
+}) => {
+    const { hasPermission, permissionRegistry } = useSettings();
+    const { user: currentUser } = useAuth();
     const getRoleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || 'Unknown';
     const isUnlinked = !user.auth_id;
+
+    const canManageOverrides = currentUser && hasPermission(currentUser.role_id, 'users:manage_overrides');
+    const rolePermissions = roles.find(r => r.id === user.role_id)?.permissions || [];
+
+    const handleToggleOverride = async (key: Permission, currentState: boolean | null) => {
+      if (!canManageOverrides) return;
+      
+      // Cycle: No Override -> Granted -> Denied -> No Override
+      if (currentState === null) {
+        await db.savePermissionOverride({ user_id: user.id, permission_key: key, is_granted: true });
+      } else if (currentState === true) {
+        await db.savePermissionOverride({ user_id: user.id, permission_key: key, is_granted: false });
+      } else {
+        await db.deletePermissionOverride(user.id, key);
+      }
+      onRefresh();
+    };
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500 relative z-0">
@@ -32,12 +67,11 @@ const UserDetail = ({ user, roles, outlets, onBack, onEdit, onDelete }: { user: 
                             </div>
                         </CardContent>
                     </Card>
-                </div>
-                <div className="lg:col-span-2 space-y-8">
+                    
                     <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
                         <CardHeader className="p-8 border-b border-slate-100 flex items-center justify-between">
                             <CardTitle className="text-lg font-black tracking-tight flex items-center gap-3">
-                                <Shield className="w-5 h-5 text-indigo-600" /> Security Configuration
+                                <Shield className="w-5 h-5 text-indigo-600" /> Account Context
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-8 space-y-4">
@@ -63,7 +97,67 @@ const UserDetail = ({ user, roles, outlets, onBack, onEdit, onDelete }: { user: 
                             </div>
                         </CardContent>
                     </Card>
-                     <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
+                </div>
+                
+                <div className="lg:col-span-2 space-y-8">
+                    <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
+                        <CardHeader className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
+                            <CardTitle className="text-lg font-black tracking-tight flex items-center gap-3 uppercase">
+                                <ShieldAlert className="w-5 h-5 text-indigo-400" /> Granular Policy Overrides
+                            </CardTitle>
+                            {canManageOverrides && (
+                              <div className="bg-white/10 px-4 py-1.5 rounded-xl border border-white/10">
+                                <p className="text-[8px] font-black uppercase tracking-[0.2em] text-indigo-200">Cycle: Default → Grant → Deny</p>
+                              </div>
+                            )}
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="divide-y divide-slate-100">
+                              {permissionRegistry.map(group => (
+                                <div key={group.id} className="p-0">
+                                  <div className="bg-slate-50/80 px-8 py-3 flex items-center gap-3">
+                                    <ChevronRight className="w-3 h-3 text-slate-400" />
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{group.label}</span>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-100">
+                                    {group.permissions.map(p => {
+                                      const override = user.overrides?.find(o => o.permission_key === p.key);
+                                      const isRoleDefault = rolePermissions.includes(p.key);
+                                      const currentStatus = override === undefined ? null : override.is_granted;
+                                      
+                                      return (
+                                        <div 
+                                          key={p.key} 
+                                          onClick={() => handleToggleOverride(p.key, currentStatus)}
+                                          className={`p-6 flex items-center justify-between bg-white transition-all ${canManageOverrides ? 'cursor-pointer hover:bg-indigo-50/30' : ''}`}
+                                        >
+                                          <div className="space-y-1">
+                                            <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{p.label}</p>
+                                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">
+                                              Default: {isRoleDefault ? 'Granted' : 'Restricted'}
+                                            </p>
+                                          </div>
+                                          
+                                          <div className="flex items-center gap-2">
+                                            {currentStatus === null ? (
+                                              <div className="px-2 py-1 rounded bg-slate-100 text-slate-400 text-[8px] font-black uppercase tracking-tighter border border-slate-200">Role Default</div>
+                                            ) : currentStatus === true ? (
+                                              <div className="px-2 py-1 rounded bg-emerald-50 text-emerald-600 text-[8px] font-black uppercase tracking-tighter border border-emerald-200 flex items-center gap-1"><Check className="w-2 h-2"/> Manual Grant</div>
+                                            ) : (
+                                              <div className="px-2 py-1 rounded bg-red-50 text-red-600 text-[8px] font-black uppercase tracking-tighter border border-red-200 flex items-center gap-1"><X className="w-2 h-2"/> Manual Deny</div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
                         <CardHeader className="p-8 border-b border-slate-100">
                             <CardTitle className="text-lg font-black tracking-tight flex items-center gap-3">
                                 <Building2 className="w-5 h-5 text-indigo-600" /> Facility Access Scopes
@@ -123,7 +217,17 @@ const Users = () => {
     setLoading(true);
     try {
         const data = await db.getUsers();
-        setUsers(data);
+        // Hydrate users with overrides
+        const hydratedUsers = await Promise.all(data.map(async u => {
+          const overrides = await db.getPermissionOverrides(u.id);
+          return { ...u, overrides };
+        }));
+        setUsers(hydratedUsers);
+        
+        if (selectedUser) {
+          const updated = hydratedUsers.find(u => u.id === selectedUser.id);
+          if (updated) setSelectedUser(updated);
+        }
     } catch (err) { console.error("Directory Load Error:", err); } 
     finally { setLoading(false); }
   };
@@ -157,7 +261,7 @@ const Users = () => {
   };
 
   const callEdgeFunction = async (funcName: string, payload: any) => {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await (supabase.auth as any).getSession();
     if (!session) throw new Error("Session expired. Please refresh the page or login again.");
     const response = await fetch(`${supabaseUrl}/functions/v1/${funcName}`, {
         method: 'POST',
@@ -199,7 +303,6 @@ const Users = () => {
                 handleFormCancel();
             }
         } else {
-            // View shortcuts
             if (checkShortcut(e, 'action_create') && canCreate) {
                 e.preventDefault();
                 handleAddNew();
@@ -298,6 +401,7 @@ const Users = () => {
             onBack={() => setView('list')} 
             onEdit={handleEdit} 
             onDelete={setDeleteId} 
+            onRefresh={loadUsers}
         />
       ) : (
         <>

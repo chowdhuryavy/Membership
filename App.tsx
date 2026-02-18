@@ -7,8 +7,8 @@ import {
   Link, 
   useLocation, 
   Navigate, 
-  Outlet as RouterOutlet,
-  useNavigate
+  useNavigate,
+  Outlet as RouterOutlet
 } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
@@ -17,6 +17,7 @@ import Dashboard from './pages/Dashboard';
 import Members from './pages/Members';
 import Categories from './pages/Categories';
 import UsersPage from './pages/Users';
+import StaffPage from './pages/Staff'; 
 import Reports from './pages/Reports';
 import Logs from './pages/Logs';
 import SettingsPage from './pages/Settings';
@@ -51,7 +52,8 @@ import {
   Radio, 
   Sparkles, 
   CalendarClock, 
-  ShoppingBag 
+  ShoppingBag,
+  Contact2
 } from 'lucide-react';
 import { Permission, Property } from './types';
 import { db } from './services/mockSupabase';
@@ -329,10 +331,11 @@ const Sidebar = () => {
     const { settings, hasPermission } = useSettings();
     const location = useLocation();
 
-    // Defined all possible sidebar items
+    // EXHAUSTIVE NAV REGISTRY - Ensure all modules are defined here with their required permissions
     const ALL_NAV_ITEMS = useMemo(() => [
-        { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+        { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:view' as Permission },
         { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
+        { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
         { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
         { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
         { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
@@ -342,10 +345,13 @@ const Sidebar = () => {
         { id: 'settings', to: '/settings', icon: Settings, label: 'System Settings', permission: 'settings:view' as Permission },
     ], []);
 
-    // Sort items based on settings or fallback to default order
     const orderedNavItems = useMemo(() => {
-        const order = settings?.navigation_order || ALL_NAV_ITEMS.map(item => item.id);
-        return order.map(id => ALL_NAV_ITEMS.find(item => item.id === id)).filter(Boolean);
+        const order = settings?.navigation_order || [];
+        const sortedItems = order
+            .map(id => ALL_NAV_ITEMS.find(item => item.id === id))
+            .filter((item): item is typeof ALL_NAV_ITEMS[0] => !!item);
+        const missingItems = ALL_NAV_ITEMS.filter(item => !order.includes(item.id));
+        return [...sortedItems, ...missingItems];
     }, [settings?.navigation_order, ALL_NAV_ITEMS]);
 
     const NavItem = ({ to, icon: Icon, label, permission }: { to: string, icon: any, label: string, permission?: Permission }) => {
@@ -392,7 +398,7 @@ const Sidebar = () => {
             </div>
             
             <nav className="flex-1 space-y-1.5 px-4 mt-4 overflow-y-auto custom-scrollbar pb-8">
-                {orderedNavItems.map((item: any) => (
+                {orderedNavItems.map((item) => (
                     <NavItem key={item.id} to={item.to} icon={item.icon} label={item.label} permission={item.permission} />
                 ))}
             </nav>
@@ -416,10 +422,10 @@ const MobileHeader = () => {
     const { settings, hasPermission } = useSettings();
     const location = useLocation();
 
-    // Defined all possible sidebar items
     const ALL_NAV_ITEMS = useMemo(() => [
-        { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+        { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:view' as Permission },
         { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
+        { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
         { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
         { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
         { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
@@ -430,8 +436,12 @@ const MobileHeader = () => {
     ], []);
 
     const orderedNavItems = useMemo(() => {
-        const order = settings?.navigation_order || ALL_NAV_ITEMS.map(item => item.id);
-        return order.map(id => ALL_NAV_ITEMS.find(item => item.id === id)).filter(Boolean);
+        const order = settings?.navigation_order || [];
+        const sortedItems = order
+            .map(id => ALL_NAV_ITEMS.find(item => item.id === id))
+            .filter((item): item is typeof ALL_NAV_ITEMS[0] => !!item);
+        const missingItems = ALL_NAV_ITEMS.filter(item => !order.includes(item.id));
+        return [...sortedItems, ...missingItems];
     }, [settings?.navigation_order, ALL_NAV_ITEMS]);
 
     const MobileNavItem = ({ to, icon: Icon, label, permission }: { to: string, icon: any, label: string, permission?: Permission }) => {
@@ -479,7 +489,7 @@ const MobileHeader = () => {
 
             {isOpen && (
                 <div className="absolute top-full left-0 w-full bg-white border-b border-slate-200 shadow-2xl p-6 flex flex-col gap-2 z-50 animate-in slide-in-from-top-4 duration-300 max-h-[calc(100vh-140px)] overflow-y-auto custom-scrollbar">
-                    {orderedNavItems.map((item: any) => (
+                    {orderedNavItems.map((item) => (
                         <MobileNavItem key={item.id} to={item.to} icon={item.icon} label={item.label} permission={item.permission} />
                     ))}
                     <div className="h-px bg-slate-100 my-4 shrink-0" />
@@ -502,17 +512,19 @@ const App = () => {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route element={<ProtectedLayout />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/members" element={<Members />} />
-              <Route path="/bookings" element={<MassageScheduling />} />
-              <Route path="/sales" element={<Sales />} />
-              <Route path="/categories" element={<Categories />} />
-              <Route path="/users" element={<UsersPage />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/logs" element={<Logs />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/profile" element={<Profile />} />
+                <Route index element={<Dashboard />} />
+                <Route path="members" element={<Members />} />
+                <Route path="staff" element={<StaffPage />} />
+                <Route path="bookings" element={<MassageScheduling />} />
+                <Route path="sales" element={<Sales />} />
+                <Route path="categories" element={<Categories />} />
+                <Route path="users" element={<UsersPage />} />
+                <Route path="reports" element={<Reports />} />
+                <Route path="logs" element={<Logs />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route path="profile" element={<Profile />} />
             </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Router>
       </SettingsProvider>

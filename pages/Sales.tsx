@@ -44,10 +44,12 @@ import {
   TrendingDown,
   Lock,
   ShieldAlert,
-  Edit3
+  Edit3,
+  Users,
+  Shield
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
-import { Sale, Guest, SaleCategory, InventoryItem, MassageBooking, MassageType } from '../types';
+import { Sale, Guest, SaleCategory, InventoryItem, MassageBooking, MassageType, UserProfile } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, addDays, isSameDay } from 'date-fns';
@@ -55,6 +57,7 @@ import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, addDays
 const POSForm = ({ 
     guests, 
     inventory,
+    users,
     onCancel, 
     onSuccess, 
     currentPropertyId,
@@ -62,12 +65,14 @@ const POSForm = ({
 }: { 
     guests: Guest[], 
     inventory: InventoryItem[],
+    users: UserProfile[],
     onCancel: () => void, 
     onSuccess: () => void, 
     currentPropertyId: string,
     initialSale?: Sale
 }) => {
     const { formatMoney } = useSettings();
+    const { user: currentUser } = useAuth();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     
@@ -82,7 +87,8 @@ const POSForm = ({
         discount: initialSale?.discount_amount || 0,
         discount_mode: 'amount' as 'amount' | 'percent',
         payment_method: initialSale?.payment_method || 'Cash',
-        remarks: initialSale?.remarks || ''
+        remarks: initialSale?.remarks || '',
+        sold_by_id: initialSale?.sold_by_id || currentUser?.id || ''
     });
 
     const [showGuestSuggestions, setShowGuestSuggestions] = useState(false);
@@ -141,7 +147,8 @@ const POSForm = ({
                 net_amount: netAmount,
                 payment_method: saleData.payment_method,
                 status: initialSale?.status || 'completed' as any,
-                remarks: saleData.remarks
+                remarks: saleData.remarks,
+                sold_by_id: saleData.sold_by_id
             };
 
             if (initialSale) {
@@ -272,8 +279,25 @@ const POSForm = ({
                             onChange={e => setSaleData({...saleData, payment_method: e.target.value})}
                             className="h-11 rounded-xl text-xs"
                         />
-                        <Input label="Internal Audit Remarks" value={saleData.remarks} onChange={e => setSaleData({...saleData, remarks: e.target.value})} placeholder="Notes..." className="h-11 rounded-xl text-xs" />
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-700">Sales Rep / Trainer (Incentive)</label>
+                            <div className="relative">
+                                <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <select 
+                                    value={saleData.sold_by_id}
+                                    onChange={e => setSaleData({...saleData, sold_by_id: e.target.value})}
+                                    className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-300 bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                >
+                                    <option value="">Select Staff Member...</option>
+                                    {users.map(u => (
+                                        <option key={u.id} value={u.id}>{u.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
                     </div>
+                    
+                    <Input label="Internal Audit Remarks" value={saleData.remarks} onChange={e => setSaleData({...saleData, remarks: e.target.value})} placeholder="Notes..." className="h-11 rounded-xl text-xs" />
 
                     {error && <div className="bg-red-50 text-red-600 text-[10px] font-bold p-4 rounded-xl flex items-center gap-3 animate-in shake duration-300"><AlertTriangle className="w-4 h-4 shrink-0" /><span>{error}</span></div>}
 
@@ -442,6 +466,7 @@ const Sales = () => {
     const [sales, setSales] = useState<Sale[]>([]);
     const [bookings, setBookings] = useState<MassageBooking[]>([]);
     const [guests, setGuests] = useState<Guest[]>([]);
+    const [users, setUsers] = useState<UserProfile[]>([]);
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [massageTypes, setMassageTypes] = useState<MassageType[]>([]);
     const [loading, setLoading] = useState(true);
@@ -451,6 +476,7 @@ const Sales = () => {
     const [categoryFilter, setCategoryFilter] = useState('All');
     const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
+    // Security Check
     const canView = user && hasPermission(user.role_id, 'sales:view');
     const canCreate = user && hasPermission(user.role_id, 'sales:create');
     const canEdit = user && hasPermission(user.role_id, 'sales:edit');
@@ -458,31 +484,45 @@ const Sales = () => {
     const canViewInventory = user && hasPermission(user.role_id, 'inventory:view');
 
     useEffect(() => {
-        if (currentProperty) loadData();
-    }, [currentProperty]);
+        if (currentProperty && canView) loadData();
+    }, [currentProperty, canView]);
 
     const loadData = async () => {
         if (!currentProperty) return;
         setLoading(true);
         try {
-            const [s, b, g, i, mt] = await Promise.all([
+            const [s, b, g, i, mt, u] = await Promise.all([
                 db.getSales(currentProperty.id),
                 db.getMassageBookings(currentProperty.id),
                 db.getGuests(currentProperty.id),
                 db.getInventory(currentProperty.id),
-                db.getMassageTypes(currentProperty.id)
+                db.getMassageTypes(currentProperty.id),
+                db.getUsers()
             ]);
             setSales(s);
             setBookings(b);
             setGuests(g);
             setInventory(i);
             setMassageTypes(mt);
+            setUsers(u);
         } catch (e) {
             console.error(e);
         } finally {
             setLoading(false);
         }
     };
+
+    if (!canView) {
+        return (
+            <div className="flex items-center justify-center h-screen">
+                <Card className="max-w-md text-center p-8 border-red-100 bg-red-50/30 rounded-[2rem]">
+                    <Shield className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight uppercase">Operational Protocol Lock</h3>
+                    <p className="text-slate-500 mt-2 text-sm font-bold uppercase tracking-tight">Your security clearance does not allow access to the Sales Ledger.</p>
+                </Card>
+            </div>
+        );
+    }
 
     const unifiedEntries = useMemo(() => {
         const salesMapped = sales.map(s => ({
@@ -674,7 +714,7 @@ const Sales = () => {
             {showForm && (
                 <div className="fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
                     <div className="w-full max-w-2xl animate-in zoom-in-95 duration-300">
-                        <POSForm guests={guests} inventory={inventory} currentPropertyId={currentProperty?.id || ''} onCancel={() => {setShowForm(false); setEditingSale(null);}} onSuccess={() => { setShowForm(false); setEditingSale(null); loadData(); }} initialSale={editingSale || undefined} />
+                        <POSForm users={users} guests={guests} inventory={inventory} currentPropertyId={currentProperty?.id || ''} onCancel={() => {setShowForm(false); setEditingSale(null);}} onSuccess={() => { setShowForm(false); setEditingSale(null); loadData(); }} initialSale={editingSale || undefined} />
                     </div>
                 </div>
             )}

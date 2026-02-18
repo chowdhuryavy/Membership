@@ -1,11 +1,12 @@
 
 export type Permission = 
-  | 'dashboard:view' | 'dashboard:view_financials'
+  | 'dashboard:view' | 'dashboard:view_financials' | 'dashboard:view_insights'
   | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:renew' | 'members:print_contract'
   | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete'
-  | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email'
+  | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email' | 'users:manage_overrides'
+  | 'staff:view' | 'staff:manage'
   | 'settings:view' | 'settings:edit' 
-  | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_maintenance' | 'settings:view_navigation'
+  | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives'
   | 'reports:view' | 'reports:export'
   | 'logs:view'
   | 'properties:view' | 'properties:edit'
@@ -13,6 +14,23 @@ export type Permission =
   | 'bookings:view' | 'bookings:create' | 'bookings:edit' | 'bookings:delete' | 'bookings:manage_resources'
   | 'sales:view' | 'sales:create' | 'sales:edit' | 'sales:delete'
   | 'inventory:view' | 'inventory:manage'; 
+
+export interface PermissionGroup {
+  id: string;
+  label: string;
+  permissions: {
+    key: Permission;
+    label: string;
+    description: string;
+  }[];
+}
+
+export interface UserPermissionOverride {
+  id: string;
+  user_id: string;
+  permission_key: Permission;
+  is_granted: boolean;
+}
 
 export interface Role {
   id: string;
@@ -39,6 +57,20 @@ export interface Outlet {
   conditions?: string; 
 }
 
+export interface Staff {
+  id: string;
+  outlet_id: string;
+  name: string;
+  role: string;
+  email?: string;
+  phone?: string;
+  is_active: boolean;
+  is_eligible_for_incentives: boolean; 
+  leave_start_date?: string; 
+  leave_end_date?: string;   
+  created_at: string;
+}
+
 export interface MembershipCategory {
   id: string;
   outlet_id: string;
@@ -56,6 +88,7 @@ export interface UserProfile {
   name: string;
   allowed_outlets: string[];
   temp_password?: string | null;
+  overrides?: UserPermissionOverride[]; // Hydrated in session
 }
 
 export interface SystemLog {
@@ -89,13 +122,15 @@ export interface CompanySettings {
   keyboard_shortcuts?: Record<string, string>;
   contract_template?: string; 
   navigation_order?: string[];
+  conditions?: string;
 }
 
 export enum MemberStatus {
   ACTIVE = 'Active',
   FROZEN = 'Frozen',
   EXPIRED = 'Expired',
-  PENDING = 'Pending'
+  PENDING = 'Pending',
+  TENTATIVE = 'Tentative'
 }
 
 export interface Member {
@@ -113,6 +148,7 @@ export interface Member {
   daily_rate: number;
   check_no?: string;
   status: MemberStatus;
+  sales_rep_id?: string; 
   created_at?: string;
   nationality?: string;
   dob?: string;
@@ -185,7 +221,7 @@ export interface Sale {
   guest_id?: string; 
   guest_name: string; 
   category: SaleCategory;
-  item_id?: string; // Reference to predefined item
+  item_id?: string; 
   item_name: string;
   quantity: number;
   unit_price: number;
@@ -194,6 +230,7 @@ export interface Sale {
   net_amount: number;
   payment_method: string;
   status: 'completed' | 'refunded' | 'void';
+  sold_by_id?: string; 
   created_at: string;
   remarks?: string;
 }
@@ -207,4 +244,22 @@ export interface InventoryItem {
   stock_quantity: number;
   track_inventory: boolean;
   created_at: string;
+}
+
+export interface IncentiveRule {
+  id: string;
+  name: string;
+  scope: 'Global' | 'Property' | 'Outlet';
+  scope_id: string | 'global'; 
+  applies_to: 'Membership' | 'Massage' | 'Sale';
+  target_id: string | 'all'; 
+  distribution_type: 'Individual' | 'Shared'; 
+  calculation_type: 'Percentage' | 'Fixed';
+  value: number;
+  min_price?: number;
+  max_price?: number;
+  min_duration_minutes?: number;
+  max_duration_minutes?: number;
+  apply_discount_percentage: boolean; 
+  is_active: boolean;
 }

@@ -1,5 +1,4 @@
-
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, InventoryItem } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format } from 'date-fns';
@@ -26,6 +25,134 @@ class DatabaseService {
     });
   }
 
+  // --- COMPREHENSIVE PERMISSION REGISTRY ---
+  // The Single Source of Truth for the System's Access Control Matrix
+  getPermissionRegistry(): PermissionGroup[] {
+    return [
+      {
+        id: 'dashboard',
+        label: 'Dashboard & Intelligence',
+        permissions: [
+          { key: 'dashboard:view', label: 'Access Dashboard', description: 'Core entry point for operational overview.' },
+          { key: 'dashboard:view_financials', label: 'Financial KPI Insights', description: 'Visibility into revenue recognition and daily accruals.' },
+          { key: 'dashboard:view_insights', label: 'AI Strategic Analysis', description: 'Ability to generate Gemini-powered performance reports.' },
+        ]
+      },
+      {
+        id: 'members',
+        label: 'Membership Management',
+        permissions: [
+          { key: 'members:view', label: 'View Ledger', description: 'Access the member directory and profiles.' },
+          { key: 'members:create', label: 'New Enrollments', description: 'Permission to add new members to the registry.' },
+          { key: 'members:edit', label: 'Modify Profiles', description: 'Update existing member details and tiers.' },
+          { key: 'members:delete', label: 'Revoke Records', description: 'Permanently remove members from the system.' },
+          { key: 'members:view_contact_info', label: 'PII Visibility', description: 'Access to sensitive data like phone numbers and emails.' },
+          { key: 'members:freeze', label: 'Handle Suspensions', description: 'Authorize or cancel membership freeze periods.' },
+          { key: 'members:renew', label: 'Process Renewals', description: 'Ability to trigger re-enrollment logic.' },
+          { key: 'members:print_contract', label: 'Legal Documentation', description: 'Generate and print membership agreements.' },
+        ]
+      },
+      {
+        id: 'staff',
+        label: 'Staff Roster & Operations',
+        permissions: [
+          { key: 'staff:view', label: 'View Personnel', description: 'Access the facility staff list and profiles.' },
+          { key: 'staff:manage', label: 'Control Registry', description: 'Add, edit, or archive staff members and manage leave.' },
+        ]
+      },
+      {
+        id: 'categories',
+        label: 'Product Tiers & Rules',
+        permissions: [
+          { key: 'categories:view', label: 'View Categories', description: 'View membership tier configurations.' },
+          { key: 'categories:create', label: 'Define Tiers', description: 'Create new membership products.' },
+          { key: 'categories:edit', label: 'Modify Logic', description: 'Adjust rates and durations for tiers.' },
+          { key: 'categories:delete', label: 'Retire Tiers', description: 'Remove or archive old membership categories.' },
+        ]
+      },
+      {
+        id: 'bookings',
+        label: 'Resource Scheduling',
+        permissions: [
+          { key: 'bookings:view', label: 'View Calendar', description: 'Access the service grid and availability.' },
+          { key: 'bookings:create', label: 'Book Sessions', description: 'Create new treatment reservations.' },
+          { key: 'bookings:edit', label: 'Adjust Sessions', description: 'Reschedule or modify existing bookings.' },
+          { key: 'bookings:delete', label: 'Void Sessions', description: 'Cancel or delete bookings.' },
+          { key: 'bookings:manage_resources', label: 'Asset Config', description: 'Add/Edit therapists and treatment types.' },
+        ]
+      },
+      {
+        id: 'sales',
+        label: 'POS & Commerce',
+        permissions: [
+          { key: 'sales:view', label: 'Transaction Audit', description: 'View the daily sales and revenue ledger.' },
+          { key: 'sales:create', label: 'Process Sales', description: 'Authorize and finalize new POS transactions.' },
+          { key: 'sales:edit', label: 'Modify Sales', description: 'Adjust completed transaction details.' },
+          { key: 'sales:delete', label: 'Authorize Voids', description: 'Reverse revenue events and adjust inventory.' },
+          { key: 'inventory:view', label: 'Catalog Visibility', description: 'Access the item master and stock levels.' },
+          { key: 'inventory:manage', label: 'Inventory Control', description: 'Define new assets and adjust quantities.' },
+        ]
+      },
+      {
+        id: 'reports',
+        label: 'Financial Reporting',
+        permissions: [
+          { key: 'reports:view', label: 'Generate Reports', description: 'Access high-level financial audit tools.' },
+          { key: 'reports:export', label: 'Data Portability', description: 'Export ledger data to PDF or Excel formats.' },
+        ]
+      },
+      {
+        id: 'security',
+        label: 'Security & Governance',
+        permissions: [
+          { key: 'users:view', label: 'Directory Access', description: 'View system users and their roles.' },
+          { key: 'users:create', label: 'Provision Users', description: 'Create new user accounts and auth identities.' },
+          { key: 'users:edit', label: 'Modify Clearances', description: 'Change roles and outlet access scopes.' },
+          { key: 'users:edit_email', label: 'Email Control', description: 'Permission to change user account emails.' },
+          { key: 'users:delete', label: 'Revoke Identity', description: 'Terminate user access permanently.' },
+          { key: 'users:manage_overrides', label: 'Policy Overrides', description: 'Manage granular user-specific permission deviations.' },
+          { key: 'logs:view', label: 'Audit Log Access', description: 'Access the system mutation and activity logs.' },
+        ]
+      },
+      {
+        id: 'settings',
+        label: 'System Configuration',
+        permissions: [
+          { key: 'settings:view', label: 'View Settings', description: 'Access system-wide settings pages.' },
+          { key: 'settings:edit', label: 'Global Mutations', description: 'Authorize changes to company identity and UI.' },
+          { key: 'settings:view_global', label: 'Enterprise Info', description: 'Access brand and address configuration.' },
+          { key: 'settings:view_properties', label: 'Property Assets', description: 'Manage luxury collection properties.' },
+          { key: 'settings:view_outlets', label: 'Facility Contexts', description: 'Manage specific gym/spa outlet records.' },
+          { key: 'settings:view_roles', label: 'Security Protocols', description: 'Define role-based permission templates.' },
+          { key: 'settings:view_currency', label: 'Monetary Standards', description: 'Manage currency and exchange rates.' },
+          { key: 'settings:view_shortcuts', label: 'Hotkey Controls', description: 'Configure system-wide keyboard shortcuts.' },
+          { key: 'settings:view_documents', label: 'Legal Templates', description: 'Manage contract and agreement text.' },
+          { key: 'settings:view_navigation', label: 'UI Architecture', description: 'Rearrange sidebar navigation order.' },
+          { key: 'settings:view_incentives', label: 'Yield Logic', description: 'Manage complex incentive distribution rules.' },
+          { key: 'settings:view_maintenance', label: 'Terminal Ops', description: 'Access database maintenance and wipe tools.' },
+        ]
+      }
+    ];
+  }
+
+  async getPermissionOverrides(userId: string): Promise<UserPermissionOverride[]> {
+    if (!this.isSupabase()) return [];
+    const { data } = await supabase.from('user_permission_overrides').select('*').eq('user_id', userId);
+    return (data || []) as UserPermissionOverride[];
+  }
+
+  async savePermissionOverride(override: Omit<UserPermissionOverride, 'id'>) {
+    if (!this.isSupabase()) return;
+    await supabase.from('user_permission_overrides').upsert([override], { onConflict: 'user_id,permission_key' });
+    await this.logAction('SECURITY_OVERRIDE', `Updated override for ${override.permission_key} on User ID: ${override.user_id}`);
+  }
+
+  async deletePermissionOverride(userId: string, key: Permission) {
+    if (!this.isSupabase()) return;
+    await supabase.from('user_permission_overrides').delete().eq('user_id', userId).eq('permission_key', key);
+    await this.logAction('SECURITY_OVERRIDE_PURGE', `Removed override for ${key} on User ID: ${userId}`);
+  }
+
   private async syncMemberEndDate(memberId: string) {
     if (!this.isSupabase()) return;
 
@@ -36,6 +163,8 @@ class DatabaseService {
         ]);
 
         if (mErr || !m) return;
+
+        if (m.status === MemberStatus.TENTATIVE) return;
 
         const totalDeferred = (freezes || []).reduce((sum, f) => sum + (Number(f.total_days) || 0), 0);
         const baselineDate = startOfDay(parseISO(m.original_end_date));
@@ -62,7 +191,7 @@ class DatabaseService {
         timestamp: new Date().toISOString(),
         user_id: session?.id || 'system',
         user_name: session?.name || 'System Engine',
-        action: action.toUpperCase(),
+        action: (action || '').toUpperCase(),
         details,
         outlet_id: outlet_id || null
     };
@@ -122,8 +251,13 @@ class DatabaseService {
           await supabase.from('profiles').update({ auth_id: authData.user.id }).eq('id', profile.id);
         }
         await this.syncAuthMetadata(profile);
+        
+        // HYDRATE OVERRIDES
+        const overrides = await this.getPermissionOverrides(profile.id);
+        const hydrated = { ...profile, overrides };
+
         await this.logAction('AUTH_LOGIN', `Access authorized for ${profile.email}`);
-        return { user: profile, error: null, requiresPasswordChange: !!profile.temp_password };
+        return { user: hydrated, error: null, requiresPasswordChange: !!profile.temp_password };
     }
 
     return { user: null, error: "Identity profile not found.", requiresPasswordChange: false };
@@ -221,11 +355,56 @@ class DatabaseService {
     if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id);
   }
 
+  // --- STAFF METHODS ---
+  async getStaff(outletId?: string): Promise<Staff[]> {
+    if (this.isSupabase()) {
+      let query = supabase.from('staff').select('*').order('name');
+      if (outletId) query = query.eq('outlet_id', outletId);
+      const { data, error } = await query;
+      if (error) {
+        throw error;
+      }
+      return (data || []) as Staff[];
+    }
+    return [];
+  }
+
+  async addStaff(staff: Omit<Staff, 'id' | 'created_at'>) {
+    if (this.isSupabase()) {
+      const { data, error } = await supabase.from('staff').insert([{
+        ...staff,
+        id: crypto.randomUUID(),
+        created_at: new Date().toISOString()
+      }]).select();
+      
+      if (error) throw error;
+      await this.logAction('CREATE_STAFF', `Staff member enrolled: ${staff.name}`, staff.outlet_id);
+      return data;
+    }
+  }
+
+  async updateStaff(id: string, updates: Partial<Staff>) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('staff').update(updates).eq('id', id);
+      if (error) throw error;
+      await this.logAction('UPDATE_STAFF', `Staff profile adjusted: ${id}`);
+    }
+  }
+
+  async deleteStaff(id: string) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('staff').delete().eq('id', id);
+      if (error) throw error;
+      await this.logAction('DELETE_STAFF', `Staff record purged: ${id}`);
+    }
+  }
+
   async getMembers(outletId?: string): Promise<Member[]> {
     if (this.isSupabase()) {
       let query = supabase.from('members').select('*');
       if (outletId) query = query.eq('outlet_id', outletId);
-      const { data } = await query;
+      const { data, error } = await query;
+      if (error) throw error;
       return (data || []) as Member[];
     }
     return [];
@@ -246,14 +425,16 @@ class DatabaseService {
   async addMember(member: Member) {
     if (this.isSupabase()) {
       await supabase.from('members').insert([member]);
-      await this.logAction('CREATE_MEMBER', `New enrollment: ${member.guest_name} (${member.membership_number})`, member.outlet_id);
+      const statusText = member.status === MemberStatus.TENTATIVE ? 'Tentative Booking' : 'Confirmed Enrollment';
+      await this.logAction('CREATE_MEMBER', `${statusText}: ${member.guest_name} (${member.membership_number})`, member.outlet_id);
     }
   }
 
   async updateMember(id: string, member: Partial<Member>) {
     if (this.isSupabase()) {
       await supabase.from('members').update(member).eq('id', id);
-      await this.logAction('UPDATE_MEMBER', `Profile update: ${member.guest_name || id}`, member.outlet_id);
+      const statusUpdate = member.status ? ` (Status: ${member.status})` : '';
+      await this.logAction('UPDATE_MEMBER', `Profile update${statusUpdate}: ${member.guest_name || id}`, member.outlet_id);
     }
   }
 
@@ -300,9 +481,11 @@ class DatabaseService {
     }
   }
 
-  async getCategories(outletId: string): Promise<MembershipCategory[]> {
+  async getCategories(outletId?: string): Promise<MembershipCategory[]> {
     if (this.isSupabase()) {
-      const { data } = await supabase.from('membership_categories').select('*').eq('outlet_id', outletId);
+      let query = supabase.from('membership_categories').select('*');
+      if (outletId) query = query.eq('outlet_id', outletId);
+      const { data } = await query;
       return (data || []) as MembershipCategory[];
     }
     return [];
@@ -325,7 +508,8 @@ class DatabaseService {
 
   async deleteCategory(id: string) {
     if (this.isSupabase()) {
-      await supabase.from('membership_categories').delete().eq('id', id);
+      const { error } = await supabase.from('membership_categories').delete().eq('id', id);
+      if (error) throw error;
       await this.logAction('DELETE_CATEGORY', `Tier decommissioned: ${id}`);
     }
   }
@@ -372,6 +556,8 @@ class DatabaseService {
 
   async deleteCurrency(id: string) {
     if (this.isSupabase()) {
+      const { data: c } = await supabase.from('currencies').select('is_default').eq('id', id).single();
+      if (c?.is_default) throw new Error("Cannot delete the system base currency.");
       await supabase.from('currencies').delete().eq('id', id);
       await this.logAction('DELETE_CURRENCY', `Monetary standard purged: ${id}`);
     }
@@ -401,6 +587,8 @@ class DatabaseService {
 
   async deleteRole(id: string) {
     if (this.isSupabase()) {
+      const { data: r } = await supabase.from('roles').select('is_system').eq('id', id).single();
+      if (r?.is_system) throw new Error("Cannot delete a protected system role.");
       await supabase.from('roles').delete().eq('id', id);
       await this.logAction('DELETE_ROLE', `Security protocol purged: ${id}`);
     }
@@ -525,14 +713,12 @@ class DatabaseService {
 
   async addSale(sale: Omit<Sale, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
-        // Transactional logic for inventory tracking
         if (sale.item_id) {
             const { data: item } = await supabase.from('inventory').select('track_inventory, stock_quantity').eq('id', sale.item_id).single();
             if (item && item.track_inventory) {
                 if (item.stock_quantity < sale.quantity) {
                     throw new Error(`Insufficient stock for ${sale.item_name}. Available: ${item.stock_quantity}`);
                 }
-                // Decrement stock
                 await supabase.from('inventory').update({ stock_quantity: item.stock_quantity - sale.quantity }).eq('id', sale.item_id);
             }
         }
@@ -543,9 +729,16 @@ class DatabaseService {
     }
   }
 
+  async updateSale(id: string, updates: Partial<Sale>) {
+    if (this.isSupabase()) {
+        const { error } = await supabase.from('sales').update(updates).eq('id', id);
+        if (error) throw error;
+        await this.logAction('UPDATE_SALE', `Transaction updated: ${id}`);
+    }
+  }
+
   async deleteSale(id: string) {
     if (this.isSupabase()) {
-        // Reverse inventory if necessary
         const { data: sale } = await supabase.from('sales').select('*').eq('id', id).single();
         if (sale && sale.item_id) {
             const { data: item } = await supabase.from('inventory').select('track_inventory, stock_quantity').eq('id', sale.item_id).single();
@@ -648,17 +841,22 @@ class DatabaseService {
 
   async addTherapist(therapist: Omit<Therapist, 'id'>) {
     if (this.isSupabase()) {
-        console.debug("DB Service: Validating Property Reference ID", therapist.property_id);
         const { data: propExists } = await supabase.from('properties').select('id, name').eq('id', therapist.property_id).maybeSingle();
         
         if (!propExists) {
-            console.error("DB Service Critical: Found orphaned ID reference for property_id", therapist.property_id);
-            throw new Error(`Data Integrity Error: The target property (${therapist.property_id}) is not registered in the system. Ensure the Property is created in Settings first.`);
+            throw new Error(`Data Integrity Error: The target property (${therapist.property_id}) is not registered in the system.`);
         }
 
         const { error } = await supabase.from('therapists').insert([{ ...therapist, id: crypto.randomUUID() }]);
         if (error) throw error;
         await this.logAction('CREATE_THERAPIST', `Staff specialist onboarded to ${propExists.name}: ${therapist.name}`);
+    }
+  }
+
+  async updateTherapist(id: string, updates: Partial<Therapist>) {
+    if (this.isSupabase()) {
+        const { error } = await supabase.from('therapists').update(updates).eq('id', id);
+        if (error) throw error;
     }
   }
 
@@ -683,7 +881,6 @@ class DatabaseService {
 
   async addMassageType(type: Omit<MassageType, 'id'>) {
     if (this.isSupabase()) {
-        console.debug("DB Service: Validating Property Reference ID", type.property_id);
         const { data: propExists } = await supabase.from('properties').select('id, name').eq('id', type.property_id).maybeSingle();
         
         if (!propExists) {
@@ -693,6 +890,13 @@ class DatabaseService {
         const { error } = await supabase.from('massage_types').insert([{ ...type, id: crypto.randomUUID() }]);
         if (error) throw error;
         await this.logAction('CREATE_TREATMENT', `New treatment authorized for ${propExists.name}: ${type.name}`);
+    }
+  }
+
+  async updateMassageType(id: string, updates: Partial<MassageType>) {
+    if (this.isSupabase()) {
+        const { error } = await supabase.from('massage_types').update(updates).eq('id', id);
+        if (error) throw error;
     }
   }
 
@@ -723,7 +927,7 @@ class DatabaseService {
 
   async updateMassageBooking(id: string, updates: Partial<MassageBooking>) {
     if (this.isSupabase()) {
-      const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
+      const { error = null } = await supabase.from('massage_bookings').update(updates).eq('id', id);
       if (error) throw error;
       await this.logAction('UPDATE_BOOKING', `Reservation parameters adjusted: ${id}`);
     }
@@ -731,9 +935,61 @@ class DatabaseService {
 
   async updateMassageBookingStatus(id: string, status: MassageBooking['status']) {
     if (this.isSupabase()) {
-      const { error } = await supabase.from('massage_bookings').update({ status }).eq('id', id);
+      const { error = null } = await supabase.from('massage_bookings').update({ status }).eq('id', id);
       if (error) throw error;
-      await this.logAction('UPDATE_BOOKING_STATUS', `Reservation lifecycle updated to ${status.toUpperCase()} for ID: ${id}`);
+      await this.logAction('UPDATE_BOOKING_STATUS', `Reservation lifecycle updated to ${(status || '').toUpperCase()} for ID: ${id}`);
+    }
+  }
+
+  // --- INCENTIVE SYSTEM METHODS ---
+  async getIncentiveRules(propertyId?: string, outletId?: string): Promise<IncentiveRule[]> {
+    if (this.isSupabase()) {
+      try {
+        let query = supabase.from('incentive_rules').select('*').order('created_at', { ascending: false });
+        
+        if (propertyId || outletId) {
+            const filterArr = ["scope.eq.Global"];
+            if (propertyId) filterArr.push(`and(scope.eq.Property,scope_id.eq.${propertyId})`);
+            if (outletId) filterArr.push(`and(scope.eq.Outlet,scope_id.eq.${outletId})`);
+            query = query.or(filterArr.join(','));
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        
+        return (data || []).map(rule => ({
+            ...rule,
+            distribution_type: rule.distribution_type || 'Individual'
+        })) as IncentiveRule[];
+      } catch (e) {
+          console.warn("Incentive rules query failed:", e);
+          return [];
+      }
+    }
+    return [];
+  }
+
+  async addIncentiveRule(rule: Omit<IncentiveRule, 'id'>) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('incentive_rules').insert([{ ...rule, id: crypto.randomUUID() }]);
+      if (error) throw error;
+      await this.logAction('CREATE_INCENTIVE', `Incentive rule defined: ${rule.name}`);
+    }
+  }
+
+  async updateIncentiveRule(id: string, updates: Partial<IncentiveRule>) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('incentive_rules').update(updates).eq('id', id);
+      if (error) throw error;
+      await this.logAction('UPDATE_INCENTIVE', `Incentive rule updated: ${id}`);
+    }
+  }
+
+  async deleteIncentiveRule(id: string) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('incentive_rules').delete().eq('id', id);
+      if (error) throw error;
+      await this.logAction('DELETE_INCENTIVE', `Incentive rule revoked: ${id}`);
     }
   }
 }
