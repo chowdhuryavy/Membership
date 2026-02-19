@@ -192,7 +192,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
         ...guestData,
         property_id: currentProperty.id
       });
-      const payload = {
+      const payload: any = {
         guest_id: guest.id,
         therapist_id: bookingData.therapist_id,
         date: bookingData.date,
@@ -201,10 +201,17 @@ const BookingForm: React.FC<BookingFormProps> = ({
         massage_type_id: bookingData.massage_type_id,
         additional_service_ids: bookingData.additional_service_ids.filter(Boolean),
         price: netPrice,
-        discount: calculatedDiscountValue // Always store the absolute currency value in DB
+        discount: calculatedDiscountValue
       };
-      if (initialBooking) { await db.updateMassageBooking(initialBooking.id, payload); } 
-      else { await db.addMassageBooking({ ...payload, property_id: currentProperty.id, status: 'confirmed' }); }
+
+      if (initialBooking) { 
+        // When restoring or modifying, ensure status is reset to confirmed
+        payload.status = 'confirmed';
+        await db.updateMassageBooking(initialBooking.id, payload); 
+      } 
+      else { 
+        await db.addMassageBooking({ ...payload, property_id: currentProperty.id, status: 'confirmed' }); 
+      }
       onSuccess();
     } catch (err: any) { setError(err.message || "Operation failed."); } 
     finally { setLoading(false); }
