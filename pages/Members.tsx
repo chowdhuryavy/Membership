@@ -326,6 +326,13 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
               setValue('dob', match.dob ?? '');
               setValue('package_type', match.package_type || 'Single');
               setValue('access_type', match.access_type || 'Both');
+              setValue('membership_type', 'Renew');
+
+              // CONTINUITY LOGIC: Auto-set start date to day after existing expiry
+              if (match.current_end_date) {
+                  const nextDate = addDays(parseISO(match.current_end_date), 1);
+                  setValue('start_date', format(nextDate, 'yyyy-MM-dd'));
+              }
           }
       }
   }, [membershipNumber, members, isRenewal, isEditing, setValue, pulledGuest]);
