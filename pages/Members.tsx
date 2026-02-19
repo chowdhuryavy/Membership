@@ -56,7 +56,6 @@ const startOfDay = (date: Date) => {
   return d;
 };
 
-// RELAXED SCHEMA: All non-core fields are now optional and allow nulls
 const memberSchema = z.object({
   membership_number: z.string().min(1, "Membership ID is required"),
   guest_name: z.string().min(2, "Name must be at least 2 chars"),
@@ -124,6 +123,10 @@ const Members = () => {
     } finally { setLoading(false); }
   };
 
+  const logAction = (action: string, details: string) => {
+    db.logAction(action, details, currentOutlet?.id);
+  };
+
   const getEffectiveStatus = (member: Member) => {
       if (member.status === MemberStatus.FROZEN || member.status === MemberStatus.PENDING || member.status === MemberStatus.TENTATIVE) {
           return member.status;
@@ -171,8 +174,25 @@ const Members = () => {
                </div>
             </div>
             <div className="flex items-center gap-3 w-full md:w-auto">
-              <div className="relative group flex-1 md:min-w-[320px]"><Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" /><input ref={searchInputRef} placeholder="Search names or IDs..." className="w-full h-12 pl-12 pr-4 rounded-2xl bg-white border border-slate-200 shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-bold placeholder:text-slate-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-              {canCreate && (<Button onClick={() => { setIsRenewal(false); setIsEditing(false); setSelectedMember(null); setView('form'); }} className="h-12 px-8 rounded-2xl shadow-xl shadow-indigo-100 font-black uppercase text-xs tracking-widest"><Plus className="w-5 h-5 mr-1" /> New Entry</Button>)}
+              <div className="relative group flex-1 md:min-w-[320px]">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <input 
+                  ref={searchInputRef} 
+                  placeholder="Search names or IDs..." 
+                  className="w-full h-12 pl-12 pr-4 rounded-2xl bg-white border border-slate-200 shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-bold placeholder:text-slate-400" 
+                  value={searchTerm} 
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onBlur={() => { if(searchTerm) logAction('UI_SEARCH', `Operator queried ledger for: ${searchTerm}`); }}
+                />
+              </div>
+              {canCreate && (
+                <Button onClick={() => { 
+                  logAction('UI_CLICK', 'Operator navigated to enrollment portal');
+                  setIsRenewal(false); setIsEditing(false); setSelectedMember(null); setView('form'); 
+                }} className="h-12 px-8 rounded-2xl shadow-xl shadow-indigo-100 font-black uppercase text-xs tracking-widest">
+                  <Plus className="w-5 h-5 mr-1" /> New Entry
+                </Button>
+              )}
             </div>
           </div>
 
@@ -210,7 +230,10 @@ const Members = () => {
                             {group.members.map((m) => {
                                 const effectiveStatus = getEffectiveStatus(m);
                                 return (
-                                <tr key={m.id} className="hover:bg-indigo-50/20 cursor-pointer transition-colors" onClick={() => { setSelectedMember(m); setAutoOpenFreeze(false); setView('detail'); }}>
+                                <tr key={m.id} className="hover:bg-indigo-50/20 cursor-pointer transition-colors" onClick={() => { 
+                                  logAction('UI_CLICK', `User accessed profile detail: ${m.guest_name}`);
+                                  setSelectedMember(m); setAutoOpenFreeze(false); setView('detail'); 
+                                }}>
                                     <td className="px-10 py-6 font-black text-slate-900 text-base tracking-tighter">{m.membership_number}</td>
                                     <td className="px-10 py-6">
                                       <div className="font-black text-slate-800 text-sm uppercase">{m.guest_name}</div>
@@ -221,10 +244,22 @@ const Members = () => {
                                     <td className="px-10 py-6 text-[#5c56d6] font-black text-base tracking-tighter">{m.current_end_date ? format(parseISO(m.current_end_date), 'dd-MM-yyyy') : '---'}</td>
                                     <td className="px-10 py-6 text-right font-black text-slate-900 tabular-nums text-base">{formatMoney(m.net_amount)}</td>
                                     <td className="px-10 py-6 text-right"><div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
-                                      {canCreate && <button onClick={() => { setSelectedMember(m); setIsRenewal(true); setIsEditing(false); setView('form'); }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-all shadow-sm" title="Renew"><RefreshCcw className="w-4 h-4"/></button>}
-                                      {hasPermission(user!.role_id, 'members:freeze') && <button onClick={() => { setSelectedMember(m); setAutoOpenFreeze(true); setView('detail'); }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-all shadow-sm" title="Suspend/Freeze"><Snowflake className="w-4 h-4"/></button>}
-                                      {canEdit && <button onClick={() => { setSelectedMember(m); setIsEditing(true); setIsRenewal(false); setView('form'); }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-all shadow-sm" title="Edit Profile"><Edit2 className="w-4 h-4"/></button>}
-                                      {canDelete && <button onClick={() => setDeleteId(m.id)} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl transition-all shadow-sm" title="Delete"><Trash2 className="w-4 h-4"/></button>}
+                                      {canCreate && <button onClick={() => { 
+                                        logAction('UI_CLICK', `Renewal triggered via list for ID: ${m.membership_number}`);
+                                        setSelectedMember(m); setIsRenewal(true); setIsEditing(false); setView('form'); 
+                                      }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-all shadow-sm" title="Renew"><RefreshCcw className="w-4 h-4"/></button>}
+                                      {hasPermission(user!.role_id, 'members:freeze') && <button onClick={() => { 
+                                        logAction('UI_CLICK', `Auto-Freeze navigation triggered for: ${m.guest_name}`);
+                                        setSelectedMember(m); setAutoOpenFreeze(true); setView('detail'); 
+                                      }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-all shadow-sm" title="Suspend/Freeze"><Snowflake className="w-4 h-4"/></button>}
+                                      {canEdit && <button onClick={() => { 
+                                        logAction('UI_CLICK', `User modified profile via shortcut: ${m.guest_name}`);
+                                        setSelectedMember(m); setIsEditing(true); setIsRenewal(false); setView('form'); 
+                                      }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-all shadow-sm" title="Edit Profile"><Edit2 className="w-4 h-4"/></button>}
+                                      {canDelete && <button onClick={() => {
+                                        logAction('UI_CLICK', `Purge protocol initiated for member ID: ${m.membership_number}`);
+                                        setDeleteId(m.id);
+                                      }} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl transition-all shadow-sm" title="Delete"><Trash2 className="w-4 h-4"/></button>}
                                     </div></td>
                                 </tr>
                             )})}
@@ -246,7 +281,10 @@ const Members = () => {
           isRenewal={isRenewal}
           isEditing={isEditing}
           currentOutletId={currentOutlet?.id || ''}
-          onCancel={() => { setView('list'); setSelectedMember(null); setIsEditing(false); setIsRenewal(false); }} 
+          onCancel={() => { 
+            logAction('UI_CLICK', 'Operator discarded enrollment changes');
+            setView('list'); setSelectedMember(null); setIsEditing(false); setIsRenewal(false); 
+          }} 
           onSuccess={() => { loadData(); setView('list'); }} 
         />
       )}
@@ -257,10 +295,19 @@ const Members = () => {
           categories={categories}
           getEffectiveStatus={getEffectiveStatus}
           initialTriggerFreeze={autoOpenFreeze}
-          onBack={() => { setView('list'); setSelectedMember(null); setAutoOpenFreeze(false); }}
+          onBack={() => { 
+            logAction('UI_CLICK', 'Operator exited profile detail view');
+            setView('list'); setSelectedMember(null); setAutoOpenFreeze(false); 
+          }}
           onUpdate={() => { loadData(); }} 
-          onRenew={(m) => { setSelectedMember(m); setIsRenewal(true); setIsEditing(false); setView('form'); }}
-          onEdit={(m) => { setSelectedMember(m); setIsEditing(true); setIsRenewal(false); setView('form'); }}
+          onRenew={(m) => { 
+            logAction('UI_CLICK', `Renewal process commenced for: ${m.guest_name}`);
+            setSelectedMember(m); setIsRenewal(true); setIsEditing(false); setView('form'); 
+          }}
+          onEdit={(m) => { 
+            logAction('UI_CLICK', `Detailed profile mutation started for: ${m.guest_name}`);
+            setSelectedMember(m); setIsEditing(true); setIsRenewal(false); setView('form'); 
+          }}
           onDelete={(id) => setDeleteId(id)}
         />
       )}
@@ -276,6 +323,19 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const calculateRenewStartDate = (currentEnd: string) => {
+    const today = startOfDay(new Date());
+    const expiryDate = startOfDay(parseISO(currentEnd));
+    
+    // If it has already expired (expiry is before today), start from today.
+    // If it's still active (expiry is today or later), start from day after expiry.
+    if (isBefore(expiryDate, today)) {
+        return format(today, 'yyyy-MM-dd');
+    } else {
+        return format(addDays(expiryDate, 1), 'yyyy-MM-dd');
+    }
+  };
 
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<MemberFormValues>({
     resolver: zodResolver(memberSchema),
@@ -294,7 +354,7 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
       membership_number: existingMember?.membership_number || '',
       guest_name: existingMember?.guest_name || '',
       category_id: existingMember?.category_id || '',
-      start_date: isRenewal && existingMember ? format(addDays(parseISO(existingMember.current_end_date), 1), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+      start_date: (isRenewal && existingMember) ? calculateRenewStartDate(existingMember.current_end_date) : format(new Date(), 'yyyy-MM-dd'),
       discount: existingMember?.discount || 0,
       phone: existingMember?.phone ?? '',
       email: existingMember?.email ?? '',
@@ -313,11 +373,12 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
   const startDate = watch('start_date');
   const discount = watch('discount');
 
-  // Pull Guest Data Logic for New Enrollments
+  // Pull Guest Data Logic for New Enrollments + Continuous/Smart Start Date Logic
   useEffect(() => {
       if (!isRenewal && !isEditing && membershipNumber && membershipNumber.length > 3) {
           const match = members.find(m => m.membership_number.toLowerCase() === membershipNumber.toLowerCase());
           if (match && pulledGuest?.id !== match.id) {
+              db.logAction('UI_HANDSHAKE', `Identity match identified for enrollment: ${membershipNumber}`);
               setPulledGuest(match);
               setValue('guest_name', match.guest_name);
               setValue('phone', match.phone ?? '');
@@ -328,16 +389,19 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
               setValue('access_type', match.access_type || 'Both');
               setValue('membership_type', 'Renew');
 
-              // CONTINUITY LOGIC: Auto-set start date to day after existing expiry
+              // SMART START DATE LOGIC: 
+              // If active/expires today: set to Day after expiry.
+              // If expired in past: set to Current Date.
               if (match.current_end_date) {
-                  const nextDate = addDays(parseISO(match.current_end_date), 1);
-                  setValue('start_date', format(nextDate, 'yyyy-MM-dd'));
+                  const calculatedDate = calculateRenewStartDate(match.current_end_date);
+                  setValue('start_date', calculatedDate);
               }
           }
       }
   }, [membershipNumber, members, isRenewal, isEditing, setValue, pulledGuest]);
 
   const handleResetPull = () => {
+      db.logAction('UI_CLICK', 'User manually discarded pulled profile data');
       setPulledGuest(null);
       reset({
           membership_number: '',
@@ -368,13 +432,20 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
       if (!isRenewal || !existingMember || !startDate) return null;
       const start = startOfDay(parseISO(startDate));
       const prevEnd = startOfDay(parseISO(existingMember.current_end_date));
-      if (isBefore(start, addDays(prevEnd, 1))) {
+      if (isBefore(start, addDays(prevEnd, 1)) && !isSameDay(start, startOfDay(new Date()))) {
+          // Only show warning if user tries to start it BEFORE expiry AND it's not starting Today (as per smart logic)
+          // If the smart logic sets it to Today because it expired long ago, it's not an overlap.
+          if (isAfter(start, prevEnd)) return null; 
           return `Timeline Integrity Audit: Notice Overlapping previous term (Exp: ${format(prevEnd, 'dd-MM-yyyy')})`;
       }
       return null;
   }, [isRenewal, existingMember, startDate]);
 
-  // Context Banner logic: Shows "X days left" or "Expired X days ago"
+  function isSameDay(d1: Date, d2: Date) {
+      return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+  }
+
+  // Enhanced Match Context Banner logic
   const matchContextText = useMemo(() => {
     const target = pulledGuest || existingMember;
     if (!target) return "";
@@ -382,7 +453,7 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
     const end = startOfDay(parseISO(target.current_end_date));
     const diff = differenceInCalendarDays(end, today);
     const statusText = diff >= 0 ? `${diff} days remaining` : `Expired ${Math.abs(diff)} days ago`;
-    return `Guest History: ${statusText} (Current Term: ${format(parseISO(target.start_date), 'dd-MM-yyyy')} to ${format(end, 'dd-MM-yyyy')})`;
+    return `Identity Snapshot: ${statusText} (Current Expiry: ${format(end, 'dd-MM-yyyy')})`;
   }, [pulledGuest, existingMember]);
 
   const onFormSubmit = async (data: MemberFormValues) => {
@@ -390,7 +461,6 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
     setSubmitError(null);
     const isUpdate = !!(isEditing && !isRenewal && existingMember);
     
-    // Pruning: Clean up empty strings to nulls for database compatibility
     const cleanData = { ...data };
     Object.keys(cleanData).forEach(key => {
         const k = key as keyof MemberFormValues;
@@ -433,8 +503,6 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
 
   const title = isRenewal ? 'Renew Membership' : isEditing ? 'Edit Profile' : 'New Enrollment';
   const buttonLabel = submitSuccess ? 'Handshake Success' : isSubmitting ? 'Syncing...' : isRenewal ? 'Commit Renewal' : isEditing ? 'Sync Profile' : 'Confirm Enrollment';
-  
-  // LOCK LOGIC: Name and ID are editable during Profile Edit, but locked during Renewals or Pulls
   const isNameIdLocked = (isRenewal || !!pulledGuest) && !isEditing;
 
   return (
@@ -461,11 +529,6 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
                <div className="flex-1">
                   <h4 className="text-[11px] font-black text-red-900 uppercase tracking-tight">Validation Error</h4>
                   <p className="text-[10px] font-bold text-red-600 mt-0.5">Please review all fields. Some entries do not meet system requirements.</p>
-                  <div className="mt-2 grid grid-cols-2 gap-x-4">
-                      {Object.entries(errors).map(([field, error]) => (
-                          <p key={field} className="text-[9px] font-black text-red-500 uppercase tracking-tighter">• {field.replace('_', ' ')}: {(error as any)?.message}</p>
-                      ))}
-                  </div>
                </div>
             </div>
           )}
@@ -494,7 +557,6 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
             </div>
           )}
 
-          {/* Section: Primary Identity */}
           <div className="space-y-6">
             <div className="flex items-center gap-3">
               <UserCircle2 className="w-5 h-5 text-indigo-600" />
@@ -507,7 +569,6 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
                     <Shield className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 ${isNameIdLocked ? 'text-slate-400' : 'text-emerald-500'}`} />
                     <Input {...register('membership_number')} readOnly={isNameIdLocked} className={`h-14 pl-12 rounded-2xl font-bold border-2 ${isNameIdLocked ? 'bg-slate-50 text-slate-500 border-slate-100 cursor-not-allowed' : 'border-slate-200 focus:border-indigo-600'}`} />
                   </div>
-                  {errors.membership_number && <p className="text-[9px] text-red-500 font-bold uppercase ml-1">{errors.membership_number.message}</p>}
               </div>
               <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Guest Profile Name *</label>
@@ -515,7 +576,6 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <Input {...register('guest_name')} readOnly={isNameIdLocked} className={`h-14 pl-12 rounded-2xl font-bold border-2 ${isNameIdLocked ? 'bg-slate-50 text-slate-500 border-slate-100 cursor-not-allowed' : 'border-indigo-100 focus:border-indigo-600'}`} />
                   </div>
-                  {errors.guest_name && <p className="text-[9px] text-red-500 font-bold uppercase ml-1">{errors.guest_name.message}</p>}
               </div>
               <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Contact Phone</label>
@@ -530,7 +590,6 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <Input {...register('email')} className="h-14 pl-12 rounded-2xl font-bold border-2 border-slate-200 focus:border-indigo-600" />
                   </div>
-                  {errors.email && <p className="text-[9px] text-red-500 font-bold uppercase ml-1">{errors.email.message}</p>}
               </div>
               <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nationality</label>
@@ -549,7 +608,6 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
             </div>
           </div>
 
-          {/* Section: Contract Details */}
           <div className="space-y-6 pt-6 border-t border-slate-100">
             <div className="flex items-center gap-3">
               <Layers className="w-5 h-5 text-indigo-600" />
@@ -559,14 +617,12 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
               <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Membership Tier *</label>
                   <select {...register('category_id')} className="w-full h-14 rounded-2xl border-2 border-slate-200 bg-white px-5 font-black text-sm outline-none focus:border-indigo-600 appearance-none"><option value="">Select Category...</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-                  {errors.category_id && <p className="text-[9px] text-red-500 font-bold uppercase ml-1">{errors.category_id.message}</p>}
               </div>
               <div className="space-y-2">
                   <div className="flex justify-between">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Effective Start Date *</label>
                   </div>
                   <Input type="date" {...register('start_date')} className="h-14 rounded-2xl font-bold border-2 border-slate-200 focus:border-indigo-600" />
-                  {errors.start_date && <p className="text-[9px] text-red-500 font-bold uppercase ml-1">{errors.start_date.message}</p>}
               </div>
               <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Package Context</label>
@@ -594,26 +650,6 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
               </div>
             </div>
           </div>
-
-          {submitError && (
-            <div className="bg-red-50 p-6 rounded-[2rem] border border-red-100 flex items-center gap-4 animate-in shake duration-300">
-               <ShieldAlert className="w-8 h-8 text-red-500" />
-               <div>
-                  <h4 className="text-[11px] font-black text-red-900 uppercase tracking-tight">Database Rejection</h4>
-                  <p className="text-[10px] font-bold text-red-600 mt-0.5">{submitError}</p>
-               </div>
-            </div>
-          )}
-
-          {overlapError && (
-            <div className="bg-amber-50 p-6 rounded-[2rem] border border-amber-100 flex items-center gap-4 animate-in slide-in-from-left-2 duration-300">
-              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-amber-500 shadow-sm"><AlertCircle className="w-6 h-6" /></div>
-              <div>
-                <h4 className="text-[11px] font-black text-amber-900 uppercase tracking-tight">Timeline Integrity Warning</h4>
-                <p className="text-[10px] font-bold text-amber-600 mt-0.5">{overlapError}</p>
-              </div>
-            </div>
-          )}
 
           <div className="bg-slate-50/80 p-10 rounded-[2.5rem] border border-slate-100 grid grid-cols-2 lg:grid-cols-4 gap-12 relative overflow-hidden">
               <div className="space-y-1.5">
@@ -659,12 +695,15 @@ const MemberDetail = ({ member, categories, getEffectiveStatus, initialTriggerFr
   useEffect(() => { setDisplayedMember(member); }, [member]);
   useEffect(() => { loadLifecycle(); loadFreezes(); }, [displayedMember.membership_number, displayedMember.id]);
 
-  // Handle auto-triggering freeze modal if signaled from parent list
   useEffect(() => {
     if (initialTriggerFreeze) {
       setShowFreezeModal(true);
     }
   }, [initialTriggerFreeze]);
+
+  const logAction = (action: string, details: string) => {
+    db.logAction(action, details, currentOutlet?.id);
+  };
 
   const loadLifecycle = async () => { setHistory(await db.getMemberHistory(displayedMember.membership_number)); };
   const loadFreezes = async () => { setFreezes(await db.getFreezes(displayedMember.id)); };
@@ -699,8 +738,16 @@ const MemberDetail = ({ member, categories, getEffectiveStatus, initialTriggerFr
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors"><ArrowLeft className="w-4 h-4" /> Back to Ledger</button>
         <div className="flex flex-wrap gap-2">
-          {user && hasPermission(user.role_id, 'members:print_contract') && (<Button onClick={() => setShowContract(true)} variant="outline" className="rounded-xl h-11 px-6 font-black text-xs uppercase border-slate-200"><Printer className="w-4 h-4 mr-2" /> Agreement</Button>)}
-          {user && hasPermission(user.role_id, 'members:freeze') && (<Button onClick={() => setShowFreezeModal(true)} variant="secondary" className="rounded-xl h-11 px-6 font-black text-xs uppercase bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100"><Snowflake className="w-4 h-4 mr-2" /> Suspend</Button>)}
+          {user && hasPermission(user.role_id, 'members:print_contract') && (
+            <Button onClick={() => { logAction('UI_CLICK', 'Operator accessed agreement preview for printing'); setShowContract(true); }} variant="outline" className="rounded-xl h-11 px-6 font-black text-xs uppercase border-slate-200">
+              <Printer className="w-4 h-4 mr-2" /> Agreement
+            </Button>
+          )}
+          {user && hasPermission(user.role_id, 'members:freeze') && (
+            <Button onClick={() => { logAction('UI_CLICK', 'User initiated account suspension via modal'); setShowFreezeModal(true); }} variant="secondary" className="rounded-xl h-11 px-6 font-black text-xs uppercase bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100">
+              <Snowflake className="w-4 h-4 mr-2" /> Suspend
+            </Button>
+          )}
           {user && hasPermission(user.role_id, 'members:edit') && (<Button onClick={() => onEdit(displayedMember)} variant="secondary" className="rounded-xl h-11 px-6 font-black text-xs uppercase"><Edit2 className="w-4 h-4 mr-2" /> Edit Profile</Button>)}
           {user && hasPermission(user.role_id, 'members:renew') && (<Button onClick={() => onRenew(displayedMember)} className="rounded-xl h-11 px-6 font-black text-xs uppercase bg-[#5c56d6] shadow-xl shadow-indigo-100">Renew / Re-Enroll</Button>)}
           {user && hasPermission(user.role_id, 'members:delete') && (<Button onClick={() => onDelete(displayedMember.id)} variant="danger" className="rounded-xl h-11 px-4"><Trash2 className="w-4 h-4" /></Button>)}
@@ -827,9 +874,9 @@ const MemberDetail = ({ member, categories, getEffectiveStatus, initialTriggerFr
                             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Baby className="w-3.5 h-3.5" /> Dependent Registry</h4>
                             {displayedMember.kids && displayedMember.kids.length > 0 ? (
                                 <div className="space-y-3">
-                                    {displayedMember.kids.map((kid, kIdx) => (
-                                        <div key={kIdx} className="flex justify-between items-center border-b border-slate-200 pb-2 last:border-0 last:pb-0">
-                                            <span className="text-xs font-black text-slate-700 uppercase tracking-tight">{kid.name}</span>
+                                    {displayedMember.kids.map((kid, i) => (
+                                        <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
+                                            <span className="text-[10px] font-black uppercase tracking-tight">Dependent {i+1}: {kid.name}</span>
                                             <span className="text-[9px] font-bold text-slate-400 uppercase">DOB: {format(parseISO(kid.dob), 'dd MMM yyyy')}</span>
                                         </div>
                                     ))}
@@ -868,22 +915,22 @@ const MemberDetail = ({ member, categories, getEffectiveStatus, initialTriggerFr
             property={currentProperty}
             settings={settings}
             formatMoney={formatMoney}
-            onClose={() => setShowContract(false)}
+            onClose={() => { logAction('UI_CLICK', 'User closed agreement preview'); setShowContract(false); }}
           />
       )}
 
       {showFreezeModal && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-[350] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
               <Card className="w-full max-w-sm rounded-[2rem] border-slate-200 shadow-2xl overflow-hidden bg-white">
                   <CardHeader className="bg-indigo-600 text-white p-6 relative">
                       <CardTitle className="text-lg font-black uppercase tracking-tight flex items-center gap-3"><Snowflake className="w-5 h-5"/> Account Suspension</CardTitle>
-                      <button onClick={() => setShowFreezeModal(false)} className="absolute top-5 right-6 p-2 rounded-full hover:bg-white/10 transition-colors"><X className="w-5 h-5"/></button>
+                      <button onClick={() => { logAction('UI_CLICK', 'User cancelled account suspension'); setShowFreezeModal(false); }} className="absolute top-5 right-6 p-2 rounded-full hover:bg-white/10 transition-colors"><X className="w-5 h-5"/></button>
                   </CardHeader>
                   <CardContent className="p-8">
                       <form onSubmit={handleAddFreeze} className="space-y-6">
                           <Input label="Effective Start Date" type="date" value={freezeForm.start_date} onChange={e => setFreezeForm({...freezeForm, start_date: e.target.value})} className="h-12 rounded-xl" required />
                           <Input label="Resumption Date" type="date" value={freezeForm.end_date} onChange={e => setFreezeForm({...freezeForm, end_date: e.target.value})} className="h-12 rounded-xl" required />
-                          <Button type="submit" className="w-full h-14 rounded-2xl font-black uppercase shadow-xl shadow-indigo-100">Commit Suspension</Button>
+                          <Button type="submit" onClick={() => logAction('UI_CLICK', 'Operator confirmed account suspension')} className="w-full h-14 rounded-2xl font-black uppercase shadow-xl shadow-indigo-100">Commit Suspension</Button>
                       </form>
                   </CardContent>
               </Card>
