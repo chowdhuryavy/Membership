@@ -93,6 +93,7 @@ const Members = () => {
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isRenewal, setIsRenewal] = useState(false);
+  const [autoOpenFreeze, setAutoOpenFreeze] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -209,7 +210,7 @@ const Members = () => {
                             {group.members.map((m) => {
                                 const effectiveStatus = getEffectiveStatus(m);
                                 return (
-                                <tr key={m.id} className="hover:bg-indigo-50/20 cursor-pointer transition-colors" onClick={() => { setSelectedMember(m); setView('detail'); }}>
+                                <tr key={m.id} className="hover:bg-indigo-50/20 cursor-pointer transition-colors" onClick={() => { setSelectedMember(m); setAutoOpenFreeze(false); setView('detail'); }}>
                                     <td className="px-10 py-6 font-black text-slate-900 text-base tracking-tighter">{m.membership_number}</td>
                                     <td className="px-10 py-6">
                                       <div className="font-black text-slate-800 text-sm uppercase">{m.guest_name}</div>
@@ -221,7 +222,7 @@ const Members = () => {
                                     <td className="px-10 py-6 text-right font-black text-slate-900 tabular-nums text-base">{formatMoney(m.net_amount)}</td>
                                     <td className="px-10 py-6 text-right"><div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
                                       {canCreate && <button onClick={() => { setSelectedMember(m); setIsRenewal(true); setIsEditing(false); setView('form'); }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-all shadow-sm" title="Renew"><RefreshCcw className="w-4 h-4"/></button>}
-                                      {hasPermission(user!.role_id, 'members:freeze') && <button onClick={() => { setSelectedMember(m); setView('detail'); }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-all shadow-sm" title="Suspend/Freeze"><Snowflake className="w-4 h-4"/></button>}
+                                      {hasPermission(user!.role_id, 'members:freeze') && <button onClick={() => { setSelectedMember(m); setAutoOpenFreeze(true); setView('detail'); }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-all shadow-sm" title="Suspend/Freeze"><Snowflake className="w-4 h-4"/></button>}
                                       {canEdit && <button onClick={() => { setSelectedMember(m); setIsEditing(true); setIsRenewal(false); setView('form'); }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-all shadow-sm" title="Edit Profile"><Edit2 className="w-4 h-4"/></button>}
                                       {canDelete && <button onClick={() => setDeleteId(m.id)} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl transition-all shadow-sm" title="Delete"><Trash2 className="w-4 h-4"/></button>}
                                     </div></td>
@@ -255,7 +256,8 @@ const Members = () => {
           member={selectedMember} 
           categories={categories}
           getEffectiveStatus={getEffectiveStatus}
-          onBack={() => { setView('list'); setSelectedMember(null); }}
+          initialTriggerFreeze={autoOpenFreeze}
+          onBack={() => { setView('list'); setSelectedMember(null); setAutoOpenFreeze(false); }}
           onUpdate={() => { loadData(); }} 
           onRenew={(m) => { setSelectedMember(m); setIsRenewal(true); setIsEditing(false); setView('form'); }}
           onEdit={(m) => { setSelectedMember(m); setIsEditing(true); setIsRenewal(false); setView('form'); }}
@@ -279,7 +281,6 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
     resolver: zodResolver(memberSchema),
     defaultValues: (existingMember && isEditing) ? {
         ...existingMember,
-        // CRITICAL: Handle potential nulls from DB by converting to empty string
         phone: existingMember.phone ?? '',
         email: existingMember.email ?? '',
         nationality: existingMember.nationality ?? '',
@@ -365,6 +366,17 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
       }
       return null;
   }, [isRenewal, existingMember, startDate]);
+
+  // Context Banner logic: Shows "X days left" or "Expired X days ago"
+  const matchContextText = useMemo(() => {
+    const target = pulledGuest || existingMember;
+    if (!target) return "";
+    const today = startOfDay(new Date());
+    const end = startOfDay(parseISO(target.current_end_date));
+    const diff = differenceInCalendarDays(end, today);
+    const statusText = diff >= 0 ? `${diff} days remaining` : `Expired ${Math.abs(diff)} days ago`;
+    return `Guest History: ${statusText} (Current Term: ${format(parseISO(target.start_date), 'dd-MM-yyyy')} to ${format(end, 'dd-MM-yyyy')})`;
+  }, [pulledGuest, existingMember]);
 
   const onFormSubmit = async (data: MemberFormValues) => {
     setIsSubmitting(true);
@@ -458,7 +470,7 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
                 <div>
                    <h4 className={`text-xs font-black uppercase tracking-tight flex items-center gap-2 ${pulledGuest ? 'text-indigo-900' : 'text-emerald-900'}`}>Identity Matched</h4>
                    <p className={`text-[10px] font-bold uppercase ${pulledGuest ? 'text-indigo-600' : 'text-emerald-600'}`}>
-                    Guest History: Active from {format(parseISO((pulledGuest || existingMember)!.start_date), 'dd-MM-yyyy')} to {format(parseISO((pulledGuest || existingMember)!.current_end_date), 'dd-MM-yyyy')}
+                    {matchContextText}
                    </p>
                 </div>
               </div>
@@ -627,7 +639,7 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
   );
 };
 
-const MemberDetail = ({ member, categories, getEffectiveStatus, onBack, onUpdate, onRenew, onEdit, onDelete }: { member: Member, categories: MembershipCategory[], getEffectiveStatus: (m: Member) => string, onBack: () => void, onUpdate: () => void, onRenew: (m: Member) => void, onEdit: (m: Member) => void, onDelete: (id: string) => void }) => {
+const MemberDetail = ({ member, categories, getEffectiveStatus, initialTriggerFreeze, onBack, onUpdate, onRenew, onEdit, onDelete }: { member: Member, categories: MembershipCategory[], getEffectiveStatus: (m: Member) => string, initialTriggerFreeze?: boolean, onBack: () => void, onUpdate: () => void, onRenew: (m: Member) => void, onEdit: (m: Member) => void, onDelete: (id: string) => void }) => {
   const { formatMoney, currentProperty, currentOutlet, settings, hasPermission } = useSettings();
   const { user } = useAuth();
   const [displayedMember, setDisplayedMember] = useState<Member>(member);
@@ -639,6 +651,13 @@ const MemberDetail = ({ member, categories, getEffectiveStatus, onBack, onUpdate
 
   useEffect(() => { setDisplayedMember(member); }, [member]);
   useEffect(() => { loadLifecycle(); loadFreezes(); }, [displayedMember.membership_number, displayedMember.id]);
+
+  // Handle auto-triggering freeze modal if signaled from parent list
+  useEffect(() => {
+    if (initialTriggerFreeze) {
+      setShowFreezeModal(true);
+    }
+  }, [initialTriggerFreeze]);
 
   const loadLifecycle = async () => { setHistory(await db.getMemberHistory(displayedMember.membership_number)); };
   const loadFreezes = async () => { setFreezes(await db.getFreezes(displayedMember.id)); };
@@ -804,7 +823,6 @@ const MemberDetail = ({ member, categories, getEffectiveStatus, onBack, onUpdate
                                     {displayedMember.kids.map((kid, kIdx) => (
                                         <div key={kIdx} className="flex justify-between items-center border-b border-slate-200 pb-2 last:border-0 last:pb-0">
                                             <span className="text-xs font-black text-slate-700 uppercase tracking-tight">{kid.name}</span>
-                                            {/* Fix: Passed kid.dob argument to parseISO function instead of passing the function itself */}
                                             <span className="text-[9px] font-bold text-slate-400 uppercase">DOB: {format(parseISO(kid.dob), 'dd MMM yyyy')}</span>
                                         </div>
                                     ))}
@@ -868,5 +886,4 @@ const MemberDetail = ({ member, categories, getEffectiveStatus, onBack, onUpdate
   );
 };
 
-// Fix: Added missing default export for the Members component to satisfy the import in App.tsx
 export default Members;
