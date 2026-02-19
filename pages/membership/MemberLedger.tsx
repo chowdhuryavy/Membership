@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Card, Button } from '../../components/ui';
 import { 
-  Plus, Search, Filter, Layers, Building2, Store, RefreshCcw, 
-  Milestone, Edit2, Trash2, ChevronRight, UserCircle2, ShieldCheck,
-  Zap, ArrowRight, UserPlus, Snowflake, Pencil, ChevronDown, ListFilter,
+  Search, Filter, Layers, Building2, Store, RefreshCcw, 
+  Milestone, Edit2, Trash2, ShieldCheck,
+  Zap, UserPlus, Snowflake, ChevronDown, 
   CheckCircle2, CalendarX, Clock3, LayoutGrid, MousePointer2
 } from 'lucide-react';
 import { Member, MembershipCategory, MemberStatus } from '../../types';
@@ -43,12 +43,10 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   const { currentOutlet, formatMoney, hasPermission } = useSettings();
   const [searchTerm, setSearchTerm] = useState('');
   
-  // DEFAULT SET TO ACTIVE
   const [statusFilter, setStatusFilter] = useState<MemberStatus | 'All'>(MemberStatus.ACTIVE);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
@@ -108,10 +106,10 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       
-      {/* LEDGER HEADER - Removed overflow-hidden to ensure the dropdown doesn't clip */}
+      {/* LEDGER HEADER - Removed overflow-hidden to let the dropdown breathe */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group">
         
-        {/* Background decorative element constrained to its own relative overflow block */}
+        {/* Background icon logic adjusted to keep the container clean */}
         <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none group-hover:scale-110 transition-transform duration-1000 overflow-hidden rounded-[2.5rem] w-full h-full pointer-events-none">
             <ShieldCheck className="absolute top-0 right-0 w-64 h-64 -mr-10 -mt-10" />
         </div>
@@ -127,10 +125,10 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                   {canSwitchScope && (
                     <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
                         <button onClick={() => setViewScope('outlet')} className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-2 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}>
-                            <Filter className="w-2.5 h-2.5" /> Outlet Scope
+                            Outlet Scope
                         </button>
                         <button onClick={() => setViewScope('property')} className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-2 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}>
-                            <Building2 className="w-2.5 h-2.5" /> Property Portfolio
+                            Portfolio View
                         </button>
                     </div>
                   )}
@@ -146,7 +144,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
             <input placeholder="Search identity..." className="w-full h-14 pl-14 pr-4 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold placeholder:text-slate-400 shadow-inner" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
 
-          {/* CUSTOM STATUS FILTER - Higher Z-Index and Relative positioning */}
+          {/* STATUS PROTOCOL SWITCHER */}
           <div className="relative w-full md:w-48" ref={filterRef}>
             <button 
               onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -205,17 +203,15 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
         </div>
       </div>
 
-      {/* LEDGER GRID */}
       <div className="space-y-10">
         {loading ? (
-            <div className="flex flex-col items-center justify-center py-40 text-slate-400 animate-pulse"><RefreshCcw className="w-10 h-10 animate-spin mb-6" /><p className="text-[10px] font-black uppercase tracking-[0.4em]">Synchronizing Portfolio Buffers...</p></div>
+            <div className="flex flex-col items-center justify-center py-40 text-slate-400 animate-pulse"><RefreshCcw className="w-10 h-10 animate-spin mb-6" /><p className="text-[10px] font-black uppercase tracking-[0.4em]">Synchronizing Portfolios...</p></div>
         ) : groupedMembers.length === 0 ? (
             <Card className="p-32 text-center rounded-[3.5rem] border-dashed border-2 bg-white/50">
               <div className="bg-slate-100/50 inline-flex p-8 rounded-full mb-6">
                 <Milestone className="w-16 h-16 text-slate-200 mx-auto" />
               </div>
               <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest">No matching records</h3>
-              <p className="text-[10px] font-bold text-slate-300 uppercase mt-2 tracking-widest">Adjust filters or search parameters</p>
             </Card>
         ) : groupedMembers.map((group) => (
             <Card key={group.category?.id || 'none'} className="overflow-hidden border-slate-200/60 shadow-xl group bg-white rounded-[2.5rem] transition-all hover:shadow-2xl">
@@ -227,7 +223,6 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                             {group.category && <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1 flex items-center gap-2"><Zap className="w-3 h-3 text-indigo-400" /> Base yield: {formatMoney(group.category.base_rate)}</p>}
                         </div>
                     </div>
-                    {/* Badge adjusted for better spacing */}
                     <span className="bg-[#1a2335] text-white text-[10px] font-black px-6 py-2.5 rounded-full uppercase tracking-[0.2em] shadow-lg border-2 border-white/10 hidden sm:block">
                         {group.members.length} VERIFIED RECORDS
                     </span>
@@ -238,7 +233,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                           <tr>
                             <th className="px-10 py-6">Identity Serial</th>
                             <th className="px-10 py-6">Guest Profile</th>
-                            <th className="px-10 py-6 text-center">Recognition Status</th>
+                            <th className="px-10 py-6 text-center">Status</th>
                             <th className="px-10 py-6">Commencement</th>
                             <th className="px-10 py-6">Expiry Sentinel</th>
                             <th className="px-10 py-6 text-right">Net Investment</th>
@@ -266,34 +261,10 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                                 <td className="px-10 py-7 text-right font-black text-slate-900 tabular-nums text-base">{formatMoney(m.net_amount)}</td>
                                 <td className="px-10 py-7 text-center" onClick={e => e.stopPropagation()}>
                                   <div className="flex items-center justify-center gap-2">
-                                    <button 
-                                      onClick={() => onRenew(m)} 
-                                      title="Renew Membership" 
-                                      className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-lg transition-all active:scale-90"
-                                    >
-                                        <RefreshCcw className="w-4 h-4"/>
-                                    </button>
-                                    <button 
-                                      onClick={() => onViewDetail(m)} 
-                                      title="Freeze Membership" 
-                                      className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-lg transition-all active:scale-90"
-                                    >
-                                        <Snowflake className="w-4 h-4"/>
-                                    </button>
-                                    <button 
-                                      onClick={() => onEdit(m)} 
-                                      title="Edit Profile" 
-                                      className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-lg transition-all active:scale-90"
-                                    >
-                                        <Edit2 className="w-4 h-4"/>
-                                    </button>
-                                    <button 
-                                      onClick={() => onDelete(m.id)} 
-                                      title="Purge Record" 
-                                      className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-red-600 hover:border-red-100 hover:shadow-lg transition-all active:scale-90"
-                                    >
-                                        <Trash2 className="w-4 h-4"/>
-                                    </button>
+                                    <button onClick={() => onRenew(m)} title="Renew" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><RefreshCcw className="w-4 h-4"/></button>
+                                    <button onClick={() => onViewDetail(m)} title="Freeze" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><Snowflake className="w-4 h-4"/></button>
+                                    <button onClick={() => onEdit(m)} title="Edit" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><Edit2 className="w-4 h-4"/></button>
+                                    <button onClick={() => onDelete(m.id)} title="Purge" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-red-600 hover:shadow-lg transition-all active:scale-90"><Trash2 className="w-4 h-4"/></button>
                                   </div>
                                 </td>
                             </tr>

@@ -26,7 +26,7 @@ import {
   CreditCard,
   UserPlus,
   History,
-  Zap,
+  Zap, 
   CheckCircle2,
   AlertTriangle,
   Package,
@@ -307,7 +307,7 @@ const POSForm = ({
 
                     <div className="flex gap-3 pt-2">
                         <button type="button" onClick={onCancel} className="flex-1 h-12 rounded-xl font-bold uppercase text-[10px] tracking-widest bg-slate-100 hover:bg-slate-200 transition-colors">Discard</button>
-                        <Button type="submit" isLoading={loading} className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100">Commit Transaction</button>
+                        <Button type="submit" isLoading={loading} className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100">Commit Transaction</Button>
                     </div>
                 </form>
             </CardContent>
