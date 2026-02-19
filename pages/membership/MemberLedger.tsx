@@ -108,9 +108,13 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       
-      {/* LEDGER HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden group">
-        <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none group-hover:scale-110 transition-transform duration-1000"><ShieldCheck className="w-64 h-64" /></div>
+      {/* LEDGER HEADER - Removed overflow-hidden to allow dropdown to show */}
+      <div className="flex flex-col md:flex-row justify-between items-end gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group">
+        {/* Background circle adjusted to avoid layout overflow issues now that overflow-hidden is removed */}
+        <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none group-hover:scale-110 transition-transform duration-1000 overflow-hidden rounded-[2.5rem] w-full h-full flex justify-end items-start">
+            <ShieldCheck className="w-64 h-64 -mr-10 -mt-10" />
+        </div>
+        
         <div className="flex items-center gap-6 relative z-10">
            <div className="w-16 h-16 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white shadow-2xl ring-8 ring-slate-50"><Building2 className="w-8 h-8" /></div>
            <div>
@@ -132,6 +136,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
               </div>
            </div>
         </div>
+
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto relative z-[60]">
           
           {/* SEARCH COMPONENT */}
@@ -159,7 +164,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
             </button>
 
             {isFilterOpen && (
-              <div className="absolute top-full mt-2 left-0 right-0 md:left-auto md:w-64 bg-white border border-slate-200 rounded-[1.8rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] z-[70] overflow-hidden animate-in fade-in slide-in-from-top-3 duration-300">
+              <div className="absolute top-full mt-3 left-0 right-0 md:left-auto md:right-0 md:w-64 bg-white border border-slate-200 rounded-[1.8rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-3 duration-300">
                 <div className="p-4 border-b border-slate-50 bg-slate-50/50">
                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Recognition Filter</span>
                 </div>
