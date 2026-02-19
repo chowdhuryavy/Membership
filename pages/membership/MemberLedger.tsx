@@ -108,11 +108,12 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       
-      {/* LEDGER HEADER - Removed overflow-hidden to allow dropdown to show */}
+      {/* LEDGER HEADER - Removed overflow-hidden to ensure the dropdown doesn't clip */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group">
-        {/* Background circle adjusted to avoid layout overflow issues now that overflow-hidden is removed */}
-        <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none group-hover:scale-110 transition-transform duration-1000 overflow-hidden rounded-[2.5rem] w-full h-full flex justify-end items-start">
-            <ShieldCheck className="w-64 h-64 -mr-10 -mt-10" />
+        
+        {/* Background decorative element constrained to its own relative overflow block */}
+        <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none group-hover:scale-110 transition-transform duration-1000 overflow-hidden rounded-[2.5rem] w-full h-full pointer-events-none">
+            <ShieldCheck className="absolute top-0 right-0 w-64 h-64 -mr-10 -mt-10" />
         </div>
         
         <div className="flex items-center gap-6 relative z-10">
@@ -137,7 +138,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
            </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto relative z-[60]">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto relative z-50">
           
           {/* SEARCH COMPONENT */}
           <div className="relative group w-full md:min-w-[300px]">
@@ -145,7 +146,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
             <input placeholder="Search identity..." className="w-full h-14 pl-14 pr-4 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold placeholder:text-slate-400 shadow-inner" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
 
-          {/* CUSTOM STATUS FILTER */}
+          {/* CUSTOM STATUS FILTER - Higher Z-Index and Relative positioning */}
           <div className="relative w-full md:w-48" ref={filterRef}>
             <button 
               onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -164,7 +165,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
             </button>
 
             {isFilterOpen && (
-              <div className="absolute top-full mt-3 left-0 right-0 md:left-auto md:right-0 md:w-64 bg-white border border-slate-200 rounded-[1.8rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-3 duration-300">
+              <div className="absolute top-full mt-3 left-0 right-0 md:left-auto md:right-0 md:w-64 bg-white border border-slate-200 rounded-[1.8rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-3 duration-300">
                 <div className="p-4 border-b border-slate-50 bg-slate-50/50">
                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Recognition Filter</span>
                 </div>
@@ -226,7 +227,10 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                             {group.category && <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1 flex items-center gap-2"><Zap className="w-3 h-3 text-indigo-400" /> Base yield: {formatMoney(group.category.base_rate)}</p>}
                         </div>
                     </div>
-                    <span className="bg-[#1a2335] text-white text-[10px] font-black px-6 py-2.5 rounded-full uppercase tracking-[0.2em] shadow-lg border-2 border-white/10">{group.members.length} VERIFIED RECORDS</span>
+                    {/* Badge adjusted for better spacing */}
+                    <span className="bg-[#1a2335] text-white text-[10px] font-black px-6 py-2.5 rounded-full uppercase tracking-[0.2em] shadow-lg border-2 border-white/10 hidden sm:block">
+                        {group.members.length} VERIFIED RECORDS
+                    </span>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
