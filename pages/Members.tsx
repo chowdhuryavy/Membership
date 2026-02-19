@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -41,15 +40,28 @@ import {
   Users,
   Database,
   Terminal,
-  ShieldAlert
+  ShieldAlert,
+  Fingerprint,
+  Mail,
+  Phone,
+  Printer,
+  ChevronRight,
+  Globe,
+  Heart,
+  Baby,
+  UserCircle2,
+  CreditCard,
+  FileText,
+  Milestone
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Freeze, UserProfile, Staff } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, differenceInCalendarDays, addDays, isAfter, isBefore, isEqual } from 'date-fns';
+import { format, differenceInCalendarDays, addDays, isAfter, isBefore, isEqual, startOfMonth, endOfMonth } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { MembersAgreement } from '../components/MembersAgreement';
 
 const parseISO = (dateString: string) => new Date(dateString);
 const startOfDay = (date: Date) => {
@@ -72,7 +84,7 @@ type MemberFormValues = z.infer<typeof memberSchema>;
 
 const Members = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, formatMoney, hasPermission, checkShortcut } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, hasPermission, checkShortcut, settings } = useSettings();
   const location = useLocation();
   const navigate = useNavigate();
   const [view, setView] = useState<'list' | 'form' | 'detail'>('list');
@@ -431,17 +443,24 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, cur
 };
 
 const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, onBack, onUpdate, onRenew, onConfirmBooking }: { member: Member, categories: MembershipCategory[], initialFreeze: boolean, getEffectiveStatus: (m: Member) => string, onBack: () => void, onUpdate: () => void, onRenew: (m: Member) => void, onConfirmBooking: () => void }) => {
-  const { formatMoney, hasPermission } = useSettings();
+  const { formatMoney, hasPermission, currentProperty, currentOutlet, settings } = useSettings();
   const { user } = useAuth();
   const [displayedMember, setDisplayedMember] = useState<Member>(member);
   const [freezes, setFreezes] = useState<Freeze[]>([]);
+  const [history, setHistory] = useState<Member[]>([]);
   const [showFreezeModal, setShowFreezeModal] = useState(initialFreeze);
+  const [showContract, setShowContract] = useState(false);
   const [isEditingFreeze, setIsEditingFreeze] = useState(false);
   const [freezeForm, setFreezeForm] = useState({ id: '', start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' });
 
   useEffect(() => { setDisplayedMember(member); }, [member]);
-  useEffect(() => { loadFreezes(); }, [displayedMember.id]);
+  useEffect(() => { 
+    loadFreezes(); 
+    loadLifecycle();
+  }, [displayedMember.id]);
+
   const loadFreezes = async () => { setFreezes(await db.getFreezes(displayedMember.id)); };
+  const loadLifecycle = async () => { setHistory(await db.getMemberHistory(displayedMember.membership_number)); };
 
   const handleAddFreeze = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -456,13 +475,351 @@ const MemberDetail = ({ member, categories, initialFreeze, getEffectiveStatus, o
   };
 
   const effectiveStatus = getEffectiveStatus(displayedMember);
+  const selectedCategory = categories.find(c => c.id === displayedMember.category_id);
+  
+  // Calculate Lifecycle Progress
+  const lifecycleStats = useMemo(() => {
+    const start = parseISO(displayedMember.start_date);
+    const end = parseISO(displayedMember.current_end_date);
+    const now = new Date();
+    
+    const total = differenceInCalendarDays(end, start) + 1;
+    const used = Math.max(0, differenceInCalendarDays(now, start));
+    const percent = Math.min(100, Math.max(0, (used / total) * 100));
+    const remaining = Math.max(0, differenceInCalendarDays(end, now));
+    
+    return { percent, used, remaining, total };
+  }, [displayedMember]);
+
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
-      <div className="flex justify-between items-center"><button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors"><ArrowLeft className="w-4 h-4" /> Back to Directory</button><div className="flex gap-2">{effectiveStatus === 'Tentative' && user && hasPermission(user.role_id, 'members:create') && (<Button onClick={onConfirmBooking} className="rounded-xl h-11 px-6 font-black text-xs uppercase bg-indigo-600 hover:bg-indigo-700">Confirm Membership</Button>)}{user && hasPermission(user.role_id, 'members:create') && (<Button onClick={() => onRenew(displayedMember)} className="rounded-xl h-11 px-6 font-black text-xs uppercase bg-emerald-600 hover:bg-emerald-700">Renew / Re-Enroll</Button>)}</div></div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1 space-y-6"><Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden text-center bg-white"><CardContent className="p-8"><div className="w-24 h-24 bg-slate-900 rounded-[1.8rem] mx-auto flex items-center justify-center text-white text-4xl font-black mb-4">{displayedMember.guest_name.charAt(0)}</div><h3 className="text-xl font-black text-slate-900 tracking-tight">{displayedMember.guest_name}</h3><p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">{displayedMember.membership_number}</p><div className={`mt-6 inline-block px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-full border ${effectiveStatus === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{effectiveStatus}</div></CardContent></Card></div>
-        <div className="lg:col-span-2 space-y-8"><Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white"><CardHeader className="p-8 border-b border-slate-100 flex items-center justify-between"><CardTitle className="text-lg font-black tracking-tight flex items-center gap-3"><Snowflake className="w-5 h-5 text-indigo-600"/> Suspension Ledger</CardTitle>{user && hasPermission(user.role_id, 'members:edit') && effectiveStatus !== 'Tentative' && (<Button onClick={() => setShowFreezeModal(true)} size="sm" className="rounded-xl font-bold">Add Freeze</Button>)}</CardHeader><CardContent className="p-8 space-y-4">{freezes.length > 0 ? (<div className="space-y-2">{freezes.map(f => (<div key={f.id} className="p-3 bg-white border border-slate-100 rounded-2xl flex justify-between items-center group"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-black text-xs">{f.total_days}</div><div><h4 className="font-bold text-slate-700 text-xs">{format(parseISO(f.start_date), 'dd MMM')} to {format(parseISO(f.end_date), 'dd MMM yyyy')}</h4></div></div></div>))}</div>) : (<div className="text-center py-10 text-slate-400 text-xs font-bold uppercase tracking-widest">No Suspensions on Record</div>)}</CardContent></Card></div>
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500 no-print">
+      <div className="flex justify-between items-center">
+        <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to Directory
+        </button>
+        <div className="flex gap-2">
+          {user && hasPermission(user.role_id, 'members:print_contract') && (
+            <Button onClick={() => setShowContract(true)} variant="outline" className="rounded-xl h-11 px-6 font-black text-xs uppercase border-slate-200 shadow-sm">
+              <Printer className="w-4 h-4 mr-2" /> Print Agreement
+            </Button>
+          )}
+          {effectiveStatus === 'Tentative' && user && hasPermission(user.role_id, 'members:create') && (
+            <Button onClick={onConfirmBooking} className="rounded-xl h-11 px-6 font-black text-xs uppercase bg-indigo-600 hover:bg-indigo-700">
+              Confirm Membership
+            </Button>
+          )}
+          {user && hasPermission(user.role_id, 'members:create') && (
+            <Button onClick={() => onRenew(displayedMember)} className="rounded-xl h-11 px-6 font-black text-xs uppercase bg-emerald-600 hover:bg-emerald-700">
+              Renew / Re-Enroll
+            </Button>
+          )}
+        </div>
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left Column: Essential Profile */}
+        <div className="lg:col-span-4 space-y-6">
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden text-center bg-white">
+            <div className="h-24 bg-slate-900 w-full"></div>
+            <CardContent className="p-8 -mt-12">
+              <div className="inline-flex p-1.5 bg-white rounded-3xl shadow-xl mb-4">
+                <div className="w-24 h-24 bg-indigo-600 rounded-[1.8rem] flex items-center justify-center text-white text-4xl font-black">
+                  {displayedMember.guest_name.charAt(0)}
+                </div>
+              </div>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight uppercase">{displayedMember.guest_name}</h3>
+              <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">{displayedMember.membership_number}</p>
+              
+              <div className={`mt-6 inline-block px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-full border ${effectiveStatus === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : effectiveStatus === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : effectiveStatus === 'Expired' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
+                {effectiveStatus}
+              </div>
+
+              <div className="mt-10 space-y-3">
+                 <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <Phone className="w-4 h-4 text-indigo-600" />
+                    <span className="text-xs font-black text-slate-700">{displayedMember.phone}</span>
+                 </div>
+                 <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <Mail className="w-4 h-4 text-indigo-600" />
+                    <span className="text-xs font-black text-slate-700 truncate">{displayedMember.email}</span>
+                 </div>
+                 <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <Globe className="w-4 h-4 text-indigo-600" />
+                    <span className="text-xs font-black text-slate-700 uppercase">{displayedMember.nationality || 'Nationality N/A'}</span>
+                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg overflow-hidden bg-white p-8">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2"><CreditCard className="w-4 h-4" /> Financial Snapshot</h4>
+              <div className="space-y-6">
+                  <div className="flex justify-between items-end border-b border-slate-50 pb-4">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Gross Contribution</span>
+                      <span className="text-lg font-black text-slate-900">{formatMoney(displayedMember.net_amount)}</span>
+                  </div>
+                  <div className="flex justify-between items-end border-b border-slate-50 pb-4">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Amortized Yield</span>
+                      <span className="text-base font-black text-emerald-600">{formatMoney(displayedMember.daily_rate)}/Day</span>
+                  </div>
+                  <div className="flex justify-between items-end">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Audit Reference</span>
+                      <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{displayedMember.check_no || 'Ref: N/A'}</span>
+                  </div>
+              </div>
+          </Card>
+        </div>
+
+        {/* Right Column: Dynamic Lifecycle & Details */}
+        <div className="lg:col-span-8 space-y-8">
+          
+          {/* Progress / Lifecycle Tracker */}
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white p-10">
+              <div className="flex justify-between items-start mb-8">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3"><Activity className="w-5 h-5 text-indigo-600" /> Current Term Lifecycle</h3>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Operational Progress for the selected period</p>
+                  </div>
+                  <div className="text-right">
+                      <span className="text-3xl font-black text-slate-900 tracking-tighter">{lifecycleStats.remaining}</span>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Days Remaining</p>
+                  </div>
+              </div>
+
+              <div className="relative h-4 w-full bg-slate-100 rounded-full overflow-hidden mb-4 shadow-inner">
+                  <div 
+                    className="absolute top-0 left-0 h-full bg-indigo-600 rounded-full shadow-lg transition-all duration-1000"
+                    style={{ width: `${lifecycleStats.percent}%` }}
+                  ></div>
+              </div>
+              
+              <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <div className="flex flex-col">
+                      <span>Commencement</span>
+                      <span className="text-slate-900 font-black">{format(parseISO(displayedMember.start_date), 'dd MMM yyyy')}</span>
+                  </div>
+                  <div className="text-center">
+                      <span className="bg-slate-900 text-white px-3 py-1 rounded-lg shadow-xl">{lifecycleStats.percent.toFixed(0)}% Elapsed</span>
+                  </div>
+                  <div className="flex flex-col items-end">
+                      <span>Expiry Protocol</span>
+                      <span className="text-indigo-600 font-black">{format(parseISO(displayedMember.current_end_date), 'dd MMM yyyy')}</span>
+                  </div>
+              </div>
+          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Identity Grid */}
+            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                <CardHeader className="p-8 border-b border-slate-50 flex items-center justify-between">
+                    <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2"><Fingerprint className="w-4 h-4 text-indigo-600" /> Profile Forensic</CardTitle>
+                </CardHeader>
+                <CardContent className="p-8 space-y-6">
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-1">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase">Package Type</p>
+                            <div className="flex items-center gap-2">
+                                <Users className="w-3.5 h-3.5 text-indigo-600" />
+                                <span className="text-xs font-black uppercase">{displayedMember.package_type || 'Single'}</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase">Facility Access</p>
+                            <div className="flex items-center gap-2">
+                                <Zap className="w-3.5 h-3.5 text-amber-500" />
+                                <span className="text-xs font-black uppercase">{displayedMember.access_type || 'Full Facility'}</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase">Civil Status</p>
+                            <div className="flex items-center gap-2">
+                                <Heart className={`w-3.5 h-3.5 ${displayedMember.is_married ? 'text-red-500' : 'text-slate-300'}`} />
+                                <span className="text-xs font-black uppercase">{displayedMember.is_married ? 'Married' : 'Single'}</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase">Birth Matrix</p>
+                            <div className="flex items-center gap-2">
+                                <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                                <span className="text-xs font-black uppercase">{displayedMember.dob ? format(parseISO(displayedMember.dob), 'dd MMM yyyy') : 'N/A'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Suspension Ledger */}
+            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                <CardHeader className="p-8 border-b border-slate-100 flex items-center justify-between">
+                    <CardTitle className="text-sm font-black tracking-widest uppercase flex items-center gap-3"><Snowflake className="w-4 h-4 text-indigo-600"/> Suspension Ledger</CardTitle>
+                    {user && hasPermission(user.role_id, 'members:edit') && effectiveStatus !== 'Tentative' && (
+                        <button onClick={() => setShowFreezeModal(true)} className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
+                            <Plus className="w-4 h-4" />
+                        </button>
+                    )}
+                </CardHeader>
+                <CardContent className="p-6 max-h-[220px] overflow-y-auto custom-scrollbar">
+                    {freezes.length > 0 ? (
+                        <div className="space-y-2">
+                            {freezes.map(f => (
+                                <div key={f.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex justify-between items-center group hover:bg-white hover:shadow-md transition-all">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-indigo-600 font-black text-[10px] shadow-sm">{f.total_days}</div>
+                                        <div>
+                                            <h4 className="font-black text-slate-700 text-[10px] uppercase tracking-tight">{format(parseISO(f.start_date), 'dd MMM')} &rarr; {format(parseISO(f.end_date), 'dd MMM yyyy')}</h4>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-10 opacity-30">
+                            <Snowflake className="w-10 h-10 mx-auto mb-2" />
+                            <p className="text-[10px] font-black uppercase tracking-widest">No Suspensions Recorded</p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+          </div>
+
+          {/* Lifecycle Ledger: Chronological History of Renewals/Purchases */}
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+              <CardHeader className="bg-slate-900 text-white p-8 flex items-center justify-between">
+                  <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-3"><Milestone className="w-5 h-5 text-indigo-400" /> Strategic Lifecycle Ledger</CardTitle>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Historical Matrix</span>
+              </CardHeader>
+              <CardContent className="p-8">
+                  <div className="space-y-4">
+                      {history.map((hist, idx) => {
+                          const isCurrent = hist.id === displayedMember.id;
+                          const histStatus = getEffectiveStatus(hist);
+                          const cat = categories.find(c => c.id === hist.category_id);
+                          return (
+                              <button 
+                                key={hist.id} 
+                                onClick={() => setDisplayedMember(hist)}
+                                className={`w-full flex items-center gap-6 p-6 rounded-3xl border-2 transition-all group text-left ${isCurrent ? 'bg-indigo-50 border-indigo-600 shadow-xl scale-[1.01]' : 'bg-white border-slate-100 hover:border-slate-200'}`}
+                              >
+                                  <div className="flex flex-col items-center gap-2">
+                                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xs font-black shadow-lg transition-transform group-hover:scale-110 ${isCurrent ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                          {history.length - idx}
+                                      </div>
+                                      <div className={`h-8 w-1 rounded-full ${idx === history.length - 1 ? 'bg-transparent' : 'bg-slate-100'}`}></div>
+                                  </div>
+                                  <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4 items-center">
+                                      <div className="space-y-1">
+                                          <p className="text-[10px] font-black text-slate-900 uppercase truncate">{cat?.name || 'Tier Asset'}</p>
+                                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Term Designation</p>
+                                      </div>
+                                      <div className="space-y-1">
+                                          <p className="text-[10px] font-black text-slate-700 uppercase">{format(parseISO(hist.start_date), 'dd MMM yy')}</p>
+                                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Commencement</p>
+                                      </div>
+                                      <div className="space-y-1">
+                                          <p className="text-[10px] font-black text-slate-700 uppercase">{format(parseISO(hist.current_end_date), 'dd MMM yy')}</p>
+                                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Expiry</p>
+                                      </div>
+                                      <div className="flex justify-end">
+                                          <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${histStatus === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                                              {histStatus}
+                                          </span>
+                                      </div>
+                                  </div>
+                                  <div className="flex items-center">
+                                      {isCurrent ? <CheckCircle2 className="w-5 h-5 text-indigo-600" /> : <ChevronRight className="w-5 h-5 text-slate-200 group-hover:text-indigo-400 transition-colors" />}
+                                  </div>
+                              </button>
+                          );
+                      })}
+                  </div>
+              </CardContent>
+          </Card>
+
+          {/* Family Scope Visualization */}
+          {(displayedMember.package_type === 'Couple' || displayedMember.package_type === 'Family') && (
+            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
+                    <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-3"><Users className="w-4 h-4 text-indigo-600" /> Family Scope manifest</CardTitle>
+                </CardHeader>
+                <CardContent className="p-10">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col items-center text-center">
+                            <div className="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg mb-4">
+                                <Heart className="w-6 h-6" />
+                            </div>
+                            <h4 className="font-black text-slate-900 uppercase text-xs">Primary Spouse</h4>
+                            <p className="text-base font-black uppercase text-indigo-600 mt-1">{displayedMember.spouse_name || 'N/A'}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-2">DOB: {displayedMember.spouse_dob ? format(parseISO(displayedMember.spouse_dob), 'dd MMM yyyy') : '---'}</p>
+                        </div>
+
+                        {displayedMember.kids?.map((kid, i) => (
+                           <div key={i} className="p-6 bg-white rounded-[2rem] border border-slate-100 shadow-sm flex flex-col items-center text-center">
+                              <div className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-lg mb-4">
+                                  <Baby className="w-6 h-6" />
+                              </div>
+                              <h4 className="font-black text-slate-900 uppercase text-xs">Dependent {i+1}</h4>
+                              <p className="text-base font-black uppercase text-slate-700 mt-1">{kid.name}</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase mt-2">DOB: {format(parseISO(kid.dob), 'dd MMM yyyy')}</p>
+                           </div>
+                        ))}
+                    </div>
+                </CardContent>
+            </Card>
+          )}
+
+          {/* Audit History / Remarks */}
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+              <CardHeader className="p-8 border-b border-slate-100 bg-slate-50/50">
+                  <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2"><FileText className="w-4 h-4 text-indigo-600" /> Operational Context & Remarks</CardTitle>
+              </CardHeader>
+              <CardContent className="p-10">
+                  {displayedMember.remarks ? (
+                    <div className="p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-sm font-medium text-slate-600 leading-relaxed italic">
+                        "{displayedMember.remarks}"
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 text-slate-400 text-xs font-bold uppercase tracking-widest">No internal remarks provided.</div>
+                  )}
+              </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {showFreezeModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+            <Card className="w-full max-w-md rounded-[2.5rem] border-slate-200 shadow-2xl overflow-hidden bg-white">
+                <CardHeader className="bg-indigo-600 text-white p-8">
+                    <CardTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-3"><Snowflake className="w-6 h-6" /> Apply Suspension</CardTitle>
+                    <button onClick={() => setShowFreezeModal(false)} className="absolute top-8 right-8 p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-5 h-5"/></button>
+                </CardHeader>
+                <CardContent className="p-10">
+                    <form onSubmit={handleAddFreeze} className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Commencement Date</label>
+                            <Input type="date" value={freezeForm.start_date} onChange={e => setFreezeForm({...freezeForm, start_date: e.target.value})} className="h-14 rounded-2xl" required />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Resumption Date</label>
+                            <Input type="date" value={freezeForm.end_date} onChange={e => setFreezeForm({...freezeForm, end_date: e.target.value})} className="h-14 rounded-2xl" required />
+                        </div>
+                        <Button type="submit" className="w-full h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-indigo-100">Authorize Suspension</Button>
+                    </form>
+                </CardContent>
+            </Card>
+        </div>
+      )}
+
+      {showContract && (
+        <MembersAgreement 
+          member={displayedMember} 
+          category={categories.find(c => c.id === displayedMember.category_id)} 
+          outlet={currentOutlet} 
+          property={currentProperty} 
+          settings={settings} 
+          formatMoney={formatMoney} 
+          onClose={() => setShowContract(false)} 
+        />
+      )}
     </div>
   );
 }
