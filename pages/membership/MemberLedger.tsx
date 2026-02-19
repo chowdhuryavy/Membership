@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Card, Button } from '../../components/ui';
 import { 
   Plus, Search, Filter, Layers, Building2, Store, RefreshCcw, 
   Milestone, Edit2, Trash2, ChevronRight, UserCircle2, ShieldCheck,
-  Zap, ArrowRight, UserPlus, Snowflake, Pencil
+  Zap, ArrowRight, UserPlus, Snowflake, Pencil, ChevronDown, ListFilter,
+  CheckCircle2, CalendarX, Clock3, LayoutGrid, MousePointer2
 } from 'lucide-react';
 import { Member, MembershipCategory, MemberStatus } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -41,11 +42,24 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   const { user } = useAuth();
   const { currentOutlet, formatMoney, hasPermission } = useSettings();
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<MemberStatus | 'All'>('All');
+  
+  // DEFAULT SET TO ACTIVE
+  const [statusFilter, setStatusFilter] = useState<MemberStatus | 'All'>(MemberStatus.ACTIVE);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
+        setIsFilterOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const canCreate = user && hasPermission(user.role_id, 'members:create');
-  const canEdit = user && hasPermission(user.role_id, 'members:edit');
-  const canDelete = user && hasPermission(user.role_id, 'members:delete');
   const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties');
 
   const getEffectiveStatus = (member: Member) => {
@@ -81,6 +95,16 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
     return groups;
   }, [categories, filteredMembers]);
 
+  const statusOptions = [
+    { value: 'All', label: 'All Status', icon: LayoutGrid, color: 'text-slate-400' },
+    { value: MemberStatus.ACTIVE, label: 'Active Only', icon: CheckCircle2, color: 'text-emerald-500' },
+    { value: MemberStatus.FROZEN, label: 'Frozen Only', icon: Snowflake, color: 'text-indigo-500' },
+    { value: MemberStatus.EXPIRED, label: 'Expired Only', icon: CalendarX, color: 'text-red-500' },
+    { value: MemberStatus.PENDING, label: 'Pending Only', icon: Clock3, color: 'text-amber-500' },
+  ];
+
+  const currentOption = statusOptions.find(o => o.value === statusFilter) || statusOptions[0];
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       
@@ -108,13 +132,67 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
               </div>
            </div>
         </div>
-        <div className="flex items-center gap-3 w-full md:w-auto relative z-10">
-          <div className="relative group flex-1 md:min-w-[340px]">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto relative z-[60]">
+          
+          {/* SEARCH COMPONENT */}
+          <div className="relative group w-full md:min-w-[300px]">
             <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-focus-within:bg-indigo-600 group-focus-within:text-white transition-all"><Search className="h-4 w-4" /></div>
-            <input placeholder="Search ledger identity or serial ID..." className="w-full h-14 pl-14 pr-4 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold placeholder:text-slate-400 shadow-inner" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <input placeholder="Search identity..." className="w-full h-14 pl-14 pr-4 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold placeholder:text-slate-400 shadow-inner" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
+
+          {/* CUSTOM STATUS FILTER */}
+          <div className="relative w-full md:w-48" ref={filterRef}>
+            <button 
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+              className={`h-14 w-full px-5 rounded-2xl border transition-all flex items-center justify-between group/btn shadow-sm ${isFilterOpen ? 'bg-white border-indigo-500 ring-4 ring-indigo-500/10' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center border border-slate-100 transition-colors ${isFilterOpen ? 'text-indigo-600' : 'text-slate-400'}`}>
+                  <currentOption.icon className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col items-start overflow-hidden">
+                   <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Status Protocol</span>
+                   <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight truncate w-full">{currentOption.label}</span>
+                </div>
+              </div>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-300 ${isFilterOpen ? 'rotate-180 text-indigo-500' : ''}`} />
+            </button>
+
+            {isFilterOpen && (
+              <div className="absolute top-full mt-2 left-0 right-0 md:left-auto md:w-64 bg-white border border-slate-200 rounded-[1.8rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] z-[70] overflow-hidden animate-in fade-in slide-in-from-top-3 duration-300">
+                <div className="p-4 border-b border-slate-50 bg-slate-50/50">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Recognition Filter</span>
+                </div>
+                <div className="p-2">
+                  {statusOptions.map((opt) => {
+                    const isSelected = statusFilter === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => {
+                          setStatusFilter(opt.value as any);
+                          setIsFilterOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all group/item ${isSelected ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-indigo-50 text-slate-600 hover:text-indigo-600'}`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-colors ${isSelected ? 'bg-white/20 border-white/20' : 'bg-white border-slate-100 shadow-sm'}`}>
+                             <opt.icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : opt.color}`} />
+                          </div>
+                          <span className="text-[11px] font-black uppercase tracking-tight">{opt.label}</span>
+                        </div>
+                        {isSelected && <CheckCircle2 className="w-4 h-4 text-white" />}
+                        {!isSelected && <MousePointer2 className="w-3 h-3 text-indigo-300 opacity-0 group-hover/item:opacity-100 transition-opacity" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
           {canCreate && (
-            <Button onClick={onAdd} className="h-14 px-10 rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95">
+            <Button onClick={onAdd} className="w-full sm:w-auto h-14 px-8 rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95">
               <UserPlus className="w-5 h-5 mr-2" /> New Enrollment
             </Button>
           )}
@@ -126,7 +204,13 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
         {loading ? (
             <div className="flex flex-col items-center justify-center py-40 text-slate-400 animate-pulse"><RefreshCcw className="w-10 h-10 animate-spin mb-6" /><p className="text-[10px] font-black uppercase tracking-[0.4em]">Synchronizing Portfolio Buffers...</p></div>
         ) : groupedMembers.length === 0 ? (
-            <Card className="p-32 text-center rounded-[3.5rem] border-dashed border-2 bg-white/50"><Milestone className="w-16 h-16 text-slate-200 mx-auto mb-6" /><h3 className="text-xl font-black text-slate-400 uppercase tracking-widest">Historical Ledger Empty</h3></Card>
+            <Card className="p-32 text-center rounded-[3.5rem] border-dashed border-2 bg-white/50">
+              <div className="bg-slate-100/50 inline-flex p-8 rounded-full mb-6">
+                <Milestone className="w-16 h-16 text-slate-200 mx-auto" />
+              </div>
+              <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest">No matching records</h3>
+              <p className="text-[10px] font-bold text-slate-300 uppercase mt-2 tracking-widest">Adjust filters or search parameters</p>
+            </Card>
         ) : groupedMembers.map((group) => (
             <Card key={group.category?.id || 'none'} className="overflow-hidden border-slate-200/60 shadow-xl group bg-white rounded-[2.5rem] transition-all hover:shadow-2xl">
                 <div className="bg-slate-50/50 px-10 py-8 border-b flex items-center justify-between">

@@ -46,7 +46,6 @@ const Members = () => {
       setCategories(categoriesData);
       setStaffList(staffData.filter(s => s.is_active));
       
-      // If we are looking at a detail view, refresh that member's specific data
       if (selectedMember) {
         const updated = membersData.find(m => m.id === selectedMember.id);
         if (updated) setSelectedMember(updated);
@@ -96,8 +95,8 @@ const Members = () => {
           member={selectedMember}
           categories={categories}
           onBack={() => setView('list')}
-          onEdit={() => { setIsEditing(true); setIsRenewal(false); setView('form'); }}
-          onRenew={() => { setIsRenewal(true); setIsEditing(false); setView('form'); }}
+          onEdit={(m) => { setSelectedMember(m); setIsEditing(true); setIsRenewal(false); setView('form'); }}
+          onRenew={(m) => { setSelectedMember(m); setIsRenewal(true); setIsEditing(false); setView('form'); }}
           onUpdate={loadData}
           onDelete={(id) => setDeleteId(id)}
         />

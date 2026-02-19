@@ -42,7 +42,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const { user } = useAuth();
   const { formatMoney, currentOutlet, currentProperty, settings, hasPermission } = useSettings();
   
-  // Dynamic Viewing Context
   const [viewingMember, setViewingMember] = useState<Member>(initialMember);
   const [freezes, setFreezes] = useState<Freeze[]>([]);
   const [memberBookings, setMemberBookings] = useState<MassageBooking[]>([]);
@@ -56,7 +55,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
   const [showAgreement, setShowAgreement] = useState(false);
 
-  // Derived from viewingMember
   const category = useMemo(() => categories.find(c => c.id === viewingMember.category_id), [categories, viewingMember.category_id]);
   const isActive = viewingMember.status === MemberStatus.ACTIVE;
 
@@ -68,8 +66,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       db.getMemberHistory(targetMember.membership_number)
     ]);
     setFreezes(f);
-    // Bookings are typically linked to the identity (membership_number or specific profile ID)
-    // We filter based on the profile name/identity context here
     const linked = b.filter(booking => booking.guest_id === targetMember.id);
     setMemberBookings(linked);
     setMassageTypes(mt);
@@ -86,7 +82,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
   const maxAllowed = category?.max_freeze_days || 0;
   
-  // Auto-calculate termination date based on remaining capacity
   useEffect(() => {
     if (showFreezeModal && !editingFreezeId && freezeForm.start_date) {
       const start = parseISO(freezeForm.start_date);
@@ -175,7 +170,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       loadForensics(viewingMember);
   };
 
-  // Clearances
   const canEdit = hasPermission(user?.role_id || '', 'members:edit');
   const canDelete = hasPermission(user?.role_id || '', 'members:delete');
   const canFreeze = hasPermission(user?.role_id || '', 'members:freeze');
@@ -183,7 +177,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500 pb-20 no-print">
       
-      {/* COMMAND TOOLBAR */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden group">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/30 rounded-full blur-3xl -mr-32 -mt-32"></div>
         <button onClick={onBack} className="relative z-10 flex items-center gap-2 px-5 py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-all bg-slate-50 rounded-2xl border border-slate-100 shadow-inner">
@@ -224,7 +217,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* LEFT COLUMN: IDENTITY & FINANCIALS */}
           <div className="lg:col-span-4 space-y-8">
               <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white group/card">
                   <div className="h-28 bg-slate-900 w-full relative overflow-hidden">
@@ -284,7 +276,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
               </Card>
           </div>
 
-          {/* RIGHT COLUMN: REVENUE DETAILS & LOGS */}
           <div className="lg:col-span-8 space-y-8">
               <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl p-10 bg-white">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -317,7 +308,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                   </div>
               </Card>
 
-              {/* MEMBERSHIP LIFECYCLE LEDGER */}
               <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white flex flex-col">
                   <CardHeader className="bg-[#0f172a] text-white p-8 flex justify-between items-center border-b border-white/10 shrink-0">
                       <div className="flex items-center gap-3">
@@ -380,8 +370,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
               </Card>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  
-                  {/* SUSPENSIONS (FREEZES) COMMAND CARD */}
                   <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white flex flex-col min-h-[460px]">
                       <CardHeader className="bg-slate-50 p-8 flex justify-between items-center border-b shrink-0">
                           <div className="flex items-center gap-3">
@@ -446,7 +434,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                       </CardContent>
                   </Card>
 
-                  {/* SERVICE RECOGNITION LEDGER CARD */}
                   <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white flex flex-col min-h-[460px]">
                       <CardHeader className="bg-slate-50/80 p-8 flex justify-between items-center border-b shrink-0">
                           <div className="flex items-center gap-3">
@@ -496,7 +483,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                   </Card>
               </div>
 
-              {/* FAMILY MANIFEST SECTION */}
               {(viewingMember.package_type === 'Couple' || viewingMember.package_type === 'Family') && (
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl p-10 bg-white overflow-hidden relative group">
                     <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform duration-1000"><Heart className="w-48 h-48 text-red-600" /></div>
@@ -527,7 +513,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                 </Card>
               )}
 
-              {/* INTERNAL REMARKS */}
               {viewingMember.remarks && (
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl p-10 bg-slate-50 border-dashed border-2 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform duration-1000"><ClipboardList className="w-32 h-32 text-slate-900" /></div>
@@ -540,7 +525,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
           </div>
       </div>
 
-      {/* SUSPENSION MODAL ENGINE */}
       {showFreezeModal && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
             <Card className="w-full max-w-[400px] rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden bg-white border border-white/20">
@@ -568,7 +552,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         </div>
                     </div>
 
-                    {/* CONSOLIDATED ALERT SYSTEM */}
                     {(validation.error || maxAllowed === 0) && (
                         <div className="p-5 bg-red-50 border-2 border-red-500/20 rounded-2xl flex items-start gap-4 animate-in shake duration-500 shadow-lg shadow-red-100/50">
                             <div className="p-2 bg-red-100 rounded-xl shrink-0">
@@ -613,7 +596,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                             </div>
                         </div>
 
-                        {/* Pro-forma Impact HUD */}
                         {!validation.error && validation.impact && maxAllowed > 0 && (
                             <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 flex items-center justify-between animate-in fade-in duration-500">
                                 <div className="flex items-center gap-3">
@@ -643,7 +625,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         </div>
       )}
 
-      {/* AGREEMENT PRINT ENGINE */}
       {showAgreement && (
         <MembersAgreement 
             member={viewingMember} 
