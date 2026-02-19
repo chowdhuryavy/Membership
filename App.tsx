@@ -268,8 +268,8 @@ const TopHeader = () => {
 };
 
 const ProtectedLayout = () => {
-  const { user, isLoading: isAuthLoading } = useAuth();
-  const { checkShortcut, isLoading: isSettingsLoading } = useSettings();
+  const { user, logout, isLoading: isAuthLoading } = useAuth();
+  const { checkShortcut, isLoading: isSettingsLoading, currentOutlet } = useSettings();
   const [showSplash, setShowSplash] = useState(true);
   const navigate = useNavigate();
 
@@ -287,6 +287,11 @@ const ProtectedLayout = () => {
       db.syncAuthMetadata(user).catch(console.warn);
     }
   }, [user, combinedLoading]);
+
+  const handleLogout = () => {
+    db.logAction('AUTH_LOGOUT', `User terminated session: ${user?.email}`, currentOutlet?.id);
+    logout();
+  };
 
   useEffect(() => {
     const handleGlobalShortcuts = (e: KeyboardEvent) => {
@@ -313,10 +318,10 @@ const ProtectedLayout = () => {
   
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      <Sidebar />
+      <Sidebar onLogout={handleLogout} />
       <div className="flex-1 flex flex-col min-w-0 relative overflow-y-auto custom-scrollbar">
         <TopHeader />
-        <MobileHeader />
+        <MobileHeader onLogout={handleLogout} />
         <main className="flex-1 p-4 md:p-8 print:p-0 print:overflow-visible">
           <RouterOutlet />
         </main>
@@ -325,12 +330,11 @@ const ProtectedLayout = () => {
   );
 };
 
-const Sidebar = () => {
-    const { user, logout } = useAuth();
+const Sidebar = ({ onLogout }: { onLogout: () => void }) => {
+    const { user } = useAuth();
     const { settings, hasPermission } = useSettings();
     const location = useLocation();
 
-    // EXHAUSTIVE NAV REGISTRY - Ensure all modules are defined here with their required permissions
     const ALL_NAV_ITEMS = useMemo(() => [
         { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:view' as Permission },
         { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
@@ -404,7 +408,7 @@ const Sidebar = () => {
 
             <div className="p-6 border-t-2 border-slate-100 bg-slate-50/50 shrink-0">
                 <button 
-                    onClick={logout}
+                    onClick={onLogout}
                     className="flex w-full items-center justify-center px-4 py-4 text-[11px] font-black uppercase tracking-widest text-red-600 bg-red-50 hover:bg-red-100 rounded-2xl transition-all border border-red-100 shadow-sm active:scale-95"
                 >
                     <LogOut className="w-4 h-4 mr-3" />
@@ -415,9 +419,9 @@ const Sidebar = () => {
     );
 };
 
-const MobileHeader = () => {
+const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
     const { settings, hasPermission } = useSettings();
     const location = useLocation();
 
@@ -493,7 +497,7 @@ const MobileHeader = () => {
                     ))}
                     <div className="h-px bg-slate-100 my-4 shrink-0" />
                     <MobileNavItem to="/profile" icon={UserCircle} label="My Profile" />
-                    <button onClick={logout} className="p-5 text-left text-red-600 bg-red-50 rounded-2xl font-black uppercase tracking-widest flex items-center gap-4 transition-colors shrink-0">
+                    <button onClick={onLogout} className="p-5 text-left text-red-600 bg-red-50 rounded-2xl font-black uppercase tracking-widest flex items-center gap-4 transition-colors shrink-0">
                         <LogOut className="w-5 h-5" /> Terminate Session
                     </button>
                     <div className="h-4 shrink-0" />

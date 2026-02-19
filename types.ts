@@ -1,4 +1,3 @@
-
 export type Permission = 
   | 'dashboard:view' | 'dashboard:view_financials' | 'dashboard:view_insights'
   | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:renew' | 'members:print_contract'
@@ -187,11 +186,13 @@ export interface Therapist {
   specialty: string;
   country: string;
   property_id: string;
+  outlet_id: string;
 }
 
 export interface MassageType {
   id: string;
   property_id: string;
+  outlet_id: string;
   name: string;
   price: number;
   duration_minutes: number;
@@ -200,6 +201,7 @@ export interface MassageType {
 export interface MassageBooking {
   id: string;
   property_id: string;
+  outlet_id: string;
   guest_id: string;
   therapist_id: string;
   date: string;
@@ -218,6 +220,7 @@ export type SaleCategory = 'Retail' | 'Personal Training' | 'Entrance Fee' | 'Ot
 export interface Sale {
   id: string;
   property_id: string;
+  outlet_id: string;
   guest_id?: string; 
   guest_name: string; 
   category: SaleCategory;
@@ -238,6 +241,7 @@ export interface Sale {
 export interface InventoryItem {
   id: string;
   property_id: string;
+  outlet_id: string;
   name: string;
   category: SaleCategory;
   price: number;

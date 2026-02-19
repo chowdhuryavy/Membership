@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Card, 
@@ -60,7 +59,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
   initialBooking
 }) => {
   const { user } = useAuth();
-  const { currentProperty, formatMoney } = useSettings();
+  const { currentProperty, currentOutlet, formatMoney } = useSettings();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -177,7 +176,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentProperty || !bookingData.massage_type_id) {
+    if (!currentProperty || !currentOutlet || !bookingData.massage_type_id) {
        setError("Select a primary treatment.");
        return;
     }
@@ -205,12 +204,16 @@ const BookingForm: React.FC<BookingFormProps> = ({
       };
 
       if (initialBooking) { 
-        // When restoring or modifying, ensure status is reset to confirmed
         payload.status = 'confirmed';
         await db.updateMassageBooking(initialBooking.id, payload); 
       } 
       else { 
-        await db.addMassageBooking({ ...payload, property_id: currentProperty.id, status: 'confirmed' }); 
+        await db.addMassageBooking({ 
+            ...payload, 
+            property_id: currentProperty.id, 
+            outlet_id: currentOutlet.id, 
+            status: 'confirmed' 
+        }); 
       }
       onSuccess();
     } catch (err: any) { setError(err.message || "Operation failed."); } 

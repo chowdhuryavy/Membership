@@ -1,10 +1,22 @@
-
 import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
-import { addDays, format } from 'date-fns';
+import { addDays, format, parse } from 'date-fns';
 
-const parseISO = (dateString: string) => new Date(dateString);
+// Robust date parsing for the Intelligence Engine
+const parseISO = (dateString: string) => {
+  if (!dateString) return new Date();
+  // Try ISO first
+  let d = new Date(dateString);
+  if (!isNaN(d.getTime())) return d;
+  // Try DD-MM-YYYY (common in manual imports)
+  try {
+    return parse(dateString, 'dd-MM-yyyy', new Date());
+  } catch (e) {
+    return new Date();
+  }
+};
+
 const startOfDay = (date: Date) => {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -158,14 +170,27 @@ class DatabaseService {
     try {
         const [{ data: m }, { data: freezes }] = await Promise.all([
           supabase.from('members').select('id, original_end_date, status').eq('id', memberId).single(),
-          supabase.from('freezes').select('total_days').eq('member_id', memberId)
+          // Fix: Included start_date and end_date in the select query to satisfy requirements for current status calculation
+          supabase.from('freezes').select('total_days, start_date, end_date').eq('member_id', memberId)
         ]);
         if (!m || m.status === MemberStatus.TENTATIVE) return;
         const totalDeferred = (freezes || []).reduce((sum, f) => sum + (Number(f.total_days) || 0), 0);
         const baselineDate = startOfDay(parseISO(m.original_end_date));
         const calculatedEndDate = addDays(baselineDate, totalDeferred);
         const newEndDateStr = format(calculatedEndDate, 'yyyy-MM-dd');
-        const newStatus = totalDeferred > 0 ? MemberStatus.FROZEN : MemberStatus.ACTIVE;
+        
+        // Find if member is currently frozen based on today's date
+        const today = startOfDay(new Date());
+        const isCurrentlyFrozen = (freezes || []).some(f => {
+            // Fix: Accessing start_date and end_date which are now selected in the query above
+            // @ts-ignore
+            const start = startOfDay(parseISO(f.start_date));
+            // @ts-ignore
+            const end = startOfDay(parseISO(f.end_date));
+            return today >= start && today <= end;
+        });
+
+        const newStatus = isCurrentlyFrozen ? MemberStatus.FROZEN : MemberStatus.ACTIVE;
         await supabase.from('members').update({ status: newStatus, current_end_date: newEndDateStr }).eq('id', memberId);
         return newEndDateStr;
     } catch (err) { console.error(err); }
@@ -200,7 +225,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added signUp method to DatabaseService
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (!this.isSupabase()) return { user: null, error: "Cloud sync offline." };
     const cleanEmail = email.trim().toLowerCase();
@@ -224,7 +248,6 @@ class DatabaseService {
     return { user: null, error: "Signup failed." };
   }
 
-  // Fix: Added updateEmail method to DatabaseService
   async updateEmail(email: string) {
     if (this.isSupabase()) {
         await (supabase.auth as any).updateUser({ email: email.trim().toLowerCase() });
@@ -306,10 +329,18 @@ class DatabaseService {
     if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id);
   }
 
-  async getStaff(outletId?: string): Promise<Staff[]> {
+  async getStaff(scopeId?: string, isProperty: boolean = false): Promise<Staff[]> {
     if (this.isSupabase()) {
       let query = supabase.from('staff').select('*').order('name');
-      if (outletId) query = query.eq('outlet_id', outletId);
+      if (scopeId) {
+          if (isProperty) {
+              const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
+              const ids = (outlets || []).map(o => o.id);
+              query = query.in('outlet_id', ids);
+          } else {
+              query = query.eq('outlet_id', scopeId);
+          }
+      }
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as Staff[];
@@ -342,10 +373,18 @@ class DatabaseService {
     }
   }
 
-  async getMembers(outletId?: string): Promise<Member[]> {
+  async getMembers(scopeId?: string, isProperty: boolean = false): Promise<Member[]> {
     if (this.isSupabase()) {
       let query = supabase.from('members').select('*');
-      if (outletId) query = query.eq('outlet_id', outletId);
+      if (scopeId) {
+          if (isProperty) {
+              const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
+              const ids = (outlets || []).map(o => o.id);
+              query = query.in('outlet_id', ids);
+          } else {
+              query = query.eq('outlet_id', scopeId);
+          }
+      }
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as Member[];
@@ -371,14 +410,10 @@ class DatabaseService {
 
   async updateMember(id: string, member: Partial<Member>) {
     if (this.isSupabase()) {
-      // PRUNING: Supabase 'update' should only contain the changed fields, NOT the primary key 'id' or creation date
       const patch: any = { ...member };
       delete patch.id;
       delete patch.created_at;
-      
-      // Remove null or undefined values to prevent SQL validation errors
       Object.keys(patch).forEach(key => (patch[key] === null || patch[key] === undefined) && delete patch[key]);
-
       const { error } = await supabase.from('members').update(patch).eq('id', id);
       if (error) throw error;
       await this.logAction('UPDATE_MEMBER', `Profile update: ${patch.guest_name || id}`, patch.outlet_id);
@@ -411,6 +446,26 @@ class DatabaseService {
     }
   }
 
+  async updateFreeze(id: string, updates: Partial<Freeze>) {
+    if (this.isSupabase()) {
+        await supabase.from('freezes').update(updates).eq('id', id);
+        // Find the member ID associated with this freeze
+        const { data } = await supabase.from('freezes').select('member_id').eq('id', id).single();
+        if (data?.member_id) {
+            await this.syncMemberEndDate(data.member_id);
+            await this.logAction('UPDATE_FREEZE', `Account suspension modified for member ID: ${data.member_id}`);
+        }
+    }
+  }
+
+  async deleteFreeze(id: string, memberId: string) {
+    if (this.isSupabase()) {
+        await supabase.from('freezes').delete().eq('id', id);
+        await this.syncMemberEndDate(memberId);
+        await this.logAction('DELETE_FREEZE', `Account suspension removed for member ID: ${memberId}`);
+    }
+  }
+
   async getCategories(outletId?: string): Promise<MembershipCategory[]> {
     if (this.isSupabase()) {
       let query = supabase.from('membership_categories').select('*');
@@ -428,7 +483,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added updateCategory method to DatabaseService
   async updateCategory(id: string, updates: Partial<MembershipCategory>) {
     if (this.isSupabase()) {
         await supabase.from('membership_categories').update(updates).eq('id', id);
@@ -436,7 +490,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added deleteCategory method to DatabaseService
   async deleteCategory(id: string) {
     if (this.isSupabase()) {
         await supabase.from('membership_categories').delete().eq('id', id);
@@ -470,7 +523,6 @@ class DatabaseService {
     return [];
   }
 
-  // Fix: Added addCurrency method to DatabaseService
   async addCurrency(curr: Omit<Currency, 'id'>) {
     if (this.isSupabase()) {
         const { data, error } = await supabase.from('currencies').insert([{ ...curr, id: curr.code.toLowerCase() }]).select();
@@ -480,7 +532,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added updateCurrency method to DatabaseService
   async updateCurrency(id: string, updates: Partial<Currency>) {
     if (this.isSupabase()) {
         await supabase.from('currencies').update(updates).eq('id', id);
@@ -488,7 +539,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added deleteCurrency method to DatabaseService
   async deleteCurrency(id: string) {
     if (this.isSupabase()) {
         await supabase.from('currencies').delete().eq('id', id).eq('is_default', false);
@@ -504,7 +554,6 @@ class DatabaseService {
     return [];
   }
 
-  // Fix: Added addRole method to DatabaseService
   async addRole(role: Omit<Role, 'id'>) {
     if (this.isSupabase()) {
         const { data, error } = await supabase.from('roles').insert([{ ...role, id: role.name.toLowerCase().replace(/\s+/g, '_') }]).select();
@@ -514,7 +563,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added updateRole method to DatabaseService
   async updateRole(id: string, updates: Partial<Role>) {
     if (this.isSupabase()) {
         await supabase.from('roles').update(updates).eq('id', id);
@@ -522,7 +570,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added deleteRole method to DatabaseService
   async deleteRole(id: string) {
     if (this.isSupabase()) {
         await supabase.from('roles').delete().eq('id', id).eq('is_system', false);
@@ -538,7 +585,6 @@ class DatabaseService {
     return [];
   }
 
-  // Fix: Added addOutlet method to DatabaseService
   async addOutlet(outlet: Omit<Outlet, 'id'>) {
     if (this.isSupabase()) {
         const { data, error } = await supabase.from('outlets').insert([{ ...outlet, id: crypto.randomUUID() }]).select();
@@ -548,7 +594,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added updateOutlet method to DatabaseService
   async updateOutlet(id: string, updates: Partial<Outlet>) {
     if (this.isSupabase()) {
         await supabase.from('outlets').update(updates).eq('id', id);
@@ -556,7 +601,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added deleteOutlet method to DatabaseService
   async deleteOutlet(id: string) {
     if (this.isSupabase()) {
         await supabase.from('outlets').delete().eq('id', id);
@@ -572,7 +616,6 @@ class DatabaseService {
     return [];
   }
 
-  // Fix: Added addProperty method to DatabaseService
   async addProperty(prop: Omit<Property, 'id'>) {
     if (this.isSupabase()) {
         const { data, error } = await supabase.from('properties').insert([{ ...prop, id: crypto.randomUUID() }]).select();
@@ -582,7 +625,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added updateProperty method to DatabaseService
   async updateProperty(id: string, updates: Partial<Property>) {
     if (this.isSupabase()) {
         await supabase.from('properties').update(updates).eq('id', id);
@@ -590,7 +632,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added deleteProperty method to DatabaseService
   async deleteProperty(id: string) {
     if (this.isSupabase()) {
         await supabase.from('properties').delete().eq('id', id);
@@ -608,34 +649,36 @@ class DatabaseService {
     return [];
   }
 
-  async getInventory(propertyId: string): Promise<InventoryItem[]> {
+  async getInventory(scopeId: string, isPropertyScope: boolean = false): Promise<InventoryItem[]> {
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('inventory').select('*').eq('property_id', propertyId).order('name');
+        let query = supabase.from('inventory').select('*');
+        if (isPropertyScope) query = query.eq('property_id', scopeId);
+        else query = query.eq('outlet_id', scopeId);
+        
+        const { data, error } = await query.order('name');
         if (error) throw error;
         return (data || []) as InventoryItem[];
     }
     return [];
   }
 
-  // Fix: Added addInventoryItem method to DatabaseService
   async addInventoryItem(item: Omit<InventoryItem, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
         const { data, error } = await supabase.from('inventory').insert([{ ...item, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select();
         if (error) throw error;
-        await this.logAction('CREATE_INVENTORY', `Asset defined in catalog: ${item.name}`);
+        await this.logAction('CREATE_INVENTORY', `Asset defined in catalog: ${item.name}`, item.outlet_id);
         return data;
     }
   }
 
-  // Fix: Added updateInventoryItem method to DatabaseService
   async updateInventoryItem(id: string, updates: Partial<InventoryItem>) {
     if (this.isSupabase()) {
-        await supabase.from('inventory').update(updates).eq('id', id);
+        const { error } = await supabase.from('inventory').update(updates).eq('id', id);
+        if (error) throw error;
         await this.logAction('UPDATE_INVENTORY', `Catalog asset modified: ${id}`);
     }
   }
 
-  // Fix: Added deleteInventoryItem method to DatabaseService
   async deleteInventoryItem(id: string) {
     if (this.isSupabase()) {
         await supabase.from('inventory').delete().eq('id', id);
@@ -643,9 +686,13 @@ class DatabaseService {
     }
   }
 
-  async getSales(propertyId: string): Promise<Sale[]> {
+  async getSales(scopeId: string, isPropertyScope: boolean = false): Promise<Sale[]> {
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('sales').select('*').eq('property_id', propertyId).order('created_at', { ascending: false });
+        let query = supabase.from('sales').select('*');
+        if (isPropertyScope) query = query.eq('property_id', scopeId);
+        else query = query.eq('outlet_id', scopeId);
+
+        const { data, error } = await query.order('created_at', { ascending: false });
         if (error) throw error;
         return (data || []) as Sale[] | any;
     }
@@ -656,11 +703,10 @@ class DatabaseService {
     if (this.isSupabase()) {
         const { error } = await supabase.from('sales').insert([{ ...sale, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
         if (error) throw error;
-        await this.logAction('POS_SALE', `Transaction finalized: ${sale.item_name}`);
+        await this.logAction('POS_SALE', `Transaction finalized: ${sale.item_name}`, sale.outlet_id);
     }
   }
 
-  // Fix: Added updateSale method to DatabaseService
   async updateSale(id: string, updates: Partial<Sale>) {
     if (this.isSupabase()) {
         await supabase.from('sales').update(updates).eq('id', id);
@@ -668,7 +714,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added deleteSale method to DatabaseService
   async deleteSale(id: string) {
     if (this.isSupabase()) {
         await supabase.from('sales').delete().eq('id', id);
@@ -701,7 +746,6 @@ class DatabaseService {
     return { ...guest, id: crypto.randomUUID(), created_at: new Date().toISOString() } as Guest;
   }
 
-  // Fix: Added deleteGuest method to DatabaseService
   async deleteGuest(id: string) {
     if (this.isSupabase()) {
         await supabase.from('guests').delete().eq('id', id);
@@ -709,26 +753,28 @@ class DatabaseService {
     }
   }
 
-  async getTherapists(propertyId: string): Promise<Therapist[]> {
+  async getTherapists(scopeId: string, isPropertyScope: boolean = false): Promise<Therapist[]> {
     if (this.isSupabase()) {
-      const { data, error } = await supabase.from('therapists').select('*').eq('property_id', propertyId);
+      let query = supabase.from('therapists').select('*');
+      if (isPropertyScope) query = query.eq('property_id', scopeId);
+      else query = query.eq('outlet_id', scopeId);
+
+      const { data, error } = await query;
       if (error) throw error;
       return (data || []) as Therapist[];
     }
     return [];
   }
 
-  // Fix: Added addTherapist method to DatabaseService
   async addTherapist(therapist: Omit<Therapist, 'id'>) {
     if (this.isSupabase()) {
         const { data, error } = await supabase.from('therapists').insert([{ ...therapist, id: crypto.randomUUID() }]).select();
         if (error) throw error;
-        await this.logAction('CREATE_THERAPIST', `Specialist enrolled: ${therapist.name}`);
+        await this.logAction('CREATE_THERAPIST', `Specialist enrolled: ${therapist.name}`, therapist.outlet_id);
         return data;
     }
   }
 
-  // Fix: Added updateTherapist method to DatabaseService
   async updateTherapist(id: string, updates: Partial<Therapist>) {
     if (this.isSupabase()) {
         await supabase.from('therapists').update(updates).eq('id', id);
@@ -736,7 +782,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added deleteTherapist method to DatabaseService
   async deleteTherapist(id: string) {
     if (this.isSupabase()) {
         await supabase.from('therapists').delete().eq('id', id);
@@ -744,10 +789,12 @@ class DatabaseService {
     }
   }
 
-  async getMassageTypes(propertyId?: string): Promise<MassageType[]> {
+  async getMassageTypes(scopeId: string, isPropertyScope: boolean = false): Promise<MassageType[]> {
     if (this.isSupabase()) {
       let query = supabase.from('massage_types').select('*');
-      if (propertyId) query = query.eq('property_id', propertyId);
+      if (isPropertyScope) query = query.eq('property_id', scopeId);
+      else query = query.eq('outlet_id', scopeId);
+
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as MassageType[];
@@ -755,17 +802,15 @@ class DatabaseService {
     return [];
   }
 
-  // Fix: Added addMassageType method to DatabaseService
   async addMassageType(type: Omit<MassageType, 'id'>) {
     if (this.isSupabase()) {
         const { data, error } = await supabase.from('massage_types').insert([{ ...type, id: crypto.randomUUID() }]).select();
         if (error) throw error;
-        await this.logAction('CREATE_TREATMENT', `Service portfolio item added: ${type.name}`);
+        await this.logAction('CREATE_TREATMENT', `Service portfolio item added: ${type.name}`, type.outlet_id);
         return data;
     }
   }
 
-  // Fix: Added updateMassageType method to DatabaseService
   async updateMassageType(id: string, updates: Partial<MassageType>) {
     if (this.isSupabase()) {
         await supabase.from('massage_types').update(updates).eq('id', id);
@@ -773,7 +818,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added deleteMassageType method to DatabaseService
   async deleteMassageType(id: string) {
     if (this.isSupabase()) {
         await supabase.from('massage_types').delete().eq('id', id);
@@ -781,9 +825,13 @@ class DatabaseService {
     }
   }
 
-  async getMassageBookings(propertyId: string): Promise<MassageBooking[]> {
+  async getMassageBookings(scopeId: string, isPropertyScope: boolean = false): Promise<MassageBooking[]> {
     if (this.isSupabase()) {
-      const { data, error } = await supabase.from('massage_bookings').select('*').eq('property_id', propertyId).order('date', { ascending: false });
+      let query = supabase.from('massage_bookings').select('*');
+      if (isPropertyScope) query = query.eq('property_id', scopeId);
+      else query = query.eq('outlet_id', scopeId);
+
+      const { data, error } = await query.order('date', { ascending: false });
       if (error) throw error;
       return (data || []) as MassageBooking[];
     }
@@ -794,6 +842,7 @@ class DatabaseService {
     if (this.isSupabase()) {
       const { error } = await supabase.from('massage_bookings').insert([{ ...booking, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
       if (error) throw error;
+      await this.logAction('CREATE_BOOKING', `Booking finalized for ${booking.date}`, booking.outlet_id);
     }
   }
 
@@ -829,7 +878,6 @@ class DatabaseService {
     return [];
   }
 
-  // Fix: Added addIncentiveRule method to DatabaseService
   async addIncentiveRule(rule: Omit<IncentiveRule, 'id'>) {
     if (this.isSupabase()) {
         const { data, error } = await supabase.from('incentive_rules').insert([{ ...rule, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select();
@@ -839,7 +887,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added updateIncentiveRule method to DatabaseService
   async updateIncentiveRule(id: string, updates: Partial<IncentiveRule>) {
     if (this.isSupabase()) {
         await supabase.from('incentive_rules').update(updates).eq('id', id);
@@ -847,7 +894,6 @@ class DatabaseService {
     }
   }
 
-  // Fix: Added deleteIncentiveRule method to DatabaseService
   async deleteIncentiveRule(id: string) {
     if (this.isSupabase()) {
         await supabase.from('incentive_rules').delete().eq('id', id);

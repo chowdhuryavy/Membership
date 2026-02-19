@@ -151,7 +151,8 @@ const PermissionMatrix = ({
 type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance';
 
 const SettingsPage = () => {
-  const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry } = useSettings();
+  // Fix: Destructured currentOutlet and currentProperty from useSettings to provide necessary context for data fetching
+  const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry, currentOutlet, currentProperty } = useSettings();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>('company');
   const [isSaving, setIsSaving] = useState(false);
@@ -195,12 +196,13 @@ const SettingsPage = () => {
     return [...validSaved, ...missing];
   }, [companyForm.navigation_order, navItems]);
 
+  // Fix: Added currentOutlet.id as an argument to db.getMassageTypes and db.getCategories in loadData to satisfy required arguments and provide context
   const loadData = async () => {
-      if (activeTab === 'incentives') {
+      if (activeTab === 'incentives' && currentOutlet) {
           const [rules, mTypes, allCats] = await Promise.all([
               db.getIncentiveRules(), 
-              db.getMassageTypes(), 
-              db.getCategories()
+              db.getMassageTypes(currentOutlet.id), 
+              db.getCategories(currentOutlet.id)
           ]);
           setIncentiveRules(rules);
           setAllMassageTypes(mTypes);
@@ -651,7 +653,7 @@ const SettingsPage = () => {
                       )}
                       {activeTab === 'outlets' && (
                         <div className="space-y-6">
-                            <Input label="Facility Name *" value={outletForm.name} onChange={e => setOutletForm({...outletForm, name: e.target.value})} className="h-14 rounded-xl" />
+                            <Input label="Facility Name *" value={outletForm.name} onChange={e => setOutletForm({...outletForm, name: e.target.value})} className="h-14 rounded-xl font-bold" />
                             <Select label="Linked Property Portfolio" options={[{value:'', label:'Select Property...'}, ...properties.map(p=>({value:p.id, label:p.name}))]} value={outletForm.property_id} onChange={e => setOutletForm({...outletForm, property_id: e.target.value})} className="h-14 rounded-xl" />
                             <Input label="Prepared By (Signatory Role)" value={outletForm.signatory_prepared_role} onChange={e => setOutletForm({...outletForm, signatory_prepared_role: e.target.value})} className="h-14 rounded-xl" />
                             <Input label="Approved By (Signatory Role)" value={outletForm.signatory_approved_role} onChange={e => setOutletForm({...outletForm, signatory_approved_role: e.target.value})} className="h-14 rounded-xl" />

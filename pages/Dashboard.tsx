@@ -1,6 +1,4 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
-// Fix: Added Button to imports from components/ui
 import { Card, CardContent, CardHeader, Button } from '../components/ui';
 import { 
   Users, 
@@ -20,18 +18,33 @@ import {
   ShoppingBag,
   Contact2,
   PieChart as PieChartIcon,
-  ChevronRight
+  ChevronRight,
+  Filter,
+  Building2,
+  Store,
+  Terminal,
+  RefreshCcw
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Member, MassageBooking, Sale, Staff, MemberStatus } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, endOfMonth, differenceInCalendarDays, isSameMonth, startOfMonth, subMonths, isSameDay, isAfter, startOfDay, isWithinInterval } from 'date-fns';
+// Fix: Added isSameDay to date-fns imports to resolve compiler error on line 185
+import { format, endOfMonth, differenceInCalendarDays, isSameMonth, startOfMonth, subMonths, isAfter, startOfDay, isWithinInterval, parse, isSameDay } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 
-const parseISO = (dateString: string) => new Date(dateString);
+const parseISO = (dateString: string) => {
+  if (!dateString) return new Date();
+  let d = new Date(dateString);
+  if (!isNaN(d.getTime())) return d;
+  try {
+    return parse(dateString, 'dd-MM-yyyy', new Date());
+  } catch (e) {
+    return new Date();
+  }
+};
 
 interface PerformanceTrendData {
   month: string;
@@ -46,6 +59,8 @@ const Dashboard = () => {
   
   const [dashboardMonth, setDashboardMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
+  const [loading, setLoading] = useState(true);
 
   const [stats, setStats] = useState({
     activeMembers: 0,
@@ -77,147 +92,156 @@ const Dashboard = () => {
     if(currentOutlet && currentProperty) {
       loadStats();
     }
-  }, [currentOutlet, currentProperty, dashboardMonth]);
+  }, [currentOutlet, currentProperty, dashboardMonth, viewScope]);
 
   const loadStats = async () => {
     if (!currentOutlet || !currentProperty) return;
+    setLoading(true);
     
-    const now = new Date();
-    const todayStr = format(now, 'yyyy-MM-dd');
-    const viewDate = parseISO(dashboardMonth + '-01');
-    const isCurrentMonth = isSameMonth(viewDate, now);
-    const contextStart = startOfMonth(viewDate);
-    const auditPoint = isCurrentMonth ? now : endOfMonth(viewDate);
+    try {
+        const now = new Date();
+        const todayStr = format(now, 'yyyy-MM-dd');
+        const viewDate = startOfMonth(parseISO(dashboardMonth + '-01'));
+        const isCurrentMonth = isSameMonth(viewDate, now);
+        const contextStart = startOfMonth(viewDate);
+        const auditPoint = isCurrentMonth ? now : endOfMonth(viewDate);
 
-    const [members, freezes, bookings, sales, staff] = await Promise.all([
-      db.getMembers(currentOutlet.id),
-      db.getFreezes(),
-      db.getMassageBookings(currentProperty.id),
-      db.getSales(currentProperty.id),
-      db.getStaff(currentOutlet.id)
-    ]);
-    
-    // 1. Membership Logic
-    let activeAtPointCount = 0;
-    let frozenAtPointCount = 0;
-    let mtdMembershipRevenue = 0;
-    let deferredRevenueAtPoint = 0;
-    let monthEnrollments = 0;
-    let totalDailyAccrual = 0;
+        // Scoping Logic
+        const isProperty = viewScope === 'property';
+        const scopeId = isProperty ? currentProperty.id : currentOutlet.id;
 
-    members.forEach(m => {
-      const mStart = parseISO(m.start_date);
-      const mEnd = parseISO(m.current_end_date);
-      const enrollmentDate = parseISO(m.created_at || m.start_date);
+        // Fetch data with scope awareness
+        const [members, freezes, bookings, sales, staff] = await Promise.all([
+          db.getMembers(scopeId, isProperty),
+          db.getFreezes(),
+          db.getMassageBookings(scopeId, isProperty),
+          db.getSales(scopeId, isProperty),
+          db.getStaff(scopeId, isProperty)
+        ]);
+        
+        // 1. Membership Logic
+        let activeAtPointCount = 0;
+        let frozenAtPointCount = 0;
+        let mtdMembershipRevenue = 0;
+        let deferredRevenueAtPoint = 0;
+        let monthEnrollments = 0;
+        let totalDailyAccrual = 0;
 
-      if (isSameMonth(enrollmentDate, viewDate)) monthEnrollments++;
-      
-      const memberFreezes = freezes.filter(f => f.member_id === m.id);
-      mtdMembershipRevenue += RevenueEngine.calculateRevenuePeriod(m, memberFreezes, contextStart, auditPoint);
-      const earnedLifetimeToPoint = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, auditPoint);
-      deferredRevenueAtPoint += Math.max(0, m.net_amount - earnedLifetimeToPoint);
-
-      if (auditPoint >= mStart && auditPoint <= mEnd) {
-          const isFrozenAtPoint = memberFreezes.some(f => 
-              auditPoint >= parseISO(f.start_date) && 
-              auditPoint <= parseISO(f.end_date)
-          );
-          if (isFrozenAtPoint) frozenAtPointCount++;
-          else {
-              activeAtPointCount++;
-              totalDailyAccrual += m.daily_rate;
-          }
-      }
-    });
-
-    // 2. Performance Trend (6 months)
-    const performanceTrend: PerformanceTrendData[] = [];
-    for (let i = 5; i >= 0; i--) {
-        const targetMonthDate = subMonths(viewDate, i);
-        const monthStart = startOfMonth(targetMonthDate);
-        const monthEnd = endOfMonth(targetMonthDate);
-        const intakeInMonth = members.filter(m => isSameMonth(parseISO(m.start_date), targetMonthDate)).length;
-
-        let totalRevInMonth = 0;
-        // Member Rev
         members.forEach(m => {
-            const mStart = parseISO(m.start_date);
-            const mEnd = parseISO(m.current_end_date);
-            if (mEnd >= monthStart && mStart <= monthEnd) {
-                const memberFreezes = freezes.filter(f => f.member_id === m.id);
-                totalRevInMonth += RevenueEngine.calculateRevenuePeriod(m, memberFreezes, monthStart, monthEnd);
-            }
+          const mStart = parseISO(m.start_date);
+          const mEnd = parseISO(m.current_end_date);
+          const enrollmentDate = parseISO(m.created_at || m.start_date);
+
+          if (isSameMonth(enrollmentDate, viewDate)) monthEnrollments++;
+          
+          const memberFreezes = freezes.filter(f => f.member_id === m.id);
+          mtdMembershipRevenue += RevenueEngine.calculateRevenuePeriod(m, memberFreezes, contextStart, auditPoint);
+          const earnedLifetimeToPoint = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, auditPoint);
+          deferredRevenueAtPoint += Math.max(0, m.net_amount - earnedLifetimeToPoint);
+
+          if (auditPoint >= mStart && auditPoint <= mEnd) {
+              const isFrozenAtPoint = memberFreezes.some(f => 
+                  auditPoint >= parseISO(f.start_date) && 
+                  auditPoint <= parseISO(f.end_date)
+              );
+              if (isFrozenAtPoint) frozenAtPointCount++;
+              else {
+                  activeAtPointCount++;
+                  totalDailyAccrual += m.daily_rate;
+              }
+          }
         });
-        // Sales Rev
-        sales.filter(s => {
-            const d = new Date(s.created_at);
-            return s.status === 'completed' && d >= monthStart && d <= monthEnd;
-        }).forEach(s => totalRevInMonth += Number(s.net_amount));
-        // Booking Rev
-        bookings.filter(b => {
-            const d = parseISO(b.date);
-            return b.status === 'completed' && d >= monthStart && d <= monthEnd;
-        }).forEach(b => totalRevInMonth += Number(b.price));
 
-        performanceTrend.push({ month: format(targetMonthDate, 'MMM'), revenue: totalRevInMonth, intake: intakeInMonth });
+        // 2. Performance Trend (6 months)
+        const performanceTrend: PerformanceTrendData[] = [];
+        for (let i = 5; i >= 0; i--) {
+            const targetMonthDate = subMonths(viewDate, i);
+            const monthStart = startOfMonth(targetMonthDate);
+            const monthEnd = endOfMonth(targetMonthDate);
+            const intakeInMonth = members.filter(m => isSameMonth(parseISO(m.start_date), targetMonthDate)).length;
+
+            let totalRevInMonth = 0;
+            members.forEach(m => {
+                const mStart = parseISO(m.start_date);
+                const mEnd = parseISO(m.current_end_date);
+                if (mEnd >= monthStart && mStart <= monthEnd) {
+                    const memberFreezes = freezes.filter(f => f.member_id === m.id);
+                    totalRevInMonth += RevenueEngine.calculateRevenuePeriod(m, memberFreezes, monthStart, monthEnd);
+                }
+            });
+            sales.filter(s => {
+                const d = new Date(s.created_at);
+                return s.status === 'completed' && d >= monthStart && d <= monthEnd;
+            }).forEach(s => totalRevInMonth += Number(s.net_amount));
+            bookings.filter(b => {
+                const d = parseISO(b.date);
+                return b.status === 'completed' && d >= monthStart && d <= monthEnd;
+            }).forEach(b => totalRevInMonth += Number(b.price));
+
+            performanceTrend.push({ month: format(targetMonthDate, 'MMM'), revenue: totalRevInMonth, intake: intakeInMonth });
+        }
+        setPerformanceTrendData(performanceTrend);
+
+        // 3. Daily Stats (Sales & Staff)
+        const todaySales = sales.filter(s => s.status === 'completed' && isSameDay(new Date(s.created_at), now));
+        const staffOnLeaveCount = staff.filter(s => {
+            if (!s.leave_start_date || !s.leave_end_date) return false;
+            const today = startOfDay(new Date());
+            return isWithinInterval(today, { start: startOfDay(parseISO(s.leave_start_date)), end: startOfDay(parseISO(s.leave_end_date)) });
+        }).length;
+
+        // 4. Revenue Mix (MTD)
+        let mtdServiceRevenue = 0;
+        bookings.filter(b => b.status === 'completed' && isSameMonth(parseISO(b.date), viewDate))
+                .forEach(b => mtdServiceRevenue += Number(b.price));
+        
+        let mtdSalesRevenue = 0;
+        sales.filter(s => s.status === 'completed' && isSameMonth(new Date(s.created_at), viewDate))
+             .forEach(s => mtdSalesRevenue += Number(s.net_amount));
+
+        setRevenueMix([
+            { name: 'Membership', value: mtdMembershipRevenue, color: '#4f46e5' },
+            { name: 'Treatments', value: mtdServiceRevenue, color: '#8b5cf6' },
+            { name: 'Retail POS', value: mtdSalesRevenue, color: '#0ea5e9' }
+        ]);
+
+        // 5. Expiries & Upcoming
+        const todayAtZero = startOfDay(now);
+        const monthlyExpiring = members.filter(m => {
+            const mEnd = parseISO(m.current_end_date);
+            if (!isSameMonth(mEnd, viewDate)) return false;
+            if (mEnd < todayAtZero) return false;
+            return true;
+        }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 10);
+        
+        const todayBookings = bookings.filter(b => b.date === todayStr && b.status !== 'cancelled');
+        const upcoming = bookings.filter(b => (b.date === todayStr || isAfter(parseISO(b.date), todayAtZero)) && b.status === 'confirmed')
+                                 .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`))
+                                 .slice(0, 5);
+
+        setStats({
+          activeMembers: activeAtPointCount, 
+          frozenMembers: frozenAtPointCount,
+          newMembersThisMonth: monthEnrollments, 
+          dailyAccrual: totalDailyAccrual, 
+          revenueThisMonth: mtdMembershipRevenue + mtdServiceRevenue + mtdSalesRevenue,
+          futureRevenue: deferredRevenueAtPoint, 
+          projectedEndMonth: mtdMembershipRevenue + (totalDailyAccrual * Math.max(0, differenceInCalendarDays(endOfMonth(viewDate), auditPoint))),
+          bookingCount: todayBookings.length,
+          bookingYield: todayBookings.filter(b => b.status === 'completed').length,
+          todaySalesTotal: todaySales.reduce((acc, s) => acc + s.net_amount, 0),
+          todaySalesCount: todaySales.length,
+          staffActive: staff.filter(s => s.is_active).length - staffOnLeaveCount,
+          staffOnLeave: staffOnLeaveCount
+        });
+
+        setMonthlyExpiringMembers(monthlyExpiring);
+        setUpcomingBookings(upcoming);
+    } catch (e) {
+        console.error("Dashboard Intelligence Error:", e);
+    } finally {
+        setLoading(false);
     }
-    setPerformanceTrendData(performanceTrend);
-
-    // 3. Daily Stats (Sales & Staff)
-    const todaySales = sales.filter(s => s.status === 'completed' && format(new Date(s.created_at), 'yyyy-MM-dd') === todayStr);
-    const staffOnLeaveCount = staff.filter(s => {
-        if (!s.leave_start_date || !s.leave_end_date) return false;
-        const today = startOfDay(new Date());
-        return isWithinInterval(today, { start: startOfDay(new Date(s.leave_start_date)), end: startOfDay(new Date(s.leave_end_date)) });
-    }).length;
-
-    // 4. Revenue Mix (MTD)
-    let mtdServiceRevenue = 0;
-    bookings.filter(b => b.status === 'completed' && isSameMonth(parseISO(b.date), viewDate))
-            .forEach(b => mtdServiceRevenue += Number(b.price));
-    
-    let mtdSalesRevenue = 0;
-    sales.filter(s => s.status === 'completed' && isSameMonth(new Date(s.created_at), viewDate))
-         .forEach(s => mtdSalesRevenue += Number(s.net_amount));
-
-    setRevenueMix([
-        { name: 'Membership', value: mtdMembershipRevenue, color: '#4f46e5' },
-        { name: 'Treatments', value: mtdServiceRevenue, color: '#8b5cf6' },
-        { name: 'Retail POS', value: mtdSalesRevenue, color: '#0ea5e9' }
-    ]);
-
-    // 5. Expiries & Upcoming
-    const today = startOfDay(new Date());
-    const monthlyExpiring = members.filter(m => {
-        const mEnd = parseISO(m.current_end_date);
-        if (!isSameMonth(mEnd, viewDate)) return false;
-        if (mEnd < today) return false;
-        return true;
-    }).sort((a, b) => a.current_end_date.localeCompare(b.current_end_date)).slice(0, 10);
-    
-    const todayBookings = bookings.filter(b => b.date === todayStr && b.status !== 'cancelled');
-    const upcoming = bookings.filter(b => (b.date === todayStr || isAfter(parseISO(b.date), today)) && b.status === 'confirmed')
-                             .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`))
-                             .slice(0, 5);
-
-    setStats({
-      activeMembers: activeAtPointCount, 
-      frozenMembers: frozenAtPointCount,
-      newMembersThisMonth: monthEnrollments, 
-      dailyAccrual: totalDailyAccrual, 
-      revenueThisMonth: mtdMembershipRevenue + mtdServiceRevenue + mtdSalesRevenue,
-      futureRevenue: deferredRevenueAtPoint, 
-      projectedEndMonth: mtdMembershipRevenue + (totalDailyAccrual * Math.max(0, differenceInCalendarDays(endOfMonth(viewDate), auditPoint))),
-      bookingCount: todayBookings.length,
-      bookingYield: todayBookings.filter(b => b.status === 'completed').length,
-      todaySalesTotal: todaySales.reduce((acc, s) => acc + s.net_amount, 0),
-      todaySalesCount: todaySales.length,
-      staffActive: staff.filter(s => s.is_active).length - staffOnLeaveCount,
-      staffOnLeave: staffOnLeaveCount
-    });
-
-    setMonthlyExpiringMembers(monthlyExpiring);
-    setUpcomingBookings(upcoming);
   };
 
   const displayName = useMemo(() => {
@@ -227,6 +251,7 @@ const Dashboard = () => {
   
   const canViewDashboard = user && hasPermission(user.role_id, 'dashboard:view');
   const canViewFinancials = user && hasPermission(user.role_id, 'dashboard:view_financials');
+  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties');
 
   const kpiData = [
     { title: "Active Portfolio", value: stats.activeMembers, icon: Users, color: "text-emerald-600" },
@@ -257,9 +282,25 @@ const Dashboard = () => {
           <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-none uppercase">
             Hello, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600">{displayName}</span>
           </h1>
-          <p className="text-slate-500 text-xs font-black uppercase tracking-widest mt-2">
-            Intelligence Center &bull; <span className="text-indigo-600 font-bold">{format(parseISO(dashboardMonth+'-01'), 'MMMM yyyy')}</span>
-          </p>
+          <div className="flex flex-wrap items-center gap-4 mt-2">
+            <p className="text-slate-500 text-xs font-black uppercase tracking-widest">
+              Intelligence Center &bull; <span className="text-indigo-600 font-bold">{format(parseISO(dashboardMonth+'-01'), 'MMMM yyyy')}</span>
+            </p>
+            {canSwitchScope && (
+                <>
+                    <div className="h-3 w-px bg-slate-200"></div>
+                    <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                        <button onClick={() => setViewScope('outlet')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                            <Store className="w-2.5 h-2.5" /> Outlet
+                        </button>
+                        <button onClick={() => setViewScope('property')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                            <Building2 className="w-2.5 h-2.5" /> Property
+                        </button>
+                    </div>
+                </>
+            )}
+            {loading && <RefreshCcw className="w-3.5 h-3.5 animate-spin text-indigo-500" />}
+          </div>
         </div>
         <div className="flex flex-col sm:flex-row items-end relative z-10 gap-3">
             <div className="flex items-center gap-3 bg-white border border-slate-200 p-2 pl-4 rounded-2xl shadow-sm">

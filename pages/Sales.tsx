@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { 
   Card, 
@@ -46,7 +45,9 @@ import {
   ShieldAlert,
   Edit3,
   Users,
-  Shield
+  Shield,
+  Store,
+  Building2
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Sale, Guest, SaleCategory, InventoryItem, MassageBooking, MassageType, UserProfile } from '../types';
@@ -60,6 +61,7 @@ const POSForm = ({
     users,
     onCancel, 
     onSuccess, 
+    currentOutletId,
     currentPropertyId,
     initialSale 
 }: { 
@@ -68,6 +70,7 @@ const POSForm = ({
     users: UserProfile[],
     onCancel: () => void, 
     onSuccess: () => void, 
+    currentOutletId: string,
     currentPropertyId: string,
     initialSale?: Sale
 }) => {
@@ -135,6 +138,7 @@ const POSForm = ({
         try {
             const payload = {
                 property_id: currentPropertyId,
+                outlet_id: currentOutletId,
                 guest_id: saleData.guest_id || undefined,
                 guest_name: saleData.guest_name,
                 category: saleData.category,
@@ -303,7 +307,7 @@ const POSForm = ({
 
                     <div className="flex gap-3 pt-2">
                         <button type="button" onClick={onCancel} className="flex-1 h-12 rounded-xl font-bold uppercase text-[10px] tracking-widest bg-slate-100 hover:bg-slate-200 transition-colors">Discard</button>
-                        <Button type="submit" isLoading={loading} className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100">Commit Transaction</Button>
+                        <Button type="submit" isLoading={loading} className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100">Commit Transaction</button>
                     </div>
                 </form>
             </CardContent>
@@ -313,10 +317,12 @@ const POSForm = ({
 
 const InventoryManager = ({ 
     inventory, 
+    currentOutletId,
     currentPropertyId, 
     onRefresh 
 }: { 
     inventory: InventoryItem[], 
+    currentOutletId: string,
     currentPropertyId: string, 
     onRefresh: () => void 
 }) => {
@@ -345,7 +351,7 @@ const InventoryManager = ({
             if (editingItem) {
                 await db.updateInventoryItem(editingItem.id, formData);
             } else {
-                await db.addInventoryItem({ ...formData, property_id: currentPropertyId });
+                await db.addInventoryItem({ ...formData, property_id: currentPropertyId, outlet_id: currentOutletId });
             }
             setShowForm(false);
             setEditingItem(null);
@@ -460,9 +466,11 @@ const InventoryManager = ({
 
 const Sales = () => {
     const { user } = useAuth();
-    const { currentProperty, formatMoney, hasPermission } = useSettings();
+    const { currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
     const [activeTab, setActiveTab] = useState<'ledger' | 'inventory'>('ledger');
     const [selectedDate, setSelectedDate] = useState(new Date());
+    const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
+    
     const [sales, setSales] = useState<Sale[]>([]);
     const [bookings, setBookings] = useState<MassageBooking[]>([]);
     const [guests, setGuests] = useState<Guest[]>([]);
@@ -484,19 +492,20 @@ const Sales = () => {
     const canViewInventory = user && hasPermission(user.role_id, 'inventory:view');
 
     useEffect(() => {
-        if (currentProperty && canView) loadData();
-    }, [currentProperty, canView]);
+        if (currentOutlet && canView) loadData();
+    }, [currentOutlet, canView, viewScope]);
 
     const loadData = async () => {
-        if (!currentProperty) return;
+        if (!currentOutlet || !currentProperty) return;
         setLoading(true);
         try {
+            const targetOutletId = viewScope === 'outlet' ? currentOutlet.id : undefined;
             const [s, b, g, i, mt, u] = await Promise.all([
-                db.getSales(currentProperty.id),
-                db.getMassageBookings(currentProperty.id),
+                db.getSales(targetOutletId || currentProperty.id), // If property, this fetches related
+                db.getMassageBookings(targetOutletId || currentProperty.id),
                 db.getGuests(currentProperty.id),
-                db.getInventory(currentProperty.id),
-                db.getMassageTypes(currentProperty.id),
+                db.getInventory(targetOutletId || currentOutlet.id),
+                db.getMassageTypes(targetOutletId),
                 db.getUsers()
             ]);
             setSales(s);
@@ -584,18 +593,31 @@ const Sales = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-700">
-            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
+            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm">
                 <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100">
                         <ShoppingBag className="w-6 h-6" />
                     </div>
                     <div>
                         <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Sales & Commerce</h1>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mt-1">Property Hub: {currentProperty?.name}</p>
+                        <div className="flex flex-wrap items-center gap-4 mt-1">
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <Store className="w-3 h-3 text-indigo-400" /> {currentOutlet?.name}
+                            </p>
+                            <div className="h-3 w-px bg-slate-200 hidden sm:block"></div>
+                            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                                <button onClick={() => setViewScope('outlet')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                                    <Filter className="w-2.5 h-2.5" /> Outlet
+                                </button>
+                                <button onClick={() => setViewScope('property')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                                    <Building2 className="w-2.5 h-2.5" /> Property
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
+                <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto">
                     <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm w-full sm:w-auto">
                         <button onClick={() => setSelectedDate(addDays(selectedDate, -1))} className="p-1.5 hover:bg-slate-50 rounded-lg border border-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"><ChevronLeft className="w-4 h-4"/></button>
                         <div className="relative flex items-center gap-2 px-2">
@@ -604,12 +626,12 @@ const Sales = () => {
                         </div>
                         <button onClick={() => setSelectedDate(addDays(selectedDate, 1))} className="p-1.5 hover:bg-slate-50 rounded-lg border border-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"><ChevronRight className="w-4 h-4"/></button>
                     </div>
-                    <div className="flex bg-slate-200 p-1 rounded-xl border border-slate-300 shadow-inner w-full sm:w-auto">
-                        <button onClick={() => setActiveTab('ledger')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'ledger' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Ledger</button>
-                        {canViewInventory && <button onClick={() => setActiveTab('inventory')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Inventory</button>}
+                    <div className="flex bg-slate-200 p-1.5 rounded-xl border border-slate-300 shadow-inner w-full sm:w-auto">
+                        <button onClick={() => setActiveTab('ledger')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'ledger' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Ledger</button>
+                        {canViewInventory && <button onClick={() => setActiveTab('inventory')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Inventory</button>}
                     </div>
                     {canCreate && (
-                        <Button onClick={() => { setEditingSale(null); setShowForm(true); }} className="w-full sm:w-auto rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100">
+                        <Button onClick={() => { setEditingSale(null); setShowForm(true); }} className="w-full sm:w-auto rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 ml-auto xl:ml-0">
                             <Plus className="w-4 h-4 mr-2" /> New Entry
                         </Button>
                     )}
@@ -709,12 +731,12 @@ const Sales = () => {
                         </div>
                     </Card>
                 </>
-            ) : <InventoryManager inventory={inventory} currentPropertyId={currentProperty?.id || ''} onRefresh={loadData} />}
+            ) : <InventoryManager inventory={inventory} currentOutletId={currentOutlet?.id || ''} currentPropertyId={currentProperty?.id || ''} onRefresh={loadData} />}
 
             {showForm && (
                 <div className="fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
                     <div className="w-full max-w-2xl animate-in zoom-in-95 duration-300">
-                        <POSForm users={users} guests={guests} inventory={inventory} currentPropertyId={currentProperty?.id || ''} onCancel={() => {setShowForm(false); setEditingSale(null);}} onSuccess={() => { setShowForm(false); setEditingSale(null); loadData(); }} initialSale={editingSale || undefined} />
+                        <POSForm users={users} guests={guests} inventory={inventory} currentOutletId={currentOutlet?.id || ''} currentPropertyId={currentProperty?.id || ''} onCancel={() => {setShowForm(false); setEditingSale(null);}} onSuccess={() => { setShowForm(false); setEditingSale(null); loadData(); }} initialSale={editingSale || undefined} />
                     </div>
                 </div>
             )}

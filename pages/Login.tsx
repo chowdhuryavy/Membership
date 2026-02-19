@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Button } from '../components/ui';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Sparkles, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { db } from '../services/mockSupabase';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -40,6 +40,7 @@ const Login = () => {
     } else if (requiresPasswordChange) {
       setMustChangePassword(true);
     } else {
+      db.logAction('AUTH_SUCCESS', `User session authenticated for: ${email.toLowerCase()}`);
       navigate('/');
     }
   };
@@ -52,6 +53,7 @@ const Login = () => {
       setError('');
       try {
           await changePassword(password, newPassword);
+          db.logAction('AUTH_SECURITY_UPDATE', `Credential migration completed for: ${email.toLowerCase()}`);
           setMustChangePassword(false);
           navigate('/');
       } catch (err: any) {

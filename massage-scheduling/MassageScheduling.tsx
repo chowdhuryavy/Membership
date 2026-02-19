@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { 
   Card, 
@@ -37,7 +36,16 @@ import {
   ExternalLink,
   CalendarDays,
   RotateCcw,
-  PlusCircle
+  PlusCircle,
+  Store,
+  Building2,
+  Filter,
+  Globe,
+  UserCheck,
+  Terminal,
+  ClipboardCheck,
+  Database,
+  ShieldAlert
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { 
@@ -55,6 +63,92 @@ import BookingForm from './BookingForm';
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 8); // 8 AM to 10 PM
 const SLOT_HEIGHT = 52; 
 const MINUTE_HEIGHT = SLOT_HEIGHT / 60;
+
+const MissingBookingTablesPanel = () => (
+    <Card className="max-w-4xl mx-auto rounded-[3rem] border-amber-200 bg-amber-50/30 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+        <div className="bg-amber-600 p-8 text-white flex items-center gap-6">
+            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
+                <Database className="w-8 h-8" />
+            </div>
+            <div>
+                <h2 className="text-2xl font-black uppercase tracking-tight">Schema Optimization Required</h2>
+                <p className="text-amber-100 font-bold text-sm">Your booking tables are missing the 'outlet_id' column needed for multi-facility support.</p>
+            </div>
+        </div>
+        <CardContent className="p-10 space-y-8">
+            <div className="flex items-start gap-4">
+                <div className="p-3 bg-white rounded-xl shadow-sm border border-amber-100">
+                    <Terminal className="w-5 h-5 text-amber-600" />
+                </div>
+                <div className="space-y-2">
+                    <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Safe Repair Protocol</h3>
+                    <p className="text-slate-600 text-sm leading-relaxed font-medium">Please execute this script in your <span className="font-bold text-indigo-600">Supabase SQL Editor</span>. This will safely upgrade your tables without deleting existing specialists or treatments.</p>
+                </div>
+            </div>
+
+            <div className="relative group">
+                <pre className="bg-slate-950 text-indigo-300 p-8 rounded-3xl overflow-x-auto text-[11px] font-mono leading-relaxed shadow-inner border border-white/10">
+{`-- 1. ADD 'outlet_id' TO EXISTING TABLES (SAFE REPAIR)
+ALTER TABLE IF EXISTS public.therapists 
+ADD COLUMN IF NOT EXISTS outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE;
+
+ALTER TABLE IF EXISTS public.massage_types 
+ADD COLUMN IF NOT EXISTS outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE;
+
+ALTER TABLE IF EXISTS public.massage_bookings 
+ADD COLUMN IF NOT EXISTS outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE;
+
+-- 2. ENSURE TABLES EXIST (IF NEW INSTALLATION)
+CREATE TABLE IF NOT EXISTS public.therapists (
+    id TEXT PRIMARY KEY,
+    property_id TEXT REFERENCES public.properties(id) ON DELETE CASCADE,
+    outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    specialty TEXT,
+    country TEXT
+);
+
+CREATE TABLE IF NOT EXISTS public.massage_types (
+    id TEXT PRIMARY KEY,
+    property_id TEXT REFERENCES public.properties(id) ON DELETE CASCADE,
+    outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    price NUMERIC NOT NULL DEFAULT 0,
+    duration_minutes INTEGER NOT NULL DEFAULT 60
+);
+
+CREATE TABLE IF NOT EXISTS public.massage_bookings (
+    id TEXT PRIMARY KEY,
+    property_id TEXT REFERENCES public.properties(id) ON DELETE CASCADE,
+    outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE,
+    guest_id TEXT REFERENCES public.guests(id) ON DELETE SET NULL,
+    therapist_id TEXT REFERENCES public.therapists(id) ON DELETE CASCADE,
+    massage_type_id TEXT REFERENCES public.massage_types(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    price NUMERIC NOT NULL,
+    discount NUMERIC DEFAULT 0,
+    status TEXT DEFAULT 'confirmed',
+    additional_service_ids JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. RESET SECURITY POLICIES
+ALTER TABLE public.therapists DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.massage_types DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.massage_bookings DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, postgres;`}
+                </pre>
+            </div>
+            <div className="flex gap-4">
+                <Button onClick={() => window.location.reload()} className="h-12 px-8 rounded-xl font-black uppercase text-[10px] tracking-widest bg-amber-600 hover:bg-amber-700">
+                    <RefreshCcw className="w-4 h-4 mr-2" /> Verify Schema Sync
+                </Button>
+            </div>
+        </CardContent>
+    </Card>
+);
 
 const GuestHistoryView = ({ 
   guest, 
@@ -76,7 +170,7 @@ const GuestHistoryView = ({
   const [guestSales, setGuestSales] = useState<Sale[]>([]);
 
   useEffect(() => {
-    db.getSales(guest.property_id).then(allSales => {
+    db.getSales(guest.property_id, true).then(allSales => {
         setGuestSales((allSales as Sale[]).filter(s => s.guest_id === guest.id));
     });
   }, [guest.id, guest.property_id]);
@@ -113,9 +207,7 @@ const GuestHistoryView = ({
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
-      <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
-        <ArrowLeft className="w-4 h-4" /> Back to Ledger
-      </button>
+      <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors"><ArrowLeft className="w-4 h-4" /> Back to Ledger</button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 space-y-6">
@@ -123,7 +215,7 @@ const GuestHistoryView = ({
             <div className="h-20 bg-slate-900 w-full"></div>
             <CardContent className="p-8 text-center -mt-10">
               <div className="inline-flex p-1.5 bg-white rounded-3xl shadow-xl mb-4">
-                <div className="w-20 h-20 bg-indigo-600 rounded-[1.8rem] flex items-center justify-center text-white text-3xl font-black">
+                <div className="w-24 h-24 bg-indigo-600 rounded-[1.8rem] flex items-center justify-center text-white text-3xl font-black">
                   {guest.name.charAt(0)}
                 </div>
               </div>
@@ -238,9 +330,10 @@ const GuestHistoryView = ({
 
 const MassageScheduling = () => {
   const { user } = useAuth();
-  const { currentProperty, formatMoney, hasPermission } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
   const [activeTab, setActiveTab] = useState<'bookings' | 'treatments' | 'therapists' | 'guests'>('bookings');
   const [viewDate, setViewDate] = useState(new Date());
+  const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
   
   const [bookings, setBookings] = useState<MassageBooking[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
@@ -255,13 +348,14 @@ const MassageScheduling = () => {
   const [editingBooking, setEditingBooking] = useState<MassageBooking | null>(null);
   const [therapistFilter, setTherapistFilter] = useState('');
   const [guestSearchTerm, setGuestSearchTerm] = useState('');
+  const [isTableMissing, setIsTableMissing] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   
   const [newType, setNewType] = useState({ id: '', name: '', price: 0, duration_minutes: 60 });
   const [newTherapist, setNewTherapist] = useState({ id: '', name: '', specialty: '', country: '' });
   const [isEditingResource, setIsEditingResource] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest', name: string} | null>(null);
 
-  // Memoized values for current selection details
   const selectedBookingDetails = useMemo(() => {
       if (!selectedBooking) return null;
       const primaryService = massageTypes.find(mt => mt.id === selectedBooking.massage_type_id);
@@ -273,36 +367,56 @@ const MassageScheduling = () => {
       return { primaryService, addServices, therapist, guest };
   }, [selectedBooking, massageTypes, therapists, guests]);
 
+  // Permission Logic
   const canView = user && hasPermission(user.role_id, 'bookings:view');
   const canCreate = user && hasPermission(user.role_id, 'bookings:create');
   const canEdit = user && hasPermission(user.role_id, 'bookings:edit');
   const canDelete = user && hasPermission(user.role_id, 'bookings:delete');
   const canManageResources = user && hasPermission(user.role_id, 'bookings:manage_resources');
+  
+  // NEW: Strict Permission gating for scope switch and deletion
+  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties');
+  const canDeleteGuests = user && hasPermission(user.role_id, 'members:delete');
 
   useEffect(() => {
-    if (currentProperty) loadData();
-  }, [currentProperty, viewDate]);
+    if (currentOutlet) loadData();
+  }, [currentOutlet, viewDate, viewScope]);
 
   const loadData = async () => {
-    if (!currentProperty) return;
+    if (!currentOutlet || !currentProperty) return;
     setLoading(true);
+    setIsTableMissing(false);
     try {
+      const isProperty = viewScope === 'property';
+      const scopeId = isProperty ? currentProperty.id : currentOutlet.id;
+      
       const [b, g, t, m] = await Promise.all([
-        db.getMassageBookings(currentProperty.id),
+        db.getMassageBookings(scopeId, isProperty),
         db.getGuests(currentProperty.id),
-        db.getTherapists(currentProperty.id),
-        db.getMassageTypes(currentProperty.id)
+        db.getTherapists(scopeId, isProperty),
+        db.getMassageTypes(scopeId, isProperty)
       ]);
+
       setBookings(b || []);
       setGuests(g || []);
       setTherapists((t || []).sort((x, y) => x.name.localeCompare(y.name)));
       setMassageTypes((m || []).sort((x, y) => (Number(x.duration_minutes) || 0) - (Number(y.duration_minutes) || 0)));
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to load booking data", e);
+      if (e.message?.includes('schema cache') || e.code === '42P01' || e.code === '42703' || e.message?.toLowerCase().includes('column')) {
+          setIsTableMissing(true);
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  // Scope-based Guest Filtering logic
+  const guestsFilteredByScope = useMemo(() => {
+      if (viewScope === 'property') return guests;
+      // In Outlet View, only show guests who have at least one booking in this outlet
+      return guests.filter(g => bookings.some(b => b.guest_id === g.id && b.outlet_id === currentOutlet?.id));
+  }, [guests, bookings, viewScope, currentOutlet]);
 
   const handleUpdateStatus = async (id: string, status: MassageBooking['status']) => {
     if (!canEdit) return;
@@ -317,47 +431,58 @@ const MassageScheduling = () => {
 
   const handleSaveMassageType = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentProperty || !newType.name || !canManageResources) return;
+    if (!currentProperty || !currentOutlet || !newType.name || !canManageResources) return;
     setIsSubmitting(true);
+    setSaveError(null);
     try {
       if (isEditingResource && newType.id) {
-          // Fix: Removed cast to any since updateMassageType is implemented
           await db.updateMassageType(newType.id, { name: newType.name, price: newType.price, duration_minutes: newType.duration_minutes });
       } else {
-          // Fix: db.addMassageType is now implemented
-          await db.addMassageType({ ...newType, property_id: currentProperty.id });
+          await db.addMassageType({ ...newType, property_id: currentProperty.id, outlet_id: currentOutlet.id });
       }
       setNewType({ id: '', name: '', price: 0, duration_minutes: 60 });
       setIsEditingResource(false);
       loadData();
+    } catch (err: any) {
+        if (err.message?.includes('outlet_id') || err.code === '42703' || err.message?.toLowerCase().includes('column')) {
+            setIsTableMissing(true);
+        } else {
+            setSaveError(err.message || "Sync failure.");
+        }
     } finally { setIsSubmitting(false); }
   };
 
   const handleSaveTherapist = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentProperty || !newTherapist.name || !canManageResources) return;
+    if (!currentProperty || !currentOutlet || !newTherapist.name || !canManageResources) return;
     setIsSubmitting(true);
+    setSaveError(null);
     try {
       if (isEditingResource && newTherapist.id) {
-          // Fix: Removed cast to any since updateTherapist is implemented
           await db.updateTherapist(newTherapist.id, { name: newTherapist.name, specialty: newTherapist.specialty, country: newTherapist.country });
       } else {
-          // Fix: db.addTherapist is now implemented
-          await db.addTherapist({ ...newTherapist, property_id: currentProperty.id });
+          await db.addTherapist({ ...newTherapist, property_id: currentProperty.id, outlet_id: currentOutlet.id });
       }
       setNewTherapist({ id: '', name: '', specialty: '', country: '' });
       setIsEditingResource(false);
       loadData();
+    } catch (err: any) {
+        if (err.message?.includes('outlet_id') || err.code === '42703' || err.message?.toLowerCase().includes('column')) {
+            setIsTableMissing(true);
+        } else {
+            setSaveError(err.message || "Sync failure.");
+        }
     } finally { setIsSubmitting(false); }
   };
 
   const handleDeleteConfirmed = async () => {
       if (!itemToDelete) return;
       try {
-          // Fix: All these methods are now implemented in DatabaseService
           if (itemToDelete.type === 'treatment') await db.deleteMassageType(itemToDelete.id);
           else if (itemToDelete.type === 'therapist') await db.deleteTherapist(itemToDelete.id);
-          else if (itemToDelete.type === 'guest') await db.deleteGuest(itemToDelete.id);
+          else if (itemToDelete.type === 'guest') {
+              if (canDeleteGuests) await db.deleteGuest(itemToDelete.id);
+          }
           loadData();
       } finally { setItemToDelete(null); }
   };
@@ -394,6 +519,14 @@ const MassageScheduling = () => {
     </div>
   );
 
+  if (isTableMissing) {
+      return (
+          <div className="py-12 px-6">
+              <MissingBookingTablesPanel />
+          </div>
+      );
+  }
+
   if (selectedGuestForHistory) return (
     <GuestHistoryView 
       guest={selectedGuestForHistory} 
@@ -407,21 +540,38 @@ const MassageScheduling = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Resource Management</h1>
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mt-1">Property Scope: {currentProperty?.name}</p>
+          <div className="flex flex-wrap items-center gap-4 mt-1">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <Store className="w-3 h-3 text-indigo-400" /> {currentOutlet?.name}
+              </p>
+              {canSwitchScope && (
+                <>
+                  <div className="h-3 w-px bg-slate-200 hidden sm:block"></div>
+                  <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                      <button onClick={() => setViewScope('outlet')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                          <Filter className="w-2.5 h-2.5" /> Outlet View
+                      </button>
+                      <button onClick={() => setViewScope('property')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                          <Building2 className="w-2.5 h-2.5" /> Property View
+                      </button>
+                  </div>
+                </>
+              )}
+          </div>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
           <div className="flex bg-[#e2e8f0]/40 p-1.5 rounded-2xl border border-slate-200/60 shadow-inner overflow-x-auto">
-            <button onClick={() => setActiveTab('bookings')} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'bookings' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Service Grid</button>
-            <button onClick={() => setActiveTab('guests')} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'guests' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Guest Ledger</button>
-            <button onClick={() => setActiveTab('treatments')} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'treatments' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Portfolio</button>
-            <button onClick={() => setActiveTab('therapists')} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'therapists' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Staffing</button>
+            <button onClick={() => { setActiveTab('bookings'); setSaveError(null); }} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'bookings' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Service Grid</button>
+            <button onClick={() => { setActiveTab('guests'); setSaveError(null); }} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'guests' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Guest Ledger</button>
+            <button onClick={() => { setActiveTab('treatments'); setSaveError(null); }} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'treatments' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Portfolio</button>
+            <button onClick={() => { setActiveTab('therapists'); setSaveError(null); }} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'therapists' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Staffing</button>
           </div>
           {canCreate && (
-              <Button onClick={() => { setEditingBooking(null); setShowBookingForm(true); }} className="h-12 px-8 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-indigo-100">
+              <Button onClick={() => { setEditingBooking(null); setShowBookingForm(true); }} className="h-12 px-8 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-indigo-100 ml-auto md:ml-0">
                 <Plus className="w-5 h-5 mr-2" /> Authorized Booking
               </Button>
           )}
@@ -432,12 +582,12 @@ const MassageScheduling = () => {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-[1.5rem] border border-slate-200 shadow-sm gap-4">
             <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
-              <button onClick={() => setViewDate(addDays(viewDate, -1))} className="p-2 hover:bg-slate-50 rounded-xl border border-slate-100"><ChevronLeft className="w-5 h-5 text-slate-400"/></button>
+              <button onClick={() => setViewDate(addDays(viewDate, -1))} className="p-2 hover:bg-slate-50 rounded-xl border border-slate-100 transition-colors"><ChevronLeft className="w-5 h-5 text-slate-400"/></button>
               <div className="flex flex-col items-center min-w-[180px]">
                 <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{format(viewDate, 'EEEE')}</span>
                 <span className="text-base font-black text-slate-900 tracking-tight">{format(viewDate, 'MMMM dd, yyyy')}</span>
               </div>
-              <button onClick={() => setViewDate(addDays(viewDate, 1))} className="p-2 hover:bg-slate-50 rounded-xl border border-slate-100"><ChevronRight className="w-5 h-5 text-slate-400"/></button>
+              <button onClick={() => setViewDate(addDays(viewDate, 1))} className="p-2 hover:bg-slate-50 rounded-xl border border-slate-100 transition-colors"><ChevronRight className="w-5 h-5 text-slate-400"/></button>
             </div>
             <div className="relative flex-1 sm:w-64">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -477,10 +627,228 @@ const MassageScheduling = () => {
                         </div>
                       );
                     })}
+                    {therapists.length === 0 && (
+                        <div className="flex-1 p-12 text-center text-slate-400 uppercase text-[10px] font-black tracking-widest bg-white">
+                            No active specialists registered for this scope.
+                        </div>
+                    )}
                 </div>
               </div>
             </div>
           </Card>
+        </div>
+      )}
+
+      {activeTab === 'guests' && (
+        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white animate-in slide-in-from-bottom-4">
+            <CardHeader className="p-8 border-b bg-slate-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg"><Users2 className="w-6 h-6"/></div>
+                    <div>
+                        <CardTitle className="text-xl font-black uppercase tracking-tight">Guest Registry</CardTitle>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                            {viewScope === 'outlet' ? `Active bookings in ${currentOutlet?.name}` : 'Full Property Portfolio'}
+                        </p>
+                    </div>
+                </div>
+                <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input 
+                        placeholder="Search guests..." 
+                        value={guestSearchTerm}
+                        onChange={e => setGuestSearchTerm(e.target.value)}
+                        className="h-12 w-full pl-11 pr-4 rounded-xl bg-white border border-slate-200 text-xs font-bold"
+                    />
+                </div>
+            </CardHeader>
+            <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="bg-slate-50 border-b">
+                            <tr>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Profile</th>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Contact</th>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Registration</th>
+                                <th className="px-8 py-5 text-right text-[10px] font-black uppercase text-slate-400 tracking-widest">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {guestsFilteredByScope.filter(g => g.name.toLowerCase().includes(guestSearchTerm.toLowerCase())).map(g => (
+                                <tr key={g.id} className="hover:bg-indigo-50/20 group cursor-pointer" onClick={() => setSelectedGuestForHistory(g)}>
+                                    <td className="px-8 py-6 flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-indigo-600 text-xs">{g.name.charAt(0)}</div>
+                                        <span className="font-black text-slate-900 uppercase text-sm">{g.name}</span>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <div className="text-xs font-bold text-slate-700">{g.phone}</div>
+                                        <div className="text-[10px] text-slate-400">{g.email || 'No email registered'}</div>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{format(new Date(g.created_at), 'dd MMM yyyy')}</span>
+                                    </td>
+                                    <td className="px-8 py-6 text-right" onClick={e => e.stopPropagation()}>
+                                        <div className="flex justify-end gap-2">
+                                            <button onClick={() => setSelectedGuestForHistory(g)} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><ExternalLink className="w-4 h-4"/></button>
+                                            {canDeleteGuests && (
+                                                <button onClick={() => setItemToDelete({id: g.id, type: 'guest', name: g.name})} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                            {guestsFilteredByScope.length === 0 && (
+                                <tr>
+                                    <td colSpan={4} className="px-8 py-12 text-center text-slate-400 font-black uppercase text-[10px] tracking-[0.2em]">
+                                        No matching guest records found for this scope.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 'treatments' && (
+        <div className="space-y-6 animate-in slide-in-from-bottom-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white h-fit">
+                    <CardHeader className="p-8 border-b bg-slate-900 text-white relative">
+                        <CardTitle className="text-lg font-black uppercase tracking-widest flex items-center gap-3">
+                            <Layers className="w-5 h-5 text-indigo-400" /> Treatment Master Catalog
+                        </CardTitle>
+                        <p className="text-[9px] font-bold text-indigo-200 uppercase mt-1">Service Portfolio Management</p>
+                    </CardHeader>
+                    <CardContent className="p-0 max-h-[600px] overflow-y-auto custom-scrollbar">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-50 border-b border-slate-100 sticky top-0">
+                                <tr>
+                                    <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Service Name</th>
+                                    <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400 text-center">Duration</th>
+                                    <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400 text-right">Base Price</th>
+                                    <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400 text-right">Ops</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {massageTypes.map(mt => (
+                                    <tr key={mt.id} className="hover:bg-slate-50 group">
+                                        <td className="px-8 py-5 font-black text-slate-800 text-sm uppercase">{mt.name}</td>
+                                        <td className="px-8 py-5 text-center"><span className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg border border-indigo-100">{mt.duration_minutes}m</span></td>
+                                        <td className="px-8 py-5 text-right font-black text-slate-900 tabular-nums">{formatMoney(mt.price)}</td>
+                                        <td className="px-8 py-5 text-right">
+                                            <div className="flex justify-end gap-2">
+                                                {canManageResources && (
+                                                    <>
+                                                        <button onClick={() => { setIsEditingResource(true); setNewType(mt); setSaveError(null); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit3 className="w-3.5 h-3.5"/></button>
+                                                        <button onClick={() => setItemToDelete({id: mt.id, type: 'treatment', name: mt.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5"/></button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </CardContent>
+                </Card>
+
+                {canManageResources && (
+                    <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white h-fit">
+                        <CardHeader className="p-8 border-b bg-indigo-600 text-white">
+                            <CardTitle className="text-lg font-black uppercase tracking-widest">{isEditingResource ? 'Modify Treatment' : 'Provision New Treatment'}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-10">
+                            <form onSubmit={handleSaveMassageType} className="space-y-6">
+                                <Input label="Service Designation *" value={newType.name} onChange={e => setNewType({...newType, name: e.target.value})} className="h-14 rounded-2xl font-bold" placeholder="e.g. Aromatherapy Session" />
+                                <div className="grid grid-cols-2 gap-6">
+                                    <Input label="Duration (Min)" type="number" value={newType.duration_minutes} onChange={e => setNewType({...newType, duration_minutes: Number(e.target.value)})} className="h-14 rounded-2xl" />
+                                    <Input label="Retail Rate *" type="number" value={newType.price} onChange={e => setNewType({...newType, price: Number(e.target.value)})} className="h-14 rounded-2xl" />
+                                </div>
+                                {saveError && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-bold uppercase flex items-center gap-2 animate-in shake duration-300"><ShieldAlert className="w-4 h-4"/> {saveError}</div>}
+                                <div className="flex gap-4">
+                                    {isEditingResource && <Button type="button" variant="secondary" onClick={() => { setIsEditingResource(false); setNewType({id:'', name:'', price:0, duration_minutes:60}); setSaveError(null); }} className="flex-1 h-14 rounded-2xl">Discard</Button>}
+                                    <Button type="submit" isLoading={isSubmitting} className="flex-1 h-14 rounded-2xl font-black uppercase shadow-xl shadow-indigo-100">{isEditingResource ? 'Update Portfolio' : 'Deploy Service'}</Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                )}
+            </div>
+        </div>
+      )}
+
+      {activeTab === 'therapists' && (
+        <div className="space-y-6 animate-in slide-in-from-bottom-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white h-fit">
+                    <CardHeader className="p-8 border-b bg-slate-900 text-white relative">
+                        <CardTitle className="text-lg font-black uppercase tracking-widest flex items-center gap-3">
+                            <UserCheck className="w-5 h-5 text-indigo-400" /> Facility Specialists
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="bg-slate-50 border-b">
+                                    <tr>
+                                        <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Specialist Name</th>
+                                        <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Expertise</th>
+                                        <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Origin</th>
+                                        <th className="px-8 py-4 text-right text-[9px] font-black uppercase text-slate-400">Ops</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {therapists.map(t => (
+                                        <tr key={t.id} className="hover:bg-slate-50 group">
+                                            <td className="px-8 py-5 font-black text-slate-800 text-sm uppercase">{t.name}</td>
+                                            <td className="px-8 py-5 text-xs font-bold text-indigo-600">{t.specialty}</td>
+                                            <td className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t.country}</td>
+                                            <td className="px-8 py-5 text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    {canManageResources && (
+                                                        <>
+                                                            <button onClick={() => { setIsEditingResource(true); setNewTherapist(t); setSaveError(null); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit3 className="w-3.5 h-3.5"/></button>
+                                                            <button onClick={() => setItemToDelete({id: t.id, type: 'therapist', name: t.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5"/></button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {therapists.length === 0 && (
+                                        <tr>
+                                            <td colSpan={4} className="px-8 py-10 text-center text-slate-400 uppercase text-[9px] font-bold">No specialists enrolled.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {canManageResources && (
+                    <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white h-fit">
+                        <CardHeader className="p-8 border-b bg-indigo-600 text-white">
+                            <CardTitle className="text-lg font-black uppercase tracking-widest">{isEditingResource ? 'Modify Profile' : 'Enroll Specialist'}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-10">
+                            <form onSubmit={handleSaveTherapist} className="space-y-6">
+                                <Input label="Full Identity Name *" value={newTherapist.name} onChange={e => setNewTherapist({...newTherapist, name: e.target.value})} className="h-14 rounded-2xl font-bold" />
+                                <div className="grid grid-cols-2 gap-6">
+                                    <Input label="Core Specialty" value={newTherapist.specialty} onChange={e => setNewTherapist({...newTherapist, specialty: e.target.value})} className="h-14 rounded-2xl" placeholder="e.g. Deep Tissue" />
+                                    <Input label="Country of Origin" value={newTherapist.country} onChange={e => setNewTherapist({...newTherapist, country: e.target.value})} className="h-14 rounded-2xl" />
+                                </div>
+                                {saveError && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-bold uppercase flex items-center gap-2 animate-in shake duration-300"><ShieldAlert className="w-4 h-4"/> {saveError}</div>}
+                                <div className="flex gap-4">
+                                    {isEditingResource && <Button type="button" variant="secondary" onClick={() => { setIsEditingResource(false); setNewTherapist({id:'', name:'', specialty:'', country:''}); setSaveError(null); }} className="flex-1 h-14 rounded-2xl">Discard</Button>}
+                                    <Button type="submit" isLoading={isSubmitting} className="flex-1 h-14 rounded-2xl font-black uppercase shadow-xl shadow-indigo-100">{isEditingResource ? 'Update Roster' : 'Register Specialist'}</Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                )}
+            </div>
         </div>
       )}
 
