@@ -371,9 +371,17 @@ class DatabaseService {
 
   async updateMember(id: string, member: Partial<Member>) {
     if (this.isSupabase()) {
-      const { error } = await supabase.from('members').update(member).eq('id', id);
+      // PRUNING: Supabase 'update' should only contain the changed fields, NOT the primary key 'id' or creation date
+      const patch: any = { ...member };
+      delete patch.id;
+      delete patch.created_at;
+      
+      // Remove null or undefined values to prevent SQL validation errors
+      Object.keys(patch).forEach(key => (patch[key] === null || patch[key] === undefined) && delete patch[key]);
+
+      const { error } = await supabase.from('members').update(patch).eq('id', id);
       if (error) throw error;
-      await this.logAction('UPDATE_MEMBER', `Profile update: ${member.guest_name || id}`, member.outlet_id);
+      await this.logAction('UPDATE_MEMBER', `Profile update: ${patch.guest_name || id}`, patch.outlet_id);
     }
   }
 

@@ -28,9 +28,15 @@ import {
   ShieldCheck,
   RotateCcw,
   Command,
+  User,
   UserCircle2,
   Phone,
-  Mail
+  Mail,
+  ShieldAlert,
+  AlertTriangle,
+  Globe,
+  Calendar,
+  Shield
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Freeze, Staff } from '../types';
@@ -47,25 +53,26 @@ const startOfDay = (date: Date) => {
   return d;
 };
 
+// RELAXED SCHEMA: Added .nullable() and .optional() to most fields
 const memberSchema = z.object({
-  membership_number: z.string().min(1, "Required"),
-  guest_name: z.string().min(2, "Name too short"),
-  category_id: z.string().min(1, "Required"),
-  start_date: z.string().min(1, "Required"),
-  discount: z.number().min(0),
+  membership_number: z.string().min(1, "Membership ID is required"),
+  guest_name: z.string().min(2, "Name must be at least 2 chars"),
+  category_id: z.string().min(1, "Tier selection is required"),
+  start_date: z.string().min(1, "Effective date is required"),
+  discount: z.number().min(0, "Discount cannot be negative"),
   check_no: z.string().optional().nullable(),
   sales_rep_id: z.string().optional().nullable(),
-  email: z.string().email("Invalid email").or(z.literal("")),
-  phone: z.string().min(1, "Required"),
-  nationality: z.string().optional(),
-  dob: z.string().optional(),
+  email: z.string().email("Invalid email format").or(z.literal("")).optional().nullable(),
+  phone: z.string().optional().nullable(),
+  nationality: z.string().optional().nullable(),
+  dob: z.string().optional().nullable(),
   is_married: z.boolean().default(false),
   package_type: z.enum(['Single', 'Couple', 'Family']).default('Single'),
   access_type: z.enum(['Pool', 'Spa', 'Both']).default('Both'),
   membership_type: z.enum(['New', 'Renew']).default('New'),
-  spouse_name: z.string().optional(),
-  spouse_dob: z.string().optional(),
-  remarks: z.string().optional()
+  spouse_name: z.string().optional().nullable(),
+  spouse_dob: z.string().optional().nullable(),
+  remarks: z.string().optional().nullable()
 });
 
 type MemberFormValues = z.infer<typeof memberSchema>;
@@ -261,21 +268,38 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
   const { formatMoney, currency } = useSettings();
   const [pulledGuest, setPulledGuest] = useState<Member | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<MemberFormValues>({
     resolver: zodResolver(memberSchema),
-    defaultValues: (existingMember && !isRenewal) ? {
+    defaultValues: (existingMember && isEditing) ? {
         ...existingMember,
+        // Convert nulls to empty strings for inputs
+        phone: existingMember.phone ?? '',
+        email: existingMember.email ?? '',
+        nationality: existingMember.nationality ?? '',
+        dob: existingMember.dob ?? '',
+        spouse_name: existingMember.spouse_name ?? '',
+        spouse_dob: existingMember.spouse_dob ?? '',
+        remarks: existingMember.remarks ?? '',
+        check_no: existingMember.check_no ?? '',
         membership_type: existingMember.membership_type || 'New'
     } : {
       membership_number: existingMember?.membership_number || '',
       guest_name: existingMember?.guest_name || '',
       category_id: existingMember?.category_id || '',
       start_date: isRenewal && existingMember ? format(addDays(parseISO(existingMember.current_end_date), 1), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
-      discount: 0,
-      phone: existingMember?.phone || '',
-      email: existingMember?.email || '',
-      membership_type: isRenewal ? 'Renew' : 'New'
+      discount: existingMember?.discount || 0,
+      phone: existingMember?.phone ?? '',
+      email: existingMember?.email ?? '',
+      nationality: existingMember?.nationality ?? '',
+      dob: existingMember?.dob ?? '',
+      package_type: existingMember?.package_type || 'Single',
+      access_type: existingMember?.access_type || 'Both',
+      membership_type: isRenewal ? 'Renew' : 'New',
+      remarks: existingMember?.remarks ?? '',
+      check_no: existingMember?.check_no ?? ''
     }
   });
 
@@ -291,10 +315,12 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
           if (match && pulledGuest?.id !== match.id) {
               setPulledGuest(match);
               setValue('guest_name', match.guest_name);
-              setValue('phone', match.phone || '');
-              setValue('email', match.email || '');
-              setValue('nationality', match.nationality || '');
-              setValue('dob', match.dob || '');
+              setValue('phone', match.phone ?? '');
+              setValue('email', match.email ?? '');
+              setValue('nationality', match.nationality ?? '');
+              setValue('dob', match.dob ?? '');
+              setValue('package_type', match.package_type || 'Single');
+              setValue('access_type', match.access_type || 'Both');
           }
       }
   }, [membershipNumber, members, isRenewal, isEditing, setValue, pulledGuest]);
@@ -336,13 +362,23 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
       return null;
   }, [isRenewal, existingMember, startDate]);
 
-  const onSubmit = async (data: MemberFormValues) => {
+  const onFormSubmit = async (data: MemberFormValues) => {
     setIsSubmitting(true);
+    setSubmitError(null);
     const isUpdate = !!(isEditing && !isRenewal && existingMember);
     
+    // Convert empty strings back to nulls for database storage
+    const cleanData = { ...data };
+    Object.keys(cleanData).forEach(key => {
+        const k = key as keyof MemberFormValues;
+        if (cleanData[k] === "") {
+            (cleanData as any)[k] = null;
+        }
+    });
+
     const payload: Member = {
       ...(isUpdate ? existingMember : {}),
-      ...data,
+      ...cleanData,
       id: isUpdate ? existingMember!.id : crypto.randomUUID(),
       outlet_id: currentOutletId,
       original_end_date: endDateStr,
@@ -351,7 +387,7 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
       net_amount: netAmount,
       daily_rate: dailyRate,
       status: isUpdate ? existingMember!.status : MemberStatus.ACTIVE
-    };
+    } as Member;
 
     try {
         if (isUpdate) {
@@ -359,17 +395,24 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
         } else {
             await db.addMember(payload);
         }
-        setIsSubmitting(false);
-        onSuccess(payload);
-    } catch (e) { 
+        
+        setSubmitSuccess(true);
+        setTimeout(() => {
+            setIsSubmitting(false);
+            onSuccess(payload);
+        }, 800);
+    } catch (e: any) { 
         console.error("Submission Failure:", e);
+        setSubmitError(e.message || "Database synchronization failed.");
         setIsSubmitting(false);
     }
   };
 
   const title = isRenewal ? 'Renew Membership' : isEditing ? 'Edit Profile' : 'New Enrollment';
-  const buttonLabel = isSubmitting ? 'Syncing...' : isRenewal ? 'Commit Renewal' : isEditing ? 'Sync Profile' : 'Confirm Enrollment';
-  const isLocked = isRenewal || isEditing || !!pulledGuest;
+  const buttonLabel = submitSuccess ? 'Handshake Success' : isSubmitting ? 'Syncing...' : isRenewal ? 'Commit Renewal' : isEditing ? 'Sync Profile' : 'Confirm Enrollment';
+  
+  // LOCK LOGIC: Editable during Edit Profile, Locked during Renewal/Pull
+  const isNameIdLocked = (isRenewal || !!pulledGuest) && !isEditing;
 
   return (
     <Card className="max-w-4xl mx-auto rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden bg-white animate-in zoom-in-95 duration-300">
@@ -387,8 +430,23 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
       </CardHeader>
       
       <CardContent className="p-12">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-10">
+        <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-10">
           
+          {Object.keys(errors).length > 0 && (
+            <div className="bg-red-50 p-6 rounded-[2rem] border border-red-100 flex items-center gap-4 animate-in shake duration-300">
+               <AlertTriangle className="w-8 h-8 text-red-500" />
+               <div className="flex-1">
+                  <h4 className="text-[11px] font-black text-red-900 uppercase tracking-tight">Validation Error</h4>
+                  <p className="text-[10px] font-bold text-red-600 mt-0.5">Please review all fields. Some entries do not meet system requirements.</p>
+                  <div className="mt-2 grid grid-cols-2 gap-x-4">
+                      {Object.entries(errors).map(([field, error]) => (
+                          <p key={field} className="text-[9px] font-black text-red-500 uppercase tracking-tighter">• {field.replace('_', ' ')}: {(error as any)?.message}</p>
+                      ))}
+                  </div>
+               </div>
+            </div>
+          )}
+
           {(isRenewal || pulledGuest) && (
             <div className={`p-6 rounded-[2rem] border flex items-center justify-between animate-in slide-in-from-top-4 duration-500 ${pulledGuest ? 'bg-indigo-50 border-indigo-100' : 'bg-emerald-50 border-emerald-100'}`}>
               <div className="flex items-center gap-4">
@@ -413,46 +471,123 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-            <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Membership No. / ID</label>
-                <div className="relative group">
-                   <UserCircle2 className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 ${isLocked ? 'text-slate-400' : 'text-emerald-500'}`} />
-                   <Input {...register('membership_number')} readOnly={isLocked} className={`h-14 pl-12 rounded-2xl font-bold border-2 ${isLocked ? 'bg-slate-50 text-slate-500 border-slate-100' : 'border-slate-200 focus:border-indigo-600'}`} />
-                   {!isLocked && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[8px] font-black text-slate-300 uppercase">Type ID to Pull Profile</span>}
-                </div>
+          {/* Section: Primary Identity */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <UserCircle2 className="w-5 h-5 text-indigo-600" />
+              <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">Member Core Identity</h4>
             </div>
-            <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Membership Tier</label>
-                <select {...register('category_id')} className="w-full h-14 rounded-2xl border-2 border-slate-200 bg-white px-5 font-black text-sm outline-none focus:border-indigo-600 appearance-none"><option value="">Select Category...</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-            </div>
-            <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Guest Profile Name</label>
-                <Input {...register('guest_name')} readOnly={isLocked} className={`h-14 rounded-2xl font-bold border-2 ${isLocked ? 'bg-slate-50 text-slate-500 border-slate-100' : 'border-indigo-100 focus:border-indigo-600'}`} />
-            </div>
-            <div className="space-y-2">
-                <div className="flex justify-between">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Effective Start Date</label>
-                  {!isRenewal && <span className="text-[8px] font-black text-slate-300 uppercase italic">Defaulted to Today</span>}
-                </div>
-                <Input type="date" {...register('start_date')} className="h-14 rounded-2xl font-bold border-2 border-slate-200" />
-            </div>
-            <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reference / Check No. (Audit)</label>
-                <Input {...register('check_no')} className="h-14 rounded-2xl font-bold border-2 border-slate-200" />
-            </div>
-            <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Discount Allocation ({currency?.symbol || 'ر.ق'})</label>
-                <Input type="number" step="0.01" {...register('discount', { valueAsNumber: true })} className="h-14 rounded-2xl font-bold border-2 border-slate-200" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+              <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Membership No. / ID *</label>
+                  <div className="relative group">
+                    <Shield className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 ${isNameIdLocked ? 'text-slate-400' : 'text-emerald-500'}`} />
+                    <Input {...register('membership_number')} readOnly={isNameIdLocked} className={`h-14 pl-12 rounded-2xl font-bold border-2 ${isNameIdLocked ? 'bg-slate-50 text-slate-500 border-slate-100 cursor-not-allowed' : 'border-slate-200 focus:border-indigo-600'}`} />
+                  </div>
+                  {errors.membership_number && <p className="text-[9px] text-red-500 font-bold uppercase ml-1">{errors.membership_number.message}</p>}
+              </div>
+              <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Guest Profile Name *</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input {...register('guest_name')} readOnly={isNameIdLocked} className={`h-14 pl-12 rounded-2xl font-bold border-2 ${isNameIdLocked ? 'bg-slate-50 text-slate-500 border-slate-100 cursor-not-allowed' : 'border-indigo-100 focus:border-indigo-600'}`} />
+                  </div>
+                  {errors.guest_name && <p className="text-[9px] text-red-500 font-bold uppercase ml-1">{errors.guest_name.message}</p>}
+              </div>
+              <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Contact Phone</label>
+                  <div className="relative">
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input {...register('phone')} className="h-14 pl-12 rounded-2xl font-bold border-2 border-slate-200 focus:border-indigo-600" />
+                  </div>
+              </div>
+              <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input {...register('email')} className="h-14 pl-12 rounded-2xl font-bold border-2 border-slate-200 focus:border-indigo-600" />
+                  </div>
+                  {errors.email && <p className="text-[9px] text-red-500 font-bold uppercase ml-1">{errors.email.message}</p>}
+              </div>
+              <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nationality</label>
+                  <div className="relative">
+                    <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input {...register('nationality')} className="h-14 pl-12 rounded-2xl font-bold border-2 border-slate-200 focus:border-indigo-600" />
+                  </div>
+              </div>
+              <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Date of Birth</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input type="date" {...register('dob')} className="h-14 pl-12 rounded-2xl font-bold border-2 border-slate-200 focus:border-indigo-600" />
+                  </div>
+              </div>
             </div>
           </div>
 
-          {overlapError && (
+          {/* Section: Contract Details */}
+          <div className="space-y-6 pt-6 border-t border-slate-100">
+            <div className="flex items-center gap-3">
+              <Layers className="w-5 h-5 text-indigo-600" />
+              <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">Tier & Recognition Logic</h4>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+              <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Membership Tier *</label>
+                  <select {...register('category_id')} className="w-full h-14 rounded-2xl border-2 border-slate-200 bg-white px-5 font-black text-sm outline-none focus:border-indigo-600 appearance-none"><option value="">Select Category...</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                  {errors.category_id && <p className="text-[9px] text-red-500 font-bold uppercase ml-1">{errors.category_id.message}</p>}
+              </div>
+              <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Effective Start Date *</label>
+                  </div>
+                  <Input type="date" {...register('start_date')} className="h-14 rounded-2xl font-bold border-2 border-slate-200 focus:border-indigo-600" />
+                  {errors.start_date && <p className="text-[9px] text-red-500 font-bold uppercase ml-1">{errors.start_date.message}</p>}
+              </div>
+              <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Package Context</label>
+                  <select {...register('package_type')} className="w-full h-14 rounded-2xl border-2 border-slate-200 bg-white px-5 font-black text-sm outline-none focus:border-indigo-600 appearance-none">
+                      <option value="Single">Single Enrollment</option>
+                      <option value="Couple">Couple Portfolio</option>
+                      <option value="Family">Family Manifest</option>
+                  </select>
+              </div>
+              <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Access Protocol</label>
+                  <select {...register('access_type')} className="w-full h-14 rounded-2xl border-2 border-slate-200 bg-white px-5 font-black text-sm outline-none focus:border-indigo-600 appearance-none">
+                      <option value="Both">Both (Pool + Spa)</option>
+                      <option value="Pool">Pool Facilities Only</option>
+                      <option value="Spa">Spa & Gym Only</option>
+                  </select>
+              </div>
+              <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reference / Check No. (Audit)</label>
+                  <Input {...register('check_no')} className="h-14 rounded-2xl font-bold border-2 border-slate-200 focus:border-indigo-600" />
+              </div>
+              <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Discount Allocation ({currency?.symbol || 'ر.ق'})</label>
+                  <Input type="number" step="0.01" {...register('discount', { valueAsNumber: true })} className="h-14 rounded-2xl font-bold border-2 border-slate-200 focus:border-indigo-600" />
+              </div>
+            </div>
+          </div>
+
+          {submitError && (
             <div className="bg-red-50 p-6 rounded-[2rem] border border-red-100 flex items-center gap-4 animate-in shake duration-300">
-              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-red-500 shadow-sm"><AlertCircle className="w-6 h-6" /></div>
+               <ShieldAlert className="w-8 h-8 text-red-500" />
+               <div>
+                  <h4 className="text-[11px] font-black text-red-900 uppercase tracking-tight">Database Rejection</h4>
+                  <p className="text-[10px] font-bold text-red-600 mt-0.5">{submitError}</p>
+               </div>
+            </div>
+          )}
+
+          {overlapError && (
+            <div className="bg-amber-50 p-6 rounded-[2rem] border border-amber-100 flex items-center gap-4 animate-in slide-in-from-left-2 duration-300">
+              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-amber-500 shadow-sm"><AlertCircle className="w-6 h-6" /></div>
               <div>
-                <h4 className="text-[11px] font-black text-red-900 uppercase tracking-tight">Timeline Integrity Audit</h4>
-                <p className="text-[10px] font-bold text-red-600 mt-0.5">{overlapError}</p>
+                <h4 className="text-[11px] font-black text-amber-900 uppercase tracking-tight">Timeline Integrity Warning</h4>
+                <p className="text-[10px] font-bold text-amber-600 mt-0.5">{overlapError}</p>
               </div>
             </div>
           )}
@@ -478,8 +613,8 @@ const MemberForm = ({ categories, members, staff, existingMember, isRenewal, isE
 
           <div className="flex gap-4 pt-4">
               <button type="button" onClick={onCancel} className="flex-1 h-16 rounded-[1.8rem] font-black text-xs uppercase tracking-widest bg-[#f4f7fa] text-slate-700 hover:bg-slate-200 transition-all flex items-center justify-center gap-2"><Command className="w-3.5 h-3.5 opacity-40"/> Cancel</button>
-              <button type="submit" disabled={isSubmitting} className={`flex-[2] h-16 rounded-[1.8rem] font-black text-base uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${isSubmitting ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#5c56d6] text-white shadow-[0_20px_40px_-10px_rgba(92,86,214,0.4)] hover:bg-[#4d48c0]'}`}>
-                {buttonLabel} {isSubmitting ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <Command className="w-4 h-4 opacity-40"/>}
+              <button type="submit" disabled={isSubmitting || submitSuccess} className={`flex-[2] h-16 rounded-[1.8rem] font-black text-base uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${submitSuccess ? 'bg-emerald-600 text-white' : isSubmitting ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#5c56d6] text-white shadow-[0_20px_40px_-10px_rgba(92,86,214,0.4)] hover:bg-[#4d48c0]'}`}>
+                {buttonLabel} {submitSuccess ? <CheckCircle2 className="w-5 h-5 animate-in zoom-in" /> : isSubmitting ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <Command className="w-4 h-4 opacity-40"/>}
               </button>
           </div>
         </form>
