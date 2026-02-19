@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { 
   Card, 
@@ -76,7 +77,7 @@ const GuestHistoryView = ({
 
   useEffect(() => {
     db.getSales(guest.property_id).then(allSales => {
-        setGuestSales(allSales.filter(s => s.guest_id === guest.id));
+        setGuestSales((allSales as Sale[]).filter(s => s.guest_id === guest.id));
     });
   }, [guest.id, guest.property_id]);
 
@@ -320,8 +321,10 @@ const MassageScheduling = () => {
     setIsSubmitting(true);
     try {
       if (isEditingResource && newType.id) {
-          await (db as any).updateMassageType(newType.id, { name: newType.name, price: newType.price, duration_minutes: newType.duration_minutes });
+          // Fix: Removed cast to any since updateMassageType is implemented
+          await db.updateMassageType(newType.id, { name: newType.name, price: newType.price, duration_minutes: newType.duration_minutes });
       } else {
+          // Fix: db.addMassageType is now implemented
           await db.addMassageType({ ...newType, property_id: currentProperty.id });
       }
       setNewType({ id: '', name: '', price: 0, duration_minutes: 60 });
@@ -336,8 +339,10 @@ const MassageScheduling = () => {
     setIsSubmitting(true);
     try {
       if (isEditingResource && newTherapist.id) {
-          await (db as any).updateTherapist(newTherapist.id, { name: newTherapist.name, specialty: newTherapist.specialty, country: newTherapist.country });
+          // Fix: Removed cast to any since updateTherapist is implemented
+          await db.updateTherapist(newTherapist.id, { name: newTherapist.name, specialty: newTherapist.specialty, country: newTherapist.country });
       } else {
+          // Fix: db.addTherapist is now implemented
           await db.addTherapist({ ...newTherapist, property_id: currentProperty.id });
       }
       setNewTherapist({ id: '', name: '', specialty: '', country: '' });
@@ -349,6 +354,7 @@ const MassageScheduling = () => {
   const handleDeleteConfirmed = async () => {
       if (!itemToDelete) return;
       try {
+          // Fix: All these methods are now implemented in DatabaseService
           if (itemToDelete.type === 'treatment') await db.deleteMassageType(itemToDelete.id);
           else if (itemToDelete.type === 'therapist') await db.deleteTherapist(itemToDelete.id);
           else if (itemToDelete.type === 'guest') await db.deleteGuest(itemToDelete.id);

@@ -7,19 +7,15 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      // Fix for: [commonjs--resolver] Missing "./v4/core" specifier in "zod" package
-      // This maps the deep import used by @hookform/resolvers to the main zod entry point
-      'zod/v4/core': 'zod',
+      // Removed specific zod alias that causes 'instanceof' errors in browser bundling
     },
   },
   build: {
-    // These options help Vite/Rollup handle CommonJS dependencies like @hookform/resolvers
     commonjsOptions: {
       transformMixedEsModules: true,
     },
   },
-  // Force optimization of these dependencies to ensure compatibility
   optimizeDeps: {
-    include: ['zod', 'react-hook-form', '@hookform/resolvers/zod'],
+    include: ['zod', 'react-hook-form', '@hookform/resolvers/zod', 'date-fns'],
   },
 });
