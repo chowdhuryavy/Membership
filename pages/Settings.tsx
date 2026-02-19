@@ -42,7 +42,8 @@ import {
   ChevronRight,
   Info,
   RefreshCcw,
-  Key
+  Key,
+  Filter
 } from 'lucide-react';
 
 const PermissionMatrix = ({ 
@@ -171,7 +172,7 @@ const SettingsPage = () => {
     { id: 'settings', label: 'System Settings' },
   ], []);
 
-  const [companyForm, setCompanyForm] = useState<CompanySettings>({ name: '', logo_url: '', address: '', currency_id: '', signatory_prepared_role: '', signatory_reviewed_role: '', signatory_approved_role: '', navigation_order: [], conditions: '' });
+  const [companyForm, setCompanyForm] = useState<CompanySettings>({ name: '', logo_url: '', address: '', currency_id: '', signatory_prepared_role: '', signatory_reviewed_role: '', signatory_approved_role: '', navigation_order: [], conditions: '', keyboard_shortcuts: {} });
   const [propertyForm, setPropertyForm] = useState<Omit<Property, 'id'>>({ name: '', logo_url: '', address: '' });
   const [outletForm, setOutletForm] = useState<Omit<Outlet, 'id'>>({ name: '', property_id: '', signatory_prepared_role: '', signatory_reviewed_role: '', signatory_approved_role: '', conditions: '' });
   const [roleForm, setRoleForm] = useState<Omit<Role, 'id'>>({ name: '', permissions: [] });
@@ -337,6 +338,16 @@ const SettingsPage = () => {
     { id: 'maintenance', label: 'Maintenance', visible: hasPermission(user?.role_id || '', 'settings:view_maintenance'), icon: Zap },
   ].filter(t => t.visible), [user, roles, hasPermission]);
 
+  const updateShortcut = (id: string, value: string) => {
+      setCompanyForm(prev => ({
+          ...prev,
+          keyboard_shortcuts: {
+              ...(prev.keyboard_shortcuts || {}),
+              [id]: value
+          }
+      }));
+  };
+
   return (
     <div className="space-y-10 max-w-7xl mx-auto animate-in fade-in duration-700 pb-20">
       <div className="flex items-center gap-6">
@@ -498,6 +509,72 @@ const SettingsPage = () => {
                   </Card>
               )}
 
+              {activeTab === 'shortcuts' && (
+                  <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center gap-3">
+                          <Keyboard className="w-8 h-8 text-indigo-600" />
+                          <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Executive Hotkeys</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-12 space-y-10">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                              {[
+                                  { id: 'nav_dashboard', label: 'Navigation: Dashboard' },
+                                  { id: 'nav_members', label: 'Navigation: Members' },
+                                  { id: 'nav_settings', label: 'Navigation: Settings' },
+                                  { id: 'global_search', label: 'Global Search Overlay' },
+                                  { id: 'action_create', label: 'Action: Create New Record' },
+                                  { id: 'action_save', label: 'Action: Save/Submit Form' },
+                                  { id: 'action_cancel', label: 'Action: Close/Cancel' },
+                                  { id: 'action_view_contract', label: 'Action: View Contract' }
+                              ].map(item => (
+                                  <div key={item.id} className="space-y-2">
+                                      <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">{item.label}</label>
+                                      <Input 
+                                        value={companyForm.keyboard_shortcuts?.[item.id] || ''} 
+                                        onChange={e => updateShortcut(item.id, e.target.value)}
+                                        placeholder="e.g. Alt+D"
+                                        className="h-12 rounded-xl font-mono text-xs border-2"
+                                      />
+                                  </div>
+                              ))}
+                          </div>
+                          <Button onClick={handleUpdateCompany} isLoading={isSaving} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl bg-indigo-600">Commit Shortcuts</Button>
+                      </CardContent>
+                  </Card>
+              )}
+
+              {activeTab === 'documents' && (
+                  <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center gap-3">
+                          <FileCode className="w-8 h-8 text-indigo-600" />
+                          <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Audit Templates</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-12 space-y-10">
+                          <div className="space-y-6">
+                              <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Membership Agreement Body (Global)</label>
+                                  <textarea 
+                                    value={companyForm.contract_template || ''} 
+                                    onChange={e => setCompanyForm({...companyForm, contract_template: e.target.value})}
+                                    className="w-full min-h-[300px] p-6 rounded-2xl border-2 border-slate-100 font-medium text-sm focus:outline-none focus:border-indigo-600 transition-all custom-scrollbar"
+                                    placeholder="Enter raw template text..."
+                                  />
+                              </div>
+                              <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Standard Terms & Conditions (Append)</label>
+                                  <textarea 
+                                    value={companyForm.conditions || ''} 
+                                    onChange={e => setCompanyForm({...companyForm, conditions: e.target.value})}
+                                    className="w-full min-h-[150px] p-6 rounded-2xl border-2 border-slate-100 font-medium text-sm focus:outline-none focus:border-indigo-600 transition-all custom-scrollbar"
+                                    placeholder="Legal boilerplate..."
+                                  />
+                              </div>
+                          </div>
+                          <Button onClick={handleUpdateCompany} isLoading={isSaving} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl bg-indigo-600">Commit Legal Schema</Button>
+                      </CardContent>
+                  </Card>
+              )}
+
               {activeTab === 'maintenance' && (
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-red-50 p-8 border-b border-red-100 flex items-center gap-3">
@@ -617,6 +694,14 @@ const SettingsPage = () => {
                                     </div>
                               </div>
                               <Select label="Governance Scope" options={[{value:'Global', label:'Global (Portfolio)'}, {value:'Property', label:'Property-Specific'}, {value:'Outlet', label:'Facility-Specific'}]} value={incentiveForm.scope} onChange={e => setIncentiveForm({...incentiveForm, scope: e.target.value as any, scope_id: e.target.value === 'Global' ? 'global' : ''})} className="h-14 rounded-xl border-2" />
+                              
+                              {incentiveForm.scope === 'Property' && (
+                                <Select label="Target Property Portfolio *" options={[{value:'', label:'Select Property...'}, ...properties.map(p=>({value:p.id, label:p.name}))]} value={incentiveForm.scope_id} onChange={e => setIncentiveForm({...incentiveForm, scope_id: e.target.value})} className="h-14 rounded-xl border-2 animate-in slide-in-from-top-2" />
+                              )}
+                              {incentiveForm.scope === 'Outlet' && (
+                                <Select label="Target Facility Context *" options={[{value:'', label:'Select Outlet...'}, ...outlets.map(o=>({value:o.id, label:`${o.name} - ${properties.find(p => p.id === o.property_id)?.name || 'Unknown'}`}))]} value={incentiveForm.scope_id} onChange={e => setIncentiveForm({...incentiveForm, scope_id: e.target.value})} className="h-14 rounded-xl border-2 animate-in slide-in-from-top-2" />
+                              )}
+
                               <Select label="Recognition Department" options={[{value:'Massage', label:'Treatment Services'}, {value:'Membership', label:'Membership Enrollments'}, {value:'Sale', label:'POS & Retail'}]} value={incentiveForm.applies_to} onChange={e => setIncentiveForm({...incentiveForm, applies_to: e.target.value as any, target_id: 'all'})} className="h-14 rounded-xl border-2" />
                               
                               <div className="space-y-2">
@@ -646,6 +731,32 @@ const SettingsPage = () => {
                                   <div className="space-y-2"><label className="text-[10px] font-black text-slate-900 uppercase ml-1">Math Logic</label><div className="flex bg-slate-100 p-1 rounded-xl h-14"><button type="button" onClick={() => setIncentiveForm({...incentiveForm, calculation_type:'Percentage'})} className={`flex-1 rounded-lg text-[10px] font-black uppercase transition-all ${incentiveForm.calculation_type === 'Percentage' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>%</button><button type="button" onClick={() => setIncentiveForm({...incentiveForm, calculation_type:'Fixed'})} className={`flex-1 rounded-lg text-[10px] font-black uppercase transition-all ${incentiveForm.calculation_type === 'Fixed' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>FIXED</button></div></div>
                                   <Input label="Yield Value *" type="number" value={incentiveForm.value} onChange={e => setIncentiveForm({...incentiveForm, value: parseFloat(e.target.value) || 0})} className="h-14 rounded-xl font-black border-2" />
                               </div>
+
+                              {incentiveForm.applies_to === 'Massage' && (
+                                <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 space-y-4 animate-in fade-in slide-in-from-top-2">
+                                    <div className="flex items-center gap-2 text-indigo-600">
+                                        <Filter className="w-4 h-4" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Eligibility Criteria</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <Input 
+                                            label="Min Price Amount" 
+                                            type="number" 
+                                            value={incentiveForm.min_price} 
+                                            onChange={e => setIncentiveForm({...incentiveForm, min_price: parseFloat(e.target.value) || 0})} 
+                                            className="h-12 rounded-xl text-xs font-bold border-2" 
+                                        />
+                                        <Input 
+                                            label="Max Price Amount" 
+                                            type="number" 
+                                            value={incentiveForm.max_price} 
+                                            onChange={e => setIncentiveForm({...incentiveForm, max_price: parseFloat(e.target.value) || 99999})} 
+                                            className="h-12 rounded-xl text-xs font-bold border-2" 
+                                        />
+                                    </div>
+                                </div>
+                              )}
+
                               <Button onClick={handleIncentiveSubmit} className="w-full h-16 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-100">Authorize Logic</Button>
                           </div>
                       )}
