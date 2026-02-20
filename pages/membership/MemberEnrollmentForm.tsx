@@ -7,7 +7,7 @@ import {
   X, User, ShieldCheck, RotateCcw, Plus, Layers,
   Coins, Heart, AlertTriangle, RefreshCcw,
   Calendar, Zap, Mail, Phone, Globe,
-  CheckCircle2, Command, ChevronDown, Receipt, ListTree
+  CheckCircle2, Command, ChevronDown, Receipt, List
 } from 'lucide-react';
 import { db } from '../../services/mockSupabase';
 import { Member, MembershipCategory, MemberStatus, Staff } from '../../types';
@@ -263,7 +263,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         <div className={`mx-10 mt-6 p-5 rounded-[1.8rem] border flex items-center justify-between animate-in slide-in-from-top-2 duration-300 shadow-sm ${themeClass}`}>
             <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-white/50">
-                    <ListTree className={`w-5 h-5 ${iconClass}`} />
+                    <List className={`w-5 h-5 ${iconClass}`} />
                 </div>
                 <div>
                     <h4 className={`text-[11px] font-black uppercase tracking-tight ${titleClass}`}>Lifecycle Identity Matched</h4>

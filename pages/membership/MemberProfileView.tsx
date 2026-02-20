@@ -5,8 +5,8 @@ import {
   Globe, Snowflake, Plus, Trash2, CheckCircle2, Heart, FileText,
   Zap, CalendarClock, Activity, AlertTriangle, X, Coins, ExternalLink,
   Shield, UserCheck, CalendarDays, ClipboardList, TrendingUp, History,
-  LayoutGrid, Calendar, Pencil, ArrowRight, AlertCircle, ListTree,
-  Milestone, MousePointer2
+  LayoutDashboard, Calendar, Pencil, ArrowRight, AlertCircle, List,
+  Milestone, MousePointer
 } from 'lucide-react';
 import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, MassageType } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -304,14 +304,14 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         </div>
                       </div>
 
-                      <div className="space-y-1.5"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><LayoutGrid className="w-3 h-3"/> Package Spec</p><p className="text-sm font-black uppercase text-slate-900">{viewingMember.package_type}</p></div>
+                      <div className="space-y-1.5"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><LayoutDashboard className="w-3 h-3"/> Package Spec</p><p className="text-sm font-black uppercase text-slate-900">{viewingMember.package_type}</p></div>
                   </div>
               </Card>
 
               <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white flex flex-col">
                   <CardHeader className="bg-[#0f172a] text-white p-8 flex justify-between items-center border-b border-white/10 shrink-0">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-indigo-500/20 rounded-xl flex items-center justify-center border border-indigo-500/30 shadow-lg"><ListTree className="w-5 h-5 text-indigo-400" /></div>
+                        <div className="w-9 h-9 bg-indigo-500/20 rounded-xl flex items-center justify-center border border-indigo-500/30 shadow-lg"><List className="w-5 h-5 text-indigo-400" /></div>
                         <div>
                             <CardTitle className="text-[11px] font-black uppercase tracking-widest leading-none">Membership Lifecycle History</CardTitle>
                             <p className="text-[8px] font-black text-indigo-300 uppercase tracking-widest mt-1">Portfolio Traceability Ledger (Click to View Record)</p>
@@ -358,7 +358,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                           <div className="flex flex-col items-end gap-1">
                                               <span className="font-black text-slate-900 text-xs">{formatMoney(hist.net_amount)}</span>
                                               <div className={`flex items-center gap-1 text-[7px] font-black uppercase transition-all ${hist.id === viewingMember.id ? 'text-indigo-600 opacity-100' : 'text-slate-300 opacity-0 group-hover/row:opacity-100'}`}>
-                                                  <MousePointer2 className="w-2.5 h-2.5" /> {hist.id === viewingMember.id ? 'Viewing' : 'Inspect'}
+                                                  <MousePointer className="w-2.5 h-2.5" /> {hist.id === viewingMember.id ? 'Viewing' : 'Inspect'}
                                               </div>
                                           </div>
                                       </td>

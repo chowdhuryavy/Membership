@@ -4,7 +4,7 @@ import {
   Search, Filter, Layers, Building2, Store, RefreshCcw, 
   Milestone, Edit2, Trash2, ShieldCheck,
   Zap, UserPlus, Snowflake, ChevronDown, 
-  CheckCircle2, CalendarX, Clock3, LayoutGrid, MousePointer2
+  CheckCircle2, CalendarX, Clock3, LayoutDashboard, MousePointer
 } from 'lucide-react';
 import { Member, MembershipCategory, MemberStatus } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -105,7 +105,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   }, [categories, filteredMembers]);
 
   const statusOptions = [
-    { value: 'All', label: 'All Status', icon: LayoutGrid, color: 'text-slate-400' },
+    { value: 'All', label: 'All Status', icon: LayoutDashboard, color: 'text-slate-400' },
     { value: MemberStatus.ACTIVE, label: 'Active Only', icon: CheckCircle2, color: 'text-emerald-500' },
     { value: MemberStatus.FROZEN, label: 'Frozen Only', icon: Snowflake, color: 'text-indigo-500' },
     { value: MemberStatus.EXPIRED, label: 'Expired Only', icon: CalendarX, color: 'text-red-500' },
@@ -197,7 +197,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                           <span className="text-[11px] font-black uppercase tracking-tight">{opt.label}</span>
                         </div>
                         {isSelected && <CheckCircle2 className="w-4 h-4 text-white" />}
-                        {!isSelected && <MousePointer2 className="w-3 h-3 text-indigo-300 opacity-0 group-hover/item:opacity-100 transition-opacity" />}
+                        {!isSelected && <MousePointer className="w-3 h-3 text-indigo-300 opacity-0 group-hover/item:opacity-100 transition-opacity" />}
                       </button>
                     );
                   })}
