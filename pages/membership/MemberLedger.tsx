@@ -48,7 +48,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   const filterRef = useRef<HTMLDivElement>(null);
 
   const allowedOutletsInProperty = useMemo(() => {
-    if (!currentProperty || !user || !outlets) return [];
+    if (!currentProperty || !user || !outlets || !Array.isArray(outlets)) return [];
     if (user.role_id?.toLowerCase() === 'admin') {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }
@@ -85,8 +85,10 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
 
   const filteredMembers = useMemo(() => {
     return members.filter(m => {
-      const matchesSearch = m.guest_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           m.membership_number.toLowerCase().includes(searchTerm.toLowerCase());
+      const name = m.guest_name || '';
+      const num = m.membership_number || '';
+      const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           num.toLowerCase().includes(searchTerm.toLowerCase());
       const effectiveStatus = getEffectiveStatus(m);
       let matchesStatus = (statusFilter === 'All') || (effectiveStatus === statusFilter);
       return matchesSearch && matchesStatus;
@@ -259,9 +261,9 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                                 <td className="px-10 py-7 font-black text-indigo-600 text-base tracking-widest uppercase">{m.membership_number}</td>
                                 <td className="px-10 py-7">
                                   <div className="flex items-center gap-4">
-                                      <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-400 text-xs group-hover/row:bg-indigo-600 group-hover/row:text-white transition-all uppercase">{m.guest_name.charAt(0)}</div>
+                                      <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-400 text-xs group-hover/row:bg-indigo-600 group-hover/row:text-white transition-all uppercase">{(m.guest_name || '?').charAt(0)}</div>
                                       <div>
-                                          <div className="font-black text-slate-800 text-sm uppercase tracking-tight">{m.guest_name}</div>
+                                          <div className="font-black text-slate-800 text-sm uppercase tracking-tight">{m.guest_name || 'Unknown'}</div>
                                           <div className="text-[9px] font-bold text-slate-400 tracking-widest uppercase mt-0.5">{m.package_type} Manifesto</div>
                                       </div>
                                   </div>

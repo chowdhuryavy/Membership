@@ -223,12 +223,12 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
                       <div className="absolute -bottom-14 left-1/2 -translate-x-1/2 p-2 bg-white rounded-[2.5rem] shadow-2xl">
                         <div className="w-28 h-28 bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-[2.2rem] flex items-center justify-center text-white text-5xl font-black shadow-inner ring-8 ring-indigo-50/50 group-hover/card:scale-105 transition-transform duration-500">
-                            {viewingMember.guest_name.charAt(0)}
+                            {(viewingMember.guest_name || '?').charAt(0)}
                         </div>
                       </div>
                   </div>
                   <CardContent className="pt-20 pb-8 text-center px-10">
-                      <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-tight mb-1">{viewingMember.guest_name}</h3>
+                      <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-tight mb-1">{viewingMember.guest_name || 'Unknown Guest'}</h3>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center justify-center gap-2">
                         <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" /> {viewingMember.membership_number}
                       </p>

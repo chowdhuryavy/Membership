@@ -77,6 +77,15 @@ const Members = () => {
 
   if (!canView) return <div className="flex items-center justify-center h-full text-slate-400 font-black uppercase tracking-widest">Access Denied</div>;
 
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full py-40 text-slate-400 animate-pulse">
+        <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mb-6"></div>
+        <p className="text-[10px] font-black uppercase tracking-[0.4em]">Loading Ledger...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-full">
       {view === 'list' && (
