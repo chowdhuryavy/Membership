@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Card, CardHeader, CardTitle, Button, Input } from '../../components/ui';
@@ -31,16 +31,16 @@ const memberSchema = z.object({
   guest_name: z.string().min(2, "Name required"),
   category_id: z.string().min(1, "Tier required"),
   start_date: z.string().min(1, "Start date required"),
-  discount: z.coerce.number().min(0),
+  discount: z.number().min(0),
   check_no: z.string().optional().nullable(),
   sales_rep_id: z.string().optional().nullable(),
   email: z.string().email().or(z.literal("")).optional().nullable(),
   phone: z.string().optional().nullable(),
   nationality: z.string().optional().nullable(),
   dob: z.string().optional().nullable(),
-  package_type: z.enum(['Single', 'Couple', 'Family']).default('Single'),
-  access_type: z.enum(['Pool', 'Spa', 'Both']).default('Both'),
-  membership_type: z.enum(['New', 'Renew']).default('New'),
+  package_type: z.enum(['Single', 'Couple', 'Family']),
+  access_type: z.enum(['Pool', 'Spa', 'Both']),
+  membership_type: z.enum(['New', 'Renew']),
   spouse_name: z.string().optional().nullable(),
   spouse_dob: z.string().optional().nullable(),
   remarks: z.string().optional().nullable(),
@@ -85,11 +85,13 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         dob: existingMember.dob ?? '',
         membership_type: isRenewal ? 'Renew' : (existingMember.membership_type || 'New'),
         start_date: isRenewal ? calculateDefaultStartDate(existingMember.current_end_date) : existingMember.start_date,
-        check_no: '', 
-        discount: 0,
+        check_no: existingMember.check_no ?? '', 
+        discount: existingMember.discount ?? 0,
         spouse_name: existingMember.spouse_name ?? '',
         spouse_dob: existingMember.spouse_dob ?? '',
         remarks: existingMember.remarks ?? '',
+        package_type: existingMember.package_type || 'Single',
+        access_type: existingMember.access_type || 'Both',
     } : {
       membership_number: '',
       guest_name: '',
@@ -307,7 +309,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
       {getMatchBanner()}
 
-      <form onSubmit={handleSubmit(onFormSubmit)} className="p-10 space-y-12">
+      <form onSubmit={handleSubmit(onFormSubmit as any)} className="p-10 space-y-12">
         
         <section className="space-y-6">
             <div className="flex items-center gap-3 px-2">
