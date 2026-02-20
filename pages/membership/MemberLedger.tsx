@@ -40,7 +40,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   onAdd, onViewDetail, onEdit, onRenew, onDelete 
 }) => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [] } = useSettings();
   const [searchTerm, setSearchTerm] = useState('');
   
   const [statusFilter, setStatusFilter] = useState<MemberStatus | 'All'>(MemberStatus.ACTIVE);
@@ -48,7 +48,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   const filterRef = useRef<HTMLDivElement>(null);
 
   const allowedOutletsInProperty = useMemo(() => {
-    if (!currentProperty || !user) return [];
+    if (!currentProperty || !user || !outlets) return [];
     if (user.role_id?.toLowerCase() === 'admin') {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }

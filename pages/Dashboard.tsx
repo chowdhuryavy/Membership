@@ -55,7 +55,7 @@ interface PerformanceTrendData {
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [] } = useSettings();
   
   const [dashboardMonth, setDashboardMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -63,7 +63,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   const allowedOutletsInProperty = useMemo(() => {
-    if (!currentProperty || !user) return [];
+    if (!currentProperty || !user || !outlets) return [];
     if (user.role_id?.toLowerCase() === 'admin') {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }

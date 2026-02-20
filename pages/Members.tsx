@@ -10,7 +10,7 @@ import { ConfirmationModal } from '../components/ui';
 
 const Members = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, hasPermission, outlets } = useSettings();
+  const { currentOutlet, currentProperty, hasPermission, outlets = [] } = useSettings();
   
   // View State
   const [view, setView] = useState<'list' | 'form' | 'detail'>('list');
@@ -27,7 +27,7 @@ const Members = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const allowedOutletsInProperty = useMemo(() => {
-    if (!currentProperty || !user) return [];
+    if (!currentProperty || !user || !outlets) return [];
     if (user.role_id?.toLowerCase() === 'admin') {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }
@@ -75,7 +75,7 @@ const Members = () => {
     loadData();
   }, [currentOutlet, viewScope, canView]);
 
-  if (!canView) return null;
+  if (!canView) return <div className="flex items-center justify-center h-full text-slate-400 font-black uppercase tracking-widest">Access Denied</div>;
 
   return (
     <div className="min-h-full">

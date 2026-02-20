@@ -330,7 +330,7 @@ const GuestHistoryView = ({
 
 const MassageScheduling = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [] } = useSettings();
   const [activeTab, setActiveTab] = useState<'bookings' | 'treatments' | 'therapists' | 'guests'>('bookings');
   const [viewDate, setViewDate] = useState(new Date());
   const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
@@ -357,7 +357,7 @@ const MassageScheduling = () => {
   const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest', name: string} | null>(null);
 
   const allowedOutletsInProperty = useMemo(() => {
-    if (!currentProperty || !user) return [];
+    if (!currentProperty || !user || !outlets) return [];
     if (user.role_id?.toLowerCase() === 'admin') {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }

@@ -36,7 +36,7 @@ import {
 
 const StaffPage = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, hasPermission, outlets } = useSettings();
+  const { currentOutlet, currentProperty, hasPermission, outlets = [] } = useSettings();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -61,7 +61,7 @@ const StaffPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const allowedOutletsInProperty = useMemo(() => {
-    if (!currentProperty || !user) return [];
+    if (!currentProperty || !user || !outlets) return [];
     if (user.role_id?.toLowerCase() === 'admin') {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }
