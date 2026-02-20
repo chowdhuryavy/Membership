@@ -27,7 +27,7 @@ const Members = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const allowedOutletsInProperty = useMemo(() => {
-    if (!currentProperty || !user || !outlets) return [];
+    if (!currentProperty || !user || !outlets || !Array.isArray(outlets)) return [];
     if (user.role_id?.toLowerCase() === 'admin') {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }
@@ -58,14 +58,17 @@ const Members = () => {
         db.getStaff(currentOutlet.id)
       ]);
 
-      setMembers(membersData);
-      setCategories(categoriesData);
-      setStaffList(staffData.filter(s => s.is_active));
+      setMembers(Array.isArray(membersData) ? membersData : []);
+      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+      setStaffList(Array.isArray(staffData) ? staffData.filter(s => s.is_active) : []);
       
       if (selectedMember) {
-        const updated = membersData.find(m => m.id === selectedMember.id);
+        const updated = (Array.isArray(membersData) ? membersData : []).find(m => m.id === selectedMember.id);
         if (updated) setSelectedMember(updated);
       }
+    } catch (e) {
+      console.error("Failed to load members data", e);
+      setMembers([]);
     } finally {
       setLoading(false);
     }
@@ -76,6 +79,8 @@ const Members = () => {
   }, [currentOutlet, viewScope, canView]);
 
   if (!canView) return <div className="flex items-center justify-center h-full text-slate-400 font-black uppercase tracking-widest">Access Denied</div>;
+
+  if (!currentOutlet) return <div className="flex items-center justify-center h-full text-slate-400 font-black uppercase tracking-widest">Please Select an Outlet</div>;
 
   if (loading) {
     return (
@@ -90,8 +95,8 @@ const Members = () => {
     <div className="min-h-full">
       {view === 'list' && (
         <MemberLedger 
-          members={members} 
-          categories={categories}
+          members={members || []} 
+          categories={categories || []}
           loading={loading}
           viewScope={viewScope}
           setViewScope={setViewScope}

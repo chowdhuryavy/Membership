@@ -36,7 +36,7 @@ interface MemberLedgerProps {
 }
 
 const MemberLedger: React.FC<MemberLedgerProps> = ({ 
-  members, categories, loading, viewScope, setViewScope, 
+  members = [], categories = [], loading, viewScope, setViewScope, 
   onAdd, onViewDetail, onEdit, onRenew, onDelete 
 }) => {
   const { user } = useAuth();
