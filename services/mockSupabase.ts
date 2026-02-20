@@ -329,14 +329,18 @@ class DatabaseService {
     if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id);
   }
 
-  async getStaff(scopeId?: string, isProperty: boolean = false): Promise<Staff[]> {
+  async getStaff(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[]): Promise<Staff[]> {
     if (this.isSupabase()) {
       let query = supabase.from('staff').select('*').order('name');
       if (scopeId) {
           if (isProperty) {
-              const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
-              const ids = (outlets || []).map(o => o.id);
-              query = query.in('outlet_id', ids);
+              if (limitToOutletIds && limitToOutletIds.length > 0) {
+                  query = query.in('outlet_id', limitToOutletIds);
+              } else {
+                  const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
+                  const ids = (outlets || []).map(o => o.id);
+                  query = query.in('outlet_id', ids);
+              }
           } else {
               query = query.eq('outlet_id', scopeId);
           }
@@ -373,14 +377,18 @@ class DatabaseService {
     }
   }
 
-  async getMembers(scopeId?: string, isProperty: boolean = false): Promise<Member[]> {
+  async getMembers(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[]): Promise<Member[]> {
     if (this.isSupabase()) {
       let query = supabase.from('members').select('*');
       if (scopeId) {
           if (isProperty) {
-              const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
-              const ids = (outlets || []).map(o => o.id);
-              query = query.in('outlet_id', ids);
+              if (limitToOutletIds && limitToOutletIds.length > 0) {
+                  query = query.in('outlet_id', limitToOutletIds);
+              } else {
+                  const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
+                  const ids = (outlets || []).map(o => o.id);
+                  query = query.in('outlet_id', ids);
+              }
           } else {
               query = query.eq('outlet_id', scopeId);
           }
@@ -649,10 +657,16 @@ class DatabaseService {
     return [];
   }
 
-  async getInventory(scopeId: string, isPropertyScope: boolean = false): Promise<InventoryItem[]> {
+  async getInventory(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<InventoryItem[]> {
     if (this.isSupabase()) {
         let query = supabase.from('inventory').select('*');
-        if (isPropertyScope) query = query.eq('property_id', scopeId);
+        if (isPropertyScope) {
+            if (limitToOutletIds && limitToOutletIds.length > 0) {
+                query = query.in('outlet_id', limitToOutletIds);
+            } else {
+                query = query.eq('property_id', scopeId);
+            }
+        }
         else query = query.eq('outlet_id', scopeId);
         
         const { data, error } = await query.order('name');
@@ -686,10 +700,16 @@ class DatabaseService {
     }
   }
 
-  async getSales(scopeId: string, isPropertyScope: boolean = false): Promise<Sale[]> {
+  async getSales(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<Sale[]> {
     if (this.isSupabase()) {
         let query = supabase.from('sales').select('*');
-        if (isPropertyScope) query = query.eq('property_id', scopeId);
+        if (isPropertyScope) {
+            if (limitToOutletIds && limitToOutletIds.length > 0) {
+                query = query.in('outlet_id', limitToOutletIds);
+            } else {
+                query = query.eq('property_id', scopeId);
+            }
+        }
         else query = query.eq('outlet_id', scopeId);
 
         const { data, error } = await query.order('created_at', { ascending: false });
@@ -753,10 +773,16 @@ class DatabaseService {
     }
   }
 
-  async getTherapists(scopeId: string, isPropertyScope: boolean = false): Promise<Therapist[]> {
+  async getTherapists(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<Therapist[]> {
     if (this.isSupabase()) {
       let query = supabase.from('therapists').select('*');
-      if (isPropertyScope) query = query.eq('property_id', scopeId);
+      if (isPropertyScope) {
+          if (limitToOutletIds && limitToOutletIds.length > 0) {
+              query = query.in('outlet_id', limitToOutletIds);
+          } else {
+              query = query.eq('property_id', scopeId);
+          }
+      }
       else query = query.eq('outlet_id', scopeId);
 
       const { data, error } = await query;
@@ -789,10 +815,16 @@ class DatabaseService {
     }
   }
 
-  async getMassageTypes(scopeId: string, isPropertyScope: boolean = false): Promise<MassageType[]> {
+  async getMassageTypes(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<MassageType[]> {
     if (this.isSupabase()) {
       let query = supabase.from('massage_types').select('*');
-      if (isPropertyScope) query = query.eq('property_id', scopeId);
+      if (isPropertyScope) {
+          if (limitToOutletIds && limitToOutletIds.length > 0) {
+              query = query.in('outlet_id', limitToOutletIds);
+          } else {
+              query = query.eq('property_id', scopeId);
+          }
+      }
       else query = query.eq('outlet_id', scopeId);
 
       const { data, error } = await query;
@@ -825,10 +857,16 @@ class DatabaseService {
     }
   }
 
-  async getMassageBookings(scopeId: string, isPropertyScope: boolean = false): Promise<MassageBooking[]> {
+  async getMassageBookings(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<MassageBooking[]> {
     if (this.isSupabase()) {
       let query = supabase.from('massage_bookings').select('*');
-      if (isPropertyScope) query = query.eq('property_id', scopeId);
+      if (isPropertyScope) {
+          if (limitToOutletIds && limitToOutletIds.length > 0) {
+              query = query.in('outlet_id', limitToOutletIds);
+          } else {
+              query = query.eq('property_id', scopeId);
+          }
+      }
       else query = query.eq('outlet_id', scopeId);
 
       const { data, error } = await query.order('date', { ascending: false });

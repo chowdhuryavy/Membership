@@ -10,7 +10,7 @@ import { ConfirmationModal } from '../components/ui';
 
 const Members = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, hasPermission } = useSettings();
+  const { currentOutlet, currentProperty, hasPermission, outlets } = useSettings();
   
   // View State
   const [view, setView] = useState<'list' | 'form' | 'detail'>('list');
@@ -26,6 +26,17 @@ const Members = () => {
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  const allowedOutletsInProperty = useMemo(() => {
+    if (!currentProperty || !user) return [];
+    if (user.role_id?.toLowerCase() === 'admin') {
+        return outlets.filter(o => o.property_id === currentProperty.id);
+    }
+    return outlets.filter(o => 
+        o.property_id === currentProperty.id && 
+        user.allowed_outlets?.includes(o.id)
+    );
+  }, [currentProperty, user, outlets]);
+
   // Permissions
   const canView = user && hasPermission(user.role_id, 'members:view');
 
@@ -36,8 +47,13 @@ const Members = () => {
       const isPropertyScope = viewScope === 'property';
       const scopeId = isPropertyScope ? currentProperty.id : currentOutlet.id;
       
+      let limitToIds: string[] | undefined = undefined;
+      if (isPropertyScope && user?.role_id?.toLowerCase() !== 'admin') {
+          limitToIds = allowedOutletsInProperty.map(o => o.id);
+      }
+      
       const [membersData, categoriesData, staffData] = await Promise.all([
-        db.getMembers(scopeId, isPropertyScope),
+        db.getMembers(scopeId, isPropertyScope, limitToIds),
         db.getCategories(currentOutlet.id),
         db.getStaff(currentOutlet.id)
       ]);

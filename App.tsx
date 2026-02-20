@@ -145,7 +145,7 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
 
     const allowedOutlets = useMemo(() => {
         if (!user) return [];
-        if (user.role_id === 'admin') return outlets;
+        if (user.role_id?.toLowerCase() === 'admin') return outlets;
         return outlets.filter(o => user.allowed_outlets?.includes(o.id));
     }, [outlets, user]);
 
@@ -165,7 +165,7 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
         properties.find(p => p.id === currentOutlet?.property_id)
     , [currentOutlet, properties]);
 
-    const isAdmin = user?.role_id === 'admin';
+    const isAdmin = user?.role_id?.toLowerCase() === 'admin';
 
     if (allowedOutlets.length === 0) return (
         <div className={`px-4 py-3 rounded-xl border flex items-center gap-2 ${isAdmin ? 'bg-indigo-50 border-indigo-100 text-indigo-600' : 'bg-red-50 border-red-100 text-red-600'}`}>

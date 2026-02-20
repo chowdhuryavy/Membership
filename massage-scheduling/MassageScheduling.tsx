@@ -330,7 +330,7 @@ const GuestHistoryView = ({
 
 const MassageScheduling = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets } = useSettings();
   const [activeTab, setActiveTab] = useState<'bookings' | 'treatments' | 'therapists' | 'guests'>('bookings');
   const [viewDate, setViewDate] = useState(new Date());
   const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
@@ -356,6 +356,17 @@ const MassageScheduling = () => {
   const [isEditingResource, setIsEditingResource] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest', name: string} | null>(null);
 
+  const allowedOutletsInProperty = useMemo(() => {
+    if (!currentProperty || !user) return [];
+    if (user.role_id?.toLowerCase() === 'admin') {
+        return outlets.filter(o => o.property_id === currentProperty.id);
+    }
+    return outlets.filter(o => 
+        o.property_id === currentProperty.id && 
+        user.allowed_outlets?.includes(o.id)
+    );
+  }, [currentProperty, user, outlets]);
+
   const selectedBookingDetails = useMemo(() => {
       if (!selectedBooking) return null;
       const primaryService = massageTypes.find(mt => mt.id === selectedBooking.massage_type_id);
@@ -375,7 +386,7 @@ const MassageScheduling = () => {
   const canManageResources = user && hasPermission(user.role_id, 'bookings:manage_resources');
   
   // NEW: Strict Permission gating for scope switch and deletion
-  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties');
+  const canSwitchScope = user && (hasPermission(user.role_id, 'properties:view') || hasPermission(user.role_id, 'settings:view_properties')) && allowedOutletsInProperty.length > 1;
   const canDeleteGuests = user && hasPermission(user.role_id, 'members:delete');
 
   useEffect(() => {
@@ -390,11 +401,16 @@ const MassageScheduling = () => {
       const isProperty = viewScope === 'property';
       const scopeId = isProperty ? currentProperty.id : currentOutlet.id;
       
+      let limitToIds: string[] | undefined = undefined;
+      if (isProperty && user?.role_id?.toLowerCase() !== 'admin') {
+          limitToIds = allowedOutletsInProperty.map(o => o.id);
+      }
+      
       const [b, g, t, m] = await Promise.all([
-        db.getMassageBookings(scopeId, isProperty),
+        db.getMassageBookings(scopeId, isProperty, limitToIds),
         db.getGuests(currentProperty.id),
-        db.getTherapists(scopeId, isProperty),
-        db.getMassageTypes(scopeId, isProperty)
+        db.getTherapists(scopeId, isProperty, limitToIds),
+        db.getMassageTypes(scopeId, isProperty, limitToIds)
       ]);
 
       setBookings(b || []);

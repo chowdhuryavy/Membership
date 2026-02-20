@@ -55,12 +55,23 @@ interface PerformanceTrendData {
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets } = useSettings();
   
   const [dashboardMonth, setDashboardMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [currentTime, setCurrentTime] = useState(new Date());
   const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
   const [loading, setLoading] = useState(true);
+
+  const allowedOutletsInProperty = useMemo(() => {
+    if (!currentProperty || !user) return [];
+    if (user.role_id?.toLowerCase() === 'admin') {
+        return outlets.filter(o => o.property_id === currentProperty.id);
+    }
+    return outlets.filter(o => 
+        o.property_id === currentProperty.id && 
+        user.allowed_outlets?.includes(o.id)
+    );
+  }, [currentProperty, user, outlets]);
 
   const [stats, setStats] = useState({
     activeMembers: 0,
@@ -109,14 +120,19 @@ const Dashboard = () => {
         // Scoping Logic
         const isProperty = viewScope === 'property';
         const scopeId = isProperty ? currentProperty.id : currentOutlet.id;
+        
+        let limitToIds: string[] | undefined = undefined;
+        if (isProperty && user?.role_id?.toLowerCase() !== 'admin') {
+            limitToIds = allowedOutletsInProperty.map(o => o.id);
+        }
 
         // Fetch data with scope awareness
         const [members, freezes, bookings, sales, staff] = await Promise.all([
-          db.getMembers(scopeId, isProperty),
+          db.getMembers(scopeId, isProperty, limitToIds),
           db.getFreezes(),
-          db.getMassageBookings(scopeId, isProperty),
-          db.getSales(scopeId, isProperty),
-          db.getStaff(scopeId, isProperty)
+          db.getMassageBookings(scopeId, isProperty, limitToIds),
+          db.getSales(scopeId, isProperty, limitToIds),
+          db.getStaff(scopeId, isProperty, limitToIds)
         ]);
         
         // 1. Membership Logic
@@ -251,7 +267,7 @@ const Dashboard = () => {
   
   const canViewDashboard = user && hasPermission(user.role_id, 'dashboard:view');
   const canViewFinancials = user && hasPermission(user.role_id, 'dashboard:view_financials');
-  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties');
+  const canSwitchScope = user && (hasPermission(user.role_id, 'properties:view') || hasPermission(user.role_id, 'settings:view_properties')) && allowedOutletsInProperty.length > 1;
 
   const kpiData = [
     { title: "Active Portfolio", value: stats.activeMembers, icon: Users, color: "text-emerald-600" },

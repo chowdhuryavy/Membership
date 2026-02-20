@@ -59,7 +59,7 @@ serve(async (req) => {
       .eq('auth_id', user.id)
       .single();
 
-    if (profile?.role_id !== 'admin') {
+    if (profile?.role_id?.toLowerCase() !== 'admin') {
       return new Response(JSON.stringify({ error: 'Access denied.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,

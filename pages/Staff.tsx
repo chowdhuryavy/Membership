@@ -36,7 +36,7 @@ import {
 
 const StaffPage = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, hasPermission } = useSettings();
+  const { currentOutlet, currentProperty, hasPermission, outlets } = useSettings();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -60,10 +60,21 @@ const StaffPage = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const allowedOutletsInProperty = useMemo(() => {
+    if (!currentProperty || !user) return [];
+    if (user.role_id?.toLowerCase() === 'admin') {
+        return outlets.filter(o => o.property_id === currentProperty.id);
+    }
+    return outlets.filter(o => 
+        o.property_id === currentProperty.id && 
+        user.allowed_outlets?.includes(o.id)
+    );
+  }, [currentProperty, user, outlets]);
+
   // Security Check
   const canView = user && hasPermission(user.role_id, 'staff:view');
   const canManage = user && hasPermission(user.role_id, 'staff:manage');
-  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties');
+  const canSwitchScope = user && (hasPermission(user.role_id, 'properties:view') || hasPermission(user.role_id, 'settings:view_properties')) && allowedOutletsInProperty.length > 1;
 
   useEffect(() => {
     if (currentOutlet && canView) loadStaff();

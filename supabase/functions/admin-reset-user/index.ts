@@ -72,7 +72,7 @@ serve(async (req) => {
       .eq('auth_id', user.id)
       .single();
 
-    if (profile?.role_id !== 'admin') {
+    if (profile?.role_id?.toLowerCase() !== 'admin') {
       console.warn(`[AdminReset] Forbidden: ${user.email} (Role: ${profile?.role_id})`);
       return new Response(JSON.stringify({ error: 'Forbidden: Admin privileges required.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

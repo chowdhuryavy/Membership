@@ -40,12 +40,23 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   onAdd, onViewDetail, onEdit, onRenew, onDelete 
 }) => {
   const { user } = useAuth();
-  const { currentOutlet, formatMoney, hasPermission } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets } = useSettings();
   const [searchTerm, setSearchTerm] = useState('');
   
   const [statusFilter, setStatusFilter] = useState<MemberStatus | 'All'>(MemberStatus.ACTIVE);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+
+  const allowedOutletsInProperty = useMemo(() => {
+    if (!currentProperty || !user) return [];
+    if (user.role_id?.toLowerCase() === 'admin') {
+        return outlets.filter(o => o.property_id === currentProperty.id);
+    }
+    return outlets.filter(o => 
+        o.property_id === currentProperty.id && 
+        user.allowed_outlets?.includes(o.id)
+    );
+  }, [currentProperty, user, outlets]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -58,7 +69,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   }, []);
 
   const canCreate = user && hasPermission(user.role_id, 'members:create');
-  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties');
+  const canSwitchScope = user && (hasPermission(user.role_id, 'properties:view') || hasPermission(user.role_id, 'settings:view_properties')) && allowedOutletsInProperty.length > 1;
 
   const getEffectiveStatus = (member: Member) => {
     if (member.status === MemberStatus.FROZEN || member.status === MemberStatus.PENDING || member.status === MemberStatus.TENTATIVE) {

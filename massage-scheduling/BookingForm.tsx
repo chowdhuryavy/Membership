@@ -372,7 +372,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
                       {therapists.map(t => {
                         const isAvailable = availableTherapists.some(at => at.id === t.id);
                         return (
-                          <button key={t.id} type="button" onClick={() => setBookingData({...bookingData, therapist_id: t.id})} className={`p-3 rounded-xl border text-[9px] font-black uppercase transition-all flex flex-col items-center gap-0.5 ${bookingData.therapist_id === t.id ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : isAvailable ? 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300' : 'bg-slate-50 text-slate-300 opacity-60 cursor-not-allowed'}`} disabled={!isAvailable && user?.role_id !== 'admin'}>
+                          <button key={t.id} type="button" onClick={() => setBookingData({...bookingData, therapist_id: t.id})} className={`p-3 rounded-xl border text-[9px] font-black uppercase transition-all flex flex-col items-center gap-0.5 ${bookingData.therapist_id === t.id ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : isAvailable ? 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300' : 'bg-slate-50 text-slate-300 opacity-60 cursor-not-allowed'}`} disabled={!isAvailable && user?.role_id?.toLowerCase() !== 'admin'}>
                             <span className="truncate w-full text-center">{t.name}</span>
                             <span className="text-[7px] opacity-80">{t.country}</span>
                           </button>
