@@ -498,13 +498,14 @@ const Sales = () => {
     const [editingSale, setEditingSale] = useState<Sale | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
-    const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+    const [itemToDelete, setItemToDelete] = useState<{ id: string; type: 'pos' | 'booking' } | null>(null);
 
     // Security Check
     const canView = user && hasPermission(user.role_id, 'sales:view');
     const canCreate = user && hasPermission(user.role_id, 'sales:create');
     const canEdit = user && hasPermission(user.role_id, 'sales:edit');
     const canDelete = user && hasPermission(user.role_id, 'sales:delete');
+    const canDeleteBooking = user && hasPermission(user.role_id, 'bookings:delete');
     const canViewInventory = user && hasPermission(user.role_id, 'inventory:view');
 
     useEffect(() => {
@@ -735,10 +736,15 @@ const Sales = () => {
                                                     {entry.type === 'pos' ? (
                                                         <>
                                                             {canEdit && <button onClick={() => { setEditingSale(entry.original as Sale); setShowForm(true); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all"><Edit3 className="w-4 h-4" /></button>}
-                                                            {canDelete && <button onClick={() => setItemToDelete(entry.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all"><Trash2 className="w-4 h-4" /></button>}
+                                                            {canDelete && <button onClick={() => setItemToDelete({ id: entry.id, type: 'pos' })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all"><Trash2 className="w-4 h-4" /></button>}
                                                             {!canEdit && !canDelete && <Lock className="w-3.5 h-3.5 text-slate-200" />}
                                                         </>
-                                                    ) : <Lock className="w-3.5 h-3.5 text-slate-200" />}
+                                                    ) : (
+                                                        <>
+                                                            {canDeleteBooking && <button onClick={() => setItemToDelete({ id: entry.id, type: 'booking' })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all"><Trash2 className="w-4 h-4" /></button>}
+                                                            {!canDeleteBooking && <Lock className="w-3.5 h-3.5 text-slate-200" />}
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -757,7 +763,24 @@ const Sales = () => {
                     </div>
                 </div>
             )}
-            <ConfirmationModal isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} onConfirm={async () => { if (itemToDelete && canDelete) { await db.deleteSale(itemToDelete); loadData(); } }} title="Void Recognition" description="Confirm reversal of this revenue event? Inventory stock will be recalculated." confirmText="Authorize Void" isDestructive={true} />
+            <ConfirmationModal 
+                isOpen={!!itemToDelete} 
+                onClose={() => setItemToDelete(null)} 
+                onConfirm={async () => { 
+                    if (itemToDelete) { 
+                        if (itemToDelete.type === 'pos' && canDelete) {
+                            await db.deleteSale(itemToDelete.id); 
+                        } else if (itemToDelete.type === 'booking' && canDeleteBooking) {
+                            await (db as any).deleteMassageBooking(itemToDelete.id);
+                        }
+                        loadData(); 
+                    } 
+                }} 
+                title="Void Recognition" 
+                description="Confirm reversal of this revenue event? Inventory stock will be recalculated if applicable." 
+                confirmText="Authorize Void" 
+                isDestructive={true} 
+            />
         </div>
     );
 };

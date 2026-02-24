@@ -133,11 +133,11 @@ const Reports = () => {
       
       const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests, freezes] = await Promise.all([
           db.getIncentiveRules(currentProperty.id, currentOutlet.id),
-          db.getMassageBookings(currentProperty.id),
+          db.getMassageBookings(currentProperty.id, true),
           db.getMembers(currentOutlet.id),
-          db.getSales(currentProperty.id),
-          db.getTherapists(currentProperty.id),
-          db.getMassageTypes(currentProperty.id),
+          db.getSales(currentProperty.id, true),
+          db.getTherapists(currentProperty.id, true),
+          db.getMassageTypes(currentProperty.id, true),
           db.getCategories(currentOutlet.id),
           db.getStaff(currentOutlet.id),
           db.getGuests(currentProperty.id),
@@ -222,7 +222,7 @@ const Reports = () => {
           let sl = 1;
 
           if (reportType === 'daily_sales') {
-              // --- DAILY SALES LEDGER (POS + BOOKINGS) ---
+              // --- DAILY SALES LEDGER (POS + BOOKINGS + MEMBERSHIPS) ---
               const combined = [
                   ...sales.filter(s => s.status === 'completed' && parseISO(s.created_at) >= start && parseISO(s.created_at) <= end).map(s => ({
                       date: s.created_at,

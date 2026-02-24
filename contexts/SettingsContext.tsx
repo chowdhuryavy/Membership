@@ -117,25 +117,24 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!userRoleId) return false;
     const normalizedRoleId = userRoleId.toLowerCase();
     
-    // 1. USER-SPECIFIC OVERRIDES (Highest Priority)
+    // 1. SYSTEM SUPERUSER BYPASS
+    // The 'admin' role always has full system clearance.
+    if (normalizedRoleId === 'admin') return true;
+
+    // 2. USER-SPECIFIC OVERRIDES (High Priority)
     const targetUser = (userId === user?.id || !userId) ? user : null;
     if (targetUser?.overrides) {
         const override = targetUser.overrides.find(o => o.permission_key === permission);
         if (override !== undefined) return override.is_granted;
     }
 
-    // 2. ROLE-BASED DEFINITIONS
+    // 3. ROLE-BASED DEFINITIONS
     const role = roles.find(r => r.id.toLowerCase() === normalizedRoleId || r.name.toLowerCase() === normalizedRoleId);
     
     // If the role is found in the database, use its permissions strictly.
     if (role) {
         return role.permissions.includes(permission);
     }
-
-    // 3. SYSTEM EMERGENCY BYPASS
-    // Only allow absolute bypass for the system 'admin' ID if NO role metadata exists yet (Bootstrapping).
-    // Once roles are configured, this should ideally not be hit.
-    if (normalizedRoleId === 'admin' && roles.length === 0) return true;
 
     return false;
   }, [roles, user]);

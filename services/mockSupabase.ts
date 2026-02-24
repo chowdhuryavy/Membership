@@ -924,6 +924,14 @@ class DatabaseService {
     }
   }
 
+  async deleteMassageBooking(id: string) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('massage_bookings').delete().eq('id', id);
+      if (error) throw error;
+      await this.logAction('DELETE_BOOKING', `Booking record purged: ${id}`);
+    }
+  }
+
   async getIncentiveRules(propertyId?: string, outletId?: string): Promise<IncentiveRule[]> {
     if (this.isSupabase()) {
       try {
