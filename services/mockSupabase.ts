@@ -258,6 +258,11 @@ class DatabaseService {
     if (!this.isSupabase()) return { user: null, error: "Cloud sync offline.", requiresPasswordChange: false };
     const cleanEmail = email.trim().toLowerCase();
     const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
+    
+    if (profile && profile.is_active === false) {
+        return { user: null, error: "Account is inactive. Please contact administration.", requiresPasswordChange: false };
+    }
+
     const { data: authData, error: authError } = await (supabase.auth as any).signInWithPassword({ email: cleanEmail, password: passwordAttempt });
     if (authError || (profile && !profile.auth_id)) {
         if (profile && profile.temp_password === passwordAttempt) {
@@ -291,7 +296,16 @@ class DatabaseService {
         const shadow = this.getShadowClient();
         const { data: authData } = await (shadow.auth as any).signUp({ email: cleanEmail, password: tempPassword, options: { data: { full_name: user.name, name: user.name, display_name: user.name } } });
         if (authData?.user) authId = authData.user.id;
-        const { data, error } = await supabase.from('profiles').upsert([{ email: cleanEmail, name: user.name, role_id: user.role_id, allowed_outlets: user.allowed_outlets || [], temp_password: tempPassword, auth_id: authId, updated_at: new Date().toISOString() }], { onConflict: 'email' }).select().single();
+        const { data, error } = await supabase.from('profiles').upsert([{ 
+            email: cleanEmail, 
+            name: user.name, 
+            role_id: user.role_id, 
+            allowed_outlets: user.allowed_outlets || [], 
+            temp_password: tempPassword, 
+            auth_id: authId, 
+            is_active: user.is_active ?? true,
+            updated_at: new Date().toISOString() 
+        }], { onConflict: 'email' }).select().single();
         if (error) throw error;
         await this.logAction('CREATE_USER', `Identity provisioned: ${user.name} (${user.email})`);
         return data as UserProfile;
@@ -302,7 +316,14 @@ class DatabaseService {
   async updateUser(id: string, updates: Partial<UserProfile>) { 
     if (this.isSupabase()) {
         const { data: current } = await supabase.from('profiles').select('email, name').eq('id', id).single();
-        const finalUpdates: any = { name: updates.name, email: updates.email?.trim().toLowerCase(), role_id: updates.role_id, allowed_outlets: updates.allowed_outlets, updated_at: new Date().toISOString() };
+        const finalUpdates: any = { 
+            name: updates.name, 
+            email: updates.email?.trim().toLowerCase(), 
+            role_id: updates.role_id, 
+            allowed_outlets: updates.allowed_outlets, 
+            is_active: updates.is_active,
+            updated_at: new Date().toISOString() 
+        };
         Object.keys(finalUpdates).forEach(k => finalUpdates[k] === undefined && delete finalUpdates[k]);
         await supabase.from('profiles').update(finalUpdates).eq('id', id);
         await this.logAction('UPDATE_USER', `Identity modified for ${current.name} (${current.email})`);

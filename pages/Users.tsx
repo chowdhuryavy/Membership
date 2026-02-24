@@ -61,6 +61,19 @@ const UserDetail = ({
                             </div>
                             <h3 className="text-xl font-black text-slate-900 tracking-tight">{user.name}</h3>
                             <p className="text-xs font-bold text-indigo-600 mt-1">{user.email}</p>
+                            <div className="mt-3">
+                                {user.is_active !== false ? (
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                        Active Account
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-red-50 text-red-600 border border-red-100">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                        Inactive Account
+                                    </span>
+                                )}
+                            </div>
                             <div className="mt-6 flex justify-center gap-2">
                                 <Button onClick={() => onEdit(user)} size="sm" className="rounded-xl font-bold">Edit Profile</Button>
                                 <Button onClick={() => onDelete(user.id)} size="sm" variant="danger" className="rounded-xl">Revoke</Button>
@@ -200,7 +213,7 @@ const Users = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
 
-  const [formData, setFormData] = useState<{ id: string; name: string; email: string; role_id: string; allowed_outlets: string[]; password?: string; }>({ id: '', name: '', email: '', role_id: '', allowed_outlets: [], password: '' });
+  const [formData, setFormData] = useState<{ id: string; name: string; email: string; role_id: string; allowed_outlets: string[]; password?: string; is_active: boolean; }>({ id: '', name: '', email: '', role_id: '', allowed_outlets: [], password: '', is_active: true });
   
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState('');
@@ -233,7 +246,7 @@ const Users = () => {
   };
 
   const resetForm = () => {
-      setFormData({ id: '', name: '', email: '', role_id: '', allowed_outlets: [], password: '' });
+      setFormData({ id: '', name: '', email: '', role_id: '', allowed_outlets: [], password: '', is_active: true });
       setIsEditing(false);
       setError('');
       setShowPassword(false);
@@ -254,7 +267,8 @@ const Users = () => {
       if (!canEdit) return;
       setFormData({
           id: u.id, name: u.name, email: u.email, role_id: u.role_id,
-          allowed_outlets: u.allowed_outlets || [], password: '' 
+          allowed_outlets: u.allowed_outlets || [], password: '',
+          is_active: u.is_active ?? true
       });
       setIsEditing(true);
       setShowForm(true);
@@ -352,12 +366,14 @@ const Users = () => {
             await db.updateUser(formData.id, {
                 name: formData.name, email: canEditEmail ? formData.email : undefined,
                 role_id: formData.role_id, allowed_outlets: formData.allowed_outlets,
-                password: formData.password || undefined 
+                password: formData.password || undefined,
+                is_active: formData.is_active
             } as any);
         } else {
             await db.addUser({
                 name: formData.name, email: formData.email, role_id: formData.role_id,
-                allowed_outlets: formData.allowed_outlets, password: formData.password
+                allowed_outlets: formData.allowed_outlets, password: formData.password,
+                is_active: formData.is_active
             } as any);
         }
         handleFormCancel();
@@ -460,7 +476,8 @@ const Users = () => {
                       <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] bg-slate-50 border-b">
                           <tr>
                               <th className="px-8 py-6">Profile</th>
-                              <th className="px-8 py-6 text-center">Sync Status</th>
+                              <th className="px-8 py-6 text-center">Status</th>
+                              <th className="px-8 py-6 text-center">Sync</th>
                               <th className="px-8 py-6">Security Tier</th>
                               <th className="px-8 py-6">Access Scopes</th>
                               {canModifyTable && <th className="px-8 py-6 text-right">Operations</th>}
@@ -484,6 +501,19 @@ const Users = () => {
                                   <td className="px-8 py-6">
                                       <div className="font-black text-slate-900 tracking-tight text-base">{u.name}</div>
                                       <div className="text-indigo-600 text-xs font-bold">{u.email}</div>
+                                  </td>
+                                  <td className="px-8 py-6 text-center">
+                                      {u.is_active !== false ? (
+                                          <div className="inline-flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 w-fit">
+                                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                              <span className="text-[9px] font-black uppercase tracking-widest">Active</span>
+                                          </div>
+                                      ) : (
+                                          <div className="inline-flex items-center gap-2 text-red-600 bg-red-50 px-3 py-1.5 rounded-xl border border-red-100 w-fit">
+                                              <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                              <span className="text-[9px] font-black uppercase tracking-widest">Inactive</span>
+                                          </div>
+                                      )}
                                   </td>
                                   <td className="px-8 py-6 text-center">
                                       {!u.auth_id ? (
@@ -586,6 +616,25 @@ const Users = () => {
                                 <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Security Tier</label>
                                 <Select options={[{ value: '', label: 'Select Tier...' }, ...roles.map(r => ({ value: r.id, label: r.name }))]} value={formData.role_id} onChange={e => setFormData({...formData, role_id: e.target.value})} className="h-12 rounded-xl" />
                             </div>
+                          </div>
+                          <div className="space-y-2 pt-4 border-t border-slate-100">
+                              <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1 mb-2 block">Account Status</label>
+                              <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                  <button
+                                      type="button"
+                                      onClick={() => setFormData({ ...formData, is_active: true })}
+                                      className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.is_active ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'bg-white text-slate-400 border border-slate-200'}`}
+                                  >
+                                      Active
+                                  </button>
+                                  <button
+                                      type="button"
+                                      onClick={() => setFormData({ ...formData, is_active: false })}
+                                      className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!formData.is_active ? 'bg-red-600 text-white shadow-lg shadow-red-100' : 'bg-white text-slate-400 border border-slate-200'}`}
+                                  >
+                                      Inactive
+                                  </button>
+                              </div>
                           </div>
                           <div className="space-y-2 pt-4 border-t border-slate-100">
                               <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1 mb-2 block">Facility Access Scopes</label>

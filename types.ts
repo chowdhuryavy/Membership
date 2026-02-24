@@ -88,6 +88,7 @@ export interface UserProfile {
   allowed_outlets: string[];
   temp_password?: string | null;
   overrides?: UserPermissionOverride[]; // Hydrated in session
+  is_active: boolean;
 }
 
 export interface SystemLog {

@@ -31,6 +31,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const users = await db.getUsers();
               const freshUser = users.find(u => u.email.toLowerCase() === parsed.email.toLowerCase());
               if (freshUser) {
+                  if (freshUser.is_active === false) {
+                      logout();
+                      return;
+                  }
                   // CRITICAL: Hydrate overrides during refresh to maintain custom permissions
                   const overrides = await db.getPermissionOverrides(freshUser.id);
                   const hydrated = { ...freshUser, overrides };
