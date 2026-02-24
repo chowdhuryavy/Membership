@@ -31,7 +31,7 @@ const memberSchema = z.object({
   guest_name: z.string().min(2, "Name required"),
   category_id: z.string().min(1, "Tier required"),
   start_date: z.string().min(1, "Start date required"),
-  discount: z.number().min(0),
+  discount: z.coerce.number().min(0),
   check_no: z.string().optional().nullable(),
   sales_rep_id: z.string().optional().nullable(),
   email: z.string().email().or(z.literal("")).optional().nullable(),
@@ -76,7 +76,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   };
 
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<MemberFormValues>({
-    resolver: zodResolver(memberSchema),
+    resolver: zodResolver(memberSchema as any),
     defaultValues: (existingMember) ? {
         ...existingMember,
         phone: existingMember.phone ?? '',
@@ -324,7 +324,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <ShieldCheck className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
                         </div>
-                        <input {...register('membership_number')} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-black tracking-widest focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm uppercase shadow-sm" placeholder="e.g. TCP0070" />
+                        <input {...register('membership_number')} disabled={isRenewal} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-black tracking-widest focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm uppercase shadow-sm disabled:opacity-50 disabled:bg-slate-50" placeholder="e.g. TCP0070" />
                     </div>
                     {errors.membership_number && <p className="text-[8px] font-bold text-red-500 ml-2 uppercase">{errors.membership_number.message}</p>}
                 </div>
@@ -334,7 +334,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <User className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
                         </div>
-                        <input {...register('guest_name')} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm" placeholder="Legal Full Name" />
+                        <input {...register('guest_name')} disabled={isRenewal} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:bg-slate-50" placeholder="Legal Full Name" />
                     </div>
                 </div>
                 <div className="space-y-1.5">

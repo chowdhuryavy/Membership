@@ -10,7 +10,7 @@ import { ConfirmationModal } from '../components/ui';
 
 const Members = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, hasPermission, outlets = [] } = useSettings();
+  const { currentOutlet, currentProperty, hasPermission, outlets } = useSettings();
   
   // View State
   const [view, setView] = useState<'list' | 'form' | 'detail'>('list');
@@ -27,7 +27,7 @@ const Members = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const allowedOutletsInProperty = useMemo(() => {
-    if (!currentProperty || !user || !outlets || !Array.isArray(outlets)) return [];
+    if (!currentProperty || !user) return [];
     if (user.role_id?.toLowerCase() === 'admin') {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }
@@ -58,17 +58,14 @@ const Members = () => {
         db.getStaff(currentOutlet.id)
       ]);
 
-      setMembers(Array.isArray(membersData) ? membersData : []);
-      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
-      setStaffList(Array.isArray(staffData) ? staffData.filter(s => s.is_active) : []);
+      setMembers(membersData);
+      setCategories(categoriesData);
+      setStaffList(staffData.filter(s => s.is_active));
       
       if (selectedMember) {
-        const updated = (Array.isArray(membersData) ? membersData : []).find(m => m.id === selectedMember.id);
+        const updated = membersData.find(m => m.id === selectedMember.id);
         if (updated) setSelectedMember(updated);
       }
-    } catch (e) {
-      console.error("Failed to load members data", e);
-      setMembers([]);
     } finally {
       setLoading(false);
     }
@@ -78,25 +75,14 @@ const Members = () => {
     loadData();
   }, [currentOutlet, viewScope, canView]);
 
-  if (!canView) return <div className="flex items-center justify-center h-full text-slate-400 font-black uppercase tracking-widest">Access Denied</div>;
-
-  if (!currentOutlet) return <div className="flex items-center justify-center h-full text-slate-400 font-black uppercase tracking-widest">Please Select an Outlet</div>;
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full py-40 text-slate-400 animate-pulse">
-        <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mb-6"></div>
-        <p className="text-[10px] font-black uppercase tracking-[0.4em]">Loading Ledger...</p>
-      </div>
-    );
-  }
+  if (!canView) return null;
 
   return (
     <div className="min-h-full">
       {view === 'list' && (
         <MemberLedger 
-          members={members || []} 
-          categories={categories || []}
+          members={members} 
+          categories={categories}
           loading={loading}
           viewScope={viewScope}
           setViewScope={setViewScope}

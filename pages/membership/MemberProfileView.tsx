@@ -12,7 +12,7 @@ import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, Massa
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../services/mockSupabase';
-import { format, differenceInCalendarDays, parse, isAfter, addDays } from 'date-fns';
+import { format, differenceInCalendarDays, parse, isAfter, addDays, isBefore, startOfDay } from 'date-fns';
 import { MembersAgreement } from '../../components/MembersAgreement';
 
 const parseISO = (dateString: string) => {
@@ -56,7 +56,21 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const [showAgreement, setShowAgreement] = useState(false);
 
   const category = useMemo(() => categories.find(c => c.id === viewingMember.category_id), [categories, viewingMember.category_id]);
-  const isActive = viewingMember.status === MemberStatus.ACTIVE;
+  const getEffectiveStatus = (member: Member) => {
+    if (!member) return MemberStatus.ACTIVE;
+    if (member.status === MemberStatus.FROZEN || member.status === MemberStatus.PENDING || member.status === MemberStatus.TENTATIVE) {
+        return member.status;
+    }
+    const endString = member.current_end_date || member.original_end_date;
+    if (!endString) return MemberStatus.ACTIVE;
+    const end = parseISO(endString);
+    const today = startOfDay(new Date());
+    if (isBefore(end, today)) return MemberStatus.EXPIRED;
+    return MemberStatus.ACTIVE;
+  };
+
+  const effectiveStatus = getEffectiveStatus(viewingMember);
+  const isActive = effectiveStatus === MemberStatus.ACTIVE;
 
   const loadForensics = async (targetMember: Member) => {
     const [f, b, mt, history] = await Promise.all([
@@ -187,7 +201,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
               <FileText className="w-4 h-4 mr-2" /> Print Agreement
           </Button>
           
-          {canFreeze && viewingMember.status !== MemberStatus.EXPIRED && (
+          {canFreeze && effectiveStatus !== MemberStatus.EXPIRED && (
             <Button 
                 onClick={() => { setEditingFreezeId(null); setFreezeForm({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' }); setFreezeError(null); setShowFreezeModal(true); }} 
                 variant="secondary" 
@@ -233,9 +247,9 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" /> {viewingMember.membership_number}
                       </p>
                       
-                      <div className={`mt-6 inline-flex px-6 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm ${isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : viewingMember.status === MemberStatus.FROZEN ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                        <div className={`w-2 h-2 rounded-full mr-2 ${isActive ? 'bg-emerald-500 animate-pulse' : viewingMember.status === MemberStatus.FROZEN ? 'bg-amber-500 animate-pulse' : 'bg-red-500'}`}></div>
-                        {viewingMember.status}
+                      <div className={`mt-6 inline-flex px-6 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm ${isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : effectiveStatus === MemberStatus.FROZEN ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                        <div className={`w-2 h-2 rounded-full mr-2 ${isActive ? 'bg-emerald-500 animate-pulse' : effectiveStatus === MemberStatus.FROZEN ? 'bg-amber-500 animate-pulse' : 'bg-red-500'}`}></div>
+                        {effectiveStatus}
                       </div>
                       
                       <div className="mt-10 space-y-3">
@@ -379,7 +393,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Utilized: {usedFreezeDays} / {maxAllowed} Days</p>
                             </div>
                           </div>
-                          {canFreeze && viewingMember.status !== MemberStatus.EXPIRED && (
+                          {canFreeze && effectiveStatus !== MemberStatus.EXPIRED && (
                             <Button onClick={() => { setEditingFreezeId(null); setFreezeForm({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' }); setFreezeError(null); setShowFreezeModal(true); }} size="sm" variant="secondary" className="rounded-xl font-black uppercase text-[9px] tracking-widest h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white border-none transition-all active:scale-95 shadow-lg shadow-indigo-900/40">
                                 <Plus className="w-3.5 h-3.5 mr-1.5" /> Apply Freeze
                             </Button>
@@ -418,7 +432,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                               </td>
                                               <td className="px-6 py-5 text-right">
                                                   <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                      {canFreeze && viewingMember.status !== MemberStatus.EXPIRED && (
+                                                      {canFreeze && effectiveStatus !== MemberStatus.EXPIRED && (
                                                         <>
                                                           <button onClick={() => handleEditFreeze(f)} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors" title="Modify"><Pencil className="w-3.5 h-3.5"/></button>
                                                           <button onClick={() => handleDeleteFreeze(f.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5"/></button>
