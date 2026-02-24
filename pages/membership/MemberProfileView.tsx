@@ -360,8 +360,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                           </div>
                                       </td>
                                       <td className="px-6 py-4">
-                                          <span className={`inline-flex px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest border ${hist.status === MemberStatus.ACTIVE ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : hist.status === MemberStatus.EXPIRED ? 'bg-slate-50 text-slate-400 border-slate-200' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
-                                              {hist.status}
+                                          <span className={`inline-flex px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest border ${getEffectiveStatus(hist) === MemberStatus.ACTIVE ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : getEffectiveStatus(hist) === MemberStatus.EXPIRED ? 'bg-slate-50 text-slate-400 border-slate-200' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+                                              {getEffectiveStatus(hist)}
                                           </span>
                                       </td>
                                       <td className="px-6 py-4">
