@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useForm, SubmitHandler } from 'react-hook-form';
+import { useForm, SubmitHandler, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Card, CardHeader, CardTitle, Button, Input } from '../../components/ui';
@@ -43,6 +43,10 @@ const memberSchema = z.object({
   membership_type: z.enum(['New', 'Renew']),
   spouse_name: z.string().optional().nullable(),
   spouse_dob: z.string().optional().nullable(),
+  kids: z.array(z.object({
+    name: z.string().min(1, "Name required"),
+    dob: z.string().min(1, "DOB required")
+  })).optional().nullable(),
   remarks: z.string().optional().nullable(),
 });
 
@@ -75,7 +79,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     return format(today, 'yyyy-MM-dd');
   };
 
-  const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<MemberFormValues>({
+  const { register, handleSubmit, watch, setValue, reset, control, formState: { errors } } = useForm<MemberFormValues>({
     resolver: zodResolver(memberSchema as any),
     defaultValues: (existingMember) ? {
         ...existingMember,
@@ -89,6 +93,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         discount: existingMember.discount ?? 0,
         spouse_name: existingMember.spouse_name ?? '',
         spouse_dob: existingMember.spouse_dob ?? '',
+        kids: existingMember.kids ?? [],
         remarks: existingMember.remarks ?? '',
         package_type: existingMember.package_type || 'Single',
         access_type: existingMember.access_type || 'Both',
@@ -103,6 +108,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       access_type: 'Both',
       spouse_name: '',
       spouse_dob: '',
+      kids: [],
       remarks: '',
       check_no: '',
       dob: '',
@@ -110,6 +116,11 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       email: '',
       nationality: ''
     }
+  });
+
+  const { fields: kidsFields, append: appendKid, remove: removeKid } = useFieldArray({
+    control,
+    name: "kids"
   });
 
   const membershipNo = watch('membership_number');
@@ -129,6 +140,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('access_type', 'Both');
     setValue('spouse_name', '');
     setValue('spouse_dob', '');
+    setValue('kids', []);
     setValue('remarks', '');
     setValue('check_no', '');
     setValue('discount', 0);
@@ -411,6 +423,68 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>
                 </div>
+                
+                {(watch('package_type') === 'Couple' || watch('package_type') === 'Family') && (
+                    <>
+                        <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Spouse/Partner Name</label>
+                            <div className="relative group">
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
+                                    <User className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
+                                </div>
+                                <input {...register('spouse_name')} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm placeholder:text-slate-200" placeholder="Partner's Full Name" />
+                            </div>
+                        </div>
+                        <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Spouse/Partner DOB</label>
+                            <div className="relative group">
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
+                                    <Calendar className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
+                                </div>
+                                <input type="date" {...register('spouse_dob')} className="w-full h-14 pl-14 pr-12 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm uppercase" />
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {watch('package_type') === 'Family' && (
+                    <div className="col-span-1 md:col-span-2 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center justify-between">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Family Members / Kids</label>
+                            <Button type="button" onClick={() => appendKid({ name: '', dob: '' })} variant="outline" size="sm" className="h-8 text-[10px] rounded-xl border-indigo-100 text-indigo-600 hover:bg-indigo-50">
+                                <Plus className="w-3 h-3 mr-1" /> Add Member
+                            </Button>
+                        </div>
+                        {kidsFields.map((field, index) => (
+                            <div key={field.id} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 relative group">
+                                <button type="button" onClick={() => removeKid(index)} className="absolute -top-2 -right-2 w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-200 shadow-sm transition-all opacity-0 group-hover:opacity-100">
+                                    <X className="w-3 h-3" />
+                                </button>
+                                <div className="space-y-1.5">
+                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Name</label>
+                                    <div className="relative group/input">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white group-focus-within/input:bg-indigo-50 transition-colors">
+                                            <User className="w-3.5 h-3.5 text-slate-300 group-focus-within/input:text-indigo-500" />
+                                        </div>
+                                        <input {...register(`kids.${index}.name` as const)} className="w-full h-12 pl-14 pr-4 rounded-xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm placeholder:text-slate-200" placeholder="Child's Name" />
+                                    </div>
+                                    {errors.kids?.[index]?.name && <p className="text-[10px] text-red-500 font-bold ml-1">{errors.kids[index]?.name?.message}</p>}
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Date of Birth</label>
+                                    <div className="relative group/input">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white group-focus-within/input:bg-indigo-50 transition-colors">
+                                            <Calendar className="w-3.5 h-3.5 text-slate-300 group-focus-within/input:text-indigo-500" />
+                                        </div>
+                                        <input type="date" {...register(`kids.${index}.dob` as const)} className="w-full h-12 pl-14 pr-12 rounded-xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm uppercase" />
+                                    </div>
+                                    {errors.kids?.[index]?.dob && <p className="text-[10px] text-red-500 font-bold ml-1">{errors.kids[index]?.dob?.message}</p>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Access Protocol</label>
                     <div className="relative">
