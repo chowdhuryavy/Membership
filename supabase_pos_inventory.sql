@@ -7,6 +7,7 @@
 CREATE TABLE IF NOT EXISTS public.inventory (
     id TEXT PRIMARY KEY,
     property_id TEXT NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+    outlet_id TEXT NOT NULL REFERENCES public.outlets(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     category TEXT NOT NULL, -- Retail, Personal Training, Entrance Fee, Other
     price NUMERIC NOT NULL DEFAULT 0,
@@ -19,6 +20,7 @@ CREATE TABLE IF NOT EXISTS public.inventory (
 CREATE TABLE IF NOT EXISTS public.sales (
     id TEXT PRIMARY KEY,
     property_id TEXT NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+    outlet_id TEXT NOT NULL REFERENCES public.outlets(id) ON DELETE CASCADE,
     guest_id TEXT REFERENCES public.guests(id) ON DELETE SET NULL,
     guest_name TEXT NOT NULL,
     category TEXT NOT NULL,

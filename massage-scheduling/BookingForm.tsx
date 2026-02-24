@@ -31,7 +31,8 @@ import {
   Therapist, 
   MassageType, 
   MassageBooking, 
-  Guest 
+  Guest,
+  Member
 } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -45,6 +46,7 @@ interface BookingFormProps {
   massageTypes: MassageType[];
   existingBookings: MassageBooking[];
   guests: Guest[];
+  members?: Member[];
   initialBooking?: MassageBooking;
 }
 
@@ -56,6 +58,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
   massageTypes, 
   existingBookings,
   guests,
+  members = [],
   initialBooking
 }) => {
   const { user } = useAuth();
@@ -132,12 +135,28 @@ const BookingForm: React.FC<BookingFormProps> = ({
   const guestSuggestions = useMemo(() => {
     const q = showSuggestions === 'name' ? guestData.name.toLowerCase() : guestData.phone;
     if (!q || q.length < 2) return [];
-    return guests.filter(g => 
+    
+    // Combine guests and members for suggestions, avoiding duplicates by phone
+    const combined: Guest[] = [...guests];
+    members.forEach(m => {
+        if (m.phone && !combined.some(c => c.phone === m.phone)) {
+            combined.push({
+                id: m.id,
+                name: m.guest_name,
+                phone: m.phone,
+                email: m.email,
+                property_id: m.property_id,
+                created_at: m.created_at
+            });
+        }
+    });
+
+    return combined.filter(g => 
         showSuggestions === 'name' 
           ? g.name.toLowerCase().includes(q) 
           : g.phone.includes(q)
     ).slice(0, 5);
-  }, [guests, guestData, showSuggestions]);
+  }, [guests, members, guestData, showSuggestions]);
 
   const selectGuest = (guest: Guest) => {
     setGuestData({

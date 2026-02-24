@@ -73,14 +73,23 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const isActive = effectiveStatus === MemberStatus.ACTIVE;
 
   const loadForensics = async (targetMember: Member) => {
-    const [f, b, mt, history] = await Promise.all([
+    const [f, b, mt, history, guests] = await Promise.all([
       db.getFreezes(targetMember.id),
-      db.getMassageBookings(currentProperty?.id || ''),
+      db.getMassageBookings(currentProperty?.id || '', true),
       db.getMassageTypes(currentOutlet?.id || ''),
-      db.getMemberHistory(targetMember.membership_number)
+      db.getMemberHistory(targetMember.membership_number),
+      db.getGuests(currentProperty?.id || '')
     ]);
     setFreezes(f);
-    const linked = b.filter(booking => booking.guest_id === targetMember.id);
+    
+    // Find the guest record that matches this member's phone, email, or name
+    const matchedGuest = guests.find(g => 
+      (targetMember.phone && g.phone === targetMember.phone) || 
+      (targetMember.email && g.email === targetMember.email) ||
+      (g.name.toLowerCase() === targetMember.guest_name.toLowerCase())
+    );
+    const linked = matchedGuest ? b.filter(booking => booking.guest_id === matchedGuest.id) : [];
+    
     setMemberBookings(linked);
     setMassageTypes(mt);
     setLifecycleHistory(history);

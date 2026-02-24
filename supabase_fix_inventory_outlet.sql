@@ -1,0 +1,15 @@
+-- REPAIR: ADD 'outlet_id' TO INVENTORY TABLE
+ALTER TABLE IF EXISTS public.inventory 
+ADD COLUMN IF NOT EXISTS outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE;
+
+-- REPAIR: ADD 'outlet_id' TO SALES TABLE (IF MISSING)
+ALTER TABLE IF EXISTS public.sales 
+ADD COLUMN IF NOT EXISTS outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE;
+
+-- DISABLE RLS FOR SYSTEM-LEVEL OPERATIONS
+ALTER TABLE public.inventory DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sales DISABLE ROW LEVEL SECURITY;
+
+-- GRANT PERMISSIONS
+GRANT ALL ON TABLE public.inventory TO anon, authenticated, postgres;
+GRANT ALL ON TABLE public.sales TO anon, authenticated, postgres;

@@ -53,7 +53,8 @@ import {
   Guest, 
   Therapist, 
   MassageType,
-  Sale
+  Sale,
+  Member
 } from '../types';
 import { format, addDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
@@ -387,6 +388,7 @@ const MassageScheduling = () => {
   
   // NEW: Strict Permission gating for scope switch and deletion
   const canSwitchScope = user && (hasPermission(user.role_id, 'properties:view') || hasPermission(user.role_id, 'settings:view_properties')) && allowedOutletsInProperty.length > 1;
+  const [members, setMembers] = useState<Member[]>([]);
   const canDeleteGuests = user && hasPermission(user.role_id, 'members:delete');
 
   useEffect(() => {
@@ -406,17 +408,19 @@ const MassageScheduling = () => {
           limitToIds = allowedOutletsInProperty.map(o => o.id);
       }
       
-      const [b, g, t, m] = await Promise.all([
+      const [b, g, t, m, mems] = await Promise.all([
         db.getMassageBookings(scopeId, isProperty, limitToIds),
         db.getGuests(currentProperty.id),
         db.getTherapists(scopeId, isProperty, limitToIds),
-        db.getMassageTypes(scopeId, isProperty, limitToIds)
+        db.getMassageTypes(scopeId, isProperty, limitToIds),
+        db.getMembers(scopeId, isProperty, limitToIds)
       ]);
 
       setBookings(b || []);
       setGuests(g || []);
       setTherapists((t || []).sort((x, y) => x.name.localeCompare(y.name)));
       setMassageTypes((m || []).sort((x, y) => (Number(x.duration_minutes) || 0) - (Number(y.duration_minutes) || 0)));
+      setMembers(mems || []);
     } catch (e: any) {
       console.error("Failed to load booking data", e);
       if (e.message?.includes('schema cache') || e.code === '42P01' || e.code === '42703' || e.message?.toLowerCase().includes('column')) {
@@ -939,6 +943,7 @@ const MassageScheduling = () => {
             massageTypes={massageTypes}
             existingBookings={bookings}
             guests={guests}
+            members={members}
             initialBooking={editingBooking || undefined}
           />
       )}

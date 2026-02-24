@@ -47,7 +47,8 @@ import {
   Users,
   Shield,
   Store,
-  Building2
+  Building2,
+  AlertCircle
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Sale, Guest, SaleCategory, InventoryItem, MassageBooking, MassageType, UserProfile } from '../types';
@@ -342,11 +343,13 @@ const InventoryManager = ({
         stock_quantity: 0,
         track_inventory: true
     });
+    const [error, setError] = useState<string | null>(null);
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!canManage) return;
         setLoading(true);
+        setError(null);
         try {
             if (editingItem) {
                 await db.updateInventoryItem(editingItem.id, formData);
@@ -356,8 +359,13 @@ const InventoryManager = ({
             setShowForm(false);
             setEditingItem(null);
             onRefresh();
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
+            if (e.message?.includes('schema cache') || e.code === '42P01' || e.code === '42703' || e.message?.toLowerCase().includes('column')) {
+                setError("The 'inventory' table is missing or incomplete in your Supabase database. Please run the SQL migration to create it.");
+            } else {
+                setError(e.message || "Failed to save inventory item.");
+            }
         } finally {
             setLoading(false);
         }
@@ -365,6 +373,14 @@ const InventoryManager = ({
 
     return (
         <div className="space-y-6">
+            {error && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl shadow-sm animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center">
+                        <AlertCircle className="w-5 h-5 text-red-500 mr-3" />
+                        <p className="text-sm font-bold text-red-800">{error}</p>
+                    </div>
+                </div>
+            )}
             <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Master Catalog & Inventory</h2>
@@ -499,13 +515,14 @@ const Sales = () => {
         if (!currentOutlet || !currentProperty) return;
         setLoading(true);
         try {
-            const targetOutletId = viewScope === 'outlet' ? currentOutlet.id : undefined;
+            const isProperty = viewScope === 'property';
+            const scopeId = isProperty ? currentProperty.id : currentOutlet.id;
             const [s, b, g, i, mt, u] = await Promise.all([
-                db.getSales(targetOutletId || currentProperty.id), // If property, this fetches related
-                db.getMassageBookings(targetOutletId || currentProperty.id),
+                db.getSales(scopeId, isProperty),
+                db.getMassageBookings(scopeId, isProperty),
                 db.getGuests(currentProperty.id),
-                db.getInventory(targetOutletId || currentOutlet.id),
-                db.getMassageTypes(targetOutletId),
+                db.getInventory(scopeId, isProperty),
+                db.getMassageTypes(scopeId, isProperty),
                 db.getUsers()
             ]);
             setSales(s);

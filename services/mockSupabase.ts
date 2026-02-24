@@ -659,19 +659,24 @@ class DatabaseService {
 
   async getInventory(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<InventoryItem[]> {
     if (this.isSupabase()) {
-        let query = supabase.from('inventory').select('*');
-        if (isPropertyScope) {
-            if (limitToOutletIds && limitToOutletIds.length > 0) {
-                query = query.in('outlet_id', limitToOutletIds);
-            } else {
-                query = query.eq('property_id', scopeId);
+        try {
+            let query = supabase.from('inventory').select('*');
+            if (isPropertyScope) {
+                if (limitToOutletIds && limitToOutletIds.length > 0) {
+                    query = query.in('outlet_id', limitToOutletIds);
+                } else {
+                    query = query.eq('property_id', scopeId);
+                }
             }
+            else query = query.eq('outlet_id', scopeId);
+            
+            const { data, error } = await query.order('name');
+            if (error) throw error;
+            return (data || []) as InventoryItem[];
+        } catch (e: any) {
+            console.error("Inventory fetch error:", e);
+            return [];
         }
-        else query = query.eq('outlet_id', scopeId);
-        
-        const { data, error } = await query.order('name');
-        if (error) throw error;
-        return (data || []) as InventoryItem[];
     }
     return [];
   }
