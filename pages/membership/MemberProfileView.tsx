@@ -94,6 +94,10 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
     return freezes.reduce((sum, f) => sum + (f.total_days || 0), 0);
   }, [freezes]);
 
+  const totalRevenue = useMemo(() => {
+    return lifecycleHistory.reduce((sum, hist) => sum + (hist.net_amount || 0), 0);
+  }, [lifecycleHistory]);
+
   const maxAllowed = category?.max_freeze_days || 0;
   
   useEffect(() => {
@@ -280,6 +284,10 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         <div className="flex justify-between items-end border-b border-white/10 pb-4">
                            <span className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest">Net Contribution</span>
                            <span className="text-3xl font-black tracking-tighter">{formatMoney(viewingMember.net_amount)}</span>
+                        </div>
+                        <div className="flex justify-between items-end border-b border-white/10 pb-4">
+                           <span className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest">Total Revenue</span>
+                           <span className="text-3xl font-black tracking-tighter">{formatMoney(totalRevenue)}</span>
                         </div>
                         <div className="flex justify-between items-end">
                            <span className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest">Daily Yield</span>
