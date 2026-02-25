@@ -544,11 +544,26 @@ const Reports = () => {
     const isDailySales = reportType === 'daily_sales';
 
     // Calculation variables
-    let totalActual = 0;
-    let totalDiscount = 0;
-    let totalNetRev = 0;
-    let totalIncNet = 0;
-    const staffTotals: Record<string, number> = {};
+    const totals = useMemo(() => {
+        let totalActual = 0;
+        let totalDiscount = 0;
+        let totalNetRev = 0;
+        let totalIncNet = 0;
+        const staffTotals: Record<string, number> = {};
+
+        rows.forEach(row => {
+            totalActual += row.actual_price;
+            totalDiscount += row.discount_amount;
+            totalNetRev += row.net_revenue;
+            totalIncNet += row.inc_net;
+            
+            Object.entries(row.staff_splits).forEach(([staffId, amount]) => {
+                staffTotals[staffId] = (staffTotals[staffId] || 0) + (amount as number);
+            });
+        });
+
+        return { totalActual, totalDiscount, totalNetRev, totalIncNet, staffTotals };
+    }, [rows]);
 
     const specialistLabel = useMemo(() => {
         if (reportType === 'incentives') {
@@ -603,11 +618,6 @@ const Reports = () => {
                 </thead>
                 <tbody>
                     {Array.isArray(rows) && rows.map((row, idx) => {
-                        totalActual += row.actual_price;
-                        totalDiscount += row.discount_amount;
-                        totalNetRev += row.net_revenue;
-                        totalIncNet += row.inc_net;
-
                         return (
                             <tr key={idx} className="hover:bg-slate-50 transition-colors">
                                 <td className="border border-black px-2 py-1 text-center font-bold">{row.sl_no}</td>
@@ -638,7 +648,6 @@ const Reports = () => {
                                 
                                 {isIncentiveReport && Array.isArray(activeStaffList) && activeStaffList.map(s => {
                                     const val = row.staff_splits[s.id] || 0;
-                                    staffTotals[s.id] = (staffTotals[s.id] || 0) + val;
                                     return (
                                         <td key={s.id} className={`border border-black px-1 py-1 text-right font-black ${val > 0 ? 'bg-indigo-50 text-indigo-700' : 'text-slate-100'}`}>
                                             {val > 0 ? val.toFixed(2) : '0.00'}
@@ -649,20 +658,20 @@ const Reports = () => {
                         );
                     })}
                     <tr className="bg-slate-900 text-white font-black text-[10px]">
-                        <td colSpan={isDailySales ? 6 : (incentiveDept === 'Massage' ? 8 : 7)} className="border border-black px-4 py-3 text-right uppercase tracking-widest">Aggregate Portfolio Totals</td>
-                        <td className="border border-black px-2 py-3 text-right">{totalActual.toFixed(2)}</td>
+                        <td colSpan={(isDailySales || (isIncentiveReport && (incentiveDept === 'Massage' || incentiveDept === 'Retail'))) ? 7 : 6} className="border border-black px-4 py-3 text-right uppercase tracking-widest">Aggregate Portfolio Totals</td>
+                        <td className="border border-black px-2 py-3 text-right">{totals.totalActual.toFixed(2)}</td>
                         <td className="border border-black"></td>
-                        <td className="border border-black px-2 py-3 text-right text-indigo-300">{totalDiscount.toFixed(2)}</td>
-                        <td className="border border-black px-2 py-3 text-right">{totalNetRev.toFixed(2)}</td>
+                        <td className="border border-black px-2 py-3 text-right text-indigo-300">{totals.totalDiscount.toFixed(2)}</td>
+                        <td className="border border-black px-2 py-3 text-right">{totals.totalNetRev.toFixed(2)}</td>
                         
                         {isIncentiveReport && (
                             <>
                                 <td colSpan={3} className="border border-black"></td>
-                                <td className="border border-black px-2 py-3 text-right bg-indigo-600 font-bold">{totalIncNet.toFixed(2)}</td>
+                                <td className="border border-black px-2 py-3 text-right bg-indigo-600 font-bold">{totals.totalIncNet.toFixed(2)}</td>
                                 <td className="border border-black"></td>
                                 {Array.isArray(activeStaffList) && activeStaffList.map(s => (
                                     <td key={s.id} className="border border-black px-1 py-3 text-right text-indigo-200">
-                                        {(staffTotals[s.id] || 0).toFixed(2)}
+                                        {(totals.staffTotals[s.id] || 0).toFixed(2)}
                                     </td>
                                 ))}
                             </>
@@ -812,10 +821,23 @@ const Reports = () => {
                                 <table className="w-full border-collapse border-2 border-black font-black text-[10px]">
                                     <tbody>
                                         {reportType === 'incentives' && (
-                                            <tr className="bg-amber-50">
-                                                <td className="border border-black px-5 py-3 uppercase text-slate-600">Total Incentive Yield</td>
-                                                <td className="border border-black px-5 py-3 text-right text-indigo-600 text-sm">{formatMoney(rows.reduce((sum, row) => sum + row.inc_net, 0))}</td>
-                                            </tr>
+                                            <>
+                                                <tr className="bg-amber-50">
+                                                    <td className="border border-black px-5 py-3 uppercase text-slate-600">Total Incentive Yield</td>
+                                                    <td className="border border-black px-5 py-3 text-right text-indigo-600 text-sm font-black">{formatMoney(rows.reduce((sum, row) => sum + row.inc_net, 0))}</td>
+                                                </tr>
+                                                {activeStaffList.filter(s => (rows.reduce((sum, r) => sum + (r.staff_splits[s.id] || 0), 0)) > 0).map(s => (
+                                                    <tr key={s.id} className="bg-white">
+                                                        <td className="border border-black px-8 py-2 uppercase text-slate-400 text-[9px] italic flex items-center gap-2">
+                                                            <div className="w-1 h-1 bg-indigo-400 rounded-full"></div>
+                                                            {s.name} ({s.role})
+                                                        </td>
+                                                        <td className="border border-black px-5 py-2 text-right text-slate-500 font-bold">
+                                                            {formatMoney(rows.reduce((sum, r) => sum + (r.staff_splits[s.id] || 0), 0))}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </>
                                         )}
                                         <tr className="bg-white">
                                             <td className="border border-black px-5 py-3 uppercase text-slate-600">Portfolio Gross Revenue</td>
