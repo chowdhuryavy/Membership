@@ -82,7 +82,7 @@ const Reports = () => {
   const { user } = useAuth();
   const { settings, currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
   const [reportType, setReportType] = useState<ReportType>('revenue_recognition');
-  const [incentiveDept, setIncentiveDept] = useState<'Massage' | 'Membership' | 'Retail'>('Massage');
+  const [incentiveDept, setIncentiveDept] = useState<'Massage' | 'Membership' | 'Personal Training'>('Massage');
   const [reportMonth, setReportMonth] = useState(format(new Date(), 'yyyy-MM'));
   
   // Data States
@@ -154,10 +154,16 @@ const Reports = () => {
                   /therapist|specialist|masseur|masseuse/i.test(s.role) ||
                   therapists.some(t => t.id === s.id)
               );
-          } else if (incentiveDept === 'Retail' || incentiveDept === 'Membership') {
-              // Only show sales/front office staff for retail/membership
+          } else if (incentiveDept === 'Personal Training') {
+              // Only show trainers for personal training reports
               filteredStaff = filteredStaff.filter(s => 
-                  !/therapist|specialist|masseur|masseuse/i.test(s.role)
+                  /trainer|coach|instructor|pt|gym|fitness/i.test(s.role)
+              );
+          } else if (incentiveDept === 'Membership') {
+              // Only show sales/front office staff for membership
+              filteredStaff = filteredStaff.filter(s => 
+                  !/therapist|specialist|masseur|masseuse/i.test(s.role) &&
+                  !/trainer|coach|instructor|pt|gym|fitness/i.test(s.role)
               );
           }
       }
@@ -396,10 +402,11 @@ const Reports = () => {
                           staff_splits: staffSplits
                       });
                   });
-              } else if (incentiveDept === 'Retail') {
+              } else if (incentiveDept === 'Personal Training') {
                   sales.filter(s => {
                       const sDate = parseISO(s.created_at);
-                      return s.status === 'completed' && sDate >= start && sDate <= end;
+                      const isPT = s.category?.toLowerCase() === 'personal training';
+                      return s.status === 'completed' && isPT && sDate >= start && sDate <= end;
                   })
                   .forEach(s => {
                       const rule = findBestRule(rules, 'Sale', s.category, s.net_amount, 0);
@@ -593,7 +600,7 @@ const Reports = () => {
     const specialistLabel = useMemo(() => {
         if (reportType === 'incentives') {
             if (incentiveDept === 'Massage') return 'Therapist';
-            if (incentiveDept === 'Retail') return 'Sales Rep / Trainer';
+            if (incentiveDept === 'Personal Training') return 'Personal Trainer';
             if (incentiveDept === 'Membership') return 'Sales Rep';
         }
         return 'Staff';
@@ -774,7 +781,7 @@ const Reports = () => {
                                       <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Reward Department</label>
                                   </div>
                                   <div className="grid grid-cols-1 gap-2">
-                                      {(['Massage', 'Membership', 'Retail'] as const).map(dept => (
+                                      {(['Massage', 'Membership', 'Personal Training'] as const).map(dept => (
                                           <button 
                                             key={dept} 
                                             onClick={() => setIncentiveDept(dept)} 
