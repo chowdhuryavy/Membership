@@ -132,11 +132,11 @@ const Reports = () => {
       
       const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests, freezes, users] = await Promise.all([
           db.getIncentiveRules(currentProperty.id, currentOutlet.id),
-          db.getMassageBookings(currentProperty.id, true),
+          db.getMassageBookings(currentOutlet.id, false),
           db.getMembers(currentOutlet.id),
-          db.getSales(currentProperty.id, true),
-          db.getTherapists(currentProperty.id, true),
-          db.getMassageTypes(currentProperty.id, true),
+          db.getSales(currentOutlet.id, false),
+          db.getTherapists(currentOutlet.id, false),
+          db.getMassageTypes(currentOutlet.id, false),
           db.getCategories(currentOutlet.id),
           db.getStaff(currentOutlet.id),
           db.getGuests(currentProperty.id),
@@ -144,7 +144,25 @@ const Reports = () => {
           db.getUsers()
       ]);
 
-      setActiveStaffList(staffList.filter(s => s.is_active));
+      let filteredStaff = staffList.filter(s => s.is_active);
+      
+      // Filter staff list based on report context
+      if (reportType === 'incentives') {
+          if (incentiveDept === 'Massage') {
+              // Only show therapists for massage reports
+              filteredStaff = filteredStaff.filter(s => 
+                  /therapist|specialist|masseur|masseuse/i.test(s.role) ||
+                  therapists.some(t => t.id === s.id)
+              );
+          } else if (incentiveDept === 'Retail' || incentiveDept === 'Membership') {
+              // Only show sales/front office staff for retail/membership
+              filteredStaff = filteredStaff.filter(s => 
+                  !/therapist|specialist|masseur|masseuse/i.test(s.role)
+              );
+          }
+      }
+
+      setActiveStaffList(filteredStaff);
       
       if (reportType === 'revenue_recognition') {
           // --- REVENUE RECOGNITION (AMORTIZATION) LOGIC ---
@@ -274,33 +292,40 @@ const Reports = () => {
               if (incentiveDept === 'Massage') {
                   bookings.filter(b => {
                       const bDate = parseISO(b.date);
-                      return b.status === 'completed' && bDate >= start && bDate <= end;
+                      // Include both completed and confirmed for visibility, but audit usually requires completed
+                      return (b.status === 'completed' || b.status === 'confirmed') && bDate >= start && bDate <= end;
                   })
                   .forEach(b => {
                       const type = mTypes.find(m => m.id === b.massage_type_id);
                       if (!type) return;
                       const rule = findBestRule(rules, 'Massage', b.massage_type_id, type.price, type.duration_minutes);
-                      if (!rule) return;
-
+                      
                       const actualPrice = type.price;
                       const discountAmt = b.discount || 0;
                       const netRev = actualPrice - discountAmt;
                       const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
-                      const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-                      const incDiscVal = (baseInc * discPercent) / 100;
-                      const incNet = baseInc - incDiscVal;
-
+                      let baseInc = 0;
+                      let incDiscVal = 0;
+                      let incNet = 0;
                       const staffSplits: Record<string, number> = {};
-                      if (rule.distribution_type === 'Shared') {
-                          const available = staffList.filter(s => s.is_active && (s.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(s, b.date));
-                          if (available.length > 0) {
-                              const share = incNet / available.length;
-                              available.forEach(s => staffSplits[s.id] = share);
+
+                      if (rule) {
+                          baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+                          incDiscVal = (baseInc * discPercent) / 100;
+                          incNet = baseInc - incDiscVal;
+
+                          // For Massage, we always attribute the incentive to the specific therapist
+                          // who performed the service, as per user requirement.
+                          if (b.therapist_id) {
+                              staffSplits[b.therapist_id] = incNet;
                           }
-                      } else {
-                          if (b.therapist_id) staffSplits[b.therapist_id] = incNet;
                       }
+
+                      // Override: For Massage, if it's not shared, ensure it goes to the therapist
+                      // The user specifically requested that for massage only the therapist gets it.
+                      // If the rule is individual, it already goes to b.therapist_id.
+                      // If there's no rule, we still show the row with 0 incentive.
 
                       records.push({
                           sl_no: sl++,
@@ -318,7 +343,7 @@ const Reports = () => {
                           inc_discount_percent: discPercent,
                           inc_discount_val: incDiscVal,
                           inc_net: incNet,
-                          remarks: discPercent > 50 ? 'Complimentary' : '',
+                          remarks: b.status === 'confirmed' ? 'Pending Completion' : (discPercent > 50 ? 'Complimentary' : (!rule ? 'No Incentive Rule' : '')),
                           staff_splits: staffSplits
                       });
                   });
