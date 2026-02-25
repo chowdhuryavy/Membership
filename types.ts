@@ -188,6 +188,7 @@ export interface Therapist {
   country: string;
   property_id: string;
   outlet_id: string;
+  type?: string;
 }
 
 export interface MassageType {

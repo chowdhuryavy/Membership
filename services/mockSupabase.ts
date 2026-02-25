@@ -384,6 +384,9 @@ class DatabaseService {
 
   async updateStaff(id: string, updates: Partial<Staff>) {
     if (this.isSupabase()) {
+      if (updates.name) {
+          await supabase.from('therapists').update({ name: updates.name }).eq('id', id);
+      }
       const { error } = await supabase.from('staff').update(updates).eq('id', id);
       if (error) throw error;
       await this.logAction('UPDATE_STAFF', `Staff profile adjusted: ${id}`);
@@ -392,6 +395,7 @@ class DatabaseService {
 
   async deleteStaff(id: string) {
     if (this.isSupabase()) {
+      await supabase.from('therapists').delete().eq('id', id);
       const { error } = await supabase.from('staff').delete().eq('id', id);
       if (error) throw error;
       await this.logAction('DELETE_STAFF', `Staff record purged: ${id}`);
@@ -813,15 +817,44 @@ class DatabaseService {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as Therapist[];
+      
+      const therapists = (data || []) as Therapist[];
+      
+      if (therapists.length > 0) {
+          const { data: staffData } = await supabase.from('staff').select('id, role').in('id', therapists.map(t => t.id));
+          if (staffData) {
+              therapists.forEach(t => {
+                  const staff = staffData.find(s => s.id === t.id);
+                  if (staff) {
+                      t.type = staff.role;
+                  } else {
+                      t.type = 'Therapist';
+                  }
+              });
+          }
+      }
+      
+      return therapists;
     }
     return [];
   }
 
   async addTherapist(therapist: Omit<Therapist, 'id'>) {
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('therapists').insert([{ ...therapist, id: crypto.randomUUID() }]).select();
+        const id = crypto.randomUUID();
+        const { type, ...therapistData } = therapist;
+        const { data, error } = await supabase.from('therapists').insert([{ ...therapistData, id }]).select();
         if (error) throw error;
+        
+        await supabase.from('staff').insert([{
+            id,
+            outlet_id: therapist.outlet_id,
+            name: therapist.name,
+            role: type || 'Therapist',
+            is_active: true,
+            is_eligible_for_incentives: true
+        }]);
+
         await this.logAction('CREATE_THERAPIST', `Specialist enrolled: ${therapist.name}`, therapist.outlet_id);
         return data;
     }
@@ -829,7 +862,18 @@ class DatabaseService {
 
   async updateTherapist(id: string, updates: Partial<Therapist>) {
     if (this.isSupabase()) {
-        await supabase.from('therapists').update(updates).eq('id', id);
+        const { type, ...therapistUpdates } = updates;
+        if (Object.keys(therapistUpdates).length > 0) {
+            await supabase.from('therapists').update(therapistUpdates).eq('id', id);
+        }
+        
+        if (updates.name || type) {
+            const staffUpdates: any = {};
+            if (updates.name) staffUpdates.name = updates.name;
+            if (type) staffUpdates.role = type;
+            await supabase.from('staff').update(staffUpdates).eq('id', id);
+        }
+
         await this.logAction('UPDATE_THERAPIST', `Specialist profile adjusted: ${id}`);
     }
   }
@@ -837,6 +881,7 @@ class DatabaseService {
   async deleteTherapist(id: string) {
     if (this.isSupabase()) {
         await supabase.from('therapists').delete().eq('id', id);
+        await supabase.from('staff').delete().eq('id', id);
         await this.logAction('DELETE_THERAPIST', `Specialist record purged: ${id}`);
     }
   }

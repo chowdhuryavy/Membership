@@ -4,7 +4,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle } from '../components/
 import { db } from '../services/mockSupabase';
 import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO as dateFnsParseISO } from 'date-fns';
+import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { 
@@ -30,7 +30,6 @@ import {
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-const parseISO = (dateString: string) => new Date(dateString);
 const startOfMonthLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
 // Report Types
@@ -128,10 +127,10 @@ const Reports = () => {
   const loadData = async () => {
     if (!currentOutlet || !currentProperty) return;
     try {
-      const start = startOfMonthLocal(parseISO(reportMonth + '-01'));
+      const start = startOfDay(parseISO(reportMonth + '-01'));
       const end = endOfMonth(start);
       
-      const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests, freezes] = await Promise.all([
+      const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests, freezes, users] = await Promise.all([
           db.getIncentiveRules(currentProperty.id, currentOutlet.id),
           db.getMassageBookings(currentProperty.id, true),
           db.getMembers(currentOutlet.id),
@@ -141,7 +140,8 @@ const Reports = () => {
           db.getCategories(currentOutlet.id),
           db.getStaff(currentOutlet.id),
           db.getGuests(currentProperty.id),
-          db.getFreezes()
+          db.getFreezes(),
+          db.getUsers()
       ]);
 
       setActiveStaffList(staffList.filter(s => s.is_active));
@@ -222,9 +222,12 @@ const Reports = () => {
           let sl = 1;
 
           if (reportType === 'daily_sales') {
-              // --- DAILY SALES LEDGER (POS + BOOKINGS + MEMBERSHIPS) ---
+              // --- DAILY SALES LEDGER (POS + BOOKINGS) ---
               const combined = [
-                  ...sales.filter(s => s.status === 'completed' && parseISO(s.created_at) >= start && parseISO(s.created_at) <= end).map(s => ({
+                  ...sales.filter(s => {
+                      const sDate = parseISO(s.created_at);
+                      return s.status === 'completed' && sDate >= start && sDate <= end;
+                  }).map(s => ({
                       date: s.created_at,
                       name: s.guest_name,
                       item: s.item_name,
@@ -234,7 +237,10 @@ const Reports = () => {
                       type: 'Retail',
                       method: s.payment_method
                   })),
-                  ...bookings.filter(b => b.status === 'completed' && parseISO(b.date) >= start && parseISO(b.date) <= end).map(b => ({
+                  ...bookings.filter(b => {
+                      const bDate = parseISO(b.date);
+                      return b.status === 'completed' && bDate >= start && bDate <= end;
+                  }).map(b => ({
                       date: `${b.date}T${b.start_time}`,
                       name: guests.find(g => g.id === b.guest_id)?.name || 'Guest',
                       item: mTypes.find(t => t.id === b.massage_type_id)?.name || 'Service',
@@ -266,7 +272,10 @@ const Reports = () => {
           } else if (reportType === 'incentives') {
               // --- INCENTIVE AUDIT LOGIC ---
               if (incentiveDept === 'Massage') {
-                  bookings.filter(b => b.status === 'completed' && parseISO(b.date) >= start && parseISO(b.date) <= end)
+                  bookings.filter(b => {
+                      const bDate = parseISO(b.date);
+                      return b.status === 'completed' && bDate >= start && bDate <= end;
+                  })
                   .forEach(b => {
                       const type = mTypes.find(m => m.id === b.massage_type_id);
                       if (!type) return;
@@ -363,7 +372,10 @@ const Reports = () => {
                       });
                   });
               } else if (incentiveDept === 'Retail') {
-                  sales.filter(s => s.status === 'completed' && parseISO(s.created_at) >= start && parseISO(s.created_at) <= end)
+                  sales.filter(s => {
+                      const sDate = parseISO(s.created_at);
+                      return s.status === 'completed' && sDate >= start && sDate <= end;
+                  })
                   .forEach(s => {
                       const rule = findBestRule(rules, 'Sale', s.category, s.net_amount, 0);
                       if (!rule) return;
@@ -395,6 +407,7 @@ const Reports = () => {
                           duration: `x${s.quantity}`,
                           check_no: '#POS',
                           item_name: s.item_name,
+                          therapist_name: staffList.find(st => st.id === s.sold_by_id)?.name || users.find(u => u.id === s.sold_by_id)?.name || 'N/A',
                           actual_price: actualPrice,
                           discount_percent: discPercent,
                           discount_amount: discountAmt,
@@ -537,6 +550,15 @@ const Reports = () => {
     let totalIncNet = 0;
     const staffTotals: Record<string, number> = {};
 
+    const specialistLabel = useMemo(() => {
+        if (reportType === 'incentives') {
+            if (incentiveDept === 'Massage') return 'Therapist';
+            if (incentiveDept === 'Retail') return 'Sales Rep / Trainer';
+            if (incentiveDept === 'Membership') return 'Sales Rep';
+        }
+        return 'Staff';
+    }, [reportType, incentiveDept]);
+
     return (
         <div className="w-full">
             <table className="w-full border-collapse text-[9px] border-2 border-black">
@@ -550,7 +572,7 @@ const Reports = () => {
                         <th rowSpan={2} className="border border-black px-2 py-3 w-16">Check No.</th>
                         {(isDailySales) && <th rowSpan={2} className="border border-black px-2 py-3">Payment Mode</th>}
                         <th rowSpan={2} className="border border-black px-2 py-3">Item / Service</th>
-                        {incentiveDept === 'Massage' && isIncentiveReport && <th rowSpan={2} className="border border-black px-2 py-3">Therapist</th>}
+                        {((incentiveDept === 'Massage' || incentiveDept === 'Retail') && isIncentiveReport) && <th rowSpan={2} className="border border-black px-2 py-3">{specialistLabel}</th>}
                         
                         <th rowSpan={2} className="border border-black px-2 py-3 text-right">Gross Amount</th>
                         <th rowSpan={2} className="border border-black px-2 py-3 text-center">Disc %</th>
@@ -562,7 +584,7 @@ const Reports = () => {
                         
                         <th rowSpan={2} className="border border-black px-2 py-3 min-w-[100px]">Remarks</th>
                         
-                        {isIncentiveReport && activeStaffList.map(s => (
+                        {isIncentiveReport && Array.isArray(activeStaffList) && activeStaffList.map(s => (
                             <th key={s.id} rowSpan={2} className="border border-black px-1 py-3 w-16 bg-slate-50 text-center">
                                 <div className="rotate-180" style={{ writingMode: 'vertical-rl' }}>{s.name.toUpperCase()}</div>
                             </th>
@@ -580,7 +602,7 @@ const Reports = () => {
                     </tr>
                 </thead>
                 <tbody>
-                    {rows.map((row, idx) => {
+                    {Array.isArray(rows) && rows.map((row, idx) => {
                         totalActual += row.actual_price;
                         totalDiscount += row.discount_amount;
                         totalNetRev += row.net_revenue;
@@ -596,7 +618,7 @@ const Reports = () => {
                                 <td className="border border-black px-2 py-1 text-center text-slate-400">{row.check_no}</td>
                                 {(isDailySales) && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
                                 <td className="border border-black px-2 py-1">{row.item_name}</td>
-                                {incentiveDept === 'Massage' && isIncentiveReport && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
+                                {((incentiveDept === 'Massage' || incentiveDept === 'Retail') && isIncentiveReport) && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
                                 
                                 <td className="border border-black px-2 py-1 text-right">{row.actual_price.toFixed(2)}</td>
                                 <td className="border border-black px-2 py-1 text-center text-slate-400">{row.discount_percent > 0 ? `${row.discount_percent.toFixed(0)}%` : ''}</td>
@@ -614,7 +636,7 @@ const Reports = () => {
                                 
                                 <td className="border border-black px-2 py-1 text-[8px] text-slate-400 italic truncate max-w-[120px]">{row.remarks}</td>
                                 
-                                {isIncentiveReport && activeStaffList.map(s => {
+                                {isIncentiveReport && Array.isArray(activeStaffList) && activeStaffList.map(s => {
                                     const val = row.staff_splits[s.id] || 0;
                                     staffTotals[s.id] = (staffTotals[s.id] || 0) + val;
                                     return (
@@ -638,7 +660,7 @@ const Reports = () => {
                                 <td colSpan={3} className="border border-black"></td>
                                 <td className="border border-black px-2 py-3 text-right bg-indigo-600 font-bold">{totalIncNet.toFixed(2)}</td>
                                 <td className="border border-black"></td>
-                                {activeStaffList.map(s => (
+                                {Array.isArray(activeStaffList) && activeStaffList.map(s => (
                                     <td key={s.id} className="border border-black px-1 py-3 text-right text-indigo-200">
                                         {(staffTotals[s.id] || 0).toFixed(2)}
                                     </td>

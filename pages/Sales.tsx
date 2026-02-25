@@ -51,7 +51,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
-import { Sale, Guest, SaleCategory, InventoryItem, MassageBooking, MassageType, UserProfile } from '../types';
+import { Sale, Guest, SaleCategory, InventoryItem, MassageBooking, MassageType, UserProfile, Staff } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, addDays, isSameDay } from 'date-fns';
@@ -60,6 +60,7 @@ const POSForm = ({
     guests, 
     inventory,
     users,
+    staff = [],
     onCancel, 
     onSuccess, 
     currentOutletId,
@@ -69,6 +70,7 @@ const POSForm = ({
     guests: Guest[], 
     inventory: InventoryItem[],
     users: UserProfile[],
+    staff?: Staff[],
     onCancel: () => void, 
     onSuccess: () => void, 
     currentOutletId: string,
@@ -92,7 +94,7 @@ const POSForm = ({
         discount_mode: 'amount' as 'amount' | 'percent',
         payment_method: initialSale?.payment_method || 'Cash',
         remarks: initialSale?.remarks || '',
-        sold_by_id: initialSale?.sold_by_id || currentUser?.id || ''
+        sold_by_id: initialSale?.sold_by_id || ''
     });
 
     const [showGuestSuggestions, setShowGuestSuggestions] = useState(false);
@@ -100,6 +102,47 @@ const POSForm = ({
     const [itemSearch, setItemSearch] = useState(initialSale?.item_name || '');
     const suggestionRef = useRef<HTMLDivElement>(null);
     const itemRef = useRef<HTMLDivElement>(null);
+
+    const providers = useMemo(() => {
+        const activeStaff = staff.filter(s => s.is_active);
+        const category = saleData.category.toLowerCase();
+        
+        let filtered = activeStaff;
+
+        if (category === 'personal training') {
+            const trainers = activeStaff.filter(s => 
+                /trainer|coach|instructor|pt|gym|fitness/i.test(s.role)
+            );
+            if (trainers.length > 0) {
+                filtered = trainers;
+            } else {
+                // Exclude therapists from PT if other staff exist
+                const nonTherapists = activeStaff.filter(s => !/therapist|specialist|masseur|masseuse/i.test(s.role));
+                if (nonTherapists.length > 0) filtered = nonTherapists;
+            }
+        } else if (category === 'retail' || category === 'entrance fee') {
+            const frontOffice = activeStaff.filter(s => 
+                /sales|reception|associate|cashier|front|admin|manager|clerk|counter|office/i.test(s.role)
+            );
+            if (frontOffice.length > 0) {
+                filtered = frontOffice;
+            } else {
+                // Exclude therapists from Retail/Entrance if other staff exist
+                const nonTherapists = activeStaff.filter(s => !/therapist|specialist|masseur|masseuse/i.test(s.role));
+                if (nonTherapists.length > 0) filtered = nonTherapists;
+            }
+        }
+        
+        return filtered
+            .map(s => ({ id: s.id, name: s.name, role: s.role }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }, [staff, saleData.category]);
+
+    const providerLabel = useMemo(() => {
+        if (saleData.category === 'Personal Training') return 'Personal Trainer';
+        if (saleData.category === 'Retail') return 'Sales Associate';
+        return 'Staff Member';
+    }, [saleData.category]);
 
     const filteredInventory = useMemo(() => {
         const catFiltered = inventory.filter(i => i.category === saleData.category);
@@ -285,7 +328,7 @@ const POSForm = ({
                             className="h-11 rounded-xl text-xs"
                         />
                         <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-700">Sales Rep / Trainer (Incentive)</label>
+                            <label className="text-[10px] font-bold text-slate-700">{providerLabel} (Incentive)</label>
                             <div className="relative">
                                 <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <select 
@@ -293,9 +336,9 @@ const POSForm = ({
                                     onChange={e => setSaleData({...saleData, sold_by_id: e.target.value})}
                                     className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-300 bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                                 >
-                                    <option value="">Select Staff Member...</option>
-                                    {users.map(u => (
-                                        <option key={u.id} value={u.id}>{u.name}</option>
+                                    <option value="">Select {providerLabel}...</option>
+                                    {providers.map(p => (
+                                        <option key={p.id} value={p.id}>{p.name} ({p.role})</option>
                                     ))}
                                 </select>
                             </div>
@@ -491,6 +534,7 @@ const Sales = () => {
     const [bookings, setBookings] = useState<MassageBooking[]>([]);
     const [guests, setGuests] = useState<Guest[]>([]);
     const [users, setUsers] = useState<UserProfile[]>([]);
+    const [staff, setStaff] = useState<Staff[]>([]);
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [massageTypes, setMassageTypes] = useState<MassageType[]>([]);
     const [loading, setLoading] = useState(true);
@@ -518,13 +562,14 @@ const Sales = () => {
         try {
             const isProperty = viewScope === 'property';
             const scopeId = isProperty ? currentProperty.id : currentOutlet.id;
-            const [s, b, g, i, mt, u] = await Promise.all([
+            const [s, b, g, i, mt, u, st] = await Promise.all([
                 db.getSales(scopeId, isProperty),
                 db.getMassageBookings(scopeId, isProperty),
                 db.getGuests(currentProperty.id),
                 db.getInventory(scopeId, isProperty),
                 db.getMassageTypes(scopeId, isProperty),
-                db.getUsers()
+                db.getUsers(),
+                db.getStaff(currentOutlet.id)
             ]);
             setSales(s);
             setBookings(b);
@@ -532,6 +577,7 @@ const Sales = () => {
             setInventory(i);
             setMassageTypes(mt);
             setUsers(u);
+            setStaff(st);
         } catch (e) {
             console.error(e);
         } finally {
@@ -759,7 +805,17 @@ const Sales = () => {
             {showForm && (
                 <div className="fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
                     <div className="w-full max-w-2xl animate-in zoom-in-95 duration-300">
-                        <POSForm users={users} guests={guests} inventory={inventory} currentOutletId={currentOutlet?.id || ''} currentPropertyId={currentProperty?.id || ''} onCancel={() => {setShowForm(false); setEditingSale(null);}} onSuccess={() => { setShowForm(false); setEditingSale(null); loadData(); }} initialSale={editingSale || undefined} />
+                        <POSForm 
+                            users={users} 
+                            staff={staff}
+                            guests={guests} 
+                            inventory={inventory} 
+                            currentOutletId={currentOutlet?.id || ''} 
+                            currentPropertyId={currentProperty?.id || ''} 
+                            onCancel={() => {setShowForm(false); setEditingSale(null);}} 
+                            onSuccess={() => { setShowForm(false); setEditingSale(null); loadData(); }} 
+                            initialSale={editingSale || undefined} 
+                        />
                     </div>
                 </div>
             )}

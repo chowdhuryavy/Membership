@@ -43,6 +43,7 @@ const StaffPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSchemaMissing, setIsSchemaMissing] = useState(false);
   
   const [formData, setFormData] = useState<Omit<Staff, 'id' | 'created_at'>>({ 
     name: '', 
@@ -84,6 +85,7 @@ const StaffPage = () => {
     if (!currentOutlet || !currentProperty) return;
     setLoading(true);
     setErrorMessage(null);
+    setIsSchemaMissing(false);
     try {
       // If property scope is active, fetch for all outlets in property
       const targetOutletId = viewScope === 'outlet' ? currentOutlet.id : undefined;
@@ -91,6 +93,9 @@ const StaffPage = () => {
       setStaff(data);
     } catch (err: any) {
       setErrorMessage(err.message || "Failed to load staff roster.");
+      if (err.message?.includes('schema cache') || err.message?.toLowerCase().includes('column')) {
+        setIsSchemaMissing(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -117,13 +122,64 @@ const StaffPage = () => {
       loadStaff();
     } catch (err: any) {
       setErrorMessage(err.message || "Failed to save staff record.");
+      if (err.message?.includes('schema cache') || err.message?.toLowerCase().includes('column')) {
+        setIsSchemaMissing(true);
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const MissingStaffColumnsPanel = () => (
+    <Card className="max-w-4xl mx-auto rounded-[3rem] border-amber-200 bg-amber-50/30 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+        <div className="bg-amber-600 p-8 text-white flex items-center gap-6">
+            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
+                <Database className="w-8 h-8" />
+            </div>
+            <div>
+                <h2 className="text-2xl font-black uppercase tracking-tight">Schema Repair Required</h2>
+                <p className="text-amber-100 font-bold text-sm">The 'staff' table is missing columns for leave management and incentives.</p>
+            </div>
+        </div>
+        <CardContent className="p-10 space-y-8">
+            <div className="flex items-start gap-4">
+                <div className="p-3 bg-white rounded-xl shadow-sm border border-amber-100">
+                    <Terminal className="w-5 h-5 text-amber-600" />
+                </div>
+                <div className="space-y-2">
+                    <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Safe Repair Protocol</h3>
+                    <p className="text-slate-600 text-sm leading-relaxed font-medium">Please execute this script in your <span className="font-bold text-indigo-600">Supabase SQL Editor</span>. This will safely add the missing columns to your staff table.</p>
+                </div>
+            </div>
+
+            <div className="relative group">
+                <pre className="bg-slate-950 text-indigo-300 p-8 rounded-3xl overflow-x-auto text-[11px] font-mono leading-relaxed shadow-inner border border-white/10">
+{`-- ADD MISSING COLUMNS TO staff TABLE
+ALTER TABLE IF EXISTS public.staff 
+ADD COLUMN IF NOT EXISTS is_eligible_for_incentives BOOLEAN NOT NULL DEFAULT TRUE,
+ADD COLUMN IF NOT EXISTS leave_start_date TEXT,
+ADD COLUMN IF NOT EXISTS leave_end_date TEXT;
+
+-- DISABLE RLS FOR INTERNAL SYSTEM OPERATIONS
+ALTER TABLE public.staff DISABLE ROW LEVEL SECURITY;
+
+-- GRANT PERMISSIONS
+GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
+                </pre>
+            </div>
+            <div className="flex gap-4">
+                <Button onClick={() => window.location.reload()} className="h-12 px-8 rounded-xl font-black uppercase text-[10px] tracking-widest bg-amber-600 hover:bg-amber-700">
+                    <RefreshCcw className="w-4 h-4 mr-2" /> Verify Schema Sync
+                </Button>
+            </div>
+        </CardContent>
+    </Card>
+  );
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+      {isSchemaMissing && <MissingStaffColumnsPanel />}
+      
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-xl"><Contact2 className="w-7 h-7" /></div>
@@ -189,6 +245,69 @@ const StaffPage = () => {
                 </CardContent>
             </Card>
             ))}
+        </div>
+      )}
+
+      {showForm && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+          <Card className="w-full max-w-2xl rounded-[3rem] border-slate-200 shadow-2xl overflow-hidden bg-white animate-in zoom-in-95 duration-300">
+            <CardHeader className="bg-slate-900 text-white p-8 flex justify-between items-center">
+              <div>
+                <CardTitle className="text-xl font-black uppercase tracking-widest">{editingId ? 'Modify Personnel' : 'Enroll New Staff'}</CardTitle>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Facility Human Resources Management</p>
+              </div>
+              <button onClick={() => setShowForm(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-6 h-6" /></button>
+            </CardHeader>
+            <CardContent className="p-10">
+              <form onSubmit={handleSubmit} className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <Input label="Full Identity Name *" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required className="h-14 rounded-2xl font-bold" />
+                  <Input label="Professional Role *" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })} required className="h-14 rounded-2xl font-bold" placeholder="e.g. Senior Therapist" />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <Input label="Email Address" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="h-14 rounded-2xl" />
+                  <Input label="Contact Number" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="h-14 rounded-2xl" />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Incentive Eligibility</label>
+                    <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                      <button type="button" onClick={() => setFormData({ ...formData, is_eligible_for_incentives: true })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${formData.is_eligible_for_incentives ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>Eligible</button>
+                      <button type="button" onClick={() => setFormData({ ...formData, is_eligible_for_incentives: false })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${!formData.is_eligible_for_incentives ? 'bg-white text-red-600 shadow-md' : 'text-slate-400'}`}>Exempt</button>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Account Status</label>
+                    <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                      <button type="button" onClick={() => setFormData({ ...formData, is_active: true })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${formData.is_active ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-400'}`}>Active</button>
+                      <button type="button" onClick={() => setFormData({ ...formData, is_active: false })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${!formData.is_active ? 'bg-white text-slate-600 shadow-md' : 'text-slate-400'}`}>Inactive</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <Input label="Leave Start Date" type="date" value={formData.leave_start_date} onChange={e => setFormData({ ...formData, leave_start_date: e.target.value })} className="h-14 rounded-2xl" />
+                  <Input label="Leave End Date" type="date" value={formData.leave_end_date} onChange={e => setFormData({ ...formData, leave_end_date: e.target.value })} className="h-14 rounded-2xl" />
+                </div>
+
+                {errorMessage && (
+                  <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in shake duration-300">
+                    <AlertCircle className="w-5 h-5" />
+                    <p className="text-xs font-bold uppercase tracking-tight">{errorMessage}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-4 pt-4">
+                  <Button type="button" variant="secondary" onClick={() => setShowForm(false)} className="flex-1 h-14 rounded-2xl font-black uppercase tracking-widest">Discard</Button>
+                  <Button type="submit" isLoading={isSubmitting} className="flex-1 h-14 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-100">
+                    {editingId ? 'Update Identity' : 'Authorize Enrollment'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       )}
       <ConfirmationModal isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={async () => { if (deleteId) { await db.deleteStaff(deleteId); loadStaff(); } }} title="Purge Staff Identity" description="Permanently remove this personnel record from the system?" confirmText="Confirm Purge" isDestructive={true} />

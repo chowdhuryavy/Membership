@@ -361,7 +361,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                               </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-50">
-                              {lifecycleHistory.map(hist => (
+                              {Array.isArray(lifecycleHistory) && lifecycleHistory.map(hist => (
                                   <tr 
                                     key={hist.id} 
                                     onClick={() => setViewingMember(hist)}
@@ -427,7 +427,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                   </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-50">
-                                  {freezes.length === 0 ? (
+                                  {(!Array.isArray(freezes) || freezes.length === 0) ? (
                                       <tr><td colSpan={4} className="px-8 py-28 text-center">
                                           <div className="flex flex-col items-center gap-4 opacity-30">
                                               <Milestone className="w-12 h-12 text-slate-300" />
@@ -435,7 +435,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                           </div>
                                       </td></tr>
                                   ) : (
-                                      freezes.map(f => (
+                                      Array.isArray(freezes) && freezes.map(f => (
                                           <tr key={f.id} className="hover:bg-indigo-50/20 transition-colors group">
                                               <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(f.start_date), 'dd MMM yyyy')}</td>
                                               <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(f.end_date), 'dd MMM yyyy')}</td>
@@ -483,7 +483,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                   </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-50">
-                                  {memberBookings.length === 0 ? (
+                                  {(!Array.isArray(memberBookings) || memberBookings.length === 0) ? (
                                       <tr><td colSpan={3} className="px-8 py-28 text-center">
                                           <div className="flex flex-col items-center gap-4 opacity-30">
                                               <History className="w-12 h-12 text-slate-300" />
@@ -491,7 +491,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                           </div>
                                       </td></tr>
                                   ) : (
-                                      memberBookings.map(b => {
+                                      Array.isArray(memberBookings) && memberBookings.map(b => {
                                           const type = massageTypes.find(mt => mt.id === b.massage_type_id);
                                           return (
                                           <tr key={b.id} className="hover:bg-purple-50/20 transition-colors">
@@ -528,6 +528,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                 <div>
                                     <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Legal Spouse</p>
                                     <p className="text-base font-black uppercase text-slate-800">{viewingMember.spouse_name}</p>
+                                    {viewingMember.spouse_dob && <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-tighter">DOB: {format(parseISO(viewingMember.spouse_dob), 'dd MMM yyyy')}</p>}
                                 </div>
                             </div>
                         )}
@@ -537,6 +538,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                 <div>
                                     <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Dependent {i+1}</p>
                                     <p className="text-base font-black uppercase text-slate-800">{kid.name}</p>
+                                    {kid.dob && <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-tighter">DOB: {format(parseISO(kid.dob), 'dd MMM yyyy')}</p>}
                                 </div>
                             </div>
                         ))}

@@ -353,7 +353,7 @@ const MassageScheduling = () => {
   const [saveError, setSaveError] = useState<string | null>(null);
   
   const [newType, setNewType] = useState({ id: '', name: '', price: 0, duration_minutes: 60 });
-  const [newTherapist, setNewTherapist] = useState({ id: '', name: '', specialty: '', country: '' });
+  const [newTherapist, setNewTherapist] = useState({ id: '', name: '', specialty: '', country: '', type: 'Therapist' });
   const [isEditingResource, setIsEditingResource] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest', name: string} | null>(null);
 
@@ -479,11 +479,11 @@ const MassageScheduling = () => {
     setSaveError(null);
     try {
       if (isEditingResource && newTherapist.id) {
-          await db.updateTherapist(newTherapist.id, { name: newTherapist.name, specialty: newTherapist.specialty, country: newTherapist.country });
+          await db.updateTherapist(newTherapist.id, { name: newTherapist.name, specialty: newTherapist.specialty, country: newTherapist.country, type: newTherapist.type });
       } else {
           await db.addTherapist({ ...newTherapist, property_id: currentProperty.id, outlet_id: currentOutlet.id });
       }
-      setNewTherapist({ id: '', name: '', specialty: '', country: '' });
+      setNewTherapist({ id: '', name: '', specialty: '', country: '', type: 'Therapist' });
       setIsEditingResource(false);
       loadData();
     } catch (err: any) {
@@ -813,6 +813,7 @@ const MassageScheduling = () => {
                                 <thead className="bg-slate-50 border-b">
                                     <tr>
                                         <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Specialist Name</th>
+                                        <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Type</th>
                                         <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Expertise</th>
                                         <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Origin</th>
                                         <th className="px-8 py-4 text-right text-[9px] font-black uppercase text-slate-400">Ops</th>
@@ -822,6 +823,7 @@ const MassageScheduling = () => {
                                     {therapists.map(t => (
                                         <tr key={t.id} className="hover:bg-slate-50 group">
                                             <td className="px-8 py-5 font-black text-slate-800 text-sm uppercase">{t.name}</td>
+                                            <td className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">{t.type || 'Therapist'}</td>
                                             <td className="px-8 py-5 text-xs font-bold text-indigo-600">{t.specialty}</td>
                                             <td className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t.country}</td>
                                             <td className="px-8 py-5 text-right">
@@ -838,7 +840,7 @@ const MassageScheduling = () => {
                                     ))}
                                     {therapists.length === 0 && (
                                         <tr>
-                                            <td colSpan={4} className="px-8 py-10 text-center text-slate-400 uppercase text-[9px] font-bold">No specialists enrolled.</td>
+                                            <td colSpan={5} className="px-8 py-10 text-center text-slate-400 uppercase text-[9px] font-bold">No specialists enrolled.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -854,14 +856,23 @@ const MassageScheduling = () => {
                         </CardHeader>
                         <CardContent className="p-10">
                             <form onSubmit={handleSaveTherapist} className="space-y-6">
-                                <Input label="Full Identity Name *" value={newTherapist.name} onChange={e => setNewTherapist({...newTherapist, name: e.target.value})} className="h-14 rounded-2xl font-bold" />
+                                <div className="grid grid-cols-2 gap-6">
+                                    <Input label="Full Identity Name *" value={newTherapist.name} onChange={e => setNewTherapist({...newTherapist, name: e.target.value})} className="h-14 rounded-2xl font-bold" />
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Specialist Type</label>
+                                        <Select value={newTherapist.type || 'Therapist'} onChange={e => setNewTherapist({...newTherapist, type: e.target.value})} className="h-14 rounded-2xl font-bold">
+                                            <option value="Therapist">Therapist</option>
+                                            <option value="Personal Trainer">Personal Trainer</option>
+                                        </Select>
+                                    </div>
+                                </div>
                                 <div className="grid grid-cols-2 gap-6">
                                     <Input label="Core Specialty" value={newTherapist.specialty} onChange={e => setNewTherapist({...newTherapist, specialty: e.target.value})} className="h-14 rounded-2xl" placeholder="e.g. Deep Tissue" />
                                     <Input label="Country of Origin" value={newTherapist.country} onChange={e => setNewTherapist({...newTherapist, country: e.target.value})} className="h-14 rounded-2xl" />
                                 </div>
                                 {saveError && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-bold uppercase flex items-center gap-2 animate-in shake duration-300"><ShieldAlert className="w-4 h-4"/> {saveError}</div>}
                                 <div className="flex gap-4">
-                                    {isEditingResource && <Button type="button" variant="secondary" onClick={() => { setIsEditingResource(false); setNewTherapist({id:'', name:'', specialty:'', country:''}); setSaveError(null); }} className="flex-1 h-14 rounded-2xl">Discard</Button>}
+                                    {isEditingResource && <Button type="button" variant="secondary" onClick={() => { setIsEditingResource(false); setNewTherapist({id:'', name:'', specialty:'', country:'', type: 'Therapist'}); setSaveError(null); }} className="flex-1 h-14 rounded-2xl">Discard</Button>}
                                     <Button type="submit" isLoading={isSubmitting} className="flex-1 h-14 rounded-2xl font-black uppercase shadow-xl shadow-indigo-100">{isEditingResource ? 'Update Roster' : 'Register Specialist'}</Button>
                                 </div>
                             </form>

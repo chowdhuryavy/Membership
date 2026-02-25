@@ -64,12 +64,12 @@ Input.displayName = "Input";
 // --- Select ---
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
-  options: { value: string; label: string }[];
+  options?: { value: string; label: string }[];
   error?: string;
 }
 
 export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className, label, options, error, ...props }, ref) => {
+  ({ className, label, options, error, children, ...props }, ref) => {
     return (
       <div className="w-full">
         {label && <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>}
@@ -82,7 +82,8 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           ref={ref}
           {...props}
         >
-          {options.map((opt) => (
+          {children}
+          {options && options.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>

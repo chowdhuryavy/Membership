@@ -261,7 +261,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                        {group.members.map((m) => {
+                        {Array.isArray(group.members) && group.members.map((m) => {
                             if (!m) return null;
                             const effectiveStatus = getEffectiveStatus(m);
                             return (
