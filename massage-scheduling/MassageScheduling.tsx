@@ -946,10 +946,10 @@ const MassageScheduling = () => {
                                 <button onClick={() => handleUpdateStatus(selectedBooking.id, 'no-show')} className="w-full h-11 rounded-xl border-2 border-slate-100 text-slate-600 font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50"><UserX className="w-4 h-4" /> No-Show</button>
                             </>
                         )}
-                        {selectedBooking.status === 'cancelled' && canEdit && (
+                        {(selectedBooking.status === 'cancelled' || selectedBooking.status === 'no-show') && canEdit && (
                             <button onClick={() => { setEditingBooking(selectedBooking); setShowBookingForm(true); setSelectedBooking(null); }} className="w-full h-11 rounded-xl bg-indigo-600 text-white font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"><RotateCcw className="w-4 h-4" /> Restore & Modify Reservation</button>
                         )}
-                        {(selectedBooking.status === 'completed' || selectedBooking.status === 'no-show') && canEdit && (
+                        {selectedBooking.status === 'completed' && canEdit && (
                             <button onClick={() => { setEditingBooking(selectedBooking); setShowBookingForm(true); setSelectedBooking(null); }} className="w-full h-11 rounded-xl bg-indigo-600 text-white font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"><PlusCircle className="w-4 h-4" /> New Session for Guest</button>
                         )}
                         <div className="h-px bg-slate-100 my-1"></div>

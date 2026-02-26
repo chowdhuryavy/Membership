@@ -295,8 +295,8 @@ const Reports = () => {
               if (incentiveDept === 'Massage') {
                   bookings.filter(b => {
                       const bDate = parseISO(b.date);
-                      // Include both completed and confirmed for visibility, but audit usually requires completed
-                      return (b.status === 'completed' || b.status === 'confirmed') && bDate >= start && bDate <= end;
+                      // Only include completed bookings for incentive audit
+                      return b.status === 'completed' && bDate >= start && bDate <= end;
                   })
                   .forEach(b => {
                       const type = mTypes.find(m => m.id === b.massage_type_id);
