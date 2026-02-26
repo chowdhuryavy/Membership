@@ -236,6 +236,7 @@ export interface Sale {
   payment_method: string;
   status: 'completed' | 'refunded' | 'void';
   sold_by_id?: string; 
+  secondary_sold_by_id?: string;
   created_at: string;
   remarks?: string;
 }
@@ -257,7 +258,7 @@ export interface IncentiveRule {
   name: string;
   scope: 'Global' | 'Property' | 'Outlet';
   scope_id: string | 'global'; 
-  applies_to: 'Membership' | 'Massage' | 'Sale';
+  applies_to: 'Membership' | 'Massage' | 'Sale' | 'Personal Training';
   target_id: string | 'all'; 
   distribution_type: 'Individual' | 'Shared'; 
   calculation_type: 'Percentage' | 'Fixed';

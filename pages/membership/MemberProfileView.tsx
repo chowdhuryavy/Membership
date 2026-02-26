@@ -77,7 +77,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       db.getFreezes(targetMember.id),
       db.getMassageBookings(currentProperty?.id || '', true),
       db.getMassageTypes(currentOutlet?.id || ''),
-      db.getMemberHistory(targetMember.membership_number),
+      db.getMemberHistory(targetMember.membership_number, currentOutlet?.id),
       db.getGuests(currentProperty?.id || '')
     ]);
     setFreezes(f);

@@ -98,7 +98,13 @@ const Categories = () => {
 
   const handleEdit = (cat: MembershipCategory) => {
       if (!canEdit) return;
-      setFormData(cat);
+      setFormData({
+      ...cat,
+      name: cat.name || '',
+      duration_months: cat.duration_months || 0,
+      base_rate: cat.base_rate || 0,
+      max_freeze_days: cat.max_freeze_days || 0
+    });
       setIsEditing(true);
       setShowForm(true);
   };

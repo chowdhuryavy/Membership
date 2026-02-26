@@ -760,7 +760,16 @@ const MassageScheduling = () => {
                                             <div className="flex justify-end gap-2">
                                                 {canManageResources && (
                                                     <>
-                                                        <button onClick={() => { setIsEditingResource(true); setNewType(mt); setSaveError(null); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit3 className="w-3.5 h-3.5"/></button>
+                                                        <button onClick={() => { 
+                                                          setIsEditingResource(true); 
+                                                          setNewType({
+                                                            ...mt,
+                                                            name: mt.name || '',
+                                                            price: mt.price || 0,
+                                                            duration_minutes: mt.duration_minutes || 60
+                                                          }); 
+                                                          setSaveError(null); 
+                                                        }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit3 className="w-3.5 h-3.5"/></button>
                                                         <button onClick={() => setItemToDelete({id: mt.id, type: 'treatment', name: mt.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5"/></button>
                                                     </>
                                                 )}
@@ -830,7 +839,16 @@ const MassageScheduling = () => {
                                                 <div className="flex justify-end gap-2">
                                                     {canManageResources && (
                                                         <>
-                                                            <button onClick={() => { setIsEditingResource(true); setNewTherapist(t); setSaveError(null); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit3 className="w-3.5 h-3.5"/></button>
+                                                            <button onClick={() => { 
+                                                              setIsEditingResource(true); 
+                                                              setNewTherapist({
+                                                                ...t,
+                                                                specialty: t.specialty || '',
+                                                                country: t.country || '',
+                                                                type: t.type || 'Therapist'
+                                                              }); 
+                                                              setSaveError(null); 
+                                                            }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit3 className="w-3.5 h-3.5"/></button>
                                                             <button onClick={() => setItemToDelete({id: t.id, type: 'therapist', name: t.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5"/></button>
                                                         </>
                                                     )}

@@ -160,11 +160,8 @@ const Reports = () => {
                   /trainer|coach|instructor|pt|gym|fitness/i.test(s.role)
               );
           } else if (incentiveDept === 'Membership') {
-              // Only show sales/front office staff for membership
-              filteredStaff = filteredStaff.filter(s => 
-                  !/therapist|specialist|masseur|masseuse/i.test(s.role) &&
-                  !/trainer|coach|instructor|pt|gym|fitness/i.test(s.role)
-              );
+              // Show all staff for membership as they all share the incentive
+              filteredStaff = filteredStaff;
           }
       }
 
@@ -372,7 +369,8 @@ const Reports = () => {
 
                       const staffSplits: Record<string, number> = {};
                       if (rule.distribution_type === 'Shared') {
-                          const available = staffList.filter(s => s.is_active && (s.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(s, m.start_date));
+                          let available = staffList.filter(s => s.is_active && (s.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(s, m.start_date));
+                          // Membership incentive is shared among ALL staff (including therapists and trainers)
                           if (available.length > 0) {
                               const share = incNet / available.length;
                               available.forEach(s => staffSplits[s.id] = share);
@@ -390,6 +388,7 @@ const Reports = () => {
                           check_no: m.check_no || '#---',
                           mode_of_payment: 'Cash/Card',
                           item_name: cat.name,
+                          therapist_name: rule.distribution_type === 'Shared' ? 'Shared' : (staffList.find(s => s.id === m.sales_rep_id)?.name || 'N/A'),
                           actual_price: actualPrice,
                           discount_percent: discPercent,
                           discount_amount: discountAmt,
@@ -409,7 +408,9 @@ const Reports = () => {
                       return s.status === 'completed' && isPT && sDate >= start && sDate <= end;
                   })
                   .forEach(s => {
-                      const rule = findBestRule(rules, 'Sale', s.category, s.net_amount, 0);
+                      // Try Personal Training specific rule first, then fallback to Sale
+                      const rule = findBestRule(rules, 'Personal Training', s.item_id || 'all', s.net_amount, 0) || 
+                                   findBestRule(rules, 'Sale', s.category, s.net_amount, 0);
                       if (!rule) return;
 
                       const actualPrice = s.gross_amount;
@@ -423,13 +424,26 @@ const Reports = () => {
 
                       const staffSplits: Record<string, number> = {};
                       if (rule.distribution_type === 'Shared') {
-                          const available = staffList.filter(staff => staff.is_active && (staff.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(staff, s.created_at));
+                          let available = staffList.filter(staff => staff.is_active && (staff.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(staff, s.created_at));
+                          available = available.filter(st => /trainer|coach|instructor|pt|gym|fitness/i.test(st.role));
                           if (available.length > 0) {
                               const share = incNet / available.length;
                               available.forEach(staff => staffSplits[staff.id] = share);
                           }
                       } else {
-                          if (s.sold_by_id) staffSplits[s.sold_by_id] = incNet;
+                          if (s.sold_by_id && s.secondary_sold_by_id) {
+                              const share = incNet / 2;
+                              staffSplits[s.sold_by_id] = share;
+                              staffSplits[s.secondary_sold_by_id] = share;
+                          } else if (s.sold_by_id) {
+                              staffSplits[s.sold_by_id] = incNet;
+                          }
+                      }
+
+                      let therapistName = staffList.find(st => st.id === s.sold_by_id)?.name || users.find(u => u.id === s.sold_by_id)?.name || 'N/A';
+                      if (s.secondary_sold_by_id) {
+                          const secName = staffList.find(st => st.id === s.secondary_sold_by_id)?.name || users.find(u => u.id === s.secondary_sold_by_id)?.name;
+                          if (secName) therapistName += ` & ${secName}`;
                       }
 
                       records.push({
@@ -439,7 +453,7 @@ const Reports = () => {
                           duration: `x${s.quantity}`,
                           check_no: '#POS',
                           item_name: s.item_name,
-                          therapist_name: staffList.find(st => st.id === s.sold_by_id)?.name || users.find(u => u.id === s.sold_by_id)?.name || 'N/A',
+                          therapist_name: therapistName,
                           actual_price: actualPrice,
                           discount_percent: discPercent,
                           discount_amount: discountAmt,
@@ -619,7 +633,7 @@ const Reports = () => {
                         <th rowSpan={2} className="border border-black px-2 py-3 w-16">Check No.</th>
                         {(isDailySales) && <th rowSpan={2} className="border border-black px-2 py-3">Payment Mode</th>}
                         <th rowSpan={2} className="border border-black px-2 py-3">Item / Service</th>
-                        {((incentiveDept === 'Massage' || incentiveDept === 'Retail') && isIncentiveReport) && <th rowSpan={2} className="border border-black px-2 py-3">{specialistLabel}</th>}
+                        {isIncentiveReport && <th rowSpan={2} className="border border-black px-2 py-3">{specialistLabel}</th>}
                         
                         <th rowSpan={2} className="border border-black px-2 py-3 text-right">Gross Amount</th>
                         <th rowSpan={2} className="border border-black px-2 py-3 text-center">Disc %</th>
@@ -660,7 +674,7 @@ const Reports = () => {
                                 <td className="border border-black px-2 py-1 text-center text-slate-400">{row.check_no}</td>
                                 {(isDailySales) && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
                                 <td className="border border-black px-2 py-1">{row.item_name}</td>
-                                {((incentiveDept === 'Massage' || incentiveDept === 'Retail') && isIncentiveReport) && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
+                                {isIncentiveReport && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
                                 
                                 <td className="border border-black px-2 py-1 text-right">{row.actual_price.toFixed(2)}</td>
                                 <td className="border border-black px-2 py-1 text-center text-slate-400">{row.discount_percent > 0 ? `${row.discount_percent.toFixed(0)}%` : ''}</td>
@@ -690,7 +704,7 @@ const Reports = () => {
                         );
                     })}
                     <tr className="bg-slate-900 text-white font-black text-[10px]">
-                        <td colSpan={(isDailySales || (isIncentiveReport && (incentiveDept === 'Massage' || incentiveDept === 'Retail'))) ? 7 : 6} className="border border-black px-4 py-3 text-right uppercase tracking-widest">Aggregate Portfolio Totals</td>
+                        <td colSpan={(isDailySales || isIncentiveReport) ? 7 : 6} className="border border-black px-4 py-3 text-right uppercase tracking-widest">Aggregate Portfolio Totals</td>
                         <td className="border border-black px-2 py-3 text-right">{totals.totalActual.toFixed(2)}</td>
                         <td className="border border-black"></td>
                         <td className="border border-black px-2 py-3 text-right text-indigo-300">{totals.totalDiscount.toFixed(2)}</td>

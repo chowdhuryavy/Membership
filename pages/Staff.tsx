@@ -231,7 +231,17 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-black uppercase ${s.is_active ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{s.name.charAt(0)}</div>
                     {canManage && (
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => { setEditingId(s.id); setFormData(s); setShowForm(true); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>
+                            <button onClick={() => { 
+                              setEditingId(s.id); 
+                              setFormData({
+                                ...s,
+                                email: s.email || '',
+                                phone: s.phone || '',
+                                leave_start_date: s.leave_start_date || '',
+                                leave_end_date: s.leave_end_date || ''
+                              }); 
+                              setShowForm(true); 
+                            }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>
                             <button onClick={() => setDeleteId(s.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
                         </div>
                     )}

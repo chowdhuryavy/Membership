@@ -94,7 +94,8 @@ const POSForm = ({
         discount_mode: 'amount' as 'amount' | 'percent',
         payment_method: initialSale?.payment_method || 'Cash',
         remarks: initialSale?.remarks || '',
-        sold_by_id: initialSale?.sold_by_id || ''
+        sold_by_id: initialSale?.sold_by_id || '',
+        secondary_sold_by_id: initialSale?.secondary_sold_by_id || ''
     });
 
     const [showGuestSuggestions, setShowGuestSuggestions] = useState(false);
@@ -196,7 +197,8 @@ const POSForm = ({
                 payment_method: saleData.payment_method,
                 status: initialSale?.status || 'completed' as any,
                 remarks: saleData.remarks,
-                sold_by_id: saleData.sold_by_id
+                sold_by_id: saleData.sold_by_id,
+                secondary_sold_by_id: saleData.secondary_sold_by_id
             };
 
             if (initialSale) {
@@ -328,7 +330,7 @@ const POSForm = ({
                             className="h-11 rounded-xl text-xs"
                         />
                         <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-700">{providerLabel} (Incentive)</label>
+                            <label className="text-[10px] font-bold text-slate-700">Primary {providerLabel} (Incentive)</label>
                             <div className="relative">
                                 <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <select 
@@ -336,7 +338,7 @@ const POSForm = ({
                                     onChange={e => setSaleData({...saleData, sold_by_id: e.target.value})}
                                     className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-300 bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                                 >
-                                    <option value="">Select {providerLabel}...</option>
+                                    <option value="">Select Primary {providerLabel}...</option>
                                     {providers.map(p => (
                                         <option key={p.id} value={p.id}>{p.name} ({p.role})</option>
                                     ))}
@@ -344,6 +346,27 @@ const POSForm = ({
                             </div>
                         </div>
                     </div>
+                    
+                    {saleData.category === 'Personal Training' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                            <div className="md:col-start-2 space-y-1">
+                                <label className="text-[10px] font-bold text-slate-700">Secondary {providerLabel} (Split Incentive)</label>
+                                <div className="relative">
+                                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                    <select 
+                                        value={saleData.secondary_sold_by_id}
+                                        onChange={e => setSaleData({...saleData, secondary_sold_by_id: e.target.value})}
+                                        className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-300 bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                    >
+                                        <option value="">None (100% to Primary)</option>
+                                        {providers.filter(p => p.id !== saleData.sold_by_id).map(p => (
+                                            <option key={p.id} value={p.id}>{p.name} ({p.role})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     
                     <Input label="Internal Audit Remarks" value={saleData.remarks} onChange={e => setSaleData({...saleData, remarks: e.target.value})} placeholder="Notes..." className="h-11 rounded-xl text-xs" />
 
@@ -445,7 +468,17 @@ const InventoryManager = ({
                             </div>
                             {canManage && (
                                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => { setEditingItem(item); setFormData(item); setShowForm(true); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit className="w-4 h-4" /></button>
+                                    <button onClick={() => { 
+                                      setEditingItem(item); 
+                                      setFormData({
+                                        ...item,
+                                        name: item.name || '',
+                                        price: item.price || 0,
+                                        stock_quantity: item.stock_quantity || 0,
+                                        track_inventory: item.track_inventory ?? true
+                                      }); 
+                                      setShowForm(true); 
+                                    }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit className="w-4 h-4" /></button>
                                     <button onClick={() => setItemToDelete(item.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
                                 </div>
                             )}

@@ -266,8 +266,12 @@ const Users = () => {
   const handleEdit = (u: UserProfile) => {
       if (!canEdit) return;
       setFormData({
-          id: u.id, name: u.name, email: u.email, role_id: u.role_id,
-          allowed_outlets: u.allowed_outlets || [], password: '',
+          id: u.id, 
+          name: u.name || '', 
+          email: u.email || '', 
+          role_id: u.role_id || '',
+          allowed_outlets: u.allowed_outlets || [], 
+          password: '',
           is_active: u.is_active ?? true
       });
       setIsEditing(true);

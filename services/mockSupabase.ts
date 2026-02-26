@@ -425,9 +425,13 @@ class DatabaseService {
     return [];
   }
 
-  async getMemberHistory(membershipNumber: string): Promise<Member[]> {
+  async getMemberHistory(membershipNumber: string, outletId?: string): Promise<Member[]> {
     if (this.isSupabase()) {
-        const { data } = await supabase.from('members').select('*').eq('membership_number', membershipNumber).order('start_date', { ascending: false });
+        let query = supabase.from('members').select('*').eq('membership_number', membershipNumber).order('start_date', { ascending: false });
+        if (outletId) {
+            query = query.eq('outlet_id', outletId);
+        }
+        const { data } = await query;
         return (data || []) as Member[];
     }
     return [];
@@ -686,14 +690,16 @@ class DatabaseService {
     if (this.isSupabase()) {
         try {
             let query = supabase.from('inventory').select('*');
-            if (isPropertyScope) {
-                if (limitToOutletIds && limitToOutletIds.length > 0) {
-                    query = query.in('outlet_id', limitToOutletIds);
-                } else {
-                    query = query.eq('property_id', scopeId);
+            if (scopeId !== 'all') {
+                if (isPropertyScope) {
+                    if (limitToOutletIds && limitToOutletIds.length > 0) {
+                        query = query.in('outlet_id', limitToOutletIds);
+                    } else {
+                        query = query.eq('property_id', scopeId);
+                    }
                 }
+                else query = query.eq('outlet_id', scopeId);
             }
-            else query = query.eq('outlet_id', scopeId);
             
             const { data, error } = await query.order('name');
             if (error) throw error;
@@ -820,18 +826,38 @@ class DatabaseService {
       
       const therapists = (data || []) as Therapist[];
       
-      if (therapists.length > 0) {
-          const { data: staffData } = await supabase.from('staff').select('id, role').in('id', therapists.map(t => t.id));
-          if (staffData) {
-              therapists.forEach(t => {
-                  const staff = staffData.find(s => s.id === t.id);
-                  if (staff) {
-                      t.type = staff.role;
-                  } else {
-                      t.type = 'Therapist';
-                  }
-              });
-          }
+      const { data: staffData } = await supabase.from('staff').select('*');
+      
+      if (staffData) {
+          // 1. Filter existing therapists based on staff role
+          const validTherapists = therapists.filter(t => {
+              const staff = staffData.find(s => s.id === t.id);
+              if (staff) {
+                  t.type = staff.role;
+                  return /therapist|specialist|masseur|masseuse|trainer|coach|instructor|pt|gym|fitness/i.test(staff.role);
+              } else {
+                  t.type = 'Therapist';
+                  return true;
+              }
+          });
+
+          // 2. Add staff members who have therapist/trainer roles but aren't in therapists table
+          const existingIds = new Set(validTherapists.map(t => t.id));
+          const newTherapistsFromStaff = staffData.filter(s => 
+              !existingIds.has(s.id) && 
+              /therapist|specialist|masseur|masseuse|trainer|coach|instructor|pt|gym|fitness/i.test(s.role) &&
+              (isPropertyScope ? (limitToOutletIds?.length ? limitToOutletIds.includes(s.outlet_id) : true) : s.outlet_id === scopeId)
+          ).map(s => ({
+              id: s.id,
+              name: s.name,
+              specialty: s.role,
+              country: 'Local',
+              property_id: isPropertyScope ? scopeId : '', // We don't have property_id in staff, but it's fine for UI
+              outlet_id: s.outlet_id,
+              type: s.role
+          }));
+
+          return [...validTherapists, ...newTherapistsFromStaff];
       }
       
       return therapists;
@@ -863,8 +889,27 @@ class DatabaseService {
   async updateTherapist(id: string, updates: Partial<Therapist>) {
     if (this.isSupabase()) {
         const { type, ...therapistUpdates } = updates;
-        if (Object.keys(therapistUpdates).length > 0) {
-            await supabase.from('therapists').update(therapistUpdates).eq('id', id);
+        
+        // Check if therapist exists
+        const { data: existing } = await supabase.from('therapists').select('id').eq('id', id).single();
+        
+        if (existing) {
+            if (Object.keys(therapistUpdates).length > 0) {
+                await supabase.from('therapists').update(therapistUpdates).eq('id', id);
+            }
+        } else {
+            // Insert if it doesn't exist (e.g. created from Staff Roster)
+            const { data: staffData } = await supabase.from('staff').select('*').eq('id', id).single();
+            if (staffData) {
+                await supabase.from('therapists').insert([{
+                    id,
+                    name: updates.name || staffData.name,
+                    specialty: updates.specialty || staffData.role,
+                    country: updates.country || 'Local',
+                    property_id: updates.property_id || '', // Will be handled by DB or UI
+                    outlet_id: updates.outlet_id || staffData.outlet_id
+                }]);
+            }
         }
         
         if (updates.name || type) {

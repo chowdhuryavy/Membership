@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, Confir
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/mockSupabase';
-import { Role, Permission, Currency, CompanySettings, Outlet, Property, IncentiveRule, MassageType, MembershipCategory, PermissionGroup } from '../types';
+import { Role, Permission, Currency, CompanySettings, Outlet, Property, IncentiveRule, MassageType, MembershipCategory, PermissionGroup, InventoryItem } from '../types';
 import { 
   Trash2, 
   Edit2, 
@@ -186,8 +186,21 @@ const SettingsPage = () => {
   const [incentiveRules, setIncentiveRules] = useState<IncentiveRule[]>([]);
   const [allMassageTypes, setAllMassageTypes] = useState<MassageType[]>([]);
   const [allCategories, setAllCategories] = useState<MembershipCategory[]>([]); 
+  const [allInventory, setAllInventory] = useState<InventoryItem[]>([]);
 
-  useEffect(() => { if (settings) setCompanyForm({ ...settings }); }, [settings]);
+  useEffect(() => { 
+    if (settings) {
+      setCompanyForm({ 
+        ...settings,
+        name: settings.name || '',
+        logo_url: settings.logo_url || '',
+        address: settings.address || '',
+        contract_template: settings.contract_template || '',
+        conditions: settings.conditions || '',
+        keyboard_shortcuts: settings.keyboard_shortcuts || {}
+      }); 
+    }
+  }, [settings]);
 
   const currentNavOrder = useMemo(() => {
     const savedOrder = companyForm.navigation_order || [];
@@ -196,17 +209,18 @@ const SettingsPage = () => {
     return [...validSaved, ...missing];
   }, [companyForm.navigation_order, navItems]);
 
-  // Fix: Added currentOutlet.id as an argument to db.getMassageTypes and db.getCategories in loadData to satisfy required arguments and provide context
   const loadData = async () => {
       if (activeTab === 'incentives' && currentOutlet) {
-          const [rules, mTypes, allCats] = await Promise.all([
+          const [rules, mTypes, allCats, inv] = await Promise.all([
               db.getIncentiveRules(), 
               db.getMassageTypes(currentOutlet.id), 
-              db.getCategories(currentOutlet.id)
+              db.getCategories(currentOutlet.id),
+              db.getInventory('all', true)
           ]);
           setIncentiveRules(rules);
           setAllMassageTypes(mTypes);
           setAllCategories(allCats);
+          setAllInventory(inv);
       }
   };
 
@@ -404,7 +418,7 @@ const SettingsPage = () => {
                                   <tr key={p.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="flex items-center gap-4"><div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border">{p.logo_url ? <img src={p.logo_url} className="w-full h-full object-contain p-1" /> : <Building2 className="w-6 h-6 text-slate-300" />}</div><div className="font-black text-slate-900 text-lg uppercase">{p.name}</div></div></td>
                                       <td className="px-10 py-8 font-bold text-slate-500 text-xs">{p.address}</td>
-                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={()=>{setEditingId(p.id); setPropertyForm(p); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'property', id:p.id, name:p.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
+                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={()=>{setEditingId(p.id); setPropertyForm({...p, logo_url: p.logo_url || '', address: p.address || ''}); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'property', id:p.id, name:p.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
                                   </tr>
                               ))}</tbody>
                           </table>
@@ -425,7 +439,7 @@ const SettingsPage = () => {
                                   <tr key={o.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase">{o.name}</div></td>
                                       <td className="px-10 py-8"><span className="bg-indigo-50 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-indigo-600 border border-indigo-100">{properties.find(p=>p.id===o.property_id)?.name || 'Detached'}</span></td>
-                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={()=>{setEditingId(o.id); setOutletForm(o); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'outlet', id:o.id, name:o.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
+                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={()=>{setEditingId(o.id); setOutletForm({...o, signatory_prepared_role: o.signatory_prepared_role || '', signatory_approved_role: o.signatory_approved_role || ''}); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'outlet', id:o.id, name:o.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
                                   </tr>
                               ))}</tbody>
                           </table>
@@ -614,7 +628,7 @@ const SettingsPage = () => {
                                   <tbody className="divide-y divide-slate-100">
                                       {incentiveRules.map(rule => (
                                           <tr key={rule.id} className="hover:bg-indigo-50/20 transition-all group">
-                                              <td className="px-10 py-8"><div className="flex items-center gap-4 mb-2"><span className={`text-[8px] font-black uppercase px-2 py-1 rounded-lg ${rule.scope === 'Global' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>{rule.scope}</span><div className="font-black text-slate-900 uppercase text-base">{rule.name}</div></div><p className="text-[10px] font-bold text-slate-400 uppercase">{rule.applies_to} &rarr; {rule.target_id === 'all' ? 'Catch-all' : (rule.applies_to === 'Membership' ? (allCategories.find(c => c.id === rule.target_id)?.name || 'Specific Tier') : (rule.applies_to === 'Massage' ? (allMassageTypes.find(m => m.id === rule.target_id)?.name || 'Specific Treatment') : 'Specific Asset'))} <span className="ml-2 text-indigo-600 font-black">[{(rule.distribution_type || 'Individual').toUpperCase()}]</span></p></td>
+                                              <td className="px-10 py-8"><div className="flex items-center gap-4 mb-2"><span className={`text-[8px] font-black uppercase px-2 py-1 rounded-lg ${rule.scope === 'Global' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>{rule.scope}</span><div className="font-black text-slate-900 uppercase text-base">{rule.name}</div></div><p className="text-[10px] font-bold text-slate-400 uppercase">{rule.applies_to} &rarr; {rule.target_id === 'all' ? 'Catch-all' : (rule.applies_to === 'Membership' ? (allCategories.find(c => c.id === rule.target_id)?.name || 'Specific Tier') : (rule.applies_to === 'Massage' ? (allMassageTypes.find(m => m.id === rule.target_id)?.name || 'Specific Treatment') : (rule.applies_to === 'Personal Training' ? (allInventory.find(i => i.id === rule.target_id)?.name || 'Specific PT Package') : 'Specific Asset')))} <span className="ml-2 text-indigo-600 font-black">[{(rule.distribution_type || 'Individual').toUpperCase()}]</span></p></td>
                                               <td className="px-10 py-8 text-center">
                                                   <div className="flex flex-col gap-1 items-center">
                                                       <span className="text-[10px] font-black text-slate-700 uppercase flex items-center gap-1"><DollarSign className="w-3 h-3 text-indigo-600"/> {formatMoney(rule.min_price || 0)} - {formatMoney(rule.max_price || 99999)}</span>
@@ -622,7 +636,17 @@ const SettingsPage = () => {
                                                   </div>
                                               </td>
                                               <td className="px-10 py-8 text-right font-black text-indigo-600 text-base">{rule.calculation_type === 'Percentage' ? `${rule.value}%` : formatMoney(rule.value)}</td>
-                                              <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => { setEditingId(rule.id); setIncentiveForm(rule); setShowForm(true); }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={() => setItemToDelete({type:'incentive', id:rule.id, name:rule.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
+                                              <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => { 
+                                                setEditingId(rule.id); 
+                                                setIncentiveForm({
+                                                  ...rule,
+                                                  min_price: rule.min_price || 0,
+                                                  max_price: rule.max_price || 99999,
+                                                  min_duration_minutes: rule.min_duration_minutes || 0,
+                                                  max_duration_minutes: rule.max_duration_minutes || 999
+                                                }); 
+                                                setShowForm(true); 
+                                              }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={() => setItemToDelete({type:'incentive', id:rule.id, name:rule.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
                                           </tr>
                                       ))}
                                   </tbody>
@@ -704,7 +728,7 @@ const SettingsPage = () => {
                                 <Select label="Target Facility Context *" options={[{value:'', label:'Select Outlet...'}, ...outlets.map(o=>({value:o.id, label:`${o.name} - ${properties.find(p => p.id === o.property_id)?.name || 'Unknown'}`}))]} value={incentiveForm.scope_id} onChange={e => setIncentiveForm({...incentiveForm, scope_id: e.target.value})} className="h-14 rounded-xl border-2 animate-in slide-in-from-top-2" />
                               )}
 
-                              <Select label="Recognition Department" options={[{value:'Massage', label:'Treatment Services'}, {value:'Membership', label:'Membership Enrollments'}, {value:'Sale', label:'POS & Retail'}]} value={incentiveForm.applies_to} onChange={e => setIncentiveForm({...incentiveForm, applies_to: e.target.value as any, target_id: 'all'})} className="h-14 rounded-xl border-2" />
+                              <Select label="Recognition Department" options={[{value:'Massage', label:'Treatment Services'}, {value:'Membership', label:'Membership Enrollments'}, {value:'Personal Training', label:'Personal Training'}, {value:'Sale', label:'POS & Retail'}]} value={incentiveForm.applies_to} onChange={e => setIncentiveForm({...incentiveForm, applies_to: e.target.value as any, target_id: 'all'})} className="h-14 rounded-xl border-2" />
                               
                               <div className="space-y-2">
                                   <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Strategic Target (Tier/Treatment)</label>
@@ -722,7 +746,10 @@ const SettingsPage = () => {
                                           {incentiveForm.applies_to === 'Massage' && allMassageTypes.map(m => (
                                               <option key={m.id} value={m.id}>{m.name} (Treatment)</option>
                                           ))}
-                                          {incentiveForm.applies_to === 'Sale' && (['Retail', 'Personal Training', 'Entrance Fee', 'Other']).map(c => (
+                                          {incentiveForm.applies_to === 'Personal Training' && allInventory.filter(i => i.category === 'Personal Training').map(i => (
+                                              <option key={i.id} value={i.id}>{i.name} (PT Package)</option>
+                                          ))}
+                                          {incentiveForm.applies_to === 'Sale' && (['Retail', 'Entrance Fee', 'Other']).map(c => (
                                               <option key={c} value={c}>{c} (Category)</option>
                                           ))}
                                       </select>

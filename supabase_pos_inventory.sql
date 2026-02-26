@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS public.sales (
     net_amount NUMERIC NOT NULL DEFAULT 0,
     payment_method TEXT NOT NULL,
     sold_by_id TEXT,
+    secondary_sold_by_id TEXT,
     status TEXT NOT NULL DEFAULT 'completed', -- completed, refunded, void
     remarks TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()

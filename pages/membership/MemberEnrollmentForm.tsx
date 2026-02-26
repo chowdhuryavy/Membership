@@ -149,8 +149,8 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   // Handle Identity Matching & Auto-Start Date Calculation
   useEffect(() => {
     if (!isEditing && !isRenewal) {
-      if (membershipNo && membershipNo.length >= 2) {
-        db.getMemberHistory(membershipNo).then(foundMembers => {
+      if (membershipNo && membershipNo.length >= 2 && currentOutlet) {
+        db.getMemberHistory(membershipNo, currentOutlet.id).then(foundMembers => {
           if (foundMembers.length > 0) {
               setMatchedMembers(foundMembers);
               // Use most recent for defaults
