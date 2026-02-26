@@ -127,12 +127,13 @@ const Dashboard = () => {
         }
 
         // Fetch data with scope awareness
-        const [members, freezes, bookings, sales, staff] = await Promise.all([
+        const [members, freezes, bookings, sales, staff, leaves] = await Promise.all([
           db.getMembers(scopeId, isProperty, limitToIds),
           db.getFreezes(),
           db.getMassageBookings(scopeId, isProperty, limitToIds),
           db.getSales(scopeId, isProperty, limitToIds),
-          db.getStaff(scopeId, isProperty, limitToIds)
+          db.getStaff(scopeId, isProperty, limitToIds),
+          db.getAllStaffLeaves()
         ]);
         
         // 1. Membership Logic
@@ -201,9 +202,26 @@ const Dashboard = () => {
         // 3. Daily Stats (Sales & Staff)
         const todaySales = sales.filter(s => s.status === 'completed' && isSameDay(new Date(s.created_at), now));
         const staffOnLeaveCount = staff.filter(s => {
-            if (!s.leave_start_date || !s.leave_end_date) return false;
             const today = startOfDay(new Date());
-            return isWithinInterval(today, { start: startOfDay(parseISO(s.leave_start_date)), end: startOfDay(parseISO(s.leave_end_date)) });
+            
+            // Check legacy fields
+            if (s.leave_start_date && s.leave_end_date) {
+                try {
+                    const start = startOfDay(parseISO(s.leave_start_date));
+                    const end = startOfDay(parseISO(s.leave_end_date));
+                    if (isWithinInterval(today, { start, end })) return true;
+                } catch (e) {}
+            }
+
+            // Check new staff_leaves table
+            const sLeaves = leaves.filter(l => l.staff_id === s.id);
+            return sLeaves.some(l => {
+                try {
+                    const start = startOfDay(parseISO(l.start_date));
+                    const end = startOfDay(parseISO(l.end_date));
+                    return isWithinInterval(today, { start, end });
+                } catch (e) { return false; }
+            });
         }).length;
 
         // 4. Revenue Mix (MTD)

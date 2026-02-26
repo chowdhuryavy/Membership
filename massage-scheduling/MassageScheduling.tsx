@@ -352,7 +352,7 @@ const MassageScheduling = () => {
   const [isTableMissing, setIsTableMissing] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   
-  const [newType, setNewType] = useState({ id: '', name: '', price: 0, duration_minutes: 60 });
+  const [newType, setNewType] = useState<{ id: string, name: string, price: number, duration_minutes: number, category?: 'Massage' | 'Personal Training' }>({ id: '', name: '', price: 0, duration_minutes: 60, category: 'Massage' });
   const [newTherapist, setNewTherapist] = useState({ id: '', name: '', specialty: '', country: '', type: 'Therapist' });
   const [isEditingResource, setIsEditingResource] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest', name: string} | null>(null);
@@ -745,6 +745,7 @@ const MassageScheduling = () => {
                             <thead className="bg-slate-50 border-b border-slate-100 sticky top-0">
                                 <tr>
                                     <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Service Name</th>
+                                    <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Category</th>
                                     <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400 text-center">Duration</th>
                                     <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400 text-right">Base Price</th>
                                     <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400 text-right">Ops</th>
@@ -754,6 +755,7 @@ const MassageScheduling = () => {
                                 {massageTypes.map(mt => (
                                     <tr key={mt.id} className="hover:bg-slate-50 group">
                                         <td className="px-8 py-5 font-black text-slate-800 text-sm uppercase">{mt.name}</td>
+                                        <td className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">{mt.category || 'Massage'}</td>
                                         <td className="px-8 py-5 text-center"><span className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg border border-indigo-100">{mt.duration_minutes}m</span></td>
                                         <td className="px-8 py-5 text-right font-black text-slate-900 tabular-nums">{formatMoney(mt.price)}</td>
                                         <td className="px-8 py-5 text-right">
@@ -766,7 +768,8 @@ const MassageScheduling = () => {
                                                             ...mt,
                                                             name: mt.name || '',
                                                             price: mt.price || 0,
-                                                            duration_minutes: mt.duration_minutes || 60
+                                                            duration_minutes: mt.duration_minutes || 60,
+                                                            category: mt.category || 'Massage'
                                                           }); 
                                                           setSaveError(null); 
                                                         }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit3 className="w-3.5 h-3.5"/></button>
@@ -790,6 +793,13 @@ const MassageScheduling = () => {
                         <CardContent className="p-10">
                             <form onSubmit={handleSaveMassageType} className="space-y-6">
                                 <Input label="Service Designation *" value={newType.name} onChange={e => setNewType({...newType, name: e.target.value})} className="h-14 rounded-2xl font-bold" placeholder="e.g. Aromatherapy Session" />
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service Category</label>
+                                    <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                                        <button type="button" onClick={() => setNewType({ ...newType, category: 'Massage' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${newType.category === 'Massage' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>Massage</button>
+                                        <button type="button" onClick={() => setNewType({ ...newType, category: 'Personal Training' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${newType.category === 'Personal Training' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>Personal Training</button>
+                                    </div>
+                                </div>
                                 <div className="grid grid-cols-2 gap-6">
                                     <Input label="Duration (Min)" type="number" value={newType.duration_minutes} onChange={e => setNewType({...newType, duration_minutes: Number(e.target.value)})} className="h-14 rounded-2xl" />
                                     <Input label="Retail Rate *" type="number" value={newType.price} onChange={e => setNewType({...newType, price: Number(e.target.value)})} className="h-14 rounded-2xl" />

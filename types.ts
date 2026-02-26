@@ -56,6 +56,14 @@ export interface Outlet {
   conditions?: string; 
 }
 
+export interface StaffLeave {
+  id: string;
+  staff_id: string;
+  start_date: string;
+  end_date: string;
+  created_at: string;
+}
+
 export interface Staff {
   id: string;
   outlet_id: string;
@@ -198,6 +206,7 @@ export interface MassageType {
   name: string;
   price: number;
   duration_minutes: number;
+  category?: 'Massage' | 'Personal Training';
 }
 
 export interface MassageBooking {
@@ -217,7 +226,7 @@ export interface MassageBooking {
   discount?: number;
 }
 
-export type SaleCategory = 'Retail' | 'Personal Training' | 'Entrance Fee' | 'Other';
+export type SaleCategory = 'Retail' | 'Personal Training' | 'Entrance Fee' | 'Massage' | 'Other';
 
 export interface Sale {
   id: string;
@@ -237,6 +246,7 @@ export interface Sale {
   status: 'completed' | 'refunded' | 'void';
   sold_by_id?: string; 
   secondary_sold_by_id?: string;
+  booking_id?: string;
   created_at: string;
   remarks?: string;
 }

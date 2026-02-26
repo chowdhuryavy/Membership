@@ -34,6 +34,8 @@ import {
   Shield
 } from 'lucide-react';
 
+import StaffProfileView from './StaffProfileView';
+
 const StaffPage = () => {
   const { user } = useAuth();
   const { currentOutlet, currentProperty, hasPermission, outlets = [] } = useSettings();
@@ -42,6 +44,7 @@ const StaffPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
+  const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSchemaMissing, setIsSchemaMissing] = useState(false);
   
@@ -101,14 +104,35 @@ const StaffPage = () => {
     }
   };
 
-  if (!canView) return null;
-
   const filteredStaff = useMemo(() => {
     return staff.filter(s => 
       s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       s.role.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [staff, searchTerm]);
+
+  if (!canView) return null;
+
+  if (selectedStaff) {
+    return (
+      <StaffProfileView 
+        staff={selectedStaff} 
+        onBack={() => setSelectedStaff(null)} 
+        canManage={canManage || false}
+        onEdit={(s) => {
+          setEditingId(s.id); 
+          setFormData({
+            ...s,
+            email: s.email || '',
+            phone: s.phone || '',
+            leave_start_date: s.leave_start_date || '',
+            leave_end_date: s.leave_end_date || ''
+          }); 
+          setShowForm(true);
+        }}
+      />
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +143,9 @@ const StaffPage = () => {
       else await db.addStaff({ ...formData, outlet_id: currentOutlet.id });
       setShowForm(false);
       setEditingId(null);
+      if (selectedStaff && editingId === selectedStaff.id) {
+        setSelectedStaff({ ...selectedStaff, ...formData });
+      }
       loadStaff();
     } catch (err: any) {
       setErrorMessage(err.message || "Failed to save staff record.");
@@ -224,14 +251,15 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredStaff.map(s => (
-            <Card key={s.id} className="rounded-[2rem] border-slate-200/60 shadow-sm hover:shadow-xl transition-all group overflow-hidden bg-white">
+            <Card key={s.id} onClick={() => setSelectedStaff(s)} className="rounded-[2rem] border-slate-200/60 shadow-sm hover:shadow-xl transition-all group overflow-hidden bg-white cursor-pointer">
                 <div className={`h-1.5 w-full ${s.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
                 <CardContent className="p-6">
                 <div className="flex justify-between items-start mb-6">
                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-black uppercase ${s.is_active ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{s.name.charAt(0)}</div>
                     {canManage && (
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => { 
+                            <button onClick={(e) => { 
+                              e.stopPropagation();
                               setEditingId(s.id); 
                               setFormData({
                                 ...s,
@@ -242,7 +270,7 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                               }); 
                               setShowForm(true); 
                             }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>
-                            <button onClick={() => setDeleteId(s.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
+                            <button onClick={(e) => { e.stopPropagation(); setDeleteId(s.id); }} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
                         </div>
                     )}
                 </div>

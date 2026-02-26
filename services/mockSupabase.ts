@@ -1,4 +1,4 @@
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format, parse } from 'date-fns';
@@ -371,6 +371,44 @@ class DatabaseService {
       return (data || []) as Staff[];
     }
     return [];
+  }
+
+  async getStaffLeaves(staffId: string): Promise<StaffLeave[]> {
+    if (this.isSupabase()) {
+      const { data } = await supabase.from('staff_leaves').select('*').eq('staff_id', staffId).order('start_date', { ascending: false });
+      return (data || []) as StaffLeave[];
+    }
+    return [];
+  }
+
+  async getAllStaffLeaves(): Promise<StaffLeave[]> {
+    if (this.isSupabase()) {
+      const { data } = await supabase.from('staff_leaves').select('*');
+      return (data || []) as StaffLeave[];
+    }
+    return [];
+  }
+
+  async addStaffLeave(leave: Omit<StaffLeave, 'id' | 'created_at'>) {
+    if (this.isSupabase()) {
+      const { data, error } = await supabase.from('staff_leaves').insert([{ ...leave, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select();
+      if (error) throw error;
+      return data;
+    }
+  }
+
+  async updateStaffLeave(id: string, updates: Partial<StaffLeave>) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('staff_leaves').update(updates).eq('id', id);
+      if (error) throw error;
+    }
+  }
+
+  async deleteStaffLeave(id: string) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('staff_leaves').delete().eq('id', id);
+      if (error) throw error;
+    }
   }
 
   async addStaff(staff: Omit<Staff, 'id' | 'created_at'>) {
@@ -772,8 +810,16 @@ class DatabaseService {
 
   async deleteSale(id: string) {
     if (this.isSupabase()) {
+        const { data: sale } = await supabase.from('sales').select('booking_id').eq('id', id).single();
+        
         await supabase.from('sales').delete().eq('id', id);
         await this.logAction('POS_VOID', `Transaction voided: ${id}`);
+
+        // If this sale was linked to a booking, restore the booking to 'confirmed'
+        if (sale?.booking_id) {
+            await supabase.from('massage_bookings').update({ status: 'confirmed' }).eq('id', sale.booking_id);
+            await this.logAction('BOOKING_RESTORED', `Booking ${sale.booking_id} restored after sale void.`);
+        }
     }
   }
 
@@ -1009,13 +1055,52 @@ class DatabaseService {
 
   async updateMassageBookingStatus(id: string, status: MassageBooking['status']) {
     if (this.isSupabase()) {
+      const { data: booking } = await supabase.from('massage_bookings').select('*').eq('id', id).single();
+      if (!booking) return;
+
       const { error } = await supabase.from('massage_bookings').update({ status }).eq('id', id);
       if (error) throw error;
+
+      // If status changed FROM completed TO something else, delete the associated sale
+      if (booking.status === 'completed' && status !== 'completed') {
+          await supabase.from('sales').delete().eq('booking_id', id);
+          await this.logAction('BOOKING_UNSERVED', `Sale record removed for booking ${id} as status changed to ${status}`);
+      }
+
+      // If status changed TO completed, create a sale record
+      if (status === 'completed' && booking.status !== 'completed') {
+        const { data: guest } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
+        const { data: type } = await supabase.from('massage_types').select('name, category').eq('id', booking.massage_type_id).single();
+
+        const sale: Omit<Sale, 'id' | 'created_at'> = {
+          property_id: booking.property_id,
+          outlet_id: booking.outlet_id,
+          guest_id: booking.guest_id,
+          guest_name: guest?.name || 'Guest',
+          category: (type?.category || 'Massage') as SaleCategory,
+          item_id: booking.massage_type_id,
+          item_name: type?.name || 'Service',
+          quantity: 1,
+          unit_price: booking.price + (booking.discount || 0),
+          gross_amount: booking.price + (booking.discount || 0),
+          discount_amount: booking.discount || 0,
+          net_amount: booking.price,
+          payment_method: 'Cash', // Default
+          status: 'completed',
+          sold_by_id: booking.therapist_id,
+          booking_id: booking.id,
+          remarks: `Auto-generated from booking ${booking.id}`
+        };
+
+        await this.addSale(sale);
+      }
     }
   }
 
   async deleteMassageBooking(id: string) {
     if (this.isSupabase()) {
+      // Also delete any associated sales
+      await supabase.from('sales').delete().eq('booking_id', id);
       const { error } = await supabase.from('massage_bookings').delete().eq('id', id);
       if (error) throw error;
       await this.logAction('DELETE_BOOKING', `Booking record purged: ${id}`);

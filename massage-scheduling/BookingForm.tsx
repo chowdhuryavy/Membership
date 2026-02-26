@@ -210,6 +210,22 @@ const BookingForm: React.FC<BookingFormProps> = ({
         ...guestData,
         property_id: currentProperty.id
       });
+
+      // Check for guest double booking
+      const isGuestBooked = existingBookings.some(b => 
+        b.id !== initialBooking?.id && 
+        b.guest_id === guest.id && 
+        b.date === bookingData.date && 
+        b.status !== 'cancelled' &&
+        !(bookingData.end_time <= b.start_time || bookingData.start_time >= b.end_time)
+      );
+
+      if (isGuestBooked) {
+        setError("This guest already has another booking at this time.");
+        setLoading(false);
+        return;
+      }
+
       const payload: any = {
         guest_id: guest.id,
         therapist_id: bookingData.therapist_id,
@@ -315,7 +331,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                     <div className="md:col-span-1">
-                        <Select label="Primary Service *" options={[{ value: '', label: 'Select Type...' }, ...massageTypes.map(m => ({ value: m.id, label: `${m.name} (${m.duration_minutes}m)` }))]} value={bookingData.massage_type_id} onChange={e => setBookingData({...bookingData, massage_type_id: e.target.value})} className="h-11 rounded-xl text-xs" />
+                        <Select label="Primary Service / Training *" options={[{ value: '', label: 'Select Type...' }, ...massageTypes.map(m => ({ value: m.id, label: `${m.category ? `[${m.category}] ` : ''}${m.name} (${m.duration_minutes}m)` }))]} value={bookingData.massage_type_id} onChange={e => setBookingData({...bookingData, massage_type_id: e.target.value})} className="h-11 rounded-xl text-xs" />
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Reduction Logic</label>
@@ -357,7 +373,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
                     {bookingData.additional_service_ids.map((id, index) => (
                         <div key={index} className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
                             <Select 
-                                options={[{ value: '', label: 'Select service...' }, ...massageTypes.map(m => ({ value: m.id, label: `${m.name} (${m.duration_minutes}m)` }))]}
+                                options={[{ value: '', label: 'Select service...' }, ...massageTypes.map(m => ({ value: m.id, label: `${m.category ? `[${m.category}] ` : ''}${m.name} (${m.duration_minutes}m)` }))]}
                                 value={id}
                                 onChange={e => {
                                     const newIds = [...bookingData.additional_service_ids];

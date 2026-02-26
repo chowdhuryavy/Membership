@@ -256,7 +256,7 @@ const POSForm = ({
                         </div>
                         <Select 
                             label="Revenue Department *" 
-                            options={['Retail', 'Personal Training', 'Entrance Fee', 'Other'].map(c => ({ value: c, label: c }))} 
+                            options={['Retail', 'Personal Training', 'Entrance Fee', 'Massage', 'Other'].map(c => ({ value: c, label: c }))} 
                             value={saleData.category}
                             onChange={e => {
                                 setSaleData({...saleData, category: e.target.value as any, item_id: '', item_name: '', unit_price: 0});
@@ -518,7 +518,7 @@ const InventoryManager = ({
                                 <Input label="Item / Service Name *" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-12 rounded-xl" />
                                 <Select 
                                     label="Revenue Category" 
-                                    options={['Retail', 'Personal Training', 'Entrance Fee', 'Other'].map(c => ({ value: c, label: c }))} 
+                                    options={['Retail', 'Personal Training', 'Entrance Fee', 'Massage', 'Other'].map(c => ({ value: c, label: c }))} 
                                     value={formData.category}
                                     onChange={e => setFormData({...formData, category: e.target.value as any})}
                                     className="h-12 rounded-xl"
@@ -644,13 +644,16 @@ const Sales = () => {
             original: s
         }));
 
-        const bookingsMapped = bookings.filter(b => b.status === 'completed').map(b => {
+        // Avoid double counting: Only include completed bookings that don't have a linked sale record
+        const saleBookingIds = new Set(sales.map(s => s.booking_id).filter(Boolean));
+        
+        const bookingsMapped = bookings.filter(b => b.status === 'completed' && !saleBookingIds.has(b.id)).map(b => {
             const typeInfo = massageTypes.find(mt => mt.id === b.massage_type_id);
             return {
                 id: b.id,
                 timestamp: b.created_at,
                 guest_name: guests.find(g => g.id === b.guest_id)?.name || 'Guest',
-                category: 'Massage' as any,
+                category: (typeInfo?.category || 'Massage') as any,
                 item_name: typeInfo?.name || 'Massage Service',
                 quantity: 1,
                 amount: Number(b.price),
@@ -860,7 +863,8 @@ const Sales = () => {
                         if (itemToDelete.type === 'pos' && canDelete) {
                             await db.deleteSale(itemToDelete.id); 
                         } else if (itemToDelete.type === 'booking' && canDeleteBooking) {
-                            await (db as any).deleteMassageBooking(itemToDelete.id);
+                            // Instead of deleting the booking, just set it back to confirmed
+                            await db.updateMassageBookingStatus(itemToDelete.id, 'confirmed');
                         }
                         loadData(); 
                     } 

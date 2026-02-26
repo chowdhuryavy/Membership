@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '../components/ui';
 import { db } from '../services/mockSupabase';
-import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory } from '../types';
+import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory, StaffLeave } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
 import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
@@ -114,14 +114,33 @@ const Reports = () => {
     });
   };
 
+  const [staffLeaves, setStaffLeaves] = useState<StaffLeave[]>([]);
+
   const isStaffOnLeaveOnDate = (s: Staff, targetDateStr: string) => {
-      if (!s.leave_start_date || !s.leave_end_date) return false;
-      try {
-          const target = startOfDay(new Date(targetDateStr));
-          const start = startOfDay(new Date(s.leave_start_date));
-          const end = startOfDay(new Date(s.leave_end_date));
-          return isWithinInterval(target, { start, end });
-      } catch (e) { return false; }
+      // Check legacy fields
+      if (s.leave_start_date && s.leave_end_date) {
+          try {
+              const target = startOfDay(new Date(targetDateStr));
+              const start = startOfDay(new Date(s.leave_start_date));
+              const end = startOfDay(new Date(s.leave_end_date));
+              if (isWithinInterval(target, { start, end })) return true;
+          } catch (e) {}
+      }
+      
+      // Check new staff_leaves table
+      const leaves = staffLeaves.filter(l => l.staff_id === s.id);
+      if (leaves.length > 0) {
+          try {
+              const target = startOfDay(new Date(targetDateStr));
+              return leaves.some(l => {
+                  const start = startOfDay(new Date(l.start_date));
+                  const end = startOfDay(new Date(l.end_date));
+                  return isWithinInterval(target, { start, end });
+              });
+          } catch (e) {}
+      }
+
+      return false;
   };
 
   const loadData = async () => {
@@ -130,7 +149,7 @@ const Reports = () => {
       const start = startOfDay(parseISO(reportMonth + '-01'));
       const end = endOfMonth(start);
       
-      const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests, freezes, users] = await Promise.all([
+      const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests, freezes, users, leaves] = await Promise.all([
           db.getIncentiveRules(currentProperty.id, currentOutlet.id),
           db.getMassageBookings(currentOutlet.id, false),
           db.getMembers(currentOutlet.id),
@@ -141,8 +160,11 @@ const Reports = () => {
           db.getStaff(currentOutlet.id),
           db.getGuests(currentProperty.id),
           db.getFreezes(),
-          db.getUsers()
+          db.getUsers(),
+          db.getAllStaffLeaves()
       ]);
+
+      setStaffLeaves(leaves);
 
       let filteredStaff = staffList.filter(s => s.is_active);
       
@@ -295,8 +317,10 @@ const Reports = () => {
               if (incentiveDept === 'Massage') {
                   bookings.filter(b => {
                       const bDate = parseISO(b.date);
+                      const type = mTypes.find(m => m.id === b.massage_type_id);
+                      const isMassage = !type?.category || type.category === 'Massage';
                       // Only include completed bookings for incentive audit
-                      return b.status === 'completed' && bDate >= start && bDate <= end;
+                      return b.status === 'completed' && isMassage && bDate >= start && bDate <= end;
                   })
                   .forEach(b => {
                       const type = mTypes.find(m => m.id === b.massage_type_id);
@@ -321,7 +345,10 @@ const Reports = () => {
                           // For Massage, we always attribute the incentive to the specific therapist
                           // who performed the service, as per user requirement.
                           if (b.therapist_id) {
-                              staffSplits[b.therapist_id] = incNet;
+                              const therapist = staffList.find(s => s.id === b.therapist_id);
+                              if (therapist && !isStaffOnLeaveOnDate(therapist, b.date)) {
+                                  staffSplits[b.therapist_id] = incNet;
+                              }
                           }
                       }
 
@@ -402,6 +429,63 @@ const Reports = () => {
                       });
                   });
               } else if (incentiveDept === 'Personal Training') {
+                  // 1. Process Bookings categorized as Personal Training
+                  bookings.filter(b => {
+                      const bDate = parseISO(b.date);
+                      const type = mTypes.find(m => m.id === b.massage_type_id);
+                      const isPT = type?.category === 'Personal Training';
+                      return b.status === 'completed' && isPT && bDate >= start && bDate <= end;
+                  })
+                  .forEach(b => {
+                      const type = mTypes.find(m => m.id === b.massage_type_id);
+                      if (!type) return;
+                      const rule = findBestRule(rules, 'Personal Training', b.massage_type_id, type.price, type.duration_minutes);
+                      
+                      const actualPrice = type.price;
+                      const discountAmt = b.discount || 0;
+                      const netRev = actualPrice - discountAmt;
+                      const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+                      let baseInc = 0;
+                      let incDiscVal = 0;
+                      let incNet = 0;
+                      const staffSplits: Record<string, number> = {};
+
+                      if (rule) {
+                          baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+                          incDiscVal = (baseInc * discPercent) / 100;
+                          incNet = baseInc - incDiscVal;
+
+                          if (b.therapist_id) {
+                              const staff = staffList.find(s => s.id === b.therapist_id);
+                              if (staff && !isStaffOnLeaveOnDate(staff, b.date)) {
+                                  staffSplits[b.therapist_id] = incNet;
+                              }
+                          }
+                      }
+
+                      records.push({
+                          sl_no: sl++,
+                          date: format(parseISO(b.date), 'dd-MMM-yy'),
+                          guest_name: guests.find(g => g.id === b.guest_id)?.name || 'Guest',
+                          duration: `${type.duration_minutes}m`,
+                          check_no: '#BOOK',
+                          item_name: type.name,
+                          therapist_name: therapists.find(t => t.id === b.therapist_id)?.name || 'N/A',
+                          actual_price: actualPrice,
+                          discount_percent: discPercent,
+                          discount_amount: discountAmt,
+                          net_revenue: netRev,
+                          inc_total: baseInc,
+                          inc_discount_percent: discPercent,
+                          inc_discount_val: incDiscVal,
+                          inc_net: incNet,
+                          remarks: !rule ? 'No PT Incentive Rule' : '',
+                          staff_splits: staffSplits
+                      });
+                  });
+
+                  // 2. Process Sales categorized as Personal Training (POS)
                   sales.filter(s => {
                       const sDate = parseISO(s.created_at);
                       const isPT = s.category?.toLowerCase() === 'personal training';
