@@ -35,9 +35,12 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
     loadLeaves();
   }, [staff.id]);
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleSaveLeave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!leaveForm.start_date || !leaveForm.end_date) return;
+    setError(null);
     
     try {
       if (editingLeaveId) {
@@ -53,8 +56,13 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
       setEditingLeaveId(null);
       setLeaveForm({ start_date: '', end_date: '' });
       loadLeaves();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      if (e.message?.includes('relation "public.staff_leaves" does not exist') || e.code === '42P01') {
+        setError("The 'staff_leaves' table is missing in your Supabase database. Please run the SQL migration.");
+      } else {
+        setError(e.message || "Failed to save leave record.");
+      }
     }
   };
 
@@ -214,6 +222,13 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
                                 <Calendar className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none transition-colors text-slate-400 group-focus-within:text-indigo-600" />
                             </div>
                         </div>
+
+                        {error && (
+                            <div className="bg-red-50 text-red-600 text-[10px] font-bold p-4 rounded-xl flex items-center gap-3 animate-in shake duration-300">
+                                <X className="w-4 h-4 shrink-0" />
+                                <span>{error}</span>
+                            </div>
+                        )}
 
                         <Button 
                             type="submit" 
