@@ -5,6 +5,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/mockSupabase';
 import { Role, Permission, Currency, CompanySettings, Outlet, Property, IncentiveRule, MassageType, MembershipCategory, PermissionGroup, InventoryItem } from '../types';
+import { BookingSettings } from '../components/BookingSettings';
 import { 
   Trash2, 
   Edit2, 
@@ -148,7 +149,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking';
 
 const SettingsPage = () => {
   // Fix: Destructured currentOutlet and currentProperty from useSettings to provide necessary context for data fetching
@@ -351,6 +352,7 @@ const SettingsPage = () => {
     { id: 'navigation', label: 'UI Architecture', visible: hasPermission(user?.role_id || '', 'settings:view_navigation'), icon: ListOrdered },
     { id: 'shortcuts', label: 'Executive Hotkeys', visible: hasPermission(user?.role_id || '', 'settings:view_shortcuts'), icon: Keyboard },
     { id: 'documents', label: 'Audit Templates', visible: hasPermission(user?.role_id || '', 'settings:view_documents'), icon: FileCode },
+    { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_outlets'), icon: Timer },
     { id: 'maintenance', label: 'Maintenance', visible: hasPermission(user?.role_id || '', 'settings:view_maintenance'), icon: Zap },
   ].filter(t => t.visible), [user, roles, hasPermission]);
 
@@ -589,6 +591,10 @@ const SettingsPage = () => {
                           <Button onClick={handleUpdateCompany} isLoading={isSaving} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl bg-indigo-600">Commit Legal Schema</Button>
                       </CardContent>
                   </Card>
+              )}
+
+              {activeTab === 'booking' && (
+                  <BookingSettings />
               )}
 
               {activeTab === 'maintenance' && (

@@ -226,6 +226,16 @@ const BookingForm: React.FC<BookingFormProps> = ({
         return;
       }
 
+      if (currentOutlet) {
+        const startHour = currentOutlet.booking_start_time || '08:00';
+        const endHour = currentOutlet.booking_end_time || '22:00';
+        if (bookingData.start_time < startHour || bookingData.end_time > endHour) {
+            setError(`Booking must be within outlet operational hours (${startHour} - ${endHour}).`);
+            setLoading(false);
+            return;
+        }
+      }
+
       const payload: any = {
         guest_id: guest.id,
         therapist_id: bookingData.therapist_id,

@@ -54,6 +54,9 @@ export interface Outlet {
   signatory_approved_role?: string;
   contract_template?: string; 
   conditions?: string; 
+  booking_enabled?: boolean;
+  booking_start_time?: string;
+  booking_end_time?: string;
 }
 
 export interface StaffLeave {

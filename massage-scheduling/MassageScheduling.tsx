@@ -61,7 +61,6 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import BookingForm from './BookingForm';
 
-const HOURS = Array.from({ length: 15 }, (_, i) => i + 8); // 8 AM to 10 PM
 const SLOT_HEIGHT = 52; 
 const MINUTE_HEIGHT = SLOT_HEIGHT / 60;
 
@@ -98,6 +97,11 @@ ADD COLUMN IF NOT EXISTS outlet_id TEXT REFERENCES public.outlets(id) ON DELETE 
 
 ALTER TABLE IF EXISTS public.massage_bookings 
 ADD COLUMN IF NOT EXISTS outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE;
+
+ALTER TABLE IF EXISTS public.outlets
+ADD COLUMN IF NOT EXISTS booking_enabled BOOLEAN DEFAULT true,
+ADD COLUMN IF NOT EXISTS booking_start_time TEXT DEFAULT '08:00',
+ADD COLUMN IF NOT EXISTS booking_end_time TEXT DEFAULT '22:00';
 
 -- 2. ENSURE TABLES EXIST (IF NEW INSTALLATION)
 CREATE TABLE IF NOT EXISTS public.therapists (
@@ -507,10 +511,19 @@ const MassageScheduling = () => {
       } finally { setItemToDelete(null); }
   };
 
+  const HOURS = useMemo(() => {
+    if (!currentOutlet) return Array.from({ length: 15 }, (_, i) => i + 8);
+    const startHour = currentOutlet.booking_start_time ? parseInt(currentOutlet.booking_start_time.split(':')[0]) : 8;
+    const endHour = currentOutlet.booking_end_time ? parseInt(currentOutlet.booking_end_time.split(':')[0]) : 22;
+    const length = Math.max(1, endHour - startHour + 1);
+    return Array.from({ length }, (_, i) => i + startHour);
+  }, [currentOutlet]);
+
   const calculatePosition = (startTime: string, endTime: string) => {
+    const startHour = HOURS[0];
     const [sH, sM] = startTime.split(':').map(Number);
     const [eH, eM] = endTime.split(':').map(Number);
-    const top = ((sH - 8) * 60 + sM) * MINUTE_HEIGHT;
+    const top = ((sH - startHour) * 60 + sM) * MINUTE_HEIGHT;
     const duration = ((eH * 60 + eM) - (sH * 60 + sM));
     return { top, height: duration * MINUTE_HEIGHT };
   };
@@ -590,7 +603,7 @@ const MassageScheduling = () => {
             <button onClick={() => { setActiveTab('treatments'); setSaveError(null); }} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'treatments' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Portfolio</button>
             <button onClick={() => { setActiveTab('therapists'); setSaveError(null); }} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'therapists' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Staffing</button>
           </div>
-          {canCreate && (
+          {canCreate && currentOutlet?.booking_enabled !== false && (
               <Button onClick={() => { setEditingBooking(null); setShowBookingForm(true); }} className="h-12 px-8 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-indigo-100 ml-auto md:ml-0">
                 <Plus className="w-5 h-5 mr-2" /> Authorized Booking
               </Button>
@@ -600,6 +613,15 @@ const MassageScheduling = () => {
 
       {activeTab === 'bookings' && (
         <div className="space-y-4">
+          {currentOutlet?.booking_enabled === false && (
+            <div className="bg-amber-50 border border-amber-200 p-6 rounded-[2rem] flex items-start gap-4 animate-in fade-in">
+              <ShieldAlert className="w-8 h-8 text-amber-600 shrink-0" />
+              <div>
+                <h3 className="text-lg font-black text-amber-900 uppercase tracking-tight">Booking Engine Disabled</h3>
+                <p className="text-amber-700 text-sm mt-1">The booking engine is currently disabled for this outlet. You can view historical records but new bookings cannot be created.</p>
+              </div>
+            </div>
+          )}
           <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-[1.5rem] border border-slate-200 shadow-sm gap-4">
             <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
               <button onClick={() => setViewDate(addDays(viewDate, -1))} className="p-2 hover:bg-slate-50 rounded-xl border border-slate-100 transition-colors"><ChevronLeft className="w-5 h-5 text-slate-400"/></button>

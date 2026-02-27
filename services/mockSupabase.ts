@@ -671,7 +671,8 @@ class DatabaseService {
 
   async updateOutlet(id: string, updates: Partial<Outlet>) {
     if (this.isSupabase()) {
-        await supabase.from('outlets').update(updates).eq('id', id);
+        const { error } = await supabase.from('outlets').update(updates).eq('id', id);
+        if (error) throw error;
         await this.logAction('UPDATE_OUTLET', `Outlet modified: ${id}`);
     }
   }
