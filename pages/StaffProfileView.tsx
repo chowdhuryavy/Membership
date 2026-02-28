@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, ConfirmationModal } from '../components/ui';
 import { Staff, StaffLeave } from '../types';
 import { db } from '../services/mockSupabase';
 import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X } from 'lucide-react';
@@ -19,13 +19,20 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
   const [leaveForm, setLeaveForm] = useState({ start_date: '', end_date: '' });
   const [editingLeaveId, setEditingLeaveId] = useState<string | null>(null);
 
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isSchemaMissing, setIsSchemaMissing] = useState(false);
+
   const loadLeaves = async () => {
     setLoading(true);
+    setIsSchemaMissing(false);
     try {
       const data = await db.getStaffLeaves(staff.id);
       setLeaves(data);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      if (e.message?.includes('relation "public.staff_leaves" does not exist') || e.code === '42P01') {
+        setIsSchemaMissing(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -59,19 +66,93 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
     } catch (e: any) {
       console.error(e);
       if (e.message?.includes('relation "public.staff_leaves" does not exist') || e.code === '42P01') {
-        setError("The 'staff_leaves' table is missing in your Supabase database. Please run the SQL migration.");
+        setIsSchemaMissing(true);
+        setShowLeaveForm(false);
       } else {
         setError(e.message || "Failed to save leave record.");
       }
     }
   };
 
+  const [leaveToDelete, setLeaveToDelete] = useState<StaffLeave | null>(null);
+
   const handleDeleteLeave = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this leave record?')) {
-      await db.deleteStaffLeave(id);
+    const leave = leaves.find(l => l.id === id);
+    if (leave) setLeaveToDelete(leave);
+  };
+
+  const confirmDeleteLeave = async () => {
+    if (!leaveToDelete) return;
+    setIsDeleting(leaveToDelete.id);
+    try {
+      await db.deleteStaffLeave(leaveToDelete.id);
       loadLeaves();
+    } catch (e: any) {
+      console.error("Delete failed", e);
+      alert(`Failed to delete leave: ${e.message}`);
+    } finally {
+      setIsDeleting(null);
+      setLeaveToDelete(null);
     }
   };
+
+  const MissingLeavesTablePanel = () => (
+    <div className="col-span-1 lg:col-span-12 mb-8">
+      <Card className="rounded-[2.5rem] border-amber-200 bg-amber-50/30 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+          <div className="bg-amber-600 p-6 text-white flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md">
+                  <Database className="w-6 h-6" />
+              </div>
+              <div>
+                  <h2 className="text-lg font-black uppercase tracking-tight">Leave Management System Update Required</h2>
+                  <p className="text-amber-100 font-bold text-xs">The 'staff_leaves' table is missing or inaccessible.</p>
+              </div>
+          </div>
+          <CardContent className="p-8 space-y-6">
+              <div className="space-y-2">
+                  <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Safe Repair Protocol</h3>
+                  <p className="text-slate-600 text-xs leading-relaxed font-medium">Please execute this script in your <span className="font-bold text-indigo-600">Supabase SQL Editor</span> to enable leave tracking.</p>
+              </div>
+
+              <div className="relative group">
+                  <pre className="bg-slate-950 text-indigo-300 p-6 rounded-2xl overflow-x-auto text-[10px] font-mono leading-relaxed shadow-inner border border-white/10">
+{`-- CREATE STAFF LEAVES TABLE
+CREATE TABLE IF NOT EXISTS public.staff_leaves (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    staff_id TEXT NOT NULL REFERENCES public.staff(id) ON DELETE CASCADE,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+-- ENABLE RLS
+ALTER TABLE public.staff_leaves ENABLE ROW LEVEL SECURITY;
+
+-- CREATE POLICIES
+DROP POLICY IF EXISTS "Allow authenticated read access to staff_leaves" ON public.staff_leaves;
+DROP POLICY IF EXISTS "Allow authenticated insert access to staff_leaves" ON public.staff_leaves;
+DROP POLICY IF EXISTS "Allow authenticated update access to staff_leaves" ON public.staff_leaves;
+DROP POLICY IF EXISTS "Allow authenticated delete access to staff_leaves" ON public.staff_leaves;
+
+CREATE POLICY "Allow authenticated read access to staff_leaves" ON public.staff_leaves FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Allow authenticated insert access to staff_leaves" ON public.staff_leaves FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Allow authenticated update access to staff_leaves" ON public.staff_leaves FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "Allow authenticated delete access to staff_leaves" ON public.staff_leaves FOR DELETE TO authenticated USING (true);
+
+-- GRANT PERMISSIONS
+GRANT ALL ON TABLE public.staff_leaves TO anon, authenticated, postgres;
+
+-- RELOAD SCHEMA
+NOTIFY pgrst, 'reload schema';`}
+                  </pre>
+              </div>
+              <Button onClick={() => window.location.reload()} className="h-10 px-6 rounded-xl font-black uppercase text-[9px] tracking-widest bg-amber-600 hover:bg-amber-700">
+                  <RefreshCcw className="w-3.5 h-3.5 mr-2" /> Verify System Sync
+              </Button>
+          </CardContent>
+      </Card>
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500 pb-20">
@@ -87,6 +168,8 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {isSchemaMissing && <MissingLeavesTablePanel />}
+        
         <div className="lg:col-span-4 space-y-8">
           <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
             <div className="h-28 bg-slate-900 w-full relative overflow-hidden">
@@ -165,7 +248,9 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
                                               {canManage && (
                                                 <>
                                                   <button onClick={() => { setEditingLeaveId(l.id); setLeaveForm({ start_date: l.start_date, end_date: l.end_date }); setShowLeaveForm(true); }} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors" title="Modify"><Edit2 className="w-3.5 h-3.5"/></button>
-                                                  <button onClick={() => handleDeleteLeave(l.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5"/></button>
+                                                  <button onClick={() => handleDeleteLeave(l.id)} disabled={isDeleting === l.id} className={`p-2 transition-colors ${isDeleting === l.id ? 'text-slate-200 cursor-wait' : 'text-slate-300 hover:text-red-500'}`} title="Delete">
+                                                      {isDeleting === l.id ? <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-transparent rounded-full animate-spin"></div> : <Trash2 className="w-3.5 h-3.5"/>}
+                                                  </button>
                                                 </>
                                               )}
                                           </div>
@@ -241,6 +326,16 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
             </Card>
         </div>
       )}
+      
+      <ConfirmationModal 
+        isOpen={!!leaveToDelete} 
+        onClose={() => setLeaveToDelete(null)} 
+        onConfirm={confirmDeleteLeave} 
+        title="Revoke Leave Period" 
+        description={`Permanently remove this absence record (${leaveToDelete ? format(parseISO(leaveToDelete.start_date), 'dd MMM') : ''} - ${leaveToDelete ? format(parseISO(leaveToDelete.end_date), 'dd MMM') : ''})?`} 
+        confirmText="Confirm Revocation" 
+        isDestructive={true} 
+      />
     </div>
   );
 };

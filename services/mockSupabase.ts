@@ -406,8 +406,17 @@ class DatabaseService {
 
   async deleteStaffLeave(id: string) {
     if (this.isSupabase()) {
-      const { error } = await supabase.from('staff_leaves').delete().eq('id', id);
-      if (error) throw error;
+      console.log(`[DB] Deleting staff leave ${id}`);
+      const { error, count } = await supabase.from('staff_leaves').delete({ count: 'exact' }).eq('id', id);
+      if (error) {
+          console.error('[DB] Delete failed:', error);
+          throw error;
+      }
+      if (count === 0) {
+          console.warn('[DB] Delete succeeded but 0 rows were affected. ID mismatch or RLS policy?');
+      } else {
+          console.log(`[DB] Successfully deleted ${count} rows.`);
+      }
     }
   }
 
