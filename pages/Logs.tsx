@@ -5,7 +5,7 @@ import { SystemLog } from '../types';
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-import { History, Search, RefreshCcw, Shield, Clock, Terminal, Filter } from 'lucide-react';
+import { History, Search, RefreshCcw, Shield, Clock, Terminal, Filter, X, Calendar } from 'lucide-react';
 
 const Logs = () => {
     const { user } = useAuth();
@@ -96,6 +96,7 @@ const Logs = () => {
                     MEMBER: ['MEMBER', 'ENROLL', 'FREEZE', 'SUSPEND'],
                     POS: ['POS', 'SALE', 'VOID', 'TRANSACTION'],
                     SECURITY: ['SECURITY', 'ROLE', 'PERMISSION'],
+                    INTERACTION: ['INTERACTION', 'CLICK'],
                 };
 
                 const allowedKeywords = categoryMap[actionFilter] || [];
@@ -135,6 +136,9 @@ const Logs = () => {
 
         if (act.includes('FREEZE') || act.includes('SUSPEND'))
             return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+            
+        if (act.includes('INTERACTION'))
+            return 'bg-purple-50 text-purple-700 border-purple-200';
 
         return 'bg-slate-50 text-slate-700 border-slate-200';
     };
@@ -162,7 +166,7 @@ const Logs = () => {
     // Render
     // ===============================
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
             
             {/* Header */}
             <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm">
@@ -180,15 +184,79 @@ const Logs = () => {
                     </div>
                 </div>
 
-                <Button
-                    variant="outline"
-                    className="h-11 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest border-slate-200"
-                    onClick={loadLogs}
-                    isLoading={loading}
-                >
-                    <RefreshCcw className="w-4 h-4 mr-2" />
-                    Refresh
-                </Button>
+                <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+                    {/* Search */}
+                    <div className="relative group flex-1 sm:flex-none">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input 
+                            placeholder="Search logs..." 
+                            className="w-full sm:w-48 h-11 pl-11 pr-4 rounded-xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-xs font-bold" 
+                            value={searchTerm} 
+                            onChange={(e) => setSearchTerm(e.target.value)} 
+                        />
+                    </div>
+
+                    {/* Date Range */}
+                    <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-100 h-11 px-3">
+                        <Calendar className="w-4 h-4 text-slate-400" />
+                        <input 
+                            type="date" 
+                            className="bg-transparent border-none text-[10px] font-bold text-slate-600 focus:ring-0 w-24 p-0 uppercase tracking-widest"
+                            value={dateFrom}
+                            onChange={(e) => setDateFrom(e.target.value)}
+                        />
+                        <span className="text-slate-300">→</span>
+                        <input 
+                            type="date" 
+                            className="bg-transparent border-none text-[10px] font-bold text-slate-600 focus:ring-0 w-24 p-0 uppercase tracking-widest"
+                            value={dateTo}
+                            onChange={(e) => setDateTo(e.target.value)}
+                        />
+                    </div>
+
+                    {/* Filter Dropdown */}
+                    <div className="relative">
+                        <select 
+                            className="h-11 pl-4 pr-8 rounded-xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 text-[10px] font-black uppercase tracking-widest text-slate-600 cursor-pointer appearance-none outline-none min-w-[140px]"
+                            value={actionFilter}
+                            onChange={(e) => setActionFilter(e.target.value)}
+                        >
+                            <option value="ALL">All Actions</option>
+                            <option value="AUTH">Authentication</option>
+                            <option value="MEMBER">Members</option>
+                            <option value="POS">Sales & POS</option>
+                            <option value="SECURITY">Security</option>
+                            <option value="INTERACTION">Interactions</option>
+                        </select>
+                        <Filter className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    {/* Clear Filters */}
+                    {(searchTerm || actionFilter !== 'ALL' || dateFrom !== format(new Date(), 'yyyy-MM-dd') || dateTo !== format(new Date(), 'yyyy-MM-dd')) && (
+                        <Button 
+                            variant="ghost" 
+                            onClick={() => {
+                                setSearchTerm('');
+                                setActionFilter('ALL');
+                                setDateFrom(format(new Date(), 'yyyy-MM-dd'));
+                                setDateTo(format(new Date(), 'yyyy-MM-dd'));
+                            }}
+                            className="h-11 w-11 p-0 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            title="Clear Filters"
+                        >
+                            <X className="w-5 h-5" />
+                        </Button>
+                    )}
+
+                    <Button
+                        variant="outline"
+                        className="h-11 px-4 rounded-xl font-black text-[10px] uppercase tracking-widest border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 transition-all"
+                        onClick={loadLogs}
+                        isLoading={loading}
+                    >
+                        <RefreshCcw className="w-4 h-4" />
+                    </Button>
+                </div>
             </div>
 
             {/* Invalid Date Warning */}

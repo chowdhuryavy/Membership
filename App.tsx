@@ -56,6 +56,7 @@ import {
 } from 'lucide-react';
 import { Permission, Property } from './types';
 import { db } from './services/mockSupabase';
+import UserActivityTracker from './components/UserActivityTracker';
 
 const SplashLoading = () => {
   const { settings } = useSettings();
@@ -511,6 +512,7 @@ const App = () => {
   return (
     <AuthProvider>
       <SettingsProvider>
+        <UserActivityTracker />
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
