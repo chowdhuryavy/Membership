@@ -492,7 +492,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                       </td></tr>
                                   ) : (
                                       Array.isArray(memberBookings) && memberBookings.map(b => {
-                                          const type = massageTypes.find(mt => mt.id === b.massage_type_id);
+                                          const type = massageTypes.find(mt => mt.id === (b.massage_type_id || b.inventory_item_id));
                                           return (
                                           <tr key={b.id} className="hover:bg-purple-50/20 transition-colors">
                                               <td className="px-8 py-5">

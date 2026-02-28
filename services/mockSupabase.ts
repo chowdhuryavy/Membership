@@ -1071,16 +1071,34 @@ class DatabaseService {
       // If status changed TO completed, create a sale record
       if (status === 'completed' && booking.status !== 'completed') {
         const { data: guest } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
-        const { data: type } = await supabase.from('massage_types').select('name, category').eq('id', booking.massage_type_id).single();
+        
+        let itemName = 'Service';
+        let itemCategory = 'Massage';
+        let itemId = booking.massage_type_id;
+
+        if (booking.inventory_item_id) {
+            const { data: inv } = await supabase.from('inventory').select('name, category').eq('id', booking.inventory_item_id).single();
+            if (inv) {
+                itemName = inv.name;
+                itemCategory = inv.category;
+                itemId = booking.inventory_item_id;
+            }
+        } else if (booking.massage_type_id) {
+            const { data: type } = await supabase.from('massage_types').select('name, category').eq('id', booking.massage_type_id).single();
+            if (type) {
+                itemName = type.name;
+                itemCategory = type.category || 'Massage';
+            }
+        }
 
         const sale: Omit<Sale, 'id' | 'created_at'> = {
           property_id: booking.property_id,
           outlet_id: booking.outlet_id,
           guest_id: booking.guest_id,
           guest_name: guest?.name || 'Guest',
-          category: (type?.category || 'Massage') as SaleCategory,
-          item_id: booking.massage_type_id,
-          item_name: type?.name || 'Service',
+          category: itemCategory as SaleCategory,
+          item_id: itemId,
+          item_name: itemName,
           quantity: 1,
           unit_price: booking.price + (booking.discount || 0),
           gross_amount: booking.price + (booking.discount || 0),

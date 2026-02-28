@@ -96,7 +96,8 @@ ALTER TABLE IF EXISTS public.massage_types
 ADD COLUMN IF NOT EXISTS outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE;
 
 ALTER TABLE IF EXISTS public.massage_bookings 
-ADD COLUMN IF NOT EXISTS outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE;
+ADD COLUMN IF NOT EXISTS outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE,
+ADD COLUMN IF NOT EXISTS inventory_item_id TEXT REFERENCES public.inventory(id) ON DELETE CASCADE;
 
 ALTER TABLE IF EXISTS public.outlets
 ADD COLUMN IF NOT EXISTS booking_enabled BOOLEAN DEFAULT true,
@@ -129,6 +130,7 @@ CREATE TABLE IF NOT EXISTS public.massage_bookings (
     guest_id TEXT REFERENCES public.guests(id) ON DELETE SET NULL,
     therapist_id TEXT REFERENCES public.therapists(id) ON DELETE CASCADE,
     massage_type_id TEXT REFERENCES public.massage_types(id) ON DELETE CASCADE,
+    inventory_item_id TEXT REFERENCES public.inventory(id) ON DELETE CASCADE,
     date TEXT NOT NULL,
     start_time TEXT NOT NULL,
     end_time TEXT NOT NULL,
@@ -143,7 +145,10 @@ CREATE TABLE IF NOT EXISTS public.massage_bookings (
 ALTER TABLE public.therapists DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.massage_types DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.massage_bookings DISABLE ROW LEVEL SECURITY;
-GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, postgres;`}
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, postgres;
+
+-- 4. RELOAD SCHEMA CACHE
+NOTIFY pgrst, 'reload schema';`}
                 </pre>
             </div>
             <div className="flex gap-4">
@@ -187,7 +192,7 @@ const GuestHistoryView = ({
   const filteredBookings = useMemo(() => {
     return guestBookings
       .filter(b => {
-        const type = massageTypes.find(m => m.id === b.massage_type_id);
+        const type = massageTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
         const therapist = therapists.find(t => t.id === b.therapist_id);
         const searchString = `${type?.name || ''} ${therapist?.name || ''} ${b.date}`.toLowerCase();
         
@@ -300,7 +305,7 @@ const GuestHistoryView = ({
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                         {filteredBookings.map(b => {
-                            const type = massageTypes.find(m => m.id === b.massage_type_id);
+                            const type = massageTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
                             return (
                             <tr key={b.id} className="hover:bg-indigo-50/30 transition-colors group">
                                 <td className="px-8 py-4">
@@ -374,7 +379,7 @@ const MassageScheduling = () => {
 
   const selectedBookingDetails = useMemo(() => {
       if (!selectedBooking) return null;
-      const primaryService = massageTypes.find(mt => mt.id === selectedBooking.massage_type_id);
+      const primaryService = massageTypes.find(mt => mt.id === (selectedBooking.massage_type_id || selectedBooking.inventory_item_id));
       const addServices = (selectedBooking.additional_service_ids || [])
           .map(id => massageTypes.find(mt => mt.id === id))
           .filter(Boolean);
@@ -412,18 +417,31 @@ const MassageScheduling = () => {
           limitToIds = allowedOutletsInProperty.map(o => o.id);
       }
       
-      const [b, g, t, m, mems] = await Promise.all([
+      const [b, g, t, m, mems, inv] = await Promise.all([
         db.getMassageBookings(scopeId, isProperty, limitToIds),
         db.getGuests(currentProperty.id),
         db.getTherapists(scopeId, isProperty, limitToIds),
         db.getMassageTypes(scopeId, isProperty, limitToIds),
-        db.getMembers(scopeId, isProperty, limitToIds)
+        db.getMembers(scopeId, isProperty, limitToIds),
+        db.getInventory(scopeId, isProperty, limitToIds)
       ]);
 
       setBookings(b || []);
       setGuests(g || []);
       setTherapists((t || []).sort((x, y) => x.name.localeCompare(y.name)));
-      setMassageTypes((m || []).sort((x, y) => (Number(x.duration_minutes) || 0) - (Number(y.duration_minutes) || 0)));
+      
+      const ptItems = (inv || []).filter(i => i.category === 'Personal Training').map(i => ({
+          id: i.id,
+          property_id: i.property_id,
+          outlet_id: i.outlet_id,
+          name: i.name,
+          price: i.price,
+          duration_minutes: 60, // Default duration for PT sessions
+          category: 'Personal Training' as const
+      }));
+      
+      const combinedTypes = [...(m || []), ...ptItems];
+      setMassageTypes(combinedTypes.sort((x, y) => (Number(x.duration_minutes) || 0) - (Number(y.duration_minutes) || 0)));
       setMembers(mems || []);
     } catch (e: any) {
       console.error("Failed to load booking data", e);
@@ -815,13 +833,6 @@ const MassageScheduling = () => {
                         <CardContent className="p-10">
                             <form onSubmit={handleSaveMassageType} className="space-y-6">
                                 <Input label="Service Designation *" value={newType.name} onChange={e => setNewType({...newType, name: e.target.value})} className="h-14 rounded-2xl font-bold" placeholder="e.g. Aromatherapy Session" />
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service Category</label>
-                                    <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-                                        <button type="button" onClick={() => setNewType({ ...newType, category: 'Massage' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${newType.category === 'Massage' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>Massage</button>
-                                        <button type="button" onClick={() => setNewType({ ...newType, category: 'Personal Training' })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${newType.category === 'Personal Training' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>Personal Training</button>
-                                    </div>
-                                </div>
                                 <div className="grid grid-cols-2 gap-6">
                                     <Input label="Duration (Min)" type="number" value={newType.duration_minutes} onChange={e => setNewType({...newType, duration_minutes: Number(e.target.value)})} className="h-14 rounded-2xl" />
                                     <Input label="Retail Rate *" type="number" value={newType.price} onChange={e => setNewType({...newType, price: Number(e.target.value)})} className="h-14 rounded-2xl" />

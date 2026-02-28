@@ -221,7 +221,8 @@ export interface MassageBooking {
   date: string;
   start_time: string;
   end_time: string;
-  massage_type_id: string;
+  massage_type_id?: string;
+  inventory_item_id?: string;
   additional_service_ids?: string[];
   price: number;
   status: 'confirmed' | 'cancelled' | 'completed' | 'no-show';

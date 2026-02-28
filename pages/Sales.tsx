@@ -518,7 +518,7 @@ const InventoryManager = ({
                                 <Input label="Item / Service Name *" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-12 rounded-xl" />
                                 <Select 
                                     label="Revenue Category" 
-                                    options={['Retail', 'Personal Training', 'Entrance Fee', 'Massage', 'Other'].map(c => ({ value: c, label: c }))} 
+                                    options={['Retail', 'Personal Training', 'Entrance Fee', 'Other'].map(c => ({ value: c, label: c }))} 
                                     value={formData.category}
                                     onChange={e => setFormData({...formData, category: e.target.value as any})}
                                     className="h-12 rounded-xl"
@@ -648,7 +648,7 @@ const Sales = () => {
         const saleBookingIds = new Set(sales.map(s => s.booking_id).filter(Boolean));
         
         const bookingsMapped = bookings.filter(b => b.status === 'completed' && !saleBookingIds.has(b.id)).map(b => {
-            const typeInfo = massageTypes.find(mt => mt.id === b.massage_type_id);
+            const typeInfo = massageTypes.find(mt => mt.id === (b.massage_type_id || b.inventory_item_id));
             return {
                 id: b.id,
                 timestamp: b.created_at,

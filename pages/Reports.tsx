@@ -286,7 +286,7 @@ const Reports = () => {
                   }).map(b => ({
                       date: `${b.date}T${b.start_time}`,
                       name: guests.find(g => g.id === b.guest_id)?.name || 'Guest',
-                      item: mTypes.find(t => t.id === b.massage_type_id)?.name || 'Service',
+                      item: mTypes.find(t => t.id === (b.massage_type_id || b.inventory_item_id))?.name || 'Service',
                       gross: Number(b.price) + (b.discount || 0),
                       disc: b.discount || 0,
                       net: Number(b.price),
@@ -317,15 +317,15 @@ const Reports = () => {
               if (incentiveDept === 'Massage') {
                   bookings.filter(b => {
                       const bDate = parseISO(b.date);
-                      const type = mTypes.find(m => m.id === b.massage_type_id);
+                      const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
                       const isMassage = !type?.category || type.category === 'Massage';
                       // Only include completed bookings for incentive audit
                       return b.status === 'completed' && isMassage && bDate >= start && bDate <= end;
                   })
                   .forEach(b => {
-                      const type = mTypes.find(m => m.id === b.massage_type_id);
+                      const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
                       if (!type) return;
-                      const rule = findBestRule(rules, 'Massage', b.massage_type_id, type.price, type.duration_minutes);
+                      const rule = findBestRule(rules, 'Massage', (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes);
                       
                       const actualPrice = type.price;
                       const discountAmt = b.discount || 0;
@@ -432,14 +432,14 @@ const Reports = () => {
                   // 1. Process Bookings categorized as Personal Training
                   bookings.filter(b => {
                       const bDate = parseISO(b.date);
-                      const type = mTypes.find(m => m.id === b.massage_type_id);
+                      const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
                       const isPT = type?.category === 'Personal Training';
                       return b.status === 'completed' && isPT && bDate >= start && bDate <= end;
                   })
                   .forEach(b => {
-                      const type = mTypes.find(m => m.id === b.massage_type_id);
+                      const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
                       if (!type) return;
-                      const rule = findBestRule(rules, 'Personal Training', b.massage_type_id, type.price, type.duration_minutes);
+                      const rule = findBestRule(rules, 'Personal Training', (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes);
                       
                       const actualPrice = type.price;
                       const discountAmt = b.discount || 0;
