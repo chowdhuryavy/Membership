@@ -364,7 +364,7 @@ const MassageScheduling = () => {
   const [newType, setNewType] = useState<{ id: string, name: string, price: number, duration_minutes: number, category?: 'Massage' | 'Personal Training' }>({ id: '', name: '', price: 0, duration_minutes: 60, category: 'Massage' });
   const [newTherapist, setNewTherapist] = useState({ id: '', name: '', specialty: '', country: '', type: 'Therapist' });
   const [isEditingResource, setIsEditingResource] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest', name: string} | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest' | 'booking', name: string} | null>(null);
 
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user || !outlets) return [];
@@ -525,6 +525,10 @@ const MassageScheduling = () => {
           else if (itemToDelete.type === 'guest') {
               if (canDeleteGuests) await db.deleteGuest(itemToDelete.id);
           }
+          else if (itemToDelete.type === 'booking') {
+              if (canDelete) await db.deleteMassageBooking(itemToDelete.id);
+              setSelectedBooking(null);
+          }
           loadData();
       } finally { setItemToDelete(null); }
   };
@@ -655,32 +659,52 @@ const MassageScheduling = () => {
             </div>
           </div>
 
-          <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden bg-slate-50">
-            <div className="overflow-x-auto">
-              <div className="min-w-[900px] flex">
-                <div className="w-16 shrink-0 border-r border-slate-200 bg-white">
-                    <div className="h-12 border-b border-slate-200 flex items-center justify-center"><Clock className="w-4 h-4 text-slate-300" /></div>
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden bg-white">
+            <div className="overflow-x-auto custom-scrollbar">
+              <div className="min-w-[1000px] flex relative">
+                <div className="w-20 shrink-0 border-r border-slate-100 bg-slate-50/50 sticky left-0 z-20">
+                    <div className="h-14 border-b border-slate-100 flex items-center justify-center bg-white sticky top-0 z-30 shadow-sm"><Clock className="w-5 h-5 text-indigo-400" /></div>
                     {HOURS.map(hour => (
-                        <div key={hour} style={{ height: SLOT_HEIGHT }} className="relative">
-                            <span className="absolute -top-2.5 left-0 right-0 text-center text-[9px] font-black text-slate-400 uppercase">{hour > 12 ? `${hour-12}P` : hour === 12 ? '12P' : `${hour}A`}</span>
+                        <div key={hour} style={{ height: SLOT_HEIGHT }} className="relative border-b border-slate-50 flex items-center justify-center group hover:bg-indigo-50/30 transition-colors">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-600 transition-colors">{hour > 12 ? `${hour-12} PM` : hour === 12 ? '12 PM' : `${hour} AM`}</span>
                         </div>
                     ))}
                 </div>
-                <div className="flex flex-1">
-                    {therapists.filter(t => !therapistFilter || t.name.toLowerCase().includes(therapistFilter.toLowerCase())).map(therapist => {
+                <div className="flex flex-1 relative bg-slate-50/30">
+                    {/* Current Time Indicator Line (Optional - can be added later with real-time updates) */}
+                    
+                    {therapists.filter(t => !therapistFilter || t.name.toLowerCase().includes(therapistFilter.toLowerCase())).map((therapist, idx) => {
                       const therapistBookings = filteredTodayBookings.filter(b => b.therapist_id === therapist.id);
                       return (
-                        <div key={therapist.id} className="flex-1 border-r border-slate-200 relative bg-white/50 min-w-[160px]">
-                          <div className="h-12 bg-white border-b border-slate-200 flex flex-col items-center justify-center sticky top-0 z-10 px-1">
-                            <span className="text-[10px] font-black text-slate-900 uppercase truncate w-full text-center tracking-tight">{therapist.name}</span>
+                        <div key={therapist.id} className={`flex-1 border-r border-slate-100 relative min-w-[180px] hover:bg-white transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}>
+                          <div className="h-14 bg-white border-b border-slate-100 flex flex-col items-center justify-center sticky top-0 z-10 px-2 shadow-sm">
+                            <span className="text-xs font-black text-slate-800 uppercase truncate w-full text-center tracking-tight">{therapist.name}</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate w-full text-center mt-0.5">{therapist.specialty || 'Specialist'}</span>
                           </div>
-                          {HOURS.map(hour => <div key={hour} style={{ height: SLOT_HEIGHT }} className="border-b border-slate-100/50"></div>)}
+                          {HOURS.map(hour => <div key={hour} style={{ height: SLOT_HEIGHT }} className="border-b border-slate-100 group hover:border-indigo-100 transition-colors relative">
+                              <div className="absolute inset-0 group-hover:bg-indigo-50/10 pointer-events-none"></div>
+                          </div>)}
                           {therapistBookings.map(booking => {
                             const { top, height } = calculatePosition(booking.start_time, booking.end_time);
+                            const type = massageTypes.find(m => m.id === (booking.massage_type_id || booking.inventory_item_id));
                             return (
-                              <button key={booking.id} onClick={() => setSelectedBooking(booking)} style={{ top: top + 48, height: height - 1 }} className={`absolute left-1 right-1 p-2 rounded-lg border-l-4 text-left shadow-lg transition-all hover:z-20 overflow-hidden group hover:scale-[1.02] ${getStatusStyles(booking.status)}`}>
-                                <div className="text-[9px] font-black uppercase leading-tight truncate">{guests.find(g => g.id === booking.guest_id)?.name || 'Guest'}</div>
-                                <div className="text-[7px] font-bold opacity-80 uppercase tracking-widest mt-0.5">{booking.start_time} - {booking.end_time}</div>
+                              <button 
+                                key={booking.id} 
+                                onClick={() => setSelectedBooking(booking)} 
+                                style={{ top: top + 56, height: height - 2 }} 
+                                className={`absolute left-1.5 right-1.5 p-2.5 rounded-xl border-l-[3px] text-left shadow-sm transition-all hover:z-20 overflow-hidden group hover:scale-[1.02] hover:shadow-md ${getStatusStyles(booking.status)}`}
+                              >
+                                <div className="flex flex-col h-full justify-between">
+                                    <div>
+                                        <div className="text-[10px] font-black uppercase leading-tight truncate tracking-tight">{guests.find(g => g.id === booking.guest_id)?.name || 'Guest'}</div>
+                                        <div className="text-[9px] font-bold opacity-70 uppercase tracking-widest mt-0.5 truncate">{type?.name || 'Service'}</div>
+                                    </div>
+                                    {height > 40 && (
+                                        <div className="text-[8px] font-black opacity-60 uppercase tracking-widest flex items-center gap-1">
+                                            <Clock className="w-2.5 h-2.5" /> {booking.start_time} - {booking.end_time}
+                                        </div>
+                                    )}
+                                </div>
                               </button>
                             );
                           })}
@@ -999,6 +1023,9 @@ const MassageScheduling = () => {
                         <button onClick={() => { if (selectedBookingDetails.guest) { setSelectedGuestForHistory(selectedBookingDetails.guest); setSelectedBooking(null); } }} className="w-full h-11 rounded-xl bg-slate-900 text-white font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"><ExternalLink className="w-4 h-4" /> View Guest Profile & History</button>
                         {selectedBooking.status === 'confirmed' && canDelete && (
                             <button onClick={() => handleUpdateStatus(selectedBooking.id, 'cancelled')} className="w-full h-11 rounded-xl border-2 border-red-50 text-red-600 font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-red-50"><Trash2 className="w-4 h-4" /> Cancel Session</button>
+                        )}
+                        {canDelete && (
+                            <button onClick={() => setItemToDelete({id: selectedBooking.id, type: 'booking', name: `Booking for ${selectedBookingDetails.guest?.name || 'Guest'}`})} className="w-full h-11 rounded-xl border-2 border-red-100 text-red-700 font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-red-50 mt-2"><Trash2 className="w-4 h-4" /> Delete Permanently</button>
                         )}
                     </div>
                 </CardContent>
