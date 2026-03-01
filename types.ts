@@ -1,18 +1,19 @@
 export type Permission = 
   | 'dashboard:view' | 'dashboard:view_financials' | 'dashboard:view_insights'
-  | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:renew' | 'members:print_contract'
+  | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:renew' | 'members:print_contract' | 'members:view_history'
   | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete'
   | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email' | 'users:manage_overrides'
-  | 'staff:view' | 'staff:manage'
+  | 'staff:view' | 'staff:manage' | 'staff:manage_leaves'
   | 'settings:view' | 'settings:edit' 
   | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives'
-  | 'reports:view' | 'reports:export'
-  | 'logs:view'
+  | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives'
+  | 'reports:view' | 'reports:export' | 'reports:view_financial' | 'reports:view_operational' | 'reports:view_inventory' | 'reports:view_staff'
+  | 'logs:view' | 'logs:search' | 'logs:filter' | 'logs:clear'
   | 'properties:view' | 'properties:edit'
   | 'outlets:view' | 'outlets:edit'
-  | 'bookings:view' | 'bookings:create' | 'bookings:edit' | 'bookings:delete' | 'bookings:manage_resources'
-  | 'sales:view' | 'sales:create' | 'sales:edit' | 'sales:delete'
-  | 'inventory:view' | 'inventory:manage'; 
+  | 'bookings:view' | 'bookings:create' | 'bookings:edit' | 'bookings:delete' | 'bookings:manage_resources' | 'bookings:view_therapist_schedule'
+  | 'sales:view' | 'sales:create' | 'sales:edit' | 'sales:delete' | 'sales:refund' | 'sales:void'
+  | 'inventory:view' | 'inventory:manage' | 'inventory:adjust_stock'; 
 
 export interface PermissionGroup {
   id: string;

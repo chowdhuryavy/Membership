@@ -4,5 +4,5 @@ ALTER TABLE IF EXISTS public.sales
 ADD COLUMN IF NOT EXISTS secondary_sold_by_id TEXT;
 
 -- REFRESH POLICIES AND PERMISSIONS
-ALTER TABLE public.sales DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
 GRANT ALL ON TABLE public.sales TO anon, authenticated, postgres;

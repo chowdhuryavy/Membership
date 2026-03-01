@@ -69,6 +69,10 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   }, []);
 
   const canCreate = user && hasPermission(user.role_id, 'members:create');
+  const canEdit = user && hasPermission(user.role_id, 'members:edit');
+  const canDelete = user && hasPermission(user.role_id, 'members:delete');
+  const canRenew = user && hasPermission(user.role_id, 'members:renew');
+  const canFreeze = user && hasPermission(user.role_id, 'members:freeze');
   const canSwitchScope = user && (hasPermission(user.role_id, 'properties:view') || hasPermission(user.role_id, 'settings:view_properties')) && allowedOutletsInProperty.length > 1;
 
   const getEffectiveStatus = (member: Member) => {
@@ -282,10 +286,10 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                                 <td className="px-10 py-7 text-right font-black text-slate-900 tabular-nums text-base">{formatMoney(m.net_amount)}</td>
                                 <td className="px-10 py-7 text-center" onClick={e => e.stopPropagation()}>
                                   <div className="flex items-center justify-center gap-2">
-                                    <button onClick={() => onRenew(m)} title="Renew" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><RefreshCcw className="w-4 h-4"/></button>
-                                    <button onClick={() => onViewDetail(m)} title="Freeze" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><Snowflake className="w-4 h-4"/></button>
-                                    <button onClick={() => onEdit(m)} title="Edit" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><Edit2 className="w-4 h-4"/></button>
-                                    <button onClick={() => onDelete(m.id)} title="Purge" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-red-600 hover:shadow-lg transition-all active:scale-90"><Trash2 className="w-4 h-4"/></button>
+                                    {canRenew && <button onClick={() => onRenew(m)} title="Renew" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><RefreshCcw className="w-4 h-4"/></button>}
+                                    {canFreeze && <button onClick={() => onViewDetail(m)} title="Freeze" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><Snowflake className="w-4 h-4"/></button>}
+                                    {canEdit && <button onClick={() => onEdit(m)} title="Edit" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><Edit2 className="w-4 h-4"/></button>}
+                                    {canDelete && <button onClick={() => onDelete(m.id)} title="Purge" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-red-600 hover:shadow-lg transition-all active:scale-90"><Trash2 className="w-4 h-4"/></button>}
                                   </div>
                                 </td>
                             </tr>

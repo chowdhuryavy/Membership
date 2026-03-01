@@ -78,6 +78,7 @@ const StaffPage = () => {
   // Security Check
   const canView = user && hasPermission(user.role_id, 'staff:view');
   const canManage = user && hasPermission(user.role_id, 'staff:manage');
+  const canManageLeaves = user && hasPermission(user.role_id, 'staff:manage_leaves');
   const canSwitchScope = user && (hasPermission(user.role_id, 'properties:view') || hasPermission(user.role_id, 'settings:view_properties')) && allowedOutletsInProperty.length > 1;
 
   useEffect(() => {
@@ -119,6 +120,7 @@ const StaffPage = () => {
         staff={selectedStaff} 
         onBack={() => setSelectedStaff(null)} 
         canManage={canManage || false}
+        canManageLeaves={canManageLeaves || false}
         onEdit={(s) => {
           setEditingId(s.id); 
           setFormData({
@@ -187,8 +189,8 @@ ADD COLUMN IF NOT EXISTS is_eligible_for_incentives BOOLEAN NOT NULL DEFAULT TRU
 ADD COLUMN IF NOT EXISTS leave_start_date TEXT,
 ADD COLUMN IF NOT EXISTS leave_end_date TEXT;
 
--- DISABLE RLS FOR INTERNAL SYSTEM OPERATIONS
-ALTER TABLE public.staff DISABLE ROW LEVEL SECURITY;
+-- ENABLE RLS FOR INTERNAL SYSTEM OPERATIONS
+ALTER TABLE public.staff ENABLE ROW LEVEL SECURITY;
 
 -- GRANT PERMISSIONS
 GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
@@ -325,10 +327,12 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <Input label="Leave Start Date" type="date" value={formData.leave_start_date} onChange={e => setFormData({ ...formData, leave_start_date: e.target.value })} className="h-14 rounded-2xl" />
-                  <Input label="Leave End Date" type="date" value={formData.leave_end_date} onChange={e => setFormData({ ...formData, leave_end_date: e.target.value })} className="h-14 rounded-2xl" />
-                </div>
+                {canManageLeaves && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <Input label="Leave Start Date" type="date" value={formData.leave_start_date} onChange={e => setFormData({ ...formData, leave_start_date: e.target.value })} className="h-14 rounded-2xl" />
+                    <Input label="Leave End Date" type="date" value={formData.leave_end_date} onChange={e => setFormData({ ...formData, leave_end_date: e.target.value })} className="h-14 rounded-2xl" />
+                  </div>
+                )}
 
                 {errorMessage && (
                   <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in shake duration-300">

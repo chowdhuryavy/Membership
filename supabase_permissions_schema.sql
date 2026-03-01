@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS public.user_permission_overrides (
     UNIQUE(user_id, permission_key)
 );
 
--- DISABLE RLS FOR INTERNAL SYSTEM OPERATIONS
-ALTER TABLE public.user_permission_overrides DISABLE ROW LEVEL SECURITY;
+-- ENABLE RLS FOR INTERNAL SYSTEM OPERATIONS
+ALTER TABLE public.user_permission_overrides ENABLE ROW LEVEL SECURITY;
 
 -- GRANT PERMISSIONS
 GRANT ALL ON TABLE public.user_permission_overrides TO anon, authenticated, postgres;

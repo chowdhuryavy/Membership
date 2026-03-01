@@ -118,8 +118,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const normalizedRoleId = userRoleId.toLowerCase();
     
     // 1. SYSTEM SUPERUSER BYPASS
-    // The 'admin' role always has full system clearance.
-    if (normalizedRoleId === 'admin') return true;
+    // Only the specific Super Admin email has full system clearance.
+    const isSuper = user?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+    if (isSuper) return true;
 
     // 2. USER-SPECIFIC OVERRIDES (High Priority)
     const targetUser = (userId === user?.id || !userId) ? user : null;

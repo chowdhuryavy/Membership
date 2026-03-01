@@ -95,6 +95,23 @@ const Reports = () => {
 
   // Page-Level Security Check
   const canView = user && hasPermission(user.role_id, 'reports:view');
+  const canViewFinancial = user && hasPermission(user.role_id, 'reports:view_financial');
+  const canViewOperational = user && hasPermission(user.role_id, 'reports:view_operational');
+  const canViewStaffReports = user && hasPermission(user.role_id, 'reports:view_staff');
+
+  useEffect(() => {
+    // Ensure selected report type is allowed
+    if (reportType === 'revenue_recognition' && !canViewFinancial) {
+        if (canViewOperational) setReportType('daily_sales');
+        else if (canViewStaffReports) setReportType('incentives');
+    } else if (reportType === 'daily_sales' && !canViewOperational) {
+        if (canViewFinancial) setReportType('revenue_recognition');
+        else if (canViewStaffReports) setReportType('incentives');
+    } else if (reportType === 'incentives' && !canViewStaffReports) {
+        if (canViewFinancial) setReportType('revenue_recognition');
+        else if (canViewOperational) setReportType('daily_sales');
+    }
+  }, [canViewFinancial, canViewOperational, canViewStaffReports]);
 
   useEffect(() => {
     if (currentOutlet && currentProperty && canView) loadData();
@@ -852,10 +869,10 @@ const Reports = () => {
                               </div>
                               <div className="grid grid-cols-1 gap-2">
                                   {[
-                                      { id: 'revenue_recognition', label: 'Revenue Recognition', icon: UserCheck },
-                                      { id: 'incentives', label: 'Incentive Audit', icon: Award },
-                                      { id: 'daily_sales', label: 'Daily Sales Ledger', icon: CreditCard }
-                                  ].map(type => (
+                                      { id: 'revenue_recognition', label: 'Revenue Recognition', icon: UserCheck, permission: canViewFinancial },
+                                      { id: 'incentives', label: 'Incentive Audit', icon: Award, permission: canViewStaffReports },
+                                      { id: 'daily_sales', label: 'Daily Sales Ledger', icon: CreditCard, permission: canViewOperational }
+                                  ].filter(t => t.permission).map(type => (
                                       <button 
                                         key={type.id} 
                                         onClick={() => setReportType(type.id as any)} 

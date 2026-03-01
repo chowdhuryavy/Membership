@@ -155,7 +155,35 @@ const SettingsPage = () => {
   // Fix: Destructured currentOutlet and currentProperty from useSettings to provide necessary context for data fetching
   const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry, currentOutlet, currentProperty } = useSettings();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabId>('company');
+  const availableTabs = useMemo(() => {
+    const isSuper = user?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+    
+    return [
+      // Super Admin Only
+      { id: 'company', label: 'Global Scope', visible: isSuper, icon: Building2 },
+      { id: 'properties', label: 'Facility Portfolios', visible: isSuper, icon: MapPin },
+      { id: 'outlets', label: 'Asset Contexts', visible: isSuper, icon: Store },
+      { id: 'currency', label: 'Monetary Standards', visible: isSuper, icon: Globe },
+      { id: 'navigation', label: 'UI Architecture', visible: isSuper, icon: ListOrdered },
+      { id: 'maintenance', label: 'Maintenance', visible: isSuper, icon: Zap },
+      
+      // Accessible to others with permission
+      { id: 'roles', label: 'Security Tiers', visible: hasPermission(user?.role_id || '', 'settings:view_roles'), icon: Shield },
+      { id: 'incentives', label: 'Contract Logic', visible: hasPermission(user?.role_id || '', 'settings:view_incentives'), icon: Award },
+      { id: 'shortcuts', label: 'Executive Hotkeys', visible: hasPermission(user?.role_id || '', 'settings:view_shortcuts'), icon: Keyboard },
+      { id: 'documents', label: 'Audit Templates', visible: hasPermission(user?.role_id || '', 'settings:view_documents'), icon: FileCode },
+      { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_outlets'), icon: Timer },
+    ].filter(t => t.visible);
+  }, [user, roles, hasPermission]);
+
+  const [activeTab, setActiveTab] = useState<TabId>(availableTabs[0]?.id as TabId || 'company');
+
+  useEffect(() => {
+    if (availableTabs.length > 0 && !availableTabs.find(t => t.id === activeTab)) {
+        setActiveTab(availableTabs[0].id as TabId);
+    }
+  }, [availableTabs, activeTab]);
+
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const [itemToDelete, setItemToDelete] = useState<{ type: string, id: string, name: string } | null>(null);
@@ -233,6 +261,10 @@ const SettingsPage = () => {
   };
 
   const handleUpdateCompany = async () => { 
+    if (user?.email?.toLowerCase() !== 'chowdhuryavy@gmail.com') {
+        showStatus('Unauthorized: Super Admin access required.', 'error');
+        return;
+    }
     setIsSaving(true); 
     try { 
       await db.updateSettings(companyForm); 
@@ -246,6 +278,10 @@ const SettingsPage = () => {
   };
 
   const handlePropertySubmit = async () => {
+    if (user?.email?.toLowerCase() !== 'chowdhuryavy@gmail.com') {
+        showStatus('Unauthorized: Super Admin access required.', 'error');
+        return;
+    }
     setIsSaving(true);
     try {
       if (editingId) await db.updateProperty(editingId, propertyForm);
@@ -258,6 +294,10 @@ const SettingsPage = () => {
   };
 
   const handleOutletSubmit = async () => {
+    if (user?.email?.toLowerCase() !== 'chowdhuryavy@gmail.com') {
+        showStatus('Unauthorized: Super Admin access required.', 'error');
+        return;
+    }
     setIsSaving(true);
     try {
       if (editingId) await db.updateOutlet(editingId, outletForm);
@@ -270,6 +310,18 @@ const SettingsPage = () => {
   };
 
   const handleRoleSubmit = async () => {
+    if (!hasPermission(user?.role_id || '', 'settings:manage_roles')) {
+        showStatus('Unauthorized: Role Management clearance required.', 'error');
+        return;
+    }
+    
+    // Protect System Administrator role
+    const isSuperUser = user?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+    if ((roleForm.id === 'admin' || roleForm.name === 'System Administrator') && !isSuperUser) {
+         showStatus('Unauthorized: Only Super Admin can modify System Administrator role.', 'error');
+         return;
+    }
+
     setIsSaving(true);
     try {
       if (editingId) await db.updateRole(editingId, roleForm);
@@ -282,6 +334,10 @@ const SettingsPage = () => {
   };
 
   const handleCurrencySubmit = async () => {
+    if (user?.email?.toLowerCase() !== 'chowdhuryavy@gmail.com') {
+        showStatus('Unauthorized: Super Admin access required.', 'error');
+        return;
+    }
     setIsSaving(true);
     try {
       if (editingId) await db.updateCurrency(editingId, currencyForm);
@@ -309,6 +365,10 @@ const SettingsPage = () => {
   };
 
   const handleNavReorder = async (id: string, direction: 'up' | 'down') => {
+      if (user?.email?.toLowerCase() !== 'chowdhuryavy@gmail.com') {
+          showStatus('Unauthorized: Super Admin access required.', 'error');
+          return;
+      }
       const order = [...currentNavOrder];
       const idx = order.indexOf(id);
       if (idx === -1) return;
@@ -325,6 +385,31 @@ const SettingsPage = () => {
 
   const handleDeleteConfirmed = async () => { 
     if (!itemToDelete) return; 
+    
+    const isSuper = user?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+    
+    // Check if destructive action is allowed
+    const superOnlyTypes = ['property', 'outlet', 'currency'];
+    if (superOnlyTypes.includes(itemToDelete.type) && !isSuper) {
+        showStatus('Unauthorized: Super Admin access required for this deletion.', 'error');
+        setItemToDelete(null);
+        return;
+    }
+
+    if (itemToDelete.type === 'role') {
+        if (!hasPermission(user?.role_id || '', 'settings:manage_roles')) {
+            showStatus('Unauthorized: Role Management clearance required for this deletion.', 'error');
+            setItemToDelete(null);
+            return;
+        }
+        // Protect System Administrator role
+        if ((itemToDelete.id === 'admin' || itemToDelete.name === 'System Administrator') && !isSuper) {
+             showStatus('Unauthorized: Only Super Admin can delete System Administrator role.', 'error');
+             setItemToDelete(null);
+             return;
+        }
+    }
+
     try { 
       if (itemToDelete.type === 'incentive') await db.deleteIncentiveRule(itemToDelete.id); 
       else if (itemToDelete.type === 'property') await db.deleteProperty(itemToDelete.id);
@@ -341,20 +426,6 @@ const SettingsPage = () => {
       setItemToDelete(null); 
     } 
   };
-
-  const availableTabs = useMemo(() => [
-    { id: 'company', label: 'Enterprise Scope', visible: hasPermission(user?.role_id || '', 'settings:view_global'), icon: Building2 },
-    { id: 'incentives', label: 'Contract Logic', visible: hasPermission(user?.role_id || '', 'settings:view_incentives'), icon: Award },
-    { id: 'properties', label: 'Facility Portfolios', visible: hasPermission(user?.role_id || '', 'settings:view_properties'), icon: MapPin },
-    { id: 'outlets', label: 'Asset Contexts', visible: hasPermission(user?.role_id || '', 'settings:view_outlets'), icon: Store },
-    { id: 'roles', label: 'Security Tiers', visible: hasPermission(user?.role_id || '', 'settings:view_roles'), icon: Shield },
-    { id: 'currency', label: 'Monetary Standards', visible: hasPermission(user?.role_id || '', 'settings:view_currency'), icon: Globe },
-    { id: 'navigation', label: 'UI Architecture', visible: hasPermission(user?.role_id || '', 'settings:view_navigation'), icon: ListOrdered },
-    { id: 'shortcuts', label: 'Executive Hotkeys', visible: hasPermission(user?.role_id || '', 'settings:view_shortcuts'), icon: Keyboard },
-    { id: 'documents', label: 'Audit Templates', visible: hasPermission(user?.role_id || '', 'settings:view_documents'), icon: FileCode },
-    { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_outlets'), icon: Timer },
-    { id: 'maintenance', label: 'Maintenance', visible: hasPermission(user?.role_id || '', 'settings:view_maintenance'), icon: Zap },
-  ].filter(t => t.visible), [user, roles, hasPermission]);
 
   const updateShortcut = (id: string, value: string) => {
       setCompanyForm(prev => ({
@@ -395,10 +466,10 @@ const SettingsPage = () => {
               
               {activeTab === 'company' && (
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
-                      <CardHeader className="bg-slate-50 p-12 border-b border-slate-100"><CardTitle className="text-2xl font-black tracking-tight uppercase">Enterprise Identity Configuration</CardTitle></CardHeader>
+                      <CardHeader className="bg-slate-50 p-12 border-b border-slate-100"><CardTitle className="text-2xl font-black tracking-tight uppercase">Global Scope Configuration</CardTitle></CardHeader>
                       <CardContent className="p-12 space-y-12">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                              <Input label="Enterprise Legal Name" value={companyForm.name} onChange={e => setCompanyForm({...companyForm, name: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
+                              <Input label="Global Legal Name" value={companyForm.name} onChange={e => setCompanyForm({...companyForm, name: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                               <Input label="Brand Asset URL (Logo)" value={companyForm.logo_url} onChange={e => setCompanyForm({...companyForm, logo_url: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                               <div className="md:col-span-2"><Input label="Registry HQ Address" value={companyForm.address} onChange={e => setCompanyForm({...companyForm, address: e.target.value})} className="h-16 rounded-2xl font-bold border-2" /></div>
                           </div>
@@ -458,7 +529,14 @@ const SettingsPage = () => {
                       <CardContent className="p-0">
                           <table className="w-full text-left">
                               <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Protocol Tier</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Clearance Vol.</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
-                              <tbody className="divide-y divide-slate-100">{roles.map(r => (
+                              <tbody className="divide-y divide-slate-100">{roles.filter(r => {
+                                  const isSuperUser = user?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+                                  // Hide System Administrator role (usually id='admin' or name='System Administrator') from non-super users
+                                  if ((r.id === 'admin' || r.name === 'System Administrator') && !isSuperUser) {
+                                      return false;
+                                  }
+                                  return true;
+                              }).map(r => (
                                   <tr key={r.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase flex items-center gap-3">{r.name} {r.is_system && <ShieldCheck className="w-4 h-4 text-emerald-500"/>}</div></td>
                                       <td className="px-10 py-8"><span className="bg-slate-100 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-slate-500">{r.permissions.length} Privileges</span></td>

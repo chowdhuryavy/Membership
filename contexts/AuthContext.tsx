@@ -3,6 +3,12 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { db } from '../services/mockSupabase';
 
+export const SUPER_ADMIN_EMAIL = 'chowdhuryavy@gmail.com';
+
+export const isSuperAdmin = (user: UserProfile | null) => {
+    return user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+};
+
 interface AuthContextType {
   user: UserProfile | null;
   login: (email: string, password: string) => Promise<{ error: string | null, requiresPasswordChange: boolean }>;
@@ -12,6 +18,7 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
   logout: () => void;
   isLoading: boolean;
+  isSuperAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -100,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, changePassword, updateProfile, refreshUser, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, changePassword, updateProfile, refreshUser, logout, isLoading, isSuperAdmin: isSuperAdmin(user) }}>
       {children}
     </AuthContext.Provider>
   );

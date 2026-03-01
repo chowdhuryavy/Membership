@@ -142,9 +142,9 @@ CREATE TABLE IF NOT EXISTS public.massage_bookings (
 );
 
 -- 3. RESET SECURITY POLICIES
-ALTER TABLE public.therapists DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.massage_types DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.massage_bookings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.therapists ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.massage_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.massage_bookings ENABLE ROW LEVEL SECURITY;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, postgres;
 
 -- 4. RELOAD SCHEMA CACHE
@@ -859,7 +859,7 @@ const MassageScheduling = () => {
                                 <Input label="Service Designation *" value={newType.name} onChange={e => setNewType({...newType, name: e.target.value})} className="h-14 rounded-2xl font-bold" placeholder="e.g. Aromatherapy Session" />
                                 <div className="grid grid-cols-2 gap-6">
                                     <Input label="Duration (Min)" type="number" value={newType.duration_minutes} onChange={e => setNewType({...newType, duration_minutes: Number(e.target.value)})} className="h-14 rounded-2xl" />
-                                    <Input label="Retail Rate *" type="number" value={newType.price} onChange={e => setNewType({...newType, price: Number(e.target.value)})} className="h-14 rounded-2xl" />
+                                    <Input label="Retail Rate *" type="number" step="0.01" value={newType.price} onChange={e => setNewType({...newType, price: Number(e.target.value)})} className="h-14 rounded-2xl" />
                                 </div>
                                 {saveError && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-bold uppercase flex items-center gap-2 animate-in shake duration-300"><ShieldAlert className="w-4 h-4"/> {saveError}</div>}
                                 <div className="flex gap-4">

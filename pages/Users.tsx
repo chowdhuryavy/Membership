@@ -47,6 +47,10 @@ const UserDetail = ({
       onRefresh();
     };
 
+    const isSuperTarget = user.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+    const isSuperCurrent = currentUser?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+    const canModifyThisUser = !isSuperTarget || isSuperCurrent;
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500 relative z-0">
             <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors"><ArrowLeft className="w-4 h-4" /> Back to Directory</button>
@@ -74,10 +78,12 @@ const UserDetail = ({
                                     </span>
                                 )}
                             </div>
-                            <div className="mt-6 flex justify-center gap-2">
-                                <Button onClick={() => onEdit(user)} size="sm" className="rounded-xl font-bold">Edit Profile</Button>
-                                <Button onClick={() => onDelete(user.id)} size="sm" variant="danger" className="rounded-xl">Revoke</Button>
-                            </div>
+                            {canModifyThisUser && (
+                                <div className="mt-6 flex justify-center gap-2">
+                                    <Button onClick={() => onEdit(user)} size="sm" className="rounded-xl font-bold">Edit Profile</Button>
+                                    <Button onClick={() => onDelete(user.id)} size="sm" variant="danger" className="rounded-xl">Revoke</Button>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                     
@@ -301,12 +307,17 @@ const Users = () => {
 
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
+      // Hide Super Admin from non-Super Admins
+      if (u.email?.toLowerCase() === 'chowdhuryavy@gmail.com' && currentUser?.email?.toLowerCase() !== 'chowdhuryavy@gmail.com') {
+          return false;
+      }
+
       const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             u.email.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesRole = roleFilter === 'all' || u.role_id === roleFilter;
       return matchesSearch && matchesRole;
     });
-  }, [users, searchTerm, roleFilter]);
+  }, [users, searchTerm, roleFilter, currentUser]);
 
   // Keyboard Shortcuts
   useEffect(() => {
@@ -455,7 +466,11 @@ const Users = () => {
                         onChange={(e) => setRoleFilter(e.target.value)}
                     >
                         <option value="all">All Roles</option>
-                        {roles.map(r => (
+                        {roles.filter(r => {
+                            const isSuperUser = currentUser?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+                            if ((r.id === 'admin' || r.name === 'System Administrator') && !isSuperUser) return false;
+                            return true;
+                        }).map(r => (
                             <option key={r.id} value={r.id}>{r.name}</option>
                         ))}
                     </select>
@@ -618,7 +633,11 @@ const Users = () => {
                             </div>
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Security Tier</label>
-                                <Select options={[{ value: '', label: 'Select Tier...' }, ...roles.map(r => ({ value: r.id, label: r.name }))]} value={formData.role_id} onChange={e => setFormData({...formData, role_id: e.target.value})} className="h-12 rounded-xl" />
+                                <Select options={[{ value: '', label: 'Select Tier...' }, ...roles.filter(r => {
+                                    const isSuperUser = currentUser?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+                                    if ((r.id === 'admin' || r.name === 'System Administrator') && !isSuperUser) return false;
+                                    return true;
+                                }).map(r => ({ value: r.id, label: r.name }))]} value={formData.role_id} onChange={e => setFormData({...formData, role_id: e.target.value})} className="h-12 rounded-xl" />
                             </div>
                           </div>
                           <div className="space-y-2 pt-4 border-t border-slate-100">

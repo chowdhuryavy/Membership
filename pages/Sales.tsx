@@ -48,7 +48,8 @@ import {
   Shield,
   Store,
   Building2,
-  AlertCircle
+  AlertCircle,
+  RefreshCcw
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Sale, Guest, SaleCategory, InventoryItem, MassageBooking, MassageType, UserProfile, Staff } from '../types';
@@ -306,7 +307,7 @@ const POSForm = ({
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                        <Input label="Unit Price" type="number" value={saleData.unit_price} onChange={e => setSaleData({...saleData, unit_price: parseFloat(e.target.value) || 0})} className="h-11 rounded-xl text-xs font-bold" />
+                        <Input label="Unit Price" type="number" step="0.01" value={saleData.unit_price} onChange={e => setSaleData({...saleData, unit_price: parseFloat(e.target.value) || 0})} className="h-11 rounded-xl text-xs font-bold" />
                         <div className="space-y-1.5">
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Reduction Logic</label>
                             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 h-11">
@@ -314,7 +315,7 @@ const POSForm = ({
                                 <button type="button" onClick={() => setSaleData({...saleData, discount_mode: 'percent'})} className={`flex-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center justify-center gap-1 ${saleData.discount_mode === 'percent' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-400'}`}><Percent className="w-2.5 h-2.5" /> %</button>
                             </div>
                         </div>
-                        <Input label={saleData.discount_mode === 'amount' ? 'Value' : 'Rate (%)'} type="number" value={saleData.discount} onChange={e => setSaleData({...saleData, discount: parseFloat(e.target.value) || 0})} className="h-11 rounded-xl text-xs font-bold" />
+                        <Input label={saleData.discount_mode === 'amount' ? 'Value' : 'Rate (%)'} type="number" step="0.01" value={saleData.discount} onChange={e => setSaleData({...saleData, discount: parseFloat(e.target.value) || 0})} className="h-11 rounded-xl text-xs font-bold" />
                         <div className="bg-slate-950 text-white px-4 py-2 rounded-xl flex items-center justify-between h-11 shadow-lg shadow-slate-200">
                             <span className="text-[7px] font-black opacity-60 uppercase tracking-widest">Net Total</span>
                             <span className="text-xs font-black text-indigo-400 tracking-tighter">{formatMoney(netAmount)}</span>
@@ -524,7 +525,7 @@ const InventoryManager = ({
                                     className="h-12 rounded-xl"
                                 />
                                 <div className="grid grid-cols-2 gap-4">
-                                    <Input label="Retail Price *" type="number" value={formData.price} onChange={e => setFormData({...formData, price: parseFloat(e.target.value) || 0})} className="h-12 rounded-xl" />
+                                    <Input label="Retail Price *" type="number" step="0.01" value={formData.price} onChange={e => setFormData({...formData, price: parseFloat(e.target.value) || 0})} className="h-12 rounded-xl" />
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Track Stock?</label>
                                         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 h-12">
@@ -581,6 +582,8 @@ const Sales = () => {
     const canView = user && hasPermission(user.role_id, 'sales:view');
     const canCreate = user && hasPermission(user.role_id, 'sales:create');
     const canEdit = user && hasPermission(user.role_id, 'sales:edit');
+    const canVoid = user && hasPermission(user.role_id, 'sales:void');
+    const canRefund = user && hasPermission(user.role_id, 'sales:refund');
     const canDelete = user && hasPermission(user.role_id, 'sales:delete');
     const canDeleteBooking = user && hasPermission(user.role_id, 'bookings:delete');
     const canViewInventory = user && hasPermission(user.role_id, 'inventory:view');
@@ -818,8 +821,9 @@ const Sales = () => {
                                                     {entry.type === 'pos' ? (
                                                         <>
                                                             {canEdit && <button onClick={() => { setEditingSale(entry.original as Sale); setShowForm(true); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all"><Edit3 className="w-4 h-4" /></button>}
-                                                            {canDelete && <button onClick={() => setItemToDelete({ id: entry.id, type: 'pos' })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all"><Trash2 className="w-4 h-4" /></button>}
-                                                            {!canEdit && !canDelete && <Lock className="w-3.5 h-3.5 text-slate-200" />}
+                                                            {canVoid && <button onClick={() => setItemToDelete({ id: entry.id, type: 'pos' })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Void"><Trash2 className="w-4 h-4" /></button>}
+                                                            {canRefund && <button onClick={() => alert('Refund process initiated')} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Refund"><RefreshCcw className="w-4 h-4" /></button>}
+                                                            {!canEdit && !canVoid && !canRefund && <Lock className="w-3.5 h-3.5 text-slate-200" />}
                                                         </>
                                                     ) : (
                                                         <>
@@ -860,7 +864,7 @@ const Sales = () => {
                 onClose={() => setItemToDelete(null)} 
                 onConfirm={async () => { 
                     if (itemToDelete) { 
-                        if (itemToDelete.type === 'pos' && canDelete) {
+                        if (itemToDelete.type === 'pos' && canVoid) {
                             await db.deleteSale(itemToDelete.id); 
                         } else if (itemToDelete.type === 'booking' && canDeleteBooking) {
                             // Instead of deleting the booking, just set it back to confirmed

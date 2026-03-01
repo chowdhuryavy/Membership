@@ -11,5 +11,5 @@ BEGIN
 END $$;
 
 -- Ensure RLS doesn't block updates
-ALTER TABLE public.company_settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.company_settings ENABLE ROW LEVEL SECURITY;
 GRANT ALL ON TABLE public.company_settings TO anon, authenticated, postgres;

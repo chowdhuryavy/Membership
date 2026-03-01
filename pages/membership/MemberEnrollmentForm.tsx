@@ -171,9 +171,13 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
               setValue('start_date', newStart);
           } else {
               setMatchedMembers([]);
+              clearFormExceptID();
           }
         });
       } else if (!membershipNo || membershipNo.length === 0) {
+          setMatchedMembers([]);
+          clearFormExceptID();
+      } else {
           setMatchedMembers([]);
           clearFormExceptID();
       }
@@ -346,7 +350,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <User className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
                         </div>
-                        <input {...register('guest_name')} disabled={isRenewal} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:bg-slate-50" placeholder="Legal Full Name" />
+                        <input {...register('guest_name')} disabled={isRenewal || matchedMembers.length > 0} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:bg-slate-50" placeholder="Legal Full Name" />
                     </div>
                 </div>
                 <div className="space-y-1.5">
@@ -355,7 +359,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <Phone className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
                         </div>
-                        <input {...register('phone')} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm" placeholder="+974 ..." />
+                        <input {...register('phone')} disabled={isRenewal || matchedMembers.length > 0} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:bg-slate-50" placeholder="+974 ..." />
                     </div>
                 </div>
                 <div className="space-y-1.5">
@@ -364,7 +368,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <Mail className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
                         </div>
-                        <input {...register('email')} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm" placeholder="guest@identity.com" />
+                        <input {...register('email')} disabled={isRenewal || matchedMembers.length > 0} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:bg-slate-50" placeholder="guest@identity.com" />
                     </div>
                 </div>
                 <div className="space-y-1.5">
@@ -373,7 +377,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <Globe className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
                         </div>
-                        <input {...register('nationality')} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm" placeholder="Country" />
+                        <input {...register('nationality')} disabled={isRenewal || matchedMembers.length > 0} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:bg-slate-50" placeholder="Country" />
                     </div>
                 </div>
                 <div className="space-y-1.5">
@@ -382,7 +386,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <Calendar className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
                         </div>
-                        <input type="date" {...register('dob')} className="w-full h-14 pl-14 pr-12 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm uppercase" />
+                        <input type="date" {...register('dob')} disabled={isRenewal || matchedMembers.length > 0} className="w-full h-14 pl-14 pr-12 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm uppercase disabled:opacity-50 disabled:bg-slate-50" />
                     </div>
                 </div>
             </div>
@@ -503,7 +507,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Discount Allocation ({formatMoney(0).split(' ')[0]})</label>
                     <div className="relative">
-                        <input type="number" {...register('discount')} className="w-full h-14 px-4 pr-12 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm" />
+                        <input type="number" step="0.01" {...register('discount')} className="w-full h-14 px-4 pr-12 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm" />
                         <Receipt className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-200" />
                     </div>
                 </div>

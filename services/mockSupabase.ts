@@ -62,6 +62,7 @@ class DatabaseService {
           { key: 'members:freeze', label: 'Handle Suspensions', description: 'Authorize or cancel membership freeze periods.' },
           { key: 'members:renew', label: 'Process Renewals', description: 'Ability to trigger re-enrollment logic.' },
           { key: 'members:print_contract', label: 'Legal Documentation', description: 'Generate and print membership agreements.' },
+          { key: 'members:view_history', label: 'Audit History', description: 'View historical changes to member records.' },
         ]
       },
       {
@@ -69,7 +70,8 @@ class DatabaseService {
         label: 'Staff Roster & Operations',
         permissions: [
           { key: 'staff:view', label: 'View Personnel', description: 'Access the facility staff list and profiles.' },
-          { key: 'staff:manage', label: 'Control Registry', description: 'Add, edit, or archive staff members and manage leave.' },
+          { key: 'staff:manage', label: 'Control Registry', description: 'Add, edit, or archive staff members.' },
+          { key: 'staff:manage_leaves', label: 'Leave Administration', description: 'Manage staff leave records and schedules.' },
         ]
       },
       {
@@ -91,6 +93,7 @@ class DatabaseService {
           { key: 'bookings:edit', label: 'Adjust Sessions', description: 'Reschedule or modify existing bookings.' },
           { key: 'bookings:delete', label: 'Void Sessions', description: 'Cancel or delete bookings.' },
           { key: 'bookings:manage_resources', label: 'Asset Config', description: 'Add/Edit therapists and treatment types.' },
+          { key: 'bookings:view_therapist_schedule', label: 'Specialist Timelines', description: 'View detailed schedules for individual therapists.' },
         ]
       },
       {
@@ -101,8 +104,11 @@ class DatabaseService {
           { key: 'sales:create', label: 'Process Sales', description: 'Authorize and finalize new POS transactions.' },
           { key: 'sales:edit', label: 'Modify Sales', description: 'Adjust completed transaction details.' },
           { key: 'sales:delete', label: 'Authorize Voids', description: 'Reverse revenue events and adjust inventory.' },
+          { key: 'sales:refund', label: 'Process Refunds', description: 'Issue refunds for completed transactions.' },
+          { key: 'sales:void', label: 'Void Transactions', description: 'Mark transactions as void for audit purposes.' },
           { key: 'inventory:view', label: 'Catalog Visibility', description: 'Access the item master and stock levels.' },
           { key: 'inventory:manage', label: 'Inventory Control', description: 'Define new assets and adjust quantities.' },
+          { key: 'inventory:adjust_stock', label: 'Stock Reconciliation', description: 'Manually adjust stock levels for shrinkage or corrections.' },
         ]
       },
       {
@@ -111,6 +117,10 @@ class DatabaseService {
         permissions: [
           { key: 'reports:view', label: 'Generate Reports', description: 'Access high-level financial audit tools.' },
           { key: 'reports:export', label: 'Data Portability', description: 'Export ledger data to PDF or Excel formats.' },
+          { key: 'reports:view_financial', label: 'Financial Audits', description: 'Access detailed revenue and tax reports.' },
+          { key: 'reports:view_operational', label: 'Operational Metrics', description: 'View attendance and facility usage reports.' },
+          { key: 'reports:view_inventory', label: 'Inventory Reports', description: 'Access stock movement and valuation reports.' },
+          { key: 'reports:view_staff', label: 'Staff Performance', description: 'View incentive and productivity reports.' },
         ]
       },
       {
@@ -124,6 +134,9 @@ class DatabaseService {
           { key: 'users:delete', label: 'Revoke Identity', description: 'Terminate user access permanently.' },
           { key: 'users:manage_overrides', label: 'Policy Overrides', description: 'Manage granular user-specific permission deviations.' },
           { key: 'logs:view', label: 'Audit Log Access', description: 'Access the system mutation and activity logs.' },
+          { key: 'logs:search', label: 'Log Search', description: 'Search through audit logs for specific events.' },
+          { key: 'logs:filter', label: 'Log Filtering', description: 'Filter audit logs by date, user, or action.' },
+          { key: 'logs:clear', label: 'Clear Filters', description: 'Reset all active filters on the logs page.' },
         ]
       },
       {
@@ -142,6 +155,16 @@ class DatabaseService {
           { key: 'settings:view_navigation', label: 'UI Architecture', description: 'Rearrange sidebar navigation order.' },
           { key: 'settings:view_incentives', label: 'Yield Logic', description: 'Manage complex incentive distribution rules.' },
           { key: 'settings:view_maintenance', label: 'Terminal Ops', description: 'Access database maintenance and wipe tools.' },
+          { key: 'settings:manage_global', label: 'Manage Enterprise', description: 'Edit brand and address configuration.' },
+          { key: 'settings:manage_properties', label: 'Manage Properties', description: 'Add/Edit/Delete luxury collection properties.' },
+          { key: 'settings:manage_outlets', label: 'Manage Outlets', description: 'Add/Edit/Delete specific gym/spa outlet records.' },
+          { key: 'settings:manage_roles', label: 'Manage Roles', description: 'Add/Edit/Delete role-based permission templates.' },
+          { key: 'settings:manage_currency', label: 'Manage Currencies', description: 'Add/Edit/Delete currency and exchange rates.' },
+          { key: 'settings:manage_shortcuts', label: 'Manage Hotkeys', description: 'Authorize changes to system-wide keyboard shortcuts.' },
+          { key: 'settings:manage_documents', label: 'Manage Templates', description: 'Authorize changes to contract and agreement text.' },
+          { key: 'settings:manage_navigation', label: 'Manage UI', description: 'Authorize changes to sidebar navigation order.' },
+          { key: 'settings:manage_incentives', label: 'Manage Yield', description: 'Authorize changes to complex incentive distribution rules.' },
+          { key: 'settings:manage_maintenance', label: 'Manage Maintenance', description: 'Authorize database maintenance and wipe tools.' },
         ]
       }
     ];

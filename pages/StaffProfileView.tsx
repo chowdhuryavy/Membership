@@ -2,17 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, ConfirmationModal } from '../components/ui';
 import { Staff, StaffLeave } from '../types';
 import { db } from '../services/mockSupabase';
-import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X } from 'lucide-react';
+import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X, Database, RefreshCcw } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface StaffProfileViewProps {
   staff: Staff;
   onBack: () => void;
   canManage: boolean;
+  canManageLeaves: boolean;
   onEdit: (s: Staff) => void;
 }
 
-const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canManage, onEdit }) => {
+const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canManage, canManageLeaves, onEdit }) => {
   const [leaves, setLeaves] = useState<StaffLeave[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLeaveForm, setShowLeaveForm] = useState(false);
@@ -215,7 +216,7 @@ NOTIFY pgrst, 'reload schema';`}
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Absence & Incentive Exemption Periods</p>
                     </div>
                   </div>
-                  {canManage && (
+                  {canManageLeaves && (
                     <Button onClick={() => { setEditingLeaveId(null); setLeaveForm({ start_date: '', end_date: '' }); setShowLeaveForm(true); }} size="sm" variant="secondary" className="rounded-xl font-black uppercase text-[9px] tracking-widest h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white border-none transition-all active:scale-95 shadow-lg shadow-indigo-900/40">
                         <Plus className="w-3.5 h-3.5 mr-1.5" /> Record Leave
                     </Button>
@@ -245,7 +246,7 @@ NOTIFY pgrst, 'reload schema';`}
                                       <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(l.end_date), 'dd MMM yyyy')}</td>
                                       <td className="px-6 py-5 text-right">
                                           <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                              {canManage && (
+                                              {canManageLeaves && (
                                                 <>
                                                   <button onClick={() => { setEditingLeaveId(l.id); setLeaveForm({ start_date: l.start_date, end_date: l.end_date }); setShowLeaveForm(true); }} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors" title="Modify"><Edit2 className="w-3.5 h-3.5"/></button>
                                                   <button onClick={() => handleDeleteLeave(l.id)} disabled={isDeleting === l.id} className={`p-2 transition-colors ${isDeleting === l.id ? 'text-slate-200 cursor-wait' : 'text-slate-300 hover:text-red-500'}`} title="Delete">
