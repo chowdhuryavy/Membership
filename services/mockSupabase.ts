@@ -219,14 +219,14 @@ class DatabaseService {
     } catch (err) { console.error(err); }
   }
 
-  async logAction(action: string, details: string, outlet_id?: string) {
+  async logAction(action: string, details: string, outlet_id?: string, explicitUser?: { id: string, name: string }) {
     const sessionStr = sessionStorage.getItem('membership_session');
     const session = sessionStr ? JSON.parse(sessionStr) : null;
     const logEntry = {
         id: crypto.randomUUID(),
         timestamp: new Date().toISOString(),
-        user_id: session?.id || 'system',
-        user_name: session?.name || 'System Engine',
+        user_id: explicitUser?.id || session?.id || 'system',
+        user_name: explicitUser?.name || session?.name || 'System Engine',
         action: (action || '').toUpperCase(),
         details,
         outlet_id: outlet_id || null
@@ -305,7 +305,7 @@ class DatabaseService {
         await this.syncAuthMetadata(profile);
         const overrides = await this.getPermissionOverrides(profile.id);
         const hydrated = { ...profile, overrides };
-        await this.logAction('AUTH_LOGIN', `Access authorized for ${profile.email}`);
+        await this.logAction('AUTH_LOGIN', `Access authorized for ${profile.email}`, undefined, { id: profile.id, name: profile.name });
         return { user: hydrated, error: null, requiresPasswordChange: !!profile.temp_password };
     }
     return { user: null, error: "Identity profile not found.", requiresPasswordChange: false };
@@ -447,7 +447,7 @@ class DatabaseService {
     if (this.isSupabase()) {
       const { data, error } = await supabase.from('staff').insert([{ ...staff, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select();
       if (error) throw error;
-      await this.logAction('CREATE_STAFF', `Staff member enrolled: ${staff.name}`, staff.outlet_id);
+      await this.logAction('CREATE_STAFF', `Added staff member: ${staff.name} (${staff.role})`, staff.outlet_id);
       return data;
     }
   }
@@ -459,7 +459,8 @@ class DatabaseService {
       }
       const { error } = await supabase.from('staff').update(updates).eq('id', id);
       if (error) throw error;
-      await this.logAction('UPDATE_STAFF', `Staff profile adjusted: ${id}`);
+      const changedFields = Object.keys(updates).filter(k => updates[k] !== undefined && updates[k] !== null).join(', ');
+      await this.logAction('UPDATE_STAFF', `Updated staff profile: ${id}. Modified fields: [${changedFields}]`);
     }
   }
 
@@ -468,7 +469,7 @@ class DatabaseService {
       await supabase.from('therapists').delete().eq('id', id);
       const { error } = await supabase.from('staff').delete().eq('id', id);
       if (error) throw error;
-      await this.logAction('DELETE_STAFF', `Staff record purged: ${id}`);
+      await this.logAction('DELETE_STAFF', `Deleted staff record ID: ${id}`);
     }
   }
 
@@ -511,7 +512,7 @@ class DatabaseService {
     if (this.isSupabase()) {
       const { error } = await supabase.from('members').insert([member]);
       if (error) throw error;
-      await this.logAction('CREATE_MEMBER', `Confirmed Enrollment: ${member.guest_name}`, member.outlet_id);
+      await this.logAction('CREATE_MEMBER', `Enrolled new member: ${member.guest_name} (ID: ${member.membership_number}, Tier: ${member.category_id})`, member.outlet_id);
     }
   }
 
@@ -523,7 +524,8 @@ class DatabaseService {
       Object.keys(patch).forEach(key => (patch[key] === null || patch[key] === undefined) && delete patch[key]);
       const { error } = await supabase.from('members').update(patch).eq('id', id);
       if (error) throw error;
-      await this.logAction('UPDATE_MEMBER', `Profile update: ${patch.guest_name || id}`, patch.outlet_id);
+      const changedFields = Object.keys(patch).filter(k => patch[k] !== undefined && patch[k] !== null).join(', ');
+      await this.logAction('UPDATE_MEMBER', `Updated member profile: ${patch.guest_name || id}. Modified fields: [${changedFields}]`, patch.outlet_id);
     }
   }
 
@@ -531,7 +533,7 @@ class DatabaseService {
     if (this.isSupabase()) {
       const { error } = await supabase.from('members').delete().eq('id', id);
       if (error) throw error;
-      await this.logAction('DELETE_MEMBER', `Record purged: ${id}`);
+      await this.logAction('DELETE_MEMBER', `Deleted member record ID: ${id}`);
     }
   }
 
@@ -548,8 +550,13 @@ class DatabaseService {
   async addFreeze(freeze: Freeze) {
     if (this.isSupabase()) {
       await supabase.from('freezes').insert([freeze]);
-      await this.syncMemberEndDate(freeze.member_id);
-      await this.logAction('CREATE_FREEZE', `Account suspension applied for member ID: ${freeze.member_id}`);
+      const newEndDate = await this.syncMemberEndDate(freeze.member_id);
+      
+      // Fetch member name for better logging
+      const { data: member } = await supabase.from('members').select('guest_name').eq('id', freeze.member_id).single();
+      const memberName = member?.guest_name || 'Unknown Member';
+      
+      await this.logAction('FREEZE_MEMBER', `Account suspended: ${memberName}. Membership extended to ${newEndDate}`);
     }
   }
 
@@ -568,8 +575,13 @@ class DatabaseService {
   async deleteFreeze(id: string, memberId: string) {
     if (this.isSupabase()) {
         await supabase.from('freezes').delete().eq('id', id);
-        await this.syncMemberEndDate(memberId);
-        await this.logAction('DELETE_FREEZE', `Account suspension removed for member ID: ${memberId}`);
+        const newEndDate = await this.syncMemberEndDate(memberId);
+        
+        // Fetch member name for better logging
+        const { data: member } = await supabase.from('members').select('guest_name').eq('id', memberId).single();
+        const memberName = member?.guest_name || 'Unknown Member';
+
+        await this.logAction('DELETE_FREEZE', `Suspension revoked for ${memberName}. Membership reduced to ${newEndDate}`);
     }
   }
 
@@ -586,21 +598,22 @@ class DatabaseService {
   async addCategory(cat: Omit<MembershipCategory, 'id'>) {
     if (this.isSupabase()) {
       await supabase.from('membership_categories').insert([{ ...cat, id: `cat_${crypto.randomUUID()}` }]);
-      await this.logAction('CREATE_CATEGORY', `New tier created: ${cat.name}`, cat.outlet_id);
+      await this.logAction('CREATE_CATEGORY', `Created membership tier: ${cat.name} (Base Rate: ${cat.base_rate})`, cat.outlet_id);
     }
   }
 
   async updateCategory(id: string, updates: Partial<MembershipCategory>) {
     if (this.isSupabase()) {
         await supabase.from('membership_categories').update(updates).eq('id', id);
-        await this.logAction('UPDATE_CATEGORY', `Tier modified: ${id}`);
+        const changedFields = Object.keys(updates).filter(k => updates[k] !== undefined && updates[k] !== null).join(', ');
+        await this.logAction('UPDATE_CATEGORY', `Updated membership tier: ${id}. Modified fields: [${changedFields}]`);
     }
   }
 
   async deleteCategory(id: string) {
     if (this.isSupabase()) {
         await supabase.from('membership_categories').delete().eq('id', id);
-        await this.logAction('DELETE_CATEGORY', `Tier retired: ${id}`);
+        await this.logAction('DELETE_CATEGORY', `Deleted membership tier ID: ${id}`);
     }
   }
 
@@ -617,8 +630,31 @@ class DatabaseService {
 
   async updateSettings(settings: CompanySettings) {
     if (this.isSupabase()) {
-      await supabase.from('company_settings').update(settings).eq('id', 'global');
+      const { error } = await supabase.from('company_settings').upsert({ ...settings, id: 'global' });
+      if (error) {
+        console.error('Error updating settings:', error);
+        throw error;
+      }
       await this.logAction('UPDATE_SETTINGS', 'Global system configuration mutated.');
+    }
+  }
+
+  async updateNavigationOrder(order: string[]) {
+    if (this.isSupabase()) {
+      // Try to update just the navigation_order column
+      const { error } = await supabase.from('company_settings')
+        .update({ navigation_order: order })
+        .eq('id', 'global');
+
+      if (error) {
+        console.error('Error updating navigation order:', error);
+        // Fallback: try upsert if update failed (e.g. row doesn't exist)
+        if (error.code === 'PGRST104') { // unexpected, but just in case
+             // handle specific errors if needed
+        }
+        throw error;
+      }
+      await this.logAction('UPDATE_NAVIGATION', 'UI Architecture updated.');
     }
   }
 
@@ -749,8 +785,8 @@ class DatabaseService {
 
   async getLogs(outlet_id?: string): Promise<SystemLog[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('system_logs').select('*').order('timestamp', { ascending: false });
-      if (outlet_id) query = query.eq('outlet_id', outlet_id);
+      let query = supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(1000);
+      if (outlet_id) query = query.or(`outlet_id.eq.${outlet_id},outlet_id.is.null`);
       const { data } = await query;
       return (data || []) as SystemLog[];
     }
@@ -787,7 +823,7 @@ class DatabaseService {
     if (this.isSupabase()) {
         const { data, error } = await supabase.from('inventory').insert([{ ...item, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select();
         if (error) throw error;
-        await this.logAction('CREATE_INVENTORY', `Asset defined in catalog: ${item.name}`, item.outlet_id);
+        await this.logAction('CREATE_INVENTORY', `Added inventory item: ${item.name} (Price: ${item.price}, Stock: ${item.stock_quantity})`, item.outlet_id);
         return data;
     }
   }
@@ -796,14 +832,15 @@ class DatabaseService {
     if (this.isSupabase()) {
         const { error } = await supabase.from('inventory').update(updates).eq('id', id);
         if (error) throw error;
-        await this.logAction('UPDATE_INVENTORY', `Catalog asset modified: ${id}`);
+        const changedFields = Object.keys(updates).filter(k => updates[k] !== undefined && updates[k] !== null).join(', ');
+        await this.logAction('UPDATE_INVENTORY', `Updated inventory item: ${id}. Modified fields: [${changedFields}]`);
     }
   }
 
   async deleteInventoryItem(id: string) {
     if (this.isSupabase()) {
         await supabase.from('inventory').delete().eq('id', id);
-        await this.logAction('DELETE_INVENTORY', `Catalog asset decommissioned: ${id}`);
+        await this.logAction('DELETE_INVENTORY', `Deleted inventory item ID: ${id}`);
     }
   }
 
@@ -830,14 +867,15 @@ class DatabaseService {
     if (this.isSupabase()) {
         const { error } = await supabase.from('sales').insert([{ ...sale, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
         if (error) throw error;
-        await this.logAction('POS_SALE', `Transaction finalized: ${sale.item_name}`, sale.outlet_id);
+        await this.logAction('POS_SALE', `Processed sale: ${sale.quantity}x ${sale.item_name} for ${sale.guest_name || 'Walk-in'} (Total: ${sale.net_amount})`, sale.outlet_id);
     }
   }
 
   async updateSale(id: string, updates: Partial<Sale>) {
     if (this.isSupabase()) {
         await supabase.from('sales').update(updates).eq('id', id);
-        await this.logAction('POS_SALE_UPDATE', `Transaction modified: ${id}`);
+        const changedFields = Object.keys(updates).filter(k => updates[k] !== undefined && updates[k] !== null).join(', ');
+        await this.logAction('POS_SALE_UPDATE', `Updated sale: ${id}. Modified fields: [${changedFields}]`);
     }
   }
 
@@ -846,7 +884,7 @@ class DatabaseService {
         const { data: sale } = await supabase.from('sales').select('booking_id').eq('id', id).single();
         
         await supabase.from('sales').delete().eq('id', id);
-        await this.logAction('POS_VOID', `Transaction voided: ${id}`);
+        await this.logAction('POS_VOID', `Voided sale ID: ${id}`);
 
         // If this sale was linked to a booking, restore the booking to 'confirmed'
         if (sale?.booking_id) {
@@ -1075,7 +1113,7 @@ class DatabaseService {
     if (this.isSupabase()) {
       const { error } = await supabase.from('massage_bookings').insert([{ ...booking, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
       if (error) throw error;
-      await this.logAction('CREATE_BOOKING', `Booking finalized for ${booking.date}`, booking.outlet_id);
+      await this.logAction('CREATE_BOOKING', `Created booking on ${booking.date} at ${booking.start_time} (Therapist ID: ${booking.therapist_id})`, booking.outlet_id);
     }
   }
 
@@ -1154,7 +1192,7 @@ class DatabaseService {
       await supabase.from('sales').delete().eq('booking_id', id);
       const { error } = await supabase.from('massage_bookings').delete().eq('id', id);
       if (error) throw error;
-      await this.logAction('DELETE_BOOKING', `Booking record purged: ${id}`);
+      await this.logAction('DELETE_BOOKING', `Deleted booking ID: ${id}`);
     }
   }
 

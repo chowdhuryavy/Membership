@@ -369,18 +369,31 @@ const SettingsPage = () => {
           showStatus('Unauthorized: Super Admin access required.', 'error');
           return;
       }
-      const order = [...currentNavOrder];
-      const idx = order.indexOf(id);
-      if (idx === -1) return;
-      if (direction === 'up' && idx > 0) {
-          [order[idx], order[idx-1]] = [order[idx-1], order[idx]];
-      } else if (direction === 'down' && idx < order.length - 1) {
-          [order[idx], order[idx+1]] = [order[idx+1], order[idx]];
+      
+      try {
+        const order = [...currentNavOrder];
+        const idx = order.indexOf(id);
+        if (idx === -1) return;
+        
+        if (direction === 'up' && idx > 0) {
+            [order[idx], order[idx-1]] = [order[idx-1], order[idx]];
+        } else if (direction === 'down' && idx < order.length - 1) {
+            [order[idx], order[idx+1]] = [order[idx+1], order[idx]];
+        }
+        
+        const updated = { ...companyForm, navigation_order: order };
+        setCompanyForm(updated);
+        
+        // Use specific update for navigation order to avoid overwriting other settings or hitting RLS issues
+        await db.updateNavigationOrder(order);
+        
+        await refreshSettings();
+        showStatus('Navigation order updated successfully.', 'success');
+      } catch (e: any) {
+        console.error("Navigation reorder failed:", e);
+        showStatus('Failed to update navigation order: ' + e.message, 'error');
+        await refreshSettings(); // Revert state
       }
-      const updated = { ...companyForm, navigation_order: order };
-      setCompanyForm(updated);
-      await db.updateSettings(updated);
-      await refreshSettings();
   };
 
   const handleDeleteConfirmed = async () => { 

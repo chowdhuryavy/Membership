@@ -17,11 +17,10 @@ const UserActivityTracker: React.FC = () => {
       if (element || (target.innerText && target.innerText.length < 50)) {
         const el = element || target;
         const tagName = el.tagName.toLowerCase();
-        const text = (el as HTMLElement).innerText?.substring(0, 50) || (el as HTMLInputElement).value || '';
-        const id = el.id ? `#${el.id}` : '';
-        const className = el.className ? `.${el.className.split(' ')[0]}` : ''; // Just first class to save space
+        let text = (el as HTMLElement).innerText?.trim() || (el as HTMLInputElement).value?.trim() || el.getAttribute('aria-label') || el.getAttribute('title') || '';
+        text = text.replace(/\n/g, ' ').substring(0, 50).trim();
         
-        const details = `Clicked ${tagName}${id}${className} "${text.replace(/\n/g, ' ')}"`;
+        const details = text ? `Clicked '${text}'` : `Clicked ${tagName}`;
         
         // We use a special action type 'INTERACTION'
         // Pass the current outlet ID so it shows up in the logs for this outlet

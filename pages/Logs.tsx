@@ -5,7 +5,7 @@ import { SystemLog } from '../types';
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-import { History, Search, RefreshCcw, Shield, Clock, Terminal, Filter, X, Calendar } from 'lucide-react';
+import { History, Search, RefreshCcw, Shield, Clock, Terminal, Filter, X, Calendar, User, CreditCard, Package, Settings, Activity, FileText, Key, AlertCircle } from 'lucide-react';
 
 const Logs = () => {
     const { user } = useAuth();
@@ -120,27 +120,132 @@ const Logs = () => {
     }, [logs, searchTerm, dateFrom, dateTo, actionFilter, isInvalidDateRange]);
 
     // ===============================
-    // Action Styling
+    // Action Formatting
     // ===============================
+    const formatActionName = (action: string) => {
+        const map: Record<string, string> = {
+            'AUTH_LOGIN': 'User Logged In',
+            'AUTH_LOGOUT': 'User Logged Out',
+            'AUTH_SUCCESS': 'Auth Success',
+            'AUTH_SIGNUP': 'User Registered',
+            'CREATE_MEMBER': 'Member Added',
+            'UPDATE_MEMBER': 'Member Updated',
+            'DELETE_MEMBER': 'Member Deleted',
+            'FREEZE_MEMBER': 'Member Frozen',
+            'CREATE_FREEZE': 'Member Frozen',
+            'UPDATE_FREEZE': 'Freeze Updated',
+            'DELETE_FREEZE': 'Freeze Revoked',
+            'CREATE_STAFF': 'Staff Added',
+            'UPDATE_STAFF': 'Staff Updated',
+            'DELETE_STAFF': 'Staff Deleted',
+            'CREATE_CATEGORY': 'Tier Added',
+            'UPDATE_CATEGORY': 'Tier Updated',
+            'DELETE_CATEGORY': 'Tier Deleted',
+            'CREATE_INVENTORY': 'Inventory Added',
+            'UPDATE_INVENTORY': 'Inventory Updated',
+            'DELETE_INVENTORY': 'Inventory Deleted',
+            'POS_SALE': 'Sale Processed',
+            'POS_SALE_UPDATE': 'Sale Updated',
+            'POS_VOID': 'Sale Voided',
+            'CREATE_BOOKING': 'Booking Created',
+            'UPDATE_BOOKING': 'Booking Updated',
+            'DELETE_BOOKING': 'Booking Deleted',
+            'INTERACTION': 'User Interaction',
+            'UPDATE_SETTINGS': 'Settings Updated',
+            'CREATE_USER': 'User Added',
+            'UPDATE_USER': 'User Updated',
+            'DELETE_USER': 'User Deleted',
+            'CHANGE_PASSWORD': 'Password Changed',
+            'CREATE_ROLE': 'Role Added',
+            'UPDATE_ROLE': 'Role Updated',
+            'DELETE_ROLE': 'Role Deleted',
+            'CREATE_OUTLET': 'Outlet Added',
+            'UPDATE_OUTLET': 'Outlet Updated',
+            'DELETE_OUTLET': 'Outlet Deleted',
+            'CREATE_PROPERTY': 'Property Added',
+            'UPDATE_PROPERTY': 'Property Updated',
+            'DELETE_PROPERTY': 'Property Deleted',
+            'CREATE_CURRENCY': 'Currency Added',
+            'UPDATE_CURRENCY': 'Currency Updated',
+            'DELETE_CURRENCY': 'Currency Deleted',
+            'CREATE_THERAPIST': 'Therapist Added',
+            'UPDATE_THERAPIST': 'Therapist Updated',
+            'DELETE_THERAPIST': 'Therapist Deleted',
+            'CREATE_TREATMENT': 'Treatment Added',
+            'UPDATE_TREATMENT': 'Treatment Updated',
+            'DELETE_TREATMENT': 'Treatment Deleted',
+            'CREATE_INCENTIVE': 'Incentive Added',
+            'UPDATE_INCENTIVE': 'Incentive Updated',
+            'DELETE_INCENTIVE': 'Incentive Deleted',
+            'DELETE_GUEST': 'Guest Deleted',
+            'BOOKING_RESTORED': 'Booking Restored',
+            'BOOKING_UNSERVED': 'Booking Unserved',
+            'SECURITY_OVERRIDE': 'Security Override',
+            'SECURITY_OVERRIDE_PURGE': 'Override Purged'
+        };
+        
+        if (map[action]) return map[action];
+        
+        return action.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+    };
+
+    // ===============================
+    // Action Styling & Icons
+    // ===============================
+    const getActionIcon = (action: string) => {
+        const act = (action || '').toUpperCase();
+        if (act.includes('AUTH') || act.includes('PASSWORD') || act.includes('SECURITY')) return <Shield className="w-3.5 h-3.5" />;
+        if (act.includes('MEMBER') || act.includes('GUEST')) return <User className="w-3.5 h-3.5" />;
+        if (act.includes('POS') || act.includes('SALE') || act.includes('BOOKING')) return <CreditCard className="w-3.5 h-3.5" />;
+        if (act.includes('INVENTORY') || act.includes('TREATMENT')) return <Package className="w-3.5 h-3.5" />;
+        if (act.includes('SETTING') || act.includes('ROLE') || act.includes('OUTLET') || act.includes('CURRENCY') || act.includes('PROPERTY')) return <Settings className="w-3.5 h-3.5" />;
+        if (act.includes('INTERACTION')) return <Activity className="w-3.5 h-3.5" />;
+        return <FileText className="w-3.5 h-3.5" />;
+    };
+
     const getActionStyles = (action: string) => {
         const act = (action || '').toUpperCase();
 
-        if (act.includes('CREATE') || act.includes('ENROLL') || act.includes('SUCCESS'))
-            return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        if (act.includes('CREATE') || act.includes('ENROLL') || act.includes('SUCCESS') || act.includes('RESTORED'))
+            return 'bg-emerald-50/50 text-emerald-700 border-emerald-200/50';
 
-        if (act.includes('DELETE') || act.includes('VOID') || act.includes('FAIL'))
-            return 'bg-red-50 text-red-700 border-red-200';
+        if (act.includes('DELETE') || act.includes('VOID') || act.includes('FAIL') || act.includes('PURGE'))
+            return 'bg-red-50/50 text-red-700 border-red-200/50';
 
         if (act.includes('UPDATE') || act.includes('MODIFY') || act.includes('EDIT'))
-            return 'bg-blue-50 text-blue-700 border-blue-200';
+            return 'bg-blue-50/50 text-blue-700 border-blue-200/50';
 
         if (act.includes('FREEZE') || act.includes('SUSPEND'))
-            return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+            return 'bg-amber-50/50 text-amber-700 border-amber-200/50';
             
+        if (act.includes('AUTH') || act.includes('LOGIN') || act.includes('LOGOUT'))
+            return 'bg-indigo-50/50 text-indigo-700 border-indigo-200/50';
+
         if (act.includes('INTERACTION'))
-            return 'bg-purple-50 text-purple-700 border-purple-200';
+            return 'bg-slate-50 text-slate-500 border-slate-200/50';
 
         return 'bg-slate-50 text-slate-700 border-slate-200';
+    };
+
+    // ===============================
+    // Details Formatting
+    // ===============================
+    const formatDetails = (details: string) => {
+        if (!details) return null;
+        
+        // Split by brackets to highlight modified fields
+        const parts = details.split(/(\[.*?\])/g);
+        
+        return parts.map((part, i) => {
+            if (part.startsWith('[') && part.endsWith(']')) {
+                return (
+                    <span key={i} className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 mx-1">
+                        {part.slice(1, -1)}
+                    </span>
+                );
+            }
+            return <span key={i}>{part}</span>;
+        });
     };
 
     // ===============================
@@ -272,10 +377,10 @@ const Logs = () => {
                     <table className="w-full text-sm text-left border-collapse">
                         <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] bg-slate-50/50 border-b">
                             <tr>
-                                <th className="px-8 py-5">Event Timestamp</th>
-                                <th className="px-8 py-5">User</th>
-                                <th className="px-8 py-5">Action</th>
-                                <th className="px-8 py-5">Details</th>
+                                <th className="px-6 py-4 w-48">Timestamp</th>
+                                <th className="px-6 py-4 w-48">Operator</th>
+                                <th className="px-6 py-4 w-56">Event Type</th>
+                                <th className="px-6 py-4">Audit Details</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -291,30 +396,40 @@ const Logs = () => {
                             ) : (
                                 filteredLogs.map((log) => {
                                     const parsedDate = parseISO(log.timestamp);
+                                    const userName = log.user_name || 'System Engine';
+                                    const initial = userName.charAt(0).toUpperCase();
 
                                     return (
-                                        <tr key={log.id} className="hover:bg-indigo-50/20 transition-all duration-300">
-                                            <td className="px-8 py-6 whitespace-nowrap">
-                                                <div className="text-xs font-black">
-                                                    {format(parsedDate, 'PP')}
-                                                </div>
-                                                <div className="text-[10px] text-slate-400 font-bold">
-                                                    {format(parsedDate, 'HH:mm:ss')}
+                                        <tr key={log.id} className="hover:bg-slate-50/50 transition-colors group">
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-bold text-slate-900">{format(parsedDate, 'MMM dd, yyyy')}</span>
+                                                    <span className="text-[10px] font-mono text-slate-500">{format(parsedDate, 'HH:mm:ss.SSS')}</span>
                                                 </div>
                                             </td>
 
-                                            <td className="px-8 py-6 text-xs font-black text-slate-700">
-                                                {log.user_name || 'System'}
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-600 border border-slate-200 shadow-sm">
+                                                        {initial}
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-700">
+                                                        {userName}
+                                                    </span>
+                                                </div>
                                             </td>
 
-                                            <td className="px-8 py-6">
-                                                <span className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${getActionStyles(log.action)}`}>
-                                                    {log.action}
-                                                </span>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getActionStyles(log.action)}`}>
+                                                    {getActionIcon(log.action)}
+                                                    {formatActionName(log.action)}
+                                                </div>
                                             </td>
 
-                                            <td className="px-8 py-6 text-xs text-slate-600 font-medium max-w-2xl">
-                                                {log.details}
+                                            <td className="px-6 py-4">
+                                                <p className="text-xs text-slate-600 leading-relaxed">
+                                                    {formatDetails(log.details)}
+                                                </p>
                                             </td>
                                         </tr>
                                     );

@@ -290,7 +290,7 @@ const ProtectedLayout = () => {
   }, [user, combinedLoading]);
 
   const handleLogout = () => {
-    db.logAction('AUTH_LOGOUT', `User terminated session: ${user?.email}`, currentOutlet?.id);
+    db.logAction('AUTH_LOGOUT', `User terminated session: ${user?.name} (${user?.email}) at ${new Date().toLocaleString()}`, currentOutlet?.id);
     logout();
   };
 
