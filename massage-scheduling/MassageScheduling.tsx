@@ -54,7 +54,8 @@ import {
   Therapist, 
   MassageType,
   Sale,
-  Member
+  Member,
+  InventoryItem
 } from '../types';
 import { format, addDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
@@ -308,7 +309,7 @@ ALTER TABLE IF EXISTS public.therapists ADD COLUMN IF NOT EXISTS outlet_id TEXT;
 -- massage_types
 ALTER TABLE IF EXISTS public.massage_types ADD COLUMN IF NOT EXISTS property_id TEXT;
 ALTER TABLE IF EXISTS public.massage_types ADD COLUMN IF NOT EXISTS outlet_id TEXT;
-ALTER TABLE IF EXISTS public.massage_types ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Massage';
+ALTER TABLE IF EXISTS public.massage_types ADD COLUMN IF NOT EXISTS description TEXT;
 
 -- inventory
 ALTER TABLE IF EXISTS public.inventory ADD COLUMN IF NOT EXISTS property_id TEXT;
@@ -357,7 +358,7 @@ CREATE TABLE IF NOT EXISTS public.massage_types (
     property_id TEXT,
     outlet_id TEXT,
     name TEXT NOT NULL,
-    category TEXT DEFAULT 'Massage',
+    description TEXT,
     price NUMERIC NOT NULL DEFAULT 0,
     duration_minutes INTEGER NOT NULL DEFAULT 60
 );
@@ -401,7 +402,7 @@ NOTIFY pgrst, 'reload schema';`}
     </Card>
   );
   
-  const [newType, setNewType] = useState<{ id: string, name: string, price: number, duration_minutes: number, category?: 'Massage' | 'Personal Training' }>({ id: '', name: '', price: 0, duration_minutes: 60, category: 'Massage' });
+  const [newType, setNewType] = useState<{ id: string, name: string, price: number, duration_minutes: number, description?: string }>({ id: '', name: '', price: 0, duration_minutes: 60, description: '' });
   const [newTherapist, setNewTherapist] = useState({ id: '', name: '', specialty: '', country: '', type: 'Therapist' });
   const [isEditingResource, setIsEditingResource] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest' | 'booking', name: string} | null>(null);
@@ -444,7 +445,7 @@ NOTIFY pgrst, 'reload schema';`}
     if (currentOutlet) loadData();
   }, [currentOutlet, viewDate, viewScope]);
 
-  const loadData = async () => {
+  const loadData = async (retryCount = 0) => {
     if (!currentOutlet || !currentProperty) return;
     setLoading(true);
     setIsTableMissing(false);
@@ -467,21 +468,36 @@ NOTIFY pgrst, 'reload schema';`}
         db.getInventory(scopeId, isProperty, limitToIds)
       ]);
 
-      const [b, g, t, m, mems, inv] = results.map((r, idx) => {
-          if (r.status === 'rejected') {
-              const tableNames = ['Bookings', 'Guests', 'Therapists', 'Treatments', 'Members', 'Inventory'];
-              const err = r.reason;
-              console.error(`Table [${tableNames[idx]}] failed:`, err);
-              throw new Error(`Table [${tableNames[idx]}] failed: ${err.message || 'Unknown Error'}`);
-          }
-          return r.value;
-      });
+      const errors = results
+        .map((r, idx) => r.status === 'rejected' ? { name: ['Bookings', 'Guests', 'Therapists', 'Treatments', 'Members', 'Inventory'][idx], reason: r.reason } : null)
+        .filter(Boolean);
 
-      setBookings(b || []);
-      setGuests(g || []);
-      setTherapists((t || []).sort((x, y) => x.name.localeCompare(y.name)));
+      if (errors.length > 0) {
+          const firstError = errors[0]!;
+          console.error(`Data fetch failed for ${firstError.name}:`, firstError.reason);
+          
+          // If it's a network error and we haven't retried too much, try again
+          if (retryCount < 2 && (firstError.reason?.message?.includes('Load failed') || firstError.reason?.message?.includes('fetch'))) {
+              console.log(`Retrying data load (${retryCount + 1}/2)...`);
+              setTimeout(() => loadData(retryCount + 1), 1000);
+              return;
+          }
+
+          throw new Error(`Table [${firstError.name}] failed: ${firstError.reason?.message || 'Connection Error'}`);
+      }
+
+      const b = (results[0] as PromiseFulfilledResult<MassageBooking[]>).value || [];
+      const g = (results[1] as PromiseFulfilledResult<Guest[]>).value || [];
+      const t = (results[2] as PromiseFulfilledResult<Therapist[]>).value || [];
+      const m = (results[3] as PromiseFulfilledResult<MassageType[]>).value || [];
+      const mems = (results[4] as PromiseFulfilledResult<Member[]>).value || [];
+      const inv = (results[5] as PromiseFulfilledResult<InventoryItem[]>).value || [];
+
+      setBookings(b);
+      setGuests(g);
+      setTherapists(t.sort((x, y) => x.name.localeCompare(y.name)));
       
-      const ptItems = (inv || []).filter(i => i.category === 'Personal Training').map(i => ({
+      const ptItems = inv.filter(i => i.category === 'Personal Training').map(i => ({
           id: i.id,
           property_id: i.property_id,
           outlet_id: i.outlet_id,
@@ -496,9 +512,21 @@ NOTIFY pgrst, 'reload schema';`}
       setMembers(mems || []);
     } catch (e: any) {
       console.error("Failed to load booking data", e);
-      setSchemaError(e.message || "Unknown Database Error");
-      if (e.message?.includes('schema cache') || e.code === '42P01' || e.code === '42703' || e.message?.toLowerCase().includes('column') || e.message?.includes('Table [')) {
+      const errorMessage = e.message || "Unknown Database Error";
+      setSchemaError(errorMessage);
+      
+      // Distinguish between schema errors and network errors
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      const isNetworkError = isOffline || errorMessage.includes('Load failed') || errorMessage.includes('fetch') || errorMessage.includes('Connection Error');
+      const isSchemaError = errorMessage.includes('schema cache') || e.code === '42P01' || e.code === '42703' || errorMessage.toLowerCase().includes('column') || (errorMessage.includes('Table [') && !isNetworkError);
+
+      if (isSchemaError) {
           setIsTableMissing(true);
+      } else if (isNetworkError) {
+          if (isOffline) {
+              setSchemaError("You are currently offline. Please check your internet connection.");
+          }
+          console.warn("Network error detected. Please check your internet connection or Supabase project status.");
       }
     } finally {
       setLoading(false);
@@ -530,11 +558,11 @@ NOTIFY pgrst, 'reload schema';`}
     setSaveError(null);
     try {
       if (isEditingResource && newType.id) {
-          await db.updateMassageType(newType.id, { name: newType.name, price: newType.price, duration_minutes: newType.duration_minutes });
+          await db.updateMassageType(newType.id, { name: newType.name, price: newType.price, duration_minutes: newType.duration_minutes, description: newType.description });
       } else {
           await db.addMassageType({ ...newType, property_id: currentProperty.id, outlet_id: currentOutlet.id });
       }
-      setNewType({ id: '', name: '', price: 0, duration_minutes: 60 });
+      setNewType({ id: '', name: '', price: 0, duration_minutes: 60, description: '' });
       setIsEditingResource(false);
       loadData();
     } catch (err: any) {
@@ -647,6 +675,21 @@ NOTIFY pgrst, 'reload schema';`}
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {schemaError && !isTableMissing && (
+        <div className="bg-red-50 border border-red-200 p-4 rounded-2xl flex items-center justify-between gap-4 animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-3 text-red-700">
+            <ShieldAlert className="w-5 h-5 shrink-0" />
+            <div className="space-y-0.5">
+              <p className="text-[10px] font-black uppercase tracking-widest">Connection Interrupted</p>
+              <p className="text-xs font-bold">{schemaError}</p>
+            </div>
+          </div>
+          <Button onClick={() => loadData()} variant="secondary" className="h-9 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest bg-white border-red-100 text-red-600 hover:bg-red-50 shrink-0">
+            <RefreshCcw className="w-3.5 h-3.5 mr-2" /> Retry Connection
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Resource Management</h1>
@@ -861,7 +904,6 @@ NOTIFY pgrst, 'reload schema';`}
                             <thead className="bg-slate-50 border-b border-slate-100 sticky top-0">
                                 <tr>
                                     <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Service Name</th>
-                                    <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Category</th>
                                     <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400 text-center">Duration</th>
                                     <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400 text-right">Base Price</th>
                                     <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400 text-right">Ops</th>
@@ -870,8 +912,10 @@ NOTIFY pgrst, 'reload schema';`}
                             <tbody className="divide-y divide-slate-100">
                                 {massageTypes.map(mt => (
                                     <tr key={mt.id} className="hover:bg-slate-50 group">
-                                        <td className="px-8 py-5 font-black text-slate-800 text-sm uppercase">{mt.name}</td>
-                                        <td className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">{mt.category || 'Massage'}</td>
+                                        <td className="px-8 py-5">
+                                            <div className="font-black text-slate-800 text-sm uppercase">{mt.name}</div>
+                                            {mt.description && <div className="text-[9px] font-bold text-slate-400 mt-0.5 line-clamp-1 max-w-[200px]">{mt.description}</div>}
+                                        </td>
                                         <td className="px-8 py-5 text-center"><span className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg border border-indigo-100">{mt.duration_minutes}m</span></td>
                                         <td className="px-8 py-5 text-right font-black text-slate-900 tabular-nums">{formatMoney(mt.price)}</td>
                                         <td className="px-8 py-5 text-right">
@@ -885,7 +929,8 @@ NOTIFY pgrst, 'reload schema';`}
                                                             name: mt.name || '',
                                                             price: mt.price || 0,
                                                             duration_minutes: mt.duration_minutes || 60,
-                                                            category: mt.category || 'Massage'
+                                                            category: mt.category || 'Massage',
+                                                            description: mt.description || ''
                                                           }); 
                                                           setSaveError(null); 
                                                         }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit3 className="w-3.5 h-3.5"/></button>
@@ -909,6 +954,15 @@ NOTIFY pgrst, 'reload schema';`}
                         <CardContent className="p-10">
                             <form onSubmit={handleSaveMassageType} className="space-y-6">
                                 <Input label="Service Designation *" value={newType.name} onChange={e => setNewType({...newType, name: e.target.value})} className="h-14 rounded-2xl font-bold" placeholder="e.g. Aromatherapy Session" />
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Inclusions / Description</label>
+                                    <textarea 
+                                        value={newType.description} 
+                                        onChange={e => setNewType({...newType, description: e.target.value})} 
+                                        className="w-full p-4 rounded-2xl border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 focus:outline-none min-h-[100px]" 
+                                        placeholder="List what is included in this treatment or package..."
+                                    />
+                                </div>
                                 <div className="grid grid-cols-2 gap-6">
                                     <Input label="Duration (Min)" type="number" value={newType.duration_minutes} onChange={e => setNewType({...newType, duration_minutes: Number(e.target.value)})} className="h-14 rounded-2xl" />
                                     <Input label="Retail Rate *" type="number" step="0.01" value={newType.price} onChange={e => setNewType({...newType, price: Number(e.target.value)})} className="h-14 rounded-2xl" />

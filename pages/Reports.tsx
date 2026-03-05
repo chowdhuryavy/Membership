@@ -335,9 +335,8 @@ const Reports = () => {
                   bookings.filter(b => {
                       const bDate = parseISO(b.date);
                       const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
-                      const isMassage = !type?.category || type.category === 'Massage';
                       // Only include completed bookings for incentive audit
-                      return b.status === 'completed' && isMassage && bDate >= start && bDate <= end;
+                      return b.status === 'completed' && bDate >= start && bDate <= end;
                   })
                   .forEach(b => {
                       const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
@@ -449,9 +448,7 @@ const Reports = () => {
                   // 1. Process Bookings categorized as Personal Training
                   bookings.filter(b => {
                       const bDate = parseISO(b.date);
-                      const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
-                      const isPT = type?.category === 'Personal Training';
-                      return b.status === 'completed' && isPT && bDate >= start && bDate <= end;
+                      return b.status === 'completed' && bDate >= start && bDate <= end;
                   })
                   .forEach(b => {
                       const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));

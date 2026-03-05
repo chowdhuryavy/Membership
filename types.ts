@@ -210,7 +210,7 @@ export interface MassageType {
   name: string;
   price: number;
   duration_minutes: number;
-  category?: 'Massage' | 'Personal Training';
+  description?: string;
 }
 
 export interface MassageBooking {

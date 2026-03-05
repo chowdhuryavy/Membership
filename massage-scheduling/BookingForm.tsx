@@ -67,7 +67,6 @@ const BookingForm: React.FC<BookingFormProps> = ({
   const [error, setError] = useState('');
 
   const [guestData, setGuestData] = useState({ name: '', phone: '', email: '' });
-  const [serviceType, setServiceType] = useState<'Massage' | 'Personal Training'>('Massage');
   const [bookingData, setBookingData] = useState({
     massage_type_id: '',
     additional_service_ids: [] as string[],
@@ -87,9 +86,6 @@ const BookingForm: React.FC<BookingFormProps> = ({
       const guest = guests.find(g => g.id === initialBooking.guest_id);
       if (guest) setGuestData({ name: guest.name, phone: guest.phone, email: guest.email || '' });
       
-      const isPT = !!initialBooking.inventory_item_id;
-      setServiceType(isPT ? 'Personal Training' : 'Massage');
-
       setBookingData({
         massage_type_id: initialBooking.massage_type_id || initialBooking.inventory_item_id || '',
         additional_service_ids: initialBooking.additional_service_ids || [],
@@ -241,17 +237,13 @@ const BookingForm: React.FC<BookingFormProps> = ({
         }
       }
 
-      const selectedService = massageTypes.find(m => m.id === bookingData.massage_type_id);
-      const isPT = selectedService?.category === 'Personal Training';
-
       const payload: any = {
         guest_id: guest.id,
         therapist_id: bookingData.therapist_id,
         date: bookingData.date,
         start_time: bookingData.start_time,
         end_time: bookingData.end_time,
-        massage_type_id: isPT ? null : bookingData.massage_type_id,
-        inventory_item_id: isPT ? bookingData.massage_type_id : null,
+        massage_type_id: bookingData.massage_type_id,
         additional_service_ids: bookingData.additional_service_ids.filter(Boolean),
         price: netPrice,
         discount: calculatedDiscountValue
@@ -354,14 +346,6 @@ const BookingForm: React.FC<BookingFormProps> = ({
                     </div>
                 </div>
 
-                <div className="mb-4 max-w-xs">
-                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Service Category</label>
-                    <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 h-11">
-                        <button type="button" onClick={() => { setServiceType('Massage'); setBookingData({...bookingData, massage_type_id: ''}); }} className={`flex-1 rounded-lg text-[10px] font-black uppercase transition-all ${serviceType === 'Massage' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Massage Therapy</button>
-                        <button type="button" onClick={() => { setServiceType('Personal Training'); setBookingData({...bookingData, massage_type_id: ''}); }} className={`flex-1 rounded-lg text-[10px] font-black uppercase transition-all ${serviceType === 'Personal Training' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Personal Training</button>
-                    </div>
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                     <div className="md:col-span-1">
                         <Select 
@@ -369,13 +353,18 @@ const BookingForm: React.FC<BookingFormProps> = ({
                             options={[
                                 { value: '', label: 'Select Item...' }, 
                                 ...massageTypes
-                                    .filter(m => serviceType === 'Personal Training' ? m.category === 'Personal Training' : (!m.category || m.category === 'Massage'))
                                     .map(m => ({ value: m.id, label: `${m.name} (${m.duration_minutes}m)` }))
                             ]} 
                             value={bookingData.massage_type_id} 
                             onChange={e => setBookingData({...bookingData, massage_type_id: e.target.value})} 
                             className="h-11 rounded-xl text-xs" 
                         />
+                        {bookingData.massage_type_id && massageTypes.find(m => m.id === bookingData.massage_type_id)?.description && (
+                            <div className="mt-2 p-3 bg-indigo-50 rounded-xl border border-indigo-100 animate-in fade-in slide-in-from-top-1 duration-300">
+                                <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-1">Inclusions</p>
+                                <p className="text-[10px] font-bold text-slate-600 whitespace-pre-line">{massageTypes.find(m => m.id === bookingData.massage_type_id)?.description}</p>
+                            </div>
+                        )}
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Reduction Logic</label>
