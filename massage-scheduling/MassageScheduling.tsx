@@ -64,102 +64,6 @@ import BookingForm from './BookingForm';
 const SLOT_HEIGHT = 52; 
 const MINUTE_HEIGHT = SLOT_HEIGHT / 60;
 
-const MissingBookingTablesPanel = () => (
-    <Card className="max-w-4xl mx-auto rounded-[3rem] border-amber-200 bg-amber-50/30 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-500">
-        <div className="bg-amber-600 p-8 text-white flex items-center gap-6">
-            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
-                <Database className="w-8 h-8" />
-            </div>
-            <div>
-                <h2 className="text-2xl font-black uppercase tracking-tight">Schema Optimization Required</h2>
-                <p className="text-amber-100 font-bold text-sm">Your booking tables are missing the 'outlet_id' column needed for multi-facility support.</p>
-            </div>
-        </div>
-        <CardContent className="p-10 space-y-8">
-            <div className="flex items-start gap-4">
-                <div className="p-3 bg-white rounded-xl shadow-sm border border-amber-100">
-                    <Terminal className="w-5 h-5 text-amber-600" />
-                </div>
-                <div className="space-y-2">
-                    <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Safe Repair Protocol</h3>
-                    <p className="text-slate-600 text-sm leading-relaxed font-medium">Please execute this script in your <span className="font-bold text-indigo-600">Supabase SQL Editor</span>. This will safely upgrade your tables without deleting existing specialists or treatments.</p>
-                </div>
-            </div>
-
-            <div className="relative group">
-                <pre className="bg-slate-950 text-indigo-300 p-8 rounded-3xl overflow-x-auto text-[11px] font-mono leading-relaxed shadow-inner border border-white/10">
-{`-- 1. ADD 'outlet_id' TO EXISTING TABLES (SAFE REPAIR)
-ALTER TABLE IF EXISTS public.therapists 
-ADD COLUMN IF NOT EXISTS outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE;
-
-ALTER TABLE IF EXISTS public.massage_types 
-ADD COLUMN IF NOT EXISTS outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE;
-
-ALTER TABLE IF EXISTS public.massage_bookings 
-ADD COLUMN IF NOT EXISTS outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE,
-ADD COLUMN IF NOT EXISTS inventory_item_id TEXT REFERENCES public.inventory(id) ON DELETE CASCADE;
-
-ALTER TABLE IF EXISTS public.outlets
-ADD COLUMN IF NOT EXISTS booking_enabled BOOLEAN DEFAULT true,
-ADD COLUMN IF NOT EXISTS booking_start_time TEXT DEFAULT '08:00',
-ADD COLUMN IF NOT EXISTS booking_end_time TEXT DEFAULT '22:00';
-
--- 2. ENSURE TABLES EXIST (IF NEW INSTALLATION)
-CREATE TABLE IF NOT EXISTS public.therapists (
-    id TEXT PRIMARY KEY,
-    property_id TEXT REFERENCES public.properties(id) ON DELETE CASCADE,
-    outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    specialty TEXT,
-    country TEXT
-);
-
-CREATE TABLE IF NOT EXISTS public.massage_types (
-    id TEXT PRIMARY KEY,
-    property_id TEXT REFERENCES public.properties(id) ON DELETE CASCADE,
-    outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    price NUMERIC NOT NULL DEFAULT 0,
-    duration_minutes INTEGER NOT NULL DEFAULT 60
-);
-
-CREATE TABLE IF NOT EXISTS public.massage_bookings (
-    id TEXT PRIMARY KEY,
-    property_id TEXT REFERENCES public.properties(id) ON DELETE CASCADE,
-    outlet_id TEXT REFERENCES public.outlets(id) ON DELETE CASCADE,
-    guest_id TEXT REFERENCES public.guests(id) ON DELETE SET NULL,
-    therapist_id TEXT REFERENCES public.therapists(id) ON DELETE CASCADE,
-    massage_type_id TEXT REFERENCES public.massage_types(id) ON DELETE CASCADE,
-    inventory_item_id TEXT REFERENCES public.inventory(id) ON DELETE CASCADE,
-    date TEXT NOT NULL,
-    start_time TEXT NOT NULL,
-    end_time TEXT NOT NULL,
-    price NUMERIC NOT NULL,
-    discount NUMERIC DEFAULT 0,
-    status TEXT DEFAULT 'confirmed',
-    additional_service_ids JSONB DEFAULT '[]'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 3. RESET SECURITY POLICIES
-ALTER TABLE public.therapists ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.massage_types ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.massage_bookings ENABLE ROW LEVEL SECURITY;
-GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, postgres;
-
--- 4. RELOAD SCHEMA CACHE
-NOTIFY pgrst, 'reload schema';`}
-                </pre>
-            </div>
-            <div className="flex gap-4">
-                <Button onClick={() => window.location.reload()} className="h-12 px-8 rounded-xl font-black uppercase text-[10px] tracking-widest bg-amber-600 hover:bg-amber-700">
-                    <RefreshCcw className="w-4 h-4 mr-2" /> Verify Schema Sync
-                </Button>
-            </div>
-        </CardContent>
-    </Card>
-);
-
 const GuestHistoryView = ({ 
   guest, 
   bookings, 
@@ -359,7 +263,143 @@ const MassageScheduling = () => {
   const [therapistFilter, setTherapistFilter] = useState('');
   const [guestSearchTerm, setGuestSearchTerm] = useState('');
   const [isTableMissing, setIsTableMissing] = useState(false);
+  const [schemaError, setSchemaError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const MissingBookingTablesPanel = () => (
+    <Card className="max-w-4xl mx-auto rounded-[3rem] border-amber-200 bg-amber-50/30 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+        <div className="bg-amber-600 p-8 text-white flex items-center gap-6">
+            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
+                <Database className="w-8 h-8" />
+            </div>
+            <div>
+                <h2 className="text-2xl font-black uppercase tracking-tight">Schema Repair Required</h2>
+                <p className="text-amber-100 font-bold text-sm">The booking system detected missing columns or tables in your Supabase database.</p>
+            </div>
+        </div>
+        <CardContent className="p-10 space-y-8">
+            {schemaError && (
+                <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 text-red-600">
+                    <ShieldAlert className="w-5 h-5 mt-0.5" />
+                    <div className="space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest">Detected Error:</p>
+                        <p className="text-xs font-bold font-mono">{schemaError}</p>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex items-start gap-4">
+                <div className="p-3 bg-white rounded-xl shadow-sm border border-amber-100">
+                    <Terminal className="w-5 h-5 text-amber-600" />
+                </div>
+                <div className="space-y-2">
+                    <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Safe Repair Protocol v2 (Comprehensive)</h3>
+                    <p className="text-slate-600 text-sm leading-relaxed font-medium">Please execute this script in your <span className="font-bold text-indigo-600">Supabase SQL Editor</span>. This will safely upgrade your tables without deleting existing data.</p>
+                </div>
+            </div>
+
+            <div className="relative group">
+                <pre className="bg-slate-950 text-indigo-300 p-8 rounded-3xl overflow-x-auto text-[11px] font-mono leading-relaxed shadow-inner border border-white/10">
+{`-- 1. ADD MISSING COLUMNS TO EXISTING TABLES (SAFE REPAIR)
+-- therapists
+ALTER TABLE IF EXISTS public.therapists ADD COLUMN IF NOT EXISTS property_id TEXT;
+ALTER TABLE IF EXISTS public.therapists ADD COLUMN IF NOT EXISTS outlet_id TEXT;
+
+-- massage_types
+ALTER TABLE IF EXISTS public.massage_types ADD COLUMN IF NOT EXISTS property_id TEXT;
+ALTER TABLE IF EXISTS public.massage_types ADD COLUMN IF NOT EXISTS outlet_id TEXT;
+ALTER TABLE IF EXISTS public.massage_types ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Massage';
+
+-- inventory
+ALTER TABLE IF EXISTS public.inventory ADD COLUMN IF NOT EXISTS property_id TEXT;
+ALTER TABLE IF EXISTS public.inventory ADD COLUMN IF NOT EXISTS outlet_id TEXT;
+
+-- staff
+ALTER TABLE IF EXISTS public.staff ADD COLUMN IF NOT EXISTS outlet_id TEXT;
+ALTER TABLE IF EXISTS public.staff ADD COLUMN IF NOT EXISTS is_eligible_for_incentives BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE IF EXISTS public.staff ADD COLUMN IF NOT EXISTS leave_start_date TEXT;
+ALTER TABLE IF EXISTS public.staff ADD COLUMN IF NOT EXISTS leave_end_date TEXT;
+
+-- massage_bookings
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS property_id TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS outlet_id TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS inventory_item_id TEXT;
+
+-- outlets
+ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS booking_enabled BOOLEAN DEFAULT true;
+ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS booking_start_time TEXT DEFAULT '08:00';
+ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS booking_end_time TEXT DEFAULT '22:00';
+
+-- 2. ENSURE TABLES EXIST (IF NEW INSTALLATION)
+CREATE TABLE IF NOT EXISTS public.inventory (
+    id TEXT PRIMARY KEY,
+    property_id TEXT,
+    outlet_id TEXT,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    price NUMERIC NOT NULL DEFAULT 0,
+    stock_quantity INTEGER NOT NULL DEFAULT 0,
+    track_inventory BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.therapists (
+    id TEXT PRIMARY KEY,
+    property_id TEXT,
+    outlet_id TEXT,
+    name TEXT NOT NULL,
+    specialty TEXT,
+    country TEXT
+);
+
+CREATE TABLE IF NOT EXISTS public.massage_types (
+    id TEXT PRIMARY KEY,
+    property_id TEXT,
+    outlet_id TEXT,
+    name TEXT NOT NULL,
+    category TEXT DEFAULT 'Massage',
+    price NUMERIC NOT NULL DEFAULT 0,
+    duration_minutes INTEGER NOT NULL DEFAULT 60
+);
+
+CREATE TABLE IF NOT EXISTS public.massage_bookings (
+    id TEXT PRIMARY KEY,
+    property_id TEXT,
+    outlet_id TEXT,
+    guest_id TEXT,
+    therapist_id TEXT,
+    massage_type_id TEXT,
+    inventory_item_id TEXT,
+    date TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    price NUMERIC NOT NULL,
+    discount NUMERIC DEFAULT 0,
+    status TEXT DEFAULT 'confirmed',
+    additional_service_ids JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. RESET SECURITY POLICIES
+ALTER TABLE public.therapists ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.massage_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.massage_bookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.staff ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, postgres;
+
+-- 4. RELOAD SCHEMA CACHE
+NOTIFY pgrst, 'reload schema';`}
+                </pre>
+            </div>
+            <div className="flex gap-4">
+                <Button onClick={() => window.location.reload()} className="h-12 px-8 rounded-xl font-black uppercase text-[10px] tracking-widest bg-amber-600 hover:bg-amber-700">
+                    <RefreshCcw className="w-4 h-4 mr-2" /> Verify Schema Sync
+                </Button>
+            </div>
+        </CardContent>
+    </Card>
+  );
   
   const [newType, setNewType] = useState<{ id: string, name: string, price: number, duration_minutes: number, category?: 'Massage' | 'Personal Training' }>({ id: '', name: '', price: 0, duration_minutes: 60, category: 'Massage' });
   const [newTherapist, setNewTherapist] = useState({ id: '', name: '', specialty: '', country: '', type: 'Therapist' });
@@ -408,6 +448,7 @@ const MassageScheduling = () => {
     if (!currentOutlet || !currentProperty) return;
     setLoading(true);
     setIsTableMissing(false);
+    setSchemaError(null);
     try {
       const isProperty = viewScope === 'property';
       const scopeId = isProperty ? currentProperty.id : currentOutlet.id;
@@ -417,7 +458,7 @@ const MassageScheduling = () => {
           limitToIds = allowedOutletsInProperty.map(o => o.id);
       }
       
-      const [b, g, t, m, mems, inv] = await Promise.all([
+      const results = await Promise.allSettled([
         db.getMassageBookings(scopeId, isProperty, limitToIds),
         db.getGuests(currentProperty.id),
         db.getTherapists(scopeId, isProperty, limitToIds),
@@ -425,6 +466,16 @@ const MassageScheduling = () => {
         db.getMembers(scopeId, isProperty, limitToIds),
         db.getInventory(scopeId, isProperty, limitToIds)
       ]);
+
+      const [b, g, t, m, mems, inv] = results.map((r, idx) => {
+          if (r.status === 'rejected') {
+              const tableNames = ['Bookings', 'Guests', 'Therapists', 'Treatments', 'Members', 'Inventory'];
+              const err = r.reason;
+              console.error(`Table [${tableNames[idx]}] failed:`, err);
+              throw new Error(`Table [${tableNames[idx]}] failed: ${err.message || 'Unknown Error'}`);
+          }
+          return r.value;
+      });
 
       setBookings(b || []);
       setGuests(g || []);
@@ -445,7 +496,8 @@ const MassageScheduling = () => {
       setMembers(mems || []);
     } catch (e: any) {
       console.error("Failed to load booking data", e);
-      if (e.message?.includes('schema cache') || e.code === '42P01' || e.code === '42703' || e.message?.toLowerCase().includes('column')) {
+      setSchemaError(e.message || "Unknown Database Error");
+      if (e.message?.includes('schema cache') || e.code === '42P01' || e.code === '42703' || e.message?.toLowerCase().includes('column') || e.message?.includes('Table [')) {
           setIsTableMissing(true);
       }
     } finally {
