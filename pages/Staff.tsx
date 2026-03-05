@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { supabase } from '../services/supabase';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
 import { Staff, Outlet } from '../types';
@@ -84,6 +85,29 @@ const StaffPage = () => {
   useEffect(() => {
     if (currentOutlet && canView) loadStaff();
   }, [currentOutlet, canView, viewScope]);
+
+  // Real-time synchronization subscription
+  useEffect(() => {
+    if (!currentOutlet || !currentProperty || !canView) return;
+
+    const channel = supabase
+      .channel('realtime-staff')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'staff' },
+        () => loadStaff()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'staff_leaves' },
+        () => loadStaff()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentOutlet, currentProperty, canView]);
 
   const loadStaff = async () => {
     if (!currentOutlet || !currentProperty) return;

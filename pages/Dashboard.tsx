@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { supabase } from '../services/supabase';
 import { Card, CardContent, CardHeader, Button } from '../components/ui';
 import { 
   Users, 
@@ -104,6 +105,49 @@ const Dashboard = () => {
       loadStats();
     }
   }, [currentOutlet, currentProperty, dashboardMonth, viewScope]);
+
+  // Real-time synchronization subscription
+  useEffect(() => {
+    if (!currentOutlet || !currentProperty) return;
+
+    const channel = supabase
+      .channel('realtime-dashboard')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'members' },
+        () => loadStats()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'massage_bookings' },
+        () => loadStats()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sales' },
+        () => loadStats()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'staff' },
+        () => loadStats()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'staff_leaves' },
+        () => loadStats()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'freezes' },
+        () => loadStats()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentOutlet, currentProperty]);
 
   const loadStats = async () => {
     if (!currentOutlet || !currentProperty) return;

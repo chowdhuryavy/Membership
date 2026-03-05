@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { db } from '../services/mockSupabase';
@@ -74,6 +75,34 @@ const Members = () => {
   useEffect(() => {
     loadData();
   }, [currentOutlet, viewScope, canView]);
+
+  // Real-time synchronization subscription
+  useEffect(() => {
+    if (!currentOutlet || !currentProperty || !canView) return;
+
+    const channel = supabase
+      .channel('realtime-members')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'members' },
+        () => loadData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'membership_categories' },
+        () => loadData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'staff' },
+        () => loadData()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentOutlet, currentProperty, canView]);
 
   if (!canView) return null;
 

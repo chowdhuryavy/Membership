@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { supabase } from '../services/supabase';
 import { 
   Card, 
   CardContent, 
@@ -444,6 +445,44 @@ NOTIFY pgrst, 'reload schema';`}
   useEffect(() => {
     if (currentOutlet) loadData();
   }, [currentOutlet, viewDate, viewScope]);
+
+  // Real-time synchronization subscription
+  useEffect(() => {
+    if (!currentOutlet || !currentProperty) return;
+
+    const channel = supabase
+      .channel('realtime-bookings')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'massage_bookings' },
+        () => loadData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'therapists' },
+        () => loadData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'massage_types' },
+        () => loadData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'guests' },
+        () => loadData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'inventory' },
+        () => loadData()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentOutlet, currentProperty]);
 
   const loadData = async (retryCount = 0) => {
     if (!currentOutlet || !currentProperty) return;

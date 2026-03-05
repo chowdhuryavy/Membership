@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { supabase } from '../services/supabase';
 import { 
   Card, 
   CardContent, 
@@ -591,6 +592,39 @@ const Sales = () => {
     useEffect(() => {
         if (currentOutlet && canView) loadData();
     }, [currentOutlet, canView, viewScope]);
+
+    // Real-time synchronization subscription
+    useEffect(() => {
+        if (!currentOutlet || !currentProperty || !canView) return;
+
+        const channel = supabase
+            .channel('realtime-sales')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'sales' },
+                () => loadData()
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'massage_bookings' },
+                () => loadData()
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'inventory' },
+                () => loadData()
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'guests' },
+                () => loadData()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [currentOutlet, currentProperty, canView]);
 
     const loadData = async () => {
         if (!currentOutlet || !currentProperty) return;
