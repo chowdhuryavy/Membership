@@ -25,7 +25,7 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, isSuperAdmin } = useAuth();
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -119,8 +119,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     
     // 1. SYSTEM SUPERUSER BYPASS
     // Only the specific Super Admin email has full system clearance.
-    const isSuper = user?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
-    if (isSuper) return true;
+    if (isSuperAdmin) return true;
+
+    // 1.5. LEGACY ADMIN BYPASS
+    // Restore the ability for the 'admin' role to have all permissions by default.
+    if (normalizedRoleId === 'admin' || normalizedRoleId === 'system_admin') return true;
 
     // 2. USER-SPECIFIC OVERRIDES (High Priority)
     const targetUser = (userId === user?.id || !userId) ? user : null;
@@ -138,7 +141,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     return false;
-  }, [roles, user]);
+  }, [roles, user, isSuperAdmin]);
 
   const checkShortcut = useCallback((e: KeyboardEvent, actionId: string): boolean => {
     const defaults: Record<string, string> = {

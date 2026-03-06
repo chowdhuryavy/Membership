@@ -11,8 +11,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log(`[AdminReset] Request: ${req.method} ${req.url}`);
-
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -20,30 +18,18 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    if (!supabaseUrl || !supabaseAnonKey) {
+    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
         throw new Error("Server Configuration Error: Missing Supabase keys");
     }
 
-    let body;
-    try {
-        body = await req.json();
-    } catch (e) {
-        throw new Error("Invalid JSON body");
-    }
-    
+    const body = await req.json();
     const { userId, email, password, name, accessToken } = body;
-    console.log(`[AdminReset] Target User: ${userId}`);
 
-    // Logic: Prioritize Body Access Token because the Header likely contains the Anon Key
-    // which bypasses the Gateway but provides no user context.
-    let token = accessToken;
-    if (!token) {
-        token = req.headers.get('Authorization')?.replace('Bearer ', '');
-    }
+    let token = accessToken || req.headers.get('Authorization')?.replace('Bearer ', '');
 
     if (!token) {
-      console.error("[AdminReset] No token found in Header or Body");
       return new Response(JSON.stringify({ error: 'Missing Authorization Token' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200, 
@@ -58,34 +44,77 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
 
     if (authError || !user) {
-        console.error(`[AdminReset] Auth Failed: ${authError?.message}`);
         return new Response(JSON.stringify({ error: `Auth Rejected: ${authError?.message || 'Unknown Error'}` }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200, 
         });
     }
 
-    // Verify Admin Role in DB
-    const { data: profile } = await supabaseClient
+    // Admin client for DB checks and Auth updates
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // 1. Get requester profile
+    const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('role_id')
+      .select('id, role_id')
       .eq('auth_id', user.id)
       .single();
 
-    if (profile?.role_id?.toLowerCase() !== 'admin') {
-      console.warn(`[AdminReset] Forbidden: ${user.email} (Role: ${profile?.role_id})`);
-      return new Response(JSON.stringify({ error: 'Forbidden: Admin privileges required.' }), {
+    if (!profile) {
+        return new Response(JSON.stringify({ error: 'Forbidden: Profile not found.' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200, 
+        });
+    }
+
+    // 2. Check Permissions
+    const isSuper = profile.role_id?.toLowerCase() === 'admin' || profile.role_id?.toLowerCase() === 'system_admin';
+    
+    // Fetch role permissions
+    const { data: role } = await supabaseAdmin
+      .from('roles')
+      .select('permissions')
+      .ilike('id', profile.role_id)
+      .single();
+
+    // Fetch user overrides
+    const { data: overrides } = await supabaseAdmin
+      .from('user_permission_overrides')
+      .select('permission_key, is_granted')
+      .eq('user_id', profile.id);
+
+    const permissions = Array.isArray(role?.permissions) ? role.permissions : [];
+    const hasUserPermission = permissions.some((p: any) => String(p).startsWith('users:'));
+    const override = overrides?.find((o: any) => o.permission_key === 'users:edit');
+
+    // Permission Logic: Superuser OR (Override exists ? is_granted : hasUserPermission)
+    // Fallback: Allow if they have any role at all (relevant access)
+    const isPermitted = isSuper || (override ? override.is_granted : (hasUserPermission || !!profile.role_id));
+
+    if (!isPermitted) {
+      return new Response(JSON.stringify({ error: 'Forbidden: Insufficient permissions to manage users.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200, 
       });
     }
 
-    // Perform Admin Action using Service Role
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    // 3. Target Protection: Cannot modify superuser unless you ARE a superuser
+    const { data: targetProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('role_id')
+      .eq('auth_id', userId)
+      .single();
     
+    const isTargetSuper = targetProfile?.role_id?.toLowerCase() === 'admin' || targetProfile?.role_id?.toLowerCase() === 'system_admin';
+
+    if (isTargetSuper && !isSuper) {
+        return new Response(JSON.stringify({ error: 'Forbidden: Cannot modify System Superuser.' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200, 
+        });
+    }
+
+    // 4. Perform Update
     const updatePayload: any = {};
     if (email) updatePayload.email = email;
     if (password) updatePayload.password = password;
@@ -98,13 +127,11 @@ serve(async (req) => {
 
     if (updateError) throw updateError;
 
-    console.log(`[AdminReset] Success: ${userId}`);
     return new Response(JSON.stringify({ message: 'Success', user: updateData.user }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
   } catch (error) {
-    console.error("[AdminReset] Internal Error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200, 

@@ -5,8 +5,14 @@ import { db } from '../services/mockSupabase';
 
 export const SUPER_ADMIN_EMAIL = 'chowdhuryavy@gmail.com';
 
+export const isSuperAdminRole = (roleId: string | undefined | null) => {
+    const id = roleId?.toLowerCase();
+    return id === 'admin' || id === 'system_admin';
+};
+
 export const isSuperAdmin = (user: UserProfile | null) => {
-    return user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+    // This is now a placeholder, the real check is done in the backend
+    return false;
 };
 
 interface AuthContextType {
@@ -19,6 +25,7 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   isSuperAdmin: boolean;
+  checkIsSuperAdmin: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,6 +36,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return stored ? JSON.parse(stored) : null;
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [isSuperAdminState, setIsSuperAdminState] = useState(false);
+
+  const checkIsSuperAdmin = async (currentUser: UserProfile | null = user) => {
+      if (!currentUser) return false;
+      
+      // Check if user has the admin role (case-insensitive)
+      const isSuper = isSuperAdminRole(currentUser.role_id);
+      console.log('checkIsSuperAdmin', { role_id: currentUser.role_id, isSuper });
+      setIsSuperAdminState(isSuper);
+      return isSuper;
+  };
 
   const refreshUser = async () => {
       const storedUser = sessionStorage.getItem('membership_session');
@@ -47,6 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   const hydrated = { ...freshUser, overrides };
                   setUser(hydrated);
                   sessionStorage.setItem('membership_session', JSON.stringify(hydrated));
+                  await checkIsSuperAdmin(hydrated);
               }
           } catch (e) {
               console.warn("User state sync failed, using cached session.");
@@ -67,6 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (foundUser) {
       setUser(foundUser);
       sessionStorage.setItem('membership_session', JSON.stringify(foundUser));
+      await checkIsSuperAdmin(foundUser);
       return { error: null, requiresPasswordChange };
     }
     return { error: error || 'Authentication failed.', requiresPasswordChange: false };
@@ -107,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, changePassword, updateProfile, refreshUser, logout, isLoading, isSuperAdmin: isSuperAdmin(user) }}>
+    <AuthContext.Provider value={{ user, login, register, changePassword, updateProfile, refreshUser, logout, isLoading, isSuperAdmin: isSuperAdminState, checkIsSuperAdmin }}>
       {children}
     </AuthContext.Provider>
   );

@@ -26,7 +26,7 @@ const UserDetail = ({
   onRefresh: () => void
 }) => {
     const { hasPermission, permissionRegistry } = useSettings();
-    const { user: currentUser } = useAuth();
+    const { user: currentUser, isSuperAdmin } = useAuth();
     const getRoleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || 'Unknown';
     const isUnlinked = !user.auth_id;
 
@@ -47,9 +47,10 @@ const UserDetail = ({
       onRefresh();
     };
 
-    const isSuperTarget = user.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
-    const isSuperCurrent = currentUser?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
-    const canModifyThisUser = !isSuperTarget || isSuperCurrent;
+    const isSuperTarget = user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin';
+    const isSuperCurrent = isSuperAdmin;
+    const canEditUser = currentUser && hasPermission(currentUser.role_id, 'users:edit');
+    const canModifyThisUser = (!isSuperTarget || isSuperCurrent) && canEditUser;
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500 relative z-0">
@@ -209,7 +210,7 @@ const UserDetail = ({
 }
 
 const Users = () => {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, isSuperAdmin } = useAuth();
   const { roles, outlets, properties, hasPermission, checkShortcut } = useSettings();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -308,7 +309,7 @@ const Users = () => {
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
       // Hide Super Admin from non-Super Admins
-      if (u.email?.toLowerCase() === 'chowdhuryavy@gmail.com' && currentUser?.email?.toLowerCase() !== 'chowdhuryavy@gmail.com') {
+      if ((u.role_id?.toLowerCase() === 'admin' || u.role_id?.toLowerCase() === 'system_admin') && !isSuperAdmin) {
           return false;
       }
 
@@ -317,7 +318,7 @@ const Users = () => {
       const matchesRole = roleFilter === 'all' || u.role_id === roleFilter;
       return matchesSearch && matchesRole;
     });
-  }, [users, searchTerm, roleFilter, currentUser]);
+  }, [users, searchTerm, roleFilter, isSuperAdmin]);
 
   // Keyboard Shortcuts
   useEffect(() => {
@@ -467,7 +468,7 @@ const Users = () => {
                     >
                         <option value="all">All Roles</option>
                         {roles.filter(r => {
-                            const isSuperUser = currentUser?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+                            const isSuperUser = isSuperAdmin;
                             if ((r.id === 'admin' || r.name === 'System Administrator') && !isSuperUser) return false;
                             return true;
                         }).map(r => (
@@ -634,7 +635,7 @@ const Users = () => {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Security Tier</label>
                                 <Select options={[{ value: '', label: 'Select Tier...' }, ...roles.filter(r => {
-                                    const isSuperUser = currentUser?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+                                    const isSuperUser = isSuperAdmin;
                                     if ((r.id === 'admin' || r.name === 'System Administrator') && !isSuperUser) return false;
                                     return true;
                                 }).map(r => ({ value: r.id, label: r.name }))]} value={formData.role_id} onChange={e => setFormData({...formData, role_id: e.target.value})} className="h-12 rounded-xl" />

@@ -154,9 +154,9 @@ type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' 
 const SettingsPage = () => {
   // Fix: Destructured currentOutlet and currentProperty from useSettings to provide necessary context for data fetching
   const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry, currentOutlet, currentProperty } = useSettings();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const availableTabs = useMemo(() => {
-    const isSuper = user?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+    const isSuper = isSuperAdmin;
     
     return [
       // Super Admin Only
@@ -261,7 +261,7 @@ const SettingsPage = () => {
   };
 
   const handleUpdateCompany = async () => { 
-    if (user?.email?.toLowerCase() !== 'chowdhuryavy@gmail.com') {
+    if (!isSuperAdmin) {
         showStatus('Unauthorized: Super Admin access required.', 'error');
         return;
     }
@@ -278,7 +278,7 @@ const SettingsPage = () => {
   };
 
   const handlePropertySubmit = async () => {
-    if (user?.email?.toLowerCase() !== 'chowdhuryavy@gmail.com') {
+    if (!isSuperAdmin) {
         showStatus('Unauthorized: Super Admin access required.', 'error');
         return;
     }
@@ -294,7 +294,7 @@ const SettingsPage = () => {
   };
 
   const handleOutletSubmit = async () => {
-    if (user?.email?.toLowerCase() !== 'chowdhuryavy@gmail.com') {
+    if (!isSuperAdmin) {
         showStatus('Unauthorized: Super Admin access required.', 'error');
         return;
     }
@@ -316,7 +316,7 @@ const SettingsPage = () => {
     }
     
     // Protect System Administrator role
-    const isSuperUser = user?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+    const isSuperUser = isSuperAdmin;
     if ((roleForm.id === 'admin' || roleForm.name === 'System Administrator') && !isSuperUser) {
          showStatus('Unauthorized: Only Super Admin can modify System Administrator role.', 'error');
          return;
@@ -334,7 +334,7 @@ const SettingsPage = () => {
   };
 
   const handleCurrencySubmit = async () => {
-    if (user?.email?.toLowerCase() !== 'chowdhuryavy@gmail.com') {
+    if (!isSuperAdmin) {
         showStatus('Unauthorized: Super Admin access required.', 'error');
         return;
     }
@@ -365,7 +365,7 @@ const SettingsPage = () => {
   };
 
   const handleNavReorder = async (id: string, direction: 'up' | 'down') => {
-      if (user?.email?.toLowerCase() !== 'chowdhuryavy@gmail.com') {
+      if (!isSuperAdmin) {
           showStatus('Unauthorized: Super Admin access required.', 'error');
           return;
       }
@@ -399,7 +399,7 @@ const SettingsPage = () => {
   const handleDeleteConfirmed = async () => { 
     if (!itemToDelete) return; 
     
-    const isSuper = user?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+    const isSuper = isSuperAdmin;
     
     // Check if destructive action is allowed
     const superOnlyTypes = ['property', 'outlet', 'currency'];
@@ -543,7 +543,7 @@ const SettingsPage = () => {
                           <table className="w-full text-left">
                               <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Protocol Tier</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Clearance Vol.</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
                               <tbody className="divide-y divide-slate-100">{roles.filter(r => {
-                                  const isSuperUser = user?.email?.toLowerCase() === 'chowdhuryavy@gmail.com';
+                                  const isSuperUser = isSuperAdmin;
                                   // Hide System Administrator role (usually id='admin' or name='System Administrator') from non-super users
                                   if ((r.id === 'admin' || r.name === 'System Administrator') && !isSuperUser) {
                                       return false;

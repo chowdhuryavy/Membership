@@ -313,12 +313,15 @@ class DatabaseService {
 
   async addUser(user: Omit<UserProfile, 'id'> & { password?: string }): Promise<UserProfile> {
     const cleanEmail = user.email.trim().toLowerCase();
-    let authId: string | null = null;
+    let authId: string | null = user.auth_id || null;
     let tempPassword: string | null = user.password || 'Temporary123!';
     if (this.isSupabase()) {
-        const shadow = this.getShadowClient();
-        const { data: authData } = await (shadow.auth as any).signUp({ email: cleanEmail, password: tempPassword, options: { data: { full_name: user.name, name: user.name, display_name: user.name } } });
-        if (authData?.user) authId = authData.user.id;
+        if (!authId) {
+            const shadow = this.getShadowClient();
+            const { data: authData, error: signUpError } = await (shadow.auth as any).signUp({ email: cleanEmail, password: tempPassword, options: { data: { full_name: user.name, name: user.name, display_name: user.name } } });
+            if (signUpError) throw new Error(signUpError.message);
+            if (authData?.user) authId = authData.user.id;
+        }
         const { data, error } = await supabase.from('profiles').upsert([{ 
             email: cleanEmail, 
             name: user.name, 

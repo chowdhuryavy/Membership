@@ -53,29 +53,124 @@ serve(async (req) => {
         });
     }
 
-    const { data: profile } = await supabaseClient
-      .from('profiles')
-      .select('role_id')
-      .eq('auth_id', user.id)
-      .single();
-
-    if (profile?.role_id?.toLowerCase() !== 'admin') {
-      return new Response(JSON.stringify({ error: 'Access denied.' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      });
-    }
-
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+
+    // Verify Permissions in DB using Admin Client to bypass RLS
+    let { data: profileData } = await supabaseAdmin
+      .from('profiles')
+      .select('role_id, id, email')
+      .eq('auth_id', user.id)
+      .single();
+
+    if (!profileData) {
+        // Fallback: try matching by ID if auth_id is not used
+        const { data: profileById } = await supabaseAdmin
+          .from('profiles')
+          .select('role_id, id, email')
+          .eq('id', user.id)
+          .single();
+        
+        if (!profileById) {
+            return new Response(JSON.stringify({ error: 'Forbidden: Profile not found for this session.' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200, 
+            });
+        }
+        // Use the found profile
+        profileData = profileById;
+    }
+
+    // Superuser bypass
+    const isSuper = profileData.role_id?.toLowerCase() === 'admin' || profileData.role_id?.toLowerCase() === 'system_admin';
+    
+    // Check role permissions - Try ID first (case-insensitive)
+    let { data: role } = await supabaseAdmin
+      .from('roles')
+      .select('permissions, id, name')
+      .ilike('id', profileData.role_id)
+      .single();
+
+    // If not found by ID, try by Name
+    if (!role) {
+        const { data: roleByName } = await supabaseAdmin
+          .from('roles')
+          .select('permissions, id, name')
+          .ilike('name', profileData.role_id)
+          .single();
+        role = roleByName;
+    }
+
+    // Check overrides
+    const { data: overrides } = await supabaseAdmin
+      .from('user_permission_overrides')
+      .select('permission_key, is_granted')
+      .eq('user_id', profileData.id);
+
+    const permissions = Array.isArray(role?.permissions) ? role.permissions : [];
+    const requiredPermission = action === 'delete' ? 'users:delete' : (action === 'create' ? 'users:create' : 'users:edit');
+    
+    // BROAD PERMISSION: Allow if they have ANY user management permission OR if they have ANY role at all (as requested)
+    const hasUserPermission = permissions.some((p: any) => String(p).startsWith('users:'));
+    
+    // Check if specifically granted or denied by override
+    const override = overrides?.find((o: any) => o.permission_key === requiredPermission);
+    
+    // If user has ANY role and is not trying to hack the superuser, we allow it per user request
+    const isPermitted = isSuper || (override ? override.is_granted : (hasUserPermission || !!profileData.role_id));
+
+    // Target protection: Cannot modify superuser unless you ARE the superuser
+    let isTargetSuper = false;
+    if (userId) {
+        const { data: targetProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('role_id')
+          .eq('auth_id', userId)
+          .single();
+        
+        isTargetSuper = targetProfile?.role_id?.toLowerCase() === 'admin' || targetProfile?.role_id?.toLowerCase() === 'system_admin';
+    }
+
+    if (isTargetSuper && !isSuper) {
+        return new Response(JSON.stringify({ error: 'Forbidden: Cannot modify System Superuser.' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200, 
+        });
+    }
+
+    if (!isPermitted) {
+      return new Response(JSON.stringify({ error: 'Access denied. Insufficient permissions.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
 
     if (action === 'delete' && userId) {
       const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
       if (deleteError) throw deleteError;
       
       return new Response(JSON.stringify({ message: 'User identity purged successfully.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
+
+    if (action === 'create' && body.email) {
+      const { data: createData, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email: body.email,
+        password: body.password || 'Temporary123!',
+        email_confirm: true,
+        user_metadata: {
+            full_name: body.name,
+            name: body.name,
+            display_name: body.name
+        }
+      });
+      if (createError) throw createError;
+      
+      return new Response(JSON.stringify({ message: 'User created successfully.', user: createData.user }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       });
