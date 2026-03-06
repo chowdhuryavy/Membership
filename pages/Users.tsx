@@ -666,8 +666,14 @@ const Users = () => {
                                   {outlets.map(o => {
                                       const property = properties.find(p => p.id === o.property_id);
                                       return (
-                                        <label key={o.id} className="flex items-start space-x-3 p-3 hover:bg-white rounded-xl cursor-pointer transition-all border border-transparent hover:border-slate-100 group">
-                                            <input type="checkbox" checked={formData.allowed_outlets.includes(o.id)} onChange={() => toggleOutlet(o.id)} className="h-5 w-5 text-indigo-600 rounded-lg border-slate-300 focus:ring-indigo-500 shrink-0 mt-0.5"/>
+                                        <label key={o.id} className={`flex items-start space-x-3 p-3 rounded-xl cursor-pointer transition-all border border-transparent hover:border-slate-100 group ${(!isSuperAdmin && currentUser?.id === formData.id) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white'}`}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={formData.allowed_outlets.includes(o.id)} 
+                                                onChange={() => toggleOutlet(o.id)} 
+                                                disabled={!isSuperAdmin && currentUser?.id === formData.id}
+                                                className="h-5 w-5 text-indigo-600 rounded-lg border-slate-300 focus:ring-indigo-500 shrink-0 mt-0.5"
+                                            />
                                             <div>
                                                 <span className="text-xs font-black text-slate-600 uppercase tracking-tight group-hover:text-indigo-600 block">{o.name}</span>
                                                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter block">{property?.name || 'Unassigned'}</span>
