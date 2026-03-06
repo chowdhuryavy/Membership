@@ -313,12 +313,18 @@ const Users = () => {
           return false;
       }
 
+      // Property-based filtering: Only show users who have access to at least one outlet the current user has access to
+      if (!isSuperAdmin && currentUser) {
+          const hasCommonOutlet = u.allowed_outlets.some(outletId => currentUser.allowed_outlets.includes(outletId));
+          if (!hasCommonOutlet) return false;
+      }
+
       const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             u.email.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesRole = roleFilter === 'all' || u.role_id === roleFilter;
       return matchesSearch && matchesRole;
     });
-  }, [users, searchTerm, roleFilter, isSuperAdmin]);
+  }, [users, searchTerm, roleFilter, isSuperAdmin, currentUser]);
 
   // Keyboard Shortcuts
   useEffect(() => {
@@ -663,7 +669,7 @@ const Users = () => {
                           <div className="space-y-2 pt-4 border-t border-slate-100">
                               <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1 mb-2 block">Facility Access Scopes</label>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100 max-h-48 overflow-y-auto shadow-inner custom-scrollbar">
-                                  {outlets.map(o => {
+                                  {outlets.filter(o => isSuperAdmin || currentUser?.allowed_outlets.includes(o.id)).map(o => {
                                       const property = properties.find(p => p.id === o.property_id);
                                       return (
                                         <label key={o.id} className={`flex items-start space-x-3 p-3 rounded-xl cursor-pointer transition-all border border-transparent hover:border-slate-100 group ${(!isSuperAdmin && currentUser?.id === formData.id) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white'}`}>
