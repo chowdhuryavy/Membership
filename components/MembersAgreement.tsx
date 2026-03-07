@@ -228,8 +228,12 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             {(member.package_type === 'Couple' || member.package_type === 'Family') && (
               <div className="mb-10 space-y-6">
                 <div className="flex justify-between items-end border-b-2 border-black pb-1">
-                  <h3 className="text-xs font-black uppercase">Family Manifest</h3>
-                  <h3 className="text-xs font-black uppercase font-arabic" dir="rtl">بيانات العائلة</h3>
+                  <h3 className="text-xs font-black uppercase">
+                    {member.package_type === 'Couple' ? 'Couple Details' : 'Family Manifest'}
+                  </h3>
+                  <h3 className="text-xs font-black uppercase font-arabic" dir="rtl">
+                    {member.package_type === 'Couple' ? 'بيانات الزوجين' : 'بيانات العائلة'}
+                  </h3>
                 </div>
                 <div className="grid grid-cols-2 gap-4 p-4 border border-slate-100 rounded-xl">
                    <div>
@@ -347,12 +351,42 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
 
       <style>{`
         @media print {
-          body * { visibility: hidden !important; }
-          .print-root, .print-root * { visibility: visible !important; }
-          .print-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; }
-          .print-container { border: none !important; box-shadow: none !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+          body { 
+            visibility: hidden !important; 
+            background: white !important;
+          }
+          .print-root {
+            visibility: visible !important;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+          }
+          .print-root * { 
+            visibility: visible !important; 
+          }
+          .print-container { 
+            border: none !important; 
+            box-shadow: none !important; 
+            width: 100% !important; 
+            max-width: none !important; 
+            margin: 0 !important; 
+            padding: 0 !important; 
+            background: white !important;
+          }
           .no-print { display: none !important; }
-          .print-page { width: 210mm !important; min-height: 297mm !important; padding: 20mm !important; margin: 0 auto !important; page-break-after: always !important; }
+          .print-page { 
+            width: 100% !important; 
+            margin: 0 !important; 
+            padding: 20mm !important; 
+            page-break-after: always !important; 
+            page-break-inside: avoid !important;
+            background: white !important;
+          }
           @page { size: A4; margin: 0; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
