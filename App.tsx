@@ -318,12 +318,12 @@ const ProtectedLayout = () => {
   if (!user) return <Navigate to="/login" replace />;
   
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible">
       <Sidebar onLogout={handleLogout} />
-      <div className="flex-1 flex flex-col min-w-0 relative overflow-y-auto custom-scrollbar">
+      <div className="flex-1 flex flex-col min-w-0 relative overflow-y-auto custom-scrollbar print:overflow-visible print:block">
         <TopHeader />
         <MobileHeader onLogout={handleLogout} />
-        <main className="flex-1 p-4 md:p-8 print:p-0 print:overflow-visible">
+        <main className="flex-1 p-4 md:p-8 print:p-0 print:overflow-visible print:block">
           <RouterOutlet />
         </main>
       </div>

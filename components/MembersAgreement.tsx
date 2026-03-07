@@ -97,8 +97,8 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-[300] bg-slate-900/90 backdrop-blur-md flex items-start justify-center p-4 md:p-8 animate-in fade-in duration-300 overflow-y-auto print:relative print:block print:bg-white print:p-0 print:m-0 print-root">
-      <div className="bg-white w-full max-w-[850px] rounded-2xl shadow-2xl flex flex-col border border-white/20 my-4 print:my-0 print:shadow-none print:border-none print-container">
+    <div className="fixed inset-0 z-[300] bg-slate-900/90 backdrop-blur-md flex items-start justify-center p-4 md:p-8 animate-in fade-in duration-300 overflow-y-auto print:relative print:block print:bg-white print:p-0 print:m-0 print:overflow-visible print:h-auto print-root">
+      <div className="bg-white w-full max-w-[850px] rounded-2xl shadow-2xl flex flex-col border border-white/20 my-4 print:my-0 print:shadow-none print:border-none print:overflow-visible print:h-auto print:block print-container">
         
         <div className="px-8 py-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-[210] rounded-t-2xl no-print">
           <div className="flex items-center gap-3">
@@ -358,6 +358,8 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             background: white !important;
           }
           .print-root {
+            position: relative !important;
+            inset: auto !important;
             width: 100% !important;
             height: auto !important;
             overflow: visible !important;
