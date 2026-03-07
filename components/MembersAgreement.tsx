@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Member, MembershipCategory, Property, CompanySettings, Outlet } from '../types';
 import { format } from 'date-fns';
 import { Printer, X, FileText, ShieldCheck } from 'lucide-react';
@@ -96,7 +97,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
     </div>
   );
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[300] bg-slate-900/90 backdrop-blur-md flex items-start justify-center p-4 md:p-8 animate-in fade-in duration-300 overflow-y-auto print:relative print:block print:bg-white print:p-0 print:m-0 print:overflow-visible print:h-auto print-root">
       <div className="bg-white w-full max-w-[850px] rounded-2xl shadow-2xl flex flex-col border border-white/20 my-4 print:my-0 print:shadow-none print:border-none print:overflow-visible print:h-auto print:block print-container">
         
@@ -356,6 +357,9 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
 
       <style>{`
         @media print {
+          body > #root {
+            display: none !important;
+          }
           body {
             background: white !important;
           }
@@ -398,6 +402,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
         }
         .font-arabic { font-family: 'Amiri', 'Traditional Arabic', serif; }
       `}</style>
-    </div>
+    </div>,
+    document.body
   );
 };
