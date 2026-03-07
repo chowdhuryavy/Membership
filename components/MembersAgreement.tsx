@@ -320,7 +320,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
         </div>
 
         {/* Page 2: Rules and Regulations */}
-        <div className="p-12 md:p-20 bg-white print-page overflow-hidden relative mt-4 print:mt-0 border-t border-slate-200 print:border-none">
+        <div className="p-12 md:p-20 bg-white relative mt-4 print:mt-0 border-t border-slate-200 print:border-none print:break-before-page print:block">
           <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
             <div className="text-center mb-8">
               <h3 className="text-xl font-black uppercase tracking-widest border-b-2 border-black inline-block pb-2">Gymnasium Rules & Regulations</h3>
@@ -382,16 +382,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
           .no-print, .no-print * {
             display: none !important;
           }
-          .print-page {
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 15mm !important;
-            break-after: page !important;
-            break-inside: avoid !important;
-            background: white !important;
-            display: block !important;
-          }
-          @page { size: A4; margin: 0; }
+          @page { size: A4; margin: 15mm; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
         .font-arabic { font-family: 'Amiri', 'Traditional Arabic', serif; }
