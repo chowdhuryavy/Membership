@@ -195,7 +195,12 @@ export const MembershipContract: React.FC<MembershipContractProps> = ({
                 </div>
                 <div className="pt-6 border-t-2 border-black mt-6">
                   <div className="flex justify-between px-2 mb-6">
-                    <div className="w-72 border-t border-black pt-1 text-[11px] flex justify-between"><span className="font-bold">Signature</span><span className="font-bold" dir="rtl">التوقيع :</span></div>
+                    <div className="w-72 relative">
+                      {member.member_signature && (
+                        <img src={member.member_signature} alt="Member Signature" className="absolute bottom-full left-0 h-16 object-contain mb-1" />
+                      )}
+                      <div className="border-t border-black pt-1 text-[11px] flex justify-between"><span className="font-bold">Signature</span><span className="font-bold" dir="rtl">التوقيع :</span></div>
+                    </div>
                     <div className="w-72 border-t border-black pt-1 text-[11px] flex justify-between"><span className="font-bold">Date Submitted</span><span className="font-bold" dir="rtl">تاريخ التقديم :</span></div>
                   </div>
                 </div>

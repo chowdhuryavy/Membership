@@ -174,6 +174,8 @@ export interface Member {
   spouse_dob?: string;
   kids?: { name: string; dob: string }[];
   remarks?: string;
+  member_signature?: string;
+  staff_signature?: string;
 }
 
 export interface Freeze {

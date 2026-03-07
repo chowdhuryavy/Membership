@@ -197,13 +197,23 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
 
             {/* Signatures */}
             <div className="mt-20 grid grid-cols-2 gap-20">
-               <div className="border-t border-black pt-2 flex justify-between items-center">
-                  <span className="text-[10px] font-black uppercase">Member Signature</span>
-                  <span className="text-[10px] font-black uppercase font-arabic">توقيع العضو</span>
+               <div className="relative">
+                  {member.member_signature && (
+                    <img src={member.member_signature} alt="Member Signature" className="absolute bottom-full left-0 h-16 object-contain mb-2" />
+                  )}
+                  <div className="border-t border-black pt-2 flex justify-between items-center">
+                    <span className="text-[10px] font-black uppercase">Member Signature</span>
+                    <span className="text-[10px] font-black uppercase font-arabic">توقيع العضو</span>
+                  </div>
                </div>
-               <div className="border-t border-black pt-2 flex justify-between items-center">
-                  <span className="text-[10px] font-black uppercase">Authorized Officer</span>
-                  <span className="text-[10px] font-black uppercase font-arabic">المسؤول المعتمد</span>
+               <div className="relative">
+                  {member.staff_signature && (
+                    <img src={member.staff_signature} alt="Staff Signature" className="absolute bottom-full left-0 h-16 object-contain mb-2" />
+                  )}
+                  <div className="border-t border-black pt-2 flex justify-between items-center">
+                    <span className="text-[10px] font-black uppercase">Authorized Officer</span>
+                    <span className="text-[10px] font-black uppercase font-arabic">المسؤول المعتمد</span>
+                  </div>
                </div>
             </div>
 

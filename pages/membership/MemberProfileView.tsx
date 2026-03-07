@@ -6,7 +6,7 @@ import {
   Zap, CalendarClock, Activity, AlertTriangle, X, Coins, ExternalLink,
   Shield, UserCheck, CalendarDays, ClipboardList, TrendingUp, History,
   LayoutDashboard, Calendar, Pencil, ArrowRight, AlertCircle, List,
-  Milestone, MousePointer
+  Milestone, MousePointer, PenTool
 } from 'lucide-react';
 import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, MassageType } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -14,6 +14,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../services/mockSupabase';
 import { format, differenceInCalendarDays, parse, isAfter, addDays, isBefore, startOfDay } from 'date-fns';
 import { MembersAgreement } from '../../components/MembersAgreement';
+import { SignatureModal } from '../../components/SignatureModal';
 
 const parseISO = (dateString: string) => {
   if (!dateString) return new Date();
@@ -54,6 +55,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const [freezeError, setFreezeError] = useState<string | null>(null);
 
   const [showAgreement, setShowAgreement] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
 
   const category = useMemo(() => categories.find(c => c.id === viewingMember.category_id), [categories, viewingMember.category_id]);
   const getEffectiveStatus = (member: Member) => {
@@ -71,6 +73,24 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
   const effectiveStatus = getEffectiveStatus(viewingMember);
   const isActive = effectiveStatus === MemberStatus.ACTIVE;
+
+  const handleSaveSignatures = async (memberSig: string, staffSig: string) => {
+    try {
+      await db.updateMember(viewingMember.id, {
+        member_signature: memberSig,
+        staff_signature: staffSig
+      });
+      setViewingMember({
+        ...viewingMember,
+        member_signature: memberSig,
+        staff_signature: staffSig
+      });
+      setShowSignatureModal(false);
+    } catch (err) {
+      console.error("Failed to save signatures:", err);
+      alert("Failed to save signatures. Please try again.");
+    }
+  };
 
   const loadForensics = async (targetMember: Member) => {
     const [f, b, mt, history, guests] = await Promise.all([
@@ -210,6 +230,9 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             <ArrowLeft className="w-4 h-4" /> Back to Ledger
         </button>
         <div className="relative z-10 flex flex-wrap gap-2 w-full md:w-auto">
+          <Button onClick={() => setShowSignatureModal(true)} variant="outline" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm transition-all">
+              <PenTool className="w-4 h-4 mr-2" /> Signatures
+          </Button>
           <Button onClick={() => setShowAgreement(true)} variant="outline" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase border-indigo-100 text-indigo-600 hover:bg-indigo-50 shadow-sm transition-all">
               <FileText className="w-4 h-4 mr-2" /> Print Agreement
           </Button>
@@ -656,6 +679,16 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                 </CardContent>
             </Card>
         </div>
+      )}
+
+      {showSignatureModal && (
+        <SignatureModal
+          isOpen={showSignatureModal}
+          onClose={() => setShowSignatureModal(false)}
+          onSave={handleSaveSignatures}
+          initialMemberSignature={viewingMember.member_signature}
+          initialStaffSignature={viewingMember.staff_signature}
+        />
       )}
 
       {showAgreement && (
