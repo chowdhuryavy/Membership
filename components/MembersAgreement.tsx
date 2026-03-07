@@ -320,7 +320,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
         </div>
 
         {/* Page 2: Rules and Regulations */}
-        <div className="p-12 md:p-20 bg-white relative mt-4 print:mt-0 border-t border-slate-200 print:border-none print:break-before-page print:block">
+        <div className="p-12 md:p-20 bg-white relative mt-4 print:mt-0 border-t border-slate-200 print:border-none print-page-2">
           <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
             <div className="text-center mb-8">
               <h3 className="text-xl font-black uppercase tracking-widest border-b-2 border-black inline-block pb-2">Gymnasium Rules & Regulations</h3>
@@ -329,7 +329,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             
             <div className="grid grid-cols-1 gap-y-3 text-[9px] font-medium leading-relaxed mb-12">
               {GYM_RULES.map((rule, idx) => (
-                <div key={idx} className="flex gap-4 items-start border-b border-slate-200 pb-2">
+                <div key={idx} className="flex gap-4 items-start border-b border-slate-200 pb-2 print-rule-item">
                   <span className="font-black w-6">{idx + 1}.</span>
                   <span className="flex-1">{rule.en}</span>
                   <span className="flex-1 text-right font-arabic" dir="rtl">{rule.ar}</span>
@@ -381,6 +381,13 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
           }
           .no-print, .no-print * {
             display: none !important;
+          }
+          .print-page-2 {
+            break-before: page;
+            display: block !important;
+          }
+          .print-rule-item {
+            break-inside: avoid;
           }
           @page { size: A4; margin: 15mm; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
