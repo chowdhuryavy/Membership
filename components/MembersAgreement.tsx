@@ -113,10 +113,10 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
           </div>
         </div>
 
-        <div className="p-12 md:p-20 bg-white print:p-10">
+        <div className="p-12 md:p-20 bg-white print:p-0">
           <div className="max-w-[750px] mx-auto text-black font-serif">
             {/* Header */}
-            <div className="flex justify-between items-start mb-12 border-b-4 border-black pb-8">
+            <div className="flex justify-between items-start mb-8 border-b-4 border-black pb-6">
               <div className="flex-1">
                 <h1 className="text-3xl font-black tracking-tighter text-black uppercase mb-1">{propertyName}</h1>
                 <h2 className="text-sm font-black text-slate-500 uppercase tracking-[0.3em]">{outletName}</h2>
@@ -138,18 +138,18 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-12 mb-10">
-              <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-8 mb-8">
+              <div className="space-y-3">
                 <div className="flex justify-between items-end border-b border-black pb-1">
                   <h3 className="text-xs font-black uppercase">Member Identity</h3>
                   <h3 className="text-xs font-black uppercase font-arabic" dir="rtl">هوية العضو</h3>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1">
                    <div className="flex justify-between items-end">
                      <p className="text-[10px] font-bold text-slate-400 uppercase">Legal Name</p>
                      <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">الاسم القانوني</p>
                    </div>
-                   <p className="text-base font-black uppercase">{member.guest_name}</p>
+                   <p className="text-sm font-black uppercase">{member.guest_name}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -157,37 +157,37 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Nationality</p>
                       <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">الجنسية</p>
                     </div>
-                    <p className="text-xs font-black uppercase">{member.nationality || '---'}</p>
+                    <p className="text-[11px] font-black uppercase">{member.nationality || '---'}</p>
                   </div>
                   <div>
                     <div className="flex justify-between items-end">
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Date of Birth</p>
                       <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">تاريخ الميلاد</p>
                     </div>
-                    <p className="text-xs font-black uppercase">{member.dob ? format(parseISO(member.dob), 'dd MMM yyyy') : '---'}</p>
+                    <p className="text-[11px] font-black uppercase">{member.dob ? format(parseISO(member.dob), 'dd MMM yyyy') : '---'}</p>
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1">
                    <div className="flex justify-between items-end">
                      <p className="text-[10px] font-bold text-slate-400 uppercase">Contact Information</p>
                      <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">معلومات الاتصال</p>
                    </div>
-                   <p className="text-xs font-black">{member.email}</p>
-                   <p className="text-xs font-black">{member.phone}</p>
+                   <p className="text-[11px] font-black">{member.email}</p>
+                   <p className="text-[11px] font-black">{member.phone}</p>
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div className="flex justify-between items-end border-b border-black pb-1">
                   <h3 className="text-xs font-black uppercase">Enrollment Logic</h3>
                   <h3 className="text-xs font-black uppercase font-arabic" dir="rtl">تفاصيل التسجيل</h3>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1">
                    <div className="flex justify-between items-end">
                      <p className="text-[10px] font-bold text-slate-400 uppercase">Tier Designation</p>
                      <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">نوع العضوية</p>
                    </div>
-                   <p className="text-base font-black uppercase text-indigo-600">{category?.name || 'Custom Membership'}</p>
+                   <p className="text-sm font-black uppercase text-indigo-600">{category?.name || 'Custom Membership'}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -195,28 +195,28 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Commencement</p>
                       <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">تاريخ البدء</p>
                     </div>
-                    <p className="text-xs font-black uppercase">{format(parseISO(member.start_date), 'dd MMM yyyy')}</p>
+                    <p className="text-[11px] font-black uppercase">{format(parseISO(member.start_date), 'dd MMM yyyy')}</p>
                   </div>
                   <div>
                     <div className="flex justify-between items-end">
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Expiry Date</p>
                       <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">تاريخ الانتهاء</p>
                     </div>
-                    <p className="text-xs font-black uppercase">{format(parseISO(member.current_end_date), 'dd MMM yyyy')}</p>
+                    <p className="text-[11px] font-black uppercase">{format(parseISO(member.current_end_date), 'dd MMM yyyy')}</p>
                   </div>
                 </div>
-                <div className="pt-4 mt-2 border-t border-dashed border-slate-200">
+                <div className="pt-2 mt-2 border-t border-dashed border-slate-200">
                     <div className="flex justify-between items-end mb-1">
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Total Contribution</p>
                       <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">إجمالي المبلغ</p>
                     </div>
-                    <p className="text-xl font-black">{formatMoney(member.net_amount)}</p>
+                    <p className="text-lg font-black">{formatMoney(member.net_amount)}</p>
                 </div>
               </div>
             </div>
 
             {/* Checkbox Section */}
-            <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 mb-10 grid grid-cols-2 gap-8">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-8 grid grid-cols-2 gap-8">
                 <div className="space-y-3">
                   <Checkbox checked={member.membership_type === 'New'} labelEn="New Enrollment" labelAr="طلب جديد" />
                   <Checkbox checked={member.membership_type === 'Renew'} labelEn="Renewal" labelAr="تجديد" />
@@ -229,7 +229,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
 
             {/* Family Details if applicable */}
             {(member.package_type === 'Couple' || member.package_type === 'Family') && (
-              <div className="mb-10 space-y-6">
+              <div className="mb-8 space-y-4">
                 <div className="flex justify-between items-end border-b-2 border-black pb-1">
                   <h3 className="text-xs font-black uppercase">
                     {member.package_type === 'Couple' ? 'Couple Details' : 'Family Manifest'}
@@ -238,33 +238,33 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                     {member.package_type === 'Couple' ? 'بيانات الزوجين' : 'بيانات العائلة'}
                   </h3>
                 </div>
-                <div className="grid grid-cols-2 gap-4 p-4 border border-slate-100 rounded-xl">
+                <div className="grid grid-cols-2 gap-4 p-3 border border-slate-100 rounded-xl">
                    <div>
                       <div className="flex justify-between items-end">
                         <p className="text-[9px] font-bold text-slate-400 uppercase">Spouse Name</p>
                         <p className="text-[9px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">اسم الزوج/الزوجة</p>
                       </div>
-                      <p className="text-xs font-black uppercase">{member.spouse_name || 'Not Declared'}</p>
+                      <p className="text-[11px] font-black uppercase">{member.spouse_name || 'Not Declared'}</p>
                    </div>
                    <div>
                       <div className="flex justify-between items-end">
                         <p className="text-[9px] font-bold text-slate-400 uppercase">Date of Birth</p>
                         <p className="text-[9px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">تاريخ الميلاد</p>
                       </div>
-                      <p className="text-xs font-black">{member.spouse_dob ? format(parseISO(member.spouse_dob), 'dd MMM yyyy') : '---'}</p>
+                      <p className="text-[11px] font-black">{member.spouse_dob ? format(parseISO(member.spouse_dob), 'dd MMM yyyy') : '---'}</p>
                    </div>
                 </div>
                 {member.kids && member.kids.length > 0 && (
-                  <div className="grid grid-cols-1 gap-2">
+                  <div className="grid grid-cols-1 gap-1">
                     {member.kids.map((kid, i) => (
-                      <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
+                      <div key={i} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg border border-slate-100">
                         <div className="flex flex-col">
-                          <span className="text-[10px] font-black uppercase tracking-tight">Dependent {i+1}: {kid.name}</span>
-                          <span className="text-[10px] font-black uppercase tracking-tight font-arabic" dir="rtl">التابع {i+1}</span>
+                          <span className="text-[9px] font-black uppercase tracking-tight">Dependent {i+1}: {kid.name}</span>
+                          <span className="text-[9px] font-black uppercase tracking-tight font-arabic" dir="rtl">التابع {i+1}</span>
                         </div>
                         <div className="flex flex-col text-right">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase">DOB: {format(parseISO(kid.dob), 'dd MMM yyyy')}</span>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">تاريخ الميلاد</span>
+                          <span className="text-[8px] font-bold text-slate-400 uppercase">DOB: {format(parseISO(kid.dob), 'dd MMM yyyy')}</span>
+                          <span className="text-[8px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">تاريخ الميلاد</span>
                         </div>
                       </div>
                     ))}
@@ -274,17 +274,17 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             )}
 
             {/* Terms & Conditions */}
-            <div className="mt-12 pt-8 border-t-4 border-black">
-               <div className="grid grid-cols-2 gap-10">
-                  <div className="space-y-4">
-                    <h4 className="text-[11px] font-black uppercase underline">Conditions of Enrollment</h4>
-                    <p className="text-[9px] leading-relaxed text-justify">
+            <div className="mt-8 pt-6 border-t-4 border-black">
+               <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-black uppercase underline">Conditions of Enrollment</h4>
+                    <p className="text-[8px] leading-relaxed text-justify">
                       Membership is non-transferable and non-refundable. All facility rules must be strictly adhered to. The management reserves the right to suspend or terminate membership for breach of protocols. Members must present their ID upon entry.
                     </p>
                   </div>
-                  <div className="space-y-4" dir="rtl">
-                    <h4 className="text-[11px] font-black uppercase underline font-arabic">شروط العضوية</h4>
-                    <p className="text-[9px] leading-relaxed text-justify font-arabic">
+                  <div className="space-y-2" dir="rtl">
+                    <h4 className="text-[10px] font-black uppercase underline font-arabic">شروط العضوية</h4>
+                    <p className="text-[8px] leading-relaxed text-justify font-arabic">
                       العضوية غير قابلة للتحويل وغير قابلة للاسترداد. يجب الالتزام الصارم بجميع قواعد المنشأة. تحتفظ الإدارة بالحق في تعليق أو إنهاء العضوية بسبب خرق البروتوكولات. يجب على الأعضاء تقديم هويتهم عند الدخول.
                     </p>
                   </div>
@@ -292,7 +292,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
 
             {/* Signatures */}
-            <div className="mt-20 grid grid-cols-2 gap-20">
+            <div className="mt-12 grid grid-cols-2 gap-16">
                <div className="relative">
                   {member.member_signature && (
                     <img src={member.member_signature} alt="Member Signature" className="absolute bottom-full left-0 h-16 object-contain mb-2" />
@@ -320,16 +320,16 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
         </div>
 
         {/* Page 2: Rules and Regulations */}
-        <div className="p-12 md:p-20 bg-white relative mt-4 print:mt-0 border-t border-slate-200 print:border-none print-page-2">
+        <div className="p-12 md:p-20 bg-white relative mt-4 print:mt-0 border-t border-slate-200 print:border-none print-page-2 print:p-0">
           <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
-            <div className="text-center mb-8">
-              <h3 className="text-xl font-black uppercase tracking-widest border-b-2 border-black inline-block pb-2">Gymnasium Rules & Regulations</h3>
-              <h3 className="text-lg font-bold mt-2 font-arabic" dir="rtl">القواعد و اللوائح الخاصة بصالة الألعاب الرياضية</h3>
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-black uppercase tracking-widest border-b-2 border-black inline-block pb-2">Gymnasium Rules & Regulations</h3>
+              <h3 className="text-base font-bold mt-2 font-arabic" dir="rtl">القواعد و اللوائح الخاصة بصالة الألعاب الرياضية</h3>
             </div>
             
-            <div className="grid grid-cols-1 gap-y-3 text-[9px] font-medium leading-relaxed mb-12">
+            <div className="grid grid-cols-1 gap-y-2 text-[8px] font-medium leading-relaxed mb-8">
               {GYM_RULES.map((rule, idx) => (
-                <div key={idx} className="flex gap-4 items-start border-b border-slate-200 pb-2 print-rule-item">
+                <div key={idx} className="flex gap-4 items-start border-b border-slate-200 pb-1.5 print-rule-item">
                   <span className="font-black w-6">{idx + 1}.</span>
                   <span className="flex-1">{rule.en}</span>
                   <span className="flex-1 text-right font-arabic" dir="rtl">{rule.ar}</span>
@@ -337,7 +337,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
               ))}
             </div>
             
-            <div className="mt-auto pt-6 border-t-2 border-black">
+            <div className="mt-auto pt-4 border-t-2 border-black">
               <div className="flex justify-between px-2">
                 <div className="w-72 relative">
                   {member.member_signature && (
