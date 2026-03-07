@@ -114,7 +114,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
         </div>
 
         <div className="p-12 md:p-20 bg-white print:p-0">
-          <div className="max-w-[750px] mx-auto text-black font-serif">
+          <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
             {/* Header */}
             <div className="flex justify-between items-start mb-8 border-b-4 border-black pb-6">
               <div className="flex-1">
