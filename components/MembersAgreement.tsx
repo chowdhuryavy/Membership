@@ -217,12 +217,12 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
 
             {/* Checkbox Section */}
-            <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 mb-10 grid grid-cols-2 gap-8">
-                <div className="space-y-4">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 grid grid-cols-2 gap-8">
+                <div className="space-y-3">
                   <Checkbox checked={member.membership_type === 'New'} labelEn="New Enrollment" labelAr="طلب جديد" />
                   <Checkbox checked={member.membership_type === 'Renew'} labelEn="Renewal" labelAr="تجديد" />
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <Checkbox checked={member.access_type === 'Pool' || member.access_type === 'Both'} labelEn="Pool Access" labelAr="حمام السباحة" />
                   <Checkbox checked={member.access_type === 'Spa' || member.access_type === 'Both'} labelEn="Spa Facilities" labelAr="نادي السبا" />
                 </div>
@@ -230,7 +230,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
 
             {/* Family Details if applicable */}
             {(member.package_type === 'Couple' || member.package_type === 'Family') && (
-              <div className="mb-10 space-y-4">
+              <div className="mb-6 space-y-4">
                 <div className="flex justify-between items-end border-b-2 border-black pb-1">
                   <h3 className="text-xs font-black uppercase">
                     {member.package_type === 'Couple' ? 'Couple Details' : 'Family Manifest'}
@@ -239,7 +239,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                     {member.package_type === 'Couple' ? 'بيانات الزوجين' : 'بيانات العائلة'}
                   </h3>
                 </div>
-                <div className="grid grid-cols-2 gap-6 p-4 border border-slate-100 rounded-xl">
+                <div className="grid grid-cols-2 gap-4 p-3 border border-slate-100 rounded-xl">
                    <div>
                       <div className="flex justify-between items-end">
                         <p className="text-[10px] font-bold text-slate-400 uppercase">Spouse Name</p>
@@ -275,7 +275,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             )}
 
             {/* Terms & Conditions */}
-            <div className="mt-10 pt-6 border-t-4 border-black">
+            <div className="mt-6 pt-6 border-t-4 border-black">
                <div className="grid grid-cols-2 gap-12">
                   <div className="space-y-3">
                     <h4 className="text-[11px] font-black uppercase underline">Conditions of Enrollment</h4>
@@ -293,8 +293,8 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
 
             {/* Signatures */}
-            <div className="mt-20 grid grid-cols-2 gap-16">
-               <div className="flex flex-col justify-end h-24">
+            <div className="mt-12 grid grid-cols-2 gap-16 break-inside-avoid">
+               <div className="flex flex-col justify-end h-24 break-inside-avoid">
                   {member.member_signature && (
                     <img src={member.member_signature} alt="Member Signature" className="h-16 object-contain mb-2 self-start" />
                   )}
@@ -303,7 +303,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                     <span className="text-[11px] font-black uppercase font-arabic">توقيع العضو</span>
                   </div>
                </div>
-               <div className="flex flex-col justify-end h-24">
+               <div className="flex flex-col justify-end h-24 break-inside-avoid">
                   {member.staff_signature && (
                     <img src={member.staff_signature} alt="Staff Signature" className="h-16 object-contain mb-2 self-start" />
                   )}
@@ -314,7 +314,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                </div>
             </div>
 
-            <div className="mt-12 text-center">
+            <div className="mt-8 text-center">
               <p className="text-[9px] font-bold text-slate-300 uppercase tracking-[0.5em]">This is a digitally generated legal instrument &bull; System ID: {member.id.substring(0,8)}</p>
             </div>
           </div>
