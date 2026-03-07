@@ -292,19 +292,19 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
 
             {/* Signatures */}
-            <div className="mt-12 grid grid-cols-2 gap-16">
-               <div className="relative">
+            <div className="mt-16 grid grid-cols-2 gap-16">
+               <div className="relative pt-12">
                   {member.member_signature && (
-                    <img src={member.member_signature} alt="Member Signature" className="absolute bottom-full left-0 h-16 object-contain mb-2" />
+                    <img src={member.member_signature} alt="Member Signature" className="absolute bottom-full left-0 h-16 object-contain mb-1" />
                   )}
                   <div className="border-t border-black pt-2 flex justify-between items-center">
                     <span className="text-[10px] font-black uppercase">Member Signature</span>
                     <span className="text-[10px] font-black uppercase font-arabic">توقيع العضو</span>
                   </div>
                </div>
-               <div className="relative">
+               <div className="relative pt-12">
                   {member.staff_signature && (
-                    <img src={member.staff_signature} alt="Staff Signature" className="absolute bottom-full left-0 h-16 object-contain mb-2" />
+                    <img src={member.staff_signature} alt="Staff Signature" className="absolute bottom-full left-0 h-16 object-contain mb-1" />
                   )}
                   <div className="border-t border-black pt-2 flex justify-between items-center">
                     <span className="text-[10px] font-black uppercase">Authorized Officer</span>
@@ -313,7 +313,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                </div>
             </div>
 
-            <div className="mt-12 text-center">
+            <div className="mt-8 text-center">
               <p className="text-[8px] font-bold text-slate-300 uppercase tracking-[0.5em]">This is a digitally generated legal instrument &bull; System ID: {member.id.substring(0,8)}</p>
             </div>
           </div>
@@ -327,9 +327,9 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
               <h3 className="text-base font-bold mt-2 font-arabic" dir="rtl">القواعد و اللوائح الخاصة بصالة الألعاب الرياضية</h3>
             </div>
             
-            <div className="grid grid-cols-1 gap-y-2 text-[8px] font-medium leading-relaxed mb-8">
+            <div className="grid grid-cols-1 gap-y-1.5 text-[8px] font-medium leading-relaxed mb-6">
               {GYM_RULES.map((rule, idx) => (
-                <div key={idx} className="flex gap-4 items-start border-b border-slate-200 pb-1.5 print-rule-item">
+                <div key={idx} className="flex gap-4 items-start border-b border-slate-200 pb-1 print-rule-item">
                   <span className="font-black w-6">{idx + 1}.</span>
                   <span className="flex-1">{rule.en}</span>
                   <span className="flex-1 text-right font-arabic" dir="rtl">{rule.ar}</span>
@@ -339,13 +339,15 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             
             <div className="mt-auto pt-4 border-t-2 border-black">
               <div className="flex justify-between px-2">
-                <div className="w-72 relative">
+                <div className="w-72 relative pt-12">
                   {member.member_signature && (
                     <img src={member.member_signature} alt="Member Signature" className="absolute bottom-full left-0 h-16 object-contain mb-1" />
                   )}
                   <div className="border-t border-black pt-1 text-[11px] flex justify-between"><span className="font-bold">Member Signature</span><span className="font-bold" dir="rtl">توقيع العضو :</span></div>
                 </div>
-                <div className="w-72 border-t border-black pt-1 text-[11px] flex justify-between"><span className="font-bold">Date</span><span className="font-bold" dir="rtl">التاريخ :</span></div>
+                <div className="w-72 relative pt-12">
+                   <div className="border-t border-black pt-1 text-[11px] flex justify-between"><span className="font-bold">Date</span><span className="font-bold" dir="rtl">التاريخ :</span></div>
+                </div>
               </div>
             </div>
           </div>
