@@ -351,41 +351,48 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
 
       <style>{`
         @media print {
-          body { 
-            visibility: hidden !important; 
-            background: white !important;
+          body * {
+            visibility: hidden !important;
+          }
+          .print-root, .print-root * {
+            visibility: visible !important;
           }
           .print-root {
-            visibility: visible !important;
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
             height: auto !important;
+            overflow: visible !important;
+            display: block !important;
+            background: white !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            transform: none !important;
+          }
+          .print-container {
+            width: 100% !important;
+            max-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            display: block !important;
             background: white !important;
           }
-          .print-root * { 
-            visibility: visible !important; 
+          .no-print, .no-print * {
+            display: none !important;
           }
-          .print-container { 
-            border: none !important; 
-            box-shadow: none !important; 
-            width: 100% !important; 
-            max-width: none !important; 
-            margin: 0 !important; 
-            padding: 0 !important; 
-            background: white !important;
-          }
-          .no-print { display: none !important; }
-          .print-page { 
-            width: 100% !important; 
-            margin: 0 !important; 
-            padding: 20mm !important; 
-            page-break-after: always !important; 
+          .print-page {
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 15mm !important;
+            page-break-after: always !important;
             page-break-inside: avoid !important;
             background: white !important;
+            display: block !important;
           }
           @page { size: A4; margin: 0; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
