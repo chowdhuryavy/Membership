@@ -276,6 +276,7 @@ const MassageScheduling = () => {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showBookingForm, setShowBookingForm] = useState(false);
+  const [showMassageForm, setShowMassageForm] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<MassageBooking | null>(null);
   const [selectedGuestForHistory, setSelectedGuestForHistory] = useState<Guest | null>(null);
   const [editingBooking, setEditingBooking] = useState<MassageBooking | null>(null);
@@ -963,12 +964,24 @@ NOTIFY pgrst, 'reload schema';`}
                 onRefresh={loadData}
                 externalFormState={inventoryFormState}
             />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 gap-8">
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white h-fit">
                     <CardHeader className="p-8 border-b bg-slate-900 text-white relative">
-                        <CardTitle className="text-lg font-black uppercase tracking-widest flex items-center gap-3">
-                            <Layers className="w-5 h-5 text-indigo-400" /> Treatment Master Catalog
-                        </CardTitle>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-lg font-black uppercase tracking-widest flex items-center gap-3">
+                                <Layers className="w-5 h-5 text-indigo-400" /> Treatment Master Catalog
+                            </CardTitle>
+                            <button 
+                                onClick={() => {
+                                    setIsEditingResource(false);
+                                    setNewType({ id: '', name: '', price: 0, duration_minutes: 60, description: '' });
+                                    setShowMassageForm(true);
+                                }}
+                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20"
+                            >
+                                Provision New Treatment
+                            </button>
+                        </div>
                         <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700 w-fit mt-4">
                             <button onClick={() => setTreatmentType('Massage')} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${treatmentType === 'Massage' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Massage</button>
                             <button onClick={() => setTreatmentType('Personal Training')} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${treatmentType === 'Personal Training' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Personal Training</button>
@@ -1023,6 +1036,7 @@ NOTIFY pgrst, 'reload schema';`}
                                                                 category: mt.category || 'Massage',
                                                                 description: mt.description || ''
                                                               }); 
+                                                              setShowMassageForm(true);
                                                               setSaveError(null); 
                                                           }
                                                         }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit3 className="w-3.5 h-3.5"/></button>
@@ -1037,37 +1051,6 @@ NOTIFY pgrst, 'reload schema';`}
                         </table>
                     </CardContent>
                 </Card>
-
-                {canManageResources && (
-                    <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white h-fit">
-                        <CardHeader className="p-8 border-b bg-indigo-600 text-white">
-                            <CardTitle className="text-lg font-black uppercase tracking-widest">{isEditingResource ? 'Modify Treatment' : 'Provision New Treatment'}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-10">
-                            <form onSubmit={handleSaveMassageType} className="space-y-6">
-                                <Input label="Service Designation *" value={newType.name} onChange={e => setNewType({...newType, name: e.target.value})} className="h-14 rounded-2xl font-bold" placeholder="e.g. Aromatherapy Session" />
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Inclusions / Description</label>
-                                    <textarea 
-                                        value={newType.description} 
-                                        onChange={e => setNewType({...newType, description: e.target.value})} 
-                                        className="w-full p-4 rounded-2xl border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 focus:outline-none min-h-[100px]" 
-                                        placeholder="List what is included in this treatment or package..."
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-6">
-                                    <Input label="Duration (Min)" type="number" value={newType.duration_minutes} onChange={e => setNewType({...newType, duration_minutes: Number(e.target.value)})} className="h-14 rounded-2xl" />
-                                    <Input label="Retail Rate *" type="number" step="0.01" value={newType.price} onChange={e => setNewType({...newType, price: Number(e.target.value)})} className="h-14 rounded-2xl" />
-                                </div>
-                                {saveError && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-bold uppercase flex items-center gap-2 animate-in shake duration-300"><ShieldAlert className="w-4 h-4"/> {saveError}</div>}
-                                <div className="flex gap-4">
-                                    {isEditingResource && <Button type="button" variant="secondary" onClick={() => { setIsEditingResource(false); setNewType({id:'', name:'', price:0, duration_minutes:60}); setSaveError(null); }} className="flex-1 h-14 rounded-2xl">Discard</Button>}
-                                    <Button type="submit" isLoading={isSubmitting} className="flex-1 h-14 rounded-2xl font-black uppercase shadow-xl shadow-indigo-100">{isEditingResource ? 'Update Portfolio' : 'Deploy Service'}</Button>
-                                </div>
-                            </form>
-                        </CardContent>
-                    </Card>
-                )}
             </div>
         </div>
       )}
@@ -1243,6 +1226,40 @@ NOTIFY pgrst, 'reload schema';`}
             members={members}
             initialBooking={editingBooking || undefined}
           />
+      )}
+
+      {showMassageForm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden bg-white w-full max-w-2xl scale-100 animate-in zoom-in-95 duration-200">
+                <CardHeader className="p-8 border-b bg-indigo-600 text-white flex flex-row items-center justify-between">
+                    <CardTitle className="text-lg font-black uppercase tracking-widest">{isEditingResource ? 'Modify Treatment' : 'Provision New Treatment'}</CardTitle>
+                    <button onClick={() => setShowMassageForm(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-5 h-5 text-white" /></button>
+                </CardHeader>
+                <CardContent className="p-10">
+                    <form onSubmit={(e) => { handleSaveMassageType(e); setShowMassageForm(false); }} className="space-y-6">
+                        <Input label="Service Designation *" value={newType.name} onChange={e => setNewType({...newType, name: e.target.value})} className="h-14 rounded-2xl font-bold" placeholder="e.g. Aromatherapy Session" />
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Inclusions / Description</label>
+                            <textarea 
+                                value={newType.description} 
+                                onChange={e => setNewType({...newType, description: e.target.value})} 
+                                className="w-full p-4 rounded-2xl border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 focus:outline-none min-h-[100px]" 
+                                placeholder="List what is included in this treatment or package..."
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-6">
+                            <Input label="Duration (Min)" type="number" value={newType.duration_minutes} onChange={e => setNewType({...newType, duration_minutes: Number(e.target.value)})} className="h-14 rounded-2xl" />
+                            <Input label="Retail Rate *" type="number" step="0.01" value={newType.price} onChange={e => setNewType({...newType, price: Number(e.target.value)})} className="h-14 rounded-2xl" />
+                        </div>
+                        {saveError && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-bold uppercase flex items-center gap-2 animate-in shake duration-300"><ShieldAlert className="w-4 h-4"/> {saveError}</div>}
+                        <div className="flex gap-4">
+                            <Button type="button" variant="secondary" onClick={() => setShowMassageForm(false)} className="flex-1 h-14 rounded-2xl">Discard</Button>
+                            <Button type="submit" isLoading={isSubmitting} className="flex-1 h-14 rounded-2xl font-black uppercase shadow-xl shadow-indigo-100">{isEditingResource ? 'Update Portfolio' : 'Deploy Service'}</Button>
+                        </div>
+                    </form>
+                </CardContent>
+            </Card>
+        </div>
       )}
 
       <ConfirmationModal isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} onConfirm={handleDeleteConfirmed} title="Purge Record" description={`Permanently remove ${itemToDelete?.name}?`} confirmText="Confirm Removal" isDestructive={true} />
