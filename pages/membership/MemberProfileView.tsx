@@ -222,9 +222,9 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const canFreeze = hasPermission(user?.role_id || '', 'members:freeze');
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500 pb-20 no-print">
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500 pb-20">
       
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden group">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden group print:hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/30 rounded-full blur-3xl -mr-32 -mt-32"></div>
         <button onClick={onBack} className="relative z-10 flex items-center gap-2 px-5 py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-all bg-slate-50 rounded-2xl border border-slate-100 shadow-inner">
             <ArrowLeft className="w-4 h-4" /> Back to Ledger
@@ -265,7 +265,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:hidden">
           
           <div className="lg:col-span-4 space-y-8">
               <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white group/card">
