@@ -30,7 +30,8 @@ const UserDetail = ({
     const getRoleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || 'Unknown';
     const isUnlinked = !user.auth_id;
 
-    const canManageOverrides = currentUser && hasPermission(currentUser.role_id, 'users:manage_overrides');
+    const isSelf = currentUser?.id === user.id;
+    const canManageOverrides = currentUser && hasPermission(currentUser.role_id, 'users:manage_overrides') && (!isSelf || isSuperAdmin);
     const rolePermissions = roles.find(r => r.id === user.role_id)?.permissions || [];
 
     const handleToggleOverride = async (key: Permission, currentState: boolean | null) => {
