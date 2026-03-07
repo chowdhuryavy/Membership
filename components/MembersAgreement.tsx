@@ -131,8 +131,8 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                 {logoUrl && <img src={logoUrl} alt="Logo" className="h-20 w-auto object-contain" />}
                 <div className="text-right">
                   <div className="flex justify-end items-center gap-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest">Serial No.</p>
-                    <p className="text-[10px] font-black uppercase tracking-widest font-arabic" dir="rtl">الرقم التسلسلي</p>
+                    <p className="text-[10px] font-black tracking-widest">Membership No..</p>
+                    <p className="text-[10px] font-black tracking-widest font-arabic" dir="rtl">الرقم التسلسلي</p>
                   </div>
                   <p className="text-xl font-black tracking-widest text-indigo-600">{member.membership_number}</p>
                 </div>
