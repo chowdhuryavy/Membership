@@ -6,7 +6,7 @@ import {
   Zap, CalendarClock, Activity, AlertTriangle, X, Coins, ExternalLink,
   Shield, UserCheck, CalendarDays, ClipboardList, TrendingUp, History,
   LayoutDashboard, Calendar, Pencil, ArrowRight, AlertCircle, List,
-  Milestone, MousePointer, PenTool
+  Milestone, MousePointer, PenTool, Wallet
 } from 'lucide-react';
 import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, MassageType } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -126,6 +126,12 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const totalRevenue = useMemo(() => {
     return lifecycleHistory.reduce((sum, hist) => sum + (hist.net_amount || 0), 0);
   }, [lifecycleHistory]);
+
+  const totalServiceRevenue = useMemo(() => {
+    return memberBookings.reduce((sum, booking) => sum + Number(booking.price || 0), 0);
+  }, [memberBookings]);
+
+  const grandTotal = totalRevenue + totalServiceRevenue;
 
   const maxAllowed = category?.max_freeze_days || 0;
   
@@ -324,6 +330,30 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         <div className="flex justify-between items-end">
                            <span className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest">Daily Yield</span>
                            <span className="text-3xl font-black text-emerald-300 tracking-tighter">{formatMoney(viewingMember.daily_rate)}</span>
+                        </div>
+                    </div>
+                 </div>
+              </Card>
+
+              <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl p-8 bg-slate-900 text-white relative overflow-hidden group">
+                 <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform duration-700"><Wallet className="w-32 h-32 text-emerald-500" /></div>
+                 <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-8">
+                        <div className="w-11 h-11 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 shadow-lg"><Wallet className="w-6 h-6 text-emerald-400" /></div>
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.3em]">Consolidated Portfolio</h4>
+                    </div>
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-end border-b border-white/10 pb-4">
+                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Membership Revenue</span>
+                           <span className="text-xl font-black tracking-tighter">{formatMoney(totalRevenue)}</span>
+                        </div>
+                        <div className="flex justify-between items-end border-b border-white/10 pb-4">
+                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Service Revenue</span>
+                           <span className="text-xl font-black tracking-tighter">{formatMoney(totalServiceRevenue)}</span>
+                        </div>
+                        <div className="flex justify-between items-end pt-2">
+                           <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest">Grand Total</span>
+                           <span className="text-3xl font-black text-emerald-400 tracking-tighter">{formatMoney(grandTotal)}</span>
                         </div>
                     </div>
                  </div>
