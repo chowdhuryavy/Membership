@@ -216,7 +216,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
 
             {/* Checkbox Section */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-8 grid grid-cols-2 gap-8">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 grid grid-cols-2 gap-8">
                 <div className="space-y-3">
                   <Checkbox checked={member.membership_type === 'New'} labelEn="New Enrollment" labelAr="طلب جديد" />
                   <Checkbox checked={member.membership_type === 'Renew'} labelEn="Renewal" labelAr="تجديد" />
@@ -229,7 +229,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
 
             {/* Family Details if applicable */}
             {(member.package_type === 'Couple' || member.package_type === 'Family') && (
-              <div className="mb-8 space-y-4">
+              <div className="mb-6 space-y-4">
                 <div className="flex justify-between items-end border-b-2 border-black pb-1">
                   <h3 className="text-xs font-black uppercase">
                     {member.package_type === 'Couple' ? 'Couple Details' : 'Family Manifest'}
@@ -274,7 +274,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             )}
 
             {/* Terms & Conditions */}
-            <div className="mt-8 pt-6 border-t-4 border-black">
+            <div className="mt-6 pt-6 border-t-4 border-black">
                <div className="grid grid-cols-2 gap-8">
                   <div className="space-y-2">
                     <h4 className="text-[10px] font-black uppercase underline">Conditions of Enrollment</h4>
@@ -292,21 +292,21 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
 
             {/* Signatures */}
-            <div className="mt-16 grid grid-cols-2 gap-16">
-               <div className="relative pt-12">
+            <div className="mt-8 grid grid-cols-2 gap-16">
+               <div className="flex flex-col justify-end h-20">
                   {member.member_signature && (
-                    <img src={member.member_signature} alt="Member Signature" className="absolute bottom-full left-0 h-16 object-contain mb-1" />
+                    <img src={member.member_signature} alt="Member Signature" className="h-14 object-contain mb-1 self-start" />
                   )}
-                  <div className="border-t border-black pt-2 flex justify-between items-center">
+                  <div className="border-t border-black pt-2 flex justify-between items-center w-full">
                     <span className="text-[10px] font-black uppercase">Member Signature</span>
                     <span className="text-[10px] font-black uppercase font-arabic">توقيع العضو</span>
                   </div>
                </div>
-               <div className="relative pt-12">
+               <div className="flex flex-col justify-end h-20">
                   {member.staff_signature && (
-                    <img src={member.staff_signature} alt="Staff Signature" className="absolute bottom-full left-0 h-16 object-contain mb-1" />
+                    <img src={member.staff_signature} alt="Staff Signature" className="h-14 object-contain mb-1 self-start" />
                   )}
-                  <div className="border-t border-black pt-2 flex justify-between items-center">
+                  <div className="border-t border-black pt-2 flex justify-between items-center w-full">
                     <span className="text-[10px] font-black uppercase">Authorized Officer</span>
                     <span className="text-[10px] font-black uppercase font-arabic">المسؤول المعتمد</span>
                   </div>
@@ -339,14 +339,14 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             
             <div className="mt-auto pt-4 border-t-2 border-black">
               <div className="flex justify-between px-2">
-                <div className="w-72 relative pt-12">
+                <div className="w-72 flex flex-col justify-end h-20">
                   {member.member_signature && (
-                    <img src={member.member_signature} alt="Member Signature" className="absolute bottom-full left-0 h-16 object-contain mb-1" />
+                    <img src={member.member_signature} alt="Member Signature" className="h-14 object-contain mb-1 self-start" />
                   )}
-                  <div className="border-t border-black pt-1 text-[11px] flex justify-between"><span className="font-bold">Member Signature</span><span className="font-bold" dir="rtl">توقيع العضو :</span></div>
+                  <div className="border-t border-black pt-1 text-[11px] flex justify-between w-full"><span className="font-bold">Member Signature</span><span className="font-bold" dir="rtl">توقيع العضو :</span></div>
                 </div>
-                <div className="w-72 relative pt-12">
-                   <div className="border-t border-black pt-1 text-[11px] flex justify-between"><span className="font-bold">Date</span><span className="font-bold" dir="rtl">التاريخ :</span></div>
+                <div className="w-72 flex flex-col justify-end h-20">
+                   <div className="border-t border-black pt-1 text-[11px] flex justify-between w-full"><span className="font-bold">Date</span><span className="font-bold" dir="rtl">التاريخ :</span></div>
                 </div>
               </div>
             </div>
