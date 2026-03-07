@@ -966,12 +966,14 @@ NOTIFY pgrst, 'reload schema';`}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white h-fit">
                     <CardHeader className="p-8 border-b bg-slate-900 text-white relative">
-                        <CardTitle className="text-lg font-black uppercase tracking-widest flex items-center gap-3">
-                            <Layers className="w-5 h-5 text-indigo-400" /> Treatment Master Catalog
-                        </CardTitle>
-                        <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700 mt-4">
-                            <button onClick={() => setTreatmentType('Massage')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${treatmentType === 'Massage' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Massage</button>
-                            <button onClick={() => setTreatmentType('Personal Training')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${treatmentType === 'Personal Training' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Personal Training</button>
+                        <div className="flex items-center justify-between gap-4">
+                            <CardTitle className="text-lg font-black uppercase tracking-widest flex items-center gap-3">
+                                <Layers className="w-5 h-5 text-indigo-400" /> Treatment Master Catalog
+                            </CardTitle>
+                            <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+                                <button onClick={() => setTreatmentType('Massage')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${treatmentType === 'Massage' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Massage</button>
+                                <button onClick={() => setTreatmentType('Personal Training')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${treatmentType === 'Personal Training' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Personal Training</button>
+                            </div>
                         </div>
                         <p className="text-[9px] font-bold text-indigo-200 uppercase mt-4">Service Portfolio Management</p>
                     </CardHeader>
