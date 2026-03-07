@@ -255,7 +255,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                     <table className="w-full text-sm text-left">
                         <thead className="text-[9px] text-slate-400 font-black uppercase tracking-[0.25em] border-b bg-slate-50/20">
                           <tr>
-                            <th className="px-10 py-6">Identity Serial</th>
+                            <th className="px-10 py-6">Membership No</th>
                             <th className="px-10 py-6">Guest Profile</th>
                             <th className="px-10 py-6 text-center">Status</th>
                             <th className="px-10 py-6">Commencement</th>
