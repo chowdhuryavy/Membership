@@ -35,7 +35,12 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
   onClose,
 }) => {
   const handlePrint = () => {
+    const originalTitle = document.title;
+    document.title = `${member.guest_name.replace(/\s+/g, '_')}_${member.membership_number}`;
     window.print();
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
   };
 
   const logoUrl = property?.logo_url || settings?.logo_url || '';
@@ -55,8 +60,8 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-[300] bg-slate-900/90 backdrop-blur-md flex items-start justify-center p-4 md:p-8 animate-in fade-in duration-300 overflow-y-auto print:p-0 print:bg-white print:block">
-      <div className="bg-white w-full max-w-[850px] rounded-2xl shadow-2xl flex flex-col border border-white/20 my-4 print:my-0 print:shadow-none print:w-full print:max-w-none print:border-none">
+    <div className="fixed inset-0 z-[300] bg-slate-900/90 backdrop-blur-md flex items-start justify-center p-4 md:p-8 animate-in fade-in duration-300 overflow-y-auto print-root">
+      <div className="bg-white w-full max-w-[850px] rounded-2xl shadow-2xl flex flex-col border border-white/20 my-4 print-container">
         
         <div className="px-8 py-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-[210] rounded-t-2xl no-print">
           <div className="flex items-center gap-3">
@@ -227,10 +232,12 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
       <style>{`
         @media print {
           body * { visibility: hidden !important; }
-          .print:block, .print:block * { visibility: visible !important; }
+          .print-root, .print-root * { visibility: visible !important; }
+          .print-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; }
+          .print-container { border: none !important; box-shadow: none !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
           .no-print { display: none !important; }
-          .print-modal-container { position: absolute; left: 0; top: 0; width: 100%; }
           @page { size: A4; margin: 15mm; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
         .font-arabic { font-family: 'Amiri', 'Traditional Arabic', serif; }
       `}</style>

@@ -46,8 +46,13 @@ export const MembershipContract: React.FC<MembershipContractProps> = ({
 }) => {
   const handlePrint = (e: React.MouseEvent) => {
     e.preventDefault();
+    const originalTitle = document.title;
+    document.title = `${member.guest_name.replace(/\s+/g, '_')}_${member.membership_number}`;
     window.focus();
     window.print();
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
   };
 
   const logoUrl = property?.logo_url || settings?.logo_url || 'https://fqwfffkkaeknaqjorygy.supabase.co/storage/v1/object/public/logos/al_aziziyah_logo.png';
@@ -211,11 +216,11 @@ export const MembershipContract: React.FC<MembershipContractProps> = ({
 
       <style>{`
         @media print {
-          body * { display: none !important; visibility: hidden !important; }
-          .print-root, .print-root *, .print-modal-container, .print-modal-container *, .print-page, .print-page * { display: block !important; visibility: visible !important; }
+          body * { visibility: hidden !important; }
+          .print-root, .print-root * { visibility: visible !important; }
+          .print-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; }
+          .print-modal-container { border: none !important; box-shadow: none !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
           .no-print { display: none !important; }
-          .print-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: white !important; }
-          .print-modal-container { border: none !important; box-shadow: none !important; width: 100% !important; }
           .print-page { width: 210mm !important; min-height: 297mm !important; padding: 20mm !important; margin: 0 auto !important; page-break-after: always !important; }
           @page { size: A4; margin: 0; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
