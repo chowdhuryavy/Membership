@@ -25,6 +25,40 @@ const parseISO = (dateString?: string) => {
   }
 };
 
+const GYM_RULES = [
+  { en: "Only registered members and authorized visitors are allowed entry.", ar: "يسمح بالدخول فقط للأعضاء المسجلين والزوار المعتمدين." },
+  { en: "No person below 18 years old is allowed to use the facility.", ar: "لا يسمح لأي شخص يقل عمره عن 18 عامًا باستخدام المرفق." },
+  { en: "Members should consult a doctor before starting a new fitness routine.", ar: "يجب على الأعضاء استشارة الطبيب قبل البدء في روتين لياقة بدنية جديد." },
+  { en: "If you suffer from medical conditions or are taking medications, please consult your doctor and inform the club staff before using the gym.", ar: "إذا كنت تعاني من حالات طبية أو تتناول أدوية، يرجى استشارة طبيبك وإبلاغ موظفي النادي قبل استخدام الصالة الرياضية." },
+  { en: "Pregnant women must consult their healthcare provider before exercising; a liability waiver may be required.", ar: "يجب على النساء الحوامل استشارة مقدم الرعاية الصحية قبل ممارسة الرياضة؛ قد يُطلب التنازل عن المسؤولية." },
+  { en: "Proper athletic attire and non-marking footwear are required at all times.", ar: "مطلوب ارتداء ملابس رياضية مناسبة وأحذية لا تترك أثرًا في جميع الأوقات." },
+  { en: "Follow equipment instructions and report malfunctions.", ar: "اتبع تعليمات المعدات وأبلغ عن الأعطال." },
+  { en: "Use the gym at your own risk and be responsible for your own safety.", ar: "استخدم الصالة الرياضية على مسؤوليتك الخاصة وكن مسؤولاً عن سلامتك." },
+  { en: "Use lockers for personal items. The gym is not responsible for losses.", ar: "استخدم الخزائن للأغراض الشخصية. الصالة الرياضية ليست مسؤولة عن الخسائر." },
+  { en: "Daily lockers must be emptied before closing.", ar: "يجب إفراغ الخزائن اليومية قبل الإغلاق." },
+  { en: "Re-rack weights after use.", ar: "أعد الأوزان إلى مكانها بعد الاستخدام." },
+  { en: "Do not drop dumbbells or barbells.", ar: "لا تسقط الدمبل أو الأثقال." },
+  { en: "Chalk or talcum powder is strictly prohibited.", ar: "يمنع منعاً باتاً استخدام الطباشير أو بودرة التلك." },
+  { en: "Ask staff or another member for assistance with heavy lifting.", ar: "اطلب المساعدة من الموظفين أو عضو آخر عند رفع الأثقال." },
+  { en: "Only approved trainers may offer personal training.", ar: "يُسمح فقط للمدربين المعتمدين بتقديم التدريب الشخصي." },
+  { en: "No loud music or phone calls in gym areas.", ar: "لا يسمح بالموسيقى الصاخبة أو المكالمات الهاتفية في مناطق الصالة الرياضية." },
+  { en: "Photography and videography require prior approval.", ar: "التصوير الفوتوغرافي وتصوير الفيديو يتطلب موافقة مسبقة." },
+  { en: "Harassment, intimidation, or inappropriate behavior is not tolerated.", ar: "لن يتم التسامح مع التحرش أو الترهيب أو السلوك غير اللائق." },
+  { en: "Smoking and alcohol are strictly prohibited.", ar: "يمنع منعاً باتاً التدخين والكحول." },
+  { en: "Do not exercise under the influence of alcohol.", ar: "لا تمارس الرياضة تحت تأثير الكحول." },
+  { en: "No outside food or beverages allowed.", ar: "لا يسمح بإدخال الأطعمة أو المشروبات من الخارج." },
+  { en: "No glass containers allowed.", ar: "لا يسمح بالأوعية الزجاجية." },
+  { en: "Pets are not allowed in gym areas.", ar: "لا يسمح باصطحاب الحيوانات الأليفة في مناطق الصالة الرياضية." },
+  { en: "Lost items will be held at reception for a limited time.", ar: "سيتم الاحتفاظ بالأشياء المفقودة في الاستقبال لفترة محدودة." },
+  { en: "Report any injuries or health issues immediately.", ar: "أبلغ عن أي إصابات أو مشاكل صحية على الفور." },
+  { en: "Staff are trained in first aid; AEDs are available.", ar: "الموظفون مدربون على الإسعافات الأولية؛ تتوفر أجهزة تنظيم ضربات القلب." },
+  { en: "Memberships must be renewed on time; cancellation policies apply.", ar: "يجب تجديد العضويات في الوقت المحدد؛ تطبق سياسات الإلغاء." },
+  { en: "Guests are allowed only with prior approval.", ar: "يسمح للضيوف فقط بموافقة مسبقة." },
+  { en: "Violations may result in warning, suspension, or termination.", ar: "قد تؤدي الانتهاكات إلى التحذير أو التعليق أو الإنهاء." },
+  { en: "The club is not liable for injury, death, or loss related to gym use.", ar: "النادي غير مسؤول عن الإصابة أو الوفاة أو الخسارة المتعلقة باستخدام الصالة الرياضية." },
+  { en: "In case of emergency, contact club staff immediately.", ar: "في حالة الطوارئ، اتصل بموظفي النادي على الفور." }
+];
+
 export const MembersAgreement: React.FC<MembersAgreementProps> = ({
   member,
   category,
@@ -227,6 +261,38 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Page 2: Rules and Regulations */}
+        <div className="p-12 md:p-20 bg-white print-page overflow-hidden relative mt-4 print:mt-0 border-t border-slate-200 print:border-none">
+          <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
+            <div className="text-center mb-8">
+              <h3 className="text-xl font-black uppercase tracking-widest border-b-2 border-black inline-block pb-2">Gymnasium Rules & Regulations</h3>
+              <h3 className="text-lg font-bold mt-2 font-arabic" dir="rtl">القواعد و اللوائح الخاصة بصالة الألعاب الرياضية</h3>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-y-3 text-[9px] font-medium leading-relaxed mb-12">
+              {GYM_RULES.map((rule, idx) => (
+                <div key={idx} className="flex gap-4 items-start border-b border-slate-200 pb-2">
+                  <span className="font-black w-6">{idx + 1}.</span>
+                  <span className="flex-1">{rule.en}</span>
+                  <span className="flex-1 text-right font-arabic" dir="rtl">{rule.ar}</span>
+                </div>
+              ))}
+            </div>
+            
+            <div className="mt-auto pt-6 border-t-2 border-black">
+              <div className="flex justify-between px-2">
+                <div className="w-72 relative">
+                  {member.member_signature && (
+                    <img src={member.member_signature} alt="Member Signature" className="absolute bottom-full left-0 h-16 object-contain mb-1" />
+                  )}
+                  <div className="border-t border-black pt-1 text-[11px] flex justify-between"><span className="font-bold">Member Signature</span><span className="font-bold" dir="rtl">توقيع العضو :</span></div>
+                </div>
+                <div className="w-72 border-t border-black pt-1 text-[11px] flex justify-between"><span className="font-bold">Date</span><span className="font-bold" dir="rtl">التاريخ :</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <style>{`
@@ -236,7 +302,8 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
           .print-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; }
           .print-container { border: none !important; box-shadow: none !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
           .no-print { display: none !important; }
-          @page { size: A4; margin: 15mm; }
+          .print-page { width: 210mm !important; min-height: 297mm !important; padding: 20mm !important; margin: 0 auto !important; page-break-after: always !important; }
+          @page { size: A4; margin: 0; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
         .font-arabic { font-family: 'Amiri', 'Traditional Arabic', serif; }
