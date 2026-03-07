@@ -335,7 +335,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Membership No. / ID *</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Membership No. / ID *</label>
                     <div className="relative group">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <ShieldCheck className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
@@ -345,7 +345,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                     {errors.membership_number && <p className="text-[8px] font-bold text-red-500 ml-2 uppercase">{errors.membership_number.message}</p>}
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Guest Profile Name *</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Guest Profile Name *</label>
                     <div className="relative group">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <User className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
@@ -354,7 +354,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                     </div>
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Contact Phone</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Contact Phone</label>
                     <div className="relative group">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <Phone className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
@@ -363,7 +363,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                     </div>
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Email Address</label>
                     <div className="relative group">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <Mail className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
@@ -372,7 +372,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                     </div>
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Nationality</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Nationality</label>
                     <div className="relative group">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <Globe className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
@@ -381,7 +381,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                     </div>
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Date of Birth</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Date of Birth</label>
                     <div className="relative group">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <Calendar className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
@@ -400,7 +400,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Membership Tier *</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Membership Tier *</label>
                     <div className="relative">
                         <select {...register('category_id')} className="w-full h-14 px-4 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm cursor-pointer appearance-none">
                             <option value="">Select Category...</option>
@@ -410,14 +410,14 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                     </div>
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Effective Start Date *</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Effective Start Date *</label>
                     <div className="relative group">
                         <input type="date" {...register('start_date')} className="w-full h-14 px-4 pr-12 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm uppercase" />
                         <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none group-focus-within:text-indigo-500" />
                     </div>
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Package Context</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Package Context</label>
                     <div className="relative">
                         <select {...register('package_type')} className="w-full h-14 px-4 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm cursor-pointer appearance-none">
                             <option value="Single">Single Enrollment</option>
@@ -431,7 +431,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 {(watch('package_type') === 'Couple' || watch('package_type') === 'Family') && (
                     <>
                         <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Spouse/Partner Name</label>
+                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Spouse/Partner Name</label>
                             <div className="relative group">
                                 <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                                     <User className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
@@ -440,7 +440,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                             </div>
                         </div>
                         <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Spouse/Partner DOB</label>
+                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Spouse/Partner DOB</label>
                             <div className="relative group">
                                 <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                                     <Calendar className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
@@ -454,7 +454,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 {watch('package_type') === 'Family' && (
                     <div className="col-span-1 md:col-span-2 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                         <div className="flex items-center justify-between">
-                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Family Members / Kids</label>
+                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Family Members / Kids</label>
                             <Button type="button" onClick={() => appendKid({ name: '', dob: '' })} variant="outline" size="sm" className="h-8 text-[10px] rounded-xl border-indigo-100 text-indigo-600 hover:bg-indigo-50">
                                 <Plus className="w-3 h-3 mr-1" /> Add Member
                             </Button>
@@ -465,7 +465,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                     <X className="w-3 h-3" />
                                 </button>
                                 <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Name</label>
+                                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Name</label>
                                     <div className="relative group/input">
                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white group-focus-within/input:bg-indigo-50 transition-colors">
                                             <User className="w-3.5 h-3.5 text-slate-300 group-focus-within/input:text-indigo-500" />
@@ -475,7 +475,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                     {errors.kids?.[index]?.name && <p className="text-[10px] text-red-500 font-bold ml-1">{errors.kids[index]?.name?.message}</p>}
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Date of Birth</label>
+                                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Date of Birth</label>
                                     <div className="relative group/input">
                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white group-focus-within/input:bg-indigo-50 transition-colors">
                                             <Calendar className="w-3.5 h-3.5 text-slate-300 group-focus-within/input:text-indigo-500" />
@@ -490,7 +490,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 )}
 
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Access Protocol</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Access Protocol</label>
                     <div className="relative">
                         <select {...register('access_type')} className="w-full h-14 px-4 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm cursor-pointer appearance-none">
                             <option value="Both">Both (Pool + Spa)</option>
@@ -501,11 +501,11 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                     </div>
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Reference / Check No. (Audit)</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Reference / Check No. (Audit)</label>
                     <input {...register('check_no')} className="w-full h-14 px-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm uppercase placeholder:text-slate-200" placeholder="----" />
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Discount Allocation ({formatMoney(0).split(' ')[0]})</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Discount Allocation ({formatMoney(0).split(' ')[0]})</label>
                     <div className="relative">
                         <input type="number" step="0.01" {...register('discount')} className="w-full h-14 px-4 pr-12 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm" />
                         <Receipt className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-200" />
@@ -516,21 +516,21 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
         <div className="bg-[#f8fafc] rounded-[2.5rem] p-10 grid grid-cols-2 md:grid-cols-4 gap-8 shadow-inner border border-slate-100/50">
             <div className="space-y-2">
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">Base Rate</p>
+                <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest leading-none">Base Rate</p>
                 <p className="text-base font-black text-slate-900 tracking-tight leading-none">{formatMoney(baseRate)}</p>
             </div>
             <div className="space-y-2">
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">Net Revenue</p>
+                <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none">Net Revenue</p>
                 <p className="text-base font-black text-indigo-600 tracking-tight leading-none">{formatMoney(netAmount)}</p>
             </div>
             <div className="space-y-2">
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">Expected Expiry</p>
+                <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest leading-none">Expected Expiry</p>
                 <p className="text-base font-black text-slate-900 tracking-tight leading-none">
                     {recognition.expiry ? format(parseISO(recognition.expiry), 'dd MMM yyyy') : '---'}
                 </p>
             </div>
             <div className="space-y-2">
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">Daily Accrual</p>
+                <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest leading-none">Daily Accrual</p>
                 <div className="flex items-baseline gap-1">
                     <p className="text-base font-black text-emerald-600 tracking-tight leading-none">{formatMoney(recognition.daily)}</p>
                     <span className="text-[8px] font-black text-emerald-500/50 uppercase">/Day</span>

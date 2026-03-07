@@ -253,7 +253,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
-                        <thead className="text-[9px] text-slate-400 font-black uppercase tracking-[0.25em] border-b bg-slate-50/20">
+                        <thead className="text-[9px] text-slate-700 font-black uppercase tracking-[0.25em] border-b bg-slate-50/20">
                           <tr>
                             <th className="px-10 py-6">Membership No</th>
                             <th className="px-10 py-6">Guest Profile</th>
