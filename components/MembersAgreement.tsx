@@ -118,13 +118,18 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                 <h1 className="text-3xl font-black tracking-tighter text-black uppercase mb-1">{propertyName}</h1>
                 <h2 className="text-sm font-black text-slate-500 uppercase tracking-[0.3em]">{outletName}</h2>
                 <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-black text-white rounded text-[9px] font-black uppercase tracking-widest">
-                  <ShieldCheck className="w-3 h-3" /> Certified Member Record
+                  <ShieldCheck className="w-3 h-3" /> 
+                  <span>Certified Member Record</span>
+                  <span className="font-arabic" dir="rtl">سجل عضو معتمد</span>
                 </div>
               </div>
               <div className="flex flex-col items-end gap-4">
                 {logoUrl && <img src={logoUrl} alt="Logo" className="h-20 w-auto object-contain" />}
                 <div className="text-right">
-                  <p className="text-[10px] font-black uppercase tracking-widest">Serial No.</p>
+                  <div className="flex justify-end items-center gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest">Serial No.</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest font-arabic" dir="rtl">الرقم التسلسلي</p>
+                  </div>
                   <p className="text-xl font-black tracking-widest text-indigo-600">{member.membership_number}</p>
                 </div>
               </div>
@@ -132,46 +137,76 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
 
             <div className="grid grid-cols-2 gap-12 mb-10">
               <div className="space-y-4">
-                <h3 className="text-xs font-black uppercase border-b border-black pb-1">Member Identity</h3>
+                <div className="flex justify-between items-end border-b border-black pb-1">
+                  <h3 className="text-xs font-black uppercase">Member Identity</h3>
+                  <h3 className="text-xs font-black uppercase font-arabic" dir="rtl">هوية العضو</h3>
+                </div>
                 <div className="space-y-2">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase">Legal Name</p>
+                   <div className="flex justify-between items-end">
+                     <p className="text-[10px] font-bold text-slate-400 uppercase">Legal Name</p>
+                     <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">الاسم القانوني</p>
+                   </div>
                    <p className="text-base font-black uppercase">{member.guest_name}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Nationality</p>
+                    <div className="flex justify-between items-end">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Nationality</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">الجنسية</p>
+                    </div>
                     <p className="text-xs font-black uppercase">{member.nationality || '---'}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Date of Birth</p>
+                    <div className="flex justify-between items-end">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Date of Birth</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">تاريخ الميلاد</p>
+                    </div>
                     <p className="text-xs font-black uppercase">{member.dob ? format(parseISO(member.dob), 'dd MMM yyyy') : '---'}</p>
                   </div>
                 </div>
                 <div className="space-y-2">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase">Contact Information</p>
+                   <div className="flex justify-between items-end">
+                     <p className="text-[10px] font-bold text-slate-400 uppercase">Contact Information</p>
+                     <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">معلومات الاتصال</p>
+                   </div>
                    <p className="text-xs font-black">{member.email}</p>
                    <p className="text-xs font-black">{member.phone}</p>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-xs font-black uppercase border-b border-black pb-1">Enrollment Logic</h3>
+                <div className="flex justify-between items-end border-b border-black pb-1">
+                  <h3 className="text-xs font-black uppercase">Enrollment Logic</h3>
+                  <h3 className="text-xs font-black uppercase font-arabic" dir="rtl">تفاصيل التسجيل</h3>
+                </div>
                 <div className="space-y-2">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase">Tier Designation</p>
+                   <div className="flex justify-between items-end">
+                     <p className="text-[10px] font-bold text-slate-400 uppercase">Tier Designation</p>
+                     <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">نوع العضوية</p>
+                   </div>
                    <p className="text-base font-black uppercase text-indigo-600">{category?.name || 'Custom Membership'}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Commencement</p>
+                    <div className="flex justify-between items-end">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Commencement</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">تاريخ البدء</p>
+                    </div>
                     <p className="text-xs font-black uppercase">{format(parseISO(member.start_date), 'dd MMM yyyy')}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Expiry Date</p>
+                    <div className="flex justify-between items-end">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Expiry Date</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">تاريخ الانتهاء</p>
+                    </div>
                     <p className="text-xs font-black uppercase">{format(parseISO(member.current_end_date), 'dd MMM yyyy')}</p>
                   </div>
                 </div>
                 <div className="pt-4 mt-2 border-t border-dashed border-slate-200">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Total Contribution</p>
+                    <div className="flex justify-between items-end mb-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Total Contribution</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">إجمالي المبلغ</p>
+                    </div>
                     <p className="text-xl font-black">{formatMoney(member.net_amount)}</p>
                 </div>
               </div>
@@ -192,14 +227,23 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             {/* Family Details if applicable */}
             {(member.package_type === 'Couple' || member.package_type === 'Family') && (
               <div className="mb-10 space-y-6">
-                <h3 className="text-xs font-black uppercase border-b-2 border-black pb-1">Family Manifest</h3>
+                <div className="flex justify-between items-end border-b-2 border-black pb-1">
+                  <h3 className="text-xs font-black uppercase">Family Manifest</h3>
+                  <h3 className="text-xs font-black uppercase font-arabic" dir="rtl">بيانات العائلة</h3>
+                </div>
                 <div className="grid grid-cols-2 gap-4 p-4 border border-slate-100 rounded-xl">
                    <div>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">Spouse Name</p>
+                      <div className="flex justify-between items-end">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Spouse Name</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">اسم الزوج/الزوجة</p>
+                      </div>
                       <p className="text-xs font-black uppercase">{member.spouse_name || 'Not Declared'}</p>
                    </div>
                    <div>
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">Date of Birth</p>
+                      <div className="flex justify-between items-end">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Date of Birth</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">تاريخ الميلاد</p>
+                      </div>
                       <p className="text-xs font-black">{member.spouse_dob ? format(parseISO(member.spouse_dob), 'dd MMM yyyy') : '---'}</p>
                    </div>
                 </div>
@@ -207,8 +251,14 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                   <div className="grid grid-cols-1 gap-2">
                     {member.kids.map((kid, i) => (
                       <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
-                        <span className="text-[10px] font-black uppercase tracking-tight">Dependent {i+1}: {kid.name}</span>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase">DOB: {format(parseISO(kid.dob), 'dd MMM yyyy')}</span>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-black uppercase tracking-tight">Dependent {i+1}: {kid.name}</span>
+                          <span className="text-[10px] font-black uppercase tracking-tight font-arabic" dir="rtl">التابع {i+1}</span>
+                        </div>
+                        <div className="flex flex-col text-right">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase">DOB: {format(parseISO(kid.dob), 'dd MMM yyyy')}</span>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">تاريخ الميلاد</span>
+                        </div>
                       </div>
                     ))}
                   </div>
