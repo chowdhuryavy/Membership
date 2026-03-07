@@ -384,33 +384,75 @@ const POSForm = ({
     );
 };
 
-const InventoryManager = ({ 
+export const InventoryManager = ({ 
     inventory, 
     currentOutletId,
     currentPropertyId, 
-    onRefresh 
+    onRefresh,
+    externalFormState
 }: { 
     inventory: InventoryItem[], 
     currentOutletId: string,
     currentPropertyId: string, 
-    onRefresh: () => void 
+    onRefresh: () => void,
+    externalFormState?: {
+        showForm: boolean,
+        setShowForm: (show: boolean) => void,
+        editingItem: InventoryItem | null,
+        setEditingItem: (item: InventoryItem | null) => void,
+        formData: any,
+        setFormData: (data: any) => void
+    }
 }) => {
     const { user } = useAuth();
     const { formatMoney, hasPermission } = useSettings();
     const [loading, setLoading] = useState(false);
-    const [showForm, setShowForm] = useState(false);
-    const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+    const [internalShowForm, setInternalShowForm] = useState(false);
+    const [internalEditingItem, setInternalEditingItem] = useState<InventoryItem | null>(null);
+    
+    const showForm = externalFormState ? externalFormState.showForm : internalShowForm;
+    const setShowForm = externalFormState ? externalFormState.setShowForm : setInternalShowForm;
+    const editingItem = externalFormState ? externalFormState.editingItem : internalEditingItem;
+    const setEditingItem = externalFormState ? externalFormState.setEditingItem : setInternalEditingItem;
     const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
-    const canManage = user && hasPermission(user.role_id, 'inventory:manage');
+    const canManage = user && (hasPermission(user.role_id, 'inventory:manage') || hasPermission(user.role_id, 'resources:manage'));
 
-    const [formData, setFormData] = useState({
+    const [internalFormData, setInternalFormData] = useState({
         name: '',
         category: 'Retail' as SaleCategory,
         price: 0,
         stock_quantity: 0,
         track_inventory: true
     });
+
+    const formData = externalFormState ? (externalFormState.formData || {
+        name: '',
+        category: 'Retail' as SaleCategory,
+        price: 0,
+        stock_quantity: 0,
+        track_inventory: true
+    }) : internalFormData;
+    const setFormData = externalFormState ? externalFormState.setFormData : setInternalFormData;
+    
+    // Sync external formData if provided
+    useEffect(() => {
+        if (externalFormState && editingItem) {
+            // Only update if the data is actually different
+            const currentData = externalFormState.formData;
+            const newData = {
+                name: editingItem.name || '',
+                category: editingItem.category || 'Retail',
+                price: editingItem.price || 0,
+                stock_quantity: editingItem.stock_quantity || 0,
+                track_inventory: editingItem.track_inventory ?? true
+            };
+            
+            if (JSON.stringify(currentData) !== JSON.stringify(newData)) {
+                externalFormState.setFormData(newData);
+            }
+        }
+    }, [editingItem]); // Removed externalFormState from dependencies
     const [error, setError] = useState<string | null>(null);
 
     const handleSave = async (e: React.FormEvent) => {

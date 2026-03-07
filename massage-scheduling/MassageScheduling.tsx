@@ -62,6 +62,7 @@ import { format, addDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import BookingForm from './BookingForm';
+import { InventoryManager } from '../pages/Sales';
 
 const SLOT_HEIGHT = 52; 
 const MINUTE_HEIGHT = SLOT_HEIGHT / 60;
@@ -121,6 +122,7 @@ const GuestHistoryView = ({
     };
   }, [guestBookings, guestSales]);
 
+  // Removed inventoryFormState from here
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
       <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors"><ArrowLeft className="w-4 h-4" /> Back to Ledger</button>
@@ -248,6 +250,7 @@ const MassageScheduling = () => {
   const { user } = useAuth();
   const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [] } = useSettings();
   const [activeTab, setActiveTab] = useState<'bookings' | 'treatments' | 'therapists' | 'guests'>('bookings');
+  const [treatmentType, setTreatmentType] = useState<'Massage' | 'Personal Training'>('Massage');
   const [viewDate, setViewDate] = useState(new Date());
   const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
   
@@ -255,6 +258,20 @@ const MassageScheduling = () => {
   const [guests, setGuests] = useState<Guest[]>([]);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [massageTypes, setMassageTypes] = useState<MassageType[]>([]);
+  
+  const filteredTreatments = useMemo(() => {
+      return massageTypes.filter(mt => mt.category === treatmentType);
+  }, [massageTypes, treatmentType]);
+  
+  const [showInventoryForm, setShowInventoryForm] = useState(false);
+  const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null);
+  const [inventoryFormData, setInventoryFormData] = useState<any>({
+        name: '',
+        category: 'Retail',
+        price: 0,
+        stock_quantity: 0,
+        track_inventory: true
+    });
   
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -267,6 +284,15 @@ const MassageScheduling = () => {
   const [isTableMissing, setIsTableMissing] = useState(false);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const inventoryFormState = useMemo(() => ({
+      showForm: showInventoryForm,
+      setShowForm: setShowInventoryForm,
+      editingItem: editingInventoryItem,
+      setEditingItem: setEditingInventoryItem,
+      formData: inventoryFormData,
+      setFormData: setInventoryFormData
+  }), [showInventoryForm, setShowInventoryForm, editingInventoryItem, setEditingInventoryItem, inventoryFormData, setInventoryFormData]);
 
   const MissingBookingTablesPanel = () => (
     <Card className="max-w-4xl mx-auto rounded-[3rem] border-amber-200 bg-amber-50/30 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-500">
@@ -546,7 +572,7 @@ NOTIFY pgrst, 'reload schema';`}
           category: 'Personal Training' as const
       }));
       
-      const combinedTypes = [...(m || []), ...ptItems];
+      const combinedTypes = [...(m || []).map(mt => ({...mt, category: 'Massage'})), ...ptItems];
       setMassageTypes(combinedTypes.sort((x, y) => (Number(x.duration_minutes) || 0) - (Number(y.duration_minutes) || 0)));
       setMembers(mems || []);
     } catch (e: any) {
@@ -930,13 +956,24 @@ NOTIFY pgrst, 'reload schema';`}
 
       {activeTab === 'treatments' && (
         <div className="space-y-6 animate-in slide-in-from-bottom-4">
+            <InventoryManager 
+                inventory={[]} 
+                currentOutletId={currentOutlet?.id || ''}
+                currentPropertyId={currentProperty?.id || ''}
+                onRefresh={loadData}
+                externalFormState={inventoryFormState}
+            />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white h-fit">
                     <CardHeader className="p-8 border-b bg-slate-900 text-white relative">
                         <CardTitle className="text-lg font-black uppercase tracking-widest flex items-center gap-3">
                             <Layers className="w-5 h-5 text-indigo-400" /> Treatment Master Catalog
                         </CardTitle>
-                        <p className="text-[9px] font-bold text-indigo-200 uppercase mt-1">Service Portfolio Management</p>
+                        <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700 mt-4">
+                            <button onClick={() => setTreatmentType('Massage')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${treatmentType === 'Massage' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Massage</button>
+                            <button onClick={() => setTreatmentType('Personal Training')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${treatmentType === 'Personal Training' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Personal Training</button>
+                        </div>
+                        <p className="text-[9px] font-bold text-indigo-200 uppercase mt-4">Service Portfolio Management</p>
                     </CardHeader>
                     <CardContent className="p-0 max-h-[600px] overflow-y-auto custom-scrollbar">
                         <table className="w-full text-left">
@@ -949,7 +986,7 @@ NOTIFY pgrst, 'reload schema';`}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {massageTypes.map(mt => (
+                                {filteredTreatments.map(mt => (
                                     <tr key={mt.id} className="hover:bg-slate-50 group">
                                         <td className="px-8 py-5">
                                             <div className="font-black text-slate-800 text-sm uppercase">{mt.name}</div>
@@ -962,16 +999,32 @@ NOTIFY pgrst, 'reload schema';`}
                                                 {canManageResources && (
                                                     <>
                                                         <button onClick={() => { 
-                                                          setIsEditingResource(true); 
-                                                          setNewType({
-                                                            ...mt,
-                                                            name: mt.name || '',
-                                                            price: mt.price || 0,
-                                                            duration_minutes: mt.duration_minutes || 60,
-                                                            category: mt.category || 'Massage',
-                                                            description: mt.description || ''
-                                                          }); 
-                                                          setSaveError(null); 
+                                                          if (mt.category === 'Personal Training') {
+                                                              const item = {
+                                                                id: mt.id,
+                                                                property_id: mt.property_id,
+                                                                outlet_id: mt.outlet_id,
+                                                                name: mt.name,
+                                                                category: 'Personal Training' as any,
+                                                                price: mt.price,
+                                                                stock_quantity: 0, // Not available in MassageType
+                                                                track_inventory: false,
+                                                                created_at: ''
+                                                              };
+                                                              setEditingInventoryItem(item);
+                                                              setShowInventoryForm(true);
+                                                          } else {
+                                                              setIsEditingResource(true); 
+                                                              setNewType({
+                                                                ...mt,
+                                                                name: mt.name || '',
+                                                                price: mt.price || 0,
+                                                                duration_minutes: mt.duration_minutes || 60,
+                                                                category: mt.category || 'Massage',
+                                                                description: mt.description || ''
+                                                              }); 
+                                                              setSaveError(null); 
+                                                          }
                                                         }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit3 className="w-3.5 h-3.5"/></button>
                                                         <button onClick={() => setItemToDelete({id: mt.id, type: 'treatment', name: mt.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5"/></button>
                                                     </>

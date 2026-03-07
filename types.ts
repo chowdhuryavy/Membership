@@ -213,6 +213,7 @@ export interface MassageType {
   price: number;
   duration_minutes: number;
   description?: string;
+  category?: string;
 }
 
 export interface MassageBooking {
