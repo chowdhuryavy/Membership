@@ -2,7 +2,7 @@ export type Permission =
   | 'dashboard:view' | 'dashboard:view_financials' | 'dashboard:view_insights'
   | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:renew' | 'members:print_contract' | 'members:view_history'
   | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete'
-  | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email' | 'users:manage_overrides'
+  | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email' | 'users:manage_overrides' | 'users:edit_self'
   | 'staff:view' | 'staff:manage' | 'staff:manage_leaves'
   | 'settings:view' | 'settings:edit' 
   | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives'

@@ -51,7 +51,8 @@ const UserDetail = ({
     const isSuperTarget = user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin';
     const isSuperCurrent = isSuperAdmin;
     const canEditUser = currentUser && hasPermission(currentUser.role_id, 'users:edit');
-    const canModifyThisUser = (!isSuperTarget || isSuperCurrent) && canEditUser;
+    const canEditSelf = currentUser && hasPermission(currentUser.role_id, 'users:edit_self');
+    const canModifyThisUser = (!isSuperTarget || isSuperCurrent) && canEditUser && (!isSelf || isSuperAdmin || canEditSelf);
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500 relative z-0">
@@ -595,7 +596,7 @@ const Users = () => {
                                   {canModifyTable && (
                                     <td className="px-8 py-6 text-right" onClick={e => e.stopPropagation()}>
                                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            {canEdit && <button onClick={() => handleEdit(u)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all"><Edit2 className="w-4 h-4" /></button>}
+                                            {canEdit && (u.id !== currentUser?.id || isSuperAdmin || hasPermission(currentUser.role_id, 'users:edit_self')) && <button onClick={() => handleEdit(u)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all"><Edit2 className="w-4 h-4" /></button>}
                                             {canDelete && u.id !== currentUser?.id && <button onClick={() => setDeleteId(u.id)} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>}
                                         </div>
                                     </td>
@@ -641,11 +642,17 @@ const Users = () => {
                             </div>
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Security Tier</label>
-                                <Select options={[{ value: '', label: 'Select Tier...' }, ...roles.filter(r => {
-                                    const isSuperUser = isSuperAdmin;
-                                    if ((r.id === 'admin' || r.name === 'System Administrator') && !isSuperUser) return false;
-                                    return true;
-                                }).map(r => ({ value: r.id, label: r.name }))]} value={formData.role_id} onChange={e => setFormData({...formData, role_id: e.target.value})} className="h-12 rounded-xl" />
+                                <Select 
+                                    options={[{ value: '', label: 'Select Tier...' }, ...roles.filter(r => {
+                                        const isSuperUser = isSuperAdmin;
+                                        if ((r.id === 'admin' || r.name === 'System Administrator') && !isSuperUser) return false;
+                                        return true;
+                                    }).map(r => ({ value: r.id, label: r.name }))]} 
+                                    value={formData.role_id} 
+                                    onChange={e => setFormData({...formData, role_id: e.target.value})} 
+                                    className="h-12 rounded-xl" 
+                                    disabled={!isSuperAdmin && currentUser?.id === formData.id && !hasPermission(currentUser.role_id, 'users:edit_self')}
+                                />
                             </div>
                           </div>
                           <div className="space-y-2 pt-4 border-t border-slate-100">

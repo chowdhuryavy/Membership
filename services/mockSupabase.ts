@@ -130,6 +130,7 @@ class DatabaseService {
           { key: 'users:view', label: 'Directory Access', description: 'View system users and their roles.' },
           { key: 'users:create', label: 'Provision Users', description: 'Create new user accounts and auth identities.' },
           { key: 'users:edit', label: 'Modify Clearances', description: 'Change roles and outlet access scopes.' },
+          { key: 'users:edit_self', label: 'Self-Modification', description: 'Allow user to edit their own profile and access.' },
           { key: 'users:edit_email', label: 'Email Control', description: 'Permission to change user account emails.' },
           { key: 'users:delete', label: 'Revoke Identity', description: 'Terminate user access permanently.' },
           { key: 'users:manage_overrides', label: 'Policy Overrides', description: 'Manage granular user-specific permission deviations.' },
