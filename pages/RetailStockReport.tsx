@@ -8,7 +8,7 @@ import { format, startOfMonth, endOfMonth, parseISO, isAfter, isBefore, isSameMo
 import { Sale, InventoryItem } from '../types';
 import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 interface ItemStockSummary {
   itemId: string;
@@ -168,7 +168,7 @@ const RetailStockReport = () => {
       item.closingStock
     ]);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
       startY: 40,
