@@ -333,21 +333,27 @@ const ProtectedLayout = () => {
 
 const Sidebar = ({ onLogout }: { onLogout: () => void }) => {
     const { user } = useAuth();
-    const { settings, hasPermission } = useSettings();
+    const { settings, hasPermission, currentOutlet } = useSettings();
     const location = useLocation();
 
-    const ALL_NAV_ITEMS = useMemo(() => [
-        { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:view' as Permission },
-        { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
-        { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
-        { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
-        { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
-        { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
-        { id: 'users', to: '/users', icon: Shield, label: 'Users & Security', permission: 'users:view' as Permission },
-        { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
-        { id: 'logs', to: '/logs', icon: History, label: 'Audit Logs', permission: 'logs:view' as Permission },
-        { id: 'settings', to: '/settings', icon: Settings, label: 'System Settings', permission: 'settings:view' as Permission },
-    ], []);
+    const ALL_NAV_ITEMS = useMemo(() => {
+        const items = [
+            { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:view' as Permission },
+            { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
+            { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
+            { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
+            { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
+            { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
+            { id: 'users', to: '/users', icon: Shield, label: 'Users & Security', permission: 'users:view' as Permission },
+            { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
+            { id: 'logs', to: '/logs', icon: History, label: 'Audit Logs', permission: 'logs:view' as Permission },
+            { id: 'settings', to: '/settings', icon: Settings, label: 'System Settings', permission: 'settings:view' as Permission },
+        ];
+        if (currentOutlet && currentOutlet.booking_enabled === false) {
+            return items.filter(item => item.id !== 'bookings');
+        }
+        return items;
+    }, [currentOutlet]);
 
     const orderedNavItems = useMemo(() => {
         const order = settings?.navigation_order || [];
@@ -423,21 +429,27 @@ const Sidebar = ({ onLogout }: { onLogout: () => void }) => {
 const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
     const [isOpen, setIsOpen] = useState(false);
     const { user } = useAuth();
-    const { settings, hasPermission } = useSettings();
+    const { settings, hasPermission, currentOutlet } = useSettings();
     const location = useLocation();
 
-    const ALL_NAV_ITEMS = useMemo(() => [
-        { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:view' as Permission },
-        { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
-        { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
-        { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
-        { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
-        { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
-        { id: 'users', to: '/users', icon: Shield, label: 'Users & Security', permission: 'users:view' as Permission },
-        { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
-        { id: 'logs', to: '/logs', icon: History, label: 'Audit Logs', permission: 'logs:view' as Permission },
-        { id: 'settings', to: '/settings', icon: Settings, label: 'System Settings', permission: 'settings:view' as Permission },
-    ], []);
+    const ALL_NAV_ITEMS = useMemo(() => {
+        const items = [
+            { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:view' as Permission },
+            { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
+            { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
+            { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
+            { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
+            { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
+            { id: 'users', to: '/users', icon: Shield, label: 'Users & Security', permission: 'users:view' as Permission },
+            { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
+            { id: 'logs', to: '/logs', icon: History, label: 'Audit Logs', permission: 'logs:view' as Permission },
+            { id: 'settings', to: '/settings', icon: Settings, label: 'System Settings', permission: 'settings:view' as Permission },
+        ];
+        if (currentOutlet && currentOutlet.booking_enabled === false) {
+            return items.filter(item => item.id !== 'bookings');
+        }
+        return items;
+    }, [currentOutlet]);
 
     const orderedNavItems = useMemo(() => {
         const order = settings?.navigation_order || [];

@@ -87,17 +87,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           ? outlets 
           : outlets.filter(o => user.allowed_outlets?.includes(o.id));
 
-      if (allowed.length > 0) {
-        const isAllowed = currentOutlet && allowed.find(o => o.id === currentOutlet.id);
-        
-        if (!currentOutlet || !isAllowed) {
-            const storedOutletId = localStorage.getItem('membership_last_outlet');
-            const storedOutlet = allowed.find(out => out.id === storedOutletId);
-            setCurrentOutletState(storedOutlet || allowed[0]);
-        }
-      } else {
-          setCurrentOutletState(null);
-      }
+      setCurrentOutletState(prev => {
+          if (allowed.length > 0) {
+            const isAllowed = prev && allowed.find(o => o.id === prev.id);
+            
+            if (!prev || !isAllowed) {
+                const storedOutletId = localStorage.getItem('membership_last_outlet');
+                const storedOutlet = allowed.find(out => out.id === storedOutletId);
+                return storedOutlet || allowed[0];
+            } else {
+                return isAllowed;
+            }
+          } else {
+              return null;
+          }
+      });
     }
   }, [user, outlets]);
 

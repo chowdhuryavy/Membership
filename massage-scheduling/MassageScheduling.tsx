@@ -63,6 +63,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import BookingForm from './BookingForm';
 import { InventoryManager } from '../pages/Sales';
+import { useNavigate } from 'react-router-dom';
 
 const SLOT_HEIGHT = 52; 
 const MINUTE_HEIGHT = SLOT_HEIGHT / 60;
@@ -248,6 +249,7 @@ const GuestHistoryView = ({
 
 const MassageScheduling = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [] } = useSettings();
   const [activeTab, setActiveTab] = useState<'bookings' | 'treatments' | 'therapists' | 'guests'>('bookings');
   const [treatmentType, setTreatmentType] = useState<'Massage' | 'Personal Training'>('Massage');
@@ -468,6 +470,12 @@ NOTIFY pgrst, 'reload schema';`}
   const canSwitchScope = user && (hasPermission(user.role_id, 'properties:view') || hasPermission(user.role_id, 'settings:view_properties')) && allowedOutletsInProperty.length > 1;
   const [members, setMembers] = useState<Member[]>([]);
   const canDeleteGuests = user && hasPermission(user.role_id, 'members:delete');
+
+  useEffect(() => {
+    if (currentOutlet && currentOutlet.booking_enabled === false) {
+      navigate('/');
+    }
+  }, [currentOutlet, navigate]);
 
   useEffect(() => {
     if (currentOutlet) loadData();

@@ -38,8 +38,14 @@ export const BookingSettings = () => {
     const handleSave = async () => {
         setSaving(true);
         setMessage(null);
+        console.log('Saving outlets:', outlets);
         try {
             for (const outlet of outlets) {
+                console.log('Updating outlet:', outlet.id, {
+                    booking_enabled: outlet.booking_enabled,
+                    booking_start_time: outlet.booking_start_time,
+                    booking_end_time: outlet.booking_end_time
+                });
                 await db.updateOutlet(outlet.id, {
                     booking_enabled: outlet.booking_enabled,
                     booking_start_time: outlet.booking_start_time,
@@ -51,6 +57,7 @@ export const BookingSettings = () => {
             setTimeout(() => setMessage(null), 3000);
             setIsTableMissing(false);
         } catch (error: any) {
+            console.error('Save error:', error);
             if (error.message?.includes('schema cache') || error.code === '42P01' || error.code === '42703' || error.message?.toLowerCase().includes('column')) {
                 setIsTableMissing(true);
             } else {
@@ -85,7 +92,20 @@ export const BookingSettings = () => {
 {`ALTER TABLE IF EXISTS public.outlets
 ADD COLUMN IF NOT EXISTS booking_enabled BOOLEAN DEFAULT true,
 ADD COLUMN IF NOT EXISTS booking_start_time TEXT DEFAULT '08:00',
-ADD COLUMN IF NOT EXISTS booking_end_time TEXT DEFAULT '22:00';`}
+ADD COLUMN IF NOT EXISTS booking_end_time TEXT DEFAULT '22:00';
+
+-- Ensure RLS doesn't block updates
+ALTER TABLE public.outlets ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.outlets TO anon, authenticated, postgres;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'outlets' AND policyname = 'Allow all operations on outlets'
+    ) THEN
+        CREATE POLICY "Allow all operations on outlets" ON public.outlets FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+END $$;`}
                         </pre>
                     </div>
                     <div className="flex gap-4">
