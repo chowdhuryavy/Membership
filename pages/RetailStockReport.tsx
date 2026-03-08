@@ -148,15 +148,50 @@ const RetailStockReport = () => {
     `
   });
 
-  const handleDownloadPDF = () => {
+  const getDataUrl = (url: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.src = url;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+        } else {
+            reject('Canvas context not found');
+        }
+      };
+      img.onerror = (error) => reject(error);
+    });
+  };
+
+  const handleDownloadPDF = async () => {
     const doc = new jsPDF('landscape');
     
     // Header
+    let startY = 40;
+    
+    if (currentProperty?.logo_url) {
+        try {
+            const logoData = await getDataUrl(currentProperty.logo_url);
+            doc.addImage(logoData, 'PNG', 14, 10, 25, 25);
+            startY = 50;
+        } catch (e) {
+            console.error("Failed to load logo for PDF", e);
+        }
+    }
+
     doc.setFontSize(18);
-    doc.text('Retail Stock Ledger', 14, 22);
+    doc.text(currentProperty?.name || 'Property Name', 14, startY - 15);
+    doc.setFontSize(14);
+    doc.text('Retail Stock Ledger', 14, startY - 8);
     doc.setFontSize(10);
-    doc.text(`Period: ${format(selectedMonth, 'MMMM yyyy')}`, 14, 28);
-    doc.text(`Scope: ${viewScope === 'property' ? currentProperty?.name : currentOutlet?.name}`, 14, 33);
+    doc.text(`Period: ${format(selectedMonth, 'MMMM yyyy')}`, 14, startY);
+    doc.text(`Scope: ${viewScope === 'property' ? 'All Outlets' : currentOutlet?.name}`, 14, startY + 5);
 
     const tableColumn = ["Item Name", "Unit Price", "Opening", "Sold Qty", "Revenue", "Closing"];
     const tableRows = reportData.map(item => [
@@ -171,9 +206,17 @@ const RetailStockReport = () => {
     autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
-      startY: 40,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [79, 70, 229] } // Indigo 600
+      startY: startY + 15,
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      columnStyles: {
+          1: { halign: 'right', fontStyle: 'bold' }, // Unit Price
+          2: { halign: 'right' }, // Opening
+          3: { halign: 'right', textColor: [5, 150, 105] }, // Sold (Emerald)
+          4: { halign: 'right', textColor: [5, 150, 105] }, // Revenue (Emerald)
+          5: { halign: 'right', fontStyle: 'bold' } // Closing
+      }
     });
 
     doc.save(`Retail_Stock_Report_${format(selectedMonth, 'yyyy-MM')}.pdf`);
