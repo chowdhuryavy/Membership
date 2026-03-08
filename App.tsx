@@ -159,7 +159,14 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
                 groups[prop.id].outlets.push(o);
             }
         });
-        return Object.values(groups);
+        
+        const sortedGroups = Object.values(groups).sort((a, b) => a.property.name.localeCompare(b.property.name));
+        
+        sortedGroups.forEach(group => {
+            group.outlets.sort((a, b) => a.name.localeCompare(b.name));
+        });
+        
+        return sortedGroups;
     }, [allowedOutlets, properties]);
 
     const currentProp = useMemo(() => 
