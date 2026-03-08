@@ -38,7 +38,7 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
   reportData, summary, groupedData, currentProperty, currentOutlet, selectedMonth, viewScope, formatMoney
 }, ref) => {
   return (
-    <div ref={ref} className="p-12 bg-white text-slate-900 w-[297mm] h-[210mm] mx-auto overflow-hidden">
+    <div ref={ref} className="p-12 bg-white text-slate-900 w-[297mm] min-h-[210mm] mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between border-b-2 border-slate-900 pb-8 mb-8">
         <div className="flex items-center gap-6">
@@ -96,11 +96,11 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
         <tbody className="divide-y divide-slate-200">
           {Object.entries(groupedData).map(([category, items]: [string, ItemStockSummary[]]) => (
             <React.Fragment key={category}>
-              <tr className="bg-slate-100">
+              <tr className="bg-slate-100 break-inside-avoid">
                 <td colSpan={10} className="p-3 font-black text-slate-800 uppercase tracking-widest text-[11px]">{category}</td>
               </tr>
               {items.map((row) => (
-                <tr key={row.itemId} className="hover:bg-slate-50">
+                <tr key={row.itemId} className="hover:bg-slate-50 break-inside-avoid">
                   <td className="p-4 font-bold text-slate-900">{row.itemName}</td>
                   <td className="p-4 text-right font-mono">{formatMoney(row.unitPrice)}</td>
                   <td className="p-4 text-center font-mono">{row.openingStock}</td>

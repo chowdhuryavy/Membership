@@ -222,11 +222,24 @@ const RetailStockReport = () => {
     const imgData = canvas.toDataURL('image/png');
     const doc = new jsPDF('l', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
     
     const imgWidth = pageWidth;
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    
+    let heightLeft = imgHeight;
+    let position = 0;
 
-    doc.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+    doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      doc.addPage();
+      doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+
     doc.save(`Retail_Stock_Ledger_${format(selectedMonth, 'yyyy-MM')}.pdf`);
   };
 
@@ -274,12 +287,12 @@ const RetailStockReport = () => {
           {/* Controls (Web Only) */}
           <div className="p-6 bg-slate-50/50 border-b border-slate-100 no-print">
              <div className="flex flex-col md:flex-row gap-6 justify-center items-center">
-                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-                    <button onClick={() => setViewScope('outlet')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                        <Filter className="w-2.5 h-2.5" /> Outlet
+                <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                    <button onClick={() => setViewScope('outlet')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                        <Filter className="w-3.5 h-3.5" /> Outlet
                     </button>
-                    <button onClick={() => setViewScope('property')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                        <Building2 className="w-2.5 h-2.5" /> Property
+                    <button onClick={() => setViewScope('property')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                        <Building2 className="w-3.5 h-3.5" /> Property
                     </button>
                 </div>
 
