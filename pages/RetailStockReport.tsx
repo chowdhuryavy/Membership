@@ -5,7 +5,6 @@ import { useSettings } from '../contexts/SettingsContext';
 import { db } from '../services/mockSupabase';
 import { 
   Package, 
-  ArrowLeft, 
   Calendar, 
   Building2, 
   Store, 
@@ -222,7 +221,6 @@ const RetailStockReport = () => {
     const imgData = canvas.toDataURL('image/png');
     const doc = new jsPDF('l', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
     
     const imgWidth = pageWidth;
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
@@ -244,14 +242,14 @@ const RetailStockReport = () => {
           </div>
         </div>
         <div className="flex gap-3">
-           <Button variant="outline" onClick={handlePrint} className="h-12 px-6 rounded-xl border-slate-200 hover:border-indigo-600 hover:text-indigo-600 transition-all gap-2 font-bold uppercase text-[10px] tracking-widest shadow-sm">
-             <Printer className="w-4 h-4" /> Print Report
+           <Button variant="outline" onClick={handlePrint} className="h-12 px-6 rounded-2xl border-slate-200 hover:bg-slate-50 transition-all gap-2 font-black uppercase text-[10px] tracking-widest text-slate-900">
+             <Printer className="w-4 h-4" /> Print
            </Button>
-           <Button onClick={handleDownloadPDF} className="h-12 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-200 gap-2 font-bold uppercase text-[10px] tracking-widest">
-             <FileText className="w-4 h-4" /> Export PDF
+           <Button onClick={handleDownloadPDF} className="h-12 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200 gap-2 font-black uppercase text-[10px] tracking-widest">
+             <FileText className="w-4 h-4" /> Export
            </Button>
-           <Button variant="ghost" onClick={() => window.history.back()} className="h-12 w-12 rounded-xl border border-slate-100 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
-             <ArrowLeft className="w-5 h-5" />
+           <Button variant="ghost" onClick={() => window.history.back()} className="h-12 px-6 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-900 transition-colors shadow-sm font-black uppercase text-[10px] tracking-widest">
+             Back
            </Button>
         </div>
       </div>

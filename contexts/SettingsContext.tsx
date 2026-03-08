@@ -104,19 +104,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const formatMoney = (amount: number | undefined | null) => {
     const safeAmount = (amount === null || amount === undefined || isNaN(Number(amount))) ? 0 : Number(amount);
     
-    if (currency?.code) {
-        try {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: currency.code,
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }).format(safeAmount);
-        } catch (e) {
-            // Fallback if currency code is invalid
-        }
-    }
-
     const value = safeAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (!currency) return value;
     return `${currency.symbol} ${value}`;
