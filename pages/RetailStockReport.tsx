@@ -23,7 +23,7 @@ import { format, startOfMonth, endOfMonth, parseISO, isAfter, isBefore, isSameMo
 import { Sale, InventoryItem, InventoryLog } from '../types';
 import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
 import RetailStockReportPrint from '../components/RetailStockReportPrint';
 
 interface ItemStockSummary {
@@ -216,157 +216,18 @@ const RetailStockReport = () => {
   };
 
   const handleDownloadPDF = async () => {
-    const doc = new jsPDF('landscape');
+    if (!printRef.current) return;
+
+    const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true });
+    const imgData = canvas.toDataURL('image/png');
+    const doc = new jsPDF('l', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
-    const centerX = pageWidth / 2;
+    const pageHeight = doc.internal.pageSize.getHeight();
     
-    let startY = 15;
-    
-    // Professional Header
-    doc.setFillColor(255, 255, 255);
-    doc.rect(0, 0, pageWidth, 50, 'F');
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-    // Logo
-    if (currentProperty?.logo_url) {
-        try {
-            const logoData = await getDataUrl(currentProperty.logo_url);
-            doc.addImage(logoData, 'PNG', 14, 10, 30, 30);
-        } catch (e) {
-            console.error("Failed to load logo for PDF", e);
-        }
-    }
-
-    // Header Text
-    doc.setFontSize(20);
-    doc.setTextColor(15, 23, 42);
-    doc.setFont("helvetica", "bold");
-    doc.text((currentProperty?.name || 'Property Name').toUpperCase(), 50, 22);
-    
-    doc.setFontSize(14);
-    doc.setTextColor(71, 85, 105);
-    doc.text('RETAIL STOCK LEDGER', 50, 30);
-    
-    doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139);
-    doc.text(`${format(selectedMonth, 'MMMM yyyy').toUpperCase()} | ${viewScope === 'property' ? 'ALL OUTLETS' : currentOutlet?.name || ''}`, 50, 36);
-
-    // Summary Section
-
-    const drawSummaryBox = (label: string, value: string, x: number) => {
-        doc.setDrawColor(226, 232, 240);
-        doc.setFillColor(248, 250, 252);
-        doc.roundedRect(x, 55, 60, 20, 2, 2, 'FD');
-        doc.setFontSize(8);
-        doc.setTextColor(100, 116, 139);
-        doc.text(label, x + 30, 62, { align: 'center' });
-        doc.setFontSize(12);
-        doc.setTextColor(15, 23, 42);
-        doc.text(value, x + 30, 70, { align: 'center' });
-    };
-
-    drawSummaryBox('TOTAL REVENUE', formatMoney(summary.totalRevenue), 14);
-    drawSummaryBox('STOCK VALUE', formatMoney(summary.totalStockValue), 80);
-    drawSummaryBox('ITEMS SOLD', summary.totalItemsSold.toString(), 146);
-    drawSummaryBox('RESTOCKED', summary.totalRestocked.toString(), 212);
-
-    const tableColumn = [
-        "Item Name", 
-        "Price", 
-        "Opening", 
-        "Restocked", 
-        "Sold Qty", 
-        "Sold Value",
-        "Adj.", 
-        "Closing", 
-        "Value", 
-        "Status"
-    ];
-
-    const tableRows: any[] = [];
-
-    Object.entries(groupedData).forEach(([category, items]) => {
-        const categoryItems = items as ItemStockSummary[];
-        // Add Category Header Row
-        tableRows.push([{ 
-            content: category.toUpperCase(), 
-            colSpan: 10, 
-            styles: { 
-                fillColor: [241, 245, 249], 
-                textColor: [30, 41, 59], 
-                fontStyle: 'bold',
-                fontSize: 9,
-                cellPadding: 4
-            } 
-        }]);
-        
-        categoryItems.forEach(item => {
-            tableRows.push([
-                item.itemName,
-                formatMoney(item.unitPrice),
-                item.openingStock,
-                item.restocked > 0 ? `+${item.restocked}` : '-',
-                item.sold > 0 ? `-${item.sold}` : '-',
-                item.salesRevenue > 0 ? formatMoney(item.salesRevenue) : '-',
-                item.adjustments !== 0 ? (item.adjustments > 0 ? `+${item.adjustments}` : item.adjustments) : '-',
-                item.closingStock,
-                formatMoney(item.closingValue),
-                item.status
-            ]);
-        });
-    });
-
-    // Add Grand Total Row
-    tableRows.push([
-        { content: 'GRAND TOTAL', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [15, 23, 42], textColor: 255, fontSize: 10 } },
-        { content: reportData.reduce((sum, i) => sum + i.openingStock, 0).toString(), styles: { fontStyle: 'bold', fillColor: [15, 23, 42], textColor: 255, halign: 'center', fontSize: 10 } },
-        { content: summary.totalRestocked.toString(), styles: { fontStyle: 'bold', fillColor: [15, 23, 42], textColor: 255, halign: 'center', fontSize: 10 } },
-        { content: summary.totalItemsSold.toString(), styles: { fontStyle: 'bold', fillColor: [15, 23, 42], textColor: 255, halign: 'center', fontSize: 10 } },
-        { content: formatMoney(summary.totalRevenue), styles: { fontStyle: 'bold', fillColor: [15, 23, 42], textColor: 255, halign: 'right', fontSize: 10 } },
-        { content: '-', styles: { fontStyle: 'bold', fillColor: [15, 23, 42], textColor: 255, halign: 'center', fontSize: 10 } },
-        { content: reportData.reduce((sum, i) => sum + i.closingStock, 0).toString(), styles: { fontStyle: 'bold', fillColor: [15, 23, 42], textColor: 255, halign: 'center', fontSize: 10 } },
-        { content: formatMoney(summary.totalStockValue), styles: { fontStyle: 'bold', fillColor: [15, 23, 42], textColor: 255, halign: 'right', fontSize: 10 } },
-        { content: '', styles: { fillColor: [15, 23, 42] } }
-    ]);
-
-    autoTable(doc, {
-      head: [tableColumn],
-      body: tableRows,
-      startY: startY + 32,
-      styles: { fontSize: 8, cellPadding: 3, valign: 'middle', font: 'helvetica' },
-      headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 9 },
-      columnStyles: {
-          0: { halign: 'left', fontStyle: 'bold', cellWidth: 50 }, // Item
-          1: { halign: 'right' }, // Price
-          2: { halign: 'center' }, // Opening
-          3: { halign: 'center', textColor: [79, 70, 229] }, // Restocked
-          4: { halign: 'center', textColor: [16, 185, 129] }, // Sold Qty
-          5: { halign: 'right', textColor: [16, 185, 129] }, // Sold Value
-          6: { halign: 'center', textColor: [239, 68, 68] }, // Adj
-          7: { halign: 'center', fontStyle: 'bold' }, // Closing
-          8: { halign: 'right', fontStyle: 'bold' }, // Value
-          9: { halign: 'center' } // Status
-      },
-      didDrawPage: (data) => {
-          // Footer
-          const footerY = doc.internal.pageSize.getHeight() - 15;
-          doc.setFontSize(8);
-          doc.setTextColor(148, 163, 184);
-          doc.text(`Page ${data.pageNumber}`, pageWidth - 20, footerY);
-          doc.text(`Retail Stock Ledger - Confidential Document`, 14, footerY);
-          
-          // Signature Lines (Only on last page)
-          if (data.pageNumber === doc.getNumberOfPages()) {
-              const sigY = footerY - 20;
-              doc.setDrawColor(203, 213, 225);
-              doc.line(14, sigY, 70, sigY);
-              doc.text("PREPARED BY", 14, sigY + 5);
-              
-              doc.line(pageWidth - 70, sigY, pageWidth - 14, sigY);
-              doc.text("AUTHORIZED SIGNATURE", pageWidth - 70, sigY + 5);
-          }
-      }
-    });
-
+    doc.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
     doc.save(`Retail_Stock_Ledger_${format(selectedMonth, 'yyyy-MM')}.pdf`);
   };
 
@@ -398,7 +259,7 @@ const RetailStockReport = () => {
       {/* Report Card */}
       <div ref={printRef}>
         <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
-          <div className="hidden print:block">
+          <div className="absolute -left-[9999px] top-0 print:static print:block">
             <RetailStockReportPrint
               reportData={reportData}
               summary={summary}
