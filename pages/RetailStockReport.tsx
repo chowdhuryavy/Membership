@@ -24,6 +24,7 @@ import { Sale, InventoryItem, InventoryLog } from '../types';
 import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import RetailStockReportPrint from '../components/RetailStockReportPrint';
 
 interface ItemStockSummary {
   itemId: string;
@@ -221,91 +222,52 @@ const RetailStockReport = () => {
     
     let startY = 15;
     
-    // Professional Header Background (Subtle)
-    doc.setFillColor(248, 250, 252);
-    doc.rect(0, 0, pageWidth, 65, 'F');
-    doc.setDrawColor(226, 232, 240);
-    doc.line(0, 65, pageWidth, 65);
+    // Professional Header
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, pageWidth, 50, 'F');
 
     // Logo
     if (currentProperty?.logo_url) {
         try {
             const logoData = await getDataUrl(currentProperty.logo_url);
-            const logoWidth = 25;
-            const logoHeight = 25;
-            const logoX = centerX - (logoWidth / 2);
-            doc.addImage(logoData, 'PNG', logoX, startY, logoWidth, logoHeight);
-            startY += 32;
+            doc.addImage(logoData, 'PNG', 14, 10, 30, 30);
         } catch (e) {
             console.error("Failed to load logo for PDF", e);
-            startY += 5;
         }
-    } else {
-        // Fallback Icon/Placeholder if logo fails
-        doc.setDrawColor(79, 70, 229);
-        doc.setLineWidth(0.5);
-        doc.circle(centerX, startY + 10, 8, 'S');
-        doc.setFontSize(12);
-        doc.text("H", centerX, startY + 11.5, { align: 'center' });
-        startY += 25;
     }
 
     // Header Text
-    doc.setFontSize(24);
-    doc.setTextColor(15, 23, 42); 
+    doc.setFontSize(20);
+    doc.setTextColor(15, 23, 42);
     doc.setFont("helvetica", "bold");
-    doc.text((currentProperty?.name || 'Property Name').toUpperCase(), centerX, startY, { align: 'center' });
+    doc.text((currentProperty?.name || 'Property Name').toUpperCase(), 50, 22);
     
-    startY += 8;
     doc.setFontSize(14);
-    doc.setTextColor(71, 85, 105); 
-    doc.setFont("helvetica", "bold");
-    doc.text('RETAIL STOCK LEDGER', centerX, startY, { align: 'center', charSpace: 2 });
+    doc.setTextColor(71, 85, 105);
+    doc.text('RETAIL STOCK LEDGER', 50, 30);
     
-    startY += 8;
     doc.setFontSize(9);
-    doc.setTextColor(148, 163, 184);
-    doc.setFont("helvetica", "normal");
-    const metadata = `PERIOD: ${format(selectedMonth, 'MMMM yyyy').toUpperCase()}   |   SCOPE: ${(viewScope === 'property' ? 'ALL OUTLETS' : currentOutlet?.name || '').toUpperCase()}   |   GENERATED: ${format(new Date(), 'dd MMM yyyy HH:mm').toUpperCase()}`;
-    doc.text(metadata, centerX, startY, { align: 'center' });
+    doc.setTextColor(100, 116, 139);
+    doc.text(`${format(selectedMonth, 'MMMM yyyy').toUpperCase()} | ${viewScope === 'property' ? 'ALL OUTLETS' : currentOutlet?.name || ''}`, 50, 36);
 
-    // Summary Section (Advanced Cards)
-    startY = 75;
-    const cardWidth = 62;
-    const cardHeight = 22;
-    const gap = 8;
-    const totalWidth = (cardWidth * 4) + (gap * 3);
-    let startX = (pageWidth - totalWidth) / 2;
+    // Summary Section
 
-    const drawAdvancedCard = (label: string, value: string, x: number, accentColor: [number, number, number]) => {
-        // Shadow effect
-        doc.setFillColor(241, 245, 249);
-        doc.roundedRect(x + 1, startY + 1, cardWidth, cardHeight, 4, 4, 'F');
-        
-        // Card Body
+    const drawSummaryBox = (label: string, value: string, x: number) => {
         doc.setDrawColor(226, 232, 240);
-        doc.setFillColor(255, 255, 255);
-        doc.roundedRect(x, startY, cardWidth, cardHeight, 4, 4, 'FD');
-        
-        // Accent Line
-        doc.setDrawColor(accentColor[0], accentColor[1], accentColor[2]);
-        doc.setLineWidth(1.5);
-        doc.line(x + 5, startY + 4, x + 15, startY + 4);
-        
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(x, 55, 60, 20, 2, 2, 'FD');
         doc.setFontSize(8);
         doc.setTextColor(100, 116, 139);
-        doc.setFont("helvetica", "bold");
-        doc.text(label, x + (cardWidth/2), startY + 9, { align: 'center' });
-        
+        doc.text(label, x + 30, 62, { align: 'center' });
         doc.setFontSize(12);
         doc.setTextColor(15, 23, 42);
-        doc.text(value, x + (cardWidth/2), startY + 17, { align: 'center' });
+        doc.text(value, x + 30, 70, { align: 'center' });
     };
 
-    drawAdvancedCard('TOTAL REVENUE', formatMoney(summary.totalRevenue), startX, [16, 185, 129]);
-    drawAdvancedCard('STOCK VALUE', formatMoney(summary.totalStockValue), startX + cardWidth + gap, [79, 70, 229]);
-    drawAdvancedCard('ITEMS SOLD', summary.totalItemsSold.toString(), startX + (cardWidth + gap) * 2, [245, 158, 11]);
-    drawAdvancedCard('RESTOCKED', summary.totalRestocked.toString(), startX + (cardWidth + gap) * 3, [59, 130, 246]);
+    drawSummaryBox('TOTAL REVENUE', formatMoney(summary.totalRevenue), 14);
+    drawSummaryBox('STOCK VALUE', formatMoney(summary.totalStockValue), 80);
+    drawSummaryBox('ITEMS SOLD', summary.totalItemsSold.toString(), 146);
+    drawSummaryBox('RESTOCKED', summary.totalRestocked.toString(), 212);
 
     const tableColumn = [
         "Item Name", 
@@ -436,53 +398,19 @@ const RetailStockReport = () => {
       {/* Report Card */}
       <div ref={printRef}>
         <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
+          <div className="hidden print:block">
+            <RetailStockReportPrint
+              reportData={reportData}
+              summary={summary}
+              groupedData={groupedData}
+              currentProperty={currentProperty}
+              currentOutlet={currentOutlet}
+              selectedMonth={selectedMonth}
+              viewScope={viewScope}
+              formatMoney={formatMoney}
+            />
+          </div>
           
-          {/* Advanced Report Header (Visible in Print Only) */}
-          <div className="hidden print:flex print-only flex-col items-center pt-12 pb-8 border-b-2 border-slate-900 bg-white">
-              <div className="mb-6">
-                  {currentProperty?.logo_url ? (
-                      <img src={currentProperty.logo_url} alt="Property Logo" className="h-24 object-contain" />
-                  ) : (
-                      <div className="h-20 w-20 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
-                          <Building2 className="w-10 h-10" />
-                      </div>
-                  )}
-              </div>
-              
-              <h1 className="text-4xl font-black uppercase tracking-tighter text-slate-900 mb-1">{currentProperty?.name || 'Property Name'}</h1>
-              <h2 className="text-xl font-bold text-slate-500 uppercase tracking-[0.2em] mb-6">Retail Stock Ledger</h2>
-              
-              <div className="flex gap-12 border-t border-b border-slate-200 py-4 w-full justify-center">
-                  <div className="text-center">
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Period</span>
-                      <span className="text-sm font-bold text-slate-900 uppercase">{format(selectedMonth, 'MMMM yyyy')}</span>
-                  </div>
-                  <div className="text-center border-l border-slate-200 pl-12">
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Scope</span>
-                      <span className="text-sm font-bold text-slate-900 uppercase">{viewScope === 'property' ? 'All Outlets' : currentOutlet?.name}</span>
-                  </div>
-                  <div className="text-center border-l border-slate-200 pl-12">
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Generated</span>
-                      <span className="text-sm font-bold text-slate-900 uppercase">{format(new Date(), 'dd MMM yyyy')}</span>
-                  </div>
-              </div>
-          </div>
-
-          {/* Advanced Summary Section (Visible in Print Only) */}
-          <div className="hidden print:grid print-only grid-cols-4 gap-4 p-8 bg-white border-b border-slate-200">
-              {[
-                  { label: 'Total Revenue', value: formatMoney(summary.totalRevenue) },
-                  { label: 'Asset Value', value: formatMoney(summary.totalStockValue) },
-                  { label: 'Units Sold', value: summary.totalItemsSold },
-                  { label: 'Units Restocked', value: summary.totalRestocked }
-              ].map((card, i) => (
-                  <div key={i} className="p-4 border border-slate-200 rounded-lg flex flex-col items-center text-center">
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{card.label}</span>
-                      <span className="text-xl font-black text-slate-900">{card.value}</span>
-                  </div>
-              ))}
-          </div>
-
           {/* Controls (Web Only) */}
           <div className="p-6 bg-slate-50/50 border-b border-slate-100 no-print">
              <div className="flex flex-col md:flex-row gap-6 justify-center items-center">
