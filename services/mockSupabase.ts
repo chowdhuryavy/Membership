@@ -1,4 +1,4 @@
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format, parse } from 'date-fns';
@@ -823,19 +823,76 @@ class DatabaseService {
     return [];
   }
 
+  async getInventoryLogs(scopeId: string, isPropertyScope: boolean = false): Promise<InventoryLog[]> {
+    if (this.isSupabase()) {
+      let query = supabase.from('inventory_logs').select('*');
+      if (isPropertyScope) {
+          const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
+          const ids = (outlets || []).map(o => o.id);
+          query = query.in('outlet_id', ids);
+      } else {
+          query = query.eq('outlet_id', scopeId);
+      }
+      const { data } = await query.order('created_at', { ascending: false });
+      return (data || []) as InventoryLog[];
+    }
+    return [];
+  }
+
+  async addInventoryLog(log: Omit<InventoryLog, 'id' | 'created_at'>) {
+    if (this.isSupabase()) {
+      await supabase.from('inventory_logs').insert([{ ...log, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
+    }
+  }
+
   async addInventoryItem(item: Omit<InventoryItem, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('inventory').insert([{ ...item, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select();
+        const { data, error } = await supabase.from('inventory').insert([{ ...item, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select().single();
         if (error) throw error;
+        
+        // Log initial stock
+        if (item.stock_quantity > 0) {
+            await this.addInventoryLog({
+                item_id: data.id,
+                property_id: item.property_id,
+                outlet_id: item.outlet_id,
+                change_amount: item.stock_quantity,
+                previous_stock: 0,
+                new_stock: item.stock_quantity,
+                reason: 'Initial',
+                notes: 'Initial stock creation'
+            });
+        }
+
         await this.logAction('CREATE_INVENTORY', `Added inventory item: ${item.name} (Price: ${item.price}, Stock: ${item.stock_quantity})`, item.outlet_id);
         return data;
     }
   }
 
-  async updateInventoryItem(id: string, updates: Partial<InventoryItem>) {
+  async updateInventoryItem(id: string, updates: Partial<InventoryItem>, reason?: string, userId?: string) {
     if (this.isSupabase()) {
+        // Get current item for logging
+        const { data: currentItem } = await supabase.from('inventory').select('*').eq('id', id).single();
+
         const { error } = await supabase.from('inventory').update(updates).eq('id', id);
         if (error) throw error;
+
+        // Log stock change if quantity changed
+        if (currentItem && updates.stock_quantity !== undefined && updates.stock_quantity !== currentItem.stock_quantity) {
+            const change = updates.stock_quantity - currentItem.stock_quantity;
+            await this.addInventoryLog({
+                item_id: id,
+                property_id: currentItem.property_id,
+                outlet_id: currentItem.outlet_id,
+                change_amount: change,
+                previous_stock: currentItem.stock_quantity,
+                new_stock: updates.stock_quantity,
+                reason: change > 0 ? 'Restock' : 'Adjustment',
+                notes: reason || 'Manual adjustment',
+                created_by: userId
+            });
+        }
+
         const changedFields = Object.keys(updates).filter(k => updates[k] !== undefined && updates[k] !== null).join(', ');
         await this.logAction('UPDATE_INVENTORY', `Updated inventory item: ${id}. Modified fields: [${changedFields}]`);
     }

@@ -271,6 +271,20 @@ export interface InventoryItem {
   created_at: string;
 }
 
+export interface InventoryLog {
+  id: string;
+  item_id: string;
+  property_id: string;
+  outlet_id: string;
+  change_amount: number; // Positive for restock, negative for adjustment/loss
+  previous_stock: number;
+  new_stock: number;
+  reason: 'Restock' | 'Adjustment' | 'Sale' | 'Return' | 'Initial';
+  notes?: string;
+  created_by?: string;
+  created_at: string;
+}
+
 export interface IncentiveRule {
   id: string;
   name: string;

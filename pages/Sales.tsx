@@ -454,6 +454,8 @@ export const InventoryManager = ({
             }
         }
     }, [editingItem]); // Removed externalFormState from dependencies
+    const [stockForm, setStockForm] = useState<{ show: boolean, item: InventoryItem | null, type: 'restock' | 'adjustment' }>({ show: false, item: null, type: 'restock' });
+    const [stockData, setStockData] = useState({ quantity: 0, reason: '', notes: '' });
     const [error, setError] = useState<string | null>(null);
 
     const handleSave = async (e: React.FormEvent) => {
@@ -477,6 +479,30 @@ export const InventoryManager = ({
             } else {
                 setError(e.message || "Failed to save inventory item.");
             }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleStockUpdate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!stockForm.item || !canManage) return;
+        setLoading(true);
+        try {
+            const change = stockForm.type === 'restock' ? stockData.quantity : stockData.quantity; 
+            
+            const newStock = stockForm.item.stock_quantity + change;
+            
+            await db.updateInventoryItem(stockForm.item.id, { 
+                stock_quantity: newStock 
+            }, stockForm.type === 'restock' ? 'Restock' : 'Adjustment', user?.id);
+
+            setStockForm({ show: false, item: null, type: 'restock' });
+            setStockData({ quantity: 0, reason: '', notes: '' });
+            onRefresh();
+        } catch (e: any) {
+            console.error(e);
+            setError(e.message || "Failed to update stock.");
         } finally {
             setLoading(false);
         }
@@ -523,8 +549,12 @@ export const InventoryManager = ({
                                         track_inventory: item.track_inventory ?? true
                                       }); 
                                       setShowForm(true); 
-                                    }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit className="w-4 h-4" /></button>
-                                    <button onClick={() => setItemToDelete(item.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                                    }} className="p-2 text-slate-400 hover:text-indigo-600" title="Edit Item"><Edit className="w-4 h-4" /></button>
+                                    <button onClick={() => {
+                                        setStockForm({ show: true, item, type: 'restock' });
+                                        setStockData({ quantity: 0, reason: 'Restock', notes: '' });
+                                    }} className="p-2 text-slate-400 hover:text-emerald-600" title="Add Stock"><RefreshCcw className="w-4 h-4" /></button>
+                                    <button onClick={() => setItemToDelete(item.id)} className="p-2 text-slate-400 hover:text-red-600" title="Delete Item"><Trash2 className="w-4 h-4" /></button>
                                 </div>
                             )}
                         </div>
@@ -550,6 +580,42 @@ export const InventoryManager = ({
                     </Card>
                 ))}
             </div>
+
+            {stockForm.show && stockForm.item && (
+                <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
+                    <Card className="w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        <CardHeader className="bg-slate-900 text-white p-6 relative">
+                            <CardTitle className="text-lg font-black uppercase tracking-tight">Restock Inventory</CardTitle>
+                            <p className="text-[10px] text-indigo-200 uppercase tracking-widest mt-1">{stockForm.item.name}</p>
+                            <button onClick={() => setStockForm({ ...stockForm, show: false })} className="absolute top-5 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"><X className="w-5 h-5"/></button>
+                        </CardHeader>
+                        <CardContent className="p-8 space-y-6">
+                            <form onSubmit={handleStockUpdate} className="space-y-4">
+                                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center">
+                                    <span className="text-xs font-bold text-slate-500 uppercase">Current Stock</span>
+                                    <span className="text-lg font-black text-slate-900">{stockForm.item.stock_quantity}</span>
+                                </div>
+                                <Input 
+                                    label="Quantity to Add" 
+                                    type="number" 
+                                    value={stockData.quantity} 
+                                    onChange={e => setStockData({...stockData, quantity: parseInt(e.target.value) || 0})} 
+                                    className="h-12 rounded-xl" 
+                                    autoFocus
+                                />
+                                <Input 
+                                    label="Notes / Reference" 
+                                    value={stockData.notes} 
+                                    onChange={e => setStockData({...stockData, notes: e.target.value})} 
+                                    placeholder="e.g., PO-12345"
+                                    className="h-12 rounded-xl" 
+                                />
+                                <Button type="submit" isLoading={loading} className="w-full h-14 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 mt-4">Confirm Restock</Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
 
             {showForm && canManage && (
                 <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
