@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../services/supabase';
+import { Link } from 'react-router-dom';
 import { 
   Card, 
   CardContent, 
@@ -809,6 +810,11 @@ const Sales = () => {
                         <button onClick={() => setActiveTab('ledger')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'ledger' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Ledger</button>
                         {canViewInventory && <button onClick={() => setActiveTab('inventory')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Inventory</button>}
                     </div>
+                    {canViewInventory && (
+                        <Link to="/sales/stock-report" className="p-3 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm transition-all" title="Stock Report">
+                            <TrendingUp className="w-5 h-5" />
+                        </Link>
+                    )}
                     {canCreate && (
                         <Button onClick={() => { setEditingSale(null); setShowForm(true); }} className="w-full sm:w-auto rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 ml-auto xl:ml-0">
                             <Plus className="w-4 h-4 mr-2" /> New Entry

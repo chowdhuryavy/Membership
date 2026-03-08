@@ -508,6 +508,8 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
     );
 };
 
+import RetailStockReport from './pages/RetailStockReport';
+
 const App = () => {
   return (
     <AuthProvider>
@@ -522,6 +524,7 @@ const App = () => {
                 <Route path="staff" element={<StaffPage />} />
                 <Route path="bookings" element={<MassageScheduling />} />
                 <Route path="sales" element={<Sales />} />
+                <Route path="sales/stock-report" element={<RetailStockReport />} />
                 <Route path="categories" element={<Categories />} />
                 <Route path="users" element={<UsersPage />} />
                 <Route path="reports" element={<Reports />} />
