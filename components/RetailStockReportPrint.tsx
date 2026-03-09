@@ -63,6 +63,9 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
           .break-inside-avoid {
             break-inside: avoid;
           }
+          .print-compact td, .print-compact th {
+            padding: 4px !important;
+          }
         }
         .no-oklch, .no-oklch * {
           --color-slate-50: #f8fafc !important;
@@ -102,7 +105,7 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
         }
       `}</style>
       {/* Header */}
-      <div className="flex items-start justify-between border-b border-slate-300 pb-6 mb-8">
+      <div className="flex items-start justify-between border-b border-slate-300 pb-6 mb-8 print:pb-2 print:mb-4">
         <div className="flex items-center gap-6">
           {currentProperty?.logo_url ? (
             <img 
@@ -152,7 +155,7 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
           { label: 'Units Sold', value: summary.totalItemsSold },
           { label: 'Units Restocked', value: summary.totalRestocked }
         ].map((card, i) => (
-          <div key={i} className="p-5 border border-slate-200 rounded-xl bg-white shadow-sm flex flex-col">
+          <div key={i} className="p-5 print:p-2 border border-slate-200 rounded-xl bg-white shadow-sm flex flex-col">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{card.label}</span>
             <span className="text-2xl font-black text-slate-900">{card.value}</span>
           </div>
@@ -160,7 +163,7 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
       </div>
 
       {/* Table */}
-      <div className="border border-slate-200 rounded-xl overflow-hidden">
+      <div className="border border-slate-200 rounded-xl overflow-hidden print-compact">
         <table className="w-full text-sm text-left border-collapse">
           <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] tracking-widest font-bold">
             <tr>
@@ -226,7 +229,7 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
       </div>
 
       {/* Signatories */}
-      <div className="mt-12 grid grid-cols-2 gap-24">
+      <div className="mt-12 print:mt-4 grid grid-cols-2 gap-24">
         <div className="flex flex-col gap-2">
           <div className="h-px w-full bg-slate-300"></div>
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prepared By / Store Manager</span>
