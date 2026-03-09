@@ -41,9 +41,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const checkIsSuperAdmin = async (currentUser: UserProfile | null = user) => {
       if (!currentUser) return false;
       
-      // Check if user has the admin role (case-insensitive)
-      const isSuper = isSuperAdminRole(currentUser.role_id);
-      console.log('checkIsSuperAdmin', { role_id: currentUser.role_id, isSuper });
+      // Check if user has the admin role (case-insensitive) OR is the hardcoded super admin email
+      const isSuper = isSuperAdminRole(currentUser.role_id) || currentUser.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+      console.log('checkIsSuperAdmin', { role_id: currentUser.role_id, email: currentUser.email, isSuper });
       setIsSuperAdminState(isSuper);
       return isSuper;
   };

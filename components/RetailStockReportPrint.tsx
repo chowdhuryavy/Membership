@@ -66,7 +66,7 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
               <div className="font-bold text-slate-400 uppercase tracking-widest">Period</div>
               <div className="font-bold text-slate-900 text-right">{format(selectedMonth, 'MMMM yyyy')}</div>
               <div className="font-bold text-slate-400 uppercase tracking-widest">Scope</div>
-              <div className="font-bold text-slate-900 text-right">{viewScope === 'property' ? 'ALL OUTLETS' : currentOutlet?.name}</div>
+              <div className="font-bold text-slate-900 text-right">{viewScope === 'property' ? 'ALL OUTLETS' : (currentOutlet?.name || 'N/A')}</div>
               <div className="font-bold text-slate-400 uppercase tracking-widest">Generated</div>
               <div className="font-bold text-slate-900 text-right">{format(new Date(), 'dd MMM yyyy')}</div>
             </div>

@@ -485,6 +485,11 @@ const SettingsPage = () => {
                               <Input label="Global Legal Name" value={companyForm.name} onChange={e => setCompanyForm({...companyForm, name: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                               <Input label="Brand Asset URL (Logo)" value={companyForm.logo_url} onChange={e => setCompanyForm({...companyForm, logo_url: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                               <div className="md:col-span-2"><Input label="Registry HQ Address" value={companyForm.address} onChange={e => setCompanyForm({...companyForm, address: e.target.value})} className="h-16 rounded-2xl font-bold border-2" /></div>
+                              <Input label="Report Title" value={companyForm.report_title || ''} onChange={e => setCompanyForm({...companyForm, report_title: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
+                              <Input label="Report Subtitle" value={companyForm.report_subtitle || ''} onChange={e => setCompanyForm({...companyForm, report_subtitle: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
+                              <Input label="Prepared By (Signatory Role)" value={companyForm.signatory_prepared_role || ''} onChange={e => setCompanyForm({...companyForm, signatory_prepared_role: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
+                              <Input label="Reviewed By (Signatory Role)" value={companyForm.signatory_reviewed_role || ''} onChange={e => setCompanyForm({...companyForm, signatory_reviewed_role: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
+                              <Input label="Approved By (Signatory Role)" value={companyForm.signatory_approved_role || ''} onChange={e => setCompanyForm({...companyForm, signatory_approved_role: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                           </div>
                           <Button onClick={handleUpdateCompany} isLoading={isSaving} className="w-full h-20 rounded-[2.5rem] font-black text-lg uppercase bg-indigo-600 shadow-2xl">Commit Global Scope</Button>
                       </CardContent>
@@ -525,7 +530,7 @@ const SettingsPage = () => {
                                   <tr key={o.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase">{o.name}</div></td>
                                       <td className="px-10 py-8"><span className="bg-indigo-50 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-indigo-600 border border-indigo-100">{properties.find(p=>p.id===o.property_id)?.name || 'Detached'}</span></td>
-                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={()=>{setEditingId(o.id); setOutletForm({...o, signatory_prepared_role: o.signatory_prepared_role || '', signatory_approved_role: o.signatory_approved_role || ''}); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'outlet', id:o.id, name:o.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
+                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={()=>{setEditingId(o.id); setOutletForm({...o, signatory_prepared_role: o.signatory_prepared_role || '', signatory_reviewed_role: o.signatory_reviewed_role || '', signatory_approved_role: o.signatory_approved_role || '', contract_template: o.contract_template || '', conditions: o.conditions || ''}); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'outlet', id:o.id, name:o.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
                                   </tr>
                               ))}</tbody>
                           </table>
@@ -776,8 +781,27 @@ const SettingsPage = () => {
                         <div className="space-y-6">
                             <Input label="Facility Name *" value={outletForm.name} onChange={e => setOutletForm({...outletForm, name: e.target.value})} className="h-14 rounded-xl font-bold" />
                             <Select label="Linked Property Portfolio" options={[{value:'', label:'Select Property...'}, ...properties.map(p=>({value:p.id, label:p.name}))]} value={outletForm.property_id} onChange={e => setOutletForm({...outletForm, property_id: e.target.value})} className="h-14 rounded-xl" />
-                            <Input label="Prepared By (Signatory Role)" value={outletForm.signatory_prepared_role} onChange={e => setOutletForm({...outletForm, signatory_prepared_role: e.target.value})} className="h-14 rounded-xl" />
-                            <Input label="Approved By (Signatory Role)" value={outletForm.signatory_approved_role} onChange={e => setOutletForm({...outletForm, signatory_approved_role: e.target.value})} className="h-14 rounded-xl" />
+                            <Input label="Prepared By (Signatory Role)" value={outletForm.signatory_prepared_role || ''} onChange={e => setOutletForm({...outletForm, signatory_prepared_role: e.target.value})} className="h-14 rounded-xl" />
+                            <Input label="Reviewed By (Signatory Role)" value={outletForm.signatory_reviewed_role || ''} onChange={e => setOutletForm({...outletForm, signatory_reviewed_role: e.target.value})} className="h-14 rounded-xl" />
+                            <Input label="Approved By (Signatory Role)" value={outletForm.signatory_approved_role || ''} onChange={e => setOutletForm({...outletForm, signatory_approved_role: e.target.value})} className="h-14 rounded-xl" />
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Outlet Contract Template</label>
+                                <textarea 
+                                    value={outletForm.contract_template || ''} 
+                                    onChange={e => setOutletForm({...outletForm, contract_template: e.target.value})}
+                                    className="w-full min-h-[100px] p-4 rounded-xl border-2 border-slate-100 font-medium text-xs focus:outline-none focus:border-indigo-600 transition-all"
+                                    placeholder="Outlet-specific template..."
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Outlet Terms & Conditions</label>
+                                <textarea 
+                                    value={outletForm.conditions || ''} 
+                                    onChange={e => setOutletForm({...outletForm, conditions: e.target.value})}
+                                    className="w-full min-h-[100px] p-4 rounded-xl border-2 border-slate-100 font-medium text-xs focus:outline-none focus:border-indigo-600 transition-all"
+                                    placeholder="Outlet-specific conditions..."
+                                />
+                            </div>
                             <Button onClick={handleOutletSubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Deploy Outlet</Button>
                         </div>
                       )}
