@@ -38,7 +38,45 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
   reportData, summary, groupedData, currentProperty, currentOutlet, selectedMonth, viewScope, formatMoney
 }, ref) => {
   return (
-    <div ref={ref} className="p-8 bg-white text-slate-900 w-[1000px] min-h-[700px] mx-auto print:w-full print:max-w-none print:p-0">
+    <div ref={ref} className="p-8 bg-white text-slate-900 w-[1000px] min-h-[700px] mx-auto print:w-full print:max-w-none print:p-0 no-oklch">
+      <style>{`
+        .no-oklch, .no-oklch * {
+          --color-slate-50: #f8fafc !important;
+          --color-slate-100: #f1f5f9 !important;
+          --color-slate-200: #e2e8f0 !important;
+          --color-slate-300: #cbd5e1 !important;
+          --color-slate-400: #94a3b8 !important;
+          --color-slate-500: #64748b !important;
+          --color-slate-600: #475569 !important;
+          --color-slate-700: #334155 !important;
+          --color-slate-800: #1e293b !important;
+          --color-slate-900: #0f172a !important;
+          --color-indigo-50: #eef2ff !important;
+          --color-indigo-100: #e0e7ff !important;
+          --color-indigo-600: #4f46e5 !important;
+          --color-indigo-700: #4338ca !important;
+          --color-emerald-50: #ecfdf5 !important;
+          --color-emerald-100: #d1fae5 !important;
+          --color-emerald-600: #059669 !important;
+          --color-emerald-700: #047857 !important;
+          --color-amber-50: #fffbeb !important;
+          --color-amber-100: #fef3c7 !important;
+          --color-amber-600: #d97706 !important;
+          --color-amber-700: #b45309 !important;
+          --color-red-50: #fef2f2 !important;
+          --color-red-100: #fee2e2 !important;
+          --color-red-600: #dc2626 !important;
+          --color-red-700: #b91c1c !important;
+          --color-purple-50: #faf5ff !important;
+          --color-purple-100: #f3e8ff !important;
+          --color-purple-600: #9333ea !important;
+          --color-purple-700: #7e22ce !important;
+          
+          /* Also override the generic background/foreground if used */
+          --background: #ffffff !important;
+          --foreground: #0f172a !important;
+        }
+      `}</style>
       {/* Header */}
       <div className="flex items-start justify-between border-b border-slate-300 pb-6 mb-8">
         <div className="flex items-center gap-6">

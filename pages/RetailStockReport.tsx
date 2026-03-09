@@ -214,19 +214,30 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
     if (!printRef.current) return;
 
     const el = printRef.current;
-    const parent = el.parentElement;
     
-    // Temporarily move on-screen for html2canvas
-    if (parent) {
-      parent.style.position = 'absolute';
-      parent.style.left = '0';
-      parent.style.top = '0';
-      parent.style.zIndex = '-1';
-      parent.style.opacity = '1';
-    }
+    // Create a temporary container to isolate the element
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '1000px';
+    document.body.appendChild(container);
+    
+    // Clone the element to avoid moving the original and potentially breaking React
+    const clone = el.cloneNode(true) as HTMLDivElement;
+    clone.style.position = 'static';
+    clone.style.display = 'block';
+    container.appendChild(clone);
 
     try {
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const canvas = await html2canvas(clone, { 
+        scale: 2, 
+        useCORS: true, 
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: 1000,
+        windowWidth: 1000
+      });
       const imgData = canvas.toDataURL('image/png');
       const doc = new jsPDF('l', 'mm', 'a4');
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -249,15 +260,10 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
       }
 
       doc.save(`Retail_Stock_Ledger_${format(selectedMonth, 'yyyy-MM')}.pdf`);
+    } catch (err) {
+      console.error("PDF generation failed", err);
     } finally {
-      // Restore off-screen
-      if (parent) {
-        parent.style.position = 'absolute';
-        parent.style.left = '-9999px';
-        parent.style.top = '0';
-        parent.style.zIndex = '';
-        parent.style.opacity = '';
-      }
+      document.body.removeChild(container);
     }
   };
 

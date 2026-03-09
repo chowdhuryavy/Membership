@@ -3,16 +3,14 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { db } from '../services/mockSupabase';
 
-export const SUPER_ADMIN_EMAIL = 'chowdhuryavy@gmail.com';
-
 export const isSuperAdminRole = (roleId: string | undefined | null) => {
     const id = roleId?.toLowerCase();
-    return id === 'admin' || id === 'system_admin';
+    return id === 'admin' || id === 'system_admin' || id === 'super_admin';
 };
 
 export const isSuperAdmin = (user: UserProfile | null) => {
-    // This is now a placeholder, the real check is done in the backend
-    return false;
+    if (!user) return false;
+    return isSuperAdminRole(user.role_id);
 };
 
 interface AuthContextType {
@@ -41,8 +39,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const checkIsSuperAdmin = async (currentUser: UserProfile | null = user) => {
       if (!currentUser) return false;
       
-      // Check if user has the admin role (case-insensitive) OR is the hardcoded super admin email
-      const isSuper = isSuperAdminRole(currentUser.role_id) || currentUser.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+      // Check if user has the admin role (case-insensitive)
+      const isSuper = isSuperAdminRole(currentUser.role_id);
       console.log('checkIsSuperAdmin', { role_id: currentUser.role_id, email: currentUser.email, isSuper });
       setIsSuperAdminState(isSuper);
       return isSuper;
