@@ -55,6 +55,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [internalViewScope, setInternalViewScope] = useState<'outlet' | 'property'>('outlet');
   const [loading, setLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [outletsMap, setOutletsMap] = useState<Record<string, string>>({});
   
   const viewScope = embeddedViewScope || internalViewScope;
@@ -194,8 +195,16 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
+      
+      // Add a timeout to prevent hanging
+      const timeout = setTimeout(() => {
+        img.src = '';
+        reject(new Error('Image load timeout'));
+      }, 5000);
+
       img.src = url;
       img.onload = () => {
+        clearTimeout(timeout);
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
@@ -211,7 +220,10 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
           reject('Canvas context not found');
         }
       };
-      img.onerror = (error) => reject(error);
+      img.onerror = (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      };
     });
   };
 
@@ -238,6 +250,8 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
   };
 
   const handleDownloadPDF = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
     try {
       const doc = new jsPDF('l', 'mm', 'a4');
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -254,8 +268,12 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
           } catch (e) {
             console.warn("Direct logo load failed, trying proxy", e);
             // Fallback to proxy
-            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(logoUrl)}`;
-            base64Logo = await loadImageAsBase64(proxyUrl);
+            try {
+              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(logoUrl)}`;
+              base64Logo = await loadImageAsBase64(proxyUrl);
+            } catch (proxyErr) {
+              console.warn("Proxy logo load failed", proxyErr);
+            }
           }
           
           if (base64Logo) {
@@ -339,56 +357,44 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
       ]);
 
       // 5. Render Table
-      try {
-        // Use the functional approach which is more reliable in ESM
-        autoTable(doc, {
-          startY: 55,
-          head: [['Item Description', 'Price', 'Open', 'Restock', 'Sold', 'Revenue', 'Adj', 'Close', 'Value', 'Status']],
-          body: tableRows,
-          theme: 'grid',
-          headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
-          columnStyles: {
-            1: { halign: 'right' },
-            2: { halign: 'center' },
-            3: { halign: 'center' },
-            4: { halign: 'center' },
-            5: { halign: 'right' },
-            6: { halign: 'center' },
-            7: { halign: 'center' },
-            8: { halign: 'right' },
-            9: { halign: 'center' }
-          },
-          styles: { fontSize: 8, cellPadding: 3 },
-          didParseCell: (data: any) => {
-            if (data.section === 'body' && data.column.index === 9) {
-              const status = data.cell.raw;
-              if (status === 'Low') data.cell.styles.textColor = [220, 38, 38];
-              if (status === 'Good') data.cell.styles.textColor = [5, 150, 105];
-            }
+      const tableConfig: any = {
+        startY: 55,
+        head: [['Item Description', 'Price', 'Open', 'Restock', 'Sold', 'Revenue', 'Adj', 'Close', 'Value', 'Status']],
+        body: tableRows,
+        theme: 'grid',
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+        columnStyles: {
+          1: { halign: 'right' },
+          2: { halign: 'center' },
+          3: { halign: 'center' },
+          4: { halign: 'center' },
+          5: { halign: 'right' },
+          6: { halign: 'center' },
+          7: { halign: 'center' },
+          8: { halign: 'right' },
+          9: { halign: 'center' }
+        },
+        styles: { fontSize: 8, cellPadding: 3 },
+        didParseCell: (data: any) => {
+          if (data.section === 'body' && data.column.index === 9) {
+            const status = data.cell.raw;
+            if (status === 'Low') data.cell.styles.textColor = [220, 38, 38];
+            if (status === 'Good') data.cell.styles.textColor = [5, 150, 105];
           }
-        });
+        }
+      };
+
+      try {
+        if (typeof autoTable === 'function') {
+          autoTable(doc, tableConfig);
+        } else if ((doc as any).autoTable) {
+          (doc as any).autoTable(tableConfig);
+        } else {
+          throw new Error("autoTable not found on doc or as function");
+        }
       } catch (tableErr) {
-        console.error("autoTable functional call failed, trying prototype call", tableErr);
-        // Fallback to prototype call if functional fails
-        (doc as any).autoTable({
-          startY: 55,
-          head: [['Item Description', 'Price', 'Open', 'Restock', 'Sold', 'Revenue', 'Adj', 'Close', 'Value', 'Status']],
-          body: tableRows,
-          theme: 'grid',
-          headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
-          columnStyles: {
-            1: { halign: 'right' },
-            2: { halign: 'center' },
-            3: { halign: 'center' },
-            4: { halign: 'center' },
-            5: { halign: 'right' },
-            6: { halign: 'center' },
-            7: { halign: 'center' },
-            8: { halign: 'right' },
-            9: { halign: 'center' }
-          },
-          styles: { fontSize: 8, cellPadding: 3 }
-        });
+        console.error("autoTable call failed", tableErr);
+        throw tableErr;
       }
 
       // 6. Save PDF
@@ -396,6 +402,8 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
     } catch (err) {
       console.error("PDF generation failed", err);
       alert("Failed to generate PDF. Please try the Print option instead.");
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -416,8 +424,17 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
              <Button variant="outline" onClick={handlePrint} className="h-12 px-6 rounded-2xl border-slate-200 hover:bg-slate-50 transition-all gap-2 font-black uppercase text-[10px] tracking-widest text-slate-900">
                <Printer className="w-4 h-4" /> Print
              </Button>
-             <Button onClick={handleDownloadPDF} className="h-12 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200 gap-2 font-black uppercase text-[10px] tracking-widest">
-               <FileText className="w-4 h-4" /> Export
+             <Button 
+               onClick={handleDownloadPDF} 
+               disabled={isExporting}
+               className="h-12 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200 gap-2 font-black uppercase text-[10px] tracking-widest"
+             >
+               {isExporting ? (
+                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+               ) : (
+                 <FileText className="w-4 h-4" />
+               )}
+               {isExporting ? 'Exporting...' : 'Export'}
              </Button>
              <Button variant="ghost" onClick={() => window.history.back()} className="h-12 px-6 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-900 transition-colors shadow-sm font-black uppercase text-[10px] tracking-widest">
                Back
@@ -429,7 +446,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
       {/* Report Card */}
       <div className="print:m-0 print:p-0">
         <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl shadow-slate-200/50 overflow-hidden bg-white print:shadow-none print:border-none print:bg-transparent print:overflow-visible">
-          <div className="absolute -left-[9999px] top-0 print:static print:block print-only">
+          <div className="absolute -left-[9999px] top-0 print:static print:block print-only print:left-0">
             <RetailStockReportPrint
               ref={printRef}
               reportData={reportData}
@@ -462,8 +479,17 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
                        <Button variant="outline" onClick={handlePrint} className="h-10 px-4 rounded-xl border-slate-200 hover:bg-slate-50 transition-all gap-2 font-black uppercase text-[10px] tracking-widest text-slate-900">
                          <Printer className="w-3.5 h-3.5" /> Print
                        </Button>
-                       <Button onClick={handleDownloadPDF} className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-200 gap-2 font-black uppercase text-[10px] tracking-widest">
-                         <FileText className="w-3.5 h-3.5" /> Export
+                       <Button 
+                         onClick={handleDownloadPDF} 
+                         disabled={isExporting}
+                         className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-200 gap-2 font-black uppercase text-[10px] tracking-widest"
+                       >
+                         {isExporting ? (
+                           <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
+                         ) : (
+                           <FileText className="w-3.5 h-3.5" />
+                         )}
+                         {isExporting ? 'Exporting...' : 'Export'}
                        </Button>
                     </div>
                   )}
@@ -654,22 +680,6 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
              )}
           </div>
 
-          {/* Report Footer (Visible in Print Only) */}
-          <div className="hidden print:block p-12 bg-white border-t border-slate-100">
-              <div className="grid grid-cols-2 gap-24 mt-12">
-                  <div className="flex flex-col gap-2">
-                      <div className="h-px w-full bg-slate-300"></div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prepared By / Store Manager</span>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                      <div className="h-px w-full bg-slate-300"></div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Authorized Signature / General Manager</span>
-                  </div>
-              </div>
-              <div className="mt-16 text-center">
-                  <p className="text-[9px] font-bold text-slate-300 uppercase tracking-[0.3em]">Confidential Inventory Audit Document - {format(new Date(), 'yyyy')}</p>
-              </div>
-          </div>
         </Card>
       </div>
     </div>
