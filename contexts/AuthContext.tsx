@@ -5,7 +5,7 @@ import { db } from '../services/mockSupabase';
 
 export const isSuperAdminRole = (roleId: string | undefined | null) => {
     const id = roleId?.toLowerCase();
-    return id === 'admin' || id === 'system_admin' || id === 'super_admin';
+    return id === 'admin' || id === 'system_admin' || id === 'super_admin' || id === 'superadmin' || id === 'owner' || id === 'management';
 };
 
 export const isSuperAdmin = (user: UserProfile | null) => {

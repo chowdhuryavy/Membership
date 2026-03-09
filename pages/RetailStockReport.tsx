@@ -22,7 +22,7 @@ import {
 import { format, startOfMonth, endOfMonth, parseISO, isAfter, isBefore, isSameMonth, addMonths, subMonths } from 'date-fns';
 import { Sale, InventoryItem, InventoryLog } from '../types';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import RetailStockReportPrint from '../components/RetailStockReportPrint';
 
@@ -278,32 +278,57 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
       ]);
 
       // 5. Render Table
-      (doc as any).autoTable({
-        startY: 55,
-        head: [['Item Description', 'Price', 'Open', 'Restock', 'Sold', 'Revenue', 'Adj', 'Close', 'Value', 'Status']],
-        body: tableRows,
-        theme: 'grid',
-        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
-        columnStyles: {
-          1: { halign: 'right' },
-          2: { halign: 'center' },
-          3: { halign: 'center' },
-          4: { halign: 'center' },
-          5: { halign: 'right' },
-          6: { halign: 'center' },
-          7: { halign: 'center' },
-          8: { halign: 'right' },
-          9: { halign: 'center' }
-        },
-        styles: { fontSize: 8, cellPadding: 3 },
-        didParseCell: (data: any) => {
-          if (data.section === 'body' && data.column.index === 9) {
-            const status = data.cell.raw;
-            if (status === 'Low') data.cell.styles.textColor = [220, 38, 38];
-            if (status === 'Good') data.cell.styles.textColor = [5, 150, 105];
+      try {
+        // Use the functional approach which is more reliable in ESM
+        autoTable(doc, {
+          startY: 55,
+          head: [['Item Description', 'Price', 'Open', 'Restock', 'Sold', 'Revenue', 'Adj', 'Close', 'Value', 'Status']],
+          body: tableRows,
+          theme: 'grid',
+          headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+          columnStyles: {
+            1: { halign: 'right' },
+            2: { halign: 'center' },
+            3: { halign: 'center' },
+            4: { halign: 'center' },
+            5: { halign: 'right' },
+            6: { halign: 'center' },
+            7: { halign: 'center' },
+            8: { halign: 'right' },
+            9: { halign: 'center' }
+          },
+          styles: { fontSize: 8, cellPadding: 3 },
+          didParseCell: (data: any) => {
+            if (data.section === 'body' && data.column.index === 9) {
+              const status = data.cell.raw;
+              if (status === 'Low') data.cell.styles.textColor = [220, 38, 38];
+              if (status === 'Good') data.cell.styles.textColor = [5, 150, 105];
+            }
           }
-        }
-      });
+        });
+      } catch (tableErr) {
+        console.error("autoTable functional call failed, trying prototype call", tableErr);
+        // Fallback to prototype call if functional fails
+        (doc as any).autoTable({
+          startY: 55,
+          head: [['Item Description', 'Price', 'Open', 'Restock', 'Sold', 'Revenue', 'Adj', 'Close', 'Value', 'Status']],
+          body: tableRows,
+          theme: 'grid',
+          headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+          columnStyles: {
+            1: { halign: 'right' },
+            2: { halign: 'center' },
+            3: { halign: 'center' },
+            4: { halign: 'center' },
+            5: { halign: 'right' },
+            6: { halign: 'center' },
+            7: { halign: 'center' },
+            8: { halign: 'right' },
+            9: { halign: 'center' }
+          },
+          styles: { fontSize: 8, cellPadding: 3 }
+        });
+      }
 
       // 6. Save PDF
       doc.save(`Retail_Stock_Ledger_${format(selectedMonth, 'yyyy-MM')}.pdf`);
