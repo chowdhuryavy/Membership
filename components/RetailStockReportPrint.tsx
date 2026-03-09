@@ -215,17 +215,17 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
               </React.Fragment>
             ))}
           </tbody>
-          <tfoot className="bg-slate-900 text-white font-bold text-sm uppercase tracking-widest border-t-2 border-slate-900">
+          <tfoot className="bg-slate-900 text-white font-bold text-lg uppercase tracking-widest border-t-2 border-slate-900">
             <tr>
-              <td colSpan={viewScope === 'property' ? 3 : 2} className="p-5 text-right">Grand Total</td>
-              <td className="p-5 text-center font-mono">{reportData.reduce((sum, item) => sum + item.openingStock, 0)}</td>
-              <td className="p-5 text-center font-mono">{summary.totalRestocked}</td>
-              <td className="p-5 text-center font-mono">{summary.totalItemsSold}</td>
-              <td className="p-5 text-right font-mono whitespace-nowrap">{formatMoney(summary.totalRevenue)}</td>
-              <td className="p-5 text-center font-mono">{reportData.reduce((sum, item) => sum + item.adjustments, 0)}</td>
-              <td className="p-5 text-center font-mono">{reportData.reduce((sum, item) => sum + item.closingStock, 0)}</td>
-              <td className="p-5 text-right font-mono whitespace-nowrap">{formatMoney(summary.totalStockValue)}</td>
-              <td className="p-5"></td>
+              <td colSpan={viewScope === 'property' ? 3 : 2} className="p-6 text-right">Grand Total</td>
+              <td className="p-6 text-center font-mono">{reportData.reduce((sum, item) => sum + item.openingStock, 0)}</td>
+              <td className="p-6 text-center font-mono">{summary.totalRestocked}</td>
+              <td className="p-6 text-center font-mono">{summary.totalItemsSold}</td>
+              <td className="p-6 text-right font-mono whitespace-nowrap">{formatMoney(summary.totalRevenue)}</td>
+              <td className="p-6 text-center font-mono">{reportData.reduce((sum, item) => sum + item.adjustments, 0)}</td>
+              <td className="p-6 text-center font-mono">{reportData.reduce((sum, item) => sum + item.closingStock, 0)}</td>
+              <td className="p-6 text-right font-mono whitespace-nowrap">{formatMoney(summary.totalStockValue)}</td>
+              <td className="p-6"></td>
             </tr>
           </tfoot>
         </table>
