@@ -437,18 +437,6 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
              <Button variant="outline" onClick={handlePrint} className="h-12 px-6 rounded-2xl border-slate-200 hover:bg-slate-50 transition-all gap-2 font-black uppercase text-[10px] tracking-widest text-slate-900">
                <Printer className="w-4 h-4" /> Print
              </Button>
-             <Button 
-               onClick={handleDownloadPDF} 
-               disabled={isExporting}
-               className="h-12 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200 gap-2 font-black uppercase text-[10px] tracking-widest"
-             >
-               {isExporting ? (
-                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-               ) : (
-                 <FileText className="w-4 h-4" />
-               )}
-               {isExporting ? 'Exporting...' : 'Export'}
-             </Button>
              <Button variant="ghost" onClick={() => window.history.back()} className="h-12 px-6 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-900 transition-colors shadow-sm font-black uppercase text-[10px] tracking-widest">
                Back
              </Button>
