@@ -229,14 +229,14 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
       </div>
 
       {/* Signatories */}
-      <div className="mt-8 print:mt-2 grid grid-cols-2 gap-24">
-        <div className="flex flex-col gap-6">
-          <div className="h-px w-full bg-slate-300"></div>
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prepared By / Store Manager</span>
+      <div className="mt-8 print:mt-4 grid grid-cols-2 gap-12 break-inside-avoid">
+        <div className="flex flex-col gap-2">
+          <div className="h-0.5 w-full bg-slate-500"></div>
+          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Prepared By / Store Manager</span>
         </div>
-        <div className="flex flex-col gap-6">
-          <div className="h-px w-full bg-slate-300"></div>
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Authorized Signature / General Manager</span>
+        <div className="flex flex-col gap-2">
+          <div className="h-0.5 w-full bg-slate-500"></div>
+          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Authorized Signature / General Manager</span>
         </div>
       </div>
     </div>
