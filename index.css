@@ -21,3 +21,35 @@
   .markdown-body ul { @apply list-disc pl-5 mb-4; }
   .markdown-body li { @apply mb-1; }
 }
+ 
+@media print {
+  /* Hide the main app container during print */
+  body > #root {
+    display: none !important;
+  }
+  
+  /* Ensure the print component is visible and takes full width */
+  .print-only {
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    z-index: 9999 !important;
+  }
+
+  body {
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  /* Reset shadows and borders for print */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+}

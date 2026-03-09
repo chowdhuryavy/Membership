@@ -211,6 +211,19 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
     });
   };
 
+  const formatMoneyForPDF = (amount: number) => {
+    const formatted = formatMoney(amount);
+    // If the formatted string contains non-ASCII characters (like Arabic symbols),
+    // jsPDF will fail to render them correctly without custom fonts.
+    // We replace them with 'QAR' for compatibility.
+    if (/[^\x00-\x7F]/.test(formatted)) {
+      // Extract numeric part and add QAR
+      const numericPart = formatted.replace(/[^\d.,]/g, '').trim();
+      return `${numericPart} QAR`;
+    }
+    return formatted;
+  };
+
   const handleDownloadPDF = async () => {
     try {
       const doc = new jsPDF('l', 'mm', 'a4');
@@ -235,8 +248,8 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
       // 3. Add Summary Stats
       const statsX = pageWidth - 80;
       doc.setFontSize(10);
-      doc.text(`Total Revenue: ${formatMoney(summary.totalRevenue)}`, statsX, 38);
-      doc.text(`Asset Value: ${formatMoney(summary.totalStockValue)}`, statsX, 43);
+      doc.text(`Total Revenue: ${formatMoneyForPDF(summary.totalRevenue)}`, statsX, 38);
+      doc.text(`Asset Value: ${formatMoneyForPDF(summary.totalStockValue)}`, statsX, 43);
       doc.text(`Units Sold: ${summary.totalItemsSold}`, statsX, 48);
 
       // 4. Generate Table Data
@@ -251,14 +264,14 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
         (items as ItemStockSummary[]).forEach(item => {
           tableRows.push([
             item.itemName,
-            formatMoney(item.unitPrice),
+            formatMoneyForPDF(item.unitPrice),
             item.openingStock,
             item.restocked || '-',
             item.sold || '-',
-            formatMoney(item.salesRevenue),
+            formatMoneyForPDF(item.salesRevenue),
             item.adjustments || '-',
             item.closingStock,
-            formatMoney(item.closingValue),
+            formatMoneyForPDF(item.closingValue),
             item.status
           ]);
         });
@@ -270,10 +283,10 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
         { content: reportData.reduce((sum, i) => sum + i.openingStock, 0).toString(), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
         { content: summary.totalRestocked.toString(), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
         { content: summary.totalItemsSold.toString(), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
-        { content: formatMoney(summary.totalRevenue), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
+        { content: formatMoneyForPDF(summary.totalRevenue), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
         { content: '', styles: { fillColor: [15, 23, 42] } },
         { content: reportData.reduce((sum, i) => sum + i.closingStock, 0).toString(), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
-        { content: formatMoney(summary.totalStockValue), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
+        { content: formatMoneyForPDF(summary.totalStockValue), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
         { content: '', styles: { fillColor: [15, 23, 42] } }
       ]);
 
@@ -366,9 +379,9 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
       )}
 
       {/* Report Card */}
-      <div>
-        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl shadow-slate-200/50 overflow-hidden bg-white print:overflow-visible print:shadow-none print:border-none print:bg-transparent">
-          <div className="absolute -left-[9999px] top-0 print:static print:block">
+      <div className="print:m-0 print:p-0">
+        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl shadow-slate-200/50 overflow-hidden bg-white print:shadow-none print:border-none print:bg-transparent print:overflow-visible">
+          <div className="absolute -left-[9999px] top-0 print:static print:block print-only">
             <RetailStockReportPrint
               ref={printRef}
               reportData={reportData}

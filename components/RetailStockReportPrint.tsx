@@ -133,6 +133,7 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
           <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] tracking-widest font-bold">
             <tr>
               <th className="p-4 whitespace-nowrap">Item Description</th>
+              {viewScope === 'property' && <th className="p-4 text-left">Outlet</th>}
               <th className="p-4 text-right">Price</th>
               <th className="p-4 text-center">Opening</th>
               <th className="p-4 text-center">Restocked</th>
@@ -148,11 +149,12 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
             {Object.entries(groupedData).map(([category, items]: [string, ItemStockSummary[]]) => (
               <React.Fragment key={category}>
                 <tr className="bg-slate-50/50 break-inside-avoid border-y border-slate-200">
-                  <td colSpan={10} className="p-3 font-black text-slate-900 uppercase tracking-widest text-[11px]">{category}</td>
+                  <td colSpan={viewScope === 'property' ? 11 : 10} className="p-3 font-black text-slate-900 uppercase tracking-widest text-[11px]">{category}</td>
                 </tr>
                 {items.map((row) => (
                   <tr key={row.itemId} className="hover:bg-slate-50 break-inside-avoid">
                     <td className="p-4 font-bold text-slate-900 text-xs">{row.itemName}</td>
+                    {viewScope === 'property' && <td className="p-4 text-left text-[10px] font-bold text-slate-500 uppercase">{row.outletName}</td>}
                     <td className="p-4 text-right font-mono text-xs text-slate-600 whitespace-nowrap">{formatMoney(row.unitPrice)}</td>
                     <td className="p-4 text-center font-mono text-xs text-slate-600">{row.openingStock}</td>
                     <td className="p-4 text-center font-mono text-indigo-600 font-bold text-xs">{row.restocked || '-'}</td>
@@ -177,7 +179,7 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
           </tbody>
           <tfoot className="bg-slate-900 text-white font-bold text-xs uppercase tracking-widest border-t-2 border-slate-900">
             <tr>
-              <td colSpan={2} className="p-4 text-right">Grand Total</td>
+              <td colSpan={viewScope === 'property' ? 3 : 2} className="p-4 text-right">Grand Total</td>
               <td className="p-4 text-center font-mono">{reportData.reduce((sum, item) => sum + item.openingStock, 0)}</td>
               <td className="p-4 text-center font-mono">{summary.totalRestocked}</td>
               <td className="p-4 text-center font-mono">{summary.totalItemsSold}</td>
