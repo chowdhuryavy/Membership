@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, parseISO, isAfter, isBefore, isSameMonth, addMonths, subMonths } from 'date-fns';
 import { Sale, InventoryItem, InventoryLog } from '../types';
-import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import RetailStockReportPrint from '../components/RetailStockReportPrint';
@@ -186,20 +185,9 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
     return groups;
   }, [reportData]);
 
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: `Retail_Stock_Ledger_${format(selectedMonth, 'MMM_yyyy')}`,
-    pageStyle: `
-      @page { size: landscape; margin: 15mm; }
-      @media print {
-        body { -webkit-print-color-adjust: exact; }
-        .no-print { display: none !important; }
-        .print-only { display: block !important; }
-        .print-only.grid { display: grid !important; }
-        .print-only.flex { display: flex !important; }
-      }
-    `
-  });
+  const handlePrint = () => {
+    window.print();
+  };
 
   const getDataUrl = (url: string): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -302,7 +290,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
 
       {/* Report Card */}
       <div>
-        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
+        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl shadow-slate-200/50 overflow-hidden bg-white print:overflow-visible print:shadow-none print:border-none print:bg-transparent">
           <div className="absolute -left-[9999px] top-0 print:static print:block">
             <RetailStockReportPrint
               ref={printRef}
@@ -404,7 +392,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
           </div>
 
           {/* Data Table */}
-          <div className="p-0">
+          <div className="p-0 no-print">
              {loading ? (
                  <div className="flex flex-col items-center justify-center h-96 gap-4">
                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
