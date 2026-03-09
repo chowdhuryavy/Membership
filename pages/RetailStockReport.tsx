@@ -42,15 +42,22 @@ interface ItemStockSummary {
   status: 'Low' | 'Good' | 'Overstock';
 }
 
-const RetailStockReport = () => {
+interface RetailStockReportProps {
+  embeddedViewScope?: 'outlet' | 'property';
+  isEmbedded?: boolean;
+}
+
+const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportProps = {}) => {
   const { currentOutlet, currentProperty, formatMoney } = useSettings();
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [inventoryLogs, setInventoryLogs] = useState<InventoryLog[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
-  const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
+  const [internalViewScope, setInternalViewScope] = useState<'outlet' | 'property'>('outlet');
   const [loading, setLoading] = useState(true);
   const [outletsMap, setOutletsMap] = useState<Record<string, string>>({});
+  
+  const viewScope = embeddedViewScope || internalViewScope;
   
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -244,29 +251,31 @@ const RetailStockReport = () => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-12">
+    <div className={`space-y-8 animate-in fade-in duration-500 ${isEmbedded ? '' : 'pb-12'}`}>
       {/* App Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 no-print">
-        <div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">Stock Ledger</h1>
-          <div className="flex items-center gap-3 mt-2">
-            <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-indigo-100">Retail Inventory</span>
-            <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Monthly Audit Report</span>
+      {!isEmbedded && (
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 no-print">
+          <div>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">Stock Ledger</h1>
+            <div className="flex items-center gap-3 mt-2">
+              <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-indigo-100">Retail Inventory</span>
+              <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Monthly Audit Report</span>
+            </div>
+          </div>
+          <div className="flex gap-3">
+             <Button variant="outline" onClick={handlePrint} className="h-12 px-6 rounded-2xl border-slate-200 hover:bg-slate-50 transition-all gap-2 font-black uppercase text-[10px] tracking-widest text-slate-900">
+               <Printer className="w-4 h-4" /> Print
+             </Button>
+             <Button onClick={handleDownloadPDF} className="h-12 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200 gap-2 font-black uppercase text-[10px] tracking-widest">
+               <FileText className="w-4 h-4" /> Export
+             </Button>
+             <Button variant="ghost" onClick={() => window.history.back()} className="h-12 px-6 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-900 transition-colors shadow-sm font-black uppercase text-[10px] tracking-widest">
+               Back
+             </Button>
           </div>
         </div>
-        <div className="flex gap-3">
-           <Button variant="outline" onClick={handlePrint} className="h-12 px-6 rounded-2xl border-slate-200 hover:bg-slate-50 transition-all gap-2 font-black uppercase text-[10px] tracking-widest text-slate-900">
-             <Printer className="w-4 h-4" /> Print
-           </Button>
-           <Button onClick={handleDownloadPDF} className="h-12 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200 gap-2 font-black uppercase text-[10px] tracking-widest">
-             <FileText className="w-4 h-4" /> Export
-           </Button>
-           <Button variant="ghost" onClick={() => window.history.back()} className="h-12 px-6 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-900 transition-colors shadow-sm font-black uppercase text-[10px] tracking-widest">
-             Back
-           </Button>
-        </div>
-      </div>
+      )}
 
       {/* Report Card */}
       <div ref={printRef}>
@@ -286,14 +295,28 @@ const RetailStockReport = () => {
           
           {/* Controls (Web Only) */}
           <div className="p-6 bg-slate-50/50 border-b border-slate-100 no-print">
-             <div className="flex flex-col md:flex-row gap-6 justify-center items-center">
-                <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-                    <button onClick={() => setViewScope('outlet')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                        <Filter className="w-3.5 h-3.5" /> Outlet
-                    </button>
-                    <button onClick={() => setViewScope('property')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                        <Building2 className="w-3.5 h-3.5" /> Property
-                    </button>
+             <div className="flex flex-col md:flex-row gap-6 justify-between items-center">
+                <div className="flex items-center gap-4">
+                  {!isEmbedded && (
+                    <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                        <button onClick={() => setInternalViewScope('outlet')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                            <Filter className="w-3.5 h-3.5" /> Outlet
+                        </button>
+                        <button onClick={() => setInternalViewScope('property')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                            <Building2 className="w-3.5 h-3.5" /> Property
+                        </button>
+                    </div>
+                  )}
+                  {isEmbedded && (
+                    <div className="flex gap-3">
+                       <Button variant="outline" onClick={handlePrint} className="h-10 px-4 rounded-xl border-slate-200 hover:bg-slate-50 transition-all gap-2 font-black uppercase text-[10px] tracking-widest text-slate-900">
+                         <Printer className="w-3.5 h-3.5" /> Print
+                       </Button>
+                       <Button onClick={handleDownloadPDF} className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-200 gap-2 font-black uppercase text-[10px] tracking-widest">
+                         <FileText className="w-3.5 h-3.5" /> Export
+                       </Button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-slate-200/60 shadow-sm">
