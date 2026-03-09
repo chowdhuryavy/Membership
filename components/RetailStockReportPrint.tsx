@@ -238,10 +238,6 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Authorized Signature / General Manager</span>
         </div>
       </div>
-      
-      <div className="mt-16 text-center">
-        <p className="text-[9px] font-bold text-slate-300 uppercase tracking-[0.3em]">Confidential Inventory Audit Document - {format(new Date(), 'yyyy')}</p>
-      </div>
     </div>
   );
 });
