@@ -202,9 +202,30 @@ const SettingsPage = () => {
     { id: 'settings', label: 'System Settings' },
   ], []);
 
-  const [companyForm, setCompanyForm] = useState<CompanySettings>({ name: '', logo_url: '', address: '', currency_id: '', signatory_prepared_role: '', signatory_reviewed_role: '', signatory_approved_role: '', navigation_order: [], conditions: '', keyboard_shortcuts: {} });
+  const [companyForm, setCompanyForm] = useState<CompanySettings>({ 
+    name: '', 
+    logo_url: '', 
+    address: '', 
+    currency_id: '', 
+    report_title: '',
+    report_subtitle: '',
+    signatory_prepared_role: '', 
+    signatory_reviewed_role: '', 
+    signatory_approved_role: '', 
+    navigation_order: [], 
+    conditions: '', 
+    keyboard_shortcuts: {} 
+  });
   const [propertyForm, setPropertyForm] = useState<Omit<Property, 'id'>>({ name: '', logo_url: '', address: '' });
-  const [outletForm, setOutletForm] = useState<Omit<Outlet, 'id'>>({ name: '', property_id: '', signatory_prepared_role: '', signatory_reviewed_role: '', signatory_approved_role: '', conditions: '' });
+  const [outletForm, setOutletForm] = useState<Omit<Outlet, 'id'>>({ 
+    name: '', 
+    property_id: '', 
+    signatory_prepared_role: '', 
+    signatory_reviewed_role: '', 
+    signatory_approved_role: '', 
+    contract_template: '',
+    conditions: '' 
+  });
   const [roleForm, setRoleForm] = useState<Omit<Role, 'id'>>({ name: '', permissions: [] });
   const [currencyForm, setCurrencyForm] = useState<Omit<Currency, 'id'>>({ code: '', symbol: '', rate: 1, is_default: false });
   const [incentiveForm, setIncentiveForm] = useState<Omit<IncentiveRule, 'id'>>({
@@ -224,6 +245,11 @@ const SettingsPage = () => {
         name: settings.name || '',
         logo_url: settings.logo_url || '',
         address: settings.address || '',
+        report_title: settings.report_title || '',
+        report_subtitle: settings.report_subtitle || '',
+        signatory_prepared_role: settings.signatory_prepared_role || '',
+        signatory_reviewed_role: settings.signatory_reviewed_role || '',
+        signatory_approved_role: settings.signatory_approved_role || '',
         contract_template: settings.contract_template || '',
         conditions: settings.conditions || '',
         keyboard_shortcuts: settings.keyboard_shortcuts || {}
@@ -521,7 +547,7 @@ const SettingsPage = () => {
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-5"><Store className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Asset Contexts</CardTitle></div>
-                          <Button onClick={() => { setEditingId(null); setOutletForm({name:'', property_id:'', signatory_prepared_role:'', signatory_reviewed_role:'', signatory_approved_role:'', conditions:''}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Commission Outlet</Button>
+                          <Button onClick={() => { setEditingId(null); setOutletForm({name:'', property_id:'', signatory_prepared_role:'', signatory_reviewed_role:'', signatory_approved_role:'', contract_template: '', conditions:''}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Commission Outlet</Button>
                       </CardHeader>
                       <CardContent className="p-0">
                           <table className="w-full text-left">
