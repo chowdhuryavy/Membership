@@ -109,15 +109,13 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
               src={currentProperty.logo_url} 
               alt="Logo" 
               className="w-24 h-24 object-contain" 
-              crossOrigin="anonymous" 
               referrerPolicy="no-referrer" 
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
+                // If direct load fails, try proxying
                 if (!target.src.includes('allorigins') && !target.src.includes('corsproxy')) {
-                  // Try allorigins first
                   target.src = `https://api.allorigins.win/raw?url=${encodeURIComponent(currentProperty.logo_url)}`;
                 } else if (target.src.includes('allorigins')) {
-                  // If allorigins fails, try corsproxy
                   target.src = `https://corsproxy.io/?${encodeURIComponent(currentProperty.logo_url)}`;
                 }
               }}
