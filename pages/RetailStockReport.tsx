@@ -225,29 +225,52 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
   const handleDownloadPDF = async () => {
     if (!printRef.current) return;
 
-    const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true });
-    const imgData = canvas.toDataURL('image/png');
-    const doc = new jsPDF('l', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
+    const el = printRef.current;
+    const parent = el.parentElement;
     
-    const imgWidth = pageWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    
-    let heightLeft = imgHeight;
-    let position = 0;
-
-    doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      doc.addPage();
-      doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+    // Temporarily move on-screen for html2canvas
+    if (parent) {
+      parent.style.position = 'absolute';
+      parent.style.left = '0';
+      parent.style.top = '0';
+      parent.style.zIndex = '-1';
+      parent.style.opacity = '1';
     }
 
-    doc.save(`Retail_Stock_Ledger_${format(selectedMonth, 'yyyy-MM')}.pdf`);
+    try {
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/png');
+      const doc = new jsPDF('l', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        doc.addPage();
+        doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      doc.save(`Retail_Stock_Ledger_${format(selectedMonth, 'yyyy-MM')}.pdf`);
+    } finally {
+      // Restore off-screen
+      if (parent) {
+        parent.style.position = 'absolute';
+        parent.style.left = '-9999px';
+        parent.style.top = '0';
+        parent.style.zIndex = '';
+        parent.style.opacity = '';
+      }
+    }
   };
 
   return (
@@ -278,10 +301,11 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
       )}
 
       {/* Report Card */}
-      <div ref={printRef}>
+      <div>
         <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
           <div className="absolute -left-[9999px] top-0 print:static print:block">
             <RetailStockReportPrint
+              ref={printRef}
               reportData={reportData}
               summary={summary}
               groupedData={groupedData}

@@ -38,7 +38,7 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
   reportData, summary, groupedData, currentProperty, currentOutlet, selectedMonth, viewScope, formatMoney
 }, ref) => {
   return (
-    <div ref={ref} className="p-12 bg-white text-slate-900 w-[297mm] min-h-[210mm] mx-auto">
+    <div ref={ref} className="p-8 bg-white text-slate-900 w-[1122px] min-h-[793px] mx-auto print:w-full print:min-h-0 print:p-0">
       {/* Header */}
       <div className="flex items-center justify-between border-b-2 border-slate-900 pb-8 mb-8">
         <div className="flex items-center gap-6">
