@@ -50,8 +50,20 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
   }, [reportData, groupedData, viewScope]);
 
   return (
-    <div ref={ref} className="p-8 bg-white text-slate-900 w-[1000px] min-h-[700px] mx-auto print:w-full print:max-w-none print:p-0 no-oklch">
+    <div ref={ref} className="p-8 bg-white text-slate-900 w-full max-w-[1200px] min-h-[700px] mx-auto print:w-full print:max-w-none print:p-0 no-oklch">
       <style>{`
+        @page {
+          size: landscape;
+          margin: 10mm;
+        }
+        @media print {
+          body {
+            -webkit-print-color-adjust: exact;
+          }
+          .break-inside-avoid {
+            break-inside: avoid;
+          }
+        }
         .no-oklch, .no-oklch * {
           --color-slate-50: #f8fafc !important;
           --color-slate-100: #f1f5f9 !important;
@@ -101,8 +113,12 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
               referrerPolicy="no-referrer" 
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
-                if (!target.src.includes('allorigins')) {
+                if (!target.src.includes('allorigins') && !target.src.includes('corsproxy')) {
+                  // Try allorigins first
                   target.src = `https://api.allorigins.win/raw?url=${encodeURIComponent(currentProperty.logo_url)}`;
+                } else if (target.src.includes('allorigins')) {
+                  // If allorigins fails, try corsproxy
+                  target.src = `https://corsproxy.io/?${encodeURIComponent(currentProperty.logo_url)}`;
                 }
               }}
             />

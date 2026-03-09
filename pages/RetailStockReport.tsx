@@ -233,9 +233,13 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
     // jsPDF will fail to render them correctly without custom fonts.
     // We replace them with 'QAR' for compatibility.
     if (/[^\x00-\x7F]/.test(formatted)) {
-      // Extract numeric part and add QAR
-      const numericPart = formatted.replace(/[^\d.,]/g, '').trim();
-      return `${numericPart} QAR`;
+      // Extract numeric part specifically (digits, commas, dots for decimals)
+      // We use a more precise regex to avoid picking up dots from currency symbols like ر.ق
+      const matches = formatted.match(/[\d,.]+/g);
+      const numericPart = matches ? matches.join('') : '0.00';
+      // Clean up any leading/trailing dots that might have been picked up
+      const cleanNumeric = numericPart.replace(/^\.+|\.+$/g, '');
+      return `${cleanNumeric} QAR`;
     }
     return formatted;
   };
@@ -255,6 +259,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
     try {
       const doc = new jsPDF('l', 'mm', 'a4');
       const pageWidth = doc.internal.pageSize.getWidth();
+      let logoAdded = false;
       
       // 0. Add Logo if available
       if (currentProperty?.logo_url) {
@@ -266,18 +271,26 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
             // Try direct load first (best for CORS-enabled hosts)
             base64Logo = await loadImageAsBase64(logoUrl);
           } catch (e) {
-            console.warn("Direct logo load failed, trying proxy", e);
-            // Fallback to proxy
+            console.warn("Direct logo load failed, trying proxies", e);
+            // Fallback to proxy 1: allorigins
             try {
-              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(logoUrl)}`;
-              base64Logo = await loadImageAsBase64(proxyUrl);
-            } catch (proxyErr) {
-              console.warn("Proxy logo load failed", proxyErr);
+              const proxyUrl1 = `https://api.allorigins.win/raw?url=${encodeURIComponent(logoUrl)}`;
+              base64Logo = await loadImageAsBase64(proxyUrl1);
+            } catch (proxyErr1) {
+              console.warn("Proxy 1 failed, trying Proxy 2", proxyErr1);
+              // Fallback to proxy 2: corsproxy.io
+              try {
+                const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(logoUrl)}`;
+                base64Logo = await loadImageAsBase64(proxyUrl2);
+              } catch (proxyErr2) {
+                console.warn("All logo load attempts failed", proxyErr2);
+              }
             }
           }
           
           if (base64Logo) {
             doc.addImage(base64Logo, 'PNG', 14, 10, 20, 20);
+            logoAdded = true;
           }
         } catch (logoErr) {
           console.warn("Could not load logo for PDF", logoErr);
@@ -287,7 +300,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
       // 1. Add Header Info
       doc.setFontSize(20);
       doc.setTextColor(15, 23, 42); // slate-900
-      const headerX = currentProperty?.logo_url ? 40 : 14;
+      const headerX = logoAdded ? 40 : 14;
       doc.text(currentProperty?.name?.toUpperCase() || 'PROPERTY NAME', headerX, 20);
       
       doc.setFontSize(12);
