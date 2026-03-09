@@ -50,7 +50,10 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
   }, [reportData, groupedData, viewScope]);
 
   return (
-    <div ref={ref} className="p-8 bg-white text-slate-900 w-full max-w-[1200px] min-h-[700px] mx-auto print:w-full print:max-w-none print:p-0 no-oklch">
+    <div
+  ref={ref}
+  className="p-8 bg-white text-slate-900 w-full max-w-[1200px] mx-auto print:w-full print:max-w-none print:p-4 no-oklch"
+>
       <style>{`
         @page {
           size: landscape;
@@ -212,31 +215,31 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
               </React.Fragment>
             ))}
           </tbody>
-          <tfoot className="bg-slate-900 text-white font-bold text-xs uppercase tracking-widest border-t-2 border-slate-900">
+          <tfoot className="bg-slate-900 text-white font-bold text-sm uppercase tracking-widest border-t-2 border-slate-900">
             <tr>
-              <td colSpan={viewScope === 'property' ? 3 : 2} className="p-4 text-right">Grand Total</td>
-              <td className="p-4 text-center font-mono">{reportData.reduce((sum, item) => sum + item.openingStock, 0)}</td>
-              <td className="p-4 text-center font-mono">{summary.totalRestocked}</td>
-              <td className="p-4 text-center font-mono">{summary.totalItemsSold}</td>
-              <td className="p-4 text-right font-mono whitespace-nowrap">{formatMoney(summary.totalRevenue)}</td>
-              <td className="p-4 text-center font-mono">{reportData.reduce((sum, item) => sum + item.adjustments, 0)}</td>
-              <td className="p-4 text-center font-mono">{reportData.reduce((sum, item) => sum + item.closingStock, 0)}</td>
-              <td className="p-4 text-right font-mono whitespace-nowrap">{formatMoney(summary.totalStockValue)}</td>
-              <td className="p-4"></td>
+              <td colSpan={viewScope === 'property' ? 3 : 2} className="p-5 text-right">Grand Total</td>
+              <td className="p-5 text-center font-mono">{reportData.reduce((sum, item) => sum + item.openingStock, 0)}</td>
+              <td className="p-5 text-center font-mono">{summary.totalRestocked}</td>
+              <td className="p-5 text-center font-mono">{summary.totalItemsSold}</td>
+              <td className="p-5 text-right font-mono whitespace-nowrap">{formatMoney(summary.totalRevenue)}</td>
+              <td className="p-5 text-center font-mono">{reportData.reduce((sum, item) => sum + item.adjustments, 0)}</td>
+              <td className="p-5 text-center font-mono">{reportData.reduce((sum, item) => sum + item.closingStock, 0)}</td>
+              <td className="p-5 text-right font-mono whitespace-nowrap">{formatMoney(summary.totalStockValue)}</td>
+              <td className="p-5"></td>
             </tr>
           </tfoot>
         </table>
       </div>
 
       {/* Signatories */}
-      <div className="mt-24 print:mt-16 grid grid-cols-2 gap-24">
-        <div className="flex flex-col gap-12">
-          <div className="h-px w-full bg-slate-300"></div>
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prepared By / Store Manager</span>
+      <div className="mt-32 print:mt-24 grid grid-cols-2 gap-24">
+        <div className="flex flex-col gap-4">
+          <div className="h-px w-full bg-slate-400"></div>
+          <span className="text-xs font-black text-slate-600 uppercase tracking-widest">Prepared By / Store Manager</span>
         </div>
-        <div className="flex flex-col gap-12">
-          <div className="h-px w-full bg-slate-300"></div>
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Authorized Signature / General Manager</span>
+        <div className="flex flex-col gap-4">
+          <div className="h-px w-full bg-slate-400"></div>
+          <span className="text-xs font-black text-slate-600 uppercase tracking-widest">Authorized Signature / General Manager</span>
         </div>
       </div>
     </div>
