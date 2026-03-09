@@ -190,10 +190,10 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
     window.print();
   };
 
-  const getDataUrl = (url: string): Promise<string> => {
+  const loadImageAsBase64 = (url: string): Promise<string> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.crossOrigin = 'Anonymous';
+      img.crossOrigin = 'anonymous';
       img.src = url;
       img.onload = () => {
         const canvas = document.createElement('canvas');
@@ -201,10 +201,14 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
         canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         if (ctx) {
-            ctx.drawImage(img, 0, 0);
+          ctx.drawImage(img, 0, 0);
+          try {
             resolve(canvas.toDataURL('image/png'));
+          } catch (e) {
+            reject(e);
+          }
         } else {
-            reject('Canvas context not found');
+          reject('Canvas context not found');
         }
       };
       img.onerror = (error) => reject(error);
@@ -224,19 +228,53 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
     return formatted;
   };
 
+  const getSafeLogoUrl = (url: string) => {
+    if (!url) return '';
+    if (!url.startsWith('http')) return url;
+    // We'll try to use the proxy but also allow direct loading as a fallback
+    // In the <img> tag we can't easily fallback, so we'll just provide the direct URL
+    // and let the browser handle it if CORS is allowed, otherwise we use proxy.
+    return url;
+  };
+
   const handleDownloadPDF = async () => {
     try {
       const doc = new jsPDF('l', 'mm', 'a4');
       const pageWidth = doc.internal.pageSize.getWidth();
       
+      // 0. Add Logo if available
+      if (currentProperty?.logo_url) {
+        try {
+          const logoUrl = currentProperty.logo_url;
+          let base64Logo = '';
+          
+          try {
+            // Try direct load first (best for CORS-enabled hosts)
+            base64Logo = await loadImageAsBase64(logoUrl);
+          } catch (e) {
+            console.warn("Direct logo load failed, trying proxy", e);
+            // Fallback to proxy
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(logoUrl)}`;
+            base64Logo = await loadImageAsBase64(proxyUrl);
+          }
+          
+          if (base64Logo) {
+            doc.addImage(base64Logo, 'PNG', 14, 10, 20, 20);
+          }
+        } catch (logoErr) {
+          console.warn("Could not load logo for PDF", logoErr);
+        }
+      }
+
       // 1. Add Header Info
       doc.setFontSize(20);
       doc.setTextColor(15, 23, 42); // slate-900
-      doc.text(currentProperty?.name?.toUpperCase() || 'PROPERTY NAME', 14, 20);
+      const headerX = currentProperty?.logo_url ? 40 : 14;
+      doc.text(currentProperty?.name?.toUpperCase() || 'PROPERTY NAME', headerX, 20);
       
       doc.setFontSize(12);
       doc.setTextColor(100, 116, 139); // slate-500
-      doc.text('RETAIL STOCK LEDGER', 14, 28);
+      doc.text('RETAIL STOCK LEDGER', headerX, 28);
       
       // 2. Add Meta Info Box
       doc.setFontSize(9);
@@ -255,10 +293,20 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
       // 4. Generate Table Data
       const tableRows: any[] = [];
       
-      Object.entries(groupedData).forEach(([category, items]) => {
-        // Category Header Row
+      // Determine grouping for PDF
+      const pdfGrouping = viewScope === 'property' 
+        ? reportData.reduce((acc, item) => {
+            const key = item.outletName || 'Unknown Outlet';
+            if (!acc[key]) acc[key] = [];
+            acc[key].push(item);
+            return acc;
+          }, {} as Record<string, ItemStockSummary[]>)
+        : groupedData;
+
+      Object.entries(pdfGrouping).forEach(([groupName, items]) => {
+        // Group Header Row
         tableRows.push([
-          { content: category.toUpperCase(), colSpan: 10, styles: { fillColor: [248, 250, 252], textColor: [79, 70, 229], fontStyle: 'bold' } }
+          { content: groupName.toUpperCase(), colSpan: 10, styles: { fillColor: [248, 250, 252], textColor: [79, 70, 229], fontStyle: 'bold' } }
         ]);
         
         (items as ItemStockSummary[]).forEach(item => {

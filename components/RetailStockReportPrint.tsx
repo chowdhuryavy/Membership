@@ -37,6 +37,18 @@ interface Props {
 const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
   reportData, summary, groupedData, currentProperty, currentOutlet, selectedMonth, viewScope, formatMoney
 }, ref) => {
+  const displayGrouping = React.useMemo(() => {
+    if (viewScope === 'property') {
+      return reportData.reduce((acc, item) => {
+        const key = item.outletName || 'Unknown Outlet';
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(item);
+        return acc;
+      }, {} as Record<string, ItemStockSummary[]>);
+    }
+    return groupedData;
+  }, [reportData, groupedData, viewScope]);
+
   return (
     <div ref={ref} className="p-8 bg-white text-slate-900 w-[1000px] min-h-[700px] mx-auto print:w-full print:max-w-none print:p-0 no-oklch">
       <style>{`
@@ -82,11 +94,17 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
         <div className="flex items-center gap-6">
           {currentProperty?.logo_url ? (
             <img 
-              src={currentProperty.logo_url.startsWith('http') ? `https://api.allorigins.win/raw?url=${encodeURIComponent(currentProperty.logo_url)}` : currentProperty.logo_url} 
+              src={currentProperty.logo_url} 
               alt="Logo" 
               className="w-24 h-24 object-contain" 
               crossOrigin="anonymous" 
               referrerPolicy="no-referrer" 
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                if (!target.src.includes('allorigins')) {
+                  target.src = `https://api.allorigins.win/raw?url=${encodeURIComponent(currentProperty.logo_url)}`;
+                }
+              }}
             />
           ) : (
             <div className="w-24 h-24 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400">
@@ -146,10 +164,10 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {Object.entries(groupedData).map(([category, items]: [string, ItemStockSummary[]]) => (
-              <React.Fragment key={category}>
+            {Object.entries(displayGrouping).map(([groupName, items]: [string, ItemStockSummary[]]) => (
+              <React.Fragment key={groupName}>
                 <tr className="bg-slate-50/50 break-inside-avoid border-y border-slate-200">
-                  <td colSpan={viewScope === 'property' ? 11 : 10} className="p-3 font-black text-slate-900 uppercase tracking-widest text-[11px]">{category}</td>
+                  <td colSpan={viewScope === 'property' ? 11 : 10} className="p-3 font-black text-slate-900 uppercase tracking-widest text-[11px]">{groupName}</td>
                 </tr>
                 {items.map((row) => (
                   <tr key={row.itemId} className="hover:bg-slate-50 break-inside-avoid">

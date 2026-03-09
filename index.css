@@ -23,28 +23,40 @@
 }
  
 @media print {
-  /* Hide the main app container during print */
-  body > #root {
+  /* Hide UI elements during print */
+  .no-print {
     display: none !important;
   }
   
+  /* Ensure the main container doesn't force a background or layout that breaks print */
+  body {
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Reset the root container for print */
+  #root {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide the main application shell components */
+  /* We target common layout elements that are not the report */
+  nav, aside, header:not(.print-header), footer:not(.print-footer) {
+    display: none !important;
+  }
+
   /* Ensure the print component is visible and takes full width */
   .print-only {
     display: block !important;
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: relative !important;
     width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
     z-index: 9999 !important;
-  }
-
-  body {
-    background: white !important;
-    padding: 0 !important;
-    margin: 0 !important;
   }
   
   /* Reset shadows and borders for print */
