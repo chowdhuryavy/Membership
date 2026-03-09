@@ -168,19 +168,19 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
       {/* Table */}
       <div className="border border-slate-200 rounded-xl overflow-hidden print-compact">
         <table className="w-full text-sm text-left border-collapse">
-          <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] tracking-widest font-bold">
+          <thead className="bg-slate-900 text-white font-bold text-lg uppercase tracking-widest border-b-2 border-slate-900">
             <tr>
-              <th className="p-4 whitespace-nowrap">Item Description</th>
-              {viewScope === 'property' && <th className="p-4 text-left">Outlet</th>}
-              <th className="p-4 text-right">Price</th>
-              <th className="p-4 text-center">Opening</th>
-              <th className="p-4 text-center">Restocked</th>
-              <th className="p-4 text-center">Sold Qty</th>
-              <th className="p-4 text-right whitespace-nowrap">Sold Value</th>
-              <th className="p-4 text-center">Adj.</th>
-              <th className="p-4 text-center">Closing</th>
-              <th className="p-4 text-right whitespace-nowrap">Asset Value</th>
-              <th className="p-4 text-center">Status</th>
+              <th className="p-6 whitespace-nowrap">Item Description</th>
+              {viewScope === 'property' && <th className="p-6 text-left">Outlet</th>}
+              <th className="p-6 text-right">Price</th>
+              <th className="p-6 text-center">Opening</th>
+              <th className="p-6 text-center">Restocked</th>
+              <th className="p-6 text-center">Sold Qty</th>
+              <th className="p-6 text-right whitespace-nowrap">Sold Value</th>
+              <th className="p-6 text-center">Adj.</th>
+              <th className="p-6 text-center">Closing</th>
+              <th className="p-6 text-right whitespace-nowrap">Asset Value</th>
+              <th className="p-6 text-center">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
