@@ -22,6 +22,7 @@ import {
 import { format, startOfMonth, endOfMonth, parseISO, isAfter, isBefore, isSameMonth, addMonths, subMonths } from 'date-fns';
 import { Sale, InventoryItem, InventoryLog } from '../types';
 import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import RetailStockReportPrint from '../components/RetailStockReportPrint';
 
@@ -211,59 +212,104 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
   };
 
   const handleDownloadPDF = async () => {
-    if (!printRef.current) return;
-
-    const el = printRef.current;
-    
-    // Create a temporary container to isolate the element
-    const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
-    container.style.top = '0';
-    container.style.width = '1000px';
-    document.body.appendChild(container);
-    
-    // Clone the element to avoid moving the original and potentially breaking React
-    const clone = el.cloneNode(true) as HTMLDivElement;
-    clone.style.position = 'static';
-    clone.style.display = 'block';
-    container.appendChild(clone);
-
     try {
-      const canvas = await html2canvas(clone, { 
-        scale: 2, 
-        useCORS: true, 
-        backgroundColor: '#ffffff',
-        logging: false,
-        width: 1000,
-        windowWidth: 1000
-      });
-      const imgData = canvas.toDataURL('image/png');
       const doc = new jsPDF('l', 'mm', 'a4');
       const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
       
-      const imgWidth = pageWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      // 1. Add Header Info
+      doc.setFontSize(20);
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.text(currentProperty?.name?.toUpperCase() || 'PROPERTY NAME', 14, 20);
       
-      let heightLeft = imgHeight;
-      let position = 0;
+      doc.setFontSize(12);
+      doc.setTextColor(100, 116, 139); // slate-500
+      doc.text('RETAIL STOCK LEDGER', 14, 28);
+      
+      // 2. Add Meta Info Box
+      doc.setFontSize(9);
+      doc.setTextColor(71, 85, 105); // slate-600
+      doc.text(`Period: ${format(selectedMonth, 'MMMM yyyy')}`, 14, 38);
+      doc.text(`Scope: ${viewScope === 'property' ? 'ALL OUTLETS' : (currentOutlet?.name || 'N/A')}`, 14, 43);
+      doc.text(`Generated: ${format(new Date(), 'dd MMM yyyy HH:mm')}`, 14, 48);
 
-      doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      // 3. Add Summary Stats
+      const statsX = pageWidth - 80;
+      doc.setFontSize(10);
+      doc.text(`Total Revenue: ${formatMoney(summary.totalRevenue)}`, statsX, 38);
+      doc.text(`Asset Value: ${formatMoney(summary.totalStockValue)}`, statsX, 43);
+      doc.text(`Units Sold: ${summary.totalItemsSold}`, statsX, 48);
 
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        doc.addPage();
-        doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
+      // 4. Generate Table Data
+      const tableRows: any[] = [];
+      
+      Object.entries(groupedData).forEach(([category, items]) => {
+        // Category Header Row
+        tableRows.push([
+          { content: category.toUpperCase(), colSpan: 10, styles: { fillColor: [248, 250, 252], textColor: [79, 70, 229], fontStyle: 'bold' } }
+        ]);
+        
+        (items as ItemStockSummary[]).forEach(item => {
+          tableRows.push([
+            item.itemName,
+            formatMoney(item.unitPrice),
+            item.openingStock,
+            item.restocked || '-',
+            item.sold || '-',
+            formatMoney(item.salesRevenue),
+            item.adjustments || '-',
+            item.closingStock,
+            formatMoney(item.closingValue),
+            item.status
+          ]);
+        });
+      });
 
+      // Grand Total Row
+      tableRows.push([
+        { content: 'GRAND TOTAL', colSpan: 2, styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' } },
+        { content: reportData.reduce((sum, i) => sum + i.openingStock, 0).toString(), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
+        { content: summary.totalRestocked.toString(), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
+        { content: summary.totalItemsSold.toString(), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
+        { content: formatMoney(summary.totalRevenue), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
+        { content: '', styles: { fillColor: [15, 23, 42] } },
+        { content: reportData.reduce((sum, i) => sum + i.closingStock, 0).toString(), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
+        { content: formatMoney(summary.totalStockValue), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
+        { content: '', styles: { fillColor: [15, 23, 42] } }
+      ]);
+
+      // 5. Render Table
+      (doc as any).autoTable({
+        startY: 55,
+        head: [['Item Description', 'Price', 'Open', 'Restock', 'Sold', 'Revenue', 'Adj', 'Close', 'Value', 'Status']],
+        body: tableRows,
+        theme: 'grid',
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+        columnStyles: {
+          1: { halign: 'right' },
+          2: { halign: 'center' },
+          3: { halign: 'center' },
+          4: { halign: 'center' },
+          5: { halign: 'right' },
+          6: { halign: 'center' },
+          7: { halign: 'center' },
+          8: { halign: 'right' },
+          9: { halign: 'center' }
+        },
+        styles: { fontSize: 8, cellPadding: 3 },
+        didParseCell: (data: any) => {
+          if (data.section === 'body' && data.column.index === 9) {
+            const status = data.cell.raw;
+            if (status === 'Low') data.cell.styles.textColor = [220, 38, 38];
+            if (status === 'Good') data.cell.styles.textColor = [5, 150, 105];
+          }
+        }
+      });
+
+      // 6. Save PDF
       doc.save(`Retail_Stock_Ledger_${format(selectedMonth, 'yyyy-MM')}.pdf`);
     } catch (err) {
       console.error("PDF generation failed", err);
-    } finally {
-      document.body.removeChild(container);
+      alert("Failed to generate PDF. Please try the Print option instead.");
     }
   };
 
