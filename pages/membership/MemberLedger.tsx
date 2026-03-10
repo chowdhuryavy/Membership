@@ -73,7 +73,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   const canDelete = user && hasPermission(user.role_id, 'members:delete');
   const canRenew = user && hasPermission(user.role_id, 'members:renew');
   const canFreeze = user && hasPermission(user.role_id, 'members:freeze');
-  const canSwitchScope = user && (hasPermission(user.role_id, 'properties:view') || hasPermission(user.role_id, 'settings:view_properties')) && allowedOutletsInProperty.length > 1;
+  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
 
   const getEffectiveStatus = (member: Member) => {
     if (!member) return MemberStatus.ACTIVE;

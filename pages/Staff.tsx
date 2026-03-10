@@ -80,7 +80,7 @@ const StaffPage = () => {
   const canView = user && hasPermission(user.role_id, 'staff:view');
   const canManage = user && hasPermission(user.role_id, 'staff:manage');
   const canManageLeaves = user && hasPermission(user.role_id, 'staff:manage_leaves');
-  const canSwitchScope = user && (hasPermission(user.role_id, 'properties:view') || hasPermission(user.role_id, 'settings:view_properties')) && allowedOutletsInProperty.length > 1;
+  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
 
   useEffect(() => {
     if (currentOutlet && canView) loadStaff();

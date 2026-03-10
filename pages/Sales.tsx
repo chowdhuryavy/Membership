@@ -418,7 +418,7 @@ export const InventoryManager = ({
     const setEditingItem = externalFormState ? externalFormState.setEditingItem : setInternalEditingItem;
     const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
-    const canManage = user && (hasPermission(user.role_id, 'inventory:manage') || hasPermission(user.role_id, 'resources:manage'));
+    const canManage = user && (hasPermission(user.role_id, 'inventory:manage') || hasPermission(user.role_id, 'bookings:manage_resources'));
 
     const [internalFormData, setInternalFormData] = useState({
         name: '',
@@ -874,7 +874,7 @@ const Sales = () => {
                         <button onClick={() => setSelectedDate(addDays(selectedDate, 1))} className="p-1.5 hover:bg-slate-50 rounded-lg border border-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"><ChevronRight className="w-4 h-4"/></button>
                     </div>
                     <div className="flex bg-slate-200 p-1.5 rounded-xl border border-slate-300 shadow-inner w-full sm:w-auto">
-                        <button onClick={() => setActiveTab('ledger')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'ledger' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>Ledger</button>
+                        <button onClick={() => setActiveTab('ledger')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'ledger' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}><ClipboardList className="w-3 h-3" /> Ledger</button>
                         {canViewInventory && <button onClick={() => setActiveTab('inventory')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'inventory' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}><Package className="w-3 h-3" /> Inventory</button>}
                         {canViewInventory && <button onClick={() => setActiveTab('stock')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'stock' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}><TrendingUp className="w-3 h-3" /> Stock</button>}
                     </div>

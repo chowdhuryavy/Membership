@@ -9,8 +9,6 @@ export type Permission =
   | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives'
   | 'reports:view' | 'reports:export' | 'reports:view_financial' | 'reports:view_operational' | 'reports:view_inventory' | 'reports:view_staff'
   | 'logs:view' | 'logs:search' | 'logs:filter' | 'logs:clear'
-  | 'properties:view' | 'properties:edit'
-  | 'outlets:view' | 'outlets:edit'
   | 'bookings:view' | 'bookings:create' | 'bookings:edit' | 'bookings:delete' | 'bookings:manage_resources' | 'bookings:view_therapist_schedule'
   | 'sales:view' | 'sales:create' | 'sales:edit' | 'sales:delete' | 'sales:refund' | 'sales:void'
   | 'inventory:view' | 'inventory:manage' | 'inventory:adjust_stock'; 

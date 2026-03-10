@@ -58,12 +58,13 @@ interface MemberEnrollmentFormProps {
   isRenewal: boolean;
   categories: MembershipCategory[];
   staff: Staff[];
+  allMembers: Member[];
   onCancel: () => void;
   onSuccess: () => void;
 }
 
 const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
-  existingMember, isEditing, isRenewal, categories, staff, onCancel, onSuccess
+  existingMember, isEditing, isRenewal, categories, staff, allMembers, onCancel, onSuccess
 }) => {
   const { currentOutlet, formatMoney } = useSettings();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,6 +125,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   });
 
   const membershipNo = watch('membership_number');
+  const guestName = watch('guest_name');
   const categoryId = watch('category_id');
   const startDateStr = watch('start_date');
   const discount = watch('discount');
@@ -146,6 +148,24 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('discount', 0);
   }, [setValue]);
 
+  const setMemberDefaults = (found: Member) => {
+    setValue('guest_name', found.guest_name);
+    setValue('phone', found.phone || '');
+    setValue('email', found.email || '');
+    setValue('nationality', found.nationality || '');
+    setValue('dob', found.dob || '');
+    setValue('package_type', found.package_type || 'Single');
+    setValue('access_type', found.access_type || 'Both');
+    setValue('spouse_name', found.spouse_name || '');
+    setValue('spouse_dob', found.spouse_dob || '');
+    setValue('remarks', found.remarks || '');
+    setValue('category_id', found.category_id);
+    setValue('membership_number', found.membership_number);
+    
+    const newStart = calculateDefaultStartDate(found.current_end_date);
+    setValue('start_date', newStart);
+  };
+
   // Handle Identity Matching & Auto-Start Date Calculation
   useEffect(() => {
     if (!isEditing && !isRenewal) {
@@ -153,22 +173,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         db.getMemberHistory(membershipNo, currentOutlet.id).then(foundMembers => {
           if (foundMembers.length > 0) {
               setMatchedMembers(foundMembers);
-              // Use most recent for defaults
-              const found = foundMembers[0];
-              setValue('guest_name', found.guest_name);
-              setValue('phone', found.phone || '');
-              setValue('email', found.email || '');
-              setValue('nationality', found.nationality || '');
-              setValue('dob', found.dob || '');
-              setValue('package_type', found.package_type || 'Single');
-              setValue('access_type', found.access_type || 'Both');
-              setValue('spouse_name', found.spouse_name || '');
-              setValue('spouse_dob', found.spouse_dob || '');
-              setValue('remarks', found.remarks || '');
-              setValue('category_id', found.category_id);
-              
-              const newStart = calculateDefaultStartDate(found.current_end_date);
-              setValue('start_date', newStart);
+              setMemberDefaults(foundMembers[0]);
           } else {
               setMatchedMembers([]);
               clearFormExceptID();
@@ -177,12 +182,22 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       } else if (!membershipNo || membershipNo.length === 0) {
           setMatchedMembers([]);
           clearFormExceptID();
-      } else {
-          setMatchedMembers([]);
-          clearFormExceptID();
       }
     }
-  }, [membershipNo, isEditing, isRenewal, setValue, clearFormExceptID]);
+  }, [membershipNo, isEditing, isRenewal, setValue, clearFormExceptID, currentOutlet]);
+
+  useEffect(() => {
+    if (!isEditing && !isRenewal && guestName && guestName.length >= 3) {
+      const found = (allMembers || []).filter(m => m.guest_name.toLowerCase().includes(guestName.toLowerCase()));
+      if (found.length > 0) {
+        setMatchedMembers(found);
+        setMemberDefaults(found[0]);
+      } else {
+        setMatchedMembers([]);
+        // Don't clear form here to allow typing
+      }
+    }
+  }, [guestName, isEditing, isRenewal, allMembers]);
 
   useEffect(() => {
       if (isRenewal && existingMember && matchedMembers.length === 0) {

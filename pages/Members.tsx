@@ -130,6 +130,7 @@ const Members = () => {
           isRenewal={isRenewal}
           categories={categories}
           staff={staffList}
+          allMembers={members}
           onCancel={() => setView('list')}
           onSuccess={() => { loadData(); setView('list'); }}
         />

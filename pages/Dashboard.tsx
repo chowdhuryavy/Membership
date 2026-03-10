@@ -330,7 +330,7 @@ const Dashboard = () => {
   const canViewDashboard = user && hasPermission(user.role_id, 'dashboard:view');
   const canViewFinancials = user && hasPermission(user.role_id, 'dashboard:view_financials');
   const canViewInsights = user && hasPermission(user.role_id, 'dashboard:view_insights');
-  const canSwitchScope = user && (hasPermission(user.role_id, 'properties:view') || hasPermission(user.role_id, 'settings:view_properties')) && allowedOutletsInProperty.length > 1;
+  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
 
   const kpiData = [
     { title: "Active Portfolio", value: stats.activeMembers, icon: Users, color: "text-emerald-600" },

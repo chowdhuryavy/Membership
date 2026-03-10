@@ -467,7 +467,7 @@ NOTIFY pgrst, 'reload schema';`}
   const canManageResources = user && hasPermission(user.role_id, 'bookings:manage_resources');
   
   // NEW: Strict Permission gating for scope switch and deletion
-  const canSwitchScope = user && (hasPermission(user.role_id, 'properties:view') || hasPermission(user.role_id, 'settings:view_properties')) && allowedOutletsInProperty.length > 1;
+  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
   const [members, setMembers] = useState<Member[]>([]);
   const canDeleteGuests = user && hasPermission(user.role_id, 'members:delete');
 
