@@ -535,7 +535,7 @@ const SettingsPage = () => {
                                   <tr key={p.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="flex items-center gap-4"><div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border">{p.logo_url ? <img src={p.logo_url} className="w-full h-full object-contain p-1" /> : <Building2 className="w-6 h-6 text-slate-300" />}</div><div className="font-black text-slate-900 text-lg uppercase">{p.name}</div></div></td>
                                       <td className="px-10 py-8 font-bold text-slate-500 text-xs">{p.address}</td>
-                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={()=>{setEditingId(p.id); setPropertyForm({...p, logo_url: p.logo_url || '', address: p.address || ''}); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'property', id:p.id, name:p.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
+                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(p.id); setPropertyForm({...p, logo_url: p.logo_url || '', address: p.address || ''}); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'property', id:p.id, name:p.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
                                   </tr>
                               ))}</tbody>
                           </table>
@@ -556,7 +556,7 @@ const SettingsPage = () => {
                                   <tr key={o.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase">{o.name}</div></td>
                                       <td className="px-10 py-8"><span className="bg-indigo-50 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-indigo-600 border border-indigo-100">{properties.find(p=>p.id===o.property_id)?.name || 'Detached'}</span></td>
-                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={()=>{setEditingId(o.id); setOutletForm({...o, signatory_prepared_role: o.signatory_prepared_role || '', signatory_reviewed_role: o.signatory_reviewed_role || '', signatory_approved_role: o.signatory_approved_role || '', contract_template: o.contract_template || '', conditions: o.conditions || ''}); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'outlet', id:o.id, name:o.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
+                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(o.id); setOutletForm({...o, signatory_prepared_role: o.signatory_prepared_role || '', signatory_reviewed_role: o.signatory_reviewed_role || '', signatory_approved_role: o.signatory_approved_role || '', contract_template: o.contract_template || '', conditions: o.conditions || ''}); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'outlet', id:o.id, name:o.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
                                   </tr>
                               ))}</tbody>
                           </table>
@@ -584,7 +584,7 @@ const SettingsPage = () => {
                                   <tr key={r.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase flex items-center gap-3">{r.name} {r.is_system && <ShieldCheck className="w-4 h-4 text-emerald-500"/>}</div></td>
                                       <td className="px-10 py-8"><span className="bg-slate-100 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-slate-500">{r.permissions.length} Privileges</span></td>
-                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={()=>{setEditingId(r.id); setRoleForm(r); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>{!r.is_system && <button onClick={()=>setItemToDelete({type:'role', id:r.id, name:r.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>}</div></td>
+                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(r.id); setRoleForm(r); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>{!r.is_system && <button onClick={()=>setItemToDelete({type:'role', id:r.id, name:r.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>}</div></td>
                                   </tr>
                               ))}</tbody>
                           </table>
@@ -605,7 +605,7 @@ const SettingsPage = () => {
                                   <tr key={c.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase flex items-center gap-3">{c.code} <span className="text-indigo-600">[{c.symbol}]</span> {c.is_default && <Check className="w-4 h-4 text-emerald-500"/>}</div></td>
                                       <td className="px-10 py-8 font-bold text-slate-500 text-xs">1.00 USD = {c.rate} {c.code}</td>
-                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={()=>{setEditingId(c.id); setCurrencyForm(c); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>{!c.is_default && <button onClick={()=>setItemToDelete({type:'currency', id:c.id, name:c.code})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>}</div></td>
+                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(c.id); setCurrencyForm(c); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>{!c.is_default && <button onClick={()=>setItemToDelete({type:'currency', id:c.id, name:c.code})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>}</div></td>
                                   </tr>
                               ))}</tbody>
                           </table>
@@ -764,7 +764,7 @@ const SettingsPage = () => {
                                                   </div>
                                               </td>
                                               <td className="px-10 py-8 text-right font-black text-indigo-600 text-base">{rule.calculation_type === 'Percentage' ? `${rule.value}%` : formatMoney(rule.value)}</td>
-                                              <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => { 
+                                              <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-opacity"><button onClick={() => { 
                                                 setEditingId(rule.id); 
                                                 setIncentiveForm({
                                                   ...rule,
