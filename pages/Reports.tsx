@@ -617,35 +617,30 @@ const Reports = () => {
   const signatoryConfig = useMemo(() => {
     if (!currentOutlet || !currentProperty || !settings) return null;
 
-    // 1. Check Outlet
-    const outletConfig = currentOutlet.signatory_config?.[reportType];
-    if (outletConfig) {
+    // Helper to resolve config with specific and default fallbacks
+    const resolveConfig = (config: any, type: string) => {
+      if (!config) return null;
+      const specific = config[type];
+      
+      // If specific doesn't exist, this level provides no config
+      if (!specific) return null;
+      
       return {
-        prepared: outletConfig.prepared || 'Accountant',
-        reviewed: outletConfig.reviewed || '',
-        approved: outletConfig.approved || 'General Manager'
+        prepared: specific.prepared || 'Accountant',
+        reviewed: specific.reviewed || '',
+        approved: specific.approved || 'General Manager'
       };
-    }
+    };
 
-    // 2. Check Property
-    const propertyConfig = currentProperty.signatory_config?.[reportType];
-    if (propertyConfig) {
-      return {
-        prepared: propertyConfig.prepared || 'Accountant',
-        reviewed: propertyConfig.reviewed || '',
-        approved: propertyConfig.approved || 'General Manager'
-      };
-    }
+    // Hierarchy: Outlet Specific -> Outlet Default -> Property Specific -> Property Default -> Global Specific -> Global Default
+    const outletRes = resolveConfig(currentOutlet.signatory_config, reportType);
+    if (outletRes) return outletRes;
 
-    // 3. Check Global
-    const globalConfig = settings.signatory_config?.[reportType];
-    if (globalConfig) {
-      return {
-        prepared: globalConfig.prepared || 'Accountant',
-        reviewed: globalConfig.reviewed || '',
-        approved: globalConfig.approved || 'General Manager'
-      };
-    }
+    const propertyRes = resolveConfig(currentProperty.signatory_config, reportType);
+    if (propertyRes) return propertyRes;
+
+    const globalRes = resolveConfig(settings.signatory_config, reportType);
+    if (globalRes) return globalRes;
 
     return null;
   }, [currentOutlet, currentProperty, settings, reportType]);

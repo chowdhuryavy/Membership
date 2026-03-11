@@ -45,3 +45,28 @@ BEGIN
     END IF;
 END $$;
 
+-- ==========================================
+-- MASSAGE ROOMS SCHEMA
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS public.massage_rooms (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    property_id UUID REFERENCES public.properties(id),
+    name TEXT NOT NULL,
+    number TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.massage_rooms ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.massage_rooms TO anon, authenticated, postgres;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'massage_rooms' AND policyname = 'Allow all operations on massage_rooms'
+    ) THEN
+        CREATE POLICY "Allow all operations on massage_rooms" ON public.massage_rooms FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+

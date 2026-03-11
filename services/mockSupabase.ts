@@ -1,4 +1,4 @@
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format, parse } from 'date-fns';
@@ -753,6 +753,39 @@ class DatabaseService {
     if (this.isSupabase()) {
         await supabase.from('outlets').delete().eq('id', id);
         await this.logAction('DELETE_OUTLET', `Outlet decommissioned: ${id}`);
+    }
+  }
+
+  async getMassageRooms(): Promise<MassageRoom[]> {
+    if (this.isSupabase()) {
+      const { data } = await supabase.from('massage_rooms').select('*');
+      return (data || []) as MassageRoom[];
+    }
+    return [];
+  }
+
+  async addMassageRoom(room: Omit<MassageRoom, 'id'>) {
+    if (this.isSupabase()) {
+        const { data, error } = await supabase.from('massage_rooms').insert([{ ...room, id: crypto.randomUUID() }]).select();
+        if (error) throw error;
+        await this.logAction('CREATE_ROOM', `Massage room added: ${room.name}`);
+        return data;
+    }
+  }
+
+  async updateMassageRoom(id: string, updates: Partial<MassageRoom>) {
+    if (this.isSupabase()) {
+        const { error } = await supabase.from('massage_rooms').update(updates).eq('id', id);
+        if (error) throw error;
+        await this.logAction('UPDATE_ROOM', `Massage room modified: ${id}`);
+    }
+  }
+
+  async deleteMassageRoom(id: string) {
+    if (this.isSupabase()) {
+        const { error } = await supabase.from('massage_rooms').delete().eq('id', id);
+        if (error) throw error;
+        await this.logAction('DELETE_ROOM', `Massage room deleted: ${id}`);
     }
   }
 

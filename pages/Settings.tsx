@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, Confir
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/mockSupabase';
-import { Role, Permission, Currency, CompanySettings, Outlet, Property, IncentiveRule, MassageType, MembershipCategory, PermissionGroup, InventoryItem } from '../types';
+import { Role, Permission, Currency, CompanySettings, Outlet, Property, IncentiveRule, MassageType, MembershipCategory, PermissionGroup, InventoryItem, MassageRoom } from '../types';
 import { BookingSettings } from '../components/BookingSettings';
 import { 
   Trash2, 
@@ -149,7 +149,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms';
 
 const SignatoryConfig = ({
   config = {},
@@ -277,6 +277,7 @@ const SettingsPage = () => {
       { id: 'shortcuts', label: 'Executive Hotkeys', visible: hasPermission(user?.role_id || '', 'settings:view_shortcuts'), icon: Keyboard },
       { id: 'documents', label: 'Audit Templates', visible: hasPermission(user?.role_id || '', 'settings:view_documents'), icon: FileCode },
       { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_outlets'), icon: Timer },
+      { id: 'massage_rooms', label: 'Massage Rooms', visible: isSuper, icon: Store },
     ].filter(t => t.visible);
   }, [user, roles, hasPermission]);
 
@@ -292,6 +293,11 @@ const SettingsPage = () => {
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const [itemToDelete, setItemToDelete] = useState<{ type: string, id: string, name: string } | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [massageRooms, setMassageRooms] = useState<MassageRoom[]>([]);
+
+  useEffect(() => {
+    db.getMassageRooms().then(setMassageRooms);
+  }, []);
 
   const navItems = useMemo(() => [
     { id: 'dashboard', label: 'Dashboard' },
@@ -606,7 +612,37 @@ const SettingsPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           <div className={`${showForm ? 'lg:col-span-6' : 'lg:col-span-12'} space-y-6 transition-all duration-500`}>
               
-              {activeTab === 'company' && (
+              {activeTab === 'massage_rooms' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-black text-slate-900">Massage Rooms</h2>
+                <Button onClick={() => setShowForm(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">
+                  <Plus className="w-4 h-4 mr-2" /> Add Room
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {massageRooms.map(room => (
+                  <Card key={room.id} className="p-4 rounded-2xl border-slate-200">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-sm font-black text-slate-900">{room.name}</h3>
+                        <p className="text-xs text-slate-500">Room #{room.number}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => { /* edit */ }}>
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setItemToDelete({ type: 'massage_room', id: room.id, name: room.name })}>
+                          <Trash2 className="w-4 h-4 text-red-600" />
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+          {activeTab === 'company' && (
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-12 border-b border-slate-100"><CardTitle className="text-2xl font-black tracking-tight uppercase">Global Scope Configuration</CardTitle></CardHeader>
                       <CardContent className="p-12 space-y-12">

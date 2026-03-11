@@ -65,6 +65,14 @@ export interface StaffLeave {
   created_at: string;
 }
 
+export interface MassageRoom {
+  id: string;
+  property_id: string;
+  name: string;
+  number: string;
+  is_active: boolean;
+}
+
 export interface Staff {
   id: string;
   outlet_id: string;
@@ -227,6 +235,7 @@ export interface MassageBooking {
   status: 'confirmed' | 'cancelled' | 'completed' | 'no-show';
   created_at: string;
   discount?: number;
+  room_id?: string;
 }
 
 export type SaleCategory = 'Retail' | 'Personal Training' | 'Entrance Fee' | 'Massage' | 'Other';

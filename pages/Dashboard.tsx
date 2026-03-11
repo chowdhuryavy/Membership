@@ -24,7 +24,8 @@ import {
   Building2,
   Store,
   Terminal,
-  RefreshCcw
+  RefreshCcw,
+  Award
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Member, MassageBooking, Sale, Staff, MemberStatus } from '../types';
@@ -52,6 +53,49 @@ interface PerformanceTrendData {
   revenue: number;
   intake: number;
 }
+
+const PerformanceLeaderboard = ({ staff, bookings }: { staff: Staff[], bookings: MassageBooking[] }) => {
+  const leaderboard = useMemo(() => {
+    const performance: Record<string, { name: string, count: number }> = {};
+    
+    bookings.filter(b => b.status === 'completed').forEach(b => {
+      if (b.therapist_id) {
+        if (!performance[b.therapist_id]) {
+          const s = staff.find(st => st.id === b.therapist_id);
+          performance[b.therapist_id] = { name: s?.name || 'Unknown', count: 0 };
+        }
+        performance[b.therapist_id].count += 1;
+      }
+    });
+    
+    return Object.values(performance).sort((a, b) => b.count - a.count).slice(0, 5);
+  }, [staff, bookings]);
+
+  return (
+    <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
+      <CardHeader className="p-6 border-b border-slate-100">
+        <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
+          <Award className="w-4 h-4 text-amber-600" /> Performance Leaderboard
+        </h3>
+      </CardHeader>
+      <CardContent className="p-4">
+        {leaderboard.length === 0 ? (
+            <p className="text-xs font-black text-slate-400 text-center py-4">No data available</p>
+        ) : (
+            leaderboard.map((item, index) => (
+              <div key={index} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-black text-slate-400">#{index + 1}</span>
+                  <span className="text-xs font-black text-slate-900">{item.name}</span>
+                </div>
+                <span className="text-xs font-black text-indigo-600">{item.count} Sessions</span>
+              </div>
+            ))
+        )}
+      </CardContent>
+    </Card>
+  );
+};
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -94,6 +138,9 @@ const Dashboard = () => {
   const [performanceTrendData, setPerformanceTrendData] = useState<PerformanceTrendData[]>([]);
   const [upcomingBookings, setUpcomingBookings] = useState<MassageBooking[]>([]);
   const [revenueMix, setRevenueMix] = useState<{name: string, value: number, color: string}[]>([]);
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [bookings, setBookings] = useState<MassageBooking[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -315,6 +362,9 @@ const Dashboard = () => {
 
         setMonthlyExpiringMembers(monthlyExpiring);
         setUpcomingBookings(upcoming);
+        setStaff(staff);
+        setSales(sales);
+        setBookings(bookings);
     } catch (e) {
         console.error("Dashboard Intelligence Error:", e);
     } finally {
@@ -574,6 +624,7 @@ const Dashboard = () => {
                     </CardContent>
                 </Card>
             )}
+            <PerformanceLeaderboard staff={staff} bookings={bookings} />
         </div>
       </div>
     </div>
