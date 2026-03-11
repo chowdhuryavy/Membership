@@ -976,7 +976,11 @@ const Reports = () => {
                           </div>
                           <div className="text-right flex flex-col items-end gap-3">
                               <h3 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">
-                                {reportType === 'incentives' ? `${incentiveDept} YIELD LEDGER` : reportType === 'revenue_recognition' ? 'REVENUE RECOGNITION' : 'DAILY SALES LEDGER'}
+                                {reportType === 'incentives' ? `${incentiveDept} YIELD LEDGER` : 
+                                 reportType === 'revenue_recognition' ? 'REVENUE RECOGNITION' : 
+                                 reportType === 'expiring_memberships' ? 'EXPIRING MEMBERSHIPS AUDIT' :
+                                 reportType === 'members_joined' ? 'MEMBERS JOINED AUDIT' :
+                                 'DAILY SALES LEDGER'}
                               </h3>
                               <div className="bg-slate-950 text-white px-6 py-3 rounded-2xl shadow-2xl">
                                   <span className="text-[9px] font-black uppercase opacity-60 block tracking-widest">Audit Period</span>
@@ -995,44 +999,46 @@ const Reports = () => {
                            <RenderStandardTable />}
                       </div>
 
-                      {reportType !== 'revenue_recognition' && reportType !== 'expiring_memberships' && (
+                      {reportType !== 'revenue_recognition' && (
                         <div className="mt-16 grid grid-cols-12 gap-10">
                             <div className="col-span-5">
-                                <table className="w-full border-collapse border-2 border-black font-black text-[10px]">
-                                    <tbody>
-                                        {reportType === 'incentives' && (
-                                            <>
-                                                <tr className="bg-amber-50">
-                                                    <td className="border border-black px-5 py-3 uppercase text-slate-600">Total Incentive Yield</td>
-                                                    <td className="border border-black px-5 py-3 text-right text-indigo-600 text-sm font-black">{formatMoney(rows.reduce((sum, row) => sum + row.inc_net, 0))}</td>
-                                                </tr>
-                                                {activeStaffList.filter(s => (rows.reduce((sum, r) => sum + (r.staff_splits[s.id] || 0), 0)) > 0).map(s => (
-                                                    <tr key={s.id} className="bg-white">
-                                                        <td className="border border-black px-8 py-2 uppercase text-slate-400 text-[9px] italic flex items-center gap-2">
-                                                            <div className="w-1 h-1 bg-indigo-400 rounded-full"></div>
-                                                            {s.name} ({s.role})
-                                                        </td>
-                                                        <td className="border border-black px-5 py-2 text-right text-slate-500 font-bold">
-                                                            {formatMoney(rows.reduce((sum, r) => sum + (r.staff_splits[s.id] || 0), 0))}
-                                                        </td>
+                                {(reportType === 'daily_sales' || reportType === 'incentives' || reportType === 'members_joined') && (
+                                    <table className="w-full border-collapse border-2 border-black font-black text-[10px]">
+                                        <tbody>
+                                            {reportType === 'incentives' && (
+                                                <>
+                                                    <tr className="bg-amber-50">
+                                                        <td className="border border-black px-5 py-3 uppercase text-slate-600">Total Incentive Yield</td>
+                                                        <td className="border border-black px-5 py-3 text-right text-indigo-600 text-sm font-black">{formatMoney(rows.reduce((sum, row) => sum + row.inc_net, 0))}</td>
                                                     </tr>
-                                                ))}
-                                            </>
-                                        )}
-                                        <tr className="bg-white">
-                                            <td className="border border-black px-5 py-3 uppercase text-slate-600">Portfolio Gross Revenue</td>
-                                            <td className="border border-black px-5 py-3 text-right text-sm">{formatMoney(rows.reduce((sum, row) => sum + row.actual_price, 0))}</td>
-                                        </tr>
-                                        <tr className="bg-white">
-                                            <td className="border border-black px-5 py-3 uppercase text-slate-600">Total Reduction / Discount</td>
-                                            <td className="border border-black px-5 py-3 text-right text-red-500 text-sm">{formatMoney(rows.reduce((sum, row) => sum + row.discount_amount, 0))}</td>
-                                        </tr>
-                                        <tr className="bg-sky-100 border-t-4 border-black">
-                                            <td className="border border-black px-5 py-4 uppercase text-slate-900 text-xs">Certified Net Revenue</td>
-                                            <td className="border border-black px-5 py-4 text-right text-indigo-700 text-sm">{formatMoney(rows.reduce((sum, row) => sum + row.net_revenue, 0))}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                                                    {activeStaffList.filter(s => (rows.reduce((sum, r) => sum + (r.staff_splits[s.id] || 0), 0)) > 0).map(s => (
+                                                        <tr key={s.id} className="bg-white">
+                                                            <td className="border border-black px-8 py-2 uppercase text-slate-400 text-[9px] italic flex items-center gap-2">
+                                                                <div className="w-1 h-1 bg-indigo-400 rounded-full"></div>
+                                                                {s.name} ({s.role})
+                                                            </td>
+                                                            <td className="border border-black px-5 py-2 text-right text-slate-500 font-bold">
+                                                                {formatMoney(rows.reduce((sum, r) => sum + (r.staff_splits[s.id] || 0), 0))}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </>
+                                            )}
+                                            <tr className="bg-white">
+                                                <td className="border border-black px-5 py-3 uppercase text-slate-600">Portfolio Gross Revenue</td>
+                                                <td className="border border-black px-5 py-3 text-right text-sm">{formatMoney(rows.reduce((sum, row) => sum + row.actual_price, 0))}</td>
+                                            </tr>
+                                            <tr className="bg-white">
+                                                <td className="border border-black px-5 py-3 uppercase text-slate-600">Total Reduction / Discount</td>
+                                                <td className="border border-black px-5 py-3 text-right text-red-500 text-sm">{formatMoney(rows.reduce((sum, row) => sum + row.discount_amount, 0))}</td>
+                                            </tr>
+                                            <tr className="bg-sky-100 border-t-4 border-black">
+                                                <td className="border border-black px-5 py-4 uppercase text-slate-900 text-xs">Certified Net Revenue</td>
+                                                <td className="border border-black px-5 py-4 text-right text-indigo-700 text-sm">{formatMoney(rows.reduce((sum, row) => sum + row.net_revenue, 0))}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                )}
                             </div>
 
                             <div className="col-span-7 grid grid-cols-2 gap-10 items-end pb-4">

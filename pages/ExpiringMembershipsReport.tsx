@@ -124,28 +124,30 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth }:
                 )}
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
-                        <div id="expiring-report-content" className="print-container min-w-max bg-white">
-                            <div className="p-8 pb-4 hidden print:block">
-                                <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Expiring Memberships Report</h2>
-                                <p className="text-sm text-slate-500 font-medium">Month: {format(new Date(reportMonth + '-01'), 'MMMM yyyy')}</p>
-                                <p className="text-sm text-slate-500 font-medium">Property: {currentProperty?.name} | Outlet: {currentOutlet?.name}</p>
-                            </div>
-                            <table className="w-full text-left border-collapse">
+                        <div id="expiring-report-content" className={`${isEmbedded ? '' : 'print-container'} min-w-max bg-white`}>
+                            {!isEmbedded && (
+                                <div className="p-8 pb-4 hidden print:block">
+                                    <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Expiring Memberships Report</h2>
+                                    <p className="text-sm text-slate-500 font-medium">Month: {format(new Date(reportMonth + '-01'), 'MMMM yyyy')}</p>
+                                    <p className="text-sm text-slate-500 font-medium">Property: {currentProperty?.name} | Outlet: {currentOutlet?.name}</p>
+                                </div>
+                            )}
+                            <table className={`w-full text-left border-collapse ${isEmbedded ? 'border-2 border-black text-[9px]' : ''}`}>
                                 <thead>
-                                    <tr className="bg-slate-50 border-b border-slate-100">
-                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">#</th>
-                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Member Name</th>
-                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Membership No.</th>
-                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Category</th>
-                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Start Date</th>
-                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">End Date</th>
-                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                                    <tr className={`${isEmbedded ? 'bg-sky-100 text-black font-bold' : 'bg-slate-50 border-b border-slate-100'}`}>
+                                        <th className={`px-2 py-3 font-black uppercase tracking-widest w-16 ${isEmbedded ? 'border border-black' : 'px-6 py-4 text-[10px] text-slate-400'}`}>#</th>
+                                        <th className={`px-2 py-3 font-black uppercase tracking-widest ${isEmbedded ? 'border border-black' : 'px-6 py-4 text-[10px] text-slate-400'}`}>Member Name</th>
+                                        <th className={`px-2 py-3 font-black uppercase tracking-widest ${isEmbedded ? 'border border-black' : 'px-6 py-4 text-[10px] text-slate-400'}`}>Membership No.</th>
+                                        <th className={`px-2 py-3 font-black uppercase tracking-widest ${isEmbedded ? 'border border-black' : 'px-6 py-4 text-[10px] text-slate-400'}`}>Category</th>
+                                        <th className={`px-2 py-3 font-black uppercase tracking-widest ${isEmbedded ? 'border border-black' : 'px-6 py-4 text-[10px] text-slate-400'}`}>Start Date</th>
+                                        <th className={`px-2 py-3 font-black uppercase tracking-widest ${isEmbedded ? 'border border-black' : 'px-6 py-4 text-[10px] text-slate-400'}`}>End Date</th>
+                                        <th className={`px-2 py-3 font-black uppercase tracking-widest ${isEmbedded ? 'border border-black' : 'px-6 py-4 text-[10px] text-slate-400'}`}>Status</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100">
+                                <tbody className={isEmbedded ? '' : 'divide-y divide-slate-100'}>
                                     {expiringMembers.length === 0 ? (
                                         <tr>
-                                            <td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-medium text-sm">
+                                            <td colSpan={7} className={`px-6 py-12 text-center text-slate-400 font-medium text-sm ${isEmbedded ? 'border border-black' : ''}`}>
                                                 No memberships expiring in this month.
                                             </td>
                                         </tr>
@@ -154,13 +156,13 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth }:
                                             const cat = categories.find(c => c.id === member.category_id);
                                             return (
                                                 <tr key={member.id} className="hover:bg-slate-50/50 transition-colors">
-                                                    <td className="px-6 py-4 text-sm font-bold text-slate-400">{idx + 1}</td>
-                                                    <td className="px-6 py-4 text-sm font-black text-slate-700">{member.guest_name}</td>
-                                                    <td className="px-6 py-4 text-sm font-mono text-slate-500">{member.membership_number}</td>
-                                                    <td className="px-6 py-4 text-sm font-bold text-indigo-600">{cat?.name || 'Unknown'}</td>
-                                                    <td className="px-6 py-4 text-sm text-slate-500">{format(parseISO(member.start_date), 'dd MMM yyyy')}</td>
-                                                    <td className="px-6 py-4 text-sm font-black text-rose-600">{format(parseISO(member.current_end_date), 'dd MMM yyyy')}</td>
-                                                    <td className="px-6 py-4">
+                                                    <td className={`px-2 py-1 font-bold ${isEmbedded ? 'border border-black text-center' : 'px-6 py-4 text-sm text-slate-400'}`}>{idx + 1}</td>
+                                                    <td className={`px-2 py-1 font-black ${isEmbedded ? 'border border-black text-slate-900' : 'px-6 py-4 text-sm text-slate-700'}`}>{member.guest_name}</td>
+                                                    <td className={`px-2 py-1 font-mono ${isEmbedded ? 'border border-black text-center' : 'px-6 py-4 text-sm text-slate-500'}`}>{member.membership_number}</td>
+                                                    <td className={`px-2 py-1 font-bold ${isEmbedded ? 'border border-black text-indigo-600' : 'px-6 py-4 text-sm text-indigo-600'}`}>{cat?.name || 'Unknown'}</td>
+                                                    <td className={`px-2 py-1 ${isEmbedded ? 'border border-black text-center' : 'px-6 py-4 text-sm text-slate-500'}`}>{format(parseISO(member.start_date), 'dd MMM yyyy')}</td>
+                                                    <td className={`px-2 py-1 font-black ${isEmbedded ? 'border border-black text-center text-rose-600' : 'px-6 py-4 text-sm text-rose-600'}`}>{format(parseISO(member.current_end_date), 'dd MMM yyyy')}</td>
+                                                    <td className={`px-2 py-1 ${isEmbedded ? 'border border-black text-center' : 'px-6 py-4'}`}>
                                                         <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
                                                             member.status === MemberStatus.ACTIVE ? 'bg-emerald-100 text-emerald-700' :
                                                             member.status === MemberStatus.EXPIRED ? 'bg-rose-100 text-rose-700' :
@@ -175,6 +177,14 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth }:
                                         })
                                     )}
                                 </tbody>
+                                {isEmbedded && expiringMembers.length > 0 && (
+                                    <tfoot>
+                                        <tr className="bg-slate-900 text-white font-black text-[10px]">
+                                            <td colSpan={6} className="border border-black px-4 py-3 text-right uppercase tracking-widest">Aggregate Expiration Total</td>
+                                            <td className="border border-black px-2 py-3 text-center bg-indigo-600">{expiringMembers.length}</td>
+                                        </tr>
+                                    </tfoot>
+                                )}
                             </table>
                         </div>
                     </div>
