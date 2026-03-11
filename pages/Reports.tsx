@@ -33,7 +33,7 @@ import html2canvas from 'html2canvas';
 const startOfMonthLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
 // Report Types
-type ReportType = 'revenue_recognition' | 'daily_sales' | 'incentives';
+type ReportType = 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined';
 
 interface ReportRow {
   sl_no: number;
@@ -98,20 +98,28 @@ const Reports = () => {
   const canViewFinancial = user && hasPermission(user.role_id, 'reports:view_financial');
   const canViewOperational = user && hasPermission(user.role_id, 'reports:view_operational');
   const canViewStaffReports = user && hasPermission(user.role_id, 'reports:view_staff');
+  const canViewMembersJoined = user && hasPermission(user.role_id, 'members:view'); // Or a specific report permission
 
   useEffect(() => {
     // Ensure selected report type is allowed
     if (reportType === 'revenue_recognition' && !canViewFinancial) {
         if (canViewOperational) setReportType('daily_sales');
         else if (canViewStaffReports) setReportType('incentives');
+        else if (canViewMembersJoined) setReportType('members_joined');
     } else if (reportType === 'daily_sales' && !canViewOperational) {
         if (canViewFinancial) setReportType('revenue_recognition');
         else if (canViewStaffReports) setReportType('incentives');
+        else if (canViewMembersJoined) setReportType('members_joined');
     } else if (reportType === 'incentives' && !canViewStaffReports) {
         if (canViewFinancial) setReportType('revenue_recognition');
         else if (canViewOperational) setReportType('daily_sales');
+        else if (canViewMembersJoined) setReportType('members_joined');
+    } else if (reportType === 'members_joined' && !canViewMembersJoined) {
+        if (canViewFinancial) setReportType('revenue_recognition');
+        else if (canViewOperational) setReportType('daily_sales');
+        else if (canViewStaffReports) setReportType('incentives');
     }
-  }, [canViewFinancial, canViewOperational, canViewStaffReports]);
+  }, [canViewFinancial, canViewOperational, canViewStaffReports, canViewMembersJoined]);
 
   useEffect(() => {
     if (currentOutlet && currentProperty && canView) loadData();
@@ -276,6 +284,34 @@ const Reports = () => {
           revData.forEach((row, i) => row.sl_no = i + 1);
           setRevenueRows(revData);
 
+      } else if (reportType === 'members_joined') {
+          // --- MEMBERS JOINED REPORT ---
+          const joinedMembers = members.filter(m => {
+              const mStart = parseISO(m.start_date);
+              return mStart >= start && mStart <= end && m.status !== MemberStatus.TENTATIVE;
+          });
+
+          const records: ReportRow[] = joinedMembers.map((m, i) => {
+              const cat = mCats.find(c => c.id === m.category_id);
+              return {
+                  sl_no: i + 1,
+                  date: format(parseISO(m.start_date), 'dd-MM-yyyy'),
+                  guest_name: m.guest_name,
+                  type_of_membership: cat ? cat.name : 'Unknown',
+                  item_name: 'Membership',
+                  actual_price: m.actual_rate,
+                  discount_percent: m.discount > 0 ? (m.discount / m.actual_rate) * 100 : 0,
+                  discount_amount: m.discount,
+                  net_revenue: m.net_amount,
+                  inc_total: 0,
+                  inc_discount_percent: 0,
+                  inc_discount_val: 0,
+                  inc_net: 0,
+                  remarks: m.status,
+                  staff_splits: {}
+              };
+          });
+          setRows(records);
       } else {
           // --- STANDARD ROWS FOR SALES & INCENTIVES ---
           const records: ReportRow[] = [];
@@ -686,6 +722,7 @@ const Reports = () => {
   const RenderStandardTable = () => {
     const isIncentiveReport = reportType === 'incentives';
     const isDailySales = reportType === 'daily_sales';
+    const isMembersJoined = reportType === 'members_joined';
 
     // Calculation variables
     const totals = useMemo(() => {
@@ -727,7 +764,7 @@ const Reports = () => {
                         <th rowSpan={2} className="border border-black px-2 py-3 w-20">Date</th>
                         <th rowSpan={2} className="border border-black px-2 py-3 min-w-[120px]">Guest / Member</th>
                         
-                        <th rowSpan={2} className="border border-black px-2 py-3 w-16">{isDailySales ? 'Reference' : 'Duration'}</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 w-16">{isDailySales ? 'Reference' : isMembersJoined ? 'Category' : 'Duration'}</th>
                         <th rowSpan={2} className="border border-black px-2 py-3 w-16">Check No.</th>
                         {(isDailySales) && <th rowSpan={2} className="border border-black px-2 py-3">Payment Mode</th>}
                         <th rowSpan={2} className="border border-black px-2 py-3">Item / Service</th>
@@ -768,7 +805,7 @@ const Reports = () => {
                                 <td className="border border-black px-2 py-1 text-center whitespace-nowrap">{row.date}</td>
                                 <td className="border border-black px-2 py-1 font-black text-slate-700">{row.guest_name}</td>
                                 
-                                <td className="border border-black px-2 py-1 text-center">{row.duration || '-'}</td>
+                                <td className="border border-black px-2 py-1 text-center">{isMembersJoined ? row.type_of_membership : (row.duration || '-')}</td>
                                 <td className="border border-black px-2 py-1 text-center text-slate-400">{row.check_no}</td>
                                 {(isDailySales) && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
                                 <td className="border border-black px-2 py-1">{row.item_name}</td>
@@ -868,7 +905,8 @@ const Reports = () => {
                                   {[
                                       { id: 'revenue_recognition', label: 'Revenue Recognition', icon: UserCheck, permission: canViewFinancial },
                                       { id: 'incentives', label: 'Incentive Audit', icon: Award, permission: canViewStaffReports },
-                                      { id: 'daily_sales', label: 'Daily Sales Ledger', icon: CreditCard, permission: canViewOperational }
+                                      { id: 'daily_sales', label: 'Daily Sales Ledger', icon: CreditCard, permission: canViewOperational },
+                                      { id: 'members_joined', label: 'Members Joined', icon: UserCheck, permission: canViewMembersJoined }
                                   ].filter(t => t.permission).map(type => (
                                       <button 
                                         key={type.id} 
