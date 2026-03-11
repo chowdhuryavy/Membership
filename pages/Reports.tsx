@@ -959,7 +959,7 @@ const Reports = () => {
           )}
 
           <div className={`${showConfig ? 'lg:col-span-9' : 'lg:col-span-12'} transition-all duration-700`}>
-              <Card className="rounded-[3.5rem] border-slate-200 shadow-2xl overflow-hidden bg-white min-h-[1200px] print:shadow-none print:rounded-none">
+              <Card className="rounded-none border-slate-200 shadow-2xl overflow-hidden bg-white min-h-[1200px] print:shadow-none print:rounded-none">
                   <div ref={reportRef} className="print-container p-12 md:p-16 flex flex-col bg-white">
                       <div className="flex justify-between items-start mb-16">
                           <div className="flex items-center gap-6">
