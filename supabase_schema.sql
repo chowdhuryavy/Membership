@@ -51,7 +51,7 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS public.massage_rooms (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    property_id UUID REFERENCES public.properties(id),
+    property_id TEXT REFERENCES public.properties(id),
     name TEXT NOT NULL,
     number TEXT NOT NULL,
     is_active BOOLEAN DEFAULT true,

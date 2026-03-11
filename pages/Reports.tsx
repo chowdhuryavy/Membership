@@ -31,11 +31,12 @@ import {
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import ExpiringMembershipsReport from './ExpiringMembershipsReport';
+import MassageRoomRevenueReport from './MassageRoomRevenueReport';
 
 const startOfMonthLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
 // Report Types
-type ReportType = 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'expiring_memberships';
+type ReportType = 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'expiring_memberships' | 'massage_room_revenue';
 
 interface ReportRow {
   sl_no: number;
@@ -940,7 +941,8 @@ const Reports = () => {
                                       { id: 'incentives', label: 'Incentive Audit', icon: Award, permission: canViewStaffReports },
                                       { id: 'daily_sales', label: 'Daily Sales Ledger', icon: CreditCard, permission: canViewOperational },
                                       { id: 'members_joined', label: 'Members Joined', icon: UserCheck, permission: canViewMembersJoined },
-                                      { id: 'expiring_memberships', label: 'Expiring Memberships', icon: CalendarX, permission: canViewMembersJoined }
+                                      { id: 'expiring_memberships', label: 'Expiring Memberships', icon: CalendarX, permission: canViewMembersJoined },
+                                      { id: 'massage_room_revenue', label: 'Massage Room Revenue', icon: Building2, permission: canViewFinancial }
                                   ].filter(t => t.permission).map(type => (
                                       <button 
                                         key={type.id} 
@@ -1018,6 +1020,7 @@ const Reports = () => {
                                  reportType === 'revenue_recognition' ? 'REVENUE RECOGNITION' : 
                                  reportType === 'expiring_memberships' ? 'EXPIRING MEMBERSHIPS AUDIT' :
                                  reportType === 'members_joined' ? 'MEMBERS JOINED AUDIT' :
+                                 reportType === 'massage_room_revenue' ? 'MASSAGE ROOM REVENUE' :
                                  'DAILY SALES LEDGER'}
                               </h3>
                               <div className="bg-slate-950 text-white px-6 py-3 rounded-2xl shadow-2xl">
@@ -1034,6 +1037,7 @@ const Reports = () => {
                       <div className="flex-1">
                           {reportType === 'revenue_recognition' ? <RenderRevenueTable /> : 
                            reportType === 'expiring_memberships' ? <ExpiringMembershipsReport isEmbedded={true} embeddedMonth={reportMonth} /> : 
+                           reportType === 'massage_room_revenue' ? <MassageRoomRevenueReport isEmbedded={true} embeddedMonth={reportMonth} /> :
                            <RenderStandardTable />}
                       </div>
 

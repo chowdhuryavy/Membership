@@ -330,6 +330,7 @@ const SettingsPage = () => {
     address: '',
     signatory_config: {}
   });
+  const [roomForm, setRoomForm] = useState<Omit<MassageRoom, 'id'>>({ property_id: '', name: '', number: '', is_active: true });
   const [outletForm, setOutletForm] = useState<Omit<Outlet, 'id'>>({ 
     name: '', 
     property_id: '', 
@@ -424,6 +425,22 @@ const SettingsPage = () => {
       await refreshSettings();
       setShowForm(false);
       showStatus('Property Asset Record Updated.');
+    } catch (e: any) { showStatus(e.message, 'error'); }
+    finally { setIsSaving(false); }
+  };
+
+  const handleRoomSubmit = async () => {
+    if (!isSuperAdmin) {
+        showStatus('Unauthorized: Super Admin access required.', 'error');
+        return;
+    }
+    setIsSaving(true);
+    try {
+      if (editingId) await db.updateMassageRoom(editingId, roomForm);
+      else await db.addMassageRoom(roomForm);
+      await refreshSettings();
+      setShowForm(false);
+      showStatus('Massage Room Record Updated.');
     } catch (e: any) { showStatus(e.message, 'error'); }
     finally { setIsSaving(false); }
   };
@@ -958,6 +975,18 @@ const SettingsPage = () => {
                                 onChange={(config) => setPropertyForm({ ...propertyForm, signatory_config: config })}
                             />
                             <Button onClick={handlePropertySubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Commit Asset</Button>
+                        </div>
+                      )}
+                      {activeTab === 'massage_rooms' && (
+                        <div className="space-y-6">
+                            <Select label="Linked Property Portfolio *" options={[{value:'', label:'Select Property...'}, ...properties.map(p=>({value:p.id, label:p.name}))]} value={roomForm.property_id} onChange={e => setRoomForm({...roomForm, property_id: e.target.value})} className="h-14 rounded-xl" />
+                            <Input label="Room Name *" value={roomForm.name} onChange={e => setRoomForm({...roomForm, name: e.target.value})} className="h-14 rounded-xl" />
+                            <Input label="Room Number *" value={roomForm.number} onChange={e => setRoomForm({...roomForm, number: e.target.value})} className="h-14 rounded-xl" />
+                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                <input type="checkbox" checked={roomForm.is_active} onChange={e => setRoomForm({...roomForm, is_active: e.target.checked})} className="w-5 h-5 rounded border-slate-300" />
+                                <span className="text-xs font-black text-slate-700 uppercase">Is Active</span>
+                            </div>
+                            <Button onClick={handleRoomSubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Commit Room</Button>
                         </div>
                       )}
                       {activeTab === 'outlets' && (
