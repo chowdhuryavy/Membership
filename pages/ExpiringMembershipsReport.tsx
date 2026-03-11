@@ -70,35 +70,8 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth }:
         }).sort((a, b) => parseISO(a.current_end_date).getTime() - parseISO(b.current_end_date).getTime());
     }, [members, reportMonth]);
 
-    const handleExportPDF = async () => {
-        const element = document.getElementById('expiring-report-content');
-        if (!element) return;
-
-        setIsGeneratingPDF(true);
-        try {
-            const canvas = await html2canvas(element, { 
-                scale: 2,
-                onclone: (doc) => {
-                    const printHeader = doc.querySelector('.print\\:block') as HTMLElement;
-                    if (printHeader) {
-                        printHeader.style.display = 'block';
-                        printHeader.style.visibility = 'visible';
-                    }
-                }
-            });
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.width || 210;
-            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-            
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            pdf.save(`Expiring_Memberships_${reportMonth}.pdf`);
-        } catch (error) {
-            console.error("PDF Generation failed", error);
-            alert("Failed to generate PDF. Please try again.");
-        } finally {
-            setIsGeneratingPDF(false);
-        }
+    const handleExportPDF = () => {
+        window.print();
     };
 
     if (isLoading) {
@@ -112,7 +85,7 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth }:
     return (
         <div className={`space-y-8 animate-in fade-in duration-700 ${isEmbedded ? '' : 'pb-20'}`}>
             {!isEmbedded && (
-                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-xl">
+                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-xl no-print">
                     <div className="flex items-center gap-6">
                         <div className="w-14 h-14 bg-rose-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-rose-100">
                             <CalendarX className="w-7 h-7" />
@@ -140,7 +113,7 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth }:
 
             <Card className={`rounded-[2.5rem] border-slate-200/60 overflow-hidden bg-white ${isEmbedded ? 'shadow-none border-none' : 'shadow-2xl'}`}>
                 {!isEmbedded && (
-                    <CardHeader className="bg-slate-950 text-white p-8 border-b border-slate-800 flex flex-row items-center justify-between">
+                    <CardHeader className="bg-slate-950 text-white p-8 border-b border-slate-800 flex flex-row items-center justify-between no-print">
                         <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-3">
                             <Filter className="w-4 h-4 text-rose-400" /> Expiration List for {format(new Date(reportMonth + '-01'), 'MMMM yyyy')}
                         </CardTitle>
@@ -151,7 +124,7 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth }:
                 )}
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
-                        <div id="expiring-report-content" className="min-w-max bg-white">
+                        <div id="expiring-report-content" className="print-container min-w-max bg-white">
                             <div className="p-8 pb-4 hidden print:block">
                                 <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Expiring Memberships Report</h2>
                                 <p className="text-sm text-slate-500 font-medium">Month: {format(new Date(reportMonth + '-01'), 'MMMM yyyy')}</p>

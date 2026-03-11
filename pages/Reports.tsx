@@ -610,16 +610,8 @@ const Reports = () => {
     } catch (e) { console.error(e); }
   };
 
-  const handleExportPDF = async () => {
-    if (!reportRef.current) return;
-    setIsGeneratingPDF(true);
-    try {
-      const canvas = await html2canvas(reportRef.current, { scale: 2 });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('l', 'mm', 'a4');
-      pdf.addImage(imgData, 'PNG', 0, 0, 297, (canvas.height * 297) / canvas.width);
-      pdf.save(`Report_${reportType}_${reportMonth}.pdf`);
-    } catch (e) { console.error(e); } finally { setIsGeneratingPDF(false); }
+  const handleExportPDF = () => {
+    window.print();
   };
 
   if (!canView) {
@@ -869,8 +861,8 @@ const Reports = () => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700 pb-20 no-print">
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-xl">
+    <div className="space-y-8 animate-in fade-in duration-700 pb-20">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-xl no-print">
         <div className="flex items-center gap-6">
             <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-indigo-100"><FileText className="w-7 h-7" /></div>
             <div>
@@ -889,7 +881,7 @@ const Reports = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {showConfig && (
-              <div className="lg:col-span-3 animate-in slide-in-from-left-6 duration-500">
+              <div className="lg:col-span-3 animate-in slide-in-from-left-6 duration-500 no-print">
                   <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl sticky top-24 overflow-hidden bg-white">
                       <CardHeader className="bg-slate-950 text-white p-8 border-b border-slate-800">
                           <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-3">
@@ -968,10 +960,10 @@ const Reports = () => {
 
           <div className={`${showConfig ? 'lg:col-span-9' : 'lg:col-span-12'} transition-all duration-700`}>
               <Card className="rounded-[3.5rem] border-slate-200 shadow-2xl overflow-hidden bg-white min-h-[1200px] print:shadow-none print:rounded-none">
-                  <div ref={reportRef} className="p-12 md:p-16 flex flex-col bg-white">
+                  <div ref={reportRef} className="print-container p-12 md:p-16 flex flex-col bg-white">
                       <div className="flex justify-between items-start mb-16">
                           <div className="flex items-center gap-6">
-                              {currentProperty?.logo_url && <img src={currentProperty.logo_url} className="h-20 w-auto object-contain" />}
+                              {currentProperty?.logo_url && <img src={currentProperty.logo_url} crossOrigin="anonymous" className="h-20 w-auto object-contain" />}
                               <div className="h-16 w-px bg-slate-200"></div>
                               <div>
                                   <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-2">{currentProperty?.name || settings?.name}</h2>
@@ -1074,8 +1066,8 @@ const Reports = () => {
         @media print {
             body * { visibility: hidden !important; background: white !important; }
             #root, main { overflow: visible !important; height: auto !important; position: static !important; }
-            div[ref] { visibility: visible !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; padding: 5mm !important; }
-            div[ref] * { visibility: visible !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .print-container { visibility: visible !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; padding: 5mm !important; }
+            .print-container * { visibility: visible !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             @page { size: A4 landscape; margin: 0; }
         }
       `}</style>
