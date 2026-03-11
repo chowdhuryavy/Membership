@@ -754,34 +754,34 @@ const Reports = () => {
         <div className="w-full">
             <table className="w-full border-collapse text-[9px] border-2 border-black">
                 <thead>
-                    <tr className="bg-sky-100 text-black font-bold">
+                    <tr className="bg-slate-950 text-white font-black uppercase tracking-widest">
                         <th rowSpan={2} className="border border-black px-2 py-3 w-8">Sl.No.</th>
                         <th rowSpan={2} className="border border-black px-2 py-3 w-20">Date</th>
                         <th rowSpan={2} className="border border-black px-2 py-3 min-w-[120px]">Guest / Member</th>
                         
-                        <th rowSpan={2} className="border border-black px-2 py-3 w-16">{isDailySales ? 'Reference' : isMembersJoined ? 'Category' : 'Duration'}</th>
-                        <th rowSpan={2} className="border border-black px-2 py-3 w-16">Check No.</th>
-                        {(isDailySales) && <th rowSpan={2} className="border border-black px-2 py-3">Payment Mode</th>}
-                        <th rowSpan={2} className="border border-black px-2 py-3">Item / Service</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 w-24">{isDailySales ? 'Reference' : isMembersJoined ? 'Category' : 'Duration'}</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 w-20">Check No.</th>
+                        {(isDailySales) && <th rowSpan={2} className="border border-black px-2 py-3 w-24">Payment Mode</th>}
+                        <th rowSpan={2} className="border border-black px-2 py-3 min-w-[100px]">Item / Service</th>
                         {isIncentiveReport && <th rowSpan={2} className="border border-black px-2 py-3">{specialistLabel}</th>}
                         
-                        <th rowSpan={2} className="border border-black px-2 py-3 text-right">Gross Amount</th>
-                        <th rowSpan={2} className="border border-black px-2 py-3 text-center">Disc %</th>
-                        <th rowSpan={2} className="border border-black px-2 py-3 text-right">Discount Amt</th>
-                        <th rowSpan={2} className="border border-black px-2 py-3 text-right">Net Revenue</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 text-right w-20">Gross Amount</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 text-center w-12">Disc %</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 text-right w-20">Discount Amt</th>
+                        <th rowSpan={2} className="border border-black px-2 py-3 text-right w-20">Net Revenue</th>
                         
                         {/* Incentive Columns only for Incentive Report */}
-                        {isIncentiveReport && <th colSpan={4} className="border border-black px-2 py-1 text-center bg-amber-100">Incentive Breakdown</th>}
+                        {isIncentiveReport && <th colSpan={4} className="border border-black px-2 py-1 text-center bg-amber-100 text-slate-900">Incentive Breakdown</th>}
                         
                         <th rowSpan={2} className="border border-black px-2 py-3 min-w-[100px]">Remarks</th>
                         
                         {isIncentiveReport && Array.isArray(activeStaffList) && activeStaffList.map(s => (
-                            <th key={s.id} rowSpan={2} className="border border-black px-1 py-3 w-16 bg-slate-50 text-center">
+                            <th key={s.id} rowSpan={2} className="border border-black px-1 py-3 w-16 bg-slate-900 text-center">
                                 <div className="rotate-180" style={{ writingMode: 'vertical-rl' }}>{s.name.toUpperCase()}</div>
                             </th>
                         ))}
                     </tr>
-                    <tr className="bg-amber-50">
+                    <tr className="bg-amber-50 text-slate-900">
                         {isIncentiveReport && (
                             <>
                                 <th className="border border-black px-2 py-1 w-14 text-center">Total</th>
@@ -1070,11 +1070,38 @@ const Reports = () => {
 
       <style>{`
         @media print {
-            body * { visibility: hidden !important; background: white !important; }
+            body { background: white !important; }
+            .no-print { display: none !important; }
             #root, main { overflow: visible !important; height: auto !important; position: static !important; }
-            .print-container { visibility: visible !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; padding: 5mm !important; }
-            .print-container * { visibility: visible !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-            @page { size: A4 landscape; margin: 0; }
+            
+            /* Hide everything by default */
+            body * { visibility: hidden; }
+            
+            /* Show the print container and its children */
+            .print-container, .print-container * { 
+                visibility: visible !important; 
+            }
+            
+            .print-container { 
+                position: absolute !important; 
+                left: 0 !important; 
+                top: 0 !important; 
+                width: 100% !important; 
+                padding: 0 !important;
+                margin: 0 !important;
+                background: white !important;
+            }
+            
+            /* Preserve colors */
+            * { 
+                -webkit-print-color-adjust: exact !important; 
+                print-color-adjust: exact !important; 
+            }
+            
+            @page { 
+                size: A4 landscape; 
+                margin: 10mm; 
+            }
         }
       `}</style>
     </div>
