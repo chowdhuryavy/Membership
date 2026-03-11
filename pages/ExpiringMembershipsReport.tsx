@@ -65,16 +65,26 @@ export default function ExpiringMembershipsReport() {
 
         setIsGeneratingPDF(true);
         try {
-            const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+            const canvas = await html2canvas(element, { 
+                scale: 2,
+                onclone: (doc) => {
+                    const printHeader = doc.querySelector('.print\\:block') as HTMLElement;
+                    if (printHeader) {
+                        printHeader.style.display = 'block';
+                        printHeader.style.visibility = 'visible';
+                    }
+                }
+            });
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfWidth = pdf.internal.pageSize.width || 210;
             const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
             
             pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
             pdf.save(`Expiring_Memberships_${reportMonth}.pdf`);
         } catch (error) {
             console.error("PDF Generation failed", error);
+            alert("Failed to generate PDF. Please try again.");
         } finally {
             setIsGeneratingPDF(false);
         }
@@ -124,58 +134,62 @@ export default function ExpiringMembershipsReport() {
                         Total Expiring: <span className="text-white text-sm ml-2">{expiringMembers.length}</span>
                     </div>
                 </CardHeader>
-                <CardContent className="p-0 overflow-x-auto" id="expiring-report-content">
-                    <div className="p-8 pb-4 hidden print:block">
-                        <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Expiring Memberships Report</h2>
-                        <p className="text-sm text-slate-500 font-medium">Month: {format(new Date(reportMonth + '-01'), 'MMMM yyyy')}</p>
-                        <p className="text-sm text-slate-500 font-medium">Property: {currentProperty?.name} | Outlet: {currentOutlet?.name}</p>
-                    </div>
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-slate-50 border-b border-slate-100">
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">#</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Member Name</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Membership No.</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Category</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Start Date</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">End Date</th>
-                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {expiringMembers.length === 0 ? (
-                                <tr>
-                                    <td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-medium text-sm">
-                                        No memberships expiring in this month.
-                                    </td>
-                                </tr>
-                            ) : (
-                                expiringMembers.map((member, idx) => {
-                                    const cat = categories.find(c => c.id === member.category_id);
-                                    return (
-                                        <tr key={member.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-6 py-4 text-sm font-bold text-slate-400">{idx + 1}</td>
-                                            <td className="px-6 py-4 text-sm font-black text-slate-700">{member.guest_name}</td>
-                                            <td className="px-6 py-4 text-sm font-mono text-slate-500">{member.membership_number}</td>
-                                            <td className="px-6 py-4 text-sm font-bold text-indigo-600">{cat?.name || 'Unknown'}</td>
-                                            <td className="px-6 py-4 text-sm text-slate-500">{format(parseISO(member.start_date), 'dd MMM yyyy')}</td>
-                                            <td className="px-6 py-4 text-sm font-black text-rose-600">{format(parseISO(member.current_end_date), 'dd MMM yyyy')}</td>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                                                    member.status === MemberStatus.ACTIVE ? 'bg-emerald-100 text-emerald-700' :
-                                                    member.status === MemberStatus.EXPIRED ? 'bg-rose-100 text-rose-700' :
-                                                    member.status === MemberStatus.FROZEN ? 'bg-blue-100 text-blue-700' :
-                                                    'bg-slate-100 text-slate-700'
-                                                }`}>
-                                                    {member.status}
-                                                </span>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <div id="expiring-report-content" className="min-w-max bg-white">
+                            <div className="p-8 pb-4 hidden print:block">
+                                <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Expiring Memberships Report</h2>
+                                <p className="text-sm text-slate-500 font-medium">Month: {format(new Date(reportMonth + '-01'), 'MMMM yyyy')}</p>
+                                <p className="text-sm text-slate-500 font-medium">Property: {currentProperty?.name} | Outlet: {currentOutlet?.name}</p>
+                            </div>
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-100">
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-16">#</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Member Name</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Membership No.</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Category</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Start Date</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">End Date</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {expiringMembers.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-medium text-sm">
+                                                No memberships expiring in this month.
                                             </td>
                                         </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
+                                    ) : (
+                                        expiringMembers.map((member, idx) => {
+                                            const cat = categories.find(c => c.id === member.category_id);
+                                            return (
+                                                <tr key={member.id} className="hover:bg-slate-50/50 transition-colors">
+                                                    <td className="px-6 py-4 text-sm font-bold text-slate-400">{idx + 1}</td>
+                                                    <td className="px-6 py-4 text-sm font-black text-slate-700">{member.guest_name}</td>
+                                                    <td className="px-6 py-4 text-sm font-mono text-slate-500">{member.membership_number}</td>
+                                                    <td className="px-6 py-4 text-sm font-bold text-indigo-600">{cat?.name || 'Unknown'}</td>
+                                                    <td className="px-6 py-4 text-sm text-slate-500">{format(parseISO(member.start_date), 'dd MMM yyyy')}</td>
+                                                    <td className="px-6 py-4 text-sm font-black text-rose-600">{format(parseISO(member.current_end_date), 'dd MMM yyyy')}</td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                                            member.status === MemberStatus.ACTIVE ? 'bg-emerald-100 text-emerald-700' :
+                                                            member.status === MemberStatus.EXPIRED ? 'bg-rose-100 text-rose-700' :
+                                                            member.status === MemberStatus.FROZEN ? 'bg-blue-100 text-blue-700' :
+                                                            'bg-slate-100 text-slate-700'
+                                                        }`}>
+                                                            {member.status}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
         </div>
