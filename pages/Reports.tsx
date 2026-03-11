@@ -618,29 +618,32 @@ const Reports = () => {
     if (!currentOutlet || !currentProperty || !settings) return null;
 
     // 1. Check Outlet
-    if (currentOutlet.required_signatories?.includes(reportType)) {
+    const outletConfig = currentOutlet.signatory_config?.[reportType];
+    if (outletConfig) {
       return {
-        prepared: currentOutlet.signatory_prepared_role || settings.signatory_prepared_role || 'Accountant',
-        reviewed: currentOutlet.signatory_reviewed_role || settings.signatory_reviewed_role || '',
-        approved: currentOutlet.signatory_approved_role || settings.signatory_approved_role || 'General Manager'
+        prepared: outletConfig.prepared || 'Accountant',
+        reviewed: outletConfig.reviewed || '',
+        approved: outletConfig.approved || 'General Manager'
       };
     }
 
     // 2. Check Property
-    if (currentProperty.required_signatories?.includes(reportType)) {
+    const propertyConfig = currentProperty.signatory_config?.[reportType];
+    if (propertyConfig) {
       return {
-        prepared: currentProperty.signatory_prepared_role || settings.signatory_prepared_role || 'Accountant',
-        reviewed: currentProperty.signatory_reviewed_role || settings.signatory_reviewed_role || '',
-        approved: currentProperty.signatory_approved_role || settings.signatory_approved_role || 'General Manager'
+        prepared: propertyConfig.prepared || 'Accountant',
+        reviewed: propertyConfig.reviewed || '',
+        approved: propertyConfig.approved || 'General Manager'
       };
     }
 
     // 3. Check Global
-    if (settings.required_signatories?.includes(reportType)) {
+    const globalConfig = settings.signatory_config?.[reportType];
+    if (globalConfig) {
       return {
-        prepared: settings.signatory_prepared_role || 'Accountant',
-        reviewed: settings.signatory_reviewed_role || '',
-        approved: settings.signatory_approved_role || 'General Manager'
+        prepared: globalConfig.prepared || 'Accountant',
+        reviewed: globalConfig.reviewed || '',
+        approved: globalConfig.approved || 'General Manager'
       };
     }
 
