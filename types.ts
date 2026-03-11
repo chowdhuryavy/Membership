@@ -42,6 +42,10 @@ export interface Property {
   name: string;
   logo_url: string;
   address: string;
+  signatory_prepared_role?: string;
+  signatory_reviewed_role?: string;
+  signatory_approved_role?: string;
+  required_signatories?: string[]; // Array of report types (e.g., ['daily_sales', 'incentives'])
 }
 
 export interface Outlet {
@@ -51,6 +55,7 @@ export interface Outlet {
   signatory_prepared_role?: string;
   signatory_reviewed_role?: string;
   signatory_approved_role?: string;
+  required_signatories?: string[]; // Array of report types
   contract_template?: string; 
   conditions?: string; 
   booking_enabled?: boolean;
@@ -129,6 +134,7 @@ export interface CompanySettings {
   signatory_prepared_role?: string;
   signatory_reviewed_role?: string;
   signatory_approved_role?: string;
+  required_signatories?: string[]; // Global default
   keyboard_shortcuts?: Record<string, string>;
   contract_template?: string; 
   navigation_order?: string[];

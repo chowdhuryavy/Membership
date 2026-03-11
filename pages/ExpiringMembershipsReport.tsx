@@ -124,7 +124,7 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth }:
                 )}
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
-                        <div id="expiring-report-content" className={`${isEmbedded ? '' : 'print-container'} min-w-max bg-white`}>
+                        <div id="expiring-report-content" className={`${isEmbedded ? 'w-full' : 'print-container min-w-max'} bg-white`}>
                             {!isEmbedded && (
                                 <div className="p-8 pb-4 hidden print:block">
                                     <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Expiring Memberships Report</h2>

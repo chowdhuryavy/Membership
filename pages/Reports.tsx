@@ -614,6 +614,39 @@ const Reports = () => {
     window.print();
   };
 
+  const signatoryConfig = useMemo(() => {
+    if (!currentOutlet || !currentProperty || !settings) return null;
+
+    // 1. Check Outlet
+    if (currentOutlet.required_signatories?.includes(reportType)) {
+      return {
+        prepared: currentOutlet.signatory_prepared_role || settings.signatory_prepared_role || 'Accountant',
+        reviewed: currentOutlet.signatory_reviewed_role || settings.signatory_reviewed_role || '',
+        approved: currentOutlet.signatory_approved_role || settings.signatory_approved_role || 'General Manager'
+      };
+    }
+
+    // 2. Check Property
+    if (currentProperty.required_signatories?.includes(reportType)) {
+      return {
+        prepared: currentProperty.signatory_prepared_role || settings.signatory_prepared_role || 'Accountant',
+        reviewed: currentProperty.signatory_reviewed_role || settings.signatory_reviewed_role || '',
+        approved: currentProperty.signatory_approved_role || settings.signatory_approved_role || 'General Manager'
+      };
+    }
+
+    // 3. Check Global
+    if (settings.required_signatories?.includes(reportType)) {
+      return {
+        prepared: settings.signatory_prepared_role || 'Accountant',
+        reviewed: settings.signatory_reviewed_role || '',
+        approved: settings.signatory_approved_role || 'General Manager'
+      };
+    }
+
+    return null;
+  }, [currentOutlet, currentProperty, settings, reportType]);
+
   if (!canView) {
       return (
           <div className="flex items-center justify-center h-screen">
@@ -640,76 +673,83 @@ const Reports = () => {
       let grandDeferred = 0;
 
       return (
-          <div className="w-full text-[10px] font-medium text-slate-900">
-              {/* Header */}
-              <div className="grid grid-cols-12 bg-slate-950 text-white font-black uppercase tracking-widest py-4 px-2 mb-1">
-                  <div className="col-span-1">SL.</div>
-                  <div className="col-span-3">Guest Name / Profile</div>
-                  <div className="col-span-1">Start Date</div>
-                  <div className="col-span-1">End Date</div>
-                  <div className="col-span-1 text-center">Days</div>
-                  <div className="col-span-1 text-right">Net Fees</div>
-                  <div className="col-span-1 text-right">Prev. Accrual</div>
-                  <div className="col-span-2 text-right">Period Rev</div>
-                  <div className="col-span-1 text-right">Deferred</div>
-              </div>
+          <div className="w-full">
+              <table className="w-full border-collapse text-[9px] border-2 border-black">
+                  <thead>
+                      <tr className="bg-slate-950 text-white font-black uppercase tracking-widest">
+                          <th className="border border-black px-2 py-3 w-8">SL.</th>
+                          <th className="border border-black px-2 py-3 min-w-[150px]">Guest Name / Profile</th>
+                          <th className="border border-black px-2 py-3 w-20">Start Date</th>
+                          <th className="border border-black px-2 py-3 w-20">End Date</th>
+                          <th className="border border-black px-2 py-3 w-12 text-center">Days</th>
+                          <th className="border border-black px-2 py-3 text-right w-24">Net Fees</th>
+                          <th className="border border-black px-2 py-3 text-right w-24">Prev. Accrual</th>
+                          <th className="border border-black px-2 py-3 text-right w-24">Period Rev</th>
+                          <th className="border border-black px-2 py-3 text-right w-24">Deferred</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      {Object.entries(grouped).map(([category, groupRowsData]) => {
+                          const groupRows = groupRowsData as RevenueRow[];
+                          const subNetFees = groupRows.reduce((s, r) => s + r.net_fees, 0);
+                          const subPrevAccrual = groupRows.reduce((s, r) => s + r.prev_accrual, 0);
+                          const subPeriodRev = groupRows.reduce((s, r) => s + r.period_rev, 0);
+                          const subDeferred = groupRows.reduce((s, r) => s + r.deferred, 0);
 
-              {Object.entries(grouped).map(([category, groupRowsData]) => {
-                  const groupRows = groupRowsData as RevenueRow[];
-                  const subNetFees = groupRows.reduce((s, r) => s + r.net_fees, 0);
-                  const subPrevAccrual = groupRows.reduce((s, r) => s + r.prev_accrual, 0);
-                  const subPeriodRev = groupRows.reduce((s, r) => s + r.period_rev, 0);
-                  const subDeferred = groupRows.reduce((s, r) => s + r.deferred, 0);
+                          grandNetFees += subNetFees;
+                          grandPrevAccrual += subPrevAccrual;
+                          grandPeriodRev += subPeriodRev;
+                          grandDeferred += subDeferred;
 
-                  grandNetFees += subNetFees;
-                  grandPrevAccrual += subPrevAccrual;
-                  grandPeriodRev += subPeriodRev;
-                  grandDeferred += subDeferred;
+                          return (
+                              <React.Fragment key={category}>
+                                  {/* Group Header */}
+                                  <tr className="bg-slate-100">
+                                      <td colSpan={9} className="border border-black px-4 py-2 font-black text-slate-900 uppercase tracking-tight text-[10px]">
+                                          <div className="flex items-center gap-2">
+                                              <Layers className="w-3 h-3 text-indigo-500" />
+                                              {category} <span className="text-[8px] font-bold text-slate-400 ml-2">({groupRows.length} Ledger Events)</span>
+                                          </div>
+                                      </td>
+                                  </tr>
 
-                  return (
-                      <div key={category} className="mb-6">
-                          {/* Group Header */}
-                          <div className="flex items-center gap-3 bg-white py-3 border-b border-slate-200 mt-4 mb-2">
-                              <Layers className="w-4 h-4 text-indigo-500" />
-                              <span className="font-black text-slate-900 uppercase tracking-tight text-xs">{category}</span>
-                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">({groupRows.length} Ledger Events)</span>
-                          </div>
+                                  {/* Rows */}
+                                  {groupRows.map((row, idx) => (
+                                      <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                                          <td className="border border-black px-2 py-1 text-center text-slate-500">{idx + 1}</td>
+                                          <td className="border border-black px-2 py-1 font-black text-slate-800">{row.guest_name}</td>
+                                          <td className="border border-black px-2 py-1 text-center text-slate-600">{row.start_date}</td>
+                                          <td className="border border-black px-2 py-1 text-center text-slate-600">{row.end_date}</td>
+                                          <td className="border border-black px-2 py-1 text-center text-slate-500">{row.total_days}</td>
+                                          <td className="border border-black px-2 py-1 text-right text-slate-500">{formatMoney(row.net_fees)}</td>
+                                          <td className="border border-black px-2 py-1 text-right text-slate-400">{formatMoney(row.prev_accrual)}</td>
+                                          <td className="border border-black px-2 py-1 text-right font-black text-indigo-700">{formatMoney(row.period_rev)}</td>
+                                          <td className="border border-black px-2 py-1 text-right font-bold text-red-500">{formatMoney(row.deferred)}</td>
+                                      </tr>
+                                  ))}
 
-                          {/* Rows */}
-                          {groupRows.map((row, idx) => (
-                              <div key={row.id} className="grid grid-cols-12 py-3 px-2 border-b border-slate-100 hover:bg-slate-50 transition-colors items-center">
-                                  <div className="col-span-1 text-slate-500">{idx + 1}</div>
-                                  <div className="col-span-3 font-black text-slate-800">{row.guest_name}</div>
-                                  <div className="col-span-1 text-slate-600">{row.start_date}</div>
-                                  <div className="col-span-1 text-slate-600">{row.end_date}</div>
-                                  <div className="col-span-1 text-center text-slate-500">{row.total_days}</div>
-                                  <div className="col-span-1 text-right text-slate-500">{formatMoney(row.net_fees)}</div>
-                                  <div className="col-span-1 text-right text-slate-400">{formatMoney(row.prev_accrual)}</div>
-                                  <div className="col-span-2 text-right font-black text-indigo-700">{formatMoney(row.period_rev)}</div>
-                                  <div className="col-span-1 text-right font-bold text-red-500">{formatMoney(row.deferred)}</div>
-                              </div>
-                          ))}
+                                  {/* Subtotal */}
+                                  <tr className="bg-indigo-50/50 font-black text-[9px]">
+                                      <td colSpan={5} className="border border-black px-4 py-2 text-right uppercase text-indigo-900 tracking-widest">Cluster Subtotal: {category}</td>
+                                      <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subNetFees)}</td>
+                                      <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subPrevAccrual)}</td>
+                                      <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subPeriodRev)}</td>
+                                      <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subDeferred)}</td>
+                                  </tr>
+                              </React.Fragment>
+                          );
+                      })}
 
-                          {/* Subtotal */}
-                          <div className="grid grid-cols-12 py-3 px-2 bg-indigo-50/50 mt-1 border-t-2 border-indigo-100 items-center">
-                              <div className="col-span-7 text-right pr-4 font-black uppercase text-indigo-900 text-[9px] tracking-widest">Cluster Subtotal: {category}</div>
-                              <div className="col-span-1 text-right font-black text-indigo-900">{formatMoney(subNetFees)}</div>
-                              <div className="col-span-1 text-right font-black text-indigo-900">{formatMoney(subPrevAccrual)}</div>
-                              <div className="col-span-2 text-right font-black text-indigo-900">{formatMoney(subPeriodRev)}</div>
-                              <div className="col-span-1 text-right font-black text-indigo-900">{formatMoney(subDeferred)}</div>
-                          </div>
-                      </div>
-                  );
-              })}
-
-              {/* Grand Total */}
-              <div className="grid grid-cols-12 py-4 px-2 bg-slate-900 text-white mt-8 mb-4 items-center rounded-lg shadow-xl">
-                  <div className="col-span-7 text-right pr-4 font-black uppercase tracking-[0.2em] text-xs">Verified Portfolio Total</div>
-                  <div className="col-span-1 text-right font-bold text-xs">{formatMoney(grandNetFees)}</div>
-                  <div className="col-span-1 text-right font-bold text-xs opacity-70">{formatMoney(grandPrevAccrual)}</div>
-                  <div className="col-span-2 text-right font-black text-sm text-indigo-400">{formatMoney(grandPeriodRev)}</div>
-                  <div className="col-span-1 text-right font-bold text-xs text-red-400">{formatMoney(grandDeferred)}</div>
-              </div>
+                      {/* Grand Total */}
+                      <tr className="bg-slate-900 text-white font-black text-[10px]">
+                          <td colSpan={5} className="border border-black px-4 py-3 text-right uppercase tracking-[0.2em]">Verified Portfolio Total</td>
+                          <td className="border border-black px-2 py-3 text-right">{formatMoney(grandNetFees)}</td>
+                          <td className="border border-black px-2 py-3 text-right opacity-70">{formatMoney(grandPrevAccrual)}</td>
+                          <td className="border border-black px-2 py-3 text-right text-indigo-400">{formatMoney(grandPeriodRev)}</td>
+                          <td className="border border-black px-2 py-3 text-right text-red-400">{formatMoney(grandDeferred)}</td>
+                      </tr>
+                  </tbody>
+              </table>
           </div>
       );
   };
@@ -999,7 +1039,7 @@ const Reports = () => {
                            <RenderStandardTable />}
                       </div>
 
-                      {reportType !== 'revenue_recognition' && (
+                      {signatoryConfig && (
                         <div className="mt-16 grid grid-cols-12 gap-10">
                             <div className="col-span-5">
                                 {(reportType === 'daily_sales' || reportType === 'incentives' || reportType === 'members_joined') && (
@@ -1041,19 +1081,28 @@ const Reports = () => {
                                 )}
                             </div>
 
-                            <div className="col-span-7 grid grid-cols-2 gap-10 items-end pb-4">
+                            <div className={`col-span-7 grid ${signatoryConfig.reviewed ? 'grid-cols-3' : 'grid-cols-2'} gap-10 items-end pb-4`}>
                                 <div className="space-y-12">
                                     <div className="h-px bg-black w-full"></div>
                                     <div className="text-center uppercase">
                                         <p className="font-black text-xs text-slate-900">Prepared By:</p>
-                                        <p className="text-[10px] font-bold text-slate-400 mt-1">{currentOutlet?.signatory_prepared_role || 'Accountant / Controller'}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 mt-1">{signatoryConfig.prepared}</p>
                                     </div>
                                 </div>
+                                {signatoryConfig.reviewed && (
+                                  <div className="space-y-12">
+                                      <div className="h-px bg-black w-full"></div>
+                                      <div className="text-center uppercase">
+                                          <p className="font-black text-xs text-slate-900">Reviewed By:</p>
+                                          <p className="text-[10px] font-bold text-slate-400 mt-1">{signatoryConfig.reviewed}</p>
+                                      </div>
+                                  </div>
+                                )}
                                 <div className="space-y-12">
                                     <div className="h-px bg-black w-full"></div>
                                     <div className="text-center uppercase">
                                         <p className="font-black text-xs text-slate-900">Approved By:</p>
-                                        <p className="text-[10px] font-bold text-slate-400 mt-1">{currentOutlet?.signatory_approved_role || 'General Manager'}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 mt-1">{signatoryConfig.approved}</p>
                                     </div>
                                 </div>
                             </div>

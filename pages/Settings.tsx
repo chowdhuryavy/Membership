@@ -151,6 +151,78 @@ const PermissionMatrix = ({
 
 type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking';
 
+const SignatoryConfig = ({
+  requiredSignatories = [],
+  onChange,
+  preparedRole = '',
+  onPreparedRoleChange,
+  reviewedRole = '',
+  onReviewedRoleChange,
+  approvedRole = '',
+  onApprovedRoleChange,
+  labelPrefix = ""
+}: {
+  requiredSignatories?: string[],
+  onChange: (reports: string[]) => void,
+  preparedRole?: string,
+  onPreparedRoleChange: (val: string) => void,
+  reviewedRole?: string,
+  onReviewedRoleChange: (val: string) => void,
+  approvedRole?: string,
+  onApprovedRoleChange: (val: string) => void,
+  labelPrefix?: string
+}) => {
+  const reports = [
+    { id: 'daily_sales', label: 'Daily Sales Ledger' },
+    { id: 'massage_yield', label: 'Massage Yield Report' },
+    { id: 'members_joined', label: 'Members Joined Audit' },
+    { id: 'expiring_memberships', label: 'Expiring Memberships Audit' },
+    { id: 'incentives', label: 'Staff Incentives Report' },
+    { id: 'revenue_recognition', label: 'Revenue Recognition Report' },
+  ];
+
+  const toggleReport = (id: string) => {
+    if (requiredSignatories.includes(id)) {
+      onChange(requiredSignatories.filter(r => r !== id));
+    } else {
+      onChange([...requiredSignatories, id]);
+    }
+  };
+
+  return (
+    <div className="space-y-6 p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
+      <div className="flex items-center gap-3 mb-2">
+        <ShieldCheck className="w-5 h-5 text-indigo-600" />
+        <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">{labelPrefix} Signatory Protocol</h4>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Input label="Prepared By Role" value={preparedRole} onChange={e => onPreparedRoleChange(e.target.value)} className="h-12 rounded-xl text-xs font-bold" />
+        <Input label="Reviewed By Role" value={reviewedRole} onChange={e => onReviewedRoleChange(e.target.value)} className="h-12 rounded-xl text-xs font-bold" />
+        <Input label="Approved By Role" value={approvedRole} onChange={e => onApprovedRoleChange(e.target.value)} className="h-12 rounded-xl text-xs font-bold" />
+      </div>
+
+      <div className="space-y-3">
+        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Required for Reports:</label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {reports.map(report => (
+            <div 
+              key={report.id} 
+              onClick={() => toggleReport(report.id)}
+              className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${requiredSignatories.includes(report.id) ? 'bg-indigo-50 border-indigo-600' : 'bg-white border-slate-100 hover:border-slate-200'}`}
+            >
+              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${requiredSignatories.includes(report.id) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-200'}`}>
+                {requiredSignatories.includes(report.id) && <Check className="w-2.5 h-2.5 text-white" />}
+              </div>
+              <span className={`text-[10px] font-black uppercase tracking-tight ${requiredSignatories.includes(report.id) ? 'text-indigo-900' : 'text-slate-600'}`}>{report.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SettingsPage = () => {
   // Fix: Destructured currentOutlet and currentProperty from useSettings to provide necessary context for data fetching
   const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry, currentOutlet, currentProperty } = useSettings();
@@ -212,17 +284,27 @@ const SettingsPage = () => {
     signatory_prepared_role: '', 
     signatory_reviewed_role: '', 
     signatory_approved_role: '', 
+    required_signatories: [],
     navigation_order: [], 
     conditions: '', 
     keyboard_shortcuts: {} 
   });
-  const [propertyForm, setPropertyForm] = useState<Omit<Property, 'id'>>({ name: '', logo_url: '', address: '' });
+  const [propertyForm, setPropertyForm] = useState<Omit<Property, 'id'>>({ 
+    name: '', 
+    logo_url: '', 
+    address: '',
+    signatory_prepared_role: '',
+    signatory_reviewed_role: '',
+    signatory_approved_role: '',
+    required_signatories: []
+  });
   const [outletForm, setOutletForm] = useState<Omit<Outlet, 'id'>>({ 
     name: '', 
     property_id: '', 
     signatory_prepared_role: '', 
     signatory_reviewed_role: '', 
     signatory_approved_role: '', 
+    required_signatories: [],
     contract_template: '',
     conditions: '' 
   });
@@ -250,6 +332,7 @@ const SettingsPage = () => {
         signatory_prepared_role: settings.signatory_prepared_role || '',
         signatory_reviewed_role: settings.signatory_reviewed_role || '',
         signatory_approved_role: settings.signatory_approved_role || '',
+        required_signatories: settings.required_signatories || [],
         contract_template: settings.contract_template || '',
         conditions: settings.conditions || '',
         keyboard_shortcuts: settings.keyboard_shortcuts || {}
@@ -513,10 +596,18 @@ const SettingsPage = () => {
                               <div className="md:col-span-2"><Input label="Registry HQ Address" value={companyForm.address} onChange={e => setCompanyForm({...companyForm, address: e.target.value})} className="h-16 rounded-2xl font-bold border-2" /></div>
                               <Input label="Report Title" value={companyForm.report_title || ''} onChange={e => setCompanyForm({...companyForm, report_title: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                               <Input label="Report Subtitle" value={companyForm.report_subtitle || ''} onChange={e => setCompanyForm({...companyForm, report_subtitle: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
-                              <Input label="Prepared By (Signatory Role)" value={companyForm.signatory_prepared_role || ''} onChange={e => setCompanyForm({...companyForm, signatory_prepared_role: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
-                              <Input label="Reviewed By (Signatory Role)" value={companyForm.signatory_reviewed_role || ''} onChange={e => setCompanyForm({...companyForm, signatory_reviewed_role: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
-                              <Input label="Approved By (Signatory Role)" value={companyForm.signatory_approved_role || ''} onChange={e => setCompanyForm({...companyForm, signatory_approved_role: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                           </div>
+                          <SignatoryConfig 
+                            labelPrefix="Global"
+                            requiredSignatories={companyForm.required_signatories}
+                            onChange={(reports) => setCompanyForm({ ...companyForm, required_signatories: reports })}
+                            preparedRole={companyForm.signatory_prepared_role}
+                            onPreparedRoleChange={(val) => setCompanyForm({ ...companyForm, signatory_prepared_role: val })}
+                            reviewedRole={companyForm.signatory_reviewed_role}
+                            onReviewedRoleChange={(val) => setCompanyForm({ ...companyForm, signatory_reviewed_role: val })}
+                            approvedRole={companyForm.signatory_approved_role}
+                            onApprovedRoleChange={(val) => setCompanyForm({ ...companyForm, signatory_approved_role: val })}
+                          />
                           <Button onClick={handleUpdateCompany} isLoading={isSaving} className="w-full h-20 rounded-[2.5rem] font-black text-lg uppercase bg-indigo-600 shadow-2xl">Commit Global Scope</Button>
                       </CardContent>
                   </Card>
@@ -535,7 +626,15 @@ const SettingsPage = () => {
                                   <tr key={p.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="flex items-center gap-4"><div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border">{p.logo_url ? <img src={p.logo_url} className="w-full h-full object-contain p-1" /> : <Building2 className="w-6 h-6 text-slate-300" />}</div><div className="font-black text-slate-900 text-lg uppercase">{p.name}</div></div></td>
                                       <td className="px-10 py-8 font-bold text-slate-500 text-xs">{p.address}</td>
-                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(p.id); setPropertyForm({...p, logo_url: p.logo_url || '', address: p.address || ''}); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'property', id:p.id, name:p.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
+                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(p.id); setPropertyForm({
+                                          name: p.name,
+                                          logo_url: p.logo_url || '',
+                                          address: p.address || '',
+                                          signatory_prepared_role: p.signatory_prepared_role || '',
+                                          signatory_reviewed_role: p.signatory_reviewed_role || '',
+                                          signatory_approved_role: p.signatory_approved_role || '',
+                                          required_signatories: p.required_signatories || []
+                                      }); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'property', id:p.id, name:p.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
                                   </tr>
                               ))}</tbody>
                           </table>
@@ -556,7 +655,16 @@ const SettingsPage = () => {
                                   <tr key={o.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase">{o.name}</div></td>
                                       <td className="px-10 py-8"><span className="bg-indigo-50 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-indigo-600 border border-indigo-100">{properties.find(p=>p.id===o.property_id)?.name || 'Detached'}</span></td>
-                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(o.id); setOutletForm({...o, signatory_prepared_role: o.signatory_prepared_role || '', signatory_reviewed_role: o.signatory_reviewed_role || '', signatory_approved_role: o.signatory_approved_role || '', contract_template: o.contract_template || '', conditions: o.conditions || ''}); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'outlet', id:o.id, name:o.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
+                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(o.id); setOutletForm({
+                                          name: o.name,
+                                          property_id: o.property_id,
+                                          signatory_prepared_role: o.signatory_prepared_role || '',
+                                          signatory_reviewed_role: o.signatory_reviewed_role || '',
+                                          signatory_approved_role: o.signatory_approved_role || '',
+                                          required_signatories: o.required_signatories || [],
+                                          contract_template: o.contract_template || '',
+                                          conditions: o.conditions || ''
+                                      }); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'outlet', id:o.id, name:o.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
                                   </tr>
                               ))}</tbody>
                           </table>
@@ -800,6 +908,17 @@ const SettingsPage = () => {
                             <Input label="Portfolio Designation *" value={propertyForm.name} onChange={e => setPropertyForm({...propertyForm, name: e.target.value})} className="h-14 rounded-xl" />
                             <Input label="Brand Asset URL" value={propertyForm.logo_url} onChange={e => setPropertyForm({...propertyForm, logo_url: e.target.value})} className="h-14 rounded-xl" />
                             <Input label="HQ Physical Address" value={propertyForm.address} onChange={e => setPropertyForm({...propertyForm, address: e.target.value})} className="h-14 rounded-xl" />
+                            <SignatoryConfig 
+                                labelPrefix="Property"
+                                requiredSignatories={propertyForm.required_signatories}
+                                onChange={(reports) => setPropertyForm({ ...propertyForm, required_signatories: reports })}
+                                preparedRole={propertyForm.signatory_prepared_role}
+                                onPreparedRoleChange={(val) => setPropertyForm({ ...propertyForm, signatory_prepared_role: val })}
+                                reviewedRole={propertyForm.signatory_reviewed_role}
+                                onReviewedRoleChange={(val) => setPropertyForm({ ...propertyForm, signatory_reviewed_role: val })}
+                                approvedRole={propertyForm.signatory_approved_role}
+                                onApprovedRoleChange={(val) => setPropertyForm({ ...propertyForm, signatory_approved_role: val })}
+                            />
                             <Button onClick={handlePropertySubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Commit Asset</Button>
                         </div>
                       )}
@@ -807,9 +926,17 @@ const SettingsPage = () => {
                         <div className="space-y-6">
                             <Input label="Facility Name *" value={outletForm.name} onChange={e => setOutletForm({...outletForm, name: e.target.value})} className="h-14 rounded-xl font-bold" />
                             <Select label="Linked Property Portfolio" options={[{value:'', label:'Select Property...'}, ...properties.map(p=>({value:p.id, label:p.name}))]} value={outletForm.property_id} onChange={e => setOutletForm({...outletForm, property_id: e.target.value})} className="h-14 rounded-xl" />
-                            <Input label="Prepared By (Signatory Role)" value={outletForm.signatory_prepared_role || ''} onChange={e => setOutletForm({...outletForm, signatory_prepared_role: e.target.value})} className="h-14 rounded-xl" />
-                            <Input label="Reviewed By (Signatory Role)" value={outletForm.signatory_reviewed_role || ''} onChange={e => setOutletForm({...outletForm, signatory_reviewed_role: e.target.value})} className="h-14 rounded-xl" />
-                            <Input label="Approved By (Signatory Role)" value={outletForm.signatory_approved_role || ''} onChange={e => setOutletForm({...outletForm, signatory_approved_role: e.target.value})} className="h-14 rounded-xl" />
+                            <SignatoryConfig 
+                                labelPrefix="Outlet"
+                                requiredSignatories={outletForm.required_signatories}
+                                onChange={(reports) => setOutletForm({ ...outletForm, required_signatories: reports })}
+                                preparedRole={outletForm.signatory_prepared_role}
+                                onPreparedRoleChange={(val) => setOutletForm({ ...outletForm, signatory_prepared_role: val })}
+                                reviewedRole={outletForm.signatory_reviewed_role}
+                                onReviewedRoleChange={(val) => setOutletForm({ ...outletForm, signatory_reviewed_role: val })}
+                                approvedRole={outletForm.signatory_approved_role}
+                                onApprovedRoleChange={(val) => setOutletForm({ ...outletForm, signatory_approved_role: val })}
+                            />
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Outlet Contract Template</label>
                                 <textarea 
