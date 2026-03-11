@@ -25,15 +25,17 @@ import {
   LayoutGrid,
   TrendingUp,
   CreditCard,
-  Building2
+  Building2,
+  CalendarX
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import ExpiringMembershipsReport from './ExpiringMembershipsReport';
 
 const startOfMonthLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
 // Report Types
-type ReportType = 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined';
+type ReportType = 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'expiring_memberships';
 
 interface ReportRow {
   sl_no: number;
@@ -907,7 +909,8 @@ const Reports = () => {
                                       { id: 'revenue_recognition', label: 'Revenue Recognition', icon: UserCheck, permission: canViewFinancial },
                                       { id: 'incentives', label: 'Incentive Audit', icon: Award, permission: canViewStaffReports },
                                       { id: 'daily_sales', label: 'Daily Sales Ledger', icon: CreditCard, permission: canViewOperational },
-                                      { id: 'members_joined', label: 'Members Joined', icon: UserCheck, permission: canViewMembersJoined }
+                                      { id: 'members_joined', label: 'Members Joined', icon: UserCheck, permission: canViewMembersJoined },
+                                      { id: 'expiring_memberships', label: 'Expiring Memberships', icon: CalendarX, permission: canViewMembersJoined }
                                   ].filter(t => t.permission).map(type => (
                                       <button 
                                         key={type.id} 
@@ -995,10 +998,12 @@ const Reports = () => {
                       </div>
                       
                       <div className="flex-1">
-                          {reportType === 'revenue_recognition' ? <RenderRevenueTable /> : <RenderStandardTable />}
+                          {reportType === 'revenue_recognition' ? <RenderRevenueTable /> : 
+                           reportType === 'expiring_memberships' ? <ExpiringMembershipsReport isEmbedded={true} embeddedMonth={reportMonth} /> : 
+                           <RenderStandardTable />}
                       </div>
 
-                      {reportType !== 'revenue_recognition' && (
+                      {reportType !== 'revenue_recognition' && reportType !== 'expiring_memberships' && (
                         <div className="mt-16 grid grid-cols-12 gap-10">
                             <div className="col-span-5">
                                 <table className="w-full border-collapse border-2 border-black font-black text-[10px]">

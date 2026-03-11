@@ -18,7 +18,6 @@ import Categories from './pages/Categories';
 import UsersPage from './pages/Users';
 import StaffPage from './pages/Staff'; 
 import Reports from './pages/Reports';
-import ExpiringMembershipsReport from './pages/ExpiringMembershipsReport';
 import Logs from './pages/Logs';
 import SettingsPage from './pages/Settings';
 import Profile from './pages/Profile';
@@ -354,7 +353,6 @@ const Sidebar = ({ onLogout }: { onLogout: () => void }) => {
             { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
             { id: 'users', to: '/users', icon: Shield, label: 'Users & Security', permission: 'users:view' as Permission },
             { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
-            { id: 'expiring', to: '/expiring-memberships', icon: CalendarClock, label: 'Expiring Memberships', permission: 'members:view' as Permission },
             { id: 'logs', to: '/logs', icon: History, label: 'Audit Logs', permission: 'logs:view' as Permission },
             { id: 'settings', to: '/settings', icon: Settings, label: 'System Settings', permission: 'settings:view' as Permission },
         ];
@@ -451,7 +449,6 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
             { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
             { id: 'users', to: '/users', icon: Shield, label: 'Users & Security', permission: 'users:view' as Permission },
             { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
-            { id: 'expiring', to: '/expiring-memberships', icon: CalendarClock, label: 'Expiring Memberships', permission: 'members:view' as Permission },
             { id: 'logs', to: '/logs', icon: History, label: 'Audit Logs', permission: 'logs:view' as Permission },
             { id: 'settings', to: '/settings', icon: Settings, label: 'System Settings', permission: 'settings:view' as Permission },
         ];
@@ -550,7 +547,6 @@ const App = () => {
                 <Route path="categories" element={<Categories />} />
                 <Route path="users" element={<UsersPage />} />
                 <Route path="reports" element={<Reports />} />
-                <Route path="expiring-memberships" element={<ExpiringMembershipsReport />} />
                 <Route path="logs" element={<Logs />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="profile" element={<Profile />} />

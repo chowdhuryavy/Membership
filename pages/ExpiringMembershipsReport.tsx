@@ -9,20 +9,31 @@ import { CalendarX, FileDown, Search, Filter } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-export default function ExpiringMembershipsReport() {
+interface ExpiringMembershipsReportProps {
+    isEmbedded?: boolean;
+    embeddedMonth?: string;
+}
+
+export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth }: ExpiringMembershipsReportProps = {}) {
     const { user } = useAuth();
     const { currentOutlet, currentProperty } = useSettings();
     const [members, setMembers] = useState<Member[]>([]);
     const [categories, setCategories] = useState<MembershipCategory[]>([]);
-    const [reportMonth, setReportMonth] = useState(format(new Date(), 'yyyy-MM'));
+    const [reportMonth, setReportMonth] = useState(embeddedMonth || format(new Date(), 'yyyy-MM'));
     const [isLoading, setIsLoading] = useState(true);
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+    useEffect(() => {
+        if (embeddedMonth) {
+            setReportMonth(embeddedMonth);
+        }
+    }, [embeddedMonth]);
 
     useEffect(() => {
         if (currentOutlet && currentProperty) {
             loadData();
         }
-    }, [currentOutlet, currentProperty]);
+    }, [currentOutlet, currentProperty, reportMonth]);
 
     const loadData = async () => {
         setIsLoading(true);
@@ -99,41 +110,45 @@ export default function ExpiringMembershipsReport() {
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-700 pb-20">
-            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-xl">
-                <div className="flex items-center gap-6">
-                    <div className="w-14 h-14 bg-rose-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-rose-100">
-                        <CalendarX className="w-7 h-7" />
+        <div className={`space-y-8 animate-in fade-in duration-700 ${isEmbedded ? '' : 'pb-20'}`}>
+            {!isEmbedded && (
+                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-xl">
+                    <div className="flex items-center gap-6">
+                        <div className="w-14 h-14 bg-rose-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-rose-100">
+                            <CalendarX className="w-7 h-7" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none">Expiring Memberships</h1>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2">Monthly Expiration Audit</p>
+                        </div>
                     </div>
-                    <div>
-                        <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none">Expiring Memberships</h1>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2">Monthly Expiration Audit</p>
+                    <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+                        <div className="flex items-center gap-3 bg-white border border-slate-200 px-5 py-3 rounded-2xl shadow-sm">
+                            <input 
+                                type="month" 
+                                value={reportMonth} 
+                                onChange={e => setReportMonth(e.target.value)} 
+                                className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer text-slate-700" 
+                            />
+                        </div>
+                        <Button onClick={handleExportPDF} isLoading={isGeneratingPDF} className="h-12 px-8 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 transition-all active:scale-95">
+                            <FileDown className="w-4 h-4 mr-2" /> Export PDF
+                        </Button>
                     </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-                    <div className="flex items-center gap-3 bg-white border border-slate-200 px-5 py-3 rounded-2xl shadow-sm">
-                        <input 
-                            type="month" 
-                            value={reportMonth} 
-                            onChange={e => setReportMonth(e.target.value)} 
-                            className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer text-slate-700" 
-                        />
-                    </div>
-                    <Button onClick={handleExportPDF} isLoading={isGeneratingPDF} className="h-12 px-8 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 transition-all active:scale-95">
-                        <FileDown className="w-4 h-4 mr-2" /> Export PDF
-                    </Button>
-                </div>
-            </div>
+            )}
 
-            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden bg-white">
-                <CardHeader className="bg-slate-950 text-white p-8 border-b border-slate-800 flex flex-row items-center justify-between">
-                    <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-3">
-                        <Filter className="w-4 h-4 text-rose-400" /> Expiration List for {format(new Date(reportMonth + '-01'), 'MMMM yyyy')}
-                    </CardTitle>
-                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        Total Expiring: <span className="text-white text-sm ml-2">{expiringMembers.length}</span>
-                    </div>
-                </CardHeader>
+            <Card className={`rounded-[2.5rem] border-slate-200/60 overflow-hidden bg-white ${isEmbedded ? 'shadow-none border-none' : 'shadow-2xl'}`}>
+                {!isEmbedded && (
+                    <CardHeader className="bg-slate-950 text-white p-8 border-b border-slate-800 flex flex-row items-center justify-between">
+                        <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-3">
+                            <Filter className="w-4 h-4 text-rose-400" /> Expiration List for {format(new Date(reportMonth + '-01'), 'MMMM yyyy')}
+                        </CardTitle>
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            Total Expiring: <span className="text-white text-sm ml-2">{expiringMembers.length}</span>
+                        </div>
+                    </CardHeader>
+                )}
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
                         <div id="expiring-report-content" className="min-w-max bg-white">
