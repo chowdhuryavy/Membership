@@ -298,6 +298,7 @@ const Reports = () => {
                   date: format(parseISO(m.start_date), 'dd-MM-yyyy'),
                   guest_name: m.guest_name,
                   type_of_membership: cat ? cat.name : 'Unknown',
+                  check_no: m.check_no || '#---',
                   item_name: 'Membership',
                   actual_price: m.actual_rate,
                   discount_percent: m.discount > 0 ? (m.discount / m.actual_rate) * 100 : 0,
