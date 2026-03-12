@@ -548,7 +548,7 @@ NOTIFY pgrst, 'reload schema';`}
         db.getMassageTypes(scopeId, isProperty, limitToIds),
         db.getMembers(scopeId, isProperty, limitToIds),
         db.getInventory(scopeId, isProperty, limitToIds),
-        db.getMassageRooms(currentProperty.id)
+        db.getMassageRooms(isProperty ? undefined : currentOutlet.id, currentProperty.id)
       ]);
 
       const errors = results

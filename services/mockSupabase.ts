@@ -756,10 +756,12 @@ class DatabaseService {
     }
   }
 
-  async getMassageRooms(propertyId?: string): Promise<MassageRoom[]> {
+  async getMassageRooms(outletId?: string, propertyId?: string): Promise<MassageRoom[]> {
     if (this.isSupabase()) {
       let query = supabase.from('massage_rooms').select('*');
-      if (propertyId) {
+      if (outletId) {
+          query = query.eq('outlet_id', outletId);
+      } else if (propertyId) {
           query = query.eq('property_id', propertyId);
       }
       const { data } = await query;

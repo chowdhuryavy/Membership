@@ -273,19 +273,19 @@ const SettingsPage = () => {
       
       // Accessible to others with permission
       { id: 'roles', label: 'Security Tiers', visible: hasPermission(user?.role_id || '', 'settings:view_roles'), icon: Shield },
-      { id: 'incentives', label: 'Contract Logic', visible: hasPermission(user?.role_id || '', 'settings:view_incentives'), icon: Award },
+      { id: 'incentives', label: 'Contract Logic', visible: hasPermission(user?.role_id || '', 'settings:view_incentives') && !!currentOutlet, icon: Award },
       { id: 'shortcuts', label: 'Executive Hotkeys', visible: hasPermission(user?.role_id || '', 'settings:view_shortcuts'), icon: Keyboard },
       { id: 'documents', label: 'Audit Templates', visible: hasPermission(user?.role_id || '', 'settings:view_documents'), icon: FileCode },
-      { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_outlets'), icon: Timer },
-      { id: 'massage_rooms', label: 'Massage Rooms', visible: isSuper, icon: Store },
+      { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_outlets') && !!currentProperty, icon: Timer },
+      { id: 'massage_rooms', label: 'Massage Rooms', visible: isSuper && !!currentProperty, icon: Store },
     ].filter(t => t.visible);
-  }, [user, roles, hasPermission]);
+  }, [user, roles, hasPermission, currentProperty, currentOutlet]);
 
   const [activeTab, setActiveTab] = useState<TabId>(availableTabs[0]?.id as TabId || 'company');
 
   useEffect(() => {
-    if (availableTabs.length > 0 && !availableTabs.find(t => t.id === activeTab)) {
-        setActiveTab(availableTabs[0].id as TabId);
+    if (!availableTabs.find(t => t.id === activeTab)) {
+      setActiveTab(availableTabs[0]?.id as TabId || 'company');
     }
   }, [availableTabs, activeTab]);
 
@@ -296,12 +296,14 @@ const SettingsPage = () => {
   const [massageRooms, setMassageRooms] = useState<MassageRoom[]>([]);
 
   useEffect(() => {
-    if (currentProperty) {
-      db.getMassageRooms(currentProperty.id).then(setMassageRooms);
+    if (currentOutlet) {
+      db.getMassageRooms(currentOutlet.id).then(setMassageRooms);
+    } else if (currentProperty) {
+      db.getMassageRooms(undefined, currentProperty.id).then(setMassageRooms);
     } else {
       db.getMassageRooms().then(setMassageRooms);
     }
-  }, [currentProperty]);
+  }, [currentOutlet, currentProperty]);
 
   const navItems = useMemo(() => [
     { id: 'dashboard', label: 'Dashboard' },
@@ -334,7 +336,7 @@ const SettingsPage = () => {
     address: '',
     signatory_config: {}
   });
-  const [roomForm, setRoomForm] = useState<Omit<MassageRoom, 'id'>>({ property_id: '', name: '', number: '', is_active: true });
+  const [roomForm, setRoomForm] = useState<Omit<MassageRoom, 'id'>>({ property_id: '', outlet_id: '', name: '', number: '', is_active: true });
   const [outletForm, setOutletForm] = useState<Omit<Outlet, 'id'>>({ 
     name: '', 
     property_id: '', 
@@ -440,15 +442,16 @@ const SettingsPage = () => {
     }
     setIsSaving(true);
     try {
+      const roomData = { ...roomForm, outlet_id: currentOutlet?.id || roomForm.outlet_id, property_id: currentOutlet?.property_id || roomForm.property_id };
       if (editingId) {
-          await db.updateMassageRoom(editingId, roomForm);
-          setMassageRooms(prev => prev.map(r => r.id === editingId ? { ...r, ...roomForm } as MassageRoom : r));
+          await db.updateMassageRoom(editingId, roomData);
+          setMassageRooms(prev => prev.map(r => r.id === editingId ? { ...r, ...roomData } as MassageRoom : r));
       } else {
-          const newRoom = await db.addMassageRoom(roomForm);
+          const newRoom = await db.addMassageRoom(roomData);
           if (newRoom && newRoom[0]) {
               setMassageRooms(prev => [...prev, newRoom[0]]);
           } else {
-              const updatedRooms = await db.getMassageRooms(currentProperty?.id);
+              const updatedRooms = await db.getMassageRooms(currentOutlet?.id, currentProperty?.id);
               setMassageRooms(updatedRooms);
           }
       }
@@ -662,9 +665,22 @@ const SettingsPage = () => {
                       <div>
                         <h3 className="text-sm font-black text-slate-900">{room.name}</h3>
                         <p className="text-xs text-slate-500">Room #{room.number}</p>
+                        <p className="text-[10px] font-bold text-indigo-600 uppercase mt-1">
+                          {outlets.find(o => o.id === room.outlet_id)?.name || 'No Outlet'}
+                        </p>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => { /* edit */ }}>
+                        <Button variant="ghost" size="sm" onClick={() => { 
+                          setEditingId(room.id);
+                          setRoomForm({
+                            property_id: room.property_id,
+                            outlet_id: room.outlet_id,
+                            name: room.name,
+                            number: room.number,
+                            is_active: room.is_active
+                          });
+                          setShowForm(true);
+                        }}>
                           <Edit2 className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => setItemToDelete({ type: 'massage_room', id: room.id, name: room.name })}>
@@ -733,7 +749,9 @@ const SettingsPage = () => {
                       <CardContent className="p-0">
                           <table className="w-full text-left">
                               <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Facility Designation</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Property Link</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
-                              <tbody className="divide-y divide-slate-100">{outlets.map(o => (
+                              <tbody className="divide-y divide-slate-100">{outlets
+                                  .filter(o => !currentProperty || o.property_id === currentProperty.id)
+                                  .map(o => (
                                   <tr key={o.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase">{o.name}</div></td>
                                       <td className="px-10 py-8"><span className="bg-indigo-50 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-indigo-600 border border-indigo-100">{properties.find(p=>p.id===o.property_id)?.name || 'Detached'}</span></td>
@@ -997,7 +1015,19 @@ const SettingsPage = () => {
                       )}
                       {activeTab === 'massage_rooms' && (
                         <div className="space-y-6">
-                            <Select label="Linked Property Portfolio *" options={[{value:'', label:'Select Property...'}, ...properties.map(p=>({value:p.id, label:p.name}))]} value={roomForm.property_id} onChange={e => setRoomForm({...roomForm, property_id: e.target.value})} className="h-14 rounded-xl" />
+                            <Select 
+                              label="Linked Facility Outlet *" 
+                              options={[
+                                {value:'', label:'Select Outlet...'}, 
+                                ...outlets
+                                  .filter(o => !currentProperty || o.property_id === currentProperty.id)
+                                  .map(o=>({value:o.id, label:o.name}))
+                              ]} 
+                              value={roomForm.outlet_id} 
+                              onChange={e => {
+                                const selectedOutlet = outlets.find(o => o.id === e.target.value);
+                                setRoomForm({...roomForm, outlet_id: e.target.value, property_id: selectedOutlet?.property_id || ''});
+                            }} className="h-14 rounded-xl" />
                             <Input label="Room Name *" value={roomForm.name} onChange={e => setRoomForm({...roomForm, name: e.target.value})} className="h-14 rounded-xl" />
                             <Input label="Room Number *" value={roomForm.number} onChange={e => setRoomForm({...roomForm, number: e.target.value})} className="h-14 rounded-xl" />
                             <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">

@@ -68,6 +68,7 @@ export interface StaffLeave {
 export interface MassageRoom {
   id: string;
   property_id: string;
+  outlet_id: string;
   name: string;
   number: string;
   is_active: boolean;

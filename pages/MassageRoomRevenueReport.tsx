@@ -27,7 +27,7 @@ const MassageRoomRevenueReport = ({ isEmbedded, embeddedMonth }: MassageRoomReve
     if (!currentOutlet) return;
     Promise.all([
       db.getMassageBookings(currentOutlet.id, false),
-      db.getMassageRooms()
+      db.getMassageRooms(currentOutlet.id)
     ]).then(([bookingsData, roomsData]) => {
       setBookings(bookingsData);
       setRooms(roomsData);
