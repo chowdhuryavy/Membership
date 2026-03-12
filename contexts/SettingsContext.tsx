@@ -129,7 +129,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // If the admin has defined a set of "Enabled Features", only those are visible to non-admins.
     // If the list is empty, all features are enabled by default (following role permissions).
     if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
-        if (!settings.restricted_permissions.includes(permission)) {
+        // We only apply the whitelist to permissions that are managed in the "Global Feature Control" UI
+        // (Settings and Security groups). Other features (Members, Sales, etc.) follow normal role logic.
+        const isManagedInUI = permission.startsWith('settings:') || 
+                             permission.startsWith('users:') || 
+                             permission.startsWith('logs:');
+                             
+        if (isManagedInUI && !settings.restricted_permissions.includes(permission)) {
             return false;
         }
     }
