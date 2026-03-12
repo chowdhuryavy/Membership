@@ -149,7 +149,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions';
 
 const SignatoryConfig = ({
   config = {},
@@ -269,6 +269,7 @@ const SettingsPage = () => {
       { id: 'outlets', label: 'Asset Contexts', visible: isSuper, icon: Store },
       { id: 'currency', label: 'Monetary Standards', visible: isSuper, icon: Globe },
       { id: 'navigation', label: 'UI Architecture', visible: isSuper, icon: ListOrdered },
+      { id: 'functions', label: 'Feature Visibility', visible: isSuper, icon: ShieldAlert },
       { id: 'maintenance', label: 'Maintenance', visible: isSuper, icon: Zap },
       
       // Accessible to others with permission
@@ -922,6 +923,46 @@ const SettingsPage = () => {
 
               {activeTab === 'booking' && (
                   <BookingSettings />
+              )}
+
+              {activeTab === 'functions' && (
+                  <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
+                          <div className="flex items-center gap-5">
+                              <ShieldAlert className="w-8 h-8 text-indigo-600" />
+                              <div>
+                                  <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Feature Visibility Control</CardTitle>
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Define restricted functions accessible only to Super Admins</p>
+                              </div>
+                          </div>
+                      </CardHeader>
+                      <CardContent className="p-8">
+                          <div className="bg-amber-50 border border-amber-100 p-6 rounded-3xl mb-8 flex items-start gap-4">
+                              <Info className="w-6 h-6 text-amber-600 shrink-0 mt-1" />
+                              <div className="space-y-1">
+                                  <p className="text-xs font-black text-amber-900 uppercase">Super Admin Override Protocol</p>
+                                  <p className="text-[10px] font-bold text-amber-700 uppercase leading-relaxed">
+                                      Selected features below will be completely hidden from all non-superadmin users (including regular admins). 
+                                      This allows you to simplify the interface for normal staff while retaining full control.
+                                  </p>
+                              </div>
+                          </div>
+                          <PermissionMatrix 
+                              registry={permissionRegistry} 
+                              selectedPermissions={(settings?.restricted_permissions || []) as Permission[]} 
+                              onChange={async (perms) => {
+                                  try {
+                                      const updatedSettings = { ...settings!, restricted_permissions: perms };
+                                      await db.updateSettings(updatedSettings);
+                                      await refreshSettings();
+                                      showStatus('Feature visibility updated successfully.', 'success');
+                                  } catch (e: any) {
+                                      showStatus('Failed to update feature visibility: ' + e.message, 'error');
+                                  }
+                              }} 
+                          />
+                      </CardContent>
+                  </Card>
               )}
 
               {activeTab === 'maintenance' && (

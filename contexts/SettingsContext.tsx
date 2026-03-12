@@ -125,6 +125,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Only the specific Super Admin email has full system clearance.
     if (isSuperAdmin) return true;
 
+    // 2. FEATURE VISIBILITY RESTRICTIONS (Super Admin Controlled)
+    // If a permission is restricted, only superadmins can access it.
+    if (settings?.restricted_permissions?.includes(permission)) {
+        return false;
+    }
+
     // 1.5. LEGACY ADMIN BYPASS
     // Restore the ability for the 'admin' role to have all permissions by default.
     if (normalizedRoleId === 'admin' || normalizedRoleId === 'system_admin') return true;

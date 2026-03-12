@@ -138,6 +138,7 @@ export interface CompanySettings {
   keyboard_shortcuts?: Record<string, string>;
   contract_template?: string; 
   navigation_order?: string[];
+  restricted_permissions?: string[];
   conditions?: string;
 }
 
