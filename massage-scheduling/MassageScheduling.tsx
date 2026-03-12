@@ -46,7 +46,8 @@ import {
   Terminal,
   ClipboardCheck,
   Database,
-  ShieldAlert
+  ShieldAlert,
+  MapPin
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { 
@@ -56,7 +57,8 @@ import {
   MassageType,
   Sale,
   Member,
-  InventoryItem
+  InventoryItem,
+  MassageRoom
 } from '../types';
 import { format, addDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
@@ -255,11 +257,13 @@ const MassageScheduling = () => {
   const [treatmentType, setTreatmentType] = useState<'Massage' | 'Personal Training'>('Massage');
   const [viewDate, setViewDate] = useState(new Date());
   const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
+  const [viewMode, setViewMode] = useState<'therapists' | 'rooms'>('therapists');
   
   const [bookings, setBookings] = useState<MassageBooking[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [massageTypes, setMassageTypes] = useState<MassageType[]>([]);
+  const [massageRooms, setMassageRooms] = useState<MassageRoom[]>([]);
   
   const filteredTreatments = useMemo(() => {
       return massageTypes.filter(mt => mt.category === treatmentType);
@@ -287,6 +291,8 @@ const MassageScheduling = () => {
   const [isTableMissing, setIsTableMissing] = useState(false);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [completingBookingId, setCompletingBookingId] = useState<string | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<string>('');
 
   const inventoryFormState = useMemo(() => ({
       showForm: showInventoryForm,
@@ -355,6 +361,7 @@ ALTER TABLE IF EXISTS public.staff ADD COLUMN IF NOT EXISTS leave_end_date TEXT;
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS property_id TEXT;
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS outlet_id TEXT;
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS inventory_item_id TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS room_id TEXT;
 
 -- outlets
 ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS booking_enabled BOOLEAN DEFAULT true;
@@ -399,6 +406,7 @@ CREATE TABLE IF NOT EXISTS public.massage_bookings (
     outlet_id TEXT,
     guest_id TEXT,
     therapist_id TEXT,
+    room_id TEXT,
     massage_type_id TEXT,
     inventory_item_id TEXT,
     date TEXT NOT NULL,
@@ -539,11 +547,12 @@ NOTIFY pgrst, 'reload schema';`}
         db.getTherapists(scopeId, isProperty, limitToIds),
         db.getMassageTypes(scopeId, isProperty, limitToIds),
         db.getMembers(scopeId, isProperty, limitToIds),
-        db.getInventory(scopeId, isProperty, limitToIds)
+        db.getInventory(scopeId, isProperty, limitToIds),
+        db.getMassageRooms(currentProperty.id)
       ]);
 
       const errors = results
-        .map((r, idx) => r.status === 'rejected' ? { name: ['Bookings', 'Guests', 'Therapists', 'Treatments', 'Members', 'Inventory'][idx], reason: r.reason } : null)
+        .map((r, idx) => r.status === 'rejected' ? { name: ['Bookings', 'Guests', 'Therapists', 'Treatments', 'Members', 'Inventory', 'Rooms'][idx], reason: r.reason } : null)
         .filter(Boolean);
 
       if (errors.length > 0) {
@@ -566,10 +575,12 @@ NOTIFY pgrst, 'reload schema';`}
       const m = (results[3] as PromiseFulfilledResult<MassageType[]>).value || [];
       const mems = (results[4] as PromiseFulfilledResult<Member[]>).value || [];
       const inv = (results[5] as PromiseFulfilledResult<InventoryItem[]>).value || [];
+      const rooms = (results[6] as PromiseFulfilledResult<MassageRoom[]>).value || [];
 
       setBookings(b);
       setGuests(g);
       setTherapists(t.sort((x, y) => x.name.localeCompare(y.name)));
+      setMassageRooms(rooms);
       
       const ptItems = inv.filter(i => i.category === 'Personal Training').map(i => ({
           id: i.id,
@@ -614,10 +625,10 @@ NOTIFY pgrst, 'reload schema';`}
       return guests.filter(g => bookings.some(b => b.guest_id === g.id && b.outlet_id === currentOutlet?.id));
   }, [guests, bookings, viewScope, currentOutlet]);
 
-  const handleUpdateStatus = async (id: string, status: MassageBooking['status']) => {
+  const handleUpdateStatus = async (id: string, status: MassageBooking['status'], roomId?: string) => {
     if (!canEdit) return;
     try {
-      await db.updateMassageBookingStatus(id, status);
+      await db.updateMassageBookingStatus(id, status, roomId);
       setSelectedBooking(null);
       loadData();
     } catch (e: any) {
@@ -822,9 +833,20 @@ NOTIFY pgrst, 'reload schema';`}
               </div>
               <button onClick={() => setViewDate(addDays(viewDate, 1))} className="p-2 hover:bg-slate-50 rounded-xl border border-slate-100 transition-colors"><ChevronRight className="w-5 h-5 text-slate-400"/></button>
             </div>
-            <div className="relative flex-1 sm:w-64">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input placeholder="Filter roster..." value={therapistFilter} onChange={(e) => setTherapistFilter(e.target.value)} className="h-11 w-full pl-11 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold" />
+            
+            <div className="flex items-center gap-4 w-full sm:w-auto">
+              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                  <button onClick={() => setViewMode('therapists')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${viewMode === 'therapists' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                      <Users2 className="w-3 h-3" /> Specialists
+                  </button>
+                  <button onClick={() => setViewMode('rooms')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${viewMode === 'rooms' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                      <MapPin className="w-3 h-3" /> Rooms
+                  </button>
+              </div>
+              <div className="relative flex-1 sm:w-64">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input placeholder={viewMode === 'therapists' ? "Filter roster..." : "Filter rooms..."} value={therapistFilter} onChange={(e) => setTherapistFilter(e.target.value)} className="h-11 w-full pl-11 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold" />
+              </div>
             </div>
           </div>
 
@@ -842,48 +864,98 @@ NOTIFY pgrst, 'reload schema';`}
                 <div className="flex flex-1 relative bg-slate-50/30">
                     {/* Current Time Indicator Line (Optional - can be added later with real-time updates) */}
                     
-                    {therapists.filter(t => !therapistFilter || t.name.toLowerCase().includes(therapistFilter.toLowerCase())).map((therapist, idx) => {
-                      const therapistBookings = filteredTodayBookings.filter(b => b.therapist_id === therapist.id);
-                      return (
-                        <div key={therapist.id} className={`flex-1 border-r border-slate-100 relative min-w-[180px] hover:bg-white transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}>
-                          <div className="h-14 bg-white border-b border-slate-100 flex flex-col items-center justify-center sticky top-0 z-10 px-2 shadow-sm">
-                            <span className="text-xs font-black text-slate-800 uppercase truncate w-full text-center tracking-tight">{therapist.name}</span>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate w-full text-center mt-0.5">{therapist.specialty || 'Specialist'}</span>
-                          </div>
-                          {HOURS.map(hour => <div key={hour} style={{ height: SLOT_HEIGHT }} className="border-b border-slate-100 group hover:border-indigo-100 transition-colors relative">
-                              <div className="absolute inset-0 group-hover:bg-indigo-50/10 pointer-events-none"></div>
-                          </div>)}
-                          {therapistBookings.map(booking => {
-                            const { top, height } = calculatePosition(booking.start_time, booking.end_time);
-                            const type = massageTypes.find(m => m.id === (booking.massage_type_id || booking.inventory_item_id));
-                            return (
-                              <button 
-                                key={booking.id} 
-                                onClick={() => setSelectedBooking(booking)} 
-                                style={{ top: top + 56, height: height - 2 }} 
-                                className={`absolute left-1.5 right-1.5 p-2.5 rounded-xl border-l-[3px] text-left shadow-sm transition-all hover:z-20 overflow-hidden group hover:scale-[1.02] hover:shadow-md ${getStatusStyles(booking.status)}`}
-                              >
-                                <div className="flex flex-col h-full justify-between">
+                    {viewMode === 'therapists' ? (
+                      <>
+                        {therapists.filter(t => !therapistFilter || t.name.toLowerCase().includes(therapistFilter.toLowerCase())).map((therapist, idx) => {
+                          const therapistBookings = filteredTodayBookings.filter(b => b.therapist_id === therapist.id);
+                          return (
+                            <div key={therapist.id} className={`flex-1 border-r border-slate-100 relative min-w-[180px] hover:bg-white transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}>
+                              <div className="h-14 bg-white border-b border-slate-100 flex flex-col items-center justify-center sticky top-0 z-10 px-2 shadow-sm">
+                                <span className="text-xs font-black text-slate-800 uppercase truncate w-full text-center tracking-tight">{therapist.name}</span>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate w-full text-center mt-0.5">{therapist.specialty || 'Specialist'}</span>
+                              </div>
+                              {HOURS.map(hour => <div key={hour} style={{ height: SLOT_HEIGHT }} className="border-b border-slate-100 group hover:border-indigo-100 transition-colors relative">
+                                  <div className="absolute inset-0 group-hover:bg-indigo-50/10 pointer-events-none"></div>
+                              </div>)}
+                              {therapistBookings.map(booking => {
+                                const { top, height } = calculatePosition(booking.start_time, booking.end_time);
+                                const type = massageTypes.find(m => m.id === (booking.massage_type_id || booking.inventory_item_id));
+                                const room = massageRooms.find(r => r.id === booking.room_id);
+                                return (
+                                  <button 
+                                    key={booking.id} 
+                                    onClick={() => setSelectedBooking(booking)} 
+                                    style={{ top: top + 56, height: height - 2 }} 
+                                    className={`absolute left-1.5 right-1.5 p-2.5 rounded-xl border-l-[3px] text-left shadow-sm transition-all hover:z-20 overflow-hidden group hover:scale-[1.02] hover:shadow-md flex flex-col justify-between ${getStatusStyles(booking.status)}`}
+                                  >
                                     <div>
                                         <div className="text-[10px] font-black uppercase leading-tight truncate tracking-tight">{guests.find(g => g.id === booking.guest_id)?.name || 'Guest'}</div>
                                         <div className="text-[9px] font-bold opacity-70 uppercase tracking-widest mt-0.5 truncate">{type?.name || 'Service'}</div>
+                                        {room && <div className="text-[8px] font-black opacity-80 uppercase tracking-widest mt-0.5 truncate flex items-center gap-1"><MapPin className="w-2 h-2" /> {room.name}</div>}
                                     </div>
-                                    {height > 40 && (
-                                        <div className="text-[8px] font-black opacity-60 uppercase tracking-widest flex items-center gap-1">
+                                    {height > 60 && (
+                                        <div className="text-[8px] font-black opacity-60 uppercase tracking-widest flex items-center gap-1 mt-1">
                                             <Clock className="w-2.5 h-2.5" /> {booking.start_time} - {booking.end_time}
                                         </div>
                                     )}
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
-                    {therapists.length === 0 && (
-                        <div className="flex-1 p-12 text-center text-slate-400 uppercase text-[10px] font-black tracking-widest bg-white">
-                            No active specialists registered for this scope.
-                        </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                        {therapists.length === 0 && (
+                            <div className="flex-1 p-12 text-center text-slate-400 uppercase text-[10px] font-black tracking-widest bg-white">
+                                No active specialists registered for this scope.
+                            </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {massageRooms.filter(r => !therapistFilter || r.name.toLowerCase().includes(therapistFilter.toLowerCase())).map((room, idx) => {
+                          const roomBookings = filteredTodayBookings.filter(b => b.room_id === room.id);
+                          return (
+                            <div key={room.id} className={`flex-1 border-r border-slate-100 relative min-w-[180px] hover:bg-white transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}>
+                              <div className="h-14 bg-white border-b border-slate-100 flex flex-col items-center justify-center sticky top-0 z-10 px-2 shadow-sm">
+                                <span className="text-xs font-black text-slate-800 uppercase truncate w-full text-center tracking-tight">{room.name}</span>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate w-full text-center mt-0.5">{room.number ? `Room ${room.number}` : 'Room'}</span>
+                              </div>
+                              {HOURS.map(hour => <div key={hour} style={{ height: SLOT_HEIGHT }} className="border-b border-slate-100 group hover:border-indigo-100 transition-colors relative">
+                                  <div className="absolute inset-0 group-hover:bg-indigo-50/10 pointer-events-none"></div>
+                              </div>)}
+                              {roomBookings.map(booking => {
+                                const { top, height } = calculatePosition(booking.start_time, booking.end_time);
+                                const type = massageTypes.find(m => m.id === (booking.massage_type_id || booking.inventory_item_id));
+                                const therapist = therapists.find(t => t.id === booking.therapist_id);
+                                return (
+                                  <button 
+                                    key={booking.id} 
+                                    onClick={() => setSelectedBooking(booking)} 
+                                    style={{ top: top + 56, height: height - 2 }} 
+                                    className={`absolute left-1.5 right-1.5 p-2.5 rounded-xl border-l-[3px] text-left shadow-sm transition-all hover:z-20 overflow-hidden group hover:scale-[1.02] hover:shadow-md flex flex-col justify-between ${getStatusStyles(booking.status)}`}
+                                  >
+                                    <div>
+                                        <div className="text-[10px] font-black uppercase leading-tight truncate tracking-tight">{guests.find(g => g.id === booking.guest_id)?.name || 'Guest'}</div>
+                                        <div className="text-[9px] font-bold opacity-70 uppercase tracking-widest mt-0.5 truncate">{type?.name || 'Service'}</div>
+                                        {therapist && <div className="text-[8px] font-black opacity-80 uppercase tracking-widest mt-0.5 truncate flex items-center gap-1"><Users2 className="w-2 h-2" /> {therapist.name}</div>}
+                                    </div>
+                                    {height > 60 && (
+                                        <div className="text-[8px] font-black opacity-60 uppercase tracking-widest flex items-center gap-1 mt-1">
+                                            <Clock className="w-2.5 h-2.5" /> {booking.start_time} - {booking.end_time}
+                                        </div>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                        {massageRooms.length === 0 && (
+                            <div className="flex-1 p-12 text-center text-slate-400 uppercase text-[10px] font-black tracking-widest bg-white">
+                                No active rooms registered for this scope.
+                            </div>
+                        )}
+                      </>
                     )}
                 </div>
               </div>
@@ -1197,7 +1269,23 @@ NOTIFY pgrst, 'reload schema';`}
                     <div className="flex flex-col gap-3">
                         {selectedBooking.status === 'confirmed' && canEdit && (
                             <>
-                                <button onClick={() => handleUpdateStatus(selectedBooking.id, 'completed')} className="w-full h-11 rounded-xl bg-emerald-600 text-white font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95"><CheckCircle className="w-4 h-4" /> Served</button>
+                                {completingBookingId === selectedBooking.id ? (
+                                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 mt-2 space-y-3">
+                                        <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest block">Confirm Room</label>
+                                        <Select value={selectedRoomId} onChange={e => setSelectedRoomId(e.target.value)} className="h-11 rounded-xl font-bold text-xs">
+                                            <option value="">Select Room</option>
+                                            {massageRooms.filter(r => r.is_active || r.id === selectedBooking.room_id).map(r => (
+                                                <option key={r.id} value={r.id}>{r.name} {r.number ? `(${r.number})` : ''}</option>
+                                            ))}
+                                        </Select>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setCompletingBookingId(null)} className="flex-1 h-11 rounded-xl border border-slate-200 text-slate-600 font-black text-[10px] uppercase hover:bg-slate-100 transition-colors">Cancel</button>
+                                            <button onClick={() => { handleUpdateStatus(selectedBooking.id, 'completed', selectedRoomId); setCompletingBookingId(null); }} className="flex-1 h-11 rounded-xl bg-emerald-600 text-white font-black text-[10px] uppercase hover:bg-emerald-700 transition-colors">Confirm</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button onClick={() => { setCompletingBookingId(selectedBooking.id); setSelectedRoomId(selectedBooking.room_id || ''); }} className="w-full h-11 rounded-xl bg-emerald-600 text-white font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95"><CheckCircle className="w-4 h-4" /> Served</button>
+                                )}
                                 <button onClick={() => { setEditingBooking(selectedBooking); setShowBookingForm(true); setSelectedBooking(null); }} className="w-full h-11 rounded-xl border-2 border-indigo-100 text-indigo-600 font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-indigo-50"><Settings2 className="w-4 h-4" /> Reschedule / Modify</button>
                                 <button onClick={() => handleUpdateStatus(selectedBooking.id, 'no-show')} className="w-full h-11 rounded-xl border-2 border-slate-100 text-slate-600 font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50"><UserX className="w-4 h-4" /> No-Show</button>
                             </>
@@ -1232,6 +1320,7 @@ NOTIFY pgrst, 'reload schema';`}
             existingBookings={bookings}
             guests={guests}
             members={members}
+            massageRooms={massageRooms}
             initialBooking={editingBooking || undefined}
           />
       )}

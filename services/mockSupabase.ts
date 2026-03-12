@@ -756,9 +756,13 @@ class DatabaseService {
     }
   }
 
-  async getMassageRooms(): Promise<MassageRoom[]> {
+  async getMassageRooms(propertyId?: string): Promise<MassageRoom[]> {
     if (this.isSupabase()) {
-      const { data } = await supabase.from('massage_rooms').select('*');
+      let query = supabase.from('massage_rooms').select('*');
+      if (propertyId) {
+          query = query.eq('property_id', propertyId);
+      }
+      const { data } = await query;
       return (data || []) as MassageRoom[];
     }
     return [];
@@ -1218,12 +1222,15 @@ class DatabaseService {
     }
   }
 
-  async updateMassageBookingStatus(id: string, status: MassageBooking['status']) {
+  async updateMassageBookingStatus(id: string, status: MassageBooking['status'], roomId?: string) {
     if (this.isSupabase()) {
       const { data: booking } = await supabase.from('massage_bookings').select('*').eq('id', id).single();
       if (!booking) return;
 
-      const { error } = await supabase.from('massage_bookings').update({ status }).eq('id', id);
+      const updates: any = { status };
+      if (roomId) updates.room_id = roomId;
+
+      const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
       if (error) throw error;
 
       // If status changed FROM completed TO something else, delete the associated sale

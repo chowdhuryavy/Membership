@@ -24,7 +24,8 @@ import {
   Search,
   UserPlus,
   Percent,
-  Coins
+  Coins,
+  MapPin
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { 
@@ -32,7 +33,8 @@ import {
   MassageType, 
   MassageBooking, 
   Guest,
-  Member
+  Member,
+  MassageRoom
 } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -47,6 +49,7 @@ interface BookingFormProps {
   existingBookings: MassageBooking[];
   guests: Guest[];
   members?: Member[];
+  massageRooms?: MassageRoom[];
   initialBooking?: MassageBooking;
 }
 
@@ -59,6 +62,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
   existingBookings,
   guests,
   members = [],
+  massageRooms = [],
   initialBooking
 }) => {
   const { user } = useAuth();
@@ -71,6 +75,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
     massage_type_id: '',
     additional_service_ids: [] as string[],
     therapist_id: '',
+    room_id: '',
     date: new Date().toISOString().split('T')[0],
     start_time: '10:00',
     end_time: '11:00',
@@ -90,6 +95,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
         massage_type_id: initialBooking.massage_type_id || initialBooking.inventory_item_id || '',
         additional_service_ids: initialBooking.additional_service_ids || [],
         therapist_id: initialBooking.therapist_id,
+        room_id: initialBooking.room_id || '',
         date: initialBooking.date,
         start_time: initialBooking.start_time,
         end_time: initialBooking.end_time,
@@ -194,6 +200,16 @@ const BookingForm: React.FC<BookingFormProps> = ({
     });
   }, [therapists, existingBookings, bookingData.date, bookingData.start_time, bookingData.end_time, initialBooking]);
 
+  const availableRooms = useMemo(() => {
+    return massageRooms.filter(r => {
+      const isBooked = existingBookings.some(b => 
+        b.id !== initialBooking?.id && b.room_id === r.id && b.date === bookingData.date && b.status !== 'cancelled' &&
+        !(bookingData.end_time <= b.start_time || bookingData.start_time >= b.end_time)
+      );
+      return !isBooked && r.is_active;
+    });
+  }, [massageRooms, existingBookings, bookingData.date, bookingData.start_time, bookingData.end_time, initialBooking]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentProperty || !currentOutlet || !bookingData.massage_type_id) {
@@ -201,8 +217,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
        return;
     }
     setError('');
-    if (!guestData.name || !guestData.phone || !bookingData.therapist_id) {
-      setError("Required fields: Name, Phone, and Therapist Assignment.");
+    if (!guestData.name || !guestData.phone || !bookingData.therapist_id || !bookingData.room_id) {
+      setError("Required fields: Name, Phone, Therapist Assignment, and Room.");
       return;
     }
     setLoading(true);
@@ -240,6 +256,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
       const payload: any = {
         guest_id: guest.id,
         therapist_id: bookingData.therapist_id,
+        room_id: bookingData.room_id,
         date: bookingData.date,
         start_time: bookingData.start_time,
         end_time: bookingData.end_time,
@@ -263,7 +280,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
       }
       onSuccess();
     } catch (err: any) { 
-        if (err.message?.includes('schema cache') || err.message?.includes('inventory_item_id')) {
+        if (err.message?.includes('schema cache') || err.message?.includes('inventory_item_id') || err.message?.includes('room_id')) {
             setError("Database schema needs updating. Please close this form and refresh the page to see the required SQL script.");
         } else {
             setError(err.message || "Operation failed."); 
@@ -443,6 +460,21 @@ const BookingForm: React.FC<BookingFormProps> = ({
                           <button key={t.id} type="button" onClick={() => setBookingData({...bookingData, therapist_id: t.id})} className={`p-3 rounded-xl border text-[9px] font-black uppercase transition-all flex flex-col items-center gap-0.5 ${bookingData.therapist_id === t.id ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : isAvailable ? 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300' : 'bg-slate-50 text-slate-300 opacity-60 cursor-not-allowed'}`} disabled={!isAvailable && user?.role_id?.toLowerCase() !== 'admin'}>
                             <span className="truncate w-full text-center">{t.name}</span>
                             <span className="text-[7px] opacity-80">{t.country}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-900 uppercase tracking-widest ml-1 flex items-center gap-2"><MapPin className="w-3 h-3 text-indigo-600"/> Assigned Room *</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {massageRooms.filter(r => r.is_active || r.id === bookingData.room_id).map(r => {
+                        const isAvailable = availableRooms.some(ar => ar.id === r.id);
+                        return (
+                          <button key={r.id} type="button" onClick={() => setBookingData({...bookingData, room_id: r.id})} className={`p-3 rounded-xl border text-[9px] font-black uppercase transition-all flex flex-col items-center gap-0.5 ${bookingData.room_id === r.id ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : isAvailable ? 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300' : 'bg-slate-50 text-slate-300 opacity-60 cursor-not-allowed'}`} disabled={!isAvailable && user?.role_id?.toLowerCase() !== 'admin'}>
+                            <span className="truncate w-full text-center">{r.name}</span>
+                            <span className="text-[7px] opacity-80">{r.number ? `Room ${r.number}` : 'No Number'}</span>
                           </button>
                         );
                       })}

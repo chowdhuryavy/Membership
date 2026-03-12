@@ -296,8 +296,12 @@ const SettingsPage = () => {
   const [massageRooms, setMassageRooms] = useState<MassageRoom[]>([]);
 
   useEffect(() => {
-    db.getMassageRooms().then(setMassageRooms);
-  }, []);
+    if (currentProperty) {
+      db.getMassageRooms(currentProperty.id).then(setMassageRooms);
+    } else {
+      db.getMassageRooms().then(setMassageRooms);
+    }
+  }, [currentProperty]);
 
   const navItems = useMemo(() => [
     { id: 'dashboard', label: 'Dashboard' },
@@ -436,8 +440,18 @@ const SettingsPage = () => {
     }
     setIsSaving(true);
     try {
-      if (editingId) await db.updateMassageRoom(editingId, roomForm);
-      else await db.addMassageRoom(roomForm);
+      if (editingId) {
+          await db.updateMassageRoom(editingId, roomForm);
+          setMassageRooms(prev => prev.map(r => r.id === editingId ? { ...r, ...roomForm } as MassageRoom : r));
+      } else {
+          const newRoom = await db.addMassageRoom(roomForm);
+          if (newRoom && newRoom[0]) {
+              setMassageRooms(prev => [...prev, newRoom[0]]);
+          } else {
+              const updatedRooms = await db.getMassageRooms(currentProperty?.id);
+              setMassageRooms(updatedRooms);
+          }
+      }
       await refreshSettings();
       setShowForm(false);
       showStatus('Massage Room Record Updated.');
@@ -581,6 +595,10 @@ const SettingsPage = () => {
       else if (itemToDelete.type === 'outlet') await db.deleteOutlet(itemToDelete.id);
       else if (itemToDelete.type === 'role') await db.deleteRole(itemToDelete.id);
       else if (itemToDelete.type === 'currency') await db.deleteCurrency(itemToDelete.id);
+      else if (itemToDelete.type === 'massage_room') {
+          await db.deleteMassageRoom(itemToDelete.id);
+          setMassageRooms(prev => prev.filter(r => r.id !== itemToDelete.id));
+      }
       
       await loadData(); 
       await refreshSettings();
