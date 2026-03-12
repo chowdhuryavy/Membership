@@ -43,11 +43,14 @@ const memberSchema = z.object({
   membership_type: z.enum(['New', 'Renew']),
   spouse_name: z.string().optional().nullable(),
   spouse_dob: z.string().optional().nullable(),
+  spouse_id_card_url: z.string().optional().nullable(),
   kids: z.array(z.object({
     name: z.string().min(1, "Name required"),
-    dob: z.string().min(1, "DOB required")
+    dob: z.string().min(1, "DOB required"),
+    id_card_url: z.string().optional().nullable()
   })).optional().nullable(),
   remarks: z.string().optional().nullable(),
+  id_card_url: z.string().optional().nullable(),
 });
 
 type MemberFormValues = z.infer<typeof memberSchema>;
@@ -70,6 +73,22 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [matchedMembers, setMatchedMembers] = useState<Member[]>([]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Accept image/* and application/pdf
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      alert('Only images and PDFs are allowed.');
+      return;
+    }
+    // Simulate upload by converting to base64
+    const reader = new FileReader();
+    reader.onloadend = () => {
+        setValue(fieldName as any, reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const calculateDefaultStartDate = (expiryDateStr: string) => {
     const expiry = parseISO(expiryDateStr);
@@ -396,6 +415,10 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                     </div>
                 </div>
                 <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">ID Card Upload</label>
+                    <input type="file" onChange={(e) => handleFileUpload(e, 'id_card_url')} className="w-full h-14 p-3 rounded-2xl bg-white border border-slate-200 text-sm" />
+                </div>
+                <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Date of Birth</label>
                     <div className="relative group">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
@@ -463,6 +486,10 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                 <input type="date" {...register('spouse_dob')} className="w-full h-14 pl-14 pr-12 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm uppercase" />
                             </div>
                         </div>
+                        <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Spouse ID Card Upload</label>
+                            <input type="file" onChange={(e) => handleFileUpload(e, 'spouse_id_card_url')} className="w-full h-14 p-3 rounded-2xl bg-white border border-slate-200 text-sm" />
+                        </div>
                     </>
                 )}
 
@@ -498,6 +525,10 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                         <input type="date" {...register(`kids.${index}.dob` as const)} className="w-full h-12 pl-14 pr-12 rounded-xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm uppercase" />
                                     </div>
                                     {errors.kids?.[index]?.dob && <p className="text-[10px] text-red-500 font-bold ml-1">{errors.kids[index]?.dob?.message}</p>}
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">ID Card Upload</label>
+                                    <input type="file" onChange={(e) => handleFileUpload(e, `kids.${index}.id_card_url` as const)} className="w-full h-12 p-3 rounded-xl bg-white border border-slate-200 text-sm" />
                                 </div>
                             </div>
                         ))}

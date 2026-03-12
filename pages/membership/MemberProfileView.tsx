@@ -599,6 +599,34 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                 </Card>
               )}
 
+              {/* Identity Documents Section */}
+              <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl p-10 bg-white overflow-hidden relative group">
+                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 mb-8 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500 shadow-sm border border-indigo-100"><FileText className="w-5 h-5" /></div>
+                    Identity Documents
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    {viewingMember.id_card_url && (
+                        <div className="p-4 border rounded-2xl bg-slate-50">
+                            <p className="text-[9px] font-black uppercase text-slate-400">Main Member ID</p>
+                            <Button onClick={() => window.open(viewingMember.id_card_url!, '_blank')} variant="outline" className="mt-2 w-full text-xs">View/Print</Button>
+                        </div>
+                    )}
+                    {viewingMember.spouse_id_card_url && (
+                        <div className="p-4 border rounded-2xl bg-slate-50">
+                            <p className="text-[9px] font-black uppercase text-slate-400">Spouse ID</p>
+                            <Button onClick={() => window.open(viewingMember.spouse_id_card_url!, '_blank')} variant="outline" className="mt-2 w-full text-xs">View/Print</Button>
+                        </div>
+                    )}
+                    {viewingMember.kids?.map((kid, i) => kid.id_card_url && (
+                        <div key={i} className="p-4 border rounded-2xl bg-slate-50">
+                            <p className="text-[9px] font-black uppercase text-slate-400">{kid.name} ID</p>
+                            <Button onClick={() => window.open(kid.id_card_url!, '_blank')} variant="outline" className="mt-2 w-full text-xs">View/Print</Button>
+                        </div>
+                    ))}
+                </div>
+              </Card>
+
               {viewingMember.remarks && (
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl p-10 bg-slate-50 border-dashed border-2 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform duration-1000"><ClipboardList className="w-32 h-32 text-slate-900" /></div>

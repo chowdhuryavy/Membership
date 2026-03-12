@@ -175,10 +175,12 @@ export interface Member {
   membership_type?: 'New' | 'Renew';
   spouse_name?: string;
   spouse_dob?: string;
-  kids?: { name: string; dob: string }[];
+  kids?: { name: string; dob: string; id_card_url?: string }[];
   remarks?: string;
   member_signature?: string;
   staff_signature?: string;
+  id_card_url?: string;
+  spouse_id_card_url?: string;
 }
 
 export interface Freeze {
