@@ -275,6 +275,14 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         const proratedAmount = daysUsed * viewingMember.daily_rate;
         const originalAmount = (viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : viewingMember.net_amount;
         
+        console.log("Updating member with ID:", viewingMember.id);
+        console.log("Updating member with data:", {
+            status: MemberStatus.CANCELLED,
+            cancellation_date: cancelDate,
+            current_end_date: cancelDate,
+            net_amount: proratedAmount,
+            original_net_amount: originalAmount
+        });
         await db.updateMember(viewingMember.id, {
             status: MemberStatus.CANCELLED,
             cancellation_date: cancelDate,
@@ -282,6 +290,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             net_amount: proratedAmount,
             original_net_amount: originalAmount
         });
+        console.log("Member updated successfully");
         
         setViewingMember({
             ...viewingMember,
