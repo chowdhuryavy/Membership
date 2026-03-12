@@ -83,7 +83,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     if (user && outlets.length > 0) {
-      const allowed = (user.role_id?.toLowerCase() === 'admin')
+      const allowed = isSuperAdmin
           ? outlets 
           : outlets.filter(o => user.allowed_outlets?.includes(o.id));
 

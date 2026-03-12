@@ -940,15 +940,16 @@ const SettingsPage = () => {
                           <div className="bg-amber-50 border border-amber-100 p-6 rounded-3xl mb-8 flex items-start gap-4">
                               <Info className="w-6 h-6 text-amber-600 shrink-0 mt-1" />
                               <div className="space-y-1">
-                                  <p className="text-xs font-black text-amber-900 uppercase">Global Visibility Protocol</p>
+                                  <p className="text-xs font-black text-amber-900 uppercase">Global Settings Visibility</p>
                                   <p className="text-[10px] font-bold text-amber-700 uppercase leading-relaxed">
-                                      Use this to simplify the application. If you select specific features below, <b>only those features</b> will be visible to non-admin staff. 
-                                      If nothing is selected, the system defaults to showing all features based on normal role permissions.
+                                      Use this to control which settings tabs are visible to regular administrators. 
+                                      If you enable specific settings below, <b>only those settings tabs</b> will be visible to non-superadmin users. 
+                                      This prevents other admins from accessing global configurations like Properties or Outlets.
                                   </p>
                               </div>
                           </div>
                           <PermissionMatrix 
-                              registry={permissionRegistry} 
+                              registry={permissionRegistry.filter(g => g.id === 'settings')} 
                               selectedPermissions={(settings?.restricted_permissions || []) as Permission[]} 
                               onChange={async (perms) => {
                                   try {
