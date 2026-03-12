@@ -264,13 +264,13 @@ const SettingsPage = () => {
     
     return [
       // Super Admin Only
-      { id: 'company', label: 'Global Scope', visible: isSuper, icon: Building2 },
-      { id: 'properties', label: 'Facility Portfolios', visible: isSuper, icon: MapPin },
-      { id: 'outlets', label: 'Asset Contexts', visible: isSuper, icon: Store },
-      { id: 'currency', label: 'Monetary Standards', visible: isSuper, icon: Globe },
-      { id: 'navigation', label: 'UI Architecture', visible: isSuper, icon: ListOrdered },
-      { id: 'functions', label: 'Feature Visibility', visible: isSuper, icon: ShieldAlert },
-      { id: 'maintenance', label: 'Maintenance', visible: isSuper, icon: Zap },
+      { id: 'company', label: 'Global Scope', visible: hasPermission(user?.role_id || '', 'settings:view_global'), icon: Building2 },
+      { id: 'properties', label: 'Facility Portfolios', visible: hasPermission(user?.role_id || '', 'settings:view_properties'), icon: MapPin },
+      { id: 'outlets', label: 'Asset Contexts', visible: hasPermission(user?.role_id || '', 'settings:view_outlets'), icon: Store },
+      { id: 'currency', label: 'Monetary Standards', visible: hasPermission(user?.role_id || '', 'settings:view_currency'), icon: Globe },
+      { id: 'navigation', label: 'UI Architecture', visible: hasPermission(user?.role_id || '', 'settings:view_navigation'), icon: ListOrdered },
+      { id: 'functions', label: 'Feature Visibility', visible: isSuper || hasPermission(user?.role_id || '', 'settings:manage_visibility'), icon: ShieldAlert },
+      { id: 'maintenance', label: 'Maintenance', visible: hasPermission(user?.role_id || '', 'settings:view_maintenance'), icon: Zap },
       
       // Accessible to others with permission
       { id: 'roles', label: 'Security Tiers', visible: hasPermission(user?.role_id || '', 'settings:view_roles'), icon: Shield },
