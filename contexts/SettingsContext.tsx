@@ -122,13 +122,16 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const normalizedRoleId = userRoleId.toLowerCase();
     
     // 1. SYSTEM SUPERUSER BYPASS
-    // Only the specific Super Admin email has full system clearance.
+    // Super Admins (Admins/Owners) always have full system clearance.
     if (isSuperAdmin) return true;
 
-    // 2. FEATURE VISIBILITY RESTRICTIONS (Super Admin Controlled)
-    // If a permission is restricted, only superadmins can access it.
-    if (settings?.restricted_permissions?.includes(permission)) {
-        return false;
+    // 2. GLOBAL FEATURE TOGGLE (Whitelist Logic)
+    // If the admin has defined a set of "Enabled Features", only those are visible to non-admins.
+    // If the list is empty, all features are enabled by default (following role permissions).
+    if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
+        if (!settings.restricted_permissions.includes(permission)) {
+            return false;
+        }
     }
 
     // 1.5. LEGACY ADMIN BYPASS

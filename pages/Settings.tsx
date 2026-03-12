@@ -114,7 +114,7 @@ const PermissionMatrix = ({
                     onClick={(e) => { e.stopPropagation(); toggleAllInGroup(group.id); }}
                     className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-tighter border transition-all ${allSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-white hover:text-indigo-600'}`}
                    >
-                     {allSelected ? 'Revoke Module' : 'Authorize Module'}
+                     {allSelected ? 'Disable Module' : 'Enable Module'}
                    </button>
                  )}
               </div>
@@ -931,8 +931,8 @@ const SettingsPage = () => {
                           <div className="flex items-center gap-5">
                               <ShieldAlert className="w-8 h-8 text-indigo-600" />
                               <div>
-                                  <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Feature Visibility Control</CardTitle>
-                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Define restricted functions accessible only to Super Admins</p>
+                                  <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Global Feature Control</CardTitle>
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Define which functions are enabled for the entire organization</p>
                               </div>
                           </div>
                       </CardHeader>
@@ -940,10 +940,10 @@ const SettingsPage = () => {
                           <div className="bg-amber-50 border border-amber-100 p-6 rounded-3xl mb-8 flex items-start gap-4">
                               <Info className="w-6 h-6 text-amber-600 shrink-0 mt-1" />
                               <div className="space-y-1">
-                                  <p className="text-xs font-black text-amber-900 uppercase">Super Admin Override Protocol</p>
+                                  <p className="text-xs font-black text-amber-900 uppercase">Global Visibility Protocol</p>
                                   <p className="text-[10px] font-bold text-amber-700 uppercase leading-relaxed">
-                                      Selected features below will be completely hidden from all non-superadmin users (including regular admins). 
-                                      This allows you to simplify the interface for normal staff while retaining full control.
+                                      Use this to simplify the application. If you select specific features below, <b>only those features</b> will be visible to non-admin staff. 
+                                      If nothing is selected, the system defaults to showing all features based on normal role permissions.
                                   </p>
                               </div>
                           </div>
