@@ -245,6 +245,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         await db.updateMember(viewingMember.id, {
             status: MemberStatus.ACTIVE,
             cancellation_date: null,
+            current_end_date: viewingMember.original_end_date,
             net_amount: restoredAmount,
             original_net_amount: null
         });
@@ -253,6 +254,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             ...viewingMember,
             status: MemberStatus.ACTIVE,
             cancellation_date: null,
+            current_end_date: viewingMember.original_end_date,
             net_amount: restoredAmount,
             original_net_amount: null
         });
@@ -276,6 +278,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         await db.updateMember(viewingMember.id, {
             status: MemberStatus.CANCELLED,
             cancellation_date: cancelDate,
+            current_end_date: cancelDate,
             net_amount: proratedAmount,
             original_net_amount: originalAmount
         });
@@ -284,6 +287,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             ...viewingMember,
             status: MemberStatus.CANCELLED,
             cancellation_date: cancelDate,
+            current_end_date: cancelDate,
             net_amount: proratedAmount,
             original_net_amount: originalAmount
         });
