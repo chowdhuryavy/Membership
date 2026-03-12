@@ -145,7 +145,8 @@ export enum MemberStatus {
   FROZEN = 'Frozen',
   EXPIRED = 'Expired',
   PENDING = 'Pending',
-  TENTATIVE = 'Tentative'
+  TENTATIVE = 'Tentative',
+  CANCELLED = 'Cancelled'
 }
 
 export interface Member {
@@ -157,9 +158,11 @@ export interface Member {
   start_date: string;
   original_end_date: string;
   current_end_date: string;
+  cancellation_date?: string;
   actual_rate: number;
   discount: number;
   net_amount: number;
+  original_net_amount?: number;
   daily_rate: number;
   check_no?: string;
   status: MemberStatus;

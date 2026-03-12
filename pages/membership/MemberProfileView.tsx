@@ -56,10 +56,13 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
   const [showAgreement, setShowAgreement] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelDate, setCancelDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const category = useMemo(() => categories.find(c => c.id === viewingMember.category_id), [categories, viewingMember.category_id]);
   const getEffectiveStatus = (member: Member) => {
     if (!member) return MemberStatus.ACTIVE;
+    if (member.status === MemberStatus.CANCELLED) return MemberStatus.CANCELLED;
     if (member.status === MemberStatus.FROZEN || member.status === MemberStatus.PENDING || member.status === MemberStatus.TENTATIVE) {
         return member.status;
     }
@@ -73,6 +76,18 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
   const effectiveStatus = getEffectiveStatus(viewingMember);
   const isActive = effectiveStatus === MemberStatus.ACTIVE;
+
+  const cancellationDetails = useMemo(() => {
+    if (viewingMember.status !== MemberStatus.CANCELLED || !viewingMember.cancellation_date) return null;
+    const start = parseISO(viewingMember.start_date);
+    const cancel = parseISO(viewingMember.cancellation_date);
+    const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start) + 1);
+    return {
+        date: viewingMember.cancellation_date,
+        daysUsed,
+        proratedAmount: viewingMember.net_amount
+    };
+  }, [viewingMember]);
 
   const handleSaveSignatures = async (memberSig: string, staffSig: string) => {
     try {
@@ -223,6 +238,65 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       loadForensics(viewingMember);
   };
 
+  const handleDeleteCancellation = async () => {
+    setLoading(true);
+    try {
+        const restoredAmount = viewingMember.original_net_amount || viewingMember.net_amount;
+        await db.updateMember(viewingMember.id, {
+            status: MemberStatus.ACTIVE,
+            cancellation_date: undefined,
+            net_amount: restoredAmount,
+            original_net_amount: undefined
+        });
+        
+        setViewingMember({
+            ...viewingMember,
+            status: MemberStatus.ACTIVE,
+            cancellation_date: undefined,
+            net_amount: restoredAmount,
+            original_net_amount: undefined
+        });
+        onUpdate();
+    } catch (err) {
+        console.error("Failed to delete cancellation:", err);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const handleCancelMembership = async () => {
+    setLoading(true);
+    try {
+        const start = parseISO(viewingMember.start_date);
+        const cancel = parseISO(cancelDate);
+        const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start) + 1);
+        const proratedAmount = daysUsed * viewingMember.daily_rate;
+        const originalAmount = viewingMember.original_net_amount || viewingMember.net_amount;
+        
+        await db.updateMember(viewingMember.id, {
+            status: MemberStatus.CANCELLED,
+            cancellation_date: cancelDate,
+            net_amount: proratedAmount,
+            original_net_amount: originalAmount
+        });
+        
+        setViewingMember({
+            ...viewingMember,
+            status: MemberStatus.CANCELLED,
+            cancellation_date: cancelDate,
+            net_amount: proratedAmount,
+            original_net_amount: originalAmount
+        });
+        setShowCancelModal(false);
+        onUpdate();
+    } catch (err) {
+        console.error("Failed to cancel membership:", err);
+        alert("Failed to cancel membership.");
+    } finally {
+        setLoading(false);
+    }
+  };
+
   const canEdit = hasPermission(user?.role_id || '', 'members:edit');
   const canDelete = hasPermission(user?.role_id || '', 'members:delete');
   const canFreeze = hasPermission(user?.role_id || '', 'members:freeze');
@@ -242,6 +316,12 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
           <Button onClick={() => setShowAgreement(true)} variant="outline" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase border-indigo-100 text-indigo-600 hover:bg-indigo-50 shadow-sm transition-all">
               <FileText className="w-4 h-4 mr-2" /> Print Agreement
           </Button>
+          
+          {isActive && (
+            <Button onClick={() => setShowCancelModal(true)} variant="secondary" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase bg-red-50 border-2 border-red-100 text-red-600 hover:bg-red-100 shadow-sm transition-all">
+                <X className="w-4 h-4 mr-2" /> Cancel Membership
+            </Button>
+          )}
           
           {canFreeze && effectiveStatus !== MemberStatus.EXPIRED && (
             <Button 
@@ -320,9 +400,17 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                     </div>
                     <div className="space-y-6">
                         <div className="flex justify-between items-end border-b border-white/10 pb-4">
-                           <span className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest">Net Contribution</span>
+                           <span className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest">
+                             {viewingMember.status === MemberStatus.CANCELLED ? 'Prorated Contribution' : 'Net Contribution'}
+                           </span>
                            <span className="text-3xl font-black tracking-tighter">{formatMoney(viewingMember.net_amount)}</span>
                         </div>
+                        {viewingMember.status === MemberStatus.CANCELLED && viewingMember.original_net_amount && (
+                           <div className="flex justify-between items-end border-b border-white/10 pb-4">
+                              <span className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest">Original Amount</span>
+                              <span className="text-xl font-black tracking-tighter text-indigo-200">{formatMoney(viewingMember.original_net_amount)}</span>
+                           </div>
+                        )}
                         <div className="flex justify-between items-end border-b border-white/10 pb-4">
                            <span className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest">Total Revenue</span>
                            <span className="text-3xl font-black tracking-tighter">{formatMoney(totalRevenue)}</span>
@@ -363,7 +451,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
           <div className="lg:col-span-8 space-y-8">
               <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl p-10 bg-white">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                      <div className="space-y-1.5"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Shield className="w-3 h-3"/> Enrollment Tier</p><p className="text-sm font-black uppercase text-slate-900">{category?.name}</p></div>
+                      <div className="space-y-1.5"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Shield className="w-3 h-3"/> Enrollment Tier</p><p className="text-sm font-black uppercase text-slate-900">{category?.name} ({formatMoney(viewingMember.actual_rate - viewingMember.discount)})</p></div>
                       <div className="space-y-1.5"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><CalendarDays className="w-3 h-3"/> Commencement</p><p className="text-sm font-black text-slate-900">{format(parseISO(viewingMember.start_date), 'dd MMM yyyy')}</p></div>
                       
                       <div className="space-y-2 col-span-1 md:col-span-1 border-l md:border-l-0 md:pl-0 pl-6 border-slate-100">
@@ -627,6 +715,39 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                 </div>
               </Card>
 
+              {cancellationDetails && (
+                <Card className="rounded-[2.5rem] border-red-200/60 shadow-xl p-10 bg-red-50 overflow-hidden relative group">
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-red-900 mb-8 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600 shadow-sm border border-red-200"><X className="w-5 h-5" /></div>
+                        Cancellation Details
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                        <div className="p-4 border rounded-2xl bg-white">
+                            <p className="text-[9px] font-black uppercase text-slate-400">Cancelled On</p>
+                            <p className="text-sm font-black text-slate-900 mt-1">{format(parseISO(cancellationDetails.date), 'dd MMM yyyy')}</p>
+                        </div>
+                        <div className="p-4 border rounded-2xl bg-white">
+                            <p className="text-[9px] font-black uppercase text-slate-400">Days Used</p>
+                            <p className="text-sm font-black text-slate-900 mt-1">{cancellationDetails.daysUsed} Days</p>
+                        </div>
+                        <div className="p-4 border rounded-2xl bg-white">
+                            <p className="text-[9px] font-black uppercase text-slate-400">Original Amount</p>
+                            <p className="text-sm font-black text-slate-900 mt-1">
+                                {formatMoney(viewingMember.original_net_amount || (viewingMember.actual_rate - viewingMember.discount))}
+                            </p>
+                        </div>
+                        <div className="p-4 border rounded-2xl bg-white">
+                            <p className="text-[9px] font-black uppercase text-slate-400">Prorated Amount</p>
+                            <p className="text-sm font-black text-slate-900 mt-1">{formatMoney(cancellationDetails.proratedAmount)}</p>
+                        </div>
+                        <div className="col-span-1 md:col-span-4 flex gap-2">
+                            <Button onClick={() => { setCancelDate(cancellationDetails.date); setShowCancelModal(true); }} variant="outline" className="text-xs">Edit Cancellation</Button>
+                            <Button onClick={handleDeleteCancellation} variant="secondary" className="text-xs bg-red-50 text-red-600 hover:bg-red-100">Delete Cancellation</Button>
+                        </div>
+                    </div>
+                </Card>
+              )}
+
               {viewingMember.remarks && (
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl p-10 bg-slate-50 border-dashed border-2 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform duration-1000"><ClipboardList className="w-32 h-32 text-slate-900" /></div>
@@ -638,6 +759,45 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
               )}
           </div>
       </div>
+
+      {showCancelModal && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
+            <Card className="w-full max-w-[400px] rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden bg-white border border-white/20">
+                <CardHeader className="bg-[#0f172a] text-white p-10 relative flex flex-col items-center text-center">
+                    <div className="w-14 h-14 bg-red-500/20 rounded-2xl flex items-center justify-center mb-6 border border-red-500/30">
+                        <X className="w-7 h-7 text-red-400" />
+                    </div>
+                    <CardTitle className="text-2xl font-black uppercase tracking-tight leading-none mb-2">Cancel Membership</CardTitle>
+                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Prorated Revenue Calculation</p>
+                    <button onClick={() => setShowCancelModal(false)} className="absolute top-8 right-8 p-2.5 rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90 shadow-lg border border-white/5">
+                        <X className="w-5 h-5 text-slate-400"/>
+                    </button>
+                </CardHeader>
+                <CardContent className="p-10 space-y-8">
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex justify-between items-center">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Original Membership Amount</p>
+                        <p className="text-sm font-black text-slate-900">{formatMoney(viewingMember.original_net_amount || viewingMember.net_amount)}</p>
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[11px] font-bold text-slate-600 ml-1">Cancellation Date</label>
+                        <input 
+                            type="date" 
+                            value={cancelDate} 
+                            onChange={e => setCancelDate(e.target.value)} 
+                            className="w-full h-16 pl-6 pr-6 rounded-2xl border-2 border-slate-100 focus:border-red-600 bg-white font-black text-sm uppercase tracking-wider transition-all appearance-none cursor-pointer"
+                        />
+                    </div>
+                    <Button 
+                        onClick={handleCancelMembership}
+                        isLoading={isLoading}
+                        className="w-full h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl mt-4 active:scale-95 transition-all bg-red-600 hover:bg-red-700 text-white"
+                    >
+                        Confirm Cancellation
+                    </Button>
+                </CardContent>
+            </Card>
+        </div>
+      )}
 
       {showFreezeModal && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">

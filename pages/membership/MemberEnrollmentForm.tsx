@@ -259,6 +259,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       current_end_date: recognition.expiry,
       actual_rate: baseRate,
       net_amount: netAmount,
+      original_net_amount: netAmount,
       daily_rate: recognition.daily,
       status: MemberStatus.ACTIVE
     } as Member;

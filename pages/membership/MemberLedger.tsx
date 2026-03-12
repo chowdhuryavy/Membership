@@ -4,7 +4,7 @@ import {
   Search, Filter, Layers, Building2, Store, RefreshCcw, 
   Milestone, Edit2, Trash2, ShieldCheck,
   Zap, UserPlus, Snowflake, ChevronDown, 
-  CheckCircle, Calendar, Clock, MousePointer
+  CheckCircle, Calendar, Clock, MousePointer, X
 } from 'lucide-react';
 import { Member, MembershipCategory, MemberStatus } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -77,6 +77,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
 
   const getEffectiveStatus = (member: Member) => {
     if (!member) return MemberStatus.ACTIVE;
+    if (member.status === MemberStatus.CANCELLED) return MemberStatus.CANCELLED;
     if (member.status === MemberStatus.FROZEN || member.status === MemberStatus.PENDING || member.status === MemberStatus.TENTATIVE) {
         return member.status;
     }
@@ -124,6 +125,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
     { value: MemberStatus.FROZEN, label: 'Frozen Only', icon: Snowflake, color: 'text-indigo-500' },
     { value: MemberStatus.EXPIRED, label: 'Expired Only', icon: Calendar, color: 'text-red-500' },
     { value: MemberStatus.PENDING, label: 'Pending Only', icon: Clock, color: 'text-amber-500' },
+    { value: MemberStatus.CANCELLED, label: 'Cancelled Only', icon: X, color: 'text-red-700' },
   ];
 
   const currentOption = statusOptions.find(o => o.value === statusFilter) || statusOptions[0];
