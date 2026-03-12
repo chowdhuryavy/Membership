@@ -525,7 +525,7 @@ class DatabaseService {
       const patch: any = { ...member };
       delete patch.id;
       delete patch.created_at;
-      Object.keys(patch).forEach(key => (patch[key] === null || patch[key] === undefined) && delete patch[key]);
+      Object.keys(patch).forEach(key => (patch[key] === undefined) && delete patch[key]);
       const { error } = await supabase.from('members').update(patch).eq('id', id);
       if (error) throw error;
       const changedFields = Object.keys(patch).filter(k => patch[k] !== undefined && patch[k] !== null).join(', ');

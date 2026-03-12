@@ -285,7 +285,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                                 <td className="px-10 py-7 text-center"><span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border shadow-sm ${effectiveStatus === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : effectiveStatus === 'Frozen' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-red-50 text-red-700 border-red-100'}`}>{effectiveStatus}</span></td>
                                 <td className="px-10 py-7 font-bold text-slate-500 text-xs">{m.start_date ? format(parseISO(m.start_date), 'dd MMM yyyy') : '---'}</td>
                                 <td className="px-10 py-7 text-slate-900 font-black text-sm tracking-tight">{m.current_end_date ? format(parseISO(m.current_end_date), 'dd MMM yyyy') : '---'}</td>
-                                <td className="px-10 py-7 text-right font-black text-slate-900 tabular-nums text-base">{formatMoney(m.net_amount)}</td>
+                                <td className="px-10 py-7 text-right font-black text-slate-900 tabular-nums text-base">{formatMoney(m.original_net_amount && m.original_net_amount > 0 ? m.original_net_amount : m.net_amount)}</td>
                                 <td className="px-10 py-7 text-center" onClick={e => e.stopPropagation()}>
                                   <div className="flex items-center justify-center gap-2">
                                     {canRenew && <button onClick={() => onRenew(m)} title="Renew" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><RefreshCcw className="w-4 h-4"/></button>}

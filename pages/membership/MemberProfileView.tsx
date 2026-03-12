@@ -241,20 +241,20 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const handleDeleteCancellation = async () => {
     setLoading(true);
     try {
-        const restoredAmount = viewingMember.original_net_amount || viewingMember.net_amount;
+        const restoredAmount = (viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : (viewingMember.actual_rate - viewingMember.discount);
         await db.updateMember(viewingMember.id, {
             status: MemberStatus.ACTIVE,
-            cancellation_date: undefined,
+            cancellation_date: null,
             net_amount: restoredAmount,
-            original_net_amount: undefined
+            original_net_amount: null
         });
         
         setViewingMember({
             ...viewingMember,
             status: MemberStatus.ACTIVE,
-            cancellation_date: undefined,
+            cancellation_date: null,
             net_amount: restoredAmount,
-            original_net_amount: undefined
+            original_net_amount: null
         });
         onUpdate();
     } catch (err) {
@@ -265,14 +265,17 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   };
 
   const handleCancelMembership = async () => {
+    console.log("handleCancelMembership called");
     setLoading(true);
     try {
+        console.log("Starting cancellation logic");
         const start = parseISO(viewingMember.start_date);
         const cancel = parseISO(cancelDate);
         const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start) + 1);
         const proratedAmount = daysUsed * viewingMember.daily_rate;
-        const originalAmount = viewingMember.original_net_amount || viewingMember.net_amount;
+        const originalAmount = (viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : viewingMember.net_amount;
         
+        console.log("Calling db.updateMember");
         await db.updateMember(viewingMember.id, {
             status: MemberStatus.CANCELLED,
             cancellation_date: cancelDate,
@@ -280,6 +283,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             original_net_amount: originalAmount
         });
         
+        console.log("db.updateMember successful");
         setViewingMember({
             ...viewingMember,
             status: MemberStatus.CANCELLED,
@@ -291,7 +295,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         onUpdate();
     } catch (err) {
         console.error("Failed to cancel membership:", err);
-        alert("Failed to cancel membership.");
+        alert("Failed to cancel membership: " + err);
     } finally {
         setLoading(false);
     }
@@ -405,7 +409,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                            </span>
                            <span className="text-3xl font-black tracking-tighter">{formatMoney(viewingMember.net_amount)}</span>
                         </div>
-                        {viewingMember.status === MemberStatus.CANCELLED && viewingMember.original_net_amount && (
+                        {viewingMember.status === MemberStatus.CANCELLED && viewingMember.original_net_amount && viewingMember.original_net_amount > 0 && (
                            <div className="flex justify-between items-end border-b border-white/10 pb-4">
                               <span className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest">Original Amount</span>
                               <span className="text-xl font-black tracking-tighter text-indigo-200">{formatMoney(viewingMember.original_net_amount)}</span>
@@ -733,7 +737,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         <div className="p-4 border rounded-2xl bg-white">
                             <p className="text-[9px] font-black uppercase text-slate-400">Original Amount</p>
                             <p className="text-sm font-black text-slate-900 mt-1">
-                                {formatMoney(viewingMember.original_net_amount || (viewingMember.actual_rate - viewingMember.discount))}
+                                {formatMoney((viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : (viewingMember.actual_rate - viewingMember.discount))}
                             </p>
                         </div>
                         <div className="p-4 border rounded-2xl bg-white">
@@ -776,7 +780,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                 <CardContent className="p-10 space-y-8">
                     <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex justify-between items-center">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Original Membership Amount</p>
-                        <p className="text-sm font-black text-slate-900">{formatMoney(viewingMember.original_net_amount || viewingMember.net_amount)}</p>
+                        <p className="text-sm font-black text-slate-900">{formatMoney((viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : viewingMember.net_amount)}</p>
                     </div>
                     <div className="space-y-2">
                         <label className="text-[11px] font-bold text-slate-600 ml-1">Cancellation Date</label>
