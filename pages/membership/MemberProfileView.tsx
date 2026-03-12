@@ -265,17 +265,14 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   };
 
   const handleCancelMembership = async () => {
-    console.log("handleCancelMembership called");
     setLoading(true);
     try {
-        console.log("Starting cancellation logic");
         const start = parseISO(viewingMember.start_date);
         const cancel = parseISO(cancelDate);
         const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start) + 1);
         const proratedAmount = daysUsed * viewingMember.daily_rate;
         const originalAmount = (viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : viewingMember.net_amount;
         
-        console.log("Calling db.updateMember");
         await db.updateMember(viewingMember.id, {
             status: MemberStatus.CANCELLED,
             cancellation_date: cancelDate,
@@ -283,7 +280,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             original_net_amount: originalAmount
         });
         
-        console.log("db.updateMember successful");
         setViewingMember({
             ...viewingMember,
             status: MemberStatus.CANCELLED,
@@ -295,7 +291,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         onUpdate();
     } catch (err) {
         console.error("Failed to cancel membership:", err);
-        alert("Failed to cancel membership: " + err);
+        alert("Failed to cancel membership.");
     } finally {
         setLoading(false);
     }
