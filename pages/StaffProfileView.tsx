@@ -18,8 +18,56 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
   const [leaves, setLeaves] = useState<StaffLeave[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLeaveForm, setShowLeaveForm] = useState(false);
-  const [leaveForm, setLeaveForm] = useState({ start_date: '', end_date: '' });
   const [editingLeaveId, setEditingLeaveId] = useState<string | null>(null);
+  const [leaveForm, setLeaveForm] = useState({ start_date: '', end_date: '' });
+  const [displayDates, setDisplayDates] = useState({ start: '', end: '' });
+
+  const toISODate = (displayDate: string) => {
+    const parts = displayDate.split('/');
+    if (parts.length !== 3) return '';
+    const [d, m, y] = parts;
+    if (!d || !m || !y || y.length !== 4) return '';
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  };
+
+  const fromISODate = (isoDate: string) => {
+    if (!isoDate) return '';
+    const parts = isoDate.split('-');
+    if (parts.length !== 3) return '';
+    const [y, m, d] = parts;
+    return `${d}/${m}/${y}`;
+  };
+
+  useEffect(() => {
+    if (showLeaveForm) {
+      setDisplayDates({
+        start: fromISODate(leaveForm.start_date),
+        end: fromISODate(leaveForm.end_date)
+      });
+    }
+  }, [showLeaveForm]);
+
+  const handleDisplayDateChange = (field: 'start' | 'end', value: string) => {
+    // Simple mask: DD/MM/YYYY
+    let cleaned = value.replace(/\D/g, '');
+    if (cleaned.length > 8) cleaned = cleaned.slice(0, 8);
+    
+    let formatted = cleaned;
+    if (cleaned.length > 2) formatted = cleaned.slice(0, 2) + '/' + cleaned.slice(2);
+    if (cleaned.length > 4) formatted = formatted.slice(0, 5) + '/' + formatted.slice(5);
+    
+    setDisplayDates(prev => ({ ...prev, [field]: formatted }));
+    
+    if (cleaned.length === 8) {
+      const iso = toISODate(formatted);
+      if (iso) {
+        setLeaveForm(prev => ({ ...prev, [field === 'start' ? 'start_date' : 'end_date']: iso }));
+      }
+    } else {
+      setLeaveForm(prev => ({ ...prev, [field === 'start' ? 'start_date' : 'end_date']: '' }));
+    }
+  };
+
 
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [deleteStaffId, setDeleteStaffId] = useState<string | null>(null);
@@ -308,28 +356,30 @@ NOTIFY pgrst, 'reload schema';`}
                 <CardContent className="p-10 space-y-8">
                     <form onSubmit={handleSaveLeave} className="space-y-6">
                         <div className="space-y-2">
-                            <label className="text-[11px] font-bold text-slate-600 ml-1">Commencement Date</label>
+                            <label className="text-[11px] font-bold text-slate-600 ml-1">Commencement Date (DD/MM/YYYY)</label>
                             <div className="relative group">
                                 <input 
-                                    type="date" 
-                                    value={leaveForm.start_date} 
-                                    onChange={e => setLeaveForm({...leaveForm, start_date: e.target.value})} 
+                                    type="text" 
+                                    placeholder="DD/MM/YYYY"
+                                    value={displayDates.start} 
+                                    onChange={e => handleDisplayDateChange('start', e.target.value)} 
                                     required
-                                    className="w-full h-16 pl-6 pr-14 rounded-2xl border-2 focus:ring-0 font-black text-sm uppercase tracking-wider transition-all appearance-none cursor-pointer border-slate-100 focus:border-indigo-600 bg-white"
+                                    className="w-full h-16 pl-6 pr-14 rounded-2xl border-2 focus:ring-0 font-black text-sm uppercase tracking-wider transition-all border-slate-100 focus:border-indigo-600 bg-white"
                                 />
                                 <Calendar className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none transition-colors text-slate-400 group-focus-within:text-indigo-600" />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[11px] font-bold text-slate-600 ml-1">Termination Date</label>
+                            <label className="text-[11px] font-bold text-slate-600 ml-1">Termination Date (DD/MM/YYYY)</label>
                             <div className="relative group">
                                 <input 
-                                    type="date" 
-                                    value={leaveForm.end_date} 
-                                    onChange={e => setLeaveForm({...leaveForm, end_date: e.target.value})} 
+                                    type="text" 
+                                    placeholder="DD/MM/YYYY"
+                                    value={displayDates.end} 
+                                    onChange={e => handleDisplayDateChange('end', e.target.value)} 
                                     required
-                                    className="w-full h-16 pl-6 pr-14 rounded-2xl border-2 focus:ring-0 font-black text-sm uppercase tracking-wider transition-all appearance-none cursor-pointer border-slate-100 focus:border-indigo-600 bg-white"
+                                    className="w-full h-16 pl-6 pr-14 rounded-2xl border-2 focus:ring-0 font-black text-sm uppercase tracking-wider transition-all border-slate-100 focus:border-indigo-600 bg-white"
                                 />
                                 <Calendar className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none transition-colors text-slate-400 group-focus-within:text-indigo-600" />
                             </div>
@@ -344,7 +394,7 @@ NOTIFY pgrst, 'reload schema';`}
 
                         <Button 
                             type="submit" 
-                            className="w-full h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl mt-4 active:scale-95 transition-all bg-[#a5b4fc] hover:bg-[#93a5f7] text-white"
+                            className={`w-full h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl mt-4 active:scale-95 transition-all ${leaveForm.start_date && leaveForm.end_date ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/40 scale-[1.02]' : 'bg-slate-200 text-slate-400'} text-white`}
                         >
                             {editingLeaveId ? 'Commit Modification' : 'Commit Leave'}
                         </Button>

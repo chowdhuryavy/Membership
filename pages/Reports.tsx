@@ -442,7 +442,7 @@ const Reports = () => {
                           // who performed the service, as per user requirement.
                           if (b.therapist_id) {
                               const therapist = staffList.find(s => s.id === b.therapist_id);
-                              if (therapist && !isStaffOnLeaveOnDate(therapist, b.date) && !isStaffOnProbationOnDate(therapist, b.date)) {
+                              if (therapist && therapist.is_eligible_for_incentives !== false && !isStaffOnLeaveOnDate(therapist, b.date) && !isStaffOnProbationOnDate(therapist, b.date)) {
                                   staffSplits[b.therapist_id] = incNet;
                               }
                           }
@@ -499,7 +499,12 @@ const Reports = () => {
                               available.forEach(s => staffSplits[s.id] = share);
                           }
                       } else {
-                          if (m.sales_rep_id) staffSplits[m.sales_rep_id] = incNet;
+                          if (m.sales_rep_id) {
+                              const staff = staffList.find(s => s.id === m.sales_rep_id);
+                              if (staff && staff.is_eligible_for_incentives !== false) {
+                                  staffSplits[m.sales_rep_id] = incNet;
+                              }
+                          }
                       }
 
                       records.push({
@@ -552,7 +557,7 @@ const Reports = () => {
 
                           if (b.therapist_id) {
                               const staff = staffList.find(s => s.id === b.therapist_id);
-                              if (staff && !isStaffOnLeaveOnDate(staff, b.date) && !isStaffOnProbationOnDate(staff, b.date)) {
+                              if (staff && staff.is_eligible_for_incentives !== false && !isStaffOnLeaveOnDate(staff, b.date) && !isStaffOnProbationOnDate(staff, b.date)) {
                                   staffSplits[b.therapist_id] = incNet;
                               }
                           }
@@ -611,10 +616,16 @@ const Reports = () => {
                       } else {
                           if (s.sold_by_id && s.secondary_sold_by_id) {
                               const share = incNet / 2;
-                              staffSplits[s.sold_by_id] = share;
-                              staffSplits[s.secondary_sold_by_id] = share;
+                              const staff1 = staffList.find(st => st.id === s.sold_by_id);
+                              const staff2 = staffList.find(st => st.id === s.secondary_sold_by_id);
+                              
+                              if (staff1 && staff1.is_eligible_for_incentives !== false) staffSplits[s.sold_by_id] = share;
+                              if (staff2 && staff2.is_eligible_for_incentives !== false) staffSplits[s.secondary_sold_by_id] = share;
                           } else if (s.sold_by_id) {
-                              staffSplits[s.sold_by_id] = incNet;
+                              const staff = staffList.find(st => st.id === s.sold_by_id);
+                              if (staff && staff.is_eligible_for_incentives !== false) {
+                                  staffSplits[s.sold_by_id] = incNet;
+                              }
                           }
                       }
 
