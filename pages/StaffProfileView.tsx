@@ -68,6 +68,18 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
     }
   };
 
+  const GhostPlaceholder = ({ value }: { value: string }) => {
+    const placeholder = "DD/MM/YYYY";
+    const ghost = " ".repeat(value.length) + placeholder.slice(value.length);
+    return (
+        <div className="absolute inset-0 pl-6 pr-14 flex items-center pointer-events-none">
+            <span className="font-black text-sm uppercase tracking-wider text-slate-200 whitespace-pre">
+                {ghost}
+            </span>
+        </div>
+    );
+  };
+
 
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [deleteStaffId, setDeleteStaffId] = useState<string | null>(null);
@@ -357,31 +369,59 @@ NOTIFY pgrst, 'reload schema';`}
                     <form onSubmit={handleSaveLeave} className="space-y-6">
                         <div className="space-y-2">
                             <label className="text-[11px] font-bold text-slate-600 ml-1">Commencement Date (DD/MM/YYYY)</label>
-                            <div className="relative group">
+                            <div className="relative group bg-slate-50/50 rounded-2xl border-2 border-slate-100 focus-within:border-indigo-600 transition-all">
+                                <GhostPlaceholder value={displayDates.start} />
                                 <input 
                                     type="text" 
-                                    placeholder="DD/MM/YYYY"
                                     value={displayDates.start} 
                                     onChange={e => handleDisplayDateChange('start', e.target.value)} 
                                     required
-                                    className="w-full h-16 pl-6 pr-14 rounded-2xl border-2 focus:ring-0 font-black text-sm uppercase tracking-wider transition-all border-slate-100 focus:border-indigo-600 bg-white"
+                                    className="w-full h-16 pl-6 pr-14 rounded-2xl border-none focus:ring-0 font-black text-sm uppercase tracking-wider transition-all bg-transparent relative z-20"
                                 />
-                                <Calendar className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none transition-colors text-slate-400 group-focus-within:text-indigo-600" />
+                                <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none transition-colors text-slate-400 group-focus-within:text-indigo-600 z-30">
+                                    <Calendar className="w-4 h-4" />
+                                </div>
+                                <input 
+                                    type="date"
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 opacity-0 cursor-pointer z-40"
+                                    title="Open Calendar"
+                                    onChange={(e) => {
+                                        const iso = e.target.value;
+                                        if (iso) {
+                                            setLeaveForm(prev => ({ ...prev, start_date: iso }));
+                                            setDisplayDates(prev => ({ ...prev, start: fromISODate(iso) }));
+                                        }
+                                    }}
+                                />
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <label className="text-[11px] font-bold text-slate-600 ml-1">Termination Date (DD/MM/YYYY)</label>
-                            <div className="relative group">
+                            <div className="relative group bg-slate-50/50 rounded-2xl border-2 border-slate-100 focus-within:border-indigo-600 transition-all">
+                                <GhostPlaceholder value={displayDates.end} />
                                 <input 
                                     type="text" 
-                                    placeholder="DD/MM/YYYY"
                                     value={displayDates.end} 
                                     onChange={e => handleDisplayDateChange('end', e.target.value)} 
                                     required
-                                    className="w-full h-16 pl-6 pr-14 rounded-2xl border-2 focus:ring-0 font-black text-sm uppercase tracking-wider transition-all border-slate-100 focus:border-indigo-600 bg-white"
+                                    className="w-full h-16 pl-6 pr-14 rounded-2xl border-none focus:ring-0 font-black text-sm uppercase tracking-wider transition-all bg-transparent relative z-20"
                                 />
-                                <Calendar className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none transition-colors text-slate-400 group-focus-within:text-indigo-600" />
+                                <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none transition-colors text-slate-400 group-focus-within:text-indigo-600 z-30">
+                                    <Calendar className="w-4 h-4" />
+                                </div>
+                                <input 
+                                    type="date"
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 opacity-0 cursor-pointer z-40"
+                                    title="Open Calendar"
+                                    onChange={(e) => {
+                                        const iso = e.target.value;
+                                        if (iso) {
+                                            setLeaveForm(prev => ({ ...prev, end_date: iso }));
+                                            setDisplayDates(prev => ({ ...prev, end: fromISODate(iso) }));
+                                        }
+                                    }}
+                                />
                             </div>
                         </div>
 
