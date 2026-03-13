@@ -74,6 +74,8 @@ interface RevenueRow {
     start_date: string;
     end_date: string;
     total_days: number;
+    actual_rate: number;
+    discount: number;
     net_fees: number;
     prev_accrual: number;
     period_rev: number;
@@ -160,6 +162,8 @@ const Reports = () => {
       start_date: true,
       end_date: true,
       days: true,
+      rev_actual: true,
+      rev_discount: true,
       net_fees: true,
       prev_accrual: true,
       period_rev: true,
@@ -289,6 +293,8 @@ const Reports = () => {
                       start_date: format(mStart, 'dd-MM-yyyy'),
                       end_date: format(mEnd, 'dd-MM-yyyy'),
                       total_days: totalDays,
+                      actual_rate: m.actual_rate || (m.net_amount + (m.discount || 0)) || 0,
+                      discount: m.discount || 0,
                       net_fees: m.net_amount,
                       prev_accrual: prevAccrual,
                       period_rev: periodRev,
@@ -688,6 +694,8 @@ const Reports = () => {
           return acc;
       }, {} as Record<string, RevenueRow[]>);
 
+      let grandActual = 0;
+      let grandDiscount = 0;
       let grandNetFees = 0;
       let grandPrevAccrual = 0;
       let grandPeriodRev = 0;
@@ -703,6 +711,8 @@ const Reports = () => {
                           {visibleColumns.start_date && <th className="border border-black px-2 py-3 w-20">Start Date</th>}
                           {visibleColumns.end_date && <th className="border border-black px-2 py-3 w-20">End Date</th>}
                           {visibleColumns.days && <th className="border border-black px-2 py-3 w-12 text-center">Days</th>}
+                          {visibleColumns.rev_actual && <th className="border border-black px-2 py-3 text-right w-24">Actual Rate</th>}
+                          {visibleColumns.rev_discount && <th className="border border-black px-2 py-3 text-right w-24">Discount</th>}
                           {visibleColumns.net_fees && <th className="border border-black px-2 py-3 text-right w-24">Net Fees</th>}
                           {visibleColumns.prev_accrual && <th className="border border-black px-2 py-3 text-right w-24">Prev. Accrual</th>}
                           {visibleColumns.period_rev && <th className="border border-black px-2 py-3 text-right w-24">Period Rev</th>}
@@ -712,11 +722,15 @@ const Reports = () => {
                   <tbody>
                       {Object.entries(grouped).map(([category, groupRowsData]) => {
                           const groupRows = groupRowsData as RevenueRow[];
+                          const subActual = groupRows.reduce((s, r) => s + r.actual_rate, 0);
+                          const subDiscount = groupRows.reduce((s, r) => s + r.discount, 0);
                           const subNetFees = groupRows.reduce((s, r) => s + r.net_fees, 0);
                           const subPrevAccrual = groupRows.reduce((s, r) => s + r.prev_accrual, 0);
                           const subPeriodRev = groupRows.reduce((s, r) => s + r.period_rev, 0);
                           const subDeferred = groupRows.reduce((s, r) => s + r.deferred, 0);
 
+                          grandActual += subActual;
+                          grandDiscount += subDiscount;
                           grandNetFees += subNetFees;
                           grandPrevAccrual += subPrevAccrual;
                           grandPeriodRev += subPeriodRev;
@@ -732,6 +746,8 @@ const Reports = () => {
                                           (visibleColumns.start_date ? 1 : 0) +
                                           (visibleColumns.end_date ? 1 : 0) +
                                           (visibleColumns.days ? 1 : 0) +
+                                          (visibleColumns.rev_actual ? 1 : 0) +
+                                          (visibleColumns.rev_discount ? 1 : 0) +
                                           (visibleColumns.net_fees ? 1 : 0) +
                                           (visibleColumns.prev_accrual ? 1 : 0) +
                                           (visibleColumns.period_rev ? 1 : 0) +
@@ -752,6 +768,8 @@ const Reports = () => {
                                           {visibleColumns.start_date && <td className="border border-black px-2 py-1 text-center text-slate-600">{row.start_date}</td>}
                                           {visibleColumns.end_date && <td className="border border-black px-2 py-1 text-center text-slate-600">{row.end_date}</td>}
                                           {visibleColumns.days && <td className="border border-black px-2 py-1 text-center text-slate-500">{row.total_days}</td>}
+                                          {visibleColumns.rev_actual && <td className="border border-black px-2 py-1 text-right text-slate-500">{formatMoney(row.actual_rate)}</td>}
+                                          {visibleColumns.rev_discount && <td className="border border-black px-2 py-1 text-right text-slate-500">{formatMoney(row.discount)}</td>}
                                           {visibleColumns.net_fees && <td className="border border-black px-2 py-1 text-right text-slate-500">{formatMoney(row.net_fees)}</td>}
                                           {visibleColumns.prev_accrual && <td className="border border-black px-2 py-1 text-right text-slate-400">{formatMoney(row.prev_accrual)}</td>}
                                           {visibleColumns.period_rev && <td className="border border-black px-2 py-1 text-right font-black text-indigo-700">{formatMoney(row.period_rev)}</td>}
@@ -768,6 +786,8 @@ const Reports = () => {
                                           (visibleColumns.end_date ? 1 : 0) +
                                           (visibleColumns.days ? 1 : 0)
                                       } className="border border-black px-4 py-2 text-right uppercase text-indigo-900 tracking-widest">Cluster Subtotal: {category}</td>
+                                      {visibleColumns.rev_actual && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subActual)}</td>}
+                                      {visibleColumns.rev_discount && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subDiscount)}</td>}
                                       {visibleColumns.net_fees && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subNetFees)}</td>}
                                       {visibleColumns.prev_accrual && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subPrevAccrual)}</td>}
                                       {visibleColumns.period_rev && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subPeriodRev)}</td>}
@@ -786,6 +806,8 @@ const Reports = () => {
                               (visibleColumns.end_date ? 1 : 0) +
                               (visibleColumns.days ? 1 : 0)
                           } className="border border-black px-4 py-3 text-right uppercase tracking-[0.2em]">Verified Portfolio Total</td>
+                          {visibleColumns.rev_actual && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandActual)}</td>}
+                          {visibleColumns.rev_discount && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandDiscount)}</td>}
                           {visibleColumns.net_fees && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandNetFees)}</td>}
                           {visibleColumns.prev_accrual && <td className="border border-black px-2 py-3 text-right opacity-70">{formatMoney(grandPrevAccrual)}</td>}
                           {visibleColumns.period_rev && <td className="border border-black px-2 py-3 text-right text-indigo-400">{formatMoney(grandPeriodRev)}</td>}
@@ -1052,6 +1074,8 @@ const Reports = () => {
                                               start_date: 'Start Date',
                                               end_date: 'End Date',
                                               days: 'Days',
+                                              rev_actual: 'Actual Rate',
+                                              rev_discount: 'Discount',
                                               net_fees: 'Net Fees',
                                               prev_accrual: 'Prev. Accrual',
                                               period_rev: 'Period Rev',
