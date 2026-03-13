@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, ConfirmationModal } from '../components/ui';
 import { Staff, StaffLeave } from '../types';
 import { db } from '../services/mockSupabase';
-import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X, Database, RefreshCcw } from 'lucide-react';
+import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X, Database, RefreshCcw, ShieldAlert } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface StaffProfileViewProps {
@@ -218,6 +218,15 @@ NOTIFY pgrst, 'reload schema';`}
                       <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600"><Mail className="w-4 h-4 shrink-0" /></div>
                       <span className="truncate flex-1 text-left lowercase">{staff.email || 'No email'}</span>
                   </div>
+                  {staff.probation_start_date && (
+                    <div className="flex items-center gap-4 p-4 bg-amber-50/50 rounded-2xl border border-amber-100 text-[10px] font-black text-amber-700">
+                        <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-amber-600"><ShieldAlert className="w-4 h-4" /></div>
+                        <div className="flex-1 text-left">
+                          <p className="uppercase opacity-60 text-[8px]">Probation Period</p>
+                          <p>{format(parseISO(staff.probation_start_date), 'dd MMM yy')} - {format(parseISO(staff.probation_end_date || ''), 'dd MMM yy')}</p>
+                        </div>
+                    </div>
+                  )}
                 </div>
             </CardContent>
           </Card>

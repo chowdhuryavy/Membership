@@ -57,8 +57,8 @@ const StaffPage = () => {
     phone: '', 
     is_active: true,
     is_eligible_for_incentives: true,
-    leave_start_date: '',
-    leave_end_date: '',
+    probation_start_date: '',
+    probation_end_date: '',
     outlet_id: '' 
   });
   
@@ -300,8 +300,8 @@ const StaffPage = () => {
 {`-- ADD MISSING COLUMNS TO staff TABLE
 ALTER TABLE IF EXISTS public.staff 
 ADD COLUMN IF NOT EXISTS is_eligible_for_incentives BOOLEAN NOT NULL DEFAULT TRUE,
-ADD COLUMN IF NOT EXISTS leave_start_date TEXT,
-ADD COLUMN IF NOT EXISTS leave_end_date TEXT;
+ADD COLUMN IF NOT EXISTS probation_start_date TEXT,
+ADD COLUMN IF NOT EXISTS probation_end_date TEXT;
 
 -- ENABLE RLS FOR INTERNAL SYSTEM OPERATIONS
 ALTER TABLE public.staff ENABLE ROW LEVEL SECURITY;
