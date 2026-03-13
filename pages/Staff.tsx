@@ -116,9 +116,14 @@ const StaffPage = () => {
     setErrorMessage(null);
     setIsSchemaMissing(false);
     try {
-      // If property scope is active, fetch for all outlets in property
-      const targetOutletId = viewScope === 'outlet' ? currentOutlet.id : undefined;
-      const data = await db.getStaff(targetOutletId);
+      let data: Staff[] = [];
+      if (viewScope === 'outlet') {
+        data = await db.getStaff(currentOutlet.id);
+      } else {
+        // If property scope is active, fetch for all allowed outlets in property
+        const allowedIds = allowedOutletsInProperty.map(o => o.id);
+        data = await db.getStaff(currentProperty.id, true, allowedIds);
+      }
       setStaff(data);
     } catch (err: any) {
       setErrorMessage(err.message || "Failed to load staff roster.");
@@ -349,7 +354,15 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                 )}
             </div>
             <h3 className="font-black text-slate-900 tracking-tight uppercase truncate">{s.name}</h3>
-            <div className="inline-flex items-center px-2 py-0.5 bg-indigo-50 rounded text-[9px] font-black text-indigo-600 uppercase tracking-widest mt-1">{s.role}</div>
+            <div className="flex flex-wrap gap-2 mt-1">
+              <div className="inline-flex items-center px-2 py-0.5 bg-indigo-50 rounded text-[9px] font-black text-indigo-600 uppercase tracking-widest">{s.role}</div>
+              {viewScope === 'property' && (
+                <div className="inline-flex items-center px-2 py-0.5 bg-slate-100 rounded text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                  <Store className="w-2.5 h-2.5 mr-1" />
+                  {outlets.find(o => o.id === s.outlet_id)?.name || 'Unknown Outlet'}
+                </div>
+              )}
+            </div>
             <div className="mt-6 space-y-2 border-t border-slate-50 pt-4">
                 <div className="flex items-center gap-3 text-slate-500"><Mail className="w-3.5 h-3.5" /><span className="text-[10px] font-bold truncate">{s.email || 'No email'}</span></div>
                 <div className="flex items-center gap-3 text-slate-500"><Phone className="w-3.5 h-3.5" /><span className="text-[10px] font-bold">{s.phone || 'No phone'}</span></div>
