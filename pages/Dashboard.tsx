@@ -531,14 +531,14 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-lg transition-all duration-500">
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-lg transition-all duration-500">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-indigo-100/50 transition-colors duration-700"></div>
         <div className="relative z-10">
           <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-none uppercase">
             Hello, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600">{displayName}</span>
           </h1>
-          <div className="flex flex-wrap items-center gap-4 mt-2">
+          <div className="flex flex-wrap items-center gap-3 mt-2">
             <p className="text-slate-500 text-xs font-black uppercase tracking-widest">
               Intelligence Center &bull; <span className="text-indigo-600 font-bold">{format(parseISO(dashboardMonth+'-01'), 'MMMM yyyy')}</span>
             </p>
@@ -570,37 +570,37 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpiData.map((kpi) => (
             <Card key={kpi.title} className="border-slate-200/60 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 rounded-[1.8rem]">
-                <CardContent className="p-6">
-                    <div className="flex items-center justify-between mb-4">
+                <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">{kpi.title}</p>
                         <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
                     </div>
-                    <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">{kpi.value}</h3>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tighter uppercase">{kpi.value}</h3>
                     {kpi.sub && <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{kpi.sub}</p>}
                 </CardContent>
             </Card>
         ))}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {advancedKpiData.map((kpi) => (
             <Card key={kpi.title} className="border-slate-200/60 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 rounded-[1.8rem] bg-slate-50">
-                <CardContent className="p-6">
-                    <div className="flex items-center justify-between mb-4">
+                <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
                         <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">{kpi.title}</p>
                         <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
                     </div>
-                    <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">{kpi.value}</h3>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tighter uppercase">{kpi.value}</h3>
                     {kpi.sub && <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{kpi.sub}</p>}
                 </CardContent>
             </Card>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-8 space-y-8">
             <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
                 <CardHeader className="p-8 border-b border-slate-100 flex items-center justify-between">
@@ -770,7 +770,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Top Spenders */}
         <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
             <CardHeader className="p-6 border-b border-slate-100">
@@ -832,7 +832,7 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Peak Hours Heatmap */}
         <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
             <CardHeader className="p-6 border-b border-slate-100">
@@ -884,7 +884,7 @@ const Dashboard = () => {
       </div>
 
       {canViewFinancials && (
-          <div className="grid grid-cols-1 gap-8">
+          <div className="grid grid-cols-1 gap-4">
             {/* Revenue vs Discount */}
             <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
                 <CardHeader className="p-6 border-b border-slate-100">
