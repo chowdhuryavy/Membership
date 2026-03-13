@@ -38,7 +38,6 @@ import {
 import StaffProfileView from './StaffProfileView';
 
 const StaffPage = () => {
-  let handleSubmit: any;
   const { user } = useAuth();
   const { currentOutlet, currentProperty, hasPermission, outlets = [] } = useSettings();
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -142,126 +141,17 @@ const StaffPage = () => {
     );
   }, [staff, searchTerm]);
 
-  if (!canView) return null;
-
-  if (selectedStaff) {
-    return (
-      <>
-        {showForm && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-            <Card className="w-full max-w-2xl rounded-[3rem] border-slate-200 shadow-2xl overflow-hidden bg-white animate-in zoom-in-95 duration-300">
-              <CardHeader className="bg-slate-900 text-white p-8 flex justify-between items-center">
-                <div>
-                  <CardTitle className="text-xl font-black uppercase tracking-widest">{editingId ? 'Modify Personnel' : 'Enroll New Staff'}</CardTitle>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Facility Human Resources Management</p>
-                </div>
-                <button onClick={() => setShowForm(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-6 h-6" /></button>
-              </CardHeader>
-              <CardContent className="p-10">
-                <form onSubmit={handleSubmit} className="space-y-8">
-                  <div className="space-y-6">
-                    <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Personal Information</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <Input label="Full Identity Name *" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required className="h-14 rounded-2xl font-bold" />
-                      <Input label="Professional Role *" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })} required className="h-14 rounded-2xl font-bold" placeholder="e.g. Senior Therapist" />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <Input label="Email Address" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="h-14 rounded-2xl" />
-                      <Input label="Contact Number" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="h-14 rounded-2xl" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-6">
-                    <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Employment Details</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Incentive Eligibility</label>
-                        <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-                          <button type="button" onClick={() => setFormData({ ...formData, is_eligible_for_incentives: true })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${formData.is_eligible_for_incentives ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>Eligible</button>
-                          <button type="button" onClick={() => setFormData({ ...formData, is_eligible_for_incentives: false })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${!formData.is_eligible_for_incentives ? 'bg-white text-red-600 shadow-md' : 'text-slate-400'}`}>Exempt</button>
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Account Status</label>
-                        <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-                          <button type="button" onClick={() => setFormData({ ...formData, is_active: true })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${formData.is_active ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-400'}`}>Active</button>
-                          <button type="button" onClick={() => setFormData({ ...formData, is_active: false })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${!formData.is_active ? 'bg-white text-slate-600 shadow-md' : 'text-slate-400'}`}>Inactive</button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Probation Period</h4>
-                      <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer">
-                        <input type="checkbox" checked={!!formData.probation_start_date || !!formData.probation_end_date} onChange={e => {
-                          if (e.target.checked) {
-                            const today = format(new Date(), 'yyyy-MM-dd');
-                            setFormData({ ...formData, probation_start_date: today, probation_end_date: today });
-                          } else {
-                            setFormData({ ...formData, probation_start_date: '', probation_end_date: '' });
-                          }
-                        }} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-                        Enable Probation
-                      </label>
-                    </div>
-                    {(!!formData.probation_start_date || !!formData.probation_end_date) && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-top-2 duration-300">
-                        <Input label="Probation Start Date" type="date" value={formData.probation_start_date} onChange={e => setFormData({ ...formData, probation_start_date: e.target.value })} className="h-14 rounded-2xl" />
-                        <Input label="Probation End Date" type="date" value={formData.probation_end_date} onChange={e => setFormData({ ...formData, probation_end_date: e.target.value })} className="h-14 rounded-2xl" />
-                      </div>
-                    )}
-                  </div>
-
-                  {errorMessage && (
-                    <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in shake duration-300">
-                      <AlertCircle className="w-5 h-5" />
-                      <p className="text-xs font-bold uppercase tracking-tight">{errorMessage}</p>
-                    </div>
-                  )}
-
-                  <div className="flex gap-4 pt-4">
-                    <Button type="button" variant="secondary" onClick={() => setShowForm(false)} className="flex-1 h-14 rounded-2xl font-black uppercase tracking-widest">Discard</Button>
-                    <Button type="submit" isLoading={isSubmitting} className="flex-1 h-14 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-100">
-                      {editingId ? 'Update Identity' : 'Authorize Enrollment'}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-        <StaffProfileView 
-          staff={selectedStaff} 
-          onBack={() => setSelectedStaff(null)} 
-          canManage={canManage || false}
-          canManageLeaves={canManageLeaves || false}
-          loadStaff={loadStaff}
-          onEdit={(s) => {
-            setEditingId(s.id); 
-            setFormData({
-              ...s,
-              email: s.email || '',
-              phone: s.phone || '',
-              probation_start_date: s.probation_start_date || '',
-              probation_end_date: s.probation_end_date || '',
-              outlet_id: s.outlet_id
-            }); 
-            setShowForm(true);
-          }}
-        />
-      </>
-    );
-  }
-
-  handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentOutlet || !canManage) return;
     setIsSubmitting(true);
+    setErrorMessage(null);
     try {
-      if (editingId) await db.updateStaff(editingId, formData);
-      else await db.addStaff({ ...formData, outlet_id: currentOutlet.id });
+      if (editingId) {
+        await db.updateStaff(editingId, formData);
+      } else {
+        await db.addStaff({ ...formData, outlet_id: currentOutlet.id });
+      }
       setShowForm(false);
       setEditingId(null);
       if (selectedStaff && editingId === selectedStaff.id) {
@@ -277,6 +167,8 @@ const StaffPage = () => {
       setIsSubmitting(false);
     }
   };
+
+  if (!canView) return null;
 
   const MissingStaffColumnsPanel = () => (
     <Card className="max-w-4xl mx-auto rounded-[3rem] border-amber-200 bg-amber-50/30 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-500">
@@ -413,7 +305,7 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Account Status</label>
                       <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
                         <button type="button" onClick={() => setFormData({ ...formData, is_active: true })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${formData.is_active ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-400'}`}>Active</button>
-                        <button type="button" onClick={() => setFormData({ ...formData, is_active: false })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${!formData.is_active ? 'bg-white text-slate-600 shadow-md' : 'text-slate-400'}`}>Inactive</button>
+                        <button type="button" onClick={() => setFormData({ ...formData, is_active: false })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${!formData.is_active ? 'bg-white text-red-600 shadow-md' : 'text-slate-400'}`}>Inactive</button>
                       </div>
                     </div>
                   </div>
