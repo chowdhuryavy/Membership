@@ -232,7 +232,7 @@ const StaffPage = () => {
           onBack={() => setSelectedStaff(null)} 
           canManage={canManage || false}
           canManageLeaves={canManageLeaves || false}
-          onDelete={(id) => setDeleteId(id)}
+          loadStaff={loadStaff}
           onEdit={(s) => {
             setEditingId(s.id); 
             setFormData({
@@ -447,7 +447,6 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
           </Card>
         </div>
       )}
-      <ConfirmationModal isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={async () => { if (deleteId) { await db.deleteStaff(deleteId); loadStaff(); } }} title="Purge Staff Identity" description="Permanently remove this personnel record from the system?" confirmText="Confirm Purge" isDestructive={true} />
       {isSchemaMissing && <MissingStaffColumnsPanel />}
       
       {selectedStaff ? (
@@ -456,7 +455,7 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
           onBack={() => setSelectedStaff(null)} 
           canManage={canManage || false}
           canManageLeaves={canManageLeaves || false}
-          onDelete={(id) => setDeleteId(id)}
+          loadStaff={loadStaff}
           onEdit={(s) => {
             setEditingId(s.id); 
             setFormData({
@@ -513,6 +512,9 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
           {rosterContent}
         </>
       )}
+      <div className="z-[9999] relative">
+        <ConfirmationModal isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={async () => { if (deleteId) { await db.deleteStaff(deleteId); loadStaff(); } }} title="Purge Staff Identity" description="Permanently remove this personnel record from the system?" confirmText="Confirm Purge" isDestructive={true} />
+      </div>
     </div>
   );
 };

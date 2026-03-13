@@ -11,10 +11,10 @@ interface StaffProfileViewProps {
   canManage: boolean;
   canManageLeaves: boolean;
   onEdit: (s: Staff) => void;
-  onDelete: (id: string) => void;
+  loadStaff: () => void;
 }
 
-const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canManage, canManageLeaves, onEdit, onDelete }) => {
+const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canManage, canManageLeaves, onEdit, loadStaff }) => {
   const [leaves, setLeaves] = useState<StaffLeave[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLeaveForm, setShowLeaveForm] = useState(false);
@@ -22,6 +22,7 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
   const [editingLeaveId, setEditingLeaveId] = useState<string | null>(null);
 
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [deleteStaffId, setDeleteStaffId] = useState<string | null>(null);
   const [isSchemaMissing, setIsSchemaMissing] = useState(false);
 
   const loadLeaves = async () => {
@@ -164,7 +165,7 @@ NOTIFY pgrst, 'reload schema';`}
         </button>
         {canManage && (
           <div className="flex gap-2">
-            <Button onClick={() => onDelete(staff.id)} variant="secondary" className="relative z-10 rounded-xl h-11 px-6 font-black text-xs uppercase bg-white border-2 border-red-100 hover:border-red-200 text-red-600 shadow-sm transition-all">
+            <Button onClick={() => setDeleteStaffId(staff.id)} variant="secondary" className="relative z-10 rounded-xl h-11 px-6 font-black text-xs uppercase bg-white border-2 border-red-100 hover:border-red-200 text-red-600 shadow-sm transition-all">
                 <Trash2 className="w-4 h-4 mr-2" /> Purge Staff
             </Button>
             <Button onClick={() => onEdit(staff)} variant="secondary" className="relative z-10 rounded-xl h-11 px-6 font-black text-xs uppercase bg-white border-2 border-slate-100 hover:border-indigo-200 shadow-sm transition-all">
@@ -173,6 +174,16 @@ NOTIFY pgrst, 'reload schema';`}
           </div>
         )}
       </div>
+
+      <ConfirmationModal 
+        isOpen={!!deleteStaffId} 
+        onClose={() => setDeleteStaffId(null)} 
+        onConfirm={async () => { await db.deleteStaff(staff.id); loadStaff(); onBack(); }} 
+        title="Purge Staff Identity" 
+        description="Permanently remove this personnel record from the system?" 
+        confirmText="Confirm Purge" 
+        isDestructive={true} 
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {isSchemaMissing && <MissingLeavesTablePanel />}
