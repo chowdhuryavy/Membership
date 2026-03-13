@@ -156,7 +156,14 @@ const Reports = () => {
       disc_percent: true,
       discount_amt: true,
       net_revenue: true,
-      remarks: true
+      remarks: true,
+      start_date: true,
+      end_date: true,
+      days: true,
+      net_fees: true,
+      prev_accrual: true,
+      period_rev: true,
+      deferred: true
   });
 
   const isStaffOnLeaveOnDate = (s: Staff, targetDateStr: string) => {
@@ -691,15 +698,15 @@ const Reports = () => {
               <table className="w-full border-collapse text-[9px] border-2 border-black">
                   <thead>
                       <tr className="bg-slate-950 text-white font-black uppercase tracking-widest">
-                          <th className="border border-black px-2 py-3 w-8">SL.</th>
-                          <th className="border border-black px-2 py-3 min-w-[150px]">Guest Name / Profile</th>
-                          <th className="border border-black px-2 py-3 w-20">Start Date</th>
-                          <th className="border border-black px-2 py-3 w-20">End Date</th>
-                          <th className="border border-black px-2 py-3 w-12 text-center">Days</th>
-                          <th className="border border-black px-2 py-3 text-right w-24">Net Fees</th>
-                          <th className="border border-black px-2 py-3 text-right w-24">Prev. Accrual</th>
-                          <th className="border border-black px-2 py-3 text-right w-24">Period Rev</th>
-                          <th className="border border-black px-2 py-3 text-right w-24">Deferred</th>
+                          {visibleColumns.sl_no && <th className="border border-black px-2 py-3 w-8">SL.</th>}
+                          {visibleColumns.guest_name && <th className="border border-black px-2 py-3 min-w-[150px]">Guest Name / Profile</th>}
+                          {visibleColumns.start_date && <th className="border border-black px-2 py-3 w-20">Start Date</th>}
+                          {visibleColumns.end_date && <th className="border border-black px-2 py-3 w-20">End Date</th>}
+                          {visibleColumns.days && <th className="border border-black px-2 py-3 w-12 text-center">Days</th>}
+                          {visibleColumns.net_fees && <th className="border border-black px-2 py-3 text-right w-24">Net Fees</th>}
+                          {visibleColumns.prev_accrual && <th className="border border-black px-2 py-3 text-right w-24">Prev. Accrual</th>}
+                          {visibleColumns.period_rev && <th className="border border-black px-2 py-3 text-right w-24">Period Rev</th>}
+                          {visibleColumns.deferred && <th className="border border-black px-2 py-3 text-right w-24">Deferred</th>}
                       </tr>
                   </thead>
                   <tbody>
@@ -719,7 +726,17 @@ const Reports = () => {
                               <React.Fragment key={category}>
                                   {/* Group Header */}
                                   <tr className="bg-slate-100">
-                                      <td colSpan={9} className="border border-black px-4 py-2 font-black text-slate-900 uppercase tracking-tight text-[10px]">
+                                      <td colSpan={
+                                          (visibleColumns.sl_no ? 1 : 0) +
+                                          (visibleColumns.guest_name ? 1 : 0) +
+                                          (visibleColumns.start_date ? 1 : 0) +
+                                          (visibleColumns.end_date ? 1 : 0) +
+                                          (visibleColumns.days ? 1 : 0) +
+                                          (visibleColumns.net_fees ? 1 : 0) +
+                                          (visibleColumns.prev_accrual ? 1 : 0) +
+                                          (visibleColumns.period_rev ? 1 : 0) +
+                                          (visibleColumns.deferred ? 1 : 0)
+                                      } className="border border-black px-4 py-2 font-black text-slate-900 uppercase tracking-tight text-[10px]">
                                           <div className="flex items-center gap-2">
                                               <Layers className="w-3 h-3 text-indigo-500" />
                                               {category} <span className="text-[8px] font-bold text-slate-400 ml-2">({groupRows.length} Ledger Events)</span>
@@ -730,25 +747,31 @@ const Reports = () => {
                                   {/* Rows */}
                                   {groupRows.map((row, idx) => (
                                       <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                                          <td className="border border-black px-2 py-1 text-center text-slate-500">{idx + 1}</td>
-                                          <td className="border border-black px-2 py-1 font-black text-slate-800">{row.guest_name}</td>
-                                          <td className="border border-black px-2 py-1 text-center text-slate-600">{row.start_date}</td>
-                                          <td className="border border-black px-2 py-1 text-center text-slate-600">{row.end_date}</td>
-                                          <td className="border border-black px-2 py-1 text-center text-slate-500">{row.total_days}</td>
-                                          <td className="border border-black px-2 py-1 text-right text-slate-500">{formatMoney(row.net_fees)}</td>
-                                          <td className="border border-black px-2 py-1 text-right text-slate-400">{formatMoney(row.prev_accrual)}</td>
-                                          <td className="border border-black px-2 py-1 text-right font-black text-indigo-700">{formatMoney(row.period_rev)}</td>
-                                          <td className="border border-black px-2 py-1 text-right font-bold text-red-500">{formatMoney(row.deferred)}</td>
+                                          {visibleColumns.sl_no && <td className="border border-black px-2 py-1 text-center text-slate-500">{idx + 1}</td>}
+                                          {visibleColumns.guest_name && <td className="border border-black px-2 py-1 font-black text-slate-800">{row.guest_name}</td>}
+                                          {visibleColumns.start_date && <td className="border border-black px-2 py-1 text-center text-slate-600">{row.start_date}</td>}
+                                          {visibleColumns.end_date && <td className="border border-black px-2 py-1 text-center text-slate-600">{row.end_date}</td>}
+                                          {visibleColumns.days && <td className="border border-black px-2 py-1 text-center text-slate-500">{row.total_days}</td>}
+                                          {visibleColumns.net_fees && <td className="border border-black px-2 py-1 text-right text-slate-500">{formatMoney(row.net_fees)}</td>}
+                                          {visibleColumns.prev_accrual && <td className="border border-black px-2 py-1 text-right text-slate-400">{formatMoney(row.prev_accrual)}</td>}
+                                          {visibleColumns.period_rev && <td className="border border-black px-2 py-1 text-right font-black text-indigo-700">{formatMoney(row.period_rev)}</td>}
+                                          {visibleColumns.deferred && <td className="border border-black px-2 py-1 text-right font-bold text-red-500">{formatMoney(row.deferred)}</td>}
                                       </tr>
                                   ))}
 
                                   {/* Subtotal */}
                                   <tr className="bg-indigo-50/50 font-black text-[9px]">
-                                      <td colSpan={5} className="border border-black px-4 py-2 text-right uppercase text-indigo-900 tracking-widest">Cluster Subtotal: {category}</td>
-                                      <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subNetFees)}</td>
-                                      <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subPrevAccrual)}</td>
-                                      <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subPeriodRev)}</td>
-                                      <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subDeferred)}</td>
+                                      <td colSpan={
+                                          (visibleColumns.sl_no ? 1 : 0) +
+                                          (visibleColumns.guest_name ? 1 : 0) +
+                                          (visibleColumns.start_date ? 1 : 0) +
+                                          (visibleColumns.end_date ? 1 : 0) +
+                                          (visibleColumns.days ? 1 : 0)
+                                      } className="border border-black px-4 py-2 text-right uppercase text-indigo-900 tracking-widest">Cluster Subtotal: {category}</td>
+                                      {visibleColumns.net_fees && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subNetFees)}</td>}
+                                      {visibleColumns.prev_accrual && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subPrevAccrual)}</td>}
+                                      {visibleColumns.period_rev && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subPeriodRev)}</td>}
+                                      {visibleColumns.deferred && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subDeferred)}</td>}
                                   </tr>
                               </React.Fragment>
                           );
@@ -756,11 +779,17 @@ const Reports = () => {
 
                       {/* Grand Total */}
                       <tr className="bg-slate-900 text-white font-black text-[10px]">
-                          <td colSpan={5} className="border border-black px-4 py-3 text-right uppercase tracking-[0.2em]">Verified Portfolio Total</td>
-                          <td className="border border-black px-2 py-3 text-right">{formatMoney(grandNetFees)}</td>
-                          <td className="border border-black px-2 py-3 text-right opacity-70">{formatMoney(grandPrevAccrual)}</td>
-                          <td className="border border-black px-2 py-3 text-right text-indigo-400">{formatMoney(grandPeriodRev)}</td>
-                          <td className="border border-black px-2 py-3 text-right text-red-400">{formatMoney(grandDeferred)}</td>
+                          <td colSpan={
+                              (visibleColumns.sl_no ? 1 : 0) +
+                              (visibleColumns.guest_name ? 1 : 0) +
+                              (visibleColumns.start_date ? 1 : 0) +
+                              (visibleColumns.end_date ? 1 : 0) +
+                              (visibleColumns.days ? 1 : 0)
+                          } className="border border-black px-4 py-3 text-right uppercase tracking-[0.2em]">Verified Portfolio Total</td>
+                          {visibleColumns.net_fees && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandNetFees)}</td>}
+                          {visibleColumns.prev_accrual && <td className="border border-black px-2 py-3 text-right opacity-70">{formatMoney(grandPrevAccrual)}</td>}
+                          {visibleColumns.period_rev && <td className="border border-black px-2 py-3 text-right text-indigo-400">{formatMoney(grandPeriodRev)}</td>}
+                          {visibleColumns.deferred && <td className="border border-black px-2 py-3 text-right text-red-400">{formatMoney(grandDeferred)}</td>}
                       </tr>
                   </tbody>
               </table>
@@ -1009,28 +1038,40 @@ const Reports = () => {
                           )}
 
                           {/* 3. COLUMN VISIBILITY */}
-                          {(reportType === 'daily_sales' || reportType === 'incentives' || reportType === 'members_joined') && (
+                          {(reportType === 'daily_sales' || reportType === 'incentives' || reportType === 'members_joined' || reportType === 'revenue_recognition') && (
                               <div className="space-y-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
                                   <div className="flex items-center gap-2 mb-1">
                                       <Settings2 className="w-3.5 h-3.5 text-indigo-600"/>
                                       <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Column Visibility</label>
                                   </div>
                                   <div className="grid grid-cols-2 gap-2">
-                                      {Object.entries({
-                                          sl_no: 'Sl.No.',
-                                          date: 'Date',
-                                          guest_name: 'Guest / Member',
-                                          reference: reportType === 'daily_sales' ? 'Reference' : reportType === 'members_joined' ? 'Category' : 'Duration',
-                                          check_no: 'Check No.',
-                                          payment_mode: 'Payment Mode',
-                                          item_name: 'Item / Service',
-                                          specialist: 'Specialist',
-                                          gross_amount: 'Gross Amount',
-                                          disc_percent: 'Disc %',
-                                          discount_amt: 'Discount Amt',
-                                          net_revenue: 'Net Revenue',
-                                          remarks: 'Remarks'
-                                      }).map(([key, label]) => {
+                                      {Object.entries(
+                                          reportType === 'revenue_recognition' ? {
+                                              sl_no: 'Sl.No.',
+                                              guest_name: 'Guest / Profile',
+                                              start_date: 'Start Date',
+                                              end_date: 'End Date',
+                                              days: 'Days',
+                                              net_fees: 'Net Fees',
+                                              prev_accrual: 'Prev. Accrual',
+                                              period_rev: 'Period Rev',
+                                              deferred: 'Deferred'
+                                          } : {
+                                              sl_no: 'Sl.No.',
+                                              date: 'Date',
+                                              guest_name: 'Guest / Member',
+                                              reference: reportType === 'daily_sales' ? 'Reference' : reportType === 'members_joined' ? 'Category' : 'Duration',
+                                              check_no: 'Check No.',
+                                              payment_mode: 'Payment Mode',
+                                              item_name: 'Item / Service',
+                                              specialist: 'Specialist',
+                                              gross_amount: 'Gross Amount',
+                                              disc_percent: 'Disc %',
+                                              discount_amt: 'Discount Amt',
+                                              net_revenue: 'Net Revenue',
+                                              remarks: 'Remarks'
+                                          }
+                                      ).map(([key, label]) => {
                                           // Hide irrelevant columns based on report type
                                           if (key === 'payment_mode' && reportType !== 'daily_sales') return null;
                                           if (key === 'specialist' && reportType !== 'incentives') return null;
