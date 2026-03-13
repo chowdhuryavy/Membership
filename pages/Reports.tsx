@@ -143,6 +143,21 @@ const Reports = () => {
   };
 
   const [staffLeaves, setStaffLeaves] = useState<StaffLeave[]>([]);
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
+      sl_no: true,
+      date: true,
+      guest_name: true,
+      reference: true,
+      check_no: true,
+      payment_mode: true,
+      item_name: true,
+      specialist: true,
+      gross_amount: true,
+      disc_percent: true,
+      discount_amt: true,
+      net_revenue: true,
+      remarks: true
+  });
 
   const isStaffOnLeaveOnDate = (s: Staff, targetDateStr: string) => {
       // Check legacy fields
@@ -303,10 +318,10 @@ const Reports = () => {
                   type_of_membership: cat ? cat.name : 'Unknown',
                   check_no: m.check_no || '#---',
                   item_name: 'Membership',
-                  actual_price: m.actual_rate,
-                  discount_percent: m.discount > 0 ? (m.discount / m.actual_rate) * 100 : 0,
-                  discount_amount: m.discount,
-                  net_revenue: m.net_amount,
+                  actual_price: m.actual_rate || (m.net_amount + (m.discount || 0)) || 0,
+                  discount_percent: (m.discount || 0) > 0 && (m.actual_rate || (m.net_amount + (m.discount || 0))) > 0 ? ((m.discount || 0) / (m.actual_rate || (m.net_amount + (m.discount || 0)))) * 100 : 0,
+                  discount_amount: m.discount || 0,
+                  net_revenue: m.net_amount || 0,
                   inc_total: 0,
                   inc_discount_percent: 0,
                   inc_discount_val: 0,
@@ -794,25 +809,25 @@ const Reports = () => {
             <table className="w-full border-collapse text-[9px] border-2 border-black">
                 <thead>
                     <tr className="bg-slate-950 text-white font-black uppercase tracking-widest">
-                        <th rowSpan={2} className="border border-black px-2 py-3 w-8">Sl.No.</th>
-                        <th rowSpan={2} className="border border-black px-2 py-3 w-20">Date</th>
-                        <th rowSpan={2} className="border border-black px-2 py-3 min-w-[120px]">Guest / Member</th>
+                        {visibleColumns.sl_no && <th rowSpan={2} className="border border-black px-2 py-3 w-8">Sl.No.</th>}
+                        {visibleColumns.date && <th rowSpan={2} className="border border-black px-2 py-3 w-20">Date</th>}
+                        {visibleColumns.guest_name && <th rowSpan={2} className="border border-black px-2 py-3 min-w-[120px]">Guest / Member</th>}
                         
-                        <th rowSpan={2} className="border border-black px-2 py-3 w-24">{isDailySales ? 'Reference' : isMembersJoined ? 'Category' : 'Duration'}</th>
-                        <th rowSpan={2} className="border border-black px-2 py-3 w-20">Check No.</th>
-                        {(isDailySales) && <th rowSpan={2} className="border border-black px-2 py-3 w-24">Payment Mode</th>}
-                        <th rowSpan={2} className="border border-black px-2 py-3 min-w-[100px]">Item / Service</th>
-                        {isIncentiveReport && <th rowSpan={2} className="border border-black px-2 py-3">{specialistLabel}</th>}
+                        {visibleColumns.reference && <th rowSpan={2} className="border border-black px-2 py-3 w-24">{isDailySales ? 'Reference' : isMembersJoined ? 'Category' : 'Duration'}</th>}
+                        {visibleColumns.check_no && <th rowSpan={2} className="border border-black px-2 py-3 w-20">Check No.</th>}
+                        {(isDailySales && visibleColumns.payment_mode) && <th rowSpan={2} className="border border-black px-2 py-3 w-24">Payment Mode</th>}
+                        {visibleColumns.item_name && <th rowSpan={2} className="border border-black px-2 py-3 min-w-[100px]">Item / Service</th>}
+                        {(isIncentiveReport && visibleColumns.specialist) && <th rowSpan={2} className="border border-black px-2 py-3">{specialistLabel}</th>}
                         
-                        <th rowSpan={2} className="border border-black px-2 py-3 text-right w-20">Gross Amount</th>
-                        <th rowSpan={2} className="border border-black px-2 py-3 text-center w-12">Disc %</th>
-                        <th rowSpan={2} className="border border-black px-2 py-3 text-right w-20">Discount Amt</th>
-                        <th rowSpan={2} className="border border-black px-2 py-3 text-right w-20">Net Revenue</th>
+                        {visibleColumns.gross_amount && <th rowSpan={2} className="border border-black px-2 py-3 text-right w-20">Gross Amount</th>}
+                        {visibleColumns.disc_percent && <th rowSpan={2} className="border border-black px-2 py-3 text-center w-12">Disc %</th>}
+                        {visibleColumns.discount_amt && <th rowSpan={2} className="border border-black px-2 py-3 text-right w-20">Discount Amt</th>}
+                        {visibleColumns.net_revenue && <th rowSpan={2} className="border border-black px-2 py-3 text-right w-20">Net Revenue</th>}
                         
                         {/* Incentive Columns only for Incentive Report */}
                         {isIncentiveReport && <th colSpan={4} className="border border-black px-2 py-1 text-center bg-amber-100 text-slate-900">Incentive Breakdown</th>}
                         
-                        <th rowSpan={2} className="border border-black px-2 py-3 min-w-[100px]">Remarks</th>
+                        {visibleColumns.remarks && <th rowSpan={2} className="border border-black px-2 py-3 min-w-[100px]">Remarks</th>}
                         
                         {isIncentiveReport && Array.isArray(activeStaffList) && activeStaffList.map(s => (
                             <th key={s.id} rowSpan={2} className="border border-black px-1 py-3 w-16 bg-slate-900 text-center">
@@ -835,20 +850,20 @@ const Reports = () => {
                     {Array.isArray(rows) && rows.map((row, idx) => {
                         return (
                             <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                <td className="border border-black px-2 py-1 text-center font-bold">{row.sl_no}</td>
-                                <td className="border border-black px-2 py-1 text-center whitespace-nowrap">{row.date}</td>
-                                <td className="border border-black px-2 py-1 font-black text-slate-700">{row.guest_name}</td>
+                                {visibleColumns.sl_no && <td className="border border-black px-2 py-1 text-center font-bold">{row.sl_no}</td>}
+                                {visibleColumns.date && <td className="border border-black px-2 py-1 text-center whitespace-nowrap">{row.date}</td>}
+                                {visibleColumns.guest_name && <td className="border border-black px-2 py-1 font-black text-slate-700">{row.guest_name}</td>}
                                 
-                                <td className="border border-black px-2 py-1 text-center">{isMembersJoined ? row.type_of_membership : (row.duration || '-')}</td>
-                                <td className="border border-black px-2 py-1 text-center text-slate-400">{row.check_no}</td>
-                                {(isDailySales) && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
-                                <td className="border border-black px-2 py-1">{row.item_name}</td>
-                                {isIncentiveReport && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
+                                {visibleColumns.reference && <td className="border border-black px-2 py-1 text-center">{isMembersJoined ? row.type_of_membership : (row.duration || '-')}</td>}
+                                {visibleColumns.check_no && <td className="border border-black px-2 py-1 text-center text-slate-400">{row.check_no}</td>}
+                                {(isDailySales && visibleColumns.payment_mode) && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
+                                {visibleColumns.item_name && <td className="border border-black px-2 py-1">{row.item_name}</td>}
+                                {(isIncentiveReport && visibleColumns.specialist) && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
                                 
-                                <td className="border border-black px-2 py-1 text-right">{row.actual_price.toFixed(2)}</td>
-                                <td className="border border-black px-2 py-1 text-center text-slate-400">{row.discount_percent > 0 ? `${row.discount_percent.toFixed(0)}%` : ''}</td>
-                                <td className="border border-black px-2 py-1 text-right">{row.discount_amount.toFixed(2)}</td>
-                                <td className="border border-black px-2 py-1 text-right font-black bg-slate-50">{row.net_revenue.toFixed(2)}</td>
+                                {visibleColumns.gross_amount && <td className="border border-black px-2 py-1 text-right">{row.actual_price.toFixed(2)}</td>}
+                                {visibleColumns.disc_percent && <td className="border border-black px-2 py-1 text-center text-slate-400">{row.discount_percent > 0 ? `${row.discount_percent.toFixed(0)}%` : ''}</td>}
+                                {visibleColumns.discount_amt && <td className="border border-black px-2 py-1 text-right">{row.discount_amount.toFixed(2)}</td>}
+                                {visibleColumns.net_revenue && <td className="border border-black px-2 py-1 text-right font-black bg-slate-50">{row.net_revenue.toFixed(2)}</td>}
                                 
                                 {isIncentiveReport && (
                                     <>
@@ -859,7 +874,7 @@ const Reports = () => {
                                     </>
                                 )}
                                 
-                                <td className="border border-black px-2 py-1 text-[8px] text-slate-400 italic truncate max-w-[120px]">{row.remarks}</td>
+                                {visibleColumns.remarks && <td className="border border-black px-2 py-1 text-[8px] text-slate-400 italic truncate max-w-[120px]">{row.remarks}</td>}
                                 
                                 {isIncentiveReport && Array.isArray(activeStaffList) && activeStaffList.map(s => {
                                     const val = row.staff_splits[s.id] || 0;
@@ -873,17 +888,26 @@ const Reports = () => {
                         );
                     })}
                     <tr className="bg-slate-900 text-white font-black text-[10px]">
-                        <td colSpan={(isDailySales || isIncentiveReport) ? 7 : 6} className="border border-black px-4 py-3 text-right uppercase tracking-widest">Aggregate Portfolio Totals</td>
-                        <td className="border border-black px-2 py-3 text-right">{totals.totalActual.toFixed(2)}</td>
-                        <td className="border border-black"></td>
-                        <td className="border border-black px-2 py-3 text-right text-indigo-300">{totals.totalDiscount.toFixed(2)}</td>
-                        <td className="border border-black px-2 py-3 text-right">{totals.totalNetRev.toFixed(2)}</td>
+                        <td colSpan={
+                            (visibleColumns.sl_no ? 1 : 0) +
+                            (visibleColumns.date ? 1 : 0) +
+                            (visibleColumns.guest_name ? 1 : 0) +
+                            (visibleColumns.reference ? 1 : 0) +
+                            (visibleColumns.check_no ? 1 : 0) +
+                            (isDailySales && visibleColumns.payment_mode ? 1 : 0) +
+                            (visibleColumns.item_name ? 1 : 0) +
+                            (isIncentiveReport && visibleColumns.specialist ? 1 : 0)
+                        } className="border border-black px-4 py-3 text-right uppercase tracking-widest">Aggregate Portfolio Totals</td>
+                        {visibleColumns.gross_amount && <td className="border border-black px-2 py-3 text-right">{totals.totalActual.toFixed(2)}</td>}
+                        {visibleColumns.disc_percent && <td className="border border-black"></td>}
+                        {visibleColumns.discount_amt && <td className="border border-black px-2 py-3 text-right text-indigo-300">{totals.totalDiscount.toFixed(2)}</td>}
+                        {visibleColumns.net_revenue && <td className="border border-black px-2 py-3 text-right">{totals.totalNetRev.toFixed(2)}</td>}
                         
                         {isIncentiveReport && (
                             <>
                                 <td colSpan={3} className="border border-black"></td>
                                 <td className="border border-black px-2 py-3 text-right bg-indigo-600 font-bold">{totals.totalIncNet.toFixed(2)}</td>
-                                <td className="border border-black"></td>
+                                {visibleColumns.remarks && <td className="border border-black"></td>}
                                 {Array.isArray(activeStaffList) && activeStaffList.map(s => (
                                     <td key={s.id} className="border border-black px-1 py-3 text-right text-indigo-200">
                                         {(totals.staffTotals[s.id] || 0).toFixed(2)}
@@ -891,7 +915,7 @@ const Reports = () => {
                                 ))}
                             </>
                         )}
-                        {!isIncentiveReport && <td className="border border-black"></td>}
+                        {!isIncentiveReport && visibleColumns.remarks && <td className="border border-black"></td>}
                     </tr>
                 </tbody>
             </table>
@@ -980,6 +1004,49 @@ const Reports = () => {
                                               {dept}
                                           </button>
                                       ))}
+                                  </div>
+                              </div>
+                          )}
+
+                          {/* 3. COLUMN VISIBILITY */}
+                          {(reportType === 'daily_sales' || reportType === 'incentives' || reportType === 'members_joined') && (
+                              <div className="space-y-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
+                                  <div className="flex items-center gap-2 mb-1">
+                                      <Settings2 className="w-3.5 h-3.5 text-indigo-600"/>
+                                      <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Column Visibility</label>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2">
+                                      {Object.entries({
+                                          sl_no: 'Sl.No.',
+                                          date: 'Date',
+                                          guest_name: 'Guest / Member',
+                                          reference: reportType === 'daily_sales' ? 'Reference' : reportType === 'members_joined' ? 'Category' : 'Duration',
+                                          check_no: 'Check No.',
+                                          payment_mode: 'Payment Mode',
+                                          item_name: 'Item / Service',
+                                          specialist: 'Specialist',
+                                          gross_amount: 'Gross Amount',
+                                          disc_percent: 'Disc %',
+                                          discount_amt: 'Discount Amt',
+                                          net_revenue: 'Net Revenue',
+                                          remarks: 'Remarks'
+                                      }).map(([key, label]) => {
+                                          // Hide irrelevant columns based on report type
+                                          if (key === 'payment_mode' && reportType !== 'daily_sales') return null;
+                                          if (key === 'specialist' && reportType !== 'incentives') return null;
+                                          
+                                          return (
+                                              <label key={key} className="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors border border-transparent hover:border-slate-100">
+                                                  <input 
+                                                      type="checkbox" 
+                                                      checked={visibleColumns[key]} 
+                                                      onChange={(e) => setVisibleColumns(prev => ({...prev, [key]: e.target.checked}))}
+                                                      className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                                                  />
+                                                  <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest truncate">{label}</span>
+                                              </label>
+                                          );
+                                      })}
                                   </div>
                               </div>
                           )}
