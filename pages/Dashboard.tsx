@@ -25,10 +25,11 @@ import {
   Store,
   Terminal,
   RefreshCcw,
-  Award
+  Award,
+  AlertTriangle
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
-import { Member, MassageBooking, Sale, Staff, MemberStatus } from '../types';
+import { Member, MassageBooking, Sale, Staff, MemberStatus, InventoryItem, MassageRoom } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
 // Fix: Added isSameDay to date-fns imports to resolve compiler error on line 185
 import { format, endOfMonth, differenceInCalendarDays, isSameMonth, startOfMonth, subMonths, isAfter, startOfDay, isWithinInterval, parse, isSameDay } from 'date-fns';
@@ -131,7 +132,16 @@ const Dashboard = () => {
     todaySalesTotal: 0,
     todaySalesCount: 0,
     staffActive: 0,
-    staffOnLeave: 0
+    staffOnLeave: 0,
+    atv: 0,
+    grossRevenue: 0,
+    totalDiscounts: 0,
+    netRevenue: 0,
+    momGrowth: 0,
+    roomUtilization: 0,
+    cancellationRate: 0,
+    guestRevenue: 0,
+    memberRevenue: 0
   });
   
   const [monthlyExpiringMembers, setMonthlyExpiringMembers] = useState<Member[]>([]);
@@ -141,6 +151,10 @@ const Dashboard = () => {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [bookings, setBookings] = useState<MassageBooking[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
+  const [topProducts, setTopProducts] = useState<{name: string, count: number}[]>([]);
+  const [topSpenders, setTopSpenders] = useState<{name: string, amount: number}[]>([]);
+  const [peakHours, setPeakHours] = useState<{hour: string, count: number}[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -218,13 +232,15 @@ const Dashboard = () => {
         }
 
         // Fetch data with scope awareness
-        const [members, freezes, bookings, sales, staff, leaves] = await Promise.all([
+        const [members, freezes, bookings, sales, staff, leaves, inventory, rooms] = await Promise.all([
           db.getMembers(scopeId, isProperty, limitToIds),
           db.getFreezes(),
           db.getMassageBookings(scopeId, isProperty, limitToIds),
           db.getSales(scopeId, isProperty, limitToIds),
           db.getStaff(scopeId, isProperty, limitToIds),
-          db.getAllStaffLeaves()
+          db.getAllStaffLeaves(),
+          db.getInventory(scopeId, isProperty, limitToIds),
+          db.getMassageRooms(currentOutlet.id, currentProperty.id)
         ]);
         
         // 1. Membership Logic
@@ -344,12 +360,105 @@ const Dashboard = () => {
                                  .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`))
                                  .slice(0, 5);
 
+        // 6. New Metrics
+        const mtdSales = sales.filter(s => s.status === 'completed' && isSameMonth(new Date(s.created_at), viewDate));
+        const mtdSalesCount = mtdSales.length;
+        const atv = mtdSalesCount > 0 ? mtdSalesRevenue / mtdSalesCount : 0;
+
+        let grossRevenue = 0;
+        let totalDiscounts = 0;
+        mtdSales.forEach(s => {
+            grossRevenue += Number(s.gross_amount || s.net_amount);
+            totalDiscounts += Number(s.discount_amount || 0);
+        });
+        
+        // MoM Growth
+        const prevMonthDate = subMonths(viewDate, 1);
+        let prevMonthRevenue = 0;
+        sales.filter(s => s.status === 'completed' && isSameMonth(new Date(s.created_at), prevMonthDate))
+             .forEach(s => prevMonthRevenue += Number(s.net_amount));
+        bookings.filter(b => b.status === 'completed' && isSameMonth(parseISO(b.date), prevMonthDate))
+                .forEach(b => prevMonthRevenue += Number(b.price));
+        members.forEach(m => {
+            const mStart = parseISO(m.start_date);
+            const mEnd = parseISO(m.current_end_date);
+            const monthStart = startOfMonth(prevMonthDate);
+            const monthEnd = endOfMonth(prevMonthDate);
+            if (mEnd >= monthStart && mStart <= monthEnd) {
+                const memberFreezes = freezes.filter(f => f.member_id === m.id);
+                prevMonthRevenue += RevenueEngine.calculateRevenuePeriod(m, memberFreezes, monthStart, monthEnd);
+            }
+        });
+        
+        const currentTotalRevenue = mtdMembershipRevenue + mtdServiceRevenue + mtdSalesRevenue;
+        const momGrowth = prevMonthRevenue > 0 ? ((currentTotalRevenue - prevMonthRevenue) / prevMonthRevenue) * 100 : 0;
+
+        // Room Utilization
+        const totalBookedHours = bookings.filter(b => b.status === 'completed' && isSameMonth(parseISO(b.date), viewDate)).length; // Assuming 1 hour per booking for simplicity
+        const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+        const totalAvailableHours = rooms.length * 12 * daysInMonth; // 12 hours a day
+        const roomUtilization = totalAvailableHours > 0 ? (totalBookedHours / totalAvailableHours) * 100 : 0;
+
+        // Cancellation Rate
+        const totalMonthBookings = bookings.filter(b => isSameMonth(parseISO(b.date), viewDate)).length;
+        const cancelledMonthBookings = bookings.filter(b => b.status === 'cancelled' && isSameMonth(parseISO(b.date), viewDate)).length;
+        const cancellationRate = totalMonthBookings > 0 ? (cancelledMonthBookings / totalMonthBookings) * 100 : 0;
+
+        // Guest vs Member Revenue
+        let guestRevenue = 0;
+        let memberRevenue = 0;
+        mtdSales.forEach(s => {
+            if (s.guest_id) memberRevenue += Number(s.net_amount);
+            else guestRevenue += Number(s.net_amount);
+        });
+
+        // Top Spenders
+        const spenderMap: Record<string, number> = {};
+        mtdSales.forEach(s => {
+            if (s.guest_name) {
+                spenderMap[s.guest_name] = (spenderMap[s.guest_name] || 0) + Number(s.net_amount);
+            }
+        });
+        const topSpendersList = Object.entries(spenderMap)
+            .map(([name, amount]) => ({ name, amount }))
+            .sort((a, b) => b.amount - a.amount)
+            .slice(0, 5);
+
+        // Low Stock Items
+        const lowStock = inventory.filter(i => i.track_inventory && i.stock_quantity <= 10);
+        setLowStockItems(lowStock);
+
+        // Top Products
+        const productMap: Record<string, number> = {};
+        mtdSales.forEach(s => {
+            if (s.item_name && s.category === 'Retail') {
+                productMap[s.item_name] = (productMap[s.item_name] || 0) + Number(s.quantity || 1);
+            }
+        });
+        const topProductsList = Object.entries(productMap)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+        setTopProducts(topProductsList);
+
+        // Peak Hours Heatmap
+        const hourMap: Record<string, number> = {};
+        bookings.filter(b => b.status === 'completed' && isSameMonth(parseISO(b.date), viewDate)).forEach(b => {
+            const hour = b.start_time.split(':')[0] + ':00';
+            hourMap[hour] = (hourMap[hour] || 0) + 1;
+        });
+        const peakHoursList = Object.entries(hourMap)
+            .map(([hour, count]) => ({ hour, count }))
+            .sort((a, b) => a.hour.localeCompare(b.hour));
+        setPeakHours(peakHoursList);
+        setTopSpenders(topSpendersList);
+
         setStats({
           activeMembers: activeAtPointCount, 
           frozenMembers: frozenAtPointCount,
           newMembersThisMonth: monthEnrollments, 
           dailyAccrual: totalDailyAccrual, 
-          revenueThisMonth: mtdMembershipRevenue + mtdServiceRevenue + mtdSalesRevenue,
+          revenueThisMonth: currentTotalRevenue,
           futureRevenue: deferredRevenueAtPoint, 
           projectedEndMonth: mtdMembershipRevenue + (totalDailyAccrual * Math.max(0, differenceInCalendarDays(endOfMonth(viewDate), auditPoint))),
           bookingCount: todayBookings.length,
@@ -357,7 +466,16 @@ const Dashboard = () => {
           todaySalesTotal: todaySales.reduce((acc, s) => acc + s.net_amount, 0),
           todaySalesCount: todaySales.length,
           staffActive: staff.filter(s => s.is_active).length - staffOnLeaveCount,
-          staffOnLeave: staffOnLeaveCount
+          staffOnLeave: staffOnLeaveCount,
+          atv,
+          grossRevenue,
+          totalDiscounts,
+          netRevenue: mtdSalesRevenue,
+          momGrowth,
+          roomUtilization,
+          cancellationRate,
+          guestRevenue,
+          memberRevenue
         });
 
         setMonthlyExpiringMembers(monthlyExpiring);
@@ -389,6 +507,15 @@ const Dashboard = () => {
     ...(canViewFinancials ? [
         { title: "POS Volume", value: formatMoney(stats.todaySalesTotal), icon: ShoppingBag, color: "text-blue-600", sub: `${stats.todaySalesCount} txns today` }
     ] : [])
+  ];
+
+  const advancedKpiData = [
+    ...(canViewFinancials ? [
+        { title: "Avg Transaction Value", value: formatMoney(stats.atv), icon: ShoppingBag, color: "text-blue-500", sub: "MTD Sales" },
+        { title: "MoM Growth", value: `${stats.momGrowth > 0 ? '+' : ''}${stats.momGrowth.toFixed(1)}%`, icon: TrendingUp, color: stats.momGrowth >= 0 ? "text-emerald-500" : "text-red-500", sub: "vs Last Month" }
+    ] : []),
+    { title: "Room Utilization", value: `${stats.roomUtilization.toFixed(1)}%`, icon: Building2, color: "text-indigo-500", sub: "MTD Booked Hours" },
+    { title: "Cancellation Rate", value: `${stats.cancellationRate.toFixed(1)}%`, icon: Clock, color: "text-rose-500", sub: "MTD Bookings" }
   ];
 
   if (!canViewDashboard) {
@@ -449,6 +576,21 @@ const Dashboard = () => {
                 <CardContent className="p-6">
                     <div className="flex items-center justify-between mb-4">
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">{kpi.title}</p>
+                        <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
+                    </div>
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">{kpi.value}</h3>
+                    {kpi.sub && <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{kpi.sub}</p>}
+                </CardContent>
+            </Card>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        {advancedKpiData.map((kpi) => (
+            <Card key={kpi.title} className="border-slate-200/60 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 rounded-[1.8rem] bg-slate-50">
+                <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">{kpi.title}</p>
                         <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
                     </div>
                     <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">{kpi.value}</h3>
@@ -627,6 +769,151 @@ const Dashboard = () => {
             <PerformanceLeaderboard staff={staff} bookings={bookings} />
         </div>
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Top Spenders */}
+        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
+            <CardHeader className="p-6 border-b border-slate-100">
+                <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
+                    <Award className="w-4 h-4 text-amber-500" /> Top Spenders (VIPs)
+                </h3>
+            </CardHeader>
+            <CardContent className="p-4">
+                <div className="space-y-2">
+                    {topSpenders.map((s, i) => (
+                        <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-2xl">
+                            <span className="text-xs font-bold text-slate-700">{s.name}</span>
+                            <span className="text-xs font-black text-indigo-600">{formatMoney(s.amount)}</span>
+                        </div>
+                    ))}
+                    {topSpenders.length === 0 && <p className="text-center text-xs text-slate-400 py-4">No data</p>}
+                </div>
+            </CardContent>
+        </Card>
+
+        {/* Top Products */}
+        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
+            <CardHeader className="p-6 border-b border-slate-100">
+                <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
+                    <ShoppingBag className="w-4 h-4 text-blue-500" /> Top Moving Products
+                </h3>
+            </CardHeader>
+            <CardContent className="p-4">
+                <div className="space-y-2">
+                    {topProducts.map((p, i) => (
+                        <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-2xl">
+                            <span className="text-xs font-bold text-slate-700">{p.name}</span>
+                            <span className="text-xs font-black text-blue-600">{p.count} sold</span>
+                        </div>
+                    ))}
+                    {topProducts.length === 0 && <p className="text-center text-xs text-slate-400 py-4">No data</p>}
+                </div>
+            </CardContent>
+        </Card>
+
+        {/* Low Stock */}
+        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
+            <CardHeader className="p-6 border-b border-slate-100">
+                <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
+                    <AlertTriangle className="w-4 h-4 text-red-500" /> Low Stock Warnings
+                </h3>
+            </CardHeader>
+            <CardContent className="p-4">
+                <div className="space-y-2">
+                    {lowStockItems.slice(0, 5).map((item, i) => (
+                        <div key={i} className="flex justify-between items-center p-3 bg-red-50 rounded-2xl">
+                            <span className="text-xs font-bold text-slate-700">{item.name}</span>
+                            <span className="text-xs font-black text-red-600">{item.stock_quantity} left</span>
+                        </div>
+                    ))}
+                    {lowStockItems.length === 0 && <p className="text-center text-xs text-slate-400 py-4">Stock levels normal</p>}
+                </div>
+            </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Peak Hours Heatmap */}
+        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
+            <CardHeader className="p-6 border-b border-slate-100">
+                <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
+                    <Clock className="w-4 h-4 text-indigo-500" /> Peak Hours (Bookings)
+                </h3>
+            </CardHeader>
+            <CardContent className="p-6 h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={peakHours} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                        <XAxis dataKey="hour" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
+                        <Tooltip
+                            contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '1rem', color: 'white' }}
+                            labelStyle={{ fontWeight: 'black', fontSize: '10px', textTransform: 'uppercase', marginBottom: '4px' }}
+                            itemStyle={{ fontWeight: 'bold', fontSize: '12px' }}
+                        />
+                        <Bar dataKey="count" name="Bookings" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </CardContent>
+        </Card>
+
+        {/* Guest vs Member Revenue */}
+        {canViewFinancials && (
+            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
+                <CardHeader className="p-6 border-b border-slate-100">
+                    <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
+                        <Users className="w-4 h-4 text-emerald-500" /> Guest vs Member Revenue
+                    </h3>
+                </CardHeader>
+                <CardContent className="p-6 h-[300px] flex items-center">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie data={[
+                                { name: 'Member', value: stats.memberRevenue, color: '#10b981' },
+                                { name: 'Guest', value: stats.guestRevenue, color: '#f59e0b' }
+                            ]} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                {[{color: '#10b981'}, {color: '#f59e0b'}].map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                            </Pie>
+                            <Tooltip formatter={(val: number) => formatMoney(val)} />
+                            <Legend wrapperStyle={{fontSize: "9px", fontWeight: "900", textTransform: "uppercase"}} />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+        )}
+      </div>
+
+      {canViewFinancials && (
+          <div className="grid grid-cols-1 gap-8">
+            {/* Revenue vs Discount */}
+            <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
+                <CardHeader className="p-6 border-b border-slate-100">
+                    <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
+                        <TrendingUp className="w-4 h-4 text-indigo-500" /> Revenue vs Discount Analysis (MTD Sales)
+                    </h3>
+                </CardHeader>
+                <CardContent className="p-6 h-[150px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={[{ name: 'MTD Sales', Gross: stats.grossRevenue, Discount: stats.totalDiscounts, Net: stats.netRevenue }]} layout="vertical" margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                            <XAxis type="number" tickFormatter={(val) => formatMoney(val).split(' ')[1]} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
+                            <YAxis type="category" dataKey="name" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} width={80} />
+                            <Tooltip
+                                contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '1rem', color: 'white' }}
+                                labelStyle={{ fontWeight: 'black', fontSize: '10px', textTransform: 'uppercase', marginBottom: '4px' }}
+                                itemStyle={{ fontWeight: 'bold', fontSize: '12px' }}
+                                formatter={(value: any, name: any) => [formatMoney(value), name]}
+                            />
+                            <Legend wrapperStyle={{fontSize: "9px", fontWeight: "900", textTransform: "uppercase"}} />
+                            <Bar dataKey="Gross" fill="#94a3b8" radius={[0, 4, 4, 0]} barSize={20} />
+                            <Bar dataKey="Discount" fill="#f43f5e" radius={[0, 4, 4, 0]} barSize={20} />
+                            <Bar dataKey="Net" fill="#10b981" radius={[0, 4, 4, 0]} barSize={20} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+          </div>
+      )}
     </div>
   );
 };
