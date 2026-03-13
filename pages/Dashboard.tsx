@@ -600,8 +600,8 @@ const Dashboard = () => {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-8 space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        <div className="lg:col-span-8 flex flex-col gap-4">
             <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
                 <CardHeader className="p-8 border-b border-slate-100 flex items-center justify-between">
                     <div>
@@ -707,7 +707,7 @@ const Dashboard = () => {
             </div>
         </div>
         
-        <div className="lg:col-span-4 space-y-8">
+        <div className="lg:col-span-4 flex flex-col gap-4">
             <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden h-full flex flex-col">
                 <CardHeader className="p-8 border-b border-slate-100 bg-slate-50/50">
                     <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-3 uppercase">
