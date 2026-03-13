@@ -308,18 +308,23 @@ const Dashboard = () => {
 
         // 3. Daily Stats (Sales & Staff)
         const todaySales = sales.filter(s => s.status === 'completed' && isSameDay(new Date(s.created_at), now));
-        const staffOnLeaveCount = staff.filter(s => {
+        const staffOnProbationCount = staff.filter(s => {
             const today = startOfDay(new Date());
             
-            // Check legacy fields
-            if (s.leave_start_date && s.leave_end_date) {
+            // Check probation fields
+            if (s.probation_start_date && s.probation_end_date) {
                 try {
-                    const start = startOfDay(parseISO(s.leave_start_date));
-                    const end = startOfDay(parseISO(s.leave_end_date));
+                    const start = startOfDay(parseISO(s.probation_start_date));
+                    const end = startOfDay(parseISO(s.probation_end_date));
                     if (isWithinInterval(today, { start, end })) return true;
                 } catch (e) {}
             }
+            return false;
+        }).length;
 
+        const staffOnLeaveCount = staff.filter(s => {
+            const today = startOfDay(new Date());
+            
             // Check new staff_leaves table
             const sLeaves = leaves.filter(l => l.staff_id === s.id);
             return sLeaves.some(l => {
@@ -465,8 +470,9 @@ const Dashboard = () => {
           bookingYield: todayBookings.filter(b => b.status === 'completed').length,
           todaySalesTotal: todaySales.reduce((acc, s) => acc + s.net_amount, 0),
           todaySalesCount: todaySales.length,
-          staffActive: staff.filter(s => s.is_active).length - staffOnLeaveCount,
+          staffActive: staff.filter(s => s.is_active).length - staffOnLeaveCount - staffOnProbationCount,
           staffOnLeave: staffOnLeaveCount,
+          staffOnProbation: staffOnProbationCount,
           atv,
           grossRevenue,
           totalDiscounts,

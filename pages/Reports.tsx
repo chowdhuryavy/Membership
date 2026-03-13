@@ -172,11 +172,11 @@ const Reports = () => {
 
   const isStaffOnLeaveOnDate = (s: Staff, targetDateStr: string) => {
       // Check legacy fields
-      if (s.leave_start_date && s.leave_end_date) {
+      if (s.probation_start_date && s.probation_end_date) {
           try {
               const target = startOfDay(new Date(targetDateStr));
-              const start = startOfDay(new Date(s.leave_start_date));
-              const end = startOfDay(new Date(s.leave_end_date));
+              const start = startOfDay(new Date(s.probation_start_date));
+              const end = startOfDay(new Date(s.probation_end_date));
               if (isWithinInterval(target, { start, end })) return true;
           } catch (e) {}
       }
@@ -194,6 +194,18 @@ const Reports = () => {
           } catch (e) {}
       }
 
+      return false;
+  };
+
+  const isStaffOnProbationOnDate = (s: Staff, targetDateStr: string) => {
+      if (s.probation_start_date && s.probation_end_date) {
+          try {
+              const target = startOfDay(new Date(targetDateStr));
+              const start = startOfDay(new Date(s.probation_start_date));
+              const end = startOfDay(new Date(s.probation_end_date));
+              return isWithinInterval(target, { start, end });
+          } catch (e) {}
+      }
       return false;
   };
 
@@ -430,7 +442,7 @@ const Reports = () => {
                           // who performed the service, as per user requirement.
                           if (b.therapist_id) {
                               const therapist = staffList.find(s => s.id === b.therapist_id);
-                              if (therapist && !isStaffOnLeaveOnDate(therapist, b.date)) {
+                              if (therapist && !isStaffOnLeaveOnDate(therapist, b.date) && !isStaffOnProbationOnDate(therapist, b.date)) {
                                   staffSplits[b.therapist_id] = incNet;
                               }
                           }
@@ -480,7 +492,7 @@ const Reports = () => {
 
                       const staffSplits: Record<string, number> = {};
                       if (rule.distribution_type === 'Shared') {
-                          let available = staffList.filter(s => s.is_active && (s.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(s, m.start_date));
+                          let available = staffList.filter(s => s.is_active && (s.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date));
                           // Membership incentive is shared among ALL staff (including therapists and trainers)
                           if (available.length > 0) {
                               const share = incNet / available.length;
@@ -540,7 +552,7 @@ const Reports = () => {
 
                           if (b.therapist_id) {
                               const staff = staffList.find(s => s.id === b.therapist_id);
-                              if (staff && !isStaffOnLeaveOnDate(staff, b.date)) {
+                              if (staff && !isStaffOnLeaveOnDate(staff, b.date) && !isStaffOnProbationOnDate(staff, b.date)) {
                                   staffSplits[b.therapist_id] = incNet;
                               }
                           }
@@ -590,7 +602,7 @@ const Reports = () => {
 
                       const staffSplits: Record<string, number> = {};
                       if (rule.distribution_type === 'Shared') {
-                          let available = staffList.filter(staff => staff.is_active && (staff.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(staff, s.created_at));
+                          let available = staffList.filter(staff => staff.is_active && (staff.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(staff, s.created_at) && !isStaffOnProbationOnDate(staff, s.created_at));
                           available = available.filter(st => /trainer|coach|instructor|pt|gym|fitness/i.test(st.role));
                           if (available.length > 0) {
                               const share = incNet / available.length;

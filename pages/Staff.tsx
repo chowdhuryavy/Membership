@@ -145,14 +145,16 @@ const StaffPage = () => {
         onBack={() => setSelectedStaff(null)} 
         canManage={canManage || false}
         canManageLeaves={canManageLeaves || false}
+        onDelete={(id) => setDeleteId(id)}
         onEdit={(s) => {
           setEditingId(s.id); 
           setFormData({
             ...s,
             email: s.email || '',
             phone: s.phone || '',
-            leave_start_date: s.leave_start_date || '',
-            leave_end_date: s.leave_end_date || ''
+            probation_start_date: s.probation_start_date || '',
+            probation_end_date: s.probation_end_date || '',
+            outlet_id: s.outlet_id
           }); 
           setShowForm(true);
         }}
@@ -265,7 +267,7 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
             <input placeholder="Search personnel..." className="w-full h-11 pl-11 pr-4 rounded-xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
           {canManage && (
-              <Button onClick={() => { setEditingId(null); setFormData({ name:'', role:'', email:'', phone:'', is_active:true, is_eligible_for_incentives: true, leave_start_date: '', leave_end_date: '', outlet_id:'' }); setShowForm(true); }} className="h-11 px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100">
+              <Button onClick={() => { setEditingId(null); setFormData({ name:'', role:'', email:'', phone:'', is_active:true, is_eligible_for_incentives: true, probation_start_date: '', probation_end_date: '', outlet_id:'' }); setShowForm(true); }} className="h-11 px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100">
                 <Plus className="w-4 h-4 mr-2" /> Enroll Staff
               </Button>
           )}
@@ -291,8 +293,9 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                                 ...s,
                                 email: s.email || '',
                                 phone: s.phone || '',
-                                leave_start_date: s.leave_start_date || '',
-                                leave_end_date: s.leave_end_date || ''
+                                probation_start_date: s.probation_start_date || '',
+                                probation_end_date: s.probation_end_date || '',
+                                outlet_id: s.outlet_id
                               }); 
                               setShowForm(true); 
                             }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>
@@ -351,12 +354,10 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                   </div>
                 </div>
 
-                {canManageLeaves && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <Input label="Leave Start Date" type="date" value={formData.leave_start_date} onChange={e => setFormData({ ...formData, leave_start_date: e.target.value })} className="h-14 rounded-2xl" />
-                    <Input label="Leave End Date" type="date" value={formData.leave_end_date} onChange={e => setFormData({ ...formData, leave_end_date: e.target.value })} className="h-14 rounded-2xl" />
-                  </div>
-                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <Input label="Probation Start Date" type="date" value={formData.probation_start_date} onChange={e => setFormData({ ...formData, probation_start_date: e.target.value })} className="h-14 rounded-2xl" />
+                  <Input label="Probation End Date" type="date" value={formData.probation_end_date} onChange={e => setFormData({ ...formData, probation_end_date: e.target.value })} className="h-14 rounded-2xl" />
+                </div>
 
                 {errorMessage && (
                   <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in shake duration-300">

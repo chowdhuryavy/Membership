@@ -83,8 +83,8 @@ export interface Staff {
   phone?: string;
   is_active: boolean;
   is_eligible_for_incentives: boolean; 
-  leave_start_date?: string; 
-  leave_end_date?: string;   
+  probation_start_date?: string; 
+  probation_end_date?: string;   
   created_at: string;
 }
 

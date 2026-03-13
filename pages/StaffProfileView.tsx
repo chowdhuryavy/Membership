@@ -11,9 +11,10 @@ interface StaffProfileViewProps {
   canManage: boolean;
   canManageLeaves: boolean;
   onEdit: (s: Staff) => void;
+  onDelete: (id: string) => void;
 }
 
-const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canManage, canManageLeaves, onEdit }) => {
+const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canManage, canManageLeaves, onEdit, onDelete }) => {
   const [leaves, setLeaves] = useState<StaffLeave[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLeaveForm, setShowLeaveForm] = useState(false);
@@ -162,9 +163,14 @@ NOTIFY pgrst, 'reload schema';`}
             <ArrowLeft className="w-4 h-4" /> Back to Roster
         </button>
         {canManage && (
-          <Button onClick={() => onEdit(staff)} variant="secondary" className="relative z-10 rounded-xl h-11 px-6 font-black text-xs uppercase bg-white border-2 border-slate-100 hover:border-indigo-200 shadow-sm transition-all">
-              <Edit2 className="w-4 h-4 mr-2" /> Modify Profile
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => onDelete(staff.id)} variant="secondary" className="relative z-10 rounded-xl h-11 px-6 font-black text-xs uppercase bg-white border-2 border-red-100 hover:border-red-200 text-red-600 shadow-sm transition-all">
+                <Trash2 className="w-4 h-4 mr-2" /> Purge Staff
+            </Button>
+            <Button onClick={() => onEdit(staff)} variant="secondary" className="relative z-10 rounded-xl h-11 px-6 font-black text-xs uppercase bg-white border-2 border-slate-100 hover:border-indigo-200 shadow-sm transition-all">
+                <Edit2 className="w-4 h-4 mr-2" /> Modify Profile
+            </Button>
+          </div>
         )}
       </div>
 
