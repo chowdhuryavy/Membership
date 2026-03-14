@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import toast from 'react-hot-toast';
 import { useForm, SubmitHandler, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -83,7 +84,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     if (!file) return;
     // Accept image/* and application/pdf
     if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-      alert('Only images and PDFs are allowed.');
+      toast.error('Only images and PDFs are allowed.');
       return;
     }
     // Simulate upload by converting to base64

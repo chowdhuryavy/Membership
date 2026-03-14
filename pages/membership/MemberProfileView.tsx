@@ -104,7 +104,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       setShowSignatureModal(false);
     } catch (err) {
       console.error("Failed to save signatures:", err);
-      alert("Failed to save signatures. Please try again.");
+      toast.error("Failed to save signatures. Please try again.");
     }
   };
 
@@ -305,7 +305,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         onUpdate();
     } catch (err) {
         console.error("Failed to cancel membership:", err);
-        alert("Failed to cancel membership.");
+        toast.error("Failed to cancel membership.");
     } finally {
         setLoading(false);
     }

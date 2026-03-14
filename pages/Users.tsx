@@ -290,15 +290,24 @@ const Users = () => {
   const callEdgeFunction = async (funcName: string, payload: any) => {
     const { data: { session } } = await (supabase.auth as any).getSession();
     if (!session) throw new Error("Session expired. Please refresh the page or login again.");
-    const response = await fetch(`${supabaseUrl}/functions/v1/${funcName}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseAnonKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, accessToken: session.access_token })
-    });
-    const data = await response.json();
-    if (data && data.error) throw new Error(data.error);
-    if (!response.ok) throw new Error(`Server returned status ${response.status}`);
-    return data;
+    
+    try {
+        const response = await fetch(`${supabaseUrl}/functions/v1/${funcName}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseAnonKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...payload, accessToken: session.access_token })
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Server returned status ${response.status}: ${errorText}`);
+        }
+        
+        return await response.json();
+    } catch (error: any) {
+        console.error(`Edge function call failed: ${funcName}`, error);
+        throw new Error(`Failed to call edge function ${funcName}: ${error.message}`);
+    }
   };
 
   const canViewUsers = currentUser && hasPermission(currentUser.role_id, 'users:view');

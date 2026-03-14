@@ -550,20 +550,22 @@ const BookingForm: React.FC<BookingFormProps> = ({
                     </div>
                 </div>
 
-                <div className="space-y-2">
-                    <label className="text-[9px] font-black text-slate-900 uppercase tracking-widest ml-1 flex items-center gap-2"><MapPin className="w-3 h-3 text-indigo-600"/> Assigned Room *</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {massageRooms.filter(r => r.is_active || r.id === bookingData.room_id).map(r => {
-                        const isAvailable = availableRooms.some(ar => ar.id === r.id);
-                        return (
-                          <button key={r.id} type="button" onClick={() => setBookingData({...bookingData, room_id: r.id})} className={`p-3 rounded-xl border text-[9px] font-black uppercase transition-all flex flex-col items-center gap-0.5 ${bookingData.room_id === r.id ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : isAvailable ? 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300' : 'bg-slate-50 text-slate-300 opacity-60 cursor-not-allowed'}`} disabled={!isAvailable && user?.role_id?.toLowerCase() !== 'admin'}>
-                            <span className="truncate w-full text-center">{r.name}</span>
-                            <span className="text-[7px] opacity-80">{r.number ? `Room ${r.number}` : 'No Number'}</span>
-                          </button>
-                        );
-                      })}
+                {bookingData.category !== 'Personal Training' && (
+                    <div className="space-y-2">
+                        <label className="text-[9px] font-black text-slate-900 uppercase tracking-widest ml-1 flex items-center gap-2"><MapPin className="w-3 h-3 text-indigo-600"/> Assigned Room *</label>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {massageRooms.filter(r => r.is_active || r.id === bookingData.room_id).map(r => {
+                            const isAvailable = availableRooms.some(ar => ar.id === r.id);
+                            return (
+                              <button key={r.id} type="button" onClick={() => setBookingData({...bookingData, room_id: r.id})} className={`p-3 rounded-xl border text-[9px] font-black uppercase transition-all flex flex-col items-center gap-0.5 ${bookingData.room_id === r.id ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : isAvailable ? 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300' : 'bg-slate-50 text-slate-300 opacity-60 cursor-not-allowed'}`} disabled={!isAvailable && user?.role_id?.toLowerCase() !== 'admin'}>
+                                <span className="truncate w-full text-center">{r.name}</span>
+                                <span className="text-[7px] opacity-80">{r.number ? `Room ${r.number}` : 'No Number'}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {error && <div className="bg-red-50 text-red-600 text-[10px] font-bold p-4 rounded-2xl flex items-center gap-3 animate-in shake duration-300"><AlertTriangle className="w-4 h-4 shrink-0" /><span>{error}</span></div>}
 

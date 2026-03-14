@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Toaster } from 'react-hot-toast';
 import { 
   HashRouter as Router, 
   Routes, 
@@ -533,6 +534,7 @@ const App = () => {
   return (
     <AuthProvider>
       <SettingsProvider>
+        <Toaster position="top-right" />
         <UserActivityTracker />
         <Router>
           <Routes>

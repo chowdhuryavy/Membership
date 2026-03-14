@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
+import toast from 'react-hot-toast';
 import { supabase } from '../services/supabase';
 import { Link } from 'react-router-dom';
 import { 
@@ -1054,11 +1055,11 @@ const Sales = () => {
                                                                     onClick={async () => {
                                                                         if (confirm('Are you sure you want to process this refund?')) {
                                                                             try {
-                                                                                await db.updateSaleStatus(entry.id, 'refunded');
+                                                                                await db.updateSale(entry.id, { status: 'refunded' });
                                                                                 loadData();
                                                                             } catch (e: any) {
                                                                                 console.error(e);
-                                                                                alert('Failed to process refund: ' + e.message);
+                                                                                toast.error('Failed to process refund: ' + e.message);
                                                                             }
                                                                         }
                                                                     }} 
