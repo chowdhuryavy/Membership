@@ -291,19 +291,6 @@ const GuestHistoryView = ({
                                     {(item.discount_reason || item.discount_id_url) && (
                                         <div className="mt-1 flex items-center gap-1 text-[8px] font-black text-indigo-500 italic uppercase tracking-tighter">
                                             {item.discount_reason && <><Tag className="w-2 h-2" /> {item.discount_reason}</>}
-                                            {item.discount_id_url && (
-                                                <button 
-                                                    onClick={() => {
-                                                        setViewingIdUrl(item.discount_id_url!);
-                                                        setSelectedServiceIdUrl(item.discount_id_url!);
-                                                    }}
-                                                    className="ml-1 hover:text-indigo-700 flex items-center gap-0.5"
-                                                    title="View Supportive ID"
-                                                >
-                                                    <FileUp className="w-2 h-2" />
-                                                    <ExternalLink className="w-2 h-2" />
-                                                </button>
-                                            )}
                                         </div>
                                     )}
                                 </td>

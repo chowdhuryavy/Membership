@@ -1038,15 +1038,6 @@ const Sales = () => {
                                                 {(entry.discount_reason || entry.discount_id_url) && (
                                                     <div className="mt-1 flex items-center gap-1 text-[8px] font-black text-indigo-500 italic uppercase tracking-tighter">
                                                         {entry.discount_reason && <><Tag className="w-2 h-2" /> {entry.discount_reason}</>}
-                                                        {entry.discount_id_url && (
-                                                            <button 
-                                                                onClick={() => setViewingIdUrl(entry.discount_id_url!)}
-                                                                className="ml-1 hover:text-indigo-700 flex items-center gap-0.5"
-                                                                title="View Supportive ID"
-                                                            >
-                                                                <FileUp className="w-2 h-2" />
-                                                            </button>
-                                                        )}
                                                     </div>
                                                 )}
                                             </td>
@@ -1058,7 +1049,25 @@ const Sales = () => {
                                                         <>
                                                             {canEdit && <button onClick={() => { setEditingSale(entry.original as Sale); setShowForm(true); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all"><Edit3 className="w-4 h-4" /></button>}
                                                             {canVoid && <button onClick={() => setItemToDelete({ id: entry.id, type: 'pos' })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Void"><Trash2 className="w-4 h-4" /></button>}
-                                                            {canRefund && <button onClick={() => alert('Refund process initiated')} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Refund"><RefreshCcw className="w-4 h-4" /></button>}
+                                                            {canRefund && (
+                                                                <button 
+                                                                    onClick={async () => {
+                                                                        if (confirm('Are you sure you want to process this refund?')) {
+                                                                            try {
+                                                                                await db.updateSaleStatus(entry.id, 'refunded');
+                                                                                loadData();
+                                                                            } catch (e: any) {
+                                                                                console.error(e);
+                                                                                alert('Failed to process refund: ' + e.message);
+                                                                            }
+                                                                        }
+                                                                    }} 
+                                                                    className="p-2 text-slate-400 hover:text-amber-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" 
+                                                                    title="Refund"
+                                                                >
+                                                                    <RefreshCcw className="w-4 h-4" />
+                                                                </button>
+                                                            )}
                                                             {!canEdit && !canVoid && !canRefund && <Lock className="w-3.5 h-3.5 text-slate-200" />}
                                                         </>
                                                     ) : (

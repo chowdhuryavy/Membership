@@ -75,6 +75,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
   const [guestData, setGuestData] = useState({ name: '', phone: '', email: '' });
   const [bookingData, setBookingData] = useState({
     massage_type_id: '',
+    category: 'Massage' as 'Massage' | 'Personal Training',
     additional_service_ids: [] as string[],
     therapist_id: '',
     room_id: '',
@@ -290,7 +291,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
         price: netPrice,
         discount: calculatedDiscountValue,
         discount_reason: bookingData.discount > 0 ? bookingData.discount_reason : null,
-        discount_id_url: bookingData.discount_id_url || null
+        discount_id_url: bookingData.discount > 0 ? bookingData.discount_id_url : null
       };
 
       if (initialBooking) { 
@@ -393,10 +394,23 @@ const BookingForm: React.FC<BookingFormProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                     <div className="md:col-span-1">
                         <Select 
+                            label="Category *" 
+                            options={[
+                                { value: 'Massage', label: 'Massage' },
+                                { value: 'Personal Training', label: 'Personal Training' }
+                            ]} 
+                            value={bookingData.category} 
+                            onChange={e => setBookingData({...bookingData, category: e.target.value as any, massage_type_id: ''})} 
+                            className="h-11 rounded-xl text-xs" 
+                        />
+                    </div>
+                    <div className="md:col-span-1">
+                        <Select 
                             label="Primary Service *" 
                             options={[
                                 { value: '', label: 'Select Item...' }, 
                                 ...massageTypes
+                                    .filter(m => m.category === bookingData.category)
                                     .map(m => ({ value: m.id, label: `${m.name} (${m.duration_minutes}m)` }))
                             ]} 
                             value={bookingData.massage_type_id} 
@@ -446,7 +460,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
                 </div>
 
                 {bookingData.discount > 0 && (
-                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
                         <div className="space-y-1.5">
                             <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Discount Reason *</label>
                             <div className="relative">
@@ -460,34 +474,33 @@ const BookingForm: React.FC<BookingFormProps> = ({
                                 />
                             </div>
                         </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Supportive ID (Optional)</label>
+                            <div className="relative">
+                                <FileUp className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input 
+                                    type="file" 
+                                    onChange={handleFileUpload}
+                                    className="hidden"
+                                    id="booking-discount-id-upload"
+                                    accept="image/*,.pdf"
+                                />
+                                <label 
+                                    htmlFor="booking-discount-id-upload"
+                                    className="flex items-center w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 bg-white text-xs font-bold cursor-pointer hover:bg-slate-50 transition-colors"
+                                >
+                                    {bookingData.discount_id_url ? (
+                                        <span className="text-emerald-600 flex items-center gap-2">
+                                            <CheckCircle2 className="w-3.5 h-3.5" /> Document Attached
+                                        </span>
+                                    ) : (
+                                        <span className="text-slate-400">Upload ID or Authorization...</span>
+                                    )}
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 )}
-                
-                <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Guest ID / Supportive Document (Optional)</label>
-                    <div className="relative">
-                        <FileUp className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <input 
-                            type="file" 
-                            onChange={handleFileUpload}
-                            className="hidden"
-                            id="booking-discount-id-upload"
-                            accept="image/*,.pdf"
-                        />
-                        <label 
-                            htmlFor="booking-discount-id-upload"
-                            className="flex items-center w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 bg-white text-xs font-bold cursor-pointer hover:bg-slate-50 transition-colors"
-                        >
-                            {bookingData.discount_id_url ? (
-                                <span className="text-emerald-600 flex items-center gap-2">
-                                    <CheckCircle2 className="w-3.5 h-3.5" /> Document Attached
-                                </span>
-                            ) : (
-                                <span className="text-slate-400">Upload ID or Authorization...</span>
-                            )}
-                        </label>
-                    </div>
-                </div>
                 
                 <div className="space-y-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-200/50">
                     <label className="text-[9px] font-black text-slate-900 uppercase tracking-widest ml-1">Follow-up Services</label>

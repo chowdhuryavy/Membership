@@ -1343,7 +1343,7 @@ class DatabaseService {
           booking_id: booking.id,
           discount_reason: booking.discount_reason,
           discount_id_url: booking.discount_id_url,
-          remarks: `Auto-generated from booking ${booking.id}`
+          remarks: ''
         };
 
         await this.addSale(sale);
