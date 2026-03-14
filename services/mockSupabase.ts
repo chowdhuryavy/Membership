@@ -590,10 +590,22 @@ class DatabaseService {
     }
   }
 
-  async getMembershipTypes(outletId?: string): Promise<MembershipType[]> {
+  async getMembershipTypes(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[]): Promise<MembershipType[]> {
     if (this.isSupabase()) {
       let query = supabase.from('membership_types').select('*');
-      if (outletId) query = query.eq('outlet_id', outletId);
+      if (scopeId) {
+          if (isProperty) {
+              if (limitToOutletIds && limitToOutletIds.length > 0) {
+                  query = query.in('outlet_id', limitToOutletIds);
+              } else {
+                  const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
+                  const ids = (outlets || []).map(o => o.id);
+                  query = query.in('outlet_id', ids);
+              }
+          } else {
+              query = query.eq('outlet_id', scopeId);
+          }
+      }
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as MembershipType[];

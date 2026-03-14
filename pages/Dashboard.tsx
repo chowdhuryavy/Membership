@@ -148,6 +148,8 @@ const Dashboard = () => {
   const [performanceTrendData, setPerformanceTrendData] = useState<PerformanceTrendData[]>([]);
   const [upcomingBookings, setUpcomingBookings] = useState<MassageBooking[]>([]);
   const [revenueMix, setRevenueMix] = useState<{name: string, value: number, color: string}[]>([]);
+  const [membershipTypeMix, setMembershipTypeMix] = useState<{name: string, value: number, color: string}[]>([]);
+  const [membershipTypes, setMembershipTypes] = useState<any[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [bookings, setBookings] = useState<MassageBooking[]>([]);
@@ -232,7 +234,7 @@ const Dashboard = () => {
         }
 
         // Fetch data with scope awareness
-        const [members, freezes, bookings, sales, staff, leaves, inventory, rooms] = await Promise.all([
+        const [members, freezes, bookings, sales, staff, leaves, inventory, rooms, mTypes] = await Promise.all([
           db.getMembers(scopeId, isProperty, limitToIds),
           db.getFreezes(),
           db.getMassageBookings(scopeId, isProperty, limitToIds),
@@ -240,9 +242,12 @@ const Dashboard = () => {
           db.getStaff(scopeId, isProperty, limitToIds),
           db.getAllStaffLeaves(),
           db.getInventory(scopeId, isProperty, limitToIds),
-          db.getMassageRooms(currentOutlet.id, currentProperty.id)
+          db.getMassageRooms(currentOutlet.id, currentProperty.id),
+          db.getMembershipTypes(scopeId, isProperty, limitToIds)
         ]);
         
+        setMembershipTypes(mTypes);
+
         // 1. Membership Logic
         let activeAtPointCount = 0;
         let frozenAtPointCount = 0;
@@ -250,6 +255,9 @@ const Dashboard = () => {
         let deferredRevenueAtPoint = 0;
         let monthEnrollments = 0;
         let totalDailyAccrual = 0;
+        
+        const typeRevenueMap: Record<string, number> = {};
+        const typeCountMap: Record<string, number> = {};
 
         members.forEach(m => {
           const mStart = parseISO(m.start_date);
@@ -259,7 +267,16 @@ const Dashboard = () => {
           if (isSameMonth(enrollmentDate, viewDate)) monthEnrollments++;
           
           const memberFreezes = freezes.filter(f => f.member_id === m.id);
-          mtdMembershipRevenue += RevenueEngine.calculateRevenuePeriod(m, memberFreezes, contextStart, auditPoint);
+          const earnedInPeriod = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, contextStart, auditPoint);
+          mtdMembershipRevenue += earnedInPeriod;
+          
+          // Track by type
+          if (m.membership_type_id) {
+              typeRevenueMap[m.membership_type_id] = (typeRevenueMap[m.membership_type_id] || 0) + earnedInPeriod;
+          } else {
+              typeRevenueMap['unassigned'] = (typeRevenueMap['unassigned'] || 0) + earnedInPeriod;
+          }
+
           const earnedLifetimeToPoint = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, auditPoint);
           deferredRevenueAtPoint += Math.max(0, m.net_amount - earnedLifetimeToPoint);
 
@@ -272,9 +289,57 @@ const Dashboard = () => {
               else {
                   activeAtPointCount++;
                   totalDailyAccrual += m.daily_rate;
+                  
+                  if (m.membership_type_id) {
+                      typeCountMap[m.membership_type_id] = (typeCountMap[m.membership_type_id] || 0) + 1;
+                  } else {
+                      typeCountMap['unassigned'] = (typeCountMap['unassigned'] || 0) + 1;
+                  }
               }
           }
         });
+
+        // Prepare Membership Type Mix
+        const typeMix: {name: string, value: number, count: number, color: string}[] = [];
+        
+        // 1. Add known types
+        mTypes.forEach((t, i) => {
+            typeMix.push({
+                name: t.name,
+                value: typeRevenueMap[t.id] || 0,
+                count: typeCountMap[t.id] || 0,
+                color: ['#4f46e5', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b'][i % 5]
+            });
+        });
+
+        // 2. Add "Unassigned" or "Other" for any revenue/count not in mTypes
+        const knownTypeIds = new Set(mTypes.map(t => t.id));
+        let otherRevenue = typeRevenueMap['unassigned'] || 0;
+        let otherCount = typeCountMap['unassigned'] || 0;
+
+        Object.keys(typeRevenueMap).forEach(id => {
+            if (id !== 'unassigned' && !knownTypeIds.has(id)) {
+                otherRevenue += typeRevenueMap[id];
+            }
+        });
+        Object.keys(typeCountMap).forEach(id => {
+            if (id !== 'unassigned' && !knownTypeIds.has(id)) {
+                otherCount += typeCountMap[id];
+            }
+        });
+
+        if (otherRevenue > 0 || otherCount > 0) {
+            typeMix.push({
+                name: mTypes.length > 0 ? 'Other / Unassigned' : 'All Members (Unassigned)',
+                value: otherRevenue,
+                count: otherCount,
+                color: '#94a3b8'
+            });
+        }
+        
+        // Filter out 0-value entries for the Pie Chart specifically if needed, 
+        // but for now let's keep them so the user sees the types exist.
+        setMembershipTypeMix(typeMix);
 
         // 2. Performance Trend (6 months)
         const performanceTrend: PerformanceTrendData[] = [];
@@ -774,6 +839,74 @@ const Dashboard = () => {
             )}
             <PerformanceLeaderboard staff={staff} bookings={bookings} />
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
+            <CardHeader className="p-6 border-b border-slate-100">
+                <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
+                    <PieChartIcon className="w-4 h-4 text-indigo-600" /> Revenue by Membership Type
+                </h3>
+            </CardHeader>
+            <CardContent className="p-0 h-[260px] flex items-center">
+                <div className="flex-1 h-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie data={membershipTypeMix} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                {membershipTypeMix.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                            </Pie>
+                            <Tooltip formatter={(val: number) => formatMoney(val)} />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+                <div className="w-48 pr-8 space-y-3">
+                    {membershipTypeMix.map(item => (
+                        <div key={item.name} className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full" style={{backgroundColor: item.color}}></div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter truncate max-w-[100px]">{item.name}</span>
+                            </div>
+                            <p className="text-xs font-black text-slate-900 pl-4">{formatMoney(item.value)}</p>
+                        </div>
+                    ))}
+                    {membershipTypeMix.length === 0 && <p className="text-[10px] font-black text-slate-400 uppercase">No data</p>}
+                </div>
+            </CardContent>
+        </Card>
+
+        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
+            <CardHeader className="p-6 border-b border-slate-100">
+                <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
+                    <Users className="w-4 h-4 text-emerald-600" /> Active Members by Type
+                </h3>
+            </CardHeader>
+            <CardContent className="p-6 h-[260px]">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={membershipTypeMix} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                        <XAxis type="number" hide />
+                        <YAxis 
+                            dataKey="name" 
+                            type="category" 
+                            tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} 
+                            axisLine={false} 
+                            tickLine={false}
+                            width={80}
+                        />
+                        <Tooltip 
+                            cursor={{fill: 'transparent'}}
+                            contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '1rem', color: 'white' }}
+                            itemStyle={{ fontWeight: 'bold', fontSize: '12px' }}
+                        />
+                        <Bar dataKey="count" name="Active Members" radius={[0, 4, 4, 0]} barSize={20}>
+                            {membershipTypeMix.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                        </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
+            </CardContent>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
