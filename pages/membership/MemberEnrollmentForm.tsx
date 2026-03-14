@@ -349,7 +349,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   };
 
   return (
-    <Card className="max-w-[850px] mx-auto rounded-[2.5rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.25)] overflow-hidden bg-white border-none animate-in fade-in zoom-in-95 duration-500">
+    <Card className="max-w-[1200px] mx-auto rounded-[2.5rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.25)] overflow-hidden bg-white border-none animate-in fade-in zoom-in-95 duration-500">
       <div className="bg-[#1e2335] px-10 py-8 text-white flex items-center justify-between">
         <div className="flex items-center gap-5">
             <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center border border-white/10 shadow-inner">
@@ -389,7 +389,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">Member Core Identity</h3>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Membership No. / ID *</label>
                     <div className="relative group">
@@ -458,7 +458,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">Tier & Recognition Logic</h3>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Membership Tier *</label>
                     <div className="relative">
@@ -527,7 +527,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 )}
 
                 {watch('package_type') === 'Family' && (
-                    <div className="col-span-1 md:col-span-2 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="col-span-1 md:col-span-2 lg:col-span-3 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                         <div className="flex items-center justify-between">
                             <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Family Members / Kids</label>
                             <Button type="button" onClick={() => appendKid({ name: '', dob: '' })} variant="outline" size="sm" className="h-8 text-[10px] rounded-xl border-indigo-100 text-indigo-600 hover:bg-indigo-50">
@@ -535,7 +535,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                             </Button>
                         </div>
                         {kidsFields.map((field, index) => (
-                            <div key={field.id} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 relative group">
+                            <div key={field.id} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 relative group">
                                 <button type="button" onClick={() => removeKid(index)} className="absolute -top-2 -right-2 w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-200 shadow-sm transition-all opacity-0 group-hover:opacity-100">
                                     <X className="w-3 h-3" />
                                 </button>
