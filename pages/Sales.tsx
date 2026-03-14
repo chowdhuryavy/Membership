@@ -1053,15 +1053,36 @@ const Sales = () => {
                                                             {canRefund && (
                                                                 <button 
                                                                     onClick={async () => {
-                                                                        if (confirm('Are you sure you want to process this refund?')) {
-                                                                            try {
-                                                                                await db.updateSale(entry.id, { status: 'refunded' });
-                                                                                loadData();
-                                                                            } catch (e: any) {
-                                                                                console.error(e);
-                                                                                toast.error('Failed to process refund: ' + e.message);
-                                                                            }
-                                                                        }
+                                                                        // Using toast for confirmation instead of browser confirm()
+                                                                        toast((t) => (
+                                                                            <div className="flex flex-col gap-2">
+                                                                                <p>Are you sure you want to process this refund?</p>
+                                                                                <div className="flex gap-2 justify-end">
+                                                                                    <button 
+                                                                                        className="px-3 py-1 bg-slate-200 rounded-md text-sm"
+                                                                                        onClick={() => toast.dismiss(t.id)}
+                                                                                    >
+                                                                                        Cancel
+                                                                                    </button>
+                                                                                    <button 
+                                                                                        className="px-3 py-1 bg-amber-600 text-white rounded-md text-sm"
+                                                                                        onClick={async () => {
+                                                                                            toast.dismiss(t.id);
+                                                                                            try {
+                                                                                                await db.updateSale(entry.id, { status: 'refunded' });
+                                                                                                loadData();
+                                                                                                toast.success('Refund processed successfully');
+                                                                                            } catch (e: any) {
+                                                                                                console.error(e);
+                                                                                                toast.error('Failed to process refund: ' + e.message);
+                                                                                            }
+                                                                                        }}
+                                                                                    >
+                                                                                        Confirm
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        ), { duration: Infinity });
                                                                     }} 
                                                                     className="p-2 text-slate-400 hover:text-amber-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" 
                                                                     title="Refund"
