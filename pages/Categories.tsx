@@ -257,7 +257,14 @@ const Categories = () => {
                                   <Layers className="w-6 h-6 text-indigo-600" />
                               </div>
                               <div>
-                                  <h3 className="font-black text-xl text-slate-900 tracking-tight leading-none mb-2">{cat.name}</h3>
+                                  <h3 className="font-black text-xl text-slate-900 tracking-tight leading-none mb-2">
+                                        {cat.name}
+                                        {selectedTypeId === 'all' && cat.membership_type_id && (
+                                            <span className="ml-2 text-[8px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 align-middle">
+                                                {membershipTypes.find(t => t.id === cat.membership_type_id)?.name}
+                                            </span>
+                                        )}
+                                    </h3>
                                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Revenue ID: {cat.id.split('_')[1] || cat.id}</span>
                               </div>
                           </div>

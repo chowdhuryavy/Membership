@@ -1053,7 +1053,7 @@ const SettingsPage = () => {
                                   <tbody className="divide-y divide-slate-100">
                                       {incentiveRules.map(rule => (
                                           <tr key={rule.id} className="hover:bg-indigo-50/20 transition-all group">
-                                              <td className="px-10 py-8"><div className="flex items-center gap-4 mb-2"><span className={`text-[8px] font-black uppercase px-2 py-1 rounded-lg ${rule.scope === 'Global' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>{rule.scope}</span><div className="font-black text-slate-900 uppercase text-base">{rule.name}</div></div><p className="text-[10px] font-bold text-slate-400 uppercase">{rule.applies_to} &rarr; {rule.target_id === 'all' ? 'Catch-all' : (rule.applies_to === 'Membership' ? (allCategories.find(c => c.id === rule.target_id)?.name || 'Specific Tier') : (rule.applies_to === 'Massage' ? (allMassageTypes.find(m => m.id === rule.target_id)?.name || 'Specific Treatment') : (rule.applies_to === 'Personal Training' ? (allInventory.find(i => i.id === rule.target_id)?.name || 'Specific PT Package') : 'Specific Asset')))} <span className="ml-2 text-indigo-600 font-black">[{(rule.distribution_type || 'Individual').toUpperCase()}]</span></p></td>
+                                              <td className="px-10 py-8"><div className="flex items-center gap-4 mb-2"><span className={`text-[8px] font-black uppercase px-2 py-1 rounded-lg ${rule.scope === 'Global' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>{rule.scope}</span><div className="font-black text-slate-900 uppercase text-base">{rule.name}</div></div><p className="text-[10px] font-bold text-slate-400 uppercase">{rule.applies_to} &rarr; {rule.target_id === 'all' ? 'Catch-all' : (rule.applies_to === 'Membership' ? (rule.target_id.startsWith('type:') ? (membershipTypes.find(t => t.id === rule.target_id.replace('type:', ''))?.name + ' (Type)') : (allCategories.find(c => c.id === rule.target_id)?.name || 'Specific Tier')) : (rule.applies_to === 'Massage' ? (allMassageTypes.find(m => m.id === rule.target_id)?.name || 'Specific Treatment') : (rule.applies_to === 'Personal Training' ? (allInventory.find(i => i.id === rule.target_id)?.name || 'Specific PT Package') : 'Specific Asset')))} <span className="ml-2 text-indigo-600 font-black">[{(rule.distribution_type || 'Individual').toUpperCase()}]</span></p></td>
                                               <td className="px-10 py-8 text-center">
                                                   <div className="flex flex-col gap-1 items-center">
                                                       <span className="text-[10px] font-black text-slate-700 uppercase flex items-center gap-1"><DollarSign className="w-3 h-3 text-indigo-600"/> {formatMoney(rule.min_price || 0)} - {formatMoney(rule.max_price || 99999)}</span>
@@ -1206,7 +1206,7 @@ const SettingsPage = () => {
                               <Select label="Recognition Department" options={[{value:'Massage', label:'Treatment Services'}, {value:'Membership', label:'Membership Enrollments'}, {value:'Personal Training', label:'Personal Training'}, {value:'Sale', label:'POS & Retail'}]} value={incentiveForm.applies_to} onChange={e => setIncentiveForm({...incentiveForm, applies_to: e.target.value as any, target_id: 'all'})} className="h-14 rounded-xl border-2" />
                               
                               <div className="space-y-2">
-                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Strategic Target (Tier/Treatment)</label>
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Strategic Target (Tier/Type/Treatment)</label>
                                   <div className="relative">
                                       <Target className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                       <select 
@@ -1215,9 +1215,20 @@ const SettingsPage = () => {
                                         className="w-full h-14 pl-12 pr-4 rounded-xl bg-white border-2 border-slate-100 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 appearance-none"
                                       >
                                           <option value="all">Apply to All Assets in Dept</option>
-                                          {incentiveForm.applies_to === 'Membership' && allCategories.map(c => (
-                                              <option key={c.id} value={c.id}>{c.name} (Tier)</option>
-                                          ))}
+                                          {incentiveForm.applies_to === 'Membership' && (
+                                              <>
+                                                  <optgroup label="Membership Types">
+                                                      {membershipTypes.map(t => (
+                                                          <option key={`type-${t.id}`} value={`type:${t.id}`}>{t.name} (Type)</option>
+                                                      ))}
+                                                  </optgroup>
+                                                  <optgroup label="Membership Tiers">
+                                                      {allCategories.map(c => (
+                                                          <option key={c.id} value={c.id}>{c.name} (Tier)</option>
+                                                      ))}
+                                                  </optgroup>
+                                              </>
+                                          )}
                                           {incentiveForm.applies_to === 'Massage' && allMassageTypes.map(m => (
                                               <option key={m.id} value={m.id}>{m.name} (Treatment)</option>
                                           ))}

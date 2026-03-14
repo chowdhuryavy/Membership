@@ -278,7 +278,14 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                     <div className="flex items-center gap-6">
                         <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm"><Layers className="w-6 h-6 text-indigo-600" /></div>
                         <div>
-                            <h3 className="font-black text-slate-900 tracking-tight uppercase text-lg leading-tight">{group.category?.name || 'Unassigned Portfolios'}</h3>
+                            <h3 className="font-black text-slate-900 tracking-tight uppercase text-lg leading-tight">
+                                {group.category?.name || 'Unassigned Portfolios'}
+                                {selectedTypeId === 'all' && group.category?.membership_type_id && (
+                                    <span className="ml-3 text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-100 align-middle">
+                                        {membershipTypes.find(t => t.id === group.category?.membership_type_id)?.name}
+                                    </span>
+                                )}
+                            </h3>
                             {group.category && <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1 flex items-center gap-2"><Zap className="w-3 h-3 text-indigo-400" /> Base yield: {formatMoney(group.category.base_rate)}</p>}
                         </div>
                     </div>
