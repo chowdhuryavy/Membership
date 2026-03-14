@@ -212,6 +212,7 @@ export interface Guest {
   email?: string;
   property_id: string;
   created_at: string;
+  id_card_url?: string;
 }
 
 export interface Therapist {
@@ -251,6 +252,8 @@ export interface MassageBooking {
   status: 'confirmed' | 'cancelled' | 'completed' | 'no-show';
   created_at: string;
   discount?: number;
+  discount_reason?: string;
+  discount_id_url?: string;
   room_id?: string;
 }
 
@@ -275,6 +278,8 @@ export interface Sale {
   sold_by_id?: string; 
   secondary_sold_by_id?: string;
   booking_id?: string;
+  discount_reason?: string;
+  discount_id_url?: string;
   created_at: string;
   remarks?: string;
 }

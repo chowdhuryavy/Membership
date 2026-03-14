@@ -30,6 +30,7 @@ import {
   History,
   Zap, 
   CheckCircle2,
+  FileUp,
   AlertTriangle,
   Package,
   PackageSearch,
@@ -99,8 +100,24 @@ const POSForm = ({
         payment_method: initialSale?.payment_method || 'Cash',
         remarks: initialSale?.remarks || '',
         sold_by_id: initialSale?.sold_by_id || '',
-        secondary_sold_by_id: initialSale?.secondary_sold_by_id || ''
+        secondary_sold_by_id: initialSale?.secondary_sold_by_id || '',
+        discount_reason: initialSale?.discount_reason || '',
+        discount_id_url: initialSale?.discount_id_url || ''
     });
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setSaleData(prev => ({ ...prev, discount_id_url: reader.result as string }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
 
     const [showGuestSuggestions, setShowGuestSuggestions] = useState(false);
     const [showItemSuggestions, setShowItemSuggestions] = useState(false);
@@ -183,6 +200,10 @@ const POSForm = ({
             setError("Specify valid item and price.");
             return;
         }
+        if (discountValue > 0 && !saleData.discount_reason) {
+            setError("Please provide a reason for the discount.");
+            return;
+        }
         setLoading(true);
         try {
             const payload = {
@@ -202,7 +223,9 @@ const POSForm = ({
                 status: initialSale?.status || 'completed' as any,
                 remarks: saleData.remarks,
                 sold_by_id: saleData.sold_by_id,
-                secondary_sold_by_id: saleData.secondary_sold_by_id
+                secondary_sold_by_id: saleData.secondary_sold_by_id,
+                discount_reason: saleData.discount_reason,
+                discount_id_url: saleData.discount_id_url
             };
 
             if (initialSale) {
@@ -324,6 +347,50 @@ const POSForm = ({
                             <span className="text-xs font-black text-indigo-400 tracking-tighter">{formatMoney(netAmount)}</span>
                         </div>
                     </div>
+
+                    {discountValue > 0 && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 animate-in fade-in slide-in-from-top-2">
+                            <div className="space-y-1.5">
+                                <label className="text-[8px] font-black text-indigo-600 uppercase tracking-widest ml-1">Discount Reason <span className="text-red-500">*</span></label>
+                                <div className="relative">
+                                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" />
+                                    <input 
+                                        type="text"
+                                        value={saleData.discount_reason}
+                                        onChange={e => setSaleData({...saleData, discount_reason: e.target.value})}
+                                        placeholder="Why is this discount being applied?"
+                                        className="w-full h-11 pl-10 pr-4 rounded-xl border border-indigo-200 bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[8px] font-black text-indigo-600 uppercase tracking-widest ml-1">Supportive ID / Document</label>
+                                <div className="relative">
+                                    <FileUp className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" />
+                                    <input 
+                                        type="file"
+                                        onChange={handleFileUpload}
+                                        className="hidden"
+                                        id="pos-discount-id-upload"
+                                        accept="image/*,.pdf"
+                                    />
+                                    <label 
+                                        htmlFor="pos-discount-id-upload"
+                                        className="flex items-center w-full h-11 pl-10 pr-4 rounded-xl border border-indigo-200 bg-white text-xs font-bold cursor-pointer hover:bg-indigo-50 transition-colors"
+                                    >
+                                        {saleData.discount_id_url ? (
+                                            <span className="text-emerald-600 flex items-center gap-2">
+                                                <CheckCircle2 className="w-3.5 h-3.5" /> Document Attached
+                                            </span>
+                                        ) : (
+                                            <span className="text-slate-400">Upload ID or Authorization...</span>
+                                        )}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Select 
@@ -688,6 +755,7 @@ const Sales = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
     const [itemToDelete, setItemToDelete] = useState<{ id: string; type: 'pos' | 'booking' } | null>(null);
+    const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
 
     // Security Check
     const canView = user && hasPermission(user.role_id, 'sales:view');
@@ -788,6 +856,8 @@ const Sales = () => {
             amount: s.net_amount,
             method: s.payment_method,
             type: 'pos' as const,
+            discount_reason: s.discount_reason,
+            discount_id_url: s.discount_id_url,
             original: s
         }));
 
@@ -806,6 +876,8 @@ const Sales = () => {
                 amount: Number(b.price),
                 method: 'Service Record',
                 type: 'booking' as const,
+                discount_reason: b.discount_reason,
+                discount_id_url: b.discount_id_url,
                 original: b
             };
         });
@@ -960,7 +1032,24 @@ const Sales = () => {
                                         <tr key={entry.id} className="hover:bg-indigo-50/20 transition-colors group">
                                             <td className="px-8 py-5 text-[10px] font-bold text-slate-400">{format(new Date(entry.timestamp), 'HH:mm')}</td>
                                             <td className="px-8 py-5"><div className="flex items-center gap-3"><div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-[9px] uppercase">{entry.guest_name.charAt(0)}</div><span className="font-black text-slate-700 tracking-tight uppercase text-[11px]">{entry.guest_name}</span></div></td>
-                                            <td className="px-8 py-5"><div className={`text-[8px] font-black uppercase tracking-widest mb-0.5 ${entry.category === 'Massage' ? 'text-purple-600' : 'text-indigo-600'}`}>{entry.category}</div><div className="font-bold text-slate-600 text-[11px] truncate max-w-[200px]">{entry.item_name} <span className="text-[9px] text-slate-400">x{entry.quantity}</span></div></td>
+                                            <td className="px-8 py-5">
+                                                <div className={`text-[8px] font-black uppercase tracking-widest mb-0.5 ${entry.category === 'Massage' ? 'text-purple-600' : 'text-indigo-600'}`}>{entry.category}</div>
+                                                <div className="font-bold text-slate-600 text-[11px] truncate max-w-[200px]">{entry.item_name} <span className="text-[9px] text-slate-400">x{entry.quantity}</span></div>
+                                                {(entry.discount_reason || entry.discount_id_url) && (
+                                                    <div className="mt-1 flex items-center gap-1 text-[8px] font-black text-indigo-500 italic uppercase tracking-tighter">
+                                                        {entry.discount_reason && <><Tag className="w-2 h-2" /> {entry.discount_reason}</>}
+                                                        {entry.discount_id_url && (
+                                                            <button 
+                                                                onClick={() => setViewingIdUrl(entry.discount_id_url!)}
+                                                                className="ml-1 hover:text-indigo-700 flex items-center gap-0.5"
+                                                                title="View Supportive ID"
+                                                            >
+                                                                <FileUp className="w-2 h-2" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="px-8 py-5 text-right font-black text-slate-900 tabular-nums text-[11px]">{formatMoney(entry.amount)}</td>
                                             <td className="px-8 py-5 text-center"><span className={`inline-flex px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest border ${entry.type === 'booking' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{entry.method}</span></td>
                                             <td className="px-8 py-5 text-right">
@@ -1025,6 +1114,33 @@ const Sales = () => {
                 confirmText="Authorize Void" 
                 isDestructive={true} 
             />
+
+            {viewingIdUrl && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+                            <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Supportive ID Document</h3>
+                            <button onClick={() => setViewingIdUrl(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                                <X className="w-5 h-5 text-slate-500" />
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-auto flex items-center justify-center bg-slate-50">
+                            {viewingIdUrl.startsWith('data:image') ? (
+                                <img src={viewingIdUrl} alt="ID Document" className="max-w-full h-auto rounded-xl shadow-sm" />
+                            ) : viewingIdUrl.startsWith('data:application/pdf') ? (
+                                <iframe src={viewingIdUrl} className="w-full h-[60vh] rounded-xl shadow-sm border-0" title="ID Document PDF" />
+                            ) : (
+                                <div className="text-center p-8">
+                                    <p className="text-sm font-bold text-slate-600 mb-4">Document format not supported for direct preview.</p>
+                                    <a href={viewingIdUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors">
+                                        <ExternalLink className="w-4 h-4" /> Open in New Tab
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

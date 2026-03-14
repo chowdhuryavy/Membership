@@ -6,7 +6,7 @@ import {
   Zap, CalendarClock, Activity, AlertTriangle, X, Coins, ExternalLink,
   Shield, UserCheck, CalendarDays, ClipboardList, TrendingUp, History,
   LayoutDashboard, Calendar, Pencil, ArrowRight, AlertCircle, List,
-  Milestone, MousePointer, PenTool, Wallet
+  Milestone, MousePointer, PenTool, Wallet, Tag, FileUp
 } from 'lucide-react';
 import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, MassageType } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -58,6 +58,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelDate, setCancelDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
 
   const category = useMemo(() => categories.find(c => c.id === viewingMember.category_id), [categories, viewingMember.category_id]);
   const getEffectiveStatus = (member: Member) => {
@@ -652,13 +653,35 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                               <td className="px-8 py-5">
                                                   <div className="text-[11px] font-black text-slate-900 uppercase truncate max-w-[140px] tracking-tight">{type?.name || 'Standard Service'}</div>
                                                   <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 flex items-center gap-1.5"><Calendar className="w-2.5 h-2.5" /> {format(parseISO(b.date), 'dd MMM yy')}</div>
+                                                   {(b.discount_reason || b.discount_id_url) && (
+                                                       <div className="mt-1 flex items-center gap-1 text-[8px] font-black text-indigo-500 italic uppercase tracking-tighter">
+                                                           {b.discount_reason && <><Tag className="w-2 h-2" /> {b.discount_reason}</>}
+                                                           {b.discount_id_url && (
+                                                               <button 
+                                                                   onClick={() => setViewingIdUrl(b.discount_id_url!)}
+                                                                   className="ml-1 hover:text-indigo-700 flex items-center gap-0.5"
+                                                                   title="View Supportive ID"
+                                                               >
+                                                                   <FileUp className="w-2 h-2" />
+                                                                   <ExternalLink className="w-2 h-2" />
+                                                               </button>
+                                                           )}
+                                                       </div>
+                                                   )}
                                               </td>
                                               <td className="px-8 py-5 text-center">
                                                   <span className={`inline-flex px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border shadow-sm ${b.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
                                                       {b.status}
                                                   </span>
                                               </td>
-                                              <td className="px-8 py-5 text-right font-black text-slate-900 text-xs tabular-nums">{formatMoney(Number(b.price))}</td>
+                                              <td className="px-8 py-5 text-right font-black text-slate-900 text-xs tabular-nums">
+                                                  {formatMoney(Number(b.price))}
+                                                  {Number(b.discount) > 0 && (
+                                                      <div className="text-[8px] font-bold text-red-500 mt-0.5">
+                                                          -{formatMoney(Number(b.discount))} Discount
+                                                      </div>
+                                                  )}
+                                              </td>
                                           </tr>
                                       )})
                                   )}
@@ -932,6 +955,33 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             formatMoney={(val) => formatMoney(val)} 
             onClose={() => setShowAgreement(false)} 
         />
+      )}
+
+      {viewingIdUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between p-6 border-b border-slate-100">
+                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Supportive ID Document</h3>
+                    <button onClick={() => setViewingIdUrl(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                        <X className="w-5 h-5 text-slate-500" />
+                    </button>
+                </div>
+                <div className="p-6 overflow-auto flex items-center justify-center bg-slate-50">
+                    {viewingIdUrl.startsWith('data:image') ? (
+                        <img src={viewingIdUrl} alt="ID Document" className="max-w-full h-auto rounded-xl shadow-sm" />
+                    ) : viewingIdUrl.startsWith('data:application/pdf') ? (
+                        <iframe src={viewingIdUrl} className="w-full h-[60vh] rounded-xl shadow-sm border-0" title="ID Document PDF" />
+                    ) : (
+                        <div className="text-center p-8">
+                            <p className="text-sm font-bold text-slate-600 mb-4">Document format not supported for direct preview.</p>
+                            <a href={viewingIdUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors">
+                                <ExternalLink className="w-4 h-4" /> Open in New Tab
+                            </a>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
       )}
     </div>
   );

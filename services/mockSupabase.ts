@@ -1064,7 +1064,10 @@ class DatabaseService {
     if (this.isSupabase()) {
       const { data: existing } = await supabase.from('guests').select('*').eq('phone', guest.phone).eq('property_id', guest.property_id).maybeSingle();
       if (existing) {
-        const { data, error } = await supabase.from('guests').update({ name: guest.name, email: guest.email }).eq('id', existing.id).select().single();
+        const updates: any = { name: guest.name, email: guest.email };
+        if (guest.id_card_url) updates.id_card_url = guest.id_card_url;
+        
+        const { data, error } = await supabase.from('guests').update(updates).eq('id', existing.id).select().single();
         if (error) throw error;
         return data as Guest;
       } else {
@@ -1304,7 +1307,7 @@ class DatabaseService {
         
         let itemName = 'Service';
         let itemCategory = 'Massage';
-        let itemId = booking.massage_type_id;
+        let itemId = null;
 
         if (booking.inventory_item_id) {
             const { data: inv } = await supabase.from('inventory').select('name, category').eq('id', booking.inventory_item_id).single();
@@ -1338,6 +1341,8 @@ class DatabaseService {
           status: 'completed',
           sold_by_id: booking.therapist_id,
           booking_id: booking.id,
+          discount_reason: booking.discount_reason,
+          discount_id_url: booking.discount_id_url,
           remarks: `Auto-generated from booking ${booking.id}`
         };
 

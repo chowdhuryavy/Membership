@@ -25,6 +25,8 @@ import {
   UserPlus,
   Percent,
   Coins,
+  Tag,
+  FileUp,
   MapPin
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
@@ -80,7 +82,9 @@ const BookingForm: React.FC<BookingFormProps> = ({
     start_time: '10:00',
     end_time: '11:00',
     discount: 0,
-    discount_mode: 'amount' as 'amount' | 'percent'
+    discount_mode: 'amount' as 'amount' | 'percent',
+    discount_reason: '',
+    discount_id_url: ''
   });
 
   const [showSuggestions, setShowSuggestions] = useState<'name' | 'phone' | null>(null);
@@ -100,7 +104,9 @@ const BookingForm: React.FC<BookingFormProps> = ({
         start_time: initialBooking.start_time,
         end_time: initialBooking.end_time,
         discount: initialBooking.discount || 0,
-        discount_mode: 'amount' // Defaults to amount for editing existing
+        discount_mode: 'amount', // Defaults to amount for editing existing
+        discount_reason: initialBooking.discount_reason || '',
+        discount_id_url: initialBooking.discount_id_url || ''
       });
     }
   }, [initialBooking, guests]);
@@ -174,6 +180,20 @@ const BookingForm: React.FC<BookingFormProps> = ({
     setShowSuggestions(null);
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      setError('Only images and PDFs are allowed.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setBookingData(prev => ({ ...prev, discount_id_url: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const selectedServices = useMemo(() => {
     const ids = [bookingData.massage_type_id, ...bookingData.additional_service_ids].filter(Boolean);
     return ids.map(id => massageTypes.find(m => m.id === id)).filter(Boolean) as MassageType[];
@@ -221,11 +241,16 @@ const BookingForm: React.FC<BookingFormProps> = ({
       setError("Required fields: Name, Phone, Therapist Assignment, and Room.");
       return;
     }
+    if (bookingData.discount > 0 && !bookingData.discount_reason) {
+      setError("Please provide a reason for the discount.");
+      return;
+    }
     setLoading(true);
     try {
       const guest = await db.saveGuest({
         ...guestData,
-        property_id: currentProperty.id
+        property_id: currentProperty.id,
+        id_card_url: bookingData.discount_id_url || undefined
       });
 
       // Check for guest double booking
@@ -263,7 +288,9 @@ const BookingForm: React.FC<BookingFormProps> = ({
         massage_type_id: bookingData.massage_type_id,
         additional_service_ids: bookingData.additional_service_ids.filter(Boolean),
         price: netPrice,
-        discount: calculatedDiscountValue
+        discount: calculatedDiscountValue,
+        discount_reason: bookingData.discount > 0 ? bookingData.discount_reason : null,
+        discount_id_url: bookingData.discount_id_url || null
       };
 
       if (initialBooking) { 
@@ -415,6 +442,50 @@ const BookingForm: React.FC<BookingFormProps> = ({
                     <div className="bg-slate-950 text-white px-4 py-2 rounded-xl flex items-center justify-between h-11 shadow-lg shadow-slate-200">
                         <span className="text-[7px] font-black opacity-60 uppercase tracking-widest">Total Fee</span>
                         <span className="text-xs font-black text-indigo-400 tracking-tighter">{formatMoney(netPrice)}</span>
+                    </div>
+                </div>
+
+                {bookingData.discount > 0 && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="space-y-1.5">
+                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Discount Reason *</label>
+                            <div className="relative">
+                                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input 
+                                    type="text"
+                                    value={bookingData.discount_reason}
+                                    onChange={e => setBookingData(prev => ({ ...prev, discount_reason: e.target.value }))}
+                                    className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                    placeholder="e.g. Corporate Partner, Special Promotion..."
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Guest ID / Supportive Document (Optional)</label>
+                    <div className="relative">
+                        <FileUp className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input 
+                            type="file" 
+                            onChange={handleFileUpload}
+                            className="hidden"
+                            id="booking-discount-id-upload"
+                            accept="image/*,.pdf"
+                        />
+                        <label 
+                            htmlFor="booking-discount-id-upload"
+                            className="flex items-center w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 bg-white text-xs font-bold cursor-pointer hover:bg-slate-50 transition-colors"
+                        >
+                            {bookingData.discount_id_url ? (
+                                <span className="text-emerald-600 flex items-center gap-2">
+                                    <CheckCircle2 className="w-3.5 h-3.5" /> Document Attached
+                                </span>
+                            ) : (
+                                <span className="text-slate-400">Upload ID or Authorization...</span>
+                            )}
+                        </label>
                     </div>
                 </div>
                 

@@ -47,7 +47,9 @@ import {
   ClipboardCheck,
   Database,
   ShieldAlert,
-  MapPin
+  MapPin,
+  Tag,
+  FileUp
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { 
@@ -88,6 +90,9 @@ const GuestHistoryView = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'confirmed' | 'cancelled' | 'no-show'>('all');
   const [guestSales, setGuestSales] = useState<Sale[]>([]);
+  const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
+  const [selectedServiceIdUrl, setSelectedServiceIdUrl] = useState<string | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   useEffect(() => {
     db.getSales(guest.property_id, true).then(allSales => {
@@ -99,28 +104,68 @@ const GuestHistoryView = ({
     bookings.filter(b => b.guest_id === guest.id)
   , [bookings, guest.id]);
 
-  const filteredBookings = useMemo(() => {
-    return guestBookings
-      .filter(b => {
+  const unifiedHistory = useMemo(() => {
+    const bookingsMapped = guestBookings.map(b => {
         const type = massageTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
         const therapist = therapists.find(t => t.id === b.therapist_id);
-        const searchString = `${type?.name || ''} ${therapist?.name || ''} ${b.date}`.toLowerCase();
-        
+        return {
+            id: b.id,
+            date: b.date,
+            time: `${b.start_time} - ${b.end_time}`,
+            type: type?.name || 'Standard Service',
+            staff: therapist?.name || '',
+            price: Number(b.price),
+            discount: Number(b.discount || 0),
+            discount_reason: b.discount_reason,
+            discount_id_url: b.discount_id_url,
+            status: b.status,
+            isBooking: true,
+            sortDate: new Date(`${b.date}T${b.start_time}`)
+        };
+    });
+
+    const salesMapped = guestSales.filter(s => !s.booking_id).map(s => {
+        return {
+            id: s.id,
+            date: format(new Date(s.created_at), 'yyyy-MM-dd'),
+            time: format(new Date(s.created_at), 'HH:mm'),
+            type: s.item_name,
+            staff: '', 
+            price: Number(s.gross_amount),
+            discount: Number(s.discount_amount),
+            discount_reason: s.discount_reason,
+            discount_id_url: s.discount_id_url,
+            status: s.status,
+            isBooking: false,
+            sortDate: new Date(s.created_at)
+        };
+    });
+
+    return [...bookingsMapped, ...salesMapped]
+      .filter(item => {
+        const searchString = `${item.type} ${item.staff} ${item.date}`.toLowerCase();
         const matchesSearch = searchString.includes(searchTerm.toLowerCase());
-        const matchesStatus = statusFilter === 'all' || b.status === statusFilter;
-        
+        const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
         return matchesSearch && matchesStatus;
       })
-      .sort((a, b) => `${b.date} ${b.start_time}`.localeCompare(`${a.date} ${a.start_time}`));
-  }, [guestBookings, massageTypes, therapists, searchTerm, statusFilter]);
+      .sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
+  }, [guestBookings, guestSales, massageTypes, therapists, searchTerm, statusFilter]);
+
+  useEffect(() => {
+      // Set default ID URL to guest's ID card or latest discount ID
+      const latestDiscountId = unifiedHistory.find(h => h.discount_id_url)?.discount_id_url;
+      setSelectedServiceIdUrl(guest.id_card_url || latestDiscountId || null);
+  }, [guest.id_card_url, unifiedHistory]);
 
   const stats = useMemo(() => {
-    const completedServices = guestBookings.filter(b => b.status === 'completed');
-    const serviceRevenue = completedServices.reduce((sum, b) => sum + Number(b.price), 0);
-    const saleRevenue = guestSales.filter(s => s.status === 'completed').reduce((sum, s) => sum + Number(s.net_amount), 0);
+    const completedBookings = guestBookings.filter(b => b.status === 'completed');
+    const independentSales = guestSales.filter(s => s.status === 'completed' && !s.booking_id);
+    
+    const serviceRevenue = completedBookings.reduce((sum, b) => sum + Number(b.price), 0);
+    const saleRevenue = independentSales.reduce((sum, s) => sum + Number(s.net_amount), 0);
     
     return {
-      visits: completedServices.length + guestSales.length,
+      visits: completedBookings.length + independentSales.length,
       ltv: serviceRevenue + saleRevenue
     };
   }, [guestBookings, guestSales]);
@@ -152,6 +197,18 @@ const GuestHistoryView = ({
                     <Mail className="w-4 h-4 text-indigo-600" />
                     <span className="text-xs font-black text-slate-700 truncate">{guest.email || 'No email on record'}</span>
                  </div>
+                 {(guest.id_card_url || unifiedHistory.find(h => h.discount_id_url)?.discount_id_url) && (
+                    <button 
+                        onClick={() => setViewingIdUrl(selectedServiceIdUrl)}
+                        disabled={!selectedServiceIdUrl}
+                        className={`w-full flex items-center justify-center gap-2 p-3 rounded-xl border transition-colors ${selectedServiceIdUrl ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed'}`}
+                    >
+                        <FileUp className="w-4 h-4" />
+                        <span className="text-xs font-black uppercase tracking-widest">
+                            {selectedServiceIdUrl ? 'View ID Card' : 'No ID for this service'}
+                        </span>
+                    </button>
+                 )}
               </div>
             </CardContent>
           </Card>
@@ -177,7 +234,7 @@ const GuestHistoryView = ({
                       <CardTitle className="text-sm font-black uppercase tracking-widest">Service Forensic History</CardTitle>
                    </div>
                    <span className="text-[10px] font-black bg-white px-3 py-1 rounded-full border border-slate-200 text-slate-500 uppercase">
-                      {filteredBookings.length} Matches
+                      {unifiedHistory.length} Matches
                    </span>
                </div>
                
@@ -215,25 +272,56 @@ const GuestHistoryView = ({
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                        {filteredBookings.map(b => {
-                            const type = massageTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
+                        {unifiedHistory.map(item => {
                             return (
-                            <tr key={b.id} className="hover:bg-indigo-50/30 transition-colors group">
+                            <tr 
+                                key={item.id} 
+                                className={`hover:bg-indigo-50/30 transition-colors group cursor-pointer ${selectedItemId === item.id ? 'bg-indigo-50' : ''}`}
+                                onClick={() => {
+                                    setSelectedItemId(item.id);
+                                    setSelectedServiceIdUrl(item.discount_id_url || guest.id_card_url || null);
+                                }}
+                            >
                                 <td className="px-8 py-4">
-                                    <div className="text-[11px] font-black text-slate-900">{format(new Date(b.date), 'dd MMM yyyy')}</div>
-                                    <div className="text-[9px] font-bold text-slate-400 uppercase">{b.start_time} - {b.end_time}</div>
+                                    <div className="text-[11px] font-black text-slate-900">{format(new Date(item.date), 'dd MMM yyyy')}</div>
+                                    <div className="text-[9px] font-bold text-slate-400 uppercase">{item.time}</div>
                                 </td>
                                 <td className="px-8 py-4">
-                                    <div className="text-[11px] font-black text-indigo-600 uppercase tracking-tight">{type?.name || 'Standard Service'}</div>
+                                    <div className="text-[11px] font-black text-indigo-600 uppercase tracking-tight">{item.type}</div>
+                                    {(item.discount_reason || item.discount_id_url) && (
+                                        <div className="mt-1 flex items-center gap-1 text-[8px] font-black text-indigo-500 italic uppercase tracking-tighter">
+                                            {item.discount_reason && <><Tag className="w-2 h-2" /> {item.discount_reason}</>}
+                                            {item.discount_id_url && (
+                                                <button 
+                                                    onClick={() => {
+                                                        setViewingIdUrl(item.discount_id_url!);
+                                                        setSelectedServiceIdUrl(item.discount_id_url!);
+                                                    }}
+                                                    className="ml-1 hover:text-indigo-700 flex items-center gap-0.5"
+                                                    title="View Supportive ID"
+                                                >
+                                                    <FileUp className="w-2 h-2" />
+                                                    <ExternalLink className="w-2 h-2" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                                 </td>
-                                <td className="px-8 py-4 text-right font-black text-slate-900">{formatMoney(Number(b.price))}</td>
+                                <td className="px-8 py-4 text-right font-black text-slate-900">
+                                    {formatMoney(Number(item.price))}
+                                    {Number(item.discount) > 0 && (
+                                        <div className="text-[8px] font-bold text-red-500 mt-0.5">
+                                            -{formatMoney(Number(item.discount))} Discount
+                                        </div>
+                                    )}
+                                </td>
                                 <td className="px-8 py-4 text-center">
                                     <span className={`inline-flex px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-widest border
-                                        ${b.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
-                                        b.status === 'confirmed' ? 'bg-blue-50 text-blue-700 border-blue-100' : 
-                                        b.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-100' : 
+                                        ${item.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
+                                        item.status === 'confirmed' ? 'bg-blue-50 text-blue-700 border-blue-100' : 
+                                        item.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-100' : 
                                         'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                                        {b.status}
+                                        {item.status}
                                     </span>
                                 </td>
                             </tr>
@@ -245,6 +333,43 @@ const GuestHistoryView = ({
           </Card>
         </div>
       </div>
+
+      {viewingIdUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between p-6 border-b border-slate-100">
+                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Supportive ID Document</h3>
+                    <div className="flex items-center gap-2">
+                        <a 
+                            href={viewingIdUrl} 
+                            download="supportive_id_document"
+                            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-indigo-600"
+                            title="Download Document"
+                        >
+                            <FileUp className="w-5 h-5 rotate-180" />
+                        </a>
+                        <button onClick={() => setViewingIdUrl(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                            <X className="w-5 h-5 text-slate-500" />
+                        </button>
+                    </div>
+                </div>
+                <div className="p-6 overflow-auto flex items-center justify-center bg-slate-50">
+                    {viewingIdUrl.startsWith('data:image') ? (
+                        <img src={viewingIdUrl} alt="ID Document" className="max-w-full h-auto rounded-xl shadow-sm" />
+                    ) : viewingIdUrl.startsWith('data:application/pdf') ? (
+                        <iframe src={viewingIdUrl} className="w-full h-[60vh] rounded-xl shadow-sm border-0" title="ID Document PDF" />
+                    ) : (
+                        <div className="text-center p-8">
+                            <p className="text-sm font-bold text-slate-600 mb-4">Document format not supported for direct preview.</p>
+                            <a href={viewingIdUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors">
+                                <ExternalLink className="w-4 h-4" /> Open in New Tab
+                            </a>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -362,11 +487,21 @@ ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS property_
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS outlet_id TEXT;
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS inventory_item_id TEXT;
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS room_id TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS discount_reason TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS discount_id_url TEXT;
+
+-- sales
+ALTER TABLE IF EXISTS public.sales ADD COLUMN IF NOT EXISTS discount_reason TEXT;
+ALTER TABLE IF EXISTS public.sales ADD COLUMN IF NOT EXISTS discount_id_url TEXT;
+ALTER TABLE IF EXISTS public.sales ADD COLUMN IF NOT EXISTS booking_id UUID;
 
 -- outlets
 ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS booking_enabled BOOLEAN DEFAULT true;
 ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS booking_start_time TEXT DEFAULT '08:00';
 ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS booking_end_time TEXT DEFAULT '22:00';
+
+-- guests
+ALTER TABLE IF EXISTS public.guests ADD COLUMN IF NOT EXISTS id_card_url TEXT;
 
 -- 2. ENSURE TABLES EXIST (IF NEW INSTALLATION)
 CREATE TABLE IF NOT EXISTS public.inventory (
@@ -414,6 +549,8 @@ CREATE TABLE IF NOT EXISTS public.massage_bookings (
     end_time TEXT NOT NULL,
     price NUMERIC NOT NULL,
     discount NUMERIC DEFAULT 0,
+    discount_reason TEXT,
+    discount_id_url TEXT,
     status TEXT DEFAULT 'confirmed',
     additional_service_ids JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -548,11 +685,12 @@ NOTIFY pgrst, 'reload schema';`}
         db.getMassageTypes(scopeId, isProperty, limitToIds),
         db.getMembers(scopeId, isProperty, limitToIds),
         db.getInventory(scopeId, isProperty, limitToIds),
-        db.getMassageRooms(isProperty ? undefined : currentOutlet.id, currentProperty.id)
+        db.getMassageRooms(isProperty ? undefined : currentOutlet.id, currentProperty.id),
+        supabase.from('sales').select('booking_id').limit(1).then(({ error }) => { if (error) throw error; }) // Check if booking_id exists in sales
       ]);
 
       const errors = results
-        .map((r, idx) => r.status === 'rejected' ? { name: ['Bookings', 'Guests', 'Therapists', 'Treatments', 'Members', 'Inventory', 'Rooms'][idx], reason: r.reason } : null)
+        .map((r, idx) => r.status === 'rejected' ? { name: ['Bookings', 'Guests', 'Therapists', 'Treatments', 'Members', 'Inventory', 'Rooms', 'Sales'][idx], reason: r.reason } : null)
         .filter(Boolean);
 
       if (errors.length > 0) {
@@ -1009,7 +1147,18 @@ NOTIFY pgrst, 'reload schema';`}
                                         <div className="text-[10px] text-slate-400">{g.email || 'No email registered'}</div>
                                     </td>
                                     <td className="px-8 py-6">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{format(new Date(g.created_at), 'dd MMM yyyy')}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{format(new Date(g.created_at), 'dd MMM yyyy')}</span>
+                                            {(g.id_card_url || bookings.find(b => b.guest_id === g.id && b.discount_id_url)?.discount_id_url) && (
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); setViewingIdUrl(g.id_card_url || bookings.find(b => b.guest_id === g.id && b.discount_id_url)?.discount_id_url!); }}
+                                                    className="text-indigo-500 hover:text-indigo-700 transition-colors"
+                                                    title="View ID Card"
+                                                >
+                                                    <FileUp className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-8 py-6 text-right" onClick={e => e.stopPropagation()}>
                                         <div className="flex justify-end gap-2">
@@ -1284,7 +1433,14 @@ NOTIFY pgrst, 'reload schema';`}
                                         </div>
                                     </div>
                                 ) : (
-                                    <button onClick={() => { setCompletingBookingId(selectedBooking.id); setSelectedRoomId(selectedBooking.room_id || ''); }} className="w-full h-11 rounded-xl bg-emerald-600 text-white font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95"><CheckCircle className="w-4 h-4" /> Served</button>
+                                    <button onClick={() => { 
+                                        if (selectedBooking.room_id) {
+                                            handleUpdateStatus(selectedBooking.id, 'completed', selectedBooking.room_id);
+                                        } else {
+                                            setCompletingBookingId(selectedBooking.id); 
+                                            setSelectedRoomId(''); 
+                                        }
+                                    }} className="w-full h-11 rounded-xl bg-emerald-600 text-white font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95"><CheckCircle className="w-4 h-4" /> Served</button>
                                 )}
                                 <button onClick={() => { setEditingBooking(selectedBooking); setShowBookingForm(true); setSelectedBooking(null); }} className="w-full h-11 rounded-xl border-2 border-indigo-100 text-indigo-600 font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-indigo-50"><Settings2 className="w-4 h-4" /> Reschedule / Modify</button>
                                 <button onClick={() => handleUpdateStatus(selectedBooking.id, 'no-show')} className="w-full h-11 rounded-xl border-2 border-slate-100 text-slate-600 font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50"><UserX className="w-4 h-4" /> No-Show</button>
