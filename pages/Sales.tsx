@@ -33,6 +33,7 @@ import {
   CheckCircle2,
   FileUp,
   AlertTriangle,
+  ExternalLink,
   Package,
   PackageSearch,
   LayoutGrid,
@@ -756,6 +757,7 @@ const Sales = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
     const [itemToDelete, setItemToDelete] = useState<{ id: string; type: 'pos' | 'booking' } | null>(null);
+    const [saleToRefund, setSaleToRefund] = useState<any>(null);
     const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
 
     // Security Check
@@ -1052,38 +1054,7 @@ const Sales = () => {
                                                             {canVoid && <button onClick={() => setItemToDelete({ id: entry.id, type: 'pos' })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Void"><Trash2 className="w-4 h-4" /></button>}
                                                             {canRefund && (
                                                                 <button 
-                                                                    onClick={async () => {
-                                                                        // Using toast for confirmation instead of browser confirm()
-                                                                        toast((t) => (
-                                                                            <div className="flex flex-col gap-2">
-                                                                                <p>Are you sure you want to process this refund?</p>
-                                                                                <div className="flex gap-2 justify-end">
-                                                                                    <button 
-                                                                                        className="px-3 py-1 bg-slate-200 rounded-md text-sm"
-                                                                                        onClick={() => toast.dismiss(t.id)}
-                                                                                    >
-                                                                                        Cancel
-                                                                                    </button>
-                                                                                    <button 
-                                                                                        className="px-3 py-1 bg-amber-600 text-white rounded-md text-sm"
-                                                                                        onClick={async () => {
-                                                                                            toast.dismiss(t.id);
-                                                                                            try {
-                                                                                                await db.updateSale(entry.id, { status: 'refunded' });
-                                                                                                loadData();
-                                                                                                toast.success('Refund processed successfully');
-                                                                                            } catch (e: any) {
-                                                                                                console.error(e);
-                                                                                                toast.error('Failed to process refund: ' + e.message);
-                                                                                            }
-                                                                                        }}
-                                                                                    >
-                                                                                        Confirm
-                                                                                    </button>
-                                                                                </div>
-                                                                            </div>
-                                                                        ), { duration: Infinity });
-                                                                    }} 
+                                                                    onClick={() => setSaleToRefund(entry)}
                                                                     className="p-2 text-slate-400 hover:text-amber-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" 
                                                                     title="Refund"
                                                                 >
@@ -1144,6 +1115,28 @@ const Sales = () => {
                 description="Confirm reversal of this revenue event? Inventory stock will be recalculated if applicable." 
                 confirmText="Authorize Void" 
                 isDestructive={true} 
+            />
+
+            <ConfirmationModal 
+                isOpen={!!saleToRefund} 
+                onClose={() => setSaleToRefund(null)} 
+                onConfirm={async () => { 
+                    if (saleToRefund) { 
+                        try {
+                            await db.processRefund(saleToRefund.id);
+                            loadData();
+                            toast.success('Refund processed successfully');
+                        } catch (e: any) {
+                            console.error(e);
+                            toast.error('Failed to process refund: ' + e.message);
+                        }
+                        setSaleToRefund(null);
+                    } 
+                }} 
+                title="Process Refund" 
+                description="Are you sure you want to process this refund? This action will mark the sale as refunded." 
+                confirmText="Confirm Refund" 
+                isDestructive={false} 
             />
 
             {viewingIdUrl && (

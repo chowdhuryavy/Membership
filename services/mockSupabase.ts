@@ -1036,6 +1036,43 @@ class DatabaseService {
     }
   }
 
+  async processRefund(saleId: string) {
+    if (!this.isSupabase()) return;
+    
+    // 1. Get the sale
+    const { data: sale, error: saleError } = await supabase.from('sales').select('*').eq('id', saleId).single();
+    if (saleError || !sale) throw new Error("Sale not found");
+    if (sale.status === 'refunded') return; // Already refunded
+
+    // 2. Update sale status
+    await supabase.from('sales').update({ status: 'refunded' }).eq('id', saleId);
+
+    // 3. Inventory Reversal
+    if (sale.item_id && sale.quantity > 0) {
+        const { data: item } = await supabase.from('inventory_items').select('*').eq('id', sale.item_id).single();
+        if (item) {
+            const newStock = item.stock_quantity + sale.quantity;
+            await supabase.from('inventory_items').update({ stock_quantity: newStock }).eq('id', sale.item_id);
+            // Log inventory change
+            await supabase.from('inventory_logs').insert([{
+                id: crypto.randomUUID(),
+                item_id: sale.item_id,
+                property_id: sale.property_id,
+                outlet_id: sale.outlet_id,
+                change_amount: sale.quantity,
+                previous_stock: item.stock_quantity,
+                new_stock: newStock,
+                reason: 'Return',
+                notes: `Refund for sale ${saleId}`,
+                created_at: new Date().toISOString()
+            }]);
+        }
+    }
+
+    // 4. Log the action
+    await this.logAction('POS_SALE_REFUND', `Refund processed for sale: ${saleId}. Amount: ${sale.net_amount}`);
+  }
+
   async deleteSale(id: string) {
     if (this.isSupabase()) {
         const { data: sale } = await supabase.from('sales').select('booking_id').eq('id', id).single();

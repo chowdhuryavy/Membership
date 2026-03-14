@@ -8,6 +8,7 @@ import {
   LayoutDashboard, Calendar, Pencil, ArrowRight, AlertCircle, List,
   Milestone, MousePointer, PenTool, Wallet, Tag, FileUp
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, MassageType } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
