@@ -88,9 +88,17 @@ export interface Staff {
   created_at: string;
 }
 
+export interface MembershipType {
+  id: string;
+  outlet_id: string;
+  name: string;
+  created_at: string;
+}
+
 export interface MembershipCategory {
   id: string;
   outlet_id: string;
+  membership_type_id?: string;
   name: string;
   duration_months: number;
   base_rate: number;
@@ -154,6 +162,7 @@ export enum MemberStatus {
 export interface Member {
   id: string;
   outlet_id?: string;
+  membership_type_id?: string;
   membership_number: string;
   guest_name: string;
   category_id: string;

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, Confir
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/mockSupabase';
-import { Role, Permission, Currency, CompanySettings, Outlet, Property, IncentiveRule, MassageType, MembershipCategory, PermissionGroup, InventoryItem, MassageRoom } from '../types';
+import { Role, Permission, Currency, CompanySettings, Outlet, Property, IncentiveRule, MassageType, MembershipCategory, PermissionGroup, InventoryItem, MassageRoom, MembershipType } from '../types';
 import { BookingSettings } from '../components/BookingSettings';
 import { 
   Trash2, 
@@ -149,7 +149,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types';
 
 const SignatoryConfig = ({
   config = {},
@@ -278,6 +278,7 @@ const SettingsPage = () => {
       { id: 'shortcuts', label: 'Executive Hotkeys', visible: hasPermission(user?.role_id || '', 'settings:view_shortcuts'), icon: Keyboard },
       { id: 'documents', label: 'Audit Templates', visible: hasPermission(user?.role_id || '', 'settings:view_documents'), icon: FileCode },
       { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_outlets') && !!currentProperty, icon: Timer },
+      { id: 'membership_types', label: 'Membership Types', visible: hasPermission(user?.role_id || '', 'settings:view_global') && !!currentOutlet, icon: Target },
       { id: 'massage_rooms', label: 'Massage Rooms', visible: isSuper && !!currentProperty, icon: Store },
     ].filter(t => t.visible);
   }, [user, roles, hasPermission, currentProperty, currentOutlet]);
@@ -295,14 +296,19 @@ const SettingsPage = () => {
   const [itemToDelete, setItemToDelete] = useState<{ type: string, id: string, name: string } | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [massageRooms, setMassageRooms] = useState<MassageRoom[]>([]);
+  const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
+  const [membershipTypeForm, setMembershipTypeForm] = useState<Omit<MembershipType, 'id' | 'created_at'>>({ name: '', outlet_id: '' });
 
   useEffect(() => {
     if (currentOutlet) {
       db.getMassageRooms(currentOutlet.id).then(setMassageRooms);
+      db.getMembershipTypes(currentOutlet.id).then(setMembershipTypes);
     } else if (currentProperty) {
       db.getMassageRooms(undefined, currentProperty.id).then(setMassageRooms);
+      db.getMembershipTypes().then(setMembershipTypes);
     } else {
       db.getMassageRooms().then(setMassageRooms);
+      db.getMembershipTypes().then(setMembershipTypes);
     }
   }, [currentOutlet, currentProperty]);
 
@@ -383,16 +389,22 @@ const SettingsPage = () => {
 
   const loadData = async () => {
       if (activeTab === 'incentives' && currentOutlet) {
-          const [rules, mTypes, allCats, inv] = await Promise.all([
+          const [rules, mTypes, allCats, inv, memTypes] = await Promise.all([
               db.getIncentiveRules(), 
               db.getMassageTypes(currentOutlet.id), 
               db.getCategories(currentOutlet.id),
-              db.getInventory('all', true)
+              db.getInventory('all', true),
+              db.getMembershipTypes(currentOutlet.id)
           ]);
           setIncentiveRules(rules);
           setAllMassageTypes(mTypes);
           setAllCategories(allCats);
           setAllInventory(inv);
+          setMembershipTypes(memTypes);
+      }
+      if (activeTab === 'membership_types' && currentOutlet) {
+          const types = await db.getMembershipTypes(currentOutlet.id);
+          setMembershipTypes(types);
       }
   };
 
@@ -566,6 +578,22 @@ const SettingsPage = () => {
       }
   };
 
+  const handleMembershipTypeSubmit = async () => {
+    if (!currentOutlet) return;
+    setIsSaving(true);
+    try {
+      if (editingId) await db.updateMembershipType(editingId, membershipTypeForm);
+      else await db.addMembershipType({ ...membershipTypeForm, outlet_id: currentOutlet.id });
+      await loadData();
+      setShowForm(false);
+      showStatus('Membership Type configuration updated.');
+    } catch (e: any) {
+      showStatus(e.message, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleDeleteConfirmed = async () => { 
     if (!itemToDelete) return; 
     
@@ -597,6 +625,7 @@ const SettingsPage = () => {
       if (itemToDelete.type === 'incentive') await db.deleteIncentiveRule(itemToDelete.id); 
       else if (itemToDelete.type === 'property') await db.deleteProperty(itemToDelete.id);
       else if (itemToDelete.type === 'outlet') await db.deleteOutlet(itemToDelete.id);
+      else if (itemToDelete.type === 'membership_type') await db.deleteMembershipType(itemToDelete.id);
       else if (itemToDelete.type === 'role') await db.deleteRole(itemToDelete.id);
       else if (itemToDelete.type === 'currency') await db.deleteCurrency(itemToDelete.id);
       else if (itemToDelete.type === 'massage_room') {
@@ -966,6 +995,27 @@ const SettingsPage = () => {
                   </Card>
               )}
 
+              {activeTab === 'membership_types' && (
+                  <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
+                          <div className="flex items-center gap-5"><Target className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Membership Types</CardTitle></div>
+                          <Button onClick={() => { setEditingId(null); setMembershipTypeForm({name:'', outlet_id: currentOutlet?.id || ''}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Define Type</Button>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                          <table className="w-full text-left">
+                              <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Type Designation</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Created At</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
+                              <tbody className="divide-y divide-slate-100">{membershipTypes.map(t => (
+                                  <tr key={t.id} className="hover:bg-indigo-50/20 group">
+                                      <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase">{t.name}</div></td>
+                                      <td className="px-10 py-8"><span className="text-[10px] font-bold text-slate-500">{new Date(t.created_at).toLocaleDateString()}</span></td>
+                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(t.id); setMembershipTypeForm({name: t.name, outlet_id: t.outlet_id}); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'membership_type', id:t.id, name:t.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
+                                  </tr>
+                              ))}</tbody>
+                          </table>
+                      </CardContent>
+                  </Card>
+              )}
+
               {activeTab === 'maintenance' && (
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-red-50 p-8 border-b border-red-100 flex items-center gap-3">
@@ -1213,6 +1263,12 @@ const SettingsPage = () => {
 
                               <Button onClick={handleIncentiveSubmit} className="w-full h-16 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-100">Authorize Logic</Button>
                           </div>
+                      )}
+                      {activeTab === 'membership_types' && (
+                        <div className="space-y-6">
+                            <Input label="Type Name *" value={membershipTypeForm.name} onChange={e => setMembershipTypeForm({...membershipTypeForm, name: e.target.value})} className="h-14 rounded-xl font-bold" />
+                            <Button onClick={handleMembershipTypeSubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">{editingId ? 'Commit Changes' : 'Deploy Type'}</Button>
+                        </div>
                       )}
                   </CardContent>
                   <CardHeader className="bg-slate-50 p-6 border-t flex justify-end">

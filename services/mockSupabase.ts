@@ -1,4 +1,4 @@
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format, parse } from 'date-fns';
@@ -590,11 +590,52 @@ class DatabaseService {
     }
   }
 
+  async getMembershipTypes(outletId?: string): Promise<MembershipType[]> {
+    if (this.isSupabase()) {
+      let query = supabase.from('membership_types').select('*');
+      if (outletId) query = query.eq('outlet_id', outletId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as MembershipType[];
+    }
+    return [];
+  }
+
+  async addMembershipType(type: Omit<MembershipType, 'id' | 'created_at'>) {
+    if (this.isSupabase()) {
+      const newType = {
+        ...type,
+        id: `type_${crypto.randomUUID()}`,
+        created_at: new Date().toISOString()
+      };
+      const { error } = await supabase.from('membership_types').insert([newType]);
+      if (error) throw error;
+      await this.logAction('CREATE_MEMBERSHIP_TYPE', `Created membership type: ${type.name}`, type.outlet_id);
+    }
+  }
+
+  async updateMembershipType(id: string, updates: Partial<MembershipType>) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('membership_types').update(updates).eq('id', id);
+      if (error) throw error;
+      await this.logAction('UPDATE_MEMBERSHIP_TYPE', `Updated membership type: ${id}`);
+    }
+  }
+
+  async deleteMembershipType(id: string) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('membership_types').delete().eq('id', id);
+      if (error) throw error;
+      await this.logAction('DELETE_MEMBERSHIP_TYPE', `Deleted membership type ID: ${id}`);
+    }
+  }
+
   async getCategories(outletId?: string): Promise<MembershipCategory[]> {
     if (this.isSupabase()) {
       let query = supabase.from('membership_categories').select('*');
       if (outletId) query = query.eq('outlet_id', outletId);
-      const { data } = await query;
+      const { data, error } = await query;
+      if (error) throw error;
       return (data || []) as MembershipCategory[];
     }
     return [];
@@ -602,14 +643,16 @@ class DatabaseService {
 
   async addCategory(cat: Omit<MembershipCategory, 'id'>) {
     if (this.isSupabase()) {
-      await supabase.from('membership_categories').insert([{ ...cat, id: `cat_${crypto.randomUUID()}` }]);
+      const { error } = await supabase.from('membership_categories').insert([{ ...cat, id: `cat_${crypto.randomUUID()}` }]);
+      if (error) throw error;
       await this.logAction('CREATE_CATEGORY', `Created membership tier: ${cat.name} (Base Rate: ${cat.base_rate})`, cat.outlet_id);
     }
   }
 
   async updateCategory(id: string, updates: Partial<MembershipCategory>) {
     if (this.isSupabase()) {
-        await supabase.from('membership_categories').update(updates).eq('id', id);
+        const { error } = await supabase.from('membership_categories').update(updates).eq('id', id);
+        if (error) throw error;
         const changedFields = Object.keys(updates).filter(k => updates[k] !== undefined && updates[k] !== null).join(', ');
         await this.logAction('UPDATE_CATEGORY', `Updated membership tier: ${id}. Modified fields: [${changedFields}]`);
     }
@@ -617,7 +660,8 @@ class DatabaseService {
 
   async deleteCategory(id: string) {
     if (this.isSupabase()) {
-        await supabase.from('membership_categories').delete().eq('id', id);
+        const { error } = await supabase.from('membership_categories').delete().eq('id', id);
+        if (error) throw error;
         await this.logAction('DELETE_CATEGORY', `Deleted membership tier ID: ${id}`);
     }
   }

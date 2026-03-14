@@ -3,7 +3,7 @@ import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { db } from '../services/mockSupabase';
-import { Member, MembershipCategory, MemberStatus, Staff } from '../types';
+import { Member, MembershipCategory, MemberStatus, Staff, MembershipType } from '../types';
 import MemberLedger from './membership/MemberLedger';
 import MemberEnrollmentForm from './membership/MemberEnrollmentForm';
 import MemberProfileView from './membership/MemberProfileView';
@@ -20,6 +20,8 @@ const Members = () => {
   // Data State
   const [members, setMembers] = useState<Member[]>([]);
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
+  const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
+  const [selectedTypeId, setSelectedTypeId] = useState<string | 'all'>('all');
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -53,15 +55,17 @@ const Members = () => {
           limitToIds = allowedOutletsInProperty.map(o => o.id);
       }
       
-      const [membersData, categoriesData, staffData] = await Promise.all([
+      const [membersData, categoriesData, staffData, typesData] = await Promise.all([
         db.getMembers(scopeId, isPropertyScope, limitToIds),
         db.getCategories(currentOutlet.id),
-        db.getStaff(currentOutlet.id)
+        db.getStaff(currentOutlet.id),
+        db.getMembershipTypes(currentOutlet.id)
       ]);
 
       setMembers(membersData);
       setCategories(categoriesData);
       setStaffList(staffData.filter(s => s.is_active));
+      setMembershipTypes(typesData);
       
       if (selectedMember) {
         const updated = membersData.find(m => m.id === selectedMember.id);
@@ -104,14 +108,27 @@ const Members = () => {
     };
   }, [currentOutlet, currentProperty, canView]);
 
+  const filteredMembers = useMemo(() => {
+    if (selectedTypeId === 'all') return members;
+    return members.filter(m => m.membership_type_id === selectedTypeId);
+  }, [members, selectedTypeId]);
+
+  const filteredCategories = useMemo(() => {
+    if (selectedTypeId === 'all') return categories;
+    return categories.filter(c => c.membership_type_id === selectedTypeId);
+  }, [categories, selectedTypeId]);
+
   if (!canView) return null;
 
   return (
     <div className="min-h-full">
       {view === 'list' && (
         <MemberLedger 
-          members={members} 
-          categories={categories}
+          members={filteredMembers} 
+          categories={filteredCategories}
+          membershipTypes={membershipTypes}
+          selectedTypeId={selectedTypeId}
+          onTypeChange={setSelectedTypeId}
           loading={loading}
           viewScope={viewScope}
           setViewScope={setViewScope}
@@ -128,7 +145,9 @@ const Members = () => {
           existingMember={selectedMember}
           isEditing={isEditing}
           isRenewal={isRenewal}
-          categories={categories}
+          categories={filteredCategories}
+          membershipTypes={membershipTypes}
+          selectedTypeId={selectedTypeId}
           staff={staffList}
           allMembers={members}
           onCancel={() => setView('list')}

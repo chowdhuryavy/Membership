@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
-import { MembershipCategory } from '../types';
+import { MembershipCategory, MembershipType } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock, Plus, X, Command, Snowflake, Search, SearchCode } from 'lucide-react';
@@ -12,15 +12,25 @@ const Categories = () => {
   const { user } = useAuth();
   const { currentOutlet, hasPermission, formatMoney, checkShortcut } = useSettings();
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
+  const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
+  const [selectedTypeId, setSelectedTypeId] = useState<string | 'all'>('all');
   
-  const [formData, setFormData] = useState({ id: '', name: '', duration_months: 1, base_rate: 0, max_freeze_days: 0 });
+  const [formData, setFormData] = useState({ id: '', name: '', duration_months: 1, base_rate: 0, max_freeze_days: 0, membership_type_id: '' });
   const [isEditing, setIsEditing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    if(currentOutlet) loadCats();
+    if(currentOutlet) {
+        loadCats();
+        db.getMembershipTypes(currentOutlet.id).then(types => {
+            setMembershipTypes(types);
+            if (types.length > 0 && selectedTypeId === 'all') {
+                // Optionally auto-select first type if desired, but 'all' is safer for initial view
+            }
+        });
+    }
   }, [currentOutlet]);
 
   const loadCats = () => {
@@ -61,10 +71,12 @@ const Categories = () => {
   }, [showForm, canCreate, checkShortcut, formData, isEditing, currentOutlet]); // Depend on form state
 
   const filteredCategories = useMemo(() => {
-    return categories.filter(cat => 
-        cat.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [categories, searchTerm]);
+    return categories.filter(cat => {
+        const matchesSearch = cat.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesType = selectedTypeId === 'all' || cat.membership_type_id === selectedTypeId;
+        return matchesSearch && matchesType;
+    });
+  }, [categories, searchTerm, selectedTypeId]);
 
   if (!canView) {
     return (
@@ -81,7 +93,14 @@ const Categories = () => {
   }
 
   const resetForm = () => {
-      setFormData({ id: '', name: '', duration_months: 1, base_rate: 0, max_freeze_days: 0 });
+      setFormData({ 
+          id: '', 
+          name: '', 
+          duration_months: 1, 
+          base_rate: 0, 
+          max_freeze_days: 0, 
+          membership_type_id: selectedTypeId !== 'all' ? selectedTypeId : (membershipTypes[0]?.id || '')
+      });
       setIsEditing(false);
   };
   
@@ -103,7 +122,8 @@ const Categories = () => {
       name: cat.name || '',
       duration_months: cat.duration_months || 0,
       base_rate: cat.base_rate || 0,
-      max_freeze_days: cat.max_freeze_days || 0
+      max_freeze_days: cat.max_freeze_days || 0,
+      membership_type_id: cat.membership_type_id || ''
     });
       setIsEditing(true);
       setShowForm(true);
@@ -129,7 +149,8 @@ const Categories = () => {
                 name: formData.name,
                 duration_months: formData.duration_months,
                 base_rate: formData.base_rate,
-                max_freeze_days: formData.max_freeze_days
+                max_freeze_days: formData.max_freeze_days,
+                membership_type_id: formData.membership_type_id
             });
         }
     } else {
@@ -139,7 +160,8 @@ const Categories = () => {
             name: formData.name,
             duration_months: formData.duration_months,
             base_rate: formData.base_rate,
-            max_freeze_days: formData.max_freeze_days
+            max_freeze_days: formData.max_freeze_days,
+            membership_type_id: formData.membership_type_id
         });
     }
     
@@ -149,19 +171,40 @@ const Categories = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
+      <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-2">
             <span className="h-px w-6 bg-indigo-600"></span>
             <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em]">Revenue Architecture</span>
           </div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Membership Tiers</h1>
-          <p className="text-slate-500 text-sm font-medium mt-1 flex items-center gap-2">
-            <Store className="w-3.5 h-3.5 text-slate-400"/> Managing assets for <span className="text-slate-900 font-bold underline decoration-indigo-500 underline-offset-4">{currentOutlet?.name}</span>
-          </p>
+          <div className="flex flex-wrap items-center gap-4 mt-1">
+            <p className="text-slate-500 text-sm font-medium flex items-center gap-2">
+              <Store className="w-3.5 h-3.5 text-slate-400"/> Managing assets for <span className="text-slate-900 font-bold underline decoration-indigo-500 underline-offset-4">{currentOutlet?.name}</span>
+            </p>
+            {membershipTypes.length > 0 && (
+                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+                    <button 
+                        onClick={() => setSelectedTypeId('all')}
+                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${selectedTypeId === 'all' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                        All Types
+                    </button>
+                    {membershipTypes.map(type => (
+                        <button 
+                            key={type.id}
+                            onClick={() => setSelectedTypeId(type.id)}
+                            className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${selectedTypeId === type.id ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                            {type.name}
+                        </button>
+                    ))}
+                </div>
+            )}
+          </div>
         </div>
         
-        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto shrink-0">
             <div className="relative group flex-1 sm:w-64">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                 <input 
@@ -171,7 +214,7 @@ const Categories = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
-            {canCreate && (
+            {canCreate && (membershipTypes.length === 0 || selectedTypeId !== 'all') && (
                 <Button onClick={handleAddNew} className="rounded-xl font-black h-12 px-6 shadow-xl shadow-indigo-100 whitespace-nowrap">
                     <Plus className="w-4 h-4 mr-2" /> Create Tier
                 </Button>
@@ -239,6 +282,14 @@ const Categories = () => {
                                   <p className="text-lg font-black">{formatMoney(cat.base_rate)}</p>
                               </div>
                           </div>
+                          {cat.membership_type_id && (
+                              <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2">
+                                  <Target className="w-3 h-3 text-indigo-600" />
+                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                      {membershipTypes.find(t => t.id === cat.membership_type_id)?.name || 'Unknown Type'}
+                                  </span>
+                              </div>
+                          )}
                       </CardContent>
                   </Card>
               ))}
@@ -251,7 +302,19 @@ const Categories = () => {
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden animate-in zoom-in-95 duration-300">
                     <CardHeader className="bg-slate-900 text-white p-8 relative">
                         <CardTitle className="text-xl font-black tracking-tight">{isEditing ? 'Modify Tier' : 'Create Tier'}</CardTitle>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Revenue Logic Configuration</p>
+                        <div className="flex items-center gap-2 mt-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Revenue Logic Configuration</p>
+                            {formData.membership_type_id && (
+                                <>
+                                    <span className="w-1 h-1 rounded-full bg-slate-600"></span>
+                                    <div className="px-2 py-0.5 bg-emerald-500/20 rounded-md border border-emerald-500/30">
+                                        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">
+                                            {membershipTypes.find(t => t.id === formData.membership_type_id)?.name}
+                                        </p>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                         <button onClick={handleCancel} className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
                             <X className="w-5 h-5" />
                         </button>

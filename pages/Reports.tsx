@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '../components/ui';
 import { db } from '../services/mockSupabase';
-import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory, StaffLeave } from '../types';
+import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory, StaffLeave, MembershipType } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
 import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
@@ -93,6 +93,8 @@ const Reports = () => {
   // Data States
   const [rows, setRows] = useState<ReportRow[]>([]); // For Incentives & Sales
   const [revenueRows, setRevenueRows] = useState<RevenueRow[]>([]); // For Revenue Recog
+  const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
+  const [selectedMembershipTypeId, setSelectedMembershipTypeId] = useState<string | 'all'>('all');
   const [activeStaffList, setActiveStaffList] = useState<Staff[]>([]);
   const [showConfig, setShowConfig] = useState(true);
   const reportRef = useRef<HTMLDivElement>(null);
@@ -128,7 +130,7 @@ const Reports = () => {
 
   useEffect(() => {
     if (currentOutlet && currentProperty && canView) loadData();
-  }, [reportMonth, reportType, incentiveDept, currentOutlet, currentProperty, canView]);
+  }, [reportMonth, reportType, incentiveDept, selectedMembershipTypeId, currentOutlet, currentProperty, canView]);
 
   const findBestRule = (rules: IncentiveRule[], applies_to: IncentiveRule['applies_to'], target_id: string, price: number, duration: number) => {
     const candidates = rules.filter(r => r.is_active && r.applies_to === applies_to);
@@ -215,7 +217,7 @@ const Reports = () => {
       const start = startOfDay(parseISO(reportMonth + '-01'));
       const end = endOfMonth(start);
       
-      const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests, freezes, users, leaves] = await Promise.all([
+      const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests, freezes, users, leaves, types] = await Promise.all([
           db.getIncentiveRules(currentProperty.id, currentOutlet.id),
           db.getMassageBookings(currentOutlet.id, false),
           db.getMembers(currentOutlet.id),
@@ -227,10 +229,12 @@ const Reports = () => {
           db.getGuests(currentProperty.id),
           db.getFreezes(),
           db.getUsers(),
-          db.getAllStaffLeaves()
+          db.getAllStaffLeaves(),
+          db.getMembershipTypes(currentOutlet.id)
       ]);
 
       setStaffLeaves(leaves);
+      setMembershipTypes(types);
 
       let filteredStaff = staffList.filter(s => s.is_active);
       
@@ -258,9 +262,14 @@ const Reports = () => {
       if (reportType === 'revenue_recognition') {
           // --- REVENUE RECOGNITION (AMORTIZATION) LOGIC ---
           const revData: RevenueRow[] = [];
-          let sl = 1;
+          
+          let filteredMembers = members.filter(m => m.status !== MemberStatus.TENTATIVE);
+          
+          if (selectedMembershipTypeId !== 'all') {
+              filteredMembers = filteredMembers.filter(m => m.membership_type_id === selectedMembershipTypeId);
+          }
 
-          members.filter(m => m.status !== MemberStatus.TENTATIVE).forEach(m => {
+          filteredMembers.forEach(m => {
               const mStart = parseISO(m.start_date);
               const mEnd = parseISO(m.current_end_date);
               
@@ -1056,6 +1065,41 @@ const Reports = () => {
                                   ))}
                               </div>
                           </div>
+
+                          {/* 1.1 MEMBERSHIP TYPE TOGGLE (Only for Revenue Recognition) */}
+                          {reportType === 'revenue_recognition' && membershipTypes.length > 0 && (
+                               <div className="space-y-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
+                                   <div className="flex items-center gap-2 mb-1">
+                                       <Filter className="w-3.5 h-3.5 text-indigo-600"/>
+                                       <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Membership Type</label>
+                                   </div>
+                                   <div className="grid grid-cols-1 gap-2">
+                                       <button 
+                                           onClick={() => setSelectedMembershipTypeId('all')}
+                                           className={`w-full px-5 py-3 rounded-2xl text-left text-[9px] font-black uppercase tracking-widest transition-all border ${
+                                               selectedMembershipTypeId === 'all' 
+                                               ? 'bg-indigo-50 border-indigo-200 text-indigo-600' 
+                                               : 'bg-white border-transparent text-slate-400 hover:bg-slate-50'
+                                           }`}
+                                       >
+                                           Together (All Types)
+                                       </button>
+                                       {membershipTypes.map(type => (
+                                           <button 
+                                               key={type.id}
+                                               onClick={() => setSelectedMembershipTypeId(type.id)}
+                                               className={`w-full px-5 py-3 rounded-2xl text-left text-[9px] font-black uppercase tracking-widest transition-all border ${
+                                                   selectedMembershipTypeId === type.id 
+                                                   ? 'bg-indigo-50 border-indigo-200 text-indigo-600' 
+                                                   : 'bg-white border-transparent text-slate-400 hover:bg-slate-50'
+                                               }`}
+                                           >
+                                               {type.name}
+                                           </button>
+                                       ))}
+                                   </div>
+                               </div>
+                          )}
 
                           {/* 2. REWARD DEPARTMENT (Only for Incentives) */}
                           {reportType === 'incentives' && (

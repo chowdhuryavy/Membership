@@ -4,9 +4,9 @@ import {
   Search, Filter, Layers, Building2, Store, RefreshCcw, 
   Milestone, Edit2, Trash2, ShieldCheck,
   Zap, UserPlus, Snowflake, ChevronDown, 
-  CheckCircle, Calendar, Clock, MousePointer, X
+  CheckCircle, Calendar, Clock, MousePointer, X, Eraser
 } from 'lucide-react';
-import { Member, MembershipCategory, MemberStatus } from '../../types';
+import { Member, MembershipCategory, MemberStatus, MembershipType } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { format, isBefore, startOfDay, parse } from 'date-fns';
@@ -25,6 +25,9 @@ const parseISO = (dateString: string) => {
 interface MemberLedgerProps {
   members: Member[];
   categories: MembershipCategory[];
+  membershipTypes: MembershipType[];
+  selectedTypeId: string | 'all';
+  onTypeChange: (id: string | 'all') => void;
   loading: boolean;
   viewScope: 'outlet' | 'property';
   setViewScope: (s: 'outlet' | 'property') => void;
@@ -36,7 +39,7 @@ interface MemberLedgerProps {
 }
 
 const MemberLedger: React.FC<MemberLedgerProps> = ({ 
-  members = [], categories = [], loading, viewScope, setViewScope, 
+  members = [], categories = [], membershipTypes = [], selectedTypeId, onTypeChange, loading, viewScope, setViewScope, 
   onAdd, onViewDetail, onEdit, onRenew, onDelete 
 }) => {
   const { user } = useAuth();
@@ -134,22 +137,22 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       
       {/* LEDGER HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group">
         
         <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none group-hover:scale-110 transition-transform duration-1000 overflow-hidden rounded-[2.5rem] w-full h-full">
             <ShieldCheck className="absolute top-0 right-0 w-64 h-64 -mr-10 -mt-10" />
         </div>
         
-        <div className="flex items-center gap-6 relative z-10">
-           <div className="w-16 h-16 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white shadow-2xl ring-8 ring-slate-50"><Building2 className="w-8 h-8" /></div>
-           <div>
-              <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-2">Members Ledger</h1>
+        <div className="flex flex-1 items-center gap-6 relative z-10">
+           <div className="w-16 h-16 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white shadow-2xl ring-8 ring-slate-50 shrink-0"><Building2 className="w-8 h-8" /></div>
+           <div className="flex-1 min-w-0">
+              <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-2 truncate">Members Ledger</h1>
               <div className="flex flex-wrap items-center gap-4">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2 shrink-0">
                     <Store className="w-3.5 h-3.5 text-indigo-400" /> {currentOutlet?.name || 'Loading...'}
                   </p>
                   {canSwitchScope && (
-                    <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
                         <button onClick={() => setViewScope('outlet')} className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-2 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}>
                             Outlet Scope
                         </button>
@@ -158,11 +161,30 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                         </button>
                     </div>
                   )}
+                  {membershipTypes.length > 0 && (
+                    <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+                        <button 
+                            onClick={() => onTypeChange('all')}
+                            className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all ${selectedTypeId === 'all' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                            All Types
+                        </button>
+                        {membershipTypes.map(type => (
+                            <button 
+                                key={type.id}
+                                onClick={() => onTypeChange(type.id)}
+                                className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all ${selectedTypeId === type.id ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                                {type.name}
+                            </button>
+                        ))}
+                    </div>
+                  )}
               </div>
            </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto relative z-50">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto relative z-50 shrink-0">
           
           {/* SEARCH COMPONENT */}
           <div className="relative group w-full md:min-w-[300px]">
@@ -171,57 +193,68 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
           </div>
 
           {/* STATUS PROTOCOL SWITCHER */}
-          <div className="relative w-full md:w-48" ref={filterRef}>
-            <button 
-              onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className={`h-14 w-full px-5 rounded-2xl border transition-all flex items-center justify-between group/btn shadow-sm ${isFilterOpen ? 'bg-white border-indigo-500 ring-4 ring-indigo-500/10' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center border border-slate-100 transition-colors ${isFilterOpen ? 'text-indigo-600' : 'text-slate-400'}`}>
-                  <currentOption.icon className="w-4 h-4" />
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <div className="relative w-full md:w-48" ref={filterRef}>
+              <button 
+                onClick={() => setIsFilterOpen(!isFilterOpen)}
+                className={`h-14 w-full px-5 rounded-2xl border transition-all flex items-center justify-between group/btn shadow-sm ${isFilterOpen ? 'bg-white border-indigo-500 ring-4 ring-indigo-500/10' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center border border-slate-100 transition-colors ${isFilterOpen ? 'text-indigo-600' : 'text-slate-400'}`}>
+                    <currentOption.icon className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col items-start overflow-hidden">
+                     <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Status Protocol</span>
+                     <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight truncate w-full">{currentOption.label}</span>
+                  </div>
                 </div>
-                <div className="flex flex-col items-start overflow-hidden">
-                   <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Status Protocol</span>
-                   <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight truncate w-full">{currentOption.label}</span>
-                </div>
-              </div>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-300 ${isFilterOpen ? 'rotate-180 text-indigo-500' : ''}`} />
-            </button>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-300 ${isFilterOpen ? 'rotate-180 text-indigo-500' : ''}`} />
+              </button>
 
-            {isFilterOpen && (
-              <div className="absolute top-full mt-3 left-0 right-0 md:left-auto md:right-0 md:w-64 bg-white border border-slate-200 rounded-[1.8rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-3 duration-300">
-                <div className="p-4 border-b border-slate-50 bg-slate-50/50">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Recognition Filter</span>
-                </div>
-                <div className="p-2">
-                  {statusOptions.map((opt) => {
-                    const isSelected = statusFilter === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        onClick={() => {
-                          setStatusFilter(opt.value as any);
-                          setIsFilterOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all group/item ${isSelected ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-indigo-50 text-slate-600 hover:text-indigo-600'}`}
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-colors ${isSelected ? 'bg-white/20 border-white/20' : 'bg-white border-slate-100 shadow-sm'}`}>
-                             <opt.icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : opt.color}`} />
+              {isFilterOpen && (
+                <div className="absolute top-full mt-3 left-0 right-0 md:left-auto md:right-0 md:w-64 bg-white border border-slate-200 rounded-[1.8rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-3 duration-300">
+                  <div className="p-4 border-b border-slate-50 bg-slate-50/50">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Recognition Filter</span>
+                  </div>
+                  <div className="p-2">
+                    {statusOptions.map((opt) => {
+                      const isSelected = statusFilter === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            setStatusFilter(opt.value as any);
+                            setIsFilterOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all group/item ${isSelected ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-indigo-50 text-slate-600 hover:text-indigo-600'}`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-colors ${isSelected ? 'bg-white/20 border-white/20' : 'bg-white border-slate-100 shadow-sm'}`}>
+                               <opt.icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : opt.color}`} />
+                            </div>
+                            <span className="text-[11px] font-black uppercase tracking-tight">{opt.label}</span>
                           </div>
-                          <span className="text-[11px] font-black uppercase tracking-tight">{opt.label}</span>
-                        </div>
-                        {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
-                        {!isSelected && <MousePointer className="w-3 h-3 text-indigo-300 opacity-0 group-hover/item:opacity-100 transition-opacity" />}
-                      </button>
-                    );
-                  })}
+                          {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
+                          {!isSelected && <MousePointer className="w-3 h-3 text-indigo-300 opacity-0 group-hover/item:opacity-100 transition-opacity" />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
+            </div>
+            {statusFilter !== MemberStatus.ACTIVE && (
+              <button 
+                onClick={() => setStatusFilter(MemberStatus.ACTIVE)}
+                className="h-14 px-4 rounded-2xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest animate-in fade-in zoom-in"
+                title="Clear Filter"
+              >
+                <Eraser className="w-4 h-4" /> Clear
+              </button>
             )}
           </div>
 
-          {canCreate && (
+          {canCreate && (membershipTypes.length === 0 || selectedTypeId !== 'all') && (
             <Button onClick={onAdd} className="w-full sm:w-auto h-14 px-8 rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95">
               <UserPlus className="w-5 h-5 mr-2" /> New Enrollment
             </Button>

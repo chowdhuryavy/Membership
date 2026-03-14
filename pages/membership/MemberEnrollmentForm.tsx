@@ -10,7 +10,7 @@ import {
   CheckCircle2, Command, ChevronDown, Receipt, List
 } from 'lucide-react';
 import { db } from '../../services/mockSupabase';
-import { Member, MembershipCategory, MemberStatus, Staff } from '../../types';
+import { Member, MembershipCategory, MemberStatus, Staff, MembershipType } from '../../types';
 import { RevenueEngine } from '../../services/revenueEngine';
 import { format, addDays, parse, isAfter, differenceInDays, startOfDay } from 'date-fns';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -29,6 +29,7 @@ const parseISO = (dateString: string) => {
 const memberSchema = z.object({
   membership_number: z.string().min(1, "ID required"),
   guest_name: z.string().min(2, "Name required"),
+  membership_type_id: z.string().min(1, "Type required"),
   category_id: z.string().min(1, "Tier required"),
   start_date: z.string().min(1, "Start date required"),
   discount: z.coerce.number().min(0),
@@ -60,6 +61,9 @@ interface MemberEnrollmentFormProps {
   isEditing: boolean;
   isRenewal: boolean;
   categories: MembershipCategory[];
+  membershipTypes: MembershipType[];
+  selectedTypeId: string | 'all';
+  onTypeChange: (id: string | 'all') => void;
   staff: Staff[];
   allMembers: Member[];
   onCancel: () => void;
@@ -67,7 +71,7 @@ interface MemberEnrollmentFormProps {
 }
 
 const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
-  existingMember, isEditing, isRenewal, categories, staff, allMembers, onCancel, onSuccess
+  existingMember, isEditing, isRenewal, categories, membershipTypes, selectedTypeId, onTypeChange, staff, allMembers, onCancel, onSuccess
 }) => {
   const { currentOutlet, formatMoney } = useSettings();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -103,6 +107,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     resolver: zodResolver(memberSchema as any),
     defaultValues: (existingMember) ? {
         ...existingMember,
+        membership_type_id: existingMember.membership_type_id || (selectedTypeId !== 'all' ? selectedTypeId : ''),
         phone: existingMember.phone ?? '',
         email: existingMember.email ?? '',
         nationality: existingMember.nationality ?? '',
@@ -120,6 +125,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     } : {
       membership_number: '',
       guest_name: '',
+      membership_type_id: selectedTypeId !== 'all' ? selectedTypeId : '',
       category_id: '',
       start_date: format(new Date(), 'yyyy-MM-dd'),
       discount: 0,
@@ -145,6 +151,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
   const membershipNo = watch('membership_number');
   const guestName = watch('guest_name');
+  const membershipTypeId = watch('membership_type_id');
   const categoryId = watch('category_id');
   const startDateStr = watch('start_date');
   const discount = watch('discount');
@@ -155,6 +162,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('email', '');
     setValue('nationality', '');
     setValue('dob', '');
+    setValue('membership_type_id', selectedTypeId !== 'all' ? selectedTypeId : '');
     setValue('category_id', '');
     setValue('start_date', format(new Date(), 'yyyy-MM-dd'));
     setValue('package_type', 'Single');
@@ -178,6 +186,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('spouse_name', found.spouse_name || '');
     setValue('spouse_dob', found.spouse_dob || '');
     setValue('remarks', found.remarks || '');
+    setValue('membership_type_id', found.membership_type_id || '');
     setValue('category_id', found.category_id);
     setValue('membership_number', found.membership_number);
     
@@ -350,7 +359,19 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 <h1 className="text-2xl font-black uppercase tracking-tighter leading-none">
                     {isRenewal ? 'Renew Membership' : isEditing ? 'Edit Profile' : 'New Enrollment'}
                 </h1>
-                <p className="text-[9px] font-black text-indigo-300 uppercase tracking-[0.2em] mt-1.5 opacity-80">Lifecycle Management Console</p>
+                <div className="flex items-center gap-2 mt-1.5">
+                    <p className="text-[9px] font-black text-indigo-300 uppercase tracking-[0.2em] opacity-80">Lifecycle Management Console</p>
+                    {membershipTypeId && (
+                        <>
+                            <span className="w-1 h-1 rounded-full bg-indigo-400 opacity-50"></span>
+                            <div className="px-2 py-0.5 bg-emerald-500/20 rounded-md border border-emerald-500/30">
+                                <p className="text-[9px] font-black text-emerald-400 uppercase tracking-[0.2em]">
+                                    {membershipTypes.find(t => t.id === membershipTypeId)?.name}
+                                </p>
+                            </div>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
         <button onClick={onCancel} className="p-3 bg-white/5 hover:bg-white/10 rounded-full transition-colors active:scale-90">
@@ -441,7 +462,18 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Membership Tier *</label>
                     <div className="relative">
-                        <select {...register('category_id')} className="w-full h-14 px-4 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm cursor-pointer appearance-none">
+                        <select 
+                            {...register('category_id')} 
+                            onChange={(e) => {
+                                const catId = e.target.value;
+                                register('category_id').onChange(e);
+                                const cat = categories.find(c => c.id === catId);
+                                if (cat) {
+                                    setValue('membership_type_id', cat.membership_type_id);
+                                }
+                            }}
+                            className="w-full h-14 px-4 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm cursor-pointer appearance-none"
+                        >
                             <option value="">Select Category...</option>
                             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>

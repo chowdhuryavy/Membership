@@ -25,8 +25,10 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
   const toISODate = (displayDate: string) => {
     const parts = displayDate.split('/');
     if (parts.length !== 3) return '';
-    const [d, m, y] = parts;
-    if (!d || !m || !y || y.length !== 4) return '';
+    let [d, m, y] = parts;
+    if (!d || !m || !y) return '';
+    if (y.length === 2) y = '20' + y;
+    if (y.length !== 4) return '';
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   };
 
@@ -36,6 +38,23 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
     if (parts.length !== 3) return '';
     const [y, m, d] = parts;
     return `${d}/${m}/${y}`;
+  };
+
+  const handleBlur = (field: 'start' | 'end') => {
+    const val = displayDates[field];
+    const parts = val.split('/');
+    if (parts.length === 3) {
+      let [d, m, y] = parts;
+      if (y.length === 2) {
+        const expandedYear = '20' + y;
+        const newVal = `${d}/${m}/${expandedYear}`;
+        setDisplayDates(prev => ({ ...prev, [field]: newVal }));
+        const iso = toISODate(newVal);
+        if (iso) {
+          setLeaveForm(prev => ({ ...prev, [field === 'start' ? 'start_date' : 'end_date']: iso }));
+        }
+      }
+    }
   };
 
   useEffect(() => {
@@ -58,10 +77,12 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
     
     setDisplayDates(prev => ({ ...prev, [field]: formatted }));
     
-    if (cleaned.length === 8) {
+    if (cleaned.length === 8 || cleaned.length === 6) {
       const iso = toISODate(formatted);
       if (iso) {
         setLeaveForm(prev => ({ ...prev, [field === 'start' ? 'start_date' : 'end_date']: iso }));
+      } else {
+        setLeaveForm(prev => ({ ...prev, [field === 'start' ? 'start_date' : 'end_date']: '' }));
       }
     } else {
       setLeaveForm(prev => ({ ...prev, [field === 'start' ? 'start_date' : 'end_date']: '' }));
@@ -375,6 +396,7 @@ NOTIFY pgrst, 'reload schema';`}
                                     type="text" 
                                     value={displayDates.start} 
                                     onChange={e => handleDisplayDateChange('start', e.target.value)} 
+                                    onBlur={() => handleBlur('start')}
                                     required
                                     className="w-full h-16 pl-6 pr-14 rounded-2xl border-none focus:ring-0 font-black text-sm uppercase tracking-wider transition-all bg-transparent relative z-20"
                                 />
@@ -383,6 +405,7 @@ NOTIFY pgrst, 'reload schema';`}
                                 </div>
                                 <input 
                                     type="date"
+                                    value={leaveForm.start_date}
                                     className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 opacity-0 cursor-pointer z-40"
                                     title="Open Calendar"
                                     onChange={(e) => {
@@ -404,6 +427,7 @@ NOTIFY pgrst, 'reload schema';`}
                                     type="text" 
                                     value={displayDates.end} 
                                     onChange={e => handleDisplayDateChange('end', e.target.value)} 
+                                    onBlur={() => handleBlur('end')}
                                     required
                                     className="w-full h-16 pl-6 pr-14 rounded-2xl border-none focus:ring-0 font-black text-sm uppercase tracking-wider transition-all bg-transparent relative z-20"
                                 />
@@ -412,6 +436,7 @@ NOTIFY pgrst, 'reload schema';`}
                                 </div>
                                 <input 
                                     type="date"
+                                    value={leaveForm.end_date}
                                     className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 opacity-0 cursor-pointer z-40"
                                     title="Open Calendar"
                                     onChange={(e) => {
