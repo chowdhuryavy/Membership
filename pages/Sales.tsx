@@ -895,7 +895,12 @@ const Sales = () => {
             const matchesSearch = s.guest_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                                  s.item_name.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesCat = categoryFilter === 'All' || s.category === categoryFilter;
-            return isTargetDay && matchesSearch && matchesCat;
+            
+            // Exclude refunded or void sales
+            const status = (s.original as Sale).status;
+            const isActive = s.type !== 'pos' || !status || status === 'completed';
+            
+            return isTargetDay && matchesSearch && matchesCat && isActive;
         }).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
     }, [unifiedEntries, searchTerm, categoryFilter, selectedDate]);
 
