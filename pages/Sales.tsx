@@ -849,6 +849,8 @@ const Sales = () => {
     }
 
     const unifiedEntries = useMemo(() => {
+        console.log('Sales length:', sales.length);
+        console.log('Bookings length:', bookings.length);
         const salesMapped = sales.map(s => ({
             id: s.id,
             timestamp: s.created_at,
@@ -890,17 +892,10 @@ const Sales = () => {
 
     const filteredEntries = useMemo(() => {
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        console.log('Unified entries length:', unifiedEntries.length);
         return unifiedEntries.filter(s => {
             const isTargetDay = format(new Date(s.timestamp), 'yyyy-MM-dd') === dateStr;
-            const matchesSearch = s.guest_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                 s.item_name.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesCat = categoryFilter === 'All' || s.category === categoryFilter;
-            
-            // Exclude refunded or void sales
-            const status = (s.original as Sale).status;
-            const isActive = s.type !== 'pos' || !status || status === 'completed';
-            
-            return isTargetDay && matchesSearch && matchesCat && isActive;
+            return isTargetDay;
         }).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
     }, [unifiedEntries, searchTerm, categoryFilter, selectedDate]);
 
