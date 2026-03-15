@@ -60,7 +60,7 @@ import { db } from '../services/mockSupabase';
 import { Sale, Guest, SaleCategory, InventoryItem, MassageBooking, MassageType, UserProfile, Staff } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, addDays, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, addDays, isSameDay, parseISO } from 'date-fns';
 import RetailStockReport from './RetailStockReport';
 
 const POSForm = ({ 
@@ -760,7 +760,9 @@ const Sales = () => {
     const [saleToRefund, setSaleToRefund] = useState<any>(null);
     const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
 
-    // Security Check
+    useEffect(() => {
+        console.log('Selected date changed:', selectedDate.toISOString());
+    }, [selectedDate]);
     const canView = user && hasPermission(user.role_id, 'sales:view');
     const canCreate = user && hasPermission(user.role_id, 'sales:create');
     const canEdit = user && hasPermission(user.role_id, 'sales:edit');
@@ -866,6 +868,9 @@ const Sales = () => {
     }
 
     const unifiedEntries = useMemo(() => {
+        const guestMap = new Map<string, Guest>(guests.map(g => [g.id, g]));
+        const typeMap = new Map<string, MassageType>(massageTypes.map(mt => [mt.id, mt]));
+
         const salesMapped = sales.map(s => ({
             id: s.id,
             timestamp: s.created_at,
@@ -885,11 +890,11 @@ const Sales = () => {
         const saleBookingIds = new Set(sales.map(s => s.booking_id).filter(Boolean));
         
         const bookingsMapped = bookings.filter(b => b.status === 'completed' && !saleBookingIds.has(b.id)).map(b => {
-            const typeInfo = massageTypes.find(mt => mt.id === (b.massage_type_id || b.inventory_item_id));
+            const typeInfo = typeMap.get(b.massage_type_id || b.inventory_item_id || '');
             return {
                 id: b.id,
                 timestamp: b.created_at,
-                guest_name: guests.find(g => g.id === b.guest_id)?.name || 'Guest',
+                guest_name: guestMap.get(b.guest_id)?.name || 'Guest',
                 category: (typeInfo?.category || 'Massage') as any,
                 item_name: typeInfo?.name || 'Massage Service',
                 quantity: 1,
@@ -903,7 +908,7 @@ const Sales = () => {
         });
 
         const entries = [...salesMapped, ...bookingsMapped];
-        console.log('Unified entries:', entries.map(e => ({ timestamp: e.timestamp, type: e.type, amount: e.amount })));
+        console.log('Unified entries:', entries);
         return entries;
     }, [sales, bookings, guests, massageTypes]);
 
@@ -923,23 +928,7 @@ const Sales = () => {
         
         const dayEntries = unifiedEntries.filter(e => {
             const entryDate = new Date(e.timestamp);
-            const isTargetDay = isSameDay(entryDate, selectedDate);
-            
-            const status = e.type === 'pos' ? String((e.original as any).status || '').toLowerCase() : '';
-            const isNotRefunded = e.type !== 'pos' || status !== 'refunded';
-            const isNotVoid = e.type !== 'pos' || status !== 'void';
-            
-            if (isTargetDay) {
-                console.log('Day entry match:', { 
-                    timestamp: e.timestamp, 
-                    status: status,
-                    isNotRefunded,
-                    isNotVoid,
-                    amount: e.amount
-                });
-            }
-            
-            return isTargetDay && isNotRefunded && isNotVoid;
+            return isSameDay(entryDate, selectedDate);
         });
         
         const dayTotal = dayEntries.reduce((acc, e) => acc + (e.amount as any), 0);
@@ -947,10 +936,7 @@ const Sales = () => {
         
         const mtdEntries = unifiedEntries.filter(e => {
             const isWithinMonth = isWithinInterval(new Date(e.timestamp), { start: monthStart, end: monthEnd });
-            const status = e.type === 'pos' ? String((e.original as any).status || '').toLowerCase() : '';
-            const isNotRefunded = e.type !== 'pos' || status !== 'refunded';
-            const isNotVoid = e.type !== 'pos' || status !== 'void';
-            return isWithinMonth && isNotRefunded && isNotVoid;
+            return isWithinMonth;
         });
         const mtdTotal = mtdEntries.reduce((acc, e) => acc + (e.amount as any), 0);
 
@@ -1003,7 +989,7 @@ const Sales = () => {
                         <button onClick={() => setSelectedDate(addDays(selectedDate, -1))} className="p-1.5 hover:bg-slate-50 rounded-lg border border-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"><ChevronLeft className="w-4 h-4"/></button>
                         <div className="relative flex items-center gap-2 px-2">
                              <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-                             <input type="date" value={format(selectedDate, 'yyyy-MM-dd')} onChange={e => setSelectedDate(new Date(e.target.value))} className="h-8 border-none outline-none font-black text-[10px] uppercase bg-transparent w-32 cursor-pointer" />
+                             <input type="date" value={format(selectedDate, 'yyyy-MM-dd')} onChange={e => setSelectedDate(parseISO(e.target.value))} className="h-8 border-none outline-none font-black text-[10px] uppercase bg-transparent w-32 cursor-pointer" />
                         </div>
                         <button onClick={() => setSelectedDate(addDays(selectedDate, 1))} className="p-1.5 hover:bg-slate-50 rounded-lg border border-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"><ChevronRight className="w-4 h-4"/></button>
                     </div>
