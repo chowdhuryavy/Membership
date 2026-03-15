@@ -922,12 +922,9 @@ const Sales = () => {
         const monthEnd = endOfMonth(selectedDate);
         
         const dayEntries = unifiedEntries.filter(e => {
-            const date = new Date(e.timestamp);
-            if (isNaN(date.getTime())) {
-                console.log('Invalid timestamp:', e.timestamp);
-                return false;
-            }
-            const isTargetDay = format(date, 'yyyy-MM-dd') === dateStr;
+            const entryDate = new Date(e.timestamp);
+            const isTargetDay = isSameDay(entryDate, selectedDate);
+            
             const status = e.type === 'pos' ? String((e.original as any).status || '').toLowerCase() : '';
             const isNotRefunded = e.type !== 'pos' || status !== 'refunded';
             const isNotVoid = e.type !== 'pos' || status !== 'void';
