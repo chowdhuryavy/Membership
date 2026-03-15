@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../services/supabase';
 import { Link } from 'react-router-dom';
@@ -770,44 +770,7 @@ const Sales = () => {
     const canDeleteBooking = user && hasPermission(user.role_id, 'bookings:delete');
     const canViewInventory = user && hasPermission(user.role_id, 'inventory:view');
 
-    useEffect(() => {
-        if (currentOutlet && canView) loadData();
-    }, [currentOutlet, canView, viewScope]);
-
-    // Real-time synchronization subscription
-    useEffect(() => {
-        if (!currentOutlet || !currentProperty || !canView) return;
-
-        const channel = supabase
-            .channel('realtime-sales')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'sales' },
-                () => loadData()
-            )
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'massage_bookings' },
-                () => loadData()
-            )
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'inventory' },
-                () => loadData()
-            )
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'guests' },
-                () => loadData()
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [currentOutlet, currentProperty, canView]);
-
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         if (!currentOutlet || !currentProperty) return;
         setLoading(true);
         try {
@@ -830,11 +793,56 @@ const Sales = () => {
             setUsers(u);
             setStaff(st);
         } catch (e) {
-            console.error(e);
+            console.error('Error loading data:', e);
         } finally {
             setLoading(false);
         }
-    };
+    }, [currentOutlet, currentProperty, viewScope]);
+
+    const debouncedLoadData = useMemo(() => {
+        let timeoutId: NodeJS.Timeout;
+        return () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => loadData(), 500);
+        };
+    }, [loadData]);
+
+    useEffect(() => {
+        if (currentOutlet && canView) debouncedLoadData();
+    }, [currentOutlet, currentProperty, canView, viewScope, debouncedLoadData]);
+
+    // Real-time synchronization subscription
+    useEffect(() => {
+        if (!currentOutlet || !currentProperty || !canView) return;
+
+        const channel = supabase
+            .channel('realtime-sales')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'sales' },
+                () => debouncedLoadData()
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'massage_bookings' },
+                () => debouncedLoadData()
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'inventory' },
+                () => debouncedLoadData()
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'guests' },
+                () => debouncedLoadData()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [currentOutlet, currentProperty, canView, debouncedLoadData]);
 
     if (!canView) {
         return (
@@ -849,8 +857,6 @@ const Sales = () => {
     }
 
     const unifiedEntries = useMemo(() => {
-        console.log('Sales length:', sales.length);
-        console.log('Bookings length:', bookings.length);
         const salesMapped = sales.map(s => ({
             id: s.id,
             timestamp: s.created_at,
@@ -904,11 +910,27 @@ const Sales = () => {
         const monthStart = startOfMonth(selectedDate);
         const monthEnd = endOfMonth(selectedDate);
         
-        const dayEntries = unifiedEntries.filter(e => format(new Date(e.timestamp), 'yyyy-MM-dd') === dateStr);
-        const dayTotal = dayEntries.reduce((acc, e) => acc + e.amount, 0);
-        const dayServices = dayEntries.filter(e => e.category === 'Massage').reduce((acc, e) => acc + e.amount, 0);
-        const mtdEntries = unifiedEntries.filter(e => isWithinInterval(new Date(e.timestamp), { start: monthStart, end: monthEnd }));
-        const mtdTotal = mtdEntries.reduce((acc, e) => acc + e.amount, 0);
+        const dayEntries = unifiedEntries.filter(e => {
+            const isTargetDay = format(new Date(e.timestamp), 'yyyy-MM-dd') === dateStr;
+            const isNotRefunded = e.type !== 'pos' || (e.original as any).status !== 'refunded';
+            const isNotVoid = e.type !== 'pos' || (e.original as any).status !== 'void';
+            return isTargetDay && isNotRefunded && isNotVoid;
+        });
+        
+        const dayTotal = dayEntries.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+        const dayServices = dayEntries.filter(e => e.category === 'Massage').reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+        
+        const mtdEntries = unifiedEntries.filter(e => {
+            const isWithinMonth = isWithinInterval(new Date(e.timestamp), { start: monthStart, end: monthEnd });
+            const isNotRefunded = e.type !== 'pos' || (e.original as any).status !== 'refunded';
+            const isNotVoid = e.type !== 'pos' || (e.original as any).status !== 'void';
+            return isWithinMonth && isNotRefunded && isNotVoid;
+        });
+        const mtdTotal = mtdEntries.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+
+        if (dayTotal === 0 && unifiedEntries.length > 0) {
+            console.log('KPI Debug:', { dateStr, unifiedEntriesLength: unifiedEntries.length, dayEntriesLength: dayEntries.length, dayTotal, dayServices, mtdTotal, sampleEntry: unifiedEntries[0] });
+        }
 
         return { dayTotal, dayCount: dayEntries.length, dayServices, mtdTotal };
     }, [unifiedEntries, selectedDate]);
