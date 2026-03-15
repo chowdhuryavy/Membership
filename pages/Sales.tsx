@@ -912,21 +912,23 @@ const Sales = () => {
         
         const dayEntries = unifiedEntries.filter(e => {
             const isTargetDay = format(new Date(e.timestamp), 'yyyy-MM-dd') === dateStr;
-            const isNotRefunded = e.type !== 'pos' || (e.original as any).status !== 'refunded';
-            const isNotVoid = e.type !== 'pos' || (e.original as any).status !== 'void';
+            const status = e.type === 'pos' ? String((e.original as any).status || '').toLowerCase() : '';
+            const isNotRefunded = e.type !== 'pos' || status !== 'refunded';
+            const isNotVoid = e.type !== 'pos' || status !== 'void';
             return isTargetDay && isNotRefunded && isNotVoid;
         });
         
-        const dayTotal = dayEntries.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
-        const dayServices = dayEntries.filter(e => e.category === 'Massage').reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+        const dayTotal = dayEntries.reduce((acc, e) => acc + (e.amount as any), 0);
+        const dayServices = dayEntries.filter(e => e.category === 'Massage').reduce((acc, e) => acc + (e.amount as any), 0);
         
         const mtdEntries = unifiedEntries.filter(e => {
             const isWithinMonth = isWithinInterval(new Date(e.timestamp), { start: monthStart, end: monthEnd });
-            const isNotRefunded = e.type !== 'pos' || (e.original as any).status !== 'refunded';
-            const isNotVoid = e.type !== 'pos' || (e.original as any).status !== 'void';
+            const status = e.type === 'pos' ? String((e.original as any).status || '').toLowerCase() : '';
+            const isNotRefunded = e.type !== 'pos' || status !== 'refunded';
+            const isNotVoid = e.type !== 'pos' || status !== 'void';
             return isWithinMonth && isNotRefunded && isNotVoid;
         });
-        const mtdTotal = mtdEntries.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+        const mtdTotal = mtdEntries.reduce((acc, e) => acc + (e.amount as any), 0);
 
         if (dayTotal === 0 && unifiedEntries.length > 0) {
             console.log('KPI Debug Detailed:', { 

@@ -123,9 +123,15 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
             .reduce((sum, l) => sum + l.change_amount, 0);
 
         // Calculate changes DURING the target month
-        const salesDuringEvents = itemSales.filter(s => isSameMonth(parseISO(s.created_at), selectedMonth));
+        const salesDuringEvents = itemSales.filter(s => {
+            const isTargetMonth = isSameMonth(parseISO(s.created_at), selectedMonth);
+            const status = String(s.status || '').toLowerCase();
+            const isNotRefunded = status !== 'refunded';
+            const isNotVoid = status !== 'void';
+            return isTargetMonth && isNotRefunded && isNotVoid;
+        });
         const salesDuringQty = salesDuringEvents.reduce((sum, s) => sum + s.quantity, 0);
-        const salesDuringRevenue = salesDuringEvents.reduce((sum, s) => sum + s.net_amount, 0);
+        const salesDuringRevenue = salesDuringEvents.reduce((sum, s) => sum + (s.net_amount as any), 0);
 
         const logsDuring = itemLogs.filter(l => isSameMonth(parseISO(l.created_at), selectedMonth));
         
