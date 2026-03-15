@@ -405,7 +405,6 @@ const MassageScheduling = () => {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [completingBookingId, setCompletingBookingId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
-  const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
 
   const inventoryFormState = useMemo(() => ({
       showForm: showInventoryForm,
@@ -1504,78 +1503,6 @@ NOTIFY pgrst, 'reload schema';`}
       )}
 
       <ConfirmationModal isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} onConfirm={handleDeleteConfirmed} title="Purge Record" description={`Permanently remove ${itemToDelete?.name}?`} confirmText="Confirm Removal" isDestructive={true} />
-      {viewingIdUrl && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="flex items-center justify-between p-6 border-b border-slate-100">
-                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Supportive ID Document</h3>
-                    <div className="flex items-center gap-2">
-                        <a 
-                            href={viewingIdUrl} 
-                            download="supportive_id_document"
-                            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-indigo-600"
-                            title="Download Document"
-                        >
-                            <FileUp className="w-5 h-5 rotate-180" />
-                        </a>
-                        <button onClick={() => setViewingIdUrl(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                            <X className="w-5 h-5 text-slate-500" />
-                        </button>
-                    </div>
-                </div>
-                <div className="p-6 overflow-auto flex items-center justify-center bg-slate-50">
-                    {viewingIdUrl.startsWith('data:image') ? (
-                        <img src={viewingIdUrl} alt="ID Document" className="max-w-full h-auto rounded-xl shadow-sm" />
-                    ) : viewingIdUrl.startsWith('data:application/pdf') ? (
-                        <iframe src={viewingIdUrl} className="w-full h-[60vh] rounded-xl shadow-sm border-0" title="ID Document PDF" />
-                    ) : (
-                        <div className="text-center p-8">
-                            <p className="text-sm font-bold text-slate-600 mb-4">Document format not supported for direct preview.</p>
-                            <a href={viewingIdUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors">
-                                <ExternalLink className="w-4 h-4" /> Open in New Tab
-                            </a>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-      )}
-      {viewingIdUrl && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="flex items-center justify-between p-6 border-b border-slate-100">
-                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Supportive ID Document</h3>
-                    <div className="flex items-center gap-2">
-                        <a 
-                            href={viewingIdUrl} 
-                            download="supportive_id_document"
-                            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-indigo-600"
-                            title="Download Document"
-                        >
-                            <FileUp className="w-5 h-5 rotate-180" />
-                        </a>
-                        <button onClick={() => setViewingIdUrl(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                            <X className="w-5 h-5 text-slate-500" />
-                        </button>
-                    </div>
-                </div>
-                <div className="p-6 overflow-auto flex items-center justify-center bg-slate-50">
-                    {viewingIdUrl.startsWith('data:image') ? (
-                        <img src={viewingIdUrl} alt="ID Document" className="max-w-full h-auto rounded-xl shadow-sm" />
-                    ) : viewingIdUrl.startsWith('data:application/pdf') ? (
-                        <iframe src={viewingIdUrl} className="w-full h-[60vh] rounded-xl shadow-sm border-0" title="ID Document PDF" />
-                    ) : (
-                        <div className="text-center p-8">
-                            <p className="text-sm font-bold text-slate-600 mb-4">Document format not supported for direct preview.</p>
-                            <a href={viewingIdUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors">
-                                <ExternalLink className="w-4 h-4" /> Open in New Tab
-                            </a>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-      )}
     </div>
   );
 };

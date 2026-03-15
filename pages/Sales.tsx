@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../services/supabase';
 import { Link } from 'react-router-dom';
@@ -33,7 +33,6 @@ import {
   CheckCircle2,
   FileUp,
   AlertTriangle,
-  ExternalLink,
   Package,
   PackageSearch,
   LayoutGrid,
@@ -60,7 +59,7 @@ import { db } from '../services/mockSupabase';
 import { Sale, Guest, SaleCategory, InventoryItem, MassageBooking, MassageType, UserProfile, Staff } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, addDays, isSameDay, parseISO } from 'date-fns';
+import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, addDays, isSameDay } from 'date-fns';
 import RetailStockReport from './RetailStockReport';
 
 const POSForm = ({ 
@@ -757,12 +756,9 @@ const Sales = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
     const [itemToDelete, setItemToDelete] = useState<{ id: string; type: 'pos' | 'booking' } | null>(null);
-    const [saleToRefund, setSaleToRefund] = useState<any>(null);
     const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
 
-    useEffect(() => {
-        console.log('Selected date changed:', selectedDate.toISOString());
-    }, [selectedDate]);
+    // Security Check
     const canView = user && hasPermission(user.role_id, 'sales:view');
     const canCreate = user && hasPermission(user.role_id, 'sales:create');
     const canEdit = user && hasPermission(user.role_id, 'sales:edit');
@@ -772,7 +768,44 @@ const Sales = () => {
     const canDeleteBooking = user && hasPermission(user.role_id, 'bookings:delete');
     const canViewInventory = user && hasPermission(user.role_id, 'inventory:view');
 
-    const loadData = useCallback(async () => {
+    useEffect(() => {
+        if (currentOutlet && canView) loadData();
+    }, [currentOutlet, canView, viewScope]);
+
+    // Real-time synchronization subscription
+    useEffect(() => {
+        if (!currentOutlet || !currentProperty || !canView) return;
+
+        const channel = supabase
+            .channel('realtime-sales')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'sales' },
+                () => loadData()
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'massage_bookings' },
+                () => loadData()
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'inventory' },
+                () => loadData()
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'guests' },
+                () => loadData()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [currentOutlet, currentProperty, canView]);
+
+    const loadData = async () => {
         if (!currentOutlet || !currentProperty) return;
         setLoading(true);
         try {
@@ -787,15 +820,6 @@ const Sales = () => {
                 db.getUsers(),
                 db.getStaff(currentOutlet.id)
             ]);
-            console.log('Data Fetch Results:', {
-                sales: s.length,
-                bookings: b.length,
-                guests: g.length,
-                inventory: i.length,
-                massageTypes: mt.length,
-                users: u.length,
-                staff: st.length
-            });
             setSales(s);
             setBookings(b);
             setGuests(g);
@@ -804,56 +828,11 @@ const Sales = () => {
             setUsers(u);
             setStaff(st);
         } catch (e) {
-            console.error('Error loading data:', e);
+            console.error(e);
         } finally {
             setLoading(false);
         }
-    }, [currentOutlet, currentProperty, viewScope]);
-
-    const debouncedLoadData = useMemo(() => {
-        let timeoutId: NodeJS.Timeout;
-        return () => {
-            clearTimeout(timeoutId);
-            timeoutId = setTimeout(() => loadData(), 1000);
-        };
-    }, [loadData]);
-
-    useEffect(() => {
-        if (currentOutlet && canView) debouncedLoadData();
-    }, [currentOutlet, currentProperty, canView, viewScope, debouncedLoadData]);
-
-    // Real-time synchronization subscription
-    useEffect(() => {
-        if (!currentOutlet || !currentProperty || !canView) return;
-
-        const channel = supabase
-            .channel('realtime-sales')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'sales' },
-                () => debouncedLoadData()
-            )
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'massage_bookings' },
-                () => debouncedLoadData()
-            )
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'inventory' },
-                () => debouncedLoadData()
-            )
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'guests' },
-                () => debouncedLoadData()
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [currentOutlet, currentProperty, canView, debouncedLoadData]);
+    };
 
     if (!canView) {
         return (
@@ -868,9 +847,6 @@ const Sales = () => {
     }
 
     const unifiedEntries = useMemo(() => {
-        const guestMap = new Map<string, Guest>(guests.map(g => [g.id, g]));
-        const typeMap = new Map<string, MassageType>(massageTypes.map(mt => [mt.id, mt]));
-
         const salesMapped = sales.map(s => ({
             id: s.id,
             timestamp: s.created_at,
@@ -890,11 +866,11 @@ const Sales = () => {
         const saleBookingIds = new Set(sales.map(s => s.booking_id).filter(Boolean));
         
         const bookingsMapped = bookings.filter(b => b.status === 'completed' && !saleBookingIds.has(b.id)).map(b => {
-            const typeInfo = typeMap.get(b.massage_type_id || b.inventory_item_id || '');
+            const typeInfo = massageTypes.find(mt => mt.id === (b.massage_type_id || b.inventory_item_id));
             return {
                 id: b.id,
                 timestamp: b.created_at,
-                guest_name: guestMap.get(b.guest_id)?.name || 'Guest',
+                guest_name: guests.find(g => g.id === b.guest_id)?.name || 'Guest',
                 category: (typeInfo?.category || 'Massage') as any,
                 item_name: typeInfo?.name || 'Massage Service',
                 quantity: 1,
@@ -907,15 +883,17 @@ const Sales = () => {
             };
         });
 
-        const entries = [...salesMapped, ...bookingsMapped];
-        return entries;
+        return [...salesMapped, ...bookingsMapped];
     }, [sales, bookings, guests, massageTypes]);
 
     const filteredEntries = useMemo(() => {
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         return unifiedEntries.filter(s => {
             const isTargetDay = format(new Date(s.timestamp), 'yyyy-MM-dd') === dateStr;
-            return isTargetDay;
+            const matchesSearch = s.guest_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                 s.item_name.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesCat = categoryFilter === 'All' || s.category === categoryFilter;
+            return isTargetDay && matchesSearch && matchesCat;
         }).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
     }, [unifiedEntries, searchTerm, categoryFilter, selectedDate]);
 
@@ -924,19 +902,11 @@ const Sales = () => {
         const monthStart = startOfMonth(selectedDate);
         const monthEnd = endOfMonth(selectedDate);
         
-        const dayEntries = unifiedEntries.filter(e => {
-            const entryDate = new Date(e.timestamp);
-            return isSameDay(entryDate, selectedDate);
-        });
-        
-        const dayTotal = dayEntries.reduce((acc, e) => acc + (e.amount as any), 0);
-        const dayServices = dayEntries.filter(e => e.category === 'Massage').reduce((acc, e) => acc + (e.amount as any), 0);
-        
-        const mtdEntries = unifiedEntries.filter(e => {
-            const isWithinMonth = isWithinInterval(new Date(e.timestamp), { start: monthStart, end: monthEnd });
-            return isWithinMonth;
-        });
-        const mtdTotal = mtdEntries.reduce((acc, e) => acc + (e.amount as any), 0);
+        const dayEntries = unifiedEntries.filter(e => format(new Date(e.timestamp), 'yyyy-MM-dd') === dateStr);
+        const dayTotal = dayEntries.reduce((acc, e) => acc + e.amount, 0);
+        const dayServices = dayEntries.filter(e => e.category === 'Massage').reduce((acc, e) => acc + e.amount, 0);
+        const mtdEntries = unifiedEntries.filter(e => isWithinInterval(new Date(e.timestamp), { start: monthStart, end: monthEnd }));
+        const mtdTotal = mtdEntries.reduce((acc, e) => acc + e.amount, 0);
 
         return { dayTotal, dayCount: dayEntries.length, dayServices, mtdTotal };
     }, [unifiedEntries, selectedDate]);
@@ -972,7 +942,7 @@ const Sales = () => {
                         <button onClick={() => setSelectedDate(addDays(selectedDate, -1))} className="p-1.5 hover:bg-slate-50 rounded-lg border border-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"><ChevronLeft className="w-4 h-4"/></button>
                         <div className="relative flex items-center gap-2 px-2">
                              <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-                             <input type="date" value={format(selectedDate, 'yyyy-MM-dd')} onChange={e => setSelectedDate(parseISO(e.target.value))} className="h-8 border-none outline-none font-black text-[10px] uppercase bg-transparent w-32 cursor-pointer" />
+                             <input type="date" value={format(selectedDate, 'yyyy-MM-dd')} onChange={e => setSelectedDate(new Date(e.target.value))} className="h-8 border-none outline-none font-black text-[10px] uppercase bg-transparent w-32 cursor-pointer" />
                         </div>
                         <button onClick={() => setSelectedDate(addDays(selectedDate, 1))} className="p-1.5 hover:bg-slate-50 rounded-lg border border-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"><ChevronRight className="w-4 h-4"/></button>
                     </div>
@@ -1082,7 +1052,17 @@ const Sales = () => {
                                                             {canVoid && <button onClick={() => setItemToDelete({ id: entry.id, type: 'pos' })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Void"><Trash2 className="w-4 h-4" /></button>}
                                                             {canRefund && (
                                                                 <button 
-                                                                    onClick={() => setSaleToRefund(entry)}
+                                                                    onClick={async () => {
+                                                                        if (confirm('Are you sure you want to process this refund?')) {
+                                                                            try {
+                                                                                await db.updateSale(entry.id, { status: 'refunded' });
+                                                                                loadData();
+                                                                            } catch (e: any) {
+                                                                                console.error(e);
+                                                                                toast.error('Failed to process refund: ' + e.message);
+                                                                            }
+                                                                        }
+                                                                    }} 
                                                                     className="p-2 text-slate-400 hover:text-amber-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" 
                                                                     title="Refund"
                                                                 >
@@ -1143,28 +1123,6 @@ const Sales = () => {
                 description="Confirm reversal of this revenue event? Inventory stock will be recalculated if applicable." 
                 confirmText="Authorize Void" 
                 isDestructive={true} 
-            />
-
-            <ConfirmationModal 
-                isOpen={!!saleToRefund} 
-                onClose={() => setSaleToRefund(null)} 
-                onConfirm={async () => { 
-                    if (saleToRefund) { 
-                        try {
-                            await db.processRefund(saleToRefund.id);
-                            loadData();
-                            toast.success('Refund processed successfully');
-                        } catch (e: any) {
-                            console.error(e);
-                            toast.error('Failed to process refund: ' + e.message);
-                        }
-                        setSaleToRefund(null);
-                    } 
-                }} 
-                title="Process Refund" 
-                description="Are you sure you want to process this refund? This action will mark the sale as refunded." 
-                confirmText="Confirm Refund" 
-                isDestructive={false} 
             />
 
             {viewingIdUrl && (
