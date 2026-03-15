@@ -814,7 +814,7 @@ const Sales = () => {
         let timeoutId: NodeJS.Timeout;
         return () => {
             clearTimeout(timeoutId);
-            timeoutId = setTimeout(() => loadData(), 500);
+            timeoutId = setTimeout(() => loadData(), 1000);
         };
     }, [loadData]);
 
@@ -908,13 +908,11 @@ const Sales = () => {
         });
 
         const entries = [...salesMapped, ...bookingsMapped];
-        console.log('Unified entries:', entries);
         return entries;
     }, [sales, bookings, guests, massageTypes]);
 
     const filteredEntries = useMemo(() => {
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
-        console.log('Unified entries length:', unifiedEntries.length);
         return unifiedEntries.filter(s => {
             const isTargetDay = format(new Date(s.timestamp), 'yyyy-MM-dd') === dateStr;
             return isTargetDay;
@@ -939,21 +937,6 @@ const Sales = () => {
             return isWithinMonth;
         });
         const mtdTotal = mtdEntries.reduce((acc, e) => acc + (e.amount as any), 0);
-
-        if (dayTotal === 0 && unifiedEntries.length > 0) {
-            console.log('KPI Debug Detailed:', { 
-                dateStr, 
-                unifiedEntriesLength: unifiedEntries.length, 
-                dayEntriesLength: dayEntries.length, 
-                dayTotal, 
-                dayServices, 
-                mtdTotal, 
-                sampleEntry: unifiedEntries[0],
-                sampleEntryTimestamp: unifiedEntries[0].timestamp,
-                sampleEntryStatus: (unifiedEntries[0].original as any).status,
-                sampleEntryType: unifiedEntries[0].type
-            });
-        }
 
         return { dayTotal, dayCount: dayEntries.length, dayServices, mtdTotal };
     }, [unifiedEntries, selectedDate]);
