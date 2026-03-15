@@ -928,6 +928,18 @@ const Sales = () => {
             const status = e.type === 'pos' ? String((e.original as any).status || '').toLowerCase() : '';
             const isNotRefunded = e.type !== 'pos' || status !== 'refunded';
             const isNotVoid = e.type !== 'pos' || status !== 'void';
+            
+            if (isTargetDay) {
+                console.log('Day entry match:', { 
+                    timestamp: e.timestamp, 
+                    entryDate: entryDate.toISOString(), 
+                    selectedDate: selectedDate.toISOString(),
+                    isNotRefunded,
+                    isNotVoid,
+                    amount: e.amount
+                });
+            }
+            
             return isTargetDay && isNotRefunded && isNotVoid;
         });
         
