@@ -929,7 +929,18 @@ const Sales = () => {
         const mtdTotal = mtdEntries.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
 
         if (dayTotal === 0 && unifiedEntries.length > 0) {
-            console.log('KPI Debug:', { dateStr, unifiedEntriesLength: unifiedEntries.length, dayEntriesLength: dayEntries.length, dayTotal, dayServices, mtdTotal, sampleEntry: unifiedEntries[0] });
+            console.log('KPI Debug Detailed:', { 
+                dateStr, 
+                unifiedEntriesLength: unifiedEntries.length, 
+                dayEntriesLength: dayEntries.length, 
+                dayTotal, 
+                dayServices, 
+                mtdTotal, 
+                sampleEntry: unifiedEntries[0],
+                sampleEntryTimestamp: unifiedEntries[0].timestamp,
+                sampleEntryStatus: (unifiedEntries[0].original as any).status,
+                sampleEntryType: unifiedEntries[0].type
+            });
         }
 
         return { dayTotal, dayCount: dayEntries.length, dayServices, mtdTotal };
