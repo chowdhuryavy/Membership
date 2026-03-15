@@ -932,8 +932,7 @@ const Sales = () => {
             if (isTargetDay) {
                 console.log('Day entry match:', { 
                     timestamp: e.timestamp, 
-                    entryDate: entryDate.toISOString(), 
-                    selectedDate: selectedDate.toISOString(),
+                    status: status,
                     isNotRefunded,
                     isNotVoid,
                     amount: e.amount
