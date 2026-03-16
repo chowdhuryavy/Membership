@@ -37,7 +37,6 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
-import SplashLoading from '../components/SplashLoading';
 
 const parseISO = (dateString: string) => {
   if (!dateString) return new Date();
@@ -604,7 +603,11 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
-      {loading && <SplashLoading />}
+      {loading && (
+        <div className="flex items-center justify-center h-96">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-lg transition-all duration-500">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-indigo-100/50 transition-colors duration-700"></div>
         <div className="relative z-10">

@@ -36,7 +36,6 @@ import {
 } from 'lucide-react';
 
 import StaffProfileView from './StaffProfileView';
-import SplashLoading from '../components/SplashLoading';
 
 const StaffPage = () => {
   const { user } = useAuth();
@@ -218,7 +217,9 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
   );
 
   const rosterContent = loading ? (
-    <SplashLoading />
+    <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+    </div>
   ) : (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredStaff.map(s => (

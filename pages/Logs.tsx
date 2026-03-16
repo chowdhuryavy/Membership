@@ -5,7 +5,6 @@ import { SystemLog } from '../types';
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-import SplashLoading from '../components/SplashLoading';
 import { History, Search, RefreshCcw, Shield, Clock, Terminal, Filter, X, Calendar, User, CreditCard, Package, Settings, Activity, FileText, Key, AlertCircle } from 'lucide-react';
 
 const Logs = () => {
@@ -273,7 +272,6 @@ const Logs = () => {
     // ===============================
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
-            {loading && <SplashLoading />}
             
             {/* Header */}
             <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm">

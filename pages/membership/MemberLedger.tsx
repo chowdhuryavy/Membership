@@ -10,7 +10,6 @@ import { Member, MembershipCategory, MemberStatus, MembershipType } from '../../
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { format, isBefore, startOfDay, parse } from 'date-fns';
-import SplashLoading from '../../components/SplashLoading';
 
 const parseISO = (dateString: string) => {
   if (!dateString) return new Date();
@@ -265,7 +264,9 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
 
       <div className="space-y-10">
         {loading ? (
-            <SplashLoading />
+            <div className="flex items-center justify-center py-24">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
         ) : groupedMembers.length === 0 ? (
             <Card className="p-32 text-center rounded-[3.5rem] border-dashed border-2 bg-white/50">
               <div className="bg-slate-100/50 inline-flex p-8 rounded-full mb-6">

@@ -25,7 +25,6 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import RetailStockReportPrint from '../components/RetailStockReportPrint';
-import SplashLoading from '../components/SplashLoading';
 
 interface ItemStockSummary {
   itemId: string;
@@ -575,7 +574,9 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
           {/* Data Table */}
           <div className="p-0 no-print">
              {loading ? (
-                 <SplashLoading />
+                 <div className="flex items-center justify-center py-24">
+                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+                 </div>
              ) : (
                  <div className="overflow-x-auto">
                      <table className="w-full text-sm text-left">

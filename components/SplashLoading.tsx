@@ -27,16 +27,16 @@ const SplashLoading = () => {
 
           <div className="relative z-10 w-48 h-48 flex items-center justify-center">
             <div className="absolute inset-0 bg-indigo-600/5 blur-3xl rounded-full animate-pulse"></div>
-            <div className="w-full h-full flex items-center justify-center animate-[helios_3s_linear_infinite]">
+            <div className="w-full h-full flex items-center justify-center">
               {settings?.logo_url ? (
                 <img 
                   src={settings.logo_url} 
                   alt="Logo" 
-                  className="w-full h-full object-contain filter drop-shadow-[0_0_20px_rgba(79,70,229,0.2)]" 
+                  className="w-full h-full object-contain filter drop-shadow-[0_0_20px_rgba(79,70,229,0.2)] animate-[spin_8s_linear_infinite]" 
                 />
               ) : (
                 <div className="bg-indigo-600 w-24 h-24 rounded-[2.5rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-100">
-                  <Sparkles className="w-12 h-12" />
+                  <Sparkles className="w-12 h-12 animate-[spin_8s_linear_infinite]" />
                 </div>
               )}
             </div>

@@ -5,7 +5,6 @@ import { db } from '../services/mockSupabase';
 import { MembershipCategory, MembershipType } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import SplashLoading from '../components/SplashLoading';
 import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock, Plus, X, Command, Snowflake, Search, SearchCode } from 'lucide-react';
 
 // This component manages membership categories/tiers for a facility
@@ -172,7 +171,6 @@ const Categories = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {loading && <SplashLoading />}
       <div className="flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-2">

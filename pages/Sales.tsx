@@ -62,8 +62,6 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay, addDays, isSameDay, subMonths } from 'date-fns';
 
-import SplashLoading from '../components/SplashLoading';
-
 // Lazy load RetailStockReport
 const RetailStockReport = React.lazy(() => import('./RetailStockReport'));
 
@@ -1198,9 +1196,11 @@ const Sales = () => {
             </div>
 
             {loading ? (
-                <SplashLoading />
+                <div className="flex items-center justify-center h-96">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+                </div>
             ) : activeTab === 'stock' ? (
-                <React.Suspense fallback={<SplashLoading />}>
+                <React.Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>}>
                     <RetailStockReport embeddedViewScope={viewScope} isEmbedded={true} />
                 </React.Suspense>
             ) : activeTab === 'ledger' ? (

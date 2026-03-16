@@ -4,7 +4,6 @@ import { db } from '../services/mockSupabase';
 import { MassageBooking, MassageRoom } from '../types';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
-import SplashLoading from '../components/SplashLoading';
 import { Building2 } from 'lucide-react';
 
 interface MassageRoomRevenueReportProps {
@@ -84,8 +83,6 @@ const MassageRoomRevenueReport = ({ isEmbedded, embeddedMonth }: MassageRoomReve
   const grandTotal = useMemo(() => {
     return Object.values(totalsByRoom).reduce((sum: number, val: number) => sum + val, 0);
   }, [totalsByRoom]);
-
-  if (loading) return <SplashLoading />;
 
   const content = (
     <div className="overflow-x-auto">

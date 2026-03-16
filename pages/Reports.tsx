@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '../components/ui';
 import { db } from '../services/mockSupabase';
-import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory, StaffLeave, MembershipType } from '../types';
+import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory, StaffLeave, MembershipType, InventoryItem } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
 import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
@@ -217,7 +217,7 @@ const Reports = () => {
       const start = startOfDay(parseISO(reportMonth + '-01'));
       const end = endOfMonth(start);
       
-      const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests, freezes, users, leaves, types] = await Promise.all([
+      const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests, freezes, users, leaves, types, inventory] = await Promise.all([
           db.getIncentiveRules(currentProperty.id, currentOutlet.id),
           db.getMassageBookings(currentOutlet.id, false),
           db.getMembers(currentOutlet.id),
@@ -230,7 +230,8 @@ const Reports = () => {
           db.getFreezes(),
           db.getUsers(),
           db.getAllStaffLeaves(),
-          db.getMembershipTypes(currentOutlet.id)
+          db.getMembershipTypes(currentOutlet.id),
+          db.getInventory(currentOutlet.id, false)
       ]);
 
       setStaffLeaves(leaves);
@@ -425,7 +426,7 @@ const Reports = () => {
                       const bDate = parseISO(b.date);
                       const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
                       // Only include completed bookings for incentive audit
-                      return b.status === 'completed' && bDate >= start && bDate <= end;
+                      return b.status === 'completed' && bDate >= start && bDate <= end && type?.category === 'Massage';
                   })
                   .forEach(b => {
                       const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
@@ -444,7 +445,7 @@ const Reports = () => {
 
                       if (rule) {
                           baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-                          incDiscVal = (baseInc * discPercent) / 100;
+                          incDiscVal = rule.apply_discount_percentage ? (baseInc * discPercent) / 100 : 0;
                           incNet = baseInc - incDiscVal;
 
                           // For Massage, we always attribute the incentive to the specific therapist
@@ -496,7 +497,7 @@ const Reports = () => {
                       const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
                       const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-                      const incDiscVal = (baseInc * discPercent) / 100;
+                      const incDiscVal = 0; // Discounts are not considered for membership incentives
                       const incNet = baseInc - incDiscVal;
 
                       const staffSplits: Record<string, number> = {};
@@ -545,11 +546,11 @@ const Reports = () => {
                       return b.status === 'completed' && bDate >= start && bDate <= end;
                   })
                   .forEach(b => {
-                      const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
-                      if (!type) return;
-                      const rule = findBestRule(rules, 'Personal Training', (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes);
+                      const item = inventory.find(i => i.id === b.inventory_item_id);
+                      if (!item) return;
+                      const rule = findBestRule(rules, 'Personal Training', (b.inventory_item_id || ''), item.price, 0);
                       
-                      const actualPrice = type.price;
+                      const actualPrice = item.price;
                       const discountAmt = b.discount || 0;
                       const netRev = actualPrice - discountAmt;
                       const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
@@ -561,7 +562,7 @@ const Reports = () => {
 
                       if (rule) {
                           baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-                          incDiscVal = (baseInc * discPercent) / 100;
+                          incDiscVal = rule.apply_discount_percentage ? (baseInc * discPercent) / 100 : 0;
                           incNet = baseInc - incDiscVal;
 
                           if (b.therapist_id) {
@@ -576,9 +577,9 @@ const Reports = () => {
                           sl_no: sl++,
                           date: format(parseISO(b.date), 'dd-MMM-yy'),
                           guest_name: guests.find(g => g.id === b.guest_id)?.name || 'Guest',
-                          duration: `${type.duration_minutes}m`,
+                          duration: '-',
                           check_no: '#BOOK',
-                          item_name: type.name,
+                          item_name: item.name,
                           therapist_name: therapists.find(t => t.id === b.therapist_id)?.name || 'N/A',
                           actual_price: actualPrice,
                           discount_percent: discPercent,
@@ -611,7 +612,7 @@ const Reports = () => {
                       const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
                       const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-                      const incDiscVal = (baseInc * discPercent) / 100;
+                      const incDiscVal = rule.apply_discount_percentage ? (baseInc * discPercent) / 100 : 0;
                       const incNet = baseInc - incDiscVal;
 
                       const staffSplits: Record<string, number> = {};
