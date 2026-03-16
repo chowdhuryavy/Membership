@@ -123,15 +123,15 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
                 className={`flex items-center gap-4 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl shadow-sm transition-all hover:bg-slate-50 active:scale-[0.98] ${isOpen ? 'ring-2 ring-indigo-500/10 border-indigo-500/50' : ''}`}
             >
                 {currentOutlet?.logo_url ? (
-                    <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100 overflow-hidden p-1 border border-slate-100">
+                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100 overflow-hidden p-1 border border-slate-100">
                         <img src={currentOutlet.logo_url} alt="Logo" className="w-full h-full object-contain" />
                     </div>
                 ) : currentProp?.logo_url ? (
-                    <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100 overflow-hidden p-1 border border-slate-100">
+                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100 overflow-hidden p-1 border border-slate-100">
                         <img src={currentProp.logo_url} alt="Logo" className="w-full h-full object-contain" />
                     </div>
                 ) : (
-                    <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100">
                         <Building2 className="w-4 h-4 text-white" />
                     </div>
                 )}
