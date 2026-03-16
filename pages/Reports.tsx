@@ -445,7 +445,7 @@ const Reports = () => {
 
                       if (rule) {
                           baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-                          incDiscVal = rule.apply_discount_percentage ? (baseInc * discPercent) / 100 : 0;
+                          incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
                           incNet = baseInc - incDiscVal;
 
                           // For Massage, we always attribute the incentive to the specific therapist
@@ -497,7 +497,7 @@ const Reports = () => {
                       const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
                       const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-                      const incDiscVal = 0; // Discounts are not considered for membership incentives
+                      const incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
                       const incNet = baseInc - incDiscVal;
 
                       const staffSplits: Record<string, number> = {};
@@ -562,7 +562,7 @@ const Reports = () => {
 
                       if (rule) {
                           baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-                          incDiscVal = rule.apply_discount_percentage ? (baseInc * discPercent) / 100 : 0;
+                          incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
                           incNet = baseInc - incDiscVal;
 
                           if (b.therapist_id) {
@@ -612,7 +612,7 @@ const Reports = () => {
                       const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
                       const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-                      const incDiscVal = rule.apply_discount_percentage ? (baseInc * discPercent) / 100 : 0;
+                      const incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
                       const incNet = baseInc - incDiscVal;
 
                       const staffSplits: Record<string, number> = {};

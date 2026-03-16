@@ -49,6 +49,7 @@ export interface Outlet {
   id: string;
   name: string;
   property_id: string;
+  logo_url?: string;
   signatory_config?: Record<string, { prepared?: string, reviewed?: string, approved?: string }>;
   contract_template?: string; 
   conditions?: string; 
