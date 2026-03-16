@@ -4,6 +4,7 @@ import { db } from '../services/mockSupabase';
 import { MassageBooking, MassageRoom } from '../types';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
+import SplashLoading from '../components/SplashLoading';
 import { Building2 } from 'lucide-react';
 
 interface MassageRoomRevenueReportProps {
@@ -16,6 +17,7 @@ const MassageRoomRevenueReport = ({ isEmbedded, embeddedMonth }: MassageRoomReve
   const [bookings, setBookings] = useState<MassageBooking[]>([]);
   const [rooms, setRooms] = useState<MassageRoom[]>([]);
   const [reportMonth, setReportMonth] = useState(embeddedMonth || format(new Date(), 'yyyy-MM'));
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (embeddedMonth) {
@@ -25,13 +27,15 @@ const MassageRoomRevenueReport = ({ isEmbedded, embeddedMonth }: MassageRoomReve
 
   useEffect(() => {
     if (!currentOutlet) return;
+    setLoading(true);
     Promise.all([
       db.getMassageBookings(currentOutlet.id, false),
       db.getMassageRooms(currentOutlet.id)
     ]).then(([bookingsData, roomsData]) => {
       setBookings(bookingsData);
       setRooms(roomsData);
-    });
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, [currentOutlet]);
 
   const reportData = useMemo(() => {
@@ -80,6 +84,8 @@ const MassageRoomRevenueReport = ({ isEmbedded, embeddedMonth }: MassageRoomReve
   const grandTotal = useMemo(() => {
     return Object.values(totalsByRoom).reduce((sum: number, val: number) => sum + val, 0);
   }, [totalsByRoom]);
+
+  if (loading) return <SplashLoading />;
 
   const content = (
     <div className="overflow-x-auto">

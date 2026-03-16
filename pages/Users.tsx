@@ -6,6 +6,7 @@ import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabase';
 import { UserProfile, Role, Outlet, Permission, UserPermissionOverride } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
+import SplashLoading from '../components/SplashLoading';
 import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command, Search, Filter, ShieldAlert, Check, ChevronRight } from 'lucide-react';
 
 const UserDetail = ({ 
@@ -442,6 +443,7 @@ const Users = () => {
 
   return (
     <div className="space-y-6">
+      {loading && <SplashLoading />}
       {view === 'detail' && selectedUser ? (
         <UserDetail 
             user={selectedUser} 

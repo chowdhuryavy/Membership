@@ -104,7 +104,6 @@ class DatabaseService {
           { key: 'sales:create', label: 'Process Sales', description: 'Authorize and finalize new POS transactions.' },
           { key: 'sales:edit', label: 'Modify Sales', description: 'Adjust completed transaction details.' },
           { key: 'sales:delete', label: 'Authorize Voids', description: 'Reverse revenue events and adjust inventory.' },
-          { key: 'sales:refund', label: 'Process Refunds', description: 'Issue refunds for completed transactions.' },
           { key: 'sales:void', label: 'Void Transactions', description: 'Mark transactions as void for audit purposes.' },
           { key: 'inventory:view', label: 'Catalog Visibility', description: 'Access the item master and stock levels.' },
           { key: 'inventory:manage', label: 'Inventory Control', description: 'Define new assets and adjust quantities.' },
@@ -893,10 +892,20 @@ class DatabaseService {
     return [];
   }
 
-  async getInventory(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<InventoryItem[]> {
+  async getInventory(scopeId: string, isPropertyScope: boolean = false, options?: string[] | { limit?: number }): Promise<InventoryItem[]> {
     if (this.isSupabase()) {
         try {
             let query = supabase.from('inventory').select('*');
+            
+            let limitToOutletIds: string[] | undefined;
+            let limit: number | undefined;
+            
+            if (Array.isArray(options)) {
+                limitToOutletIds = options;
+            } else if (options && typeof options === 'object') {
+                limit = (options as any).limit;
+            }
+
             if (scopeId !== 'all') {
                 if (isPropertyScope) {
                     if (limitToOutletIds && limitToOutletIds.length > 0) {
@@ -908,6 +917,8 @@ class DatabaseService {
                 else query = query.eq('outlet_id', scopeId);
             }
             
+            if (limit) query = query.limit(limit);
+
             const { data, error } = await query.order('name');
             if (error) throw error;
             return (data || []) as InventoryItem[];
@@ -1020,6 +1031,36 @@ class DatabaseService {
     return [];
   }
 
+  async getSalesByDate(scopeId: string, isPropertyScope: boolean, dateStr: string): Promise<Sale[]> {
+    if (this.isSupabase()) {
+        let query = supabase.from('sales').select('*');
+        if (isPropertyScope) query = query.eq('property_id', scopeId);
+        else query = query.eq('outlet_id', scopeId);
+        
+        query = query.gte('created_at', `${dateStr}T00:00:00`).lte('created_at', `${dateStr}T23:59:59`);
+
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (error) throw error;
+        return (data || []) as Sale[];
+    }
+    return [];
+  }
+
+  async getSalesByDateRange(scopeId: string, isPropertyScope: boolean, startDate: string, endDate: string): Promise<Sale[]> {
+    if (this.isSupabase()) {
+        let query = supabase.from('sales').select('*');
+        if (isPropertyScope) query = query.eq('property_id', scopeId);
+        else query = query.eq('outlet_id', scopeId);
+        
+        query = query.gte('created_at', `${startDate}T00:00:00`).lte('created_at', `${endDate}T23:59:59`);
+
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (error) throw error;
+        return (data || []) as Sale[];
+    }
+    return [];
+  }
+
   async addSale(sale: Omit<Sale, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
         const { error } = await supabase.from('sales').insert([{ ...sale, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
@@ -1051,9 +1092,11 @@ class DatabaseService {
     }
   }
 
-  async getGuests(propertyId: string): Promise<Guest[]> {
+  async getGuests(propertyId: string, options?: { limit?: number }): Promise<Guest[]> {
     if (this.isSupabase()) {
-      const { data, error } = await supabase.from('guests').select('*').eq('property_id', propertyId).order('name');
+      let query = supabase.from('guests').select('*').eq('property_id', propertyId);
+      if (options?.limit) query = query.limit(options.limit);
+      const { data, error } = await query.order('name');
       if (error) throw error;
       return (data || []) as Guest[];
     }
@@ -1263,6 +1306,36 @@ class DatabaseService {
       else query = query.eq('outlet_id', scopeId);
 
       const { data, error } = await query.order('date', { ascending: false });
+      if (error) throw error;
+      return (data || []) as MassageBooking[];
+    }
+    return [];
+  }
+
+  async getMassageBookingsByDate(scopeId: string, isPropertyScope: boolean, dateStr: string): Promise<MassageBooking[]> {
+    if (this.isSupabase()) {
+      let query = supabase.from('massage_bookings').select('*');
+      if (isPropertyScope) query = query.eq('property_id', scopeId);
+      else query = query.eq('outlet_id', scopeId);
+      
+      query = query.eq('date', dateStr);
+
+      const { data, error } = await query.order('start_time', { ascending: true });
+      if (error) throw error;
+      return (data || []) as MassageBooking[];
+    }
+    return [];
+  }
+
+  async getMassageBookingsByDateRange(scopeId: string, isPropertyScope: boolean, startDate: string, endDate: string): Promise<MassageBooking[]> {
+    if (this.isSupabase()) {
+      let query = supabase.from('massage_bookings').select('*');
+      if (isPropertyScope) query = query.eq('property_id', scopeId);
+      else query = query.eq('outlet_id', scopeId);
+      
+      query = query.gte('date', startDate).lte('date', endDate);
+
+      const { data, error } = await query.order('date', { ascending: false }).order('start_time', { ascending: true });
       if (error) throw error;
       return (data || []) as MassageBooking[];
     }

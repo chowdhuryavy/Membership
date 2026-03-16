@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../services/supabase';
 import { Link } from 'react-router-dom';
@@ -53,14 +53,69 @@ import {
   Store,
   Building2,
   AlertCircle,
-  RefreshCcw
+  RefreshCcw,
+  ExternalLink
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Sale, Guest, SaleCategory, InventoryItem, MassageBooking, MassageType, UserProfile, Staff } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, addDays, isSameDay } from 'date-fns';
-import RetailStockReport from './RetailStockReport';
+import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay, addDays, isSameDay, subMonths } from 'date-fns';
+
+import SplashLoading from '../components/SplashLoading';
+
+// Lazy load RetailStockReport
+const RetailStockReport = React.lazy(() => import('./RetailStockReport'));
+
+// Debounce utility
+const debounce = (func: Function, wait: number) => {
+  let timeout: NodeJS.Timeout;
+  return function executedFunction(...args: any[]) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
+
+// Simple cache implementation
+class DataCache {
+  private cache: Map<string, { data: any; timestamp: number }> = new Map();
+  private TTL = 5 * 60 * 1000; // 5 minutes
+
+  get(key: string) {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.TTL) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  set(key: string, data: any) {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now()
+    });
+  }
+
+  invalidate(keyPattern: string) {
+    const keysToDelete: string[] = [];
+    this.cache.forEach((_, key) => {
+      if (key.includes(keyPattern)) {
+        keysToDelete.push(key);
+      }
+    });
+    keysToDelete.forEach(key => this.cache.delete(key));
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+}
+
+const cache = new DataCache();
 
 const POSForm = ({ 
     guests, 
@@ -126,6 +181,7 @@ const POSForm = ({
     const suggestionRef = useRef<HTMLDivElement>(null);
     const itemRef = useRef<HTMLDivElement>(null);
 
+    // Optimized providers with useMemo
     const providers = useMemo(() => {
         const activeStaff = staff.filter(s => s.is_active);
         const category = saleData.category.toLowerCase();
@@ -139,7 +195,6 @@ const POSForm = ({
             if (trainers.length > 0) {
                 filtered = trainers;
             } else {
-                // Exclude therapists from PT if other staff exist
                 const nonTherapists = activeStaff.filter(s => !/therapist|specialist|masseur|masseuse/i.test(s.role));
                 if (nonTherapists.length > 0) filtered = nonTherapists;
             }
@@ -150,7 +205,6 @@ const POSForm = ({
             if (frontOffice.length > 0) {
                 filtered = frontOffice;
             } else {
-                // Exclude therapists from Retail/Entrance if other staff exist
                 const nonTherapists = activeStaff.filter(s => !/therapist|specialist|masseur|masseuse/i.test(s.role));
                 if (nonTherapists.length > 0) filtered = nonTherapists;
             }
@@ -167,15 +221,21 @@ const POSForm = ({
         return 'Staff Member';
     }, [saleData.category]);
 
+    // Optimized filtered inventory with limit
     const filteredInventory = useMemo(() => {
         const catFiltered = inventory.filter(i => i.category === saleData.category);
-        if (!itemSearch) return catFiltered;
-        return catFiltered.filter(i => i.name.toLowerCase().includes(itemSearch.toLowerCase()));
+        if (!itemSearch) return catFiltered.slice(0, 50); // Limit to 50 items
+        return catFiltered
+            .filter(i => i.name.toLowerCase().includes(itemSearch.toLowerCase()))
+            .slice(0, 50); // Limit to 50 items
     }, [inventory, saleData.category, itemSearch]);
 
+    // Optimized guest suggestions with limit
     const guestSuggestions = useMemo(() => {
         if (!saleData.guest_name || saleData.guest_name.length < 2 || saleData.guest_id) return [];
-        return guests.filter(g => g.name.toLowerCase().includes(saleData.guest_name.toLowerCase())).slice(0, 5);
+        return guests
+            .filter(g => g.name.toLowerCase().includes(saleData.guest_name.toLowerCase()))
+            .slice(0, 5);
     }, [guests, saleData.guest_name, saleData.guest_id]);
 
     const grossAmount = saleData.quantity * saleData.unit_price;
@@ -234,6 +294,11 @@ const POSForm = ({
             } else {
                 await db.addSale(payload);
             }
+            
+            // Invalidate cache after successful operation
+            cache.invalidate('sales');
+            cache.invalidate('inventory');
+            
             onSuccess();
         } catch (err: any) {
             setError(err.message || "Checkout failed.");
@@ -485,6 +550,8 @@ export const InventoryManager = ({
     const editingItem = externalFormState ? externalFormState.editingItem : internalEditingItem;
     const setEditingItem = externalFormState ? externalFormState.setEditingItem : setInternalEditingItem;
     const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 9;
 
     const canManage = user && (hasPermission(user.role_id, 'inventory:manage') || hasPermission(user.role_id, 'bookings:manage_resources'));
 
@@ -508,7 +575,6 @@ export const InventoryManager = ({
     // Sync external formData if provided
     useEffect(() => {
         if (externalFormState && editingItem) {
-            // Only update if the data is actually different
             const currentData = externalFormState.formData;
             const newData = {
                 name: editingItem.name || '',
@@ -522,10 +588,20 @@ export const InventoryManager = ({
                 externalFormState.setFormData(newData);
             }
         }
-    }, [editingItem]); // Removed externalFormState from dependencies
+    }, [editingItem]);
+    
     const [stockForm, setStockForm] = useState<{ show: boolean, item: InventoryItem | null, type: 'restock' | 'adjustment' }>({ show: false, item: null, type: 'restock' });
     const [stockData, setStockData] = useState({ quantity: 0, reason: '', notes: '' });
     const [error, setError] = useState<string | null>(null);
+
+    // Paginate inventory
+    const paginatedInventory = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        return inventory.slice(start, end);
+    }, [inventory, currentPage]);
+
+    const totalPages = Math.ceil(inventory.length / itemsPerPage);
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -538,6 +614,10 @@ export const InventoryManager = ({
             } else {
                 await db.addInventoryItem({ ...formData, property_id: currentPropertyId, outlet_id: currentOutletId });
             }
+            
+            // Invalidate cache
+            cache.invalidate('inventory');
+            
             setShowForm(false);
             setEditingItem(null);
             onRefresh();
@@ -565,6 +645,9 @@ export const InventoryManager = ({
             await db.updateInventoryItem(stockForm.item.id, { 
                 stock_quantity: newStock 
             }, stockForm.type === 'restock' ? 'Restock' : 'Adjustment', user?.id);
+
+            // Invalidate cache
+            cache.invalidate('inventory');
 
             setStockForm({ show: false, item: null, type: 'restock' });
             setStockData({ quantity: 0, reason: '', notes: '' });
@@ -600,7 +683,7 @@ export const InventoryManager = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {inventory.map(item => (
+                {paginatedInventory.map(item => (
                     <Card key={item.id} className="rounded-[2rem] border-slate-200/60 shadow-sm hover:shadow-md transition-shadow p-6 group">
                         <div className="flex justify-between items-start mb-4">
                             <div className="p-3 bg-slate-50 rounded-2xl group-hover:bg-indigo-50 transition-colors">
@@ -649,6 +732,29 @@ export const InventoryManager = ({
                     </Card>
                 ))}
             </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="flex justify-center items-center gap-2 mt-6">
+                    <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-xl border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                    >
+                        <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs font-bold text-slate-600">
+                        Page {currentPage} of {totalPages}
+                    </span>
+                    <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-xl border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                    >
+                        <ChevronRight className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
 
             {stockForm.show && stockForm.item && (
                 <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
@@ -726,7 +832,7 @@ export const InventoryManager = ({
             <ConfirmationModal 
                 isOpen={!!itemToDelete} 
                 onClose={() => setItemToDelete(null)} 
-                onConfirm={async () => { if (itemToDelete && canManage) { await db.deleteInventoryItem(itemToDelete); onRefresh(); } }} 
+                onConfirm={async () => { if (itemToDelete && canManage) { await db.deleteInventoryItem(itemToDelete); cache.invalidate('inventory'); onRefresh(); } }} 
                 title="Decommission Item" 
                 description="Are you sure you want to remove this item from the master catalog? Historical sales data will remain intact, but future recognition will be unavailable." 
                 confirmText="Confirm Deletion" 
@@ -757,22 +863,35 @@ const Sales = () => {
     const [categoryFilter, setCategoryFilter] = useState('All');
     const [itemToDelete, setItemToDelete] = useState<{ id: string; type: 'pos' | 'booking' } | null>(null);
     const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
+    
+    // Pagination for ledger
+    const [currentPage, setCurrentPage] = useState(1);
+    const entriesPerPage = 20;
 
     // Security Check
     const canView = user && hasPermission(user.role_id, 'sales:view');
     const canCreate = user && hasPermission(user.role_id, 'sales:create');
     const canEdit = user && hasPermission(user.role_id, 'sales:edit');
     const canVoid = user && hasPermission(user.role_id, 'sales:void');
-    const canRefund = user && hasPermission(user.role_id, 'sales:refund');
     const canDelete = user && hasPermission(user.role_id, 'sales:delete');
     const canDeleteBooking = user && hasPermission(user.role_id, 'bookings:delete');
     const canViewInventory = user && hasPermission(user.role_id, 'inventory:view');
 
-    useEffect(() => {
-        if (currentOutlet && canView) loadData();
-    }, [currentOutlet, canView, viewScope]);
+    // Debounced load function
+    const debouncedLoad = useCallback(
+        debounce(() => {
+            loadData();
+        }, 500),
+        [currentOutlet, currentProperty, viewScope, selectedDate]
+    );
 
-    // Real-time synchronization subscription
+    useEffect(() => {
+        if (currentOutlet && canView) {
+            loadData();
+        }
+    }, [currentOutlet, canView, viewScope, selectedDate]); // Added selectedDate dependency
+
+    // Optimized real-time synchronization subscription
     useEffect(() => {
         if (!currentOutlet || !currentProperty || !canView) return;
 
@@ -780,55 +899,139 @@ const Sales = () => {
             .channel('realtime-sales')
             .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'sales' },
-                () => loadData()
+                { 
+                    event: 'INSERT', 
+                    schema: 'public', 
+                    table: 'sales',
+                    filter: `outlet_id=eq.${currentOutlet.id}`
+                },
+                (payload) => {
+                    // Optimistically add new sale
+                    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                    const saleDate = format(new Date(payload.new.created_at), 'yyyy-MM-dd');
+                    
+                    if (saleDate === dateStr) {
+                        setSales(prev => [payload.new, ...prev].slice(0, 100));
+                    }
+                    // Invalidate cache for future loads
+                    cache.invalidate('sales');
+                }
             )
             .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'massage_bookings' },
-                () => loadData()
+                { 
+                    event: 'UPDATE', 
+                    schema: 'public', 
+                    table: 'sales',
+                    filter: `outlet_id=eq.${currentOutlet.id}`
+                },
+                (payload) => {
+                    setSales(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
+                    cache.invalidate('sales');
+                }
             )
             .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'inventory' },
-                () => loadData()
-            )
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'guests' },
-                () => loadData()
+                { 
+                    event: 'DELETE', 
+                    schema: 'public', 
+                    table: 'sales',
+                    filter: `outlet_id=eq.${currentOutlet.id}`
+                },
+                (payload) => {
+                    setSales(prev => prev.filter(s => s.id !== payload.old.id));
+                    cache.invalidate('sales');
+                }
             )
             .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [currentOutlet, currentProperty, canView]);
+    }, [currentOutlet, currentProperty, canView, selectedDate]);
 
     const loadData = async () => {
         if (!currentOutlet || !currentProperty) return;
         setLoading(true);
+        
         try {
             const isProperty = viewScope === 'property';
             const scopeId = isProperty ? currentProperty.id : currentOutlet.id;
-            const [s, b, g, i, mt, u, st] = await Promise.all([
-                db.getSales(scopeId, isProperty),
-                db.getMassageBookings(scopeId, isProperty),
-                db.getGuests(currentProperty.id),
-                db.getInventory(scopeId, isProperty),
-                db.getMassageTypes(scopeId, isProperty),
-                db.getUsers(),
-                db.getStaff(currentOutlet.id)
-            ]);
-            setSales(s);
-            setBookings(b);
-            setGuests(g);
-            setInventory(i);
-            setMassageTypes(mt);
-            setUsers(u);
-            setStaff(st);
+            const dateStr = format(selectedDate, 'yyyy-MM-dd');
+            const monthStartStr = format(startOfMonth(selectedDate), 'yyyy-MM-dd');
+            const monthEndStr = format(endOfMonth(selectedDate), 'yyyy-MM-dd');
+            
+            // Create cache keys
+            const salesCacheKey = `sales-${scopeId}-${isProperty}-${monthStartStr}-${monthEndStr}`;
+            const bookingsCacheKey = `bookings-${scopeId}-${isProperty}-${monthStartStr}-${monthEndStr}`;
+            const guestsCacheKey = `guests-${currentProperty.id}`;
+            const inventoryCacheKey = `inventory-${scopeId}-${isProperty}`;
+            
+            // Check cache first
+            const cachedSales = cache.get(salesCacheKey);
+            const cachedBookings = cache.get(bookingsCacheKey);
+            const cachedGuests = cache.get(guestsCacheKey);
+            const cachedInventory = cache.get(inventoryCacheKey);
+            
+            // Only fetch what's not in cache
+            const promises = [];
+            
+            if (cachedSales) {
+                setSales(cachedSales);
+            } else {
+                promises.push(
+                    db.getSalesByDateRange(scopeId, isProperty, monthStartStr, monthEndStr).then(data => {
+                        cache.set(salesCacheKey, data);
+                        setSales(data);
+                    })
+                );
+            }
+            
+            if (cachedBookings) {
+                setBookings(cachedBookings);
+            } else {
+                promises.push(
+                    db.getMassageBookingsByDateRange(scopeId, isProperty, monthStartStr, monthEndStr).then(data => {
+                        cache.set(bookingsCacheKey, data);
+                        setBookings(data);
+                    })
+                );
+            }
+            
+            if (cachedGuests) {
+                setGuests(cachedGuests);
+            } else {
+                promises.push(
+                    db.getGuests(currentProperty.id, { limit: 100 }).then(data => {
+                        cache.set(guestsCacheKey, data);
+                        setGuests(data);
+                    })
+                );
+            }
+            
+            if (cachedInventory) {
+                setInventory(cachedInventory);
+            } else {
+                promises.push(
+                    db.getInventory(scopeId, isProperty, { limit: 100 }).then(data => {
+                        cache.set(inventoryCacheKey, data);
+                        setInventory(data);
+                    })
+                );
+            }
+            
+            // Always fetch these as they're smaller datasets
+            promises.push(
+                db.getMassageTypes(scopeId, isProperty).then(setMassageTypes),
+                db.getUsers().then(setUsers),
+                db.getStaff(currentOutlet.id).then(setStaff)
+            );
+            
+            await Promise.all(promises);
+            
         } catch (e) {
             console.error(e);
+            toast.error('Failed to load data');
         } finally {
             setLoading(false);
         }
@@ -846,7 +1049,18 @@ const Sales = () => {
         );
     }
 
+    // Optimized unified entries with chunked processing
     const unifiedEntries = useMemo(() => {
+        // Process in chunks to avoid blocking the main thread
+        const processInChunks = (items: any[], chunkSize: number = 100) => {
+            const results = [];
+            for (let i = 0; i < items.length; i += chunkSize) {
+                const chunk = items.slice(i, i + chunkSize);
+                results.push(...chunk);
+            }
+            return results;
+        };
+
         const salesMapped = sales.map(s => ({
             id: s.id,
             timestamp: s.created_at,
@@ -865,47 +1079,71 @@ const Sales = () => {
         // Avoid double counting: Only include completed bookings that don't have a linked sale record
         const saleBookingIds = new Set(sales.map(s => s.booking_id).filter(Boolean));
         
-        const bookingsMapped = bookings.filter(b => b.status === 'completed' && !saleBookingIds.has(b.id)).map(b => {
-            const typeInfo = massageTypes.find(mt => mt.id === (b.massage_type_id || b.inventory_item_id));
-            return {
-                id: b.id,
-                timestamp: b.created_at,
-                guest_name: guests.find(g => g.id === b.guest_id)?.name || 'Guest',
-                category: (typeInfo?.category || 'Massage') as any,
-                item_name: typeInfo?.name || 'Massage Service',
-                quantity: 1,
-                amount: Number(b.price),
-                method: 'Service Record',
-                type: 'booking' as const,
-                discount_reason: b.discount_reason,
-                discount_id_url: b.discount_id_url,
-                original: b
-            };
-        });
+        const bookingsMapped = bookings
+            .filter(b => b.status === 'completed' && !saleBookingIds.has(b.id))
+            .map(b => {
+                const typeInfo = massageTypes.find(mt => mt.id === (b.massage_type_id || b.inventory_item_id));
+                return {
+                    id: b.id,
+                    timestamp: b.created_at,
+                    guest_name: guests.find(g => g.id === b.guest_id)?.name || 'Guest',
+                    category: (typeInfo?.category || 'Massage') as any,
+                    item_name: typeInfo?.name || 'Massage Service',
+                    quantity: 1,
+                    amount: Number(b.price),
+                    method: 'Service Record',
+                    type: 'booking' as const,
+                    discount_reason: b.discount_reason,
+                    discount_id_url: b.discount_id_url,
+                    original: b
+                };
+            });
 
         return [...salesMapped, ...bookingsMapped];
     }, [sales, bookings, guests, massageTypes]);
 
+    // Filtered and paginated entries
     const filteredEntries = useMemo(() => {
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
-        return unifiedEntries.filter(s => {
+        const filtered = unifiedEntries.filter(s => {
             const isTargetDay = format(new Date(s.timestamp), 'yyyy-MM-dd') === dateStr;
             const matchesSearch = s.guest_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                                  s.item_name.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesCat = categoryFilter === 'All' || s.category === categoryFilter;
             return isTargetDay && matchesSearch && matchesCat;
         }).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        
+        return filtered;
     }, [unifiedEntries, searchTerm, categoryFilter, selectedDate]);
 
+    // Paginate entries
+    const paginatedEntries = useMemo(() => {
+        const start = (currentPage - 1) * entriesPerPage;
+        const end = start + entriesPerPage;
+        return filteredEntries.slice(start, end);
+    }, [filteredEntries, currentPage]);
+
+    const totalPages = Math.ceil(filteredEntries.length / entriesPerPage);
+
+    // Reset page when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, categoryFilter, selectedDate]);
+
+    // Optimized stats with memoization
     const stats = useMemo(() => {
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         const monthStart = startOfMonth(selectedDate);
-        const monthEnd = endOfMonth(selectedDate);
+        const runningEnd = endOfDay(selectedDate);
         
         const dayEntries = unifiedEntries.filter(e => format(new Date(e.timestamp), 'yyyy-MM-dd') === dateStr);
         const dayTotal = dayEntries.reduce((acc, e) => acc + e.amount, 0);
         const dayServices = dayEntries.filter(e => e.category === 'Massage').reduce((acc, e) => acc + e.amount, 0);
-        const mtdEntries = unifiedEntries.filter(e => isWithinInterval(new Date(e.timestamp), { start: monthStart, end: monthEnd }));
+        
+        const mtdEntries = unifiedEntries.filter(e => {
+            const entryDate = new Date(e.timestamp);
+            return isWithinInterval(entryDate, { start: monthStart, end: runningEnd });
+        });
         const mtdTotal = mtdEntries.reduce((acc, e) => acc + e.amount, 0);
 
         return { dayTotal, dayCount: dayEntries.length, dayServices, mtdTotal };
@@ -959,8 +1197,12 @@ const Sales = () => {
                 </div>
             </div>
 
-            {activeTab === 'stock' ? (
-                <RetailStockReport embeddedViewScope={viewScope} isEmbedded={true} />
+            {loading ? (
+                <SplashLoading />
+            ) : activeTab === 'stock' ? (
+                <React.Suspense fallback={<SplashLoading />}>
+                    <RetailStockReport embeddedViewScope={viewScope} isEmbedded={true} />
+                </React.Suspense>
             ) : activeTab === 'ledger' ? (
                 <>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -981,7 +1223,9 @@ const Sales = () => {
                             <div className="relative z-10">
                                 <p className="text-[8px] font-black text-indigo-100 uppercase tracking-[0.2em] mb-1">Total MTD Recognition</p>
                                 <h3 className="text-2xl font-black tracking-tighter">{formatMoney(stats.mtdTotal)}</h3>
-                                <p className="text-[7px] font-bold text-indigo-200 uppercase mt-2">Scope: {format(selectedDate, 'MMMM yyyy')}</p>
+                                <p className="text-[7px] font-bold text-indigo-200 uppercase mt-2">
+                                    Range: 01 {format(selectedDate, 'MMM')} - {format(selectedDate, 'dd MMM yyyy')}
+                                </p>
                             </div>
                         </Card>
                     </div>
@@ -1015,6 +1259,7 @@ const Sales = () => {
                     <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                         <div className="px-8 py-5 bg-slate-50/50 border-b flex justify-between items-center">
                             <div className="flex items-center gap-3"><CalendarDays className="w-4 h-4 text-indigo-600" /><h4 className="text-[11px] font-black uppercase tracking-[0.1em] text-slate-900">{format(selectedDate, 'EEEE, dd MMMM yyyy')}</h4></div>
+                            <span className="text-xs font-bold text-slate-500">Showing {paginatedEntries.length} of {filteredEntries.length} entries</span>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
@@ -1029,7 +1274,7 @@ const Sales = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
-                                    {filteredEntries.map(entry => (
+                                    {paginatedEntries.map(entry => (
                                         <tr key={entry.id} className="hover:bg-indigo-50/20 transition-colors group">
                                             <td className="px-8 py-5 text-[10px] font-bold text-slate-400">{format(new Date(entry.timestamp), 'HH:mm')}</td>
                                             <td className="px-8 py-5"><div className="flex items-center gap-3"><div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-[9px] uppercase">{entry.guest_name.charAt(0)}</div><span className="font-black text-slate-700 tracking-tight uppercase text-[11px]">{entry.guest_name}</span></div></td>
@@ -1039,6 +1284,11 @@ const Sales = () => {
                                                 {(entry.discount_reason || entry.discount_id_url) && (
                                                     <div className="mt-1 flex items-center gap-1 text-[8px] font-black text-indigo-500 italic uppercase tracking-tighter">
                                                         {entry.discount_reason && <><Tag className="w-2 h-2" /> {entry.discount_reason}</>}
+                                                        {entry.discount_id_url && (
+                                                            <button onClick={() => setViewingIdUrl(entry.discount_id_url)} className="ml-1 text-indigo-600 hover:text-indigo-800">
+                                                                <ExternalLink className="w-2.5 h-2.5" />
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 )}
                                             </td>
@@ -1050,26 +1300,7 @@ const Sales = () => {
                                                         <>
                                                             {canEdit && <button onClick={() => { setEditingSale(entry.original as Sale); setShowForm(true); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all"><Edit3 className="w-4 h-4" /></button>}
                                                             {canVoid && <button onClick={() => setItemToDelete({ id: entry.id, type: 'pos' })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" title="Void"><Trash2 className="w-4 h-4" /></button>}
-                                                            {canRefund && (
-                                                                <button 
-                                                                    onClick={async () => {
-                                                                        if (confirm('Are you sure you want to process this refund?')) {
-                                                                            try {
-                                                                                await db.updateSale(entry.id, { status: 'refunded' });
-                                                                                loadData();
-                                                                            } catch (e: any) {
-                                                                                console.error(e);
-                                                                                toast.error('Failed to process refund: ' + e.message);
-                                                                            }
-                                                                        }
-                                                                    }} 
-                                                                    className="p-2 text-slate-400 hover:text-amber-600 hover:bg-white rounded-xl shadow-sm border border-transparent hover:border-slate-100 transition-all" 
-                                                                    title="Refund"
-                                                                >
-                                                                    <RefreshCcw className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                            {!canEdit && !canVoid && !canRefund && <Lock className="w-3.5 h-3.5 text-slate-200" />}
+                                                            {!canEdit && !canVoid && <Lock className="w-3.5 h-3.5 text-slate-200" />}
                                                         </>
                                                     ) : (
                                                         <>
@@ -1084,9 +1315,42 @@ const Sales = () => {
                                 </tbody>
                             </table>
                         </div>
+                        
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="px-8 py-4 border-t border-slate-100 flex justify-between items-center">
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                    className="px-4 py-2 rounded-xl border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors text-xs font-bold"
+                                >
+                                    Previous
+                                </button>
+                                <span className="text-xs font-bold text-slate-600">
+                                    Page {currentPage} of {totalPages}
+                                </span>
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage === totalPages}
+                                    className="px-4 py-2 rounded-xl border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors text-xs font-bold"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
                     </Card>
                 </>
-            ) : <InventoryManager inventory={inventory} currentOutletId={currentOutlet?.id || ''} currentPropertyId={currentProperty?.id || ''} onRefresh={loadData} />}
+            ) : (
+                <InventoryManager 
+                    inventory={inventory} 
+                    currentOutletId={currentOutlet?.id || ''} 
+                    currentPropertyId={currentProperty?.id || ''} 
+                    onRefresh={() => {
+                        cache.invalidate('inventory');
+                        loadData();
+                    }} 
+                />
+            )}
 
             {showForm && (
                 <div className="fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
@@ -1099,7 +1363,13 @@ const Sales = () => {
                             currentOutletId={currentOutlet?.id || ''} 
                             currentPropertyId={currentProperty?.id || ''} 
                             onCancel={() => {setShowForm(false); setEditingSale(null);}} 
-                            onSuccess={() => { setShowForm(false); setEditingSale(null); loadData(); }} 
+                            onSuccess={() => { 
+                                setShowForm(false); 
+                                setEditingSale(null); 
+                                cache.invalidate('sales');
+                                cache.invalidate('inventory');
+                                loadData(); 
+                            }} 
                             initialSale={editingSale || undefined} 
                         />
                     </div>
@@ -1112,9 +1382,10 @@ const Sales = () => {
                     if (itemToDelete) { 
                         if (itemToDelete.type === 'pos' && canVoid) {
                             await db.deleteSale(itemToDelete.id); 
+                            cache.invalidate('sales');
                         } else if (itemToDelete.type === 'booking' && canDeleteBooking) {
-                            // Instead of deleting the booking, just set it back to confirmed
                             await db.updateMassageBookingStatus(itemToDelete.id, 'confirmed');
+                            cache.invalidate('bookings');
                         }
                         loadData(); 
                     } 

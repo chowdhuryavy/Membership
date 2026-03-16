@@ -34,12 +34,20 @@ CREATE TABLE IF NOT EXISTS public.sales (
     payment_method TEXT NOT NULL,
     sold_by_id TEXT,
     secondary_sold_by_id TEXT,
-    status TEXT NOT NULL DEFAULT 'completed', -- completed, refunded, void
+    status TEXT NOT NULL DEFAULT 'completed', -- completed, void
     remarks TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. ENABLE RLS FOR SYSTEM-LEVEL OPERATIONS (PARITY WITH CORE SCHEMA)
+-- 3. CREATE INDEXES FOR PERFORMANCE
+CREATE INDEX IF NOT EXISTS idx_sales_outlet_id ON public.sales(outlet_id);
+CREATE INDEX IF NOT EXISTS idx_sales_property_id ON public.sales(property_id);
+CREATE INDEX IF NOT EXISTS idx_sales_created_at ON public.sales(created_at);
+CREATE INDEX IF NOT EXISTS idx_sales_item_id ON public.sales(item_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_outlet_id ON public.inventory(outlet_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_property_id ON public.inventory(property_id);
+
+-- 4. ENABLE RLS FOR SYSTEM-LEVEL OPERATIONS (PARITY WITH CORE SCHEMA)
 ALTER TABLE public.inventory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
 

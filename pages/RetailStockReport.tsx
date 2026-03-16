@@ -25,6 +25,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import RetailStockReportPrint from '../components/RetailStockReportPrint';
+import SplashLoading from '../components/SplashLoading';
 
 interface ItemStockSummary {
   itemId: string;
@@ -102,6 +103,21 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
     const monthStart = startOfMonth(selectedMonth);
     const monthEnd = endOfMonth(selectedMonth);
 
+    // Pre-group sales and logs by item_id for O(N) lookup instead of O(N*M)
+    const salesByItem: Record<string, Sale[]> = {};
+    sales.forEach(s => {
+      if (s.item_id) {
+        if (!salesByItem[s.item_id]) salesByItem[s.item_id] = [];
+        salesByItem[s.item_id].push(s);
+      }
+    });
+
+    const logsByItem: Record<string, InventoryLog[]> = {};
+    inventoryLogs.forEach(l => {
+      if (!logsByItem[l.item_id]) logsByItem[l.item_id] = [];
+      logsByItem[l.item_id].push(l);
+    });
+
     const relevantItems = inventory.filter(item => {
         if (!item.created_at) return true;
         const createdDate = parseISO(item.created_at);
@@ -110,8 +126,8 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
 
     const itemStats: ItemStockSummary[] = relevantItems.map(item => {
         const currentStock = item.stock_quantity || 0;
-        const itemSales = sales.filter(s => s.item_id === item.id);
-        const itemLogs = inventoryLogs.filter(l => l.item_id === item.id);
+        const itemSales = salesByItem[item.id] || [];
+        const itemLogs = logsByItem[item.id] || [];
 
         // Calculate changes AFTER the target month to reverse-engineer closing stock
         const salesAfter = itemSales
@@ -559,10 +575,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
           {/* Data Table */}
           <div className="p-0 no-print">
              {loading ? (
-                 <div className="flex flex-col items-center justify-center h-96 gap-4">
-                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
-                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Compiling Ledger Data...</p>
-                 </div>
+                 <SplashLoading />
              ) : (
                  <div className="overflow-x-auto">
                      <table className="w-full text-sm text-left">

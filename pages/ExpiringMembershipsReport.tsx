@@ -5,6 +5,7 @@ import { Member, MembershipCategory, MemberStatus } from '../types';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
+import SplashLoading from '../components/SplashLoading';
 import { CalendarX, FileDown, Search, Filter } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -76,9 +77,7 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth }:
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-            </div>
+            <SplashLoading />
         );
     }
 

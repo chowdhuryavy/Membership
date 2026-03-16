@@ -10,7 +10,7 @@ export type Permission =
   | 'reports:view' | 'reports:export' | 'reports:view_financial' | 'reports:view_operational' | 'reports:view_inventory' | 'reports:view_staff'
   | 'logs:view' | 'logs:search' | 'logs:filter' | 'logs:clear'
   | 'bookings:view' | 'bookings:create' | 'bookings:edit' | 'bookings:delete' | 'bookings:manage_resources' | 'bookings:view_therapist_schedule'
-  | 'sales:view' | 'sales:create' | 'sales:edit' | 'sales:delete' | 'sales:refund' | 'sales:void'
+  | 'sales:view' | 'sales:create' | 'sales:edit' | 'sales:delete' | 'sales:void'
   | 'inventory:view' | 'inventory:manage' | 'inventory:adjust_stock'; 
 
 export interface PermissionGroup {
@@ -274,7 +274,7 @@ export interface Sale {
   discount_amount: number;
   net_amount: number;
   payment_method: string;
-  status: 'completed' | 'refunded' | 'void';
+  status: 'completed' | 'void';
   sold_by_id?: string; 
   secondary_sold_by_id?: string;
   booking_id?: string;
