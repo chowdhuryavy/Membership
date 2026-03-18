@@ -91,7 +91,6 @@ const GuestHistoryView = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'confirmed' | 'cancelled' | 'no-show'>('all');
   const [guestSales, setGuestSales] = useState<Sale[]>([]);
   const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
-  const [selectedServiceIdUrl, setSelectedServiceIdUrl] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -151,11 +150,11 @@ const GuestHistoryView = ({
       .sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
   }, [guestBookings, guestSales, massageTypes, therapists, searchTerm, statusFilter]);
 
-  useEffect(() => {
-      // Set default ID URL to guest's ID card or latest discount ID
-      const latestDiscountId = unifiedHistory.find(h => h.discount_id_url)?.discount_id_url;
-      setSelectedServiceIdUrl(guest.id_card_url || latestDiscountId || null);
-  }, [guest.id_card_url, unifiedHistory]);
+  const effectiveIdUrl = useMemo(() => {
+    if (!selectedItemId) return null;
+    const item = unifiedHistory.find(h => h.id === selectedItemId);
+    return item?.discount_id_url || null;
+  }, [selectedItemId, unifiedHistory]);
 
   const stats = useMemo(() => {
     const completedBookings = guestBookings.filter(b => b.status === 'completed');
@@ -199,13 +198,13 @@ const GuestHistoryView = ({
                  </div>
                  {(guest.id_card_url || unifiedHistory.find(h => h.discount_id_url)?.discount_id_url) && (
                     <button 
-                        onClick={() => setViewingIdUrl(selectedServiceIdUrl)}
-                        disabled={!selectedServiceIdUrl}
-                        className={`w-full flex items-center justify-center gap-2 p-3 rounded-xl border transition-colors ${selectedServiceIdUrl ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed'}`}
+                        onClick={() => setViewingIdUrl(effectiveIdUrl)}
+                        disabled={!effectiveIdUrl}
+                        className={`w-full flex items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-200 ${effectiveIdUrl ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-100 shadow-sm' : 'bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed opacity-60'}`}
                     >
                         <FileUp className="w-4 h-4" />
                         <span className="text-xs font-black uppercase tracking-widest">
-                            {selectedServiceIdUrl ? 'View ID Card' : 'No ID for this service'}
+                            {!selectedItemId ? 'Select service to view ID' : effectiveIdUrl ? 'View ID Card' : 'No ID for this service'}
                         </span>
                     </button>
                  )}
@@ -279,7 +278,6 @@ const GuestHistoryView = ({
                                 className={`hover:bg-indigo-50/30 transition-colors group cursor-pointer ${selectedItemId === item.id ? 'bg-indigo-50' : ''}`}
                                 onClick={() => {
                                     setSelectedItemId(item.id);
-                                    setSelectedServiceIdUrl(item.discount_id_url || guest.id_card_url || null);
                                 }}
                             >
                                 <td className="px-8 py-4">
