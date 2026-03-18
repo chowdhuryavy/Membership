@@ -223,13 +223,20 @@ const ProtectedLayout = () => {
   const [showSplash, setShowSplash] = useState(true);
   const navigate = useNavigate();
 
+  const isInitialLoad = useRef(true);
+
   const combinedLoading = isAuthLoading || isSettingsLoading || (user && outlets.length > 0 && !currentOutlet) || pageLoading;
 
   useEffect(() => {
     if (!combinedLoading) {
-      const timer = setTimeout(() => setShowSplash(false), 3000); 
+      // Shorter delay for a snappier feel
+      const timer = setTimeout(() => {
+        setShowSplash(false);
+        isInitialLoad.current = false;
+      }, 500); 
       return () => clearTimeout(timer);
-    } else {
+    } else if (isInitialLoad.current) {
+      // Only re-trigger splash if we haven't finished the initial app load
       setShowSplash(true);
     }
   }, [combinedLoading]);
