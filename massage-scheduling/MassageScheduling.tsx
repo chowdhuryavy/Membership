@@ -361,6 +361,22 @@ const GuestHistoryView = ({
   );
 };
 
+// Simple cache implementation for bookings
+const bookingCache: Map<string, { data: any; timestamp: number }> = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const getCachedData = (key: string) => {
+  const cached = bookingCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  return null;
+};
+
+const setCachedData = (key: string, data: any) => {
+  bookingCache.set(key, { data, timestamp: Date.now() });
+};
+
 const MassageScheduling = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -657,70 +673,94 @@ NOTIFY pgrst, 'reload schema';`}
     setLoading(true);
     setIsTableMissing(false);
     setSchemaError(null);
+    
+    const isProperty = viewScope === 'property';
+    const scopeId = isProperty ? currentProperty.id : currentOutlet.id;
+    const dateStr = format(viewDate, 'yyyy-MM-dd');
+    
+    // Try to load from cache first for immediate display
+    const cacheKey = `bookings-data-${scopeId}-${isProperty}-${dateStr}`;
+    const cached = getCachedData(cacheKey);
+    if (cached) {
+        setBookings(cached.bookings || []);
+        setGuests(cached.guests || []);
+        setTherapists((cached.therapists || []).sort((x: any, y: any) => x.name.localeCompare(y.name)));
+        setMassageRooms(cached.rooms || []);
+        setMassageTypes(cached.massageTypes || []);
+        setMembers(cached.members || []);
+        setLoading(false); // We have cached data, so we can stop showing "loading" state if any
+    }
+
     try {
-      const isProperty = viewScope === 'property';
-      const scopeId = isProperty ? currentProperty.id : currentOutlet.id;
-      
       let limitToIds: string[] | undefined = undefined;
       if (isProperty && user?.role_id?.toLowerCase() !== 'admin') {
           limitToIds = allowedOutletsInProperty.map(o => o.id);
       }
       
-      const results = await Promise.allSettled([
-        db.getMassageBookings(scopeId, isProperty, limitToIds),
-        db.getGuests(currentProperty.id),
-        db.getTherapists(scopeId, isProperty, limitToIds),
-        db.getMassageTypes(scopeId, isProperty, limitToIds),
-        db.getMembers(scopeId, isProperty, limitToIds),
-        db.getInventory(scopeId, isProperty, limitToIds),
-        db.getMassageRooms(isProperty ? undefined : currentOutlet.id, currentProperty.id),
-        supabase.from('sales').select('booking_id').limit(1).then(({ error }) => { if (error) throw error; }) // Check if booking_id exists in sales
+      // Fetch data in parallel but update state as they complete for faster perceived performance
+      const fetchBookings = db.getMassageBookings(scopeId, isProperty, limitToIds).then(data => {
+          setBookings(data || []);
+          return data;
+      });
+      
+      const fetchGuests = db.getGuests(currentProperty.id).then(data => {
+          setGuests(data || []);
+          return data;
+      });
+      
+      const fetchTherapists = db.getTherapists(scopeId, isProperty, limitToIds).then(data => {
+          const sorted = (data || []).sort((x, y) => x.name.localeCompare(y.name));
+          setTherapists(sorted);
+          return sorted;
+      });
+      
+      const fetchMassageTypes = db.getMassageTypes(scopeId, isProperty, limitToIds);
+      const fetchInventory = db.getInventory(scopeId, isProperty, limitToIds);
+      
+      const fetchRooms = db.getMassageRooms(isProperty ? undefined : currentOutlet.id, currentProperty.id).then(data => {
+          setMassageRooms(data || []);
+          return data;
+      });
+      
+      const fetchMembers = db.getMembers(scopeId, isProperty, limitToIds).then(data => {
+          setMembers(data || []);
+          return data;
+      });
+
+      const [b, g, t, m, inv, rooms, mems] = await Promise.all([
+          fetchBookings,
+          fetchGuests,
+          fetchTherapists,
+          fetchMassageTypes,
+          fetchInventory,
+          fetchRooms,
+          fetchMembers
       ]);
 
-      const errors = results
-        .map((r, idx) => r.status === 'rejected' ? { name: ['Bookings', 'Guests', 'Therapists', 'Treatments', 'Members', 'Inventory', 'Rooms', 'Sales'][idx], reason: r.reason } : null)
-        .filter(Boolean);
-
-      if (errors.length > 0) {
-          const firstError = errors[0]!;
-          console.error(`Data fetch failed for ${firstError.name}:`, firstError.reason);
-          
-          // If it's a network error and we haven't retried too much, try again
-          if (retryCount < 2 && (firstError.reason?.message?.includes('Load failed') || firstError.reason?.message?.includes('fetch'))) {
-              console.log(`Retrying data load (${retryCount + 1}/2)...`);
-              setTimeout(() => loadData(retryCount + 1), 1000);
-              return;
-          }
-
-          throw new Error(`Table [${firstError.name}] failed: ${firstError.reason?.message || 'Connection Error'}`);
-      }
-
-      const b = (results[0] as PromiseFulfilledResult<MassageBooking[]>).value || [];
-      const g = (results[1] as PromiseFulfilledResult<Guest[]>).value || [];
-      const t = (results[2] as PromiseFulfilledResult<Therapist[]>).value || [];
-      const m = (results[3] as PromiseFulfilledResult<MassageType[]>).value || [];
-      const mems = (results[4] as PromiseFulfilledResult<Member[]>).value || [];
-      const inv = (results[5] as PromiseFulfilledResult<InventoryItem[]>).value || [];
-      const rooms = (results[6] as PromiseFulfilledResult<MassageRoom[]>).value || [];
-
-      setBookings(b);
-      setGuests(g);
-      setTherapists(t.sort((x, y) => x.name.localeCompare(y.name)));
-      setMassageRooms(rooms);
-      
-      const ptItems = inv.filter(i => i.category === 'Personal Training').map(i => ({
+      const ptItems = (inv || []).filter(i => i.category === 'Personal Training').map(i => ({
           id: i.id,
           property_id: i.property_id,
           outlet_id: i.outlet_id,
           name: i.name,
           price: i.price,
-          duration_minutes: 60, // Default duration for PT sessions
+          duration_minutes: 60,
           category: 'Personal Training' as const
       }));
       
       const combinedTypes = [...(m || []).map(mt => ({...mt, category: 'Massage'})), ...ptItems];
-      setMassageTypes(combinedTypes.sort((x, y) => (Number(x.duration_minutes) || 0) - (Number(y.duration_minutes) || 0)));
-      setMembers(mems || []);
+      const sortedTypes = combinedTypes.sort((x, y) => (Number(x.duration_minutes) || 0) - (Number(y.duration_minutes) || 0));
+      setMassageTypes(sortedTypes);
+
+      // Update cache
+      setCachedData(cacheKey, {
+          bookings: b,
+          guests: g,
+          therapists: t,
+          rooms: rooms,
+          massageTypes: sortedTypes,
+          members: mems
+      });
+
     } catch (e: any) {
       console.error("Failed to load booking data", e);
       const errorMessage = e.message || "Unknown Database Error";

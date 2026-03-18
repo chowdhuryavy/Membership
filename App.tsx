@@ -225,10 +225,11 @@ const ProtectedLayout = () => {
 
   const isInitialLoad = useRef(true);
 
-  const combinedLoading = isAuthLoading || isSettingsLoading || (user && outlets.length > 0 && !currentOutlet) || pageLoading;
+  const isAppInitializing = isAuthLoading || isSettingsLoading || (user && outlets.length > 0 && !currentOutlet);
+  const combinedLoading = isAppInitializing;
 
   useEffect(() => {
-    if (!combinedLoading) {
+    if (!isAppInitializing) {
       // Shorter delay for a snappier feel
       const timer = setTimeout(() => {
         setShowSplash(false);
@@ -239,7 +240,7 @@ const ProtectedLayout = () => {
       // Only re-trigger splash if we haven't finished the initial app load
       setShowSplash(true);
     }
-  }, [combinedLoading]);
+  }, [isAppInitializing]);
   
   useEffect(() => {
     if (user && !combinedLoading) {

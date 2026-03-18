@@ -953,7 +953,6 @@ const Sales = () => {
     const loadData = async () => {
         if (!currentOutlet || !currentProperty) return;
         setLoading(true);
-        setPageLoading(true);
         
         try {
             const isProperty = viewScope === 'property';
@@ -1035,7 +1034,6 @@ const Sales = () => {
             toast.error('Failed to load data');
         } finally {
             setLoading(false);
-            setPageLoading(false);
         }
     };
 
