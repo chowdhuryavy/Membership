@@ -134,7 +134,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   const currentOption = statusOptions.find(o => o.value === statusFilter) || statusOptions[0];
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+    <div className="space-y-6 pb-20">
       
       {/* LEDGER HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group">
@@ -263,7 +263,11 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
       </div>
 
       <div className="space-y-10">
-        {loading ? null : groupedMembers.length === 0 ? (
+        {loading ? (
+            <Card className="p-32 text-center rounded-[3.5rem] border-dashed border-2 bg-white/50">
+              <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest">Loading records...</h3>
+            </Card>
+        ) : groupedMembers.length === 0 ? (
             <Card className="p-32 text-center rounded-[3.5rem] border-dashed border-2 bg-white/50">
               <div className="bg-slate-100/50 inline-flex p-8 rounded-full mb-6">
                 <Milestone className="w-16 h-16 text-slate-200 mx-auto" />
@@ -324,7 +328,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                                 <td className="px-10 py-7 font-bold text-slate-500 text-xs">{m.start_date ? format(parseISO(m.start_date), 'dd MMM yyyy') : '---'}</td>
                                 <td className="px-10 py-7 text-slate-900 font-black text-sm tracking-tight">{m.current_end_date ? format(parseISO(m.current_end_date), 'dd MMM yyyy') : '---'}</td>
                                 <td className="px-10 py-7 text-right font-black text-slate-900 tabular-nums text-base">{formatMoney(m.original_net_amount && m.original_net_amount > 0 ? m.original_net_amount : m.net_amount)}</td>
-                                <td className="px-10 py-7 text-center" onClick={e => e.stopPropagation()}>
+                                <td className="px-10 py-7 text-center opacity-0 group-hover/row:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                                   <div className="flex items-center justify-center gap-2">
                                     {canRenew && <button onClick={() => onRenew(m)} title="Renew" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><RefreshCcw className="w-4 h-4"/></button>}
                                     {canFreeze && <button onClick={() => onViewDetail(m)} title="Freeze" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><Snowflake className="w-4 h-4"/></button>}

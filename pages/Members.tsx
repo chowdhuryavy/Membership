@@ -45,7 +45,7 @@ const Members = () => {
 
   const loadData = async () => {
     if (!currentOutlet || !currentProperty || !canView) return;
-    setLoading(true);
+    if (members.length === 0) setLoading(true);
     setPageLoading(true);
     try {
       const isPropertyScope = viewScope === 'property';
