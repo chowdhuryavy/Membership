@@ -63,7 +63,11 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    loadData();
+    if (currentOutlet && currentProperty) {
+      loadData();
+    } else if (!currentOutlet || !currentProperty) {
+      setLoading(false);
+    }
   }, [currentOutlet, currentProperty, viewScope]);
 
   const loadData = async () => {

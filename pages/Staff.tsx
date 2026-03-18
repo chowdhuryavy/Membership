@@ -83,7 +83,11 @@ const StaffPage = () => {
   const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
 
   useEffect(() => {
-    if (currentOutlet && canView) loadStaff();
+    if (currentOutlet && canView) {
+      loadStaff();
+    } else if (!currentOutlet) {
+      setLoading(false);
+    }
   }, [currentOutlet, canView, viewScope]);
 
   // Real-time synchronization subscription

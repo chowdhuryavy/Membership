@@ -77,7 +77,11 @@ const Members = () => {
   };
 
   useEffect(() => {
-    loadData();
+    if (currentOutlet && canView) {
+      loadData();
+    } else if (!currentOutlet) {
+      setLoading(false);
+    }
   }, [currentOutlet, viewScope, canView]);
 
   // Real-time synchronization subscription

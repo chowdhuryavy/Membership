@@ -886,6 +886,8 @@ const Sales = () => {
     useEffect(() => {
         if (currentOutlet && canView) {
             loadData();
+        } else if (!currentOutlet) {
+            setLoading(false);
         }
     }, [currentOutlet, canView, viewScope, selectedDate]); // Added selectedDate dependency
 
