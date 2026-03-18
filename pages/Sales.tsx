@@ -875,12 +875,96 @@ const Sales = () => {
     const canDeleteBooking = user && hasPermission(user.role_id, 'bookings:delete');
     const canViewInventory = user && hasPermission(user.role_id, 'inventory:view');
 
+    // 1. Move loadData definition before its usage
+    const loadData = useCallback(async (forceRefresh = false) => {
+        if (!currentOutlet || !currentProperty) return;
+        
+        const isProperty = viewScope === 'property';
+        const scopeId = isProperty ? currentProperty.id : currentOutlet.id;
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        const monthStartStr = format(startOfMonth(selectedDate), 'yyyy-MM-dd');
+        const monthEndStr = format(endOfMonth(selectedDate), 'yyyy-MM-dd');
+        
+        // Create cache keys
+        const salesCacheKey = `sales-${scopeId}-${isProperty}-${monthStartStr}-${monthEndStr}`;
+        const bookingsCacheKey = `bookings-${scopeId}-${isProperty}-${monthStartStr}-${monthEndStr}`;
+        const guestsCacheKey = `guests-${currentProperty.id}`;
+        const inventoryCacheKey = `inventory-${scopeId}-${isProperty}`;
+        const massageTypesCacheKey = `massage-types-${scopeId}-${isProperty}`;
+        
+        // Check cache first
+        const cachedSales = cache.get(salesCacheKey);
+        const cachedBookings = cache.get(bookingsCacheKey);
+        const cachedGuests = cache.get(guestsCacheKey);
+        const cachedInventory = cache.get(inventoryCacheKey);
+        const cachedMassageTypes = cache.get(massageTypesCacheKey);
+        
+        // If we have cached data, show it immediately and don't show the blocking loader
+        if (cachedSales && cachedBookings && !forceRefresh) {
+            setSales(cachedSales);
+            setBookings(cachedBookings);
+            if (cachedGuests) setGuests(cachedGuests);
+            if (cachedInventory) setInventory(cachedInventory);
+            if (cachedMassageTypes) setMassageTypes(cachedMassageTypes);
+            setLoading(false);
+            // Still fetch in background to ensure freshness
+        } else {
+            setLoading(true);
+        }
+        
+        try {
+            // Fetch individually and update state as they come in
+            const fetchPromises = [
+                db.getSalesByDateRange(scopeId, isProperty, monthStartStr, monthEndStr).then(data => {
+                    setSales(data);
+                    cache.set(salesCacheKey, data);
+                    return data;
+                }),
+                db.getMassageBookingsByDateRange(scopeId, isProperty, monthStartStr, monthEndStr).then(data => {
+                    setBookings(data);
+                    cache.set(bookingsCacheKey, data);
+                    return data;
+                }),
+                db.getGuests(currentProperty.id, { limit: 100 }).then(data => {
+                    setGuests(data);
+                    cache.set(guestsCacheKey, data);
+                    return data;
+                }),
+                db.getInventory(scopeId, isProperty, { limit: 100 }).then(data => {
+                    setInventory(data);
+                    cache.set(inventoryCacheKey, data);
+                    return data;
+                }),
+                db.getMassageTypes(scopeId, isProperty).then(data => {
+                    setMassageTypes(data);
+                    cache.set(massageTypesCacheKey, data);
+                    return data;
+                }),
+                db.getUsers().then(setUsers),
+                db.getStaff(currentOutlet.id).then(setStaff)
+            ];
+            
+            // Wait for at least sales and bookings to be done before hiding loading if it was true
+            await Promise.all([fetchPromises[0], fetchPromises[1]]);
+            setLoading(false);
+            
+            // Wait for the rest in background
+            await Promise.all(fetchPromises);
+            
+        } catch (e) {
+            console.error(e);
+            toast.error('Failed to load data');
+        } finally {
+            setLoading(false);
+        }
+    }, [currentOutlet, currentProperty, selectedDate, viewScope]);
+
     // Debounced load function
     const debouncedLoad = useCallback(
         debounce(() => {
             loadData();
         }, 500),
-        [currentOutlet, currentProperty, viewScope, selectedDate]
+        [loadData]
     );
 
     useEffect(() => {
@@ -889,7 +973,7 @@ const Sales = () => {
         } else if (!currentOutlet) {
             setLoading(false);
         }
-    }, [currentOutlet, canView, viewScope, selectedDate]); // Added selectedDate dependency
+    }, [currentOutlet, canView, viewScope, selectedDate, loadData]);
 
     // Optimized real-time synchronization subscription
     useEffect(() => {
@@ -949,93 +1033,6 @@ const Sales = () => {
             supabase.removeChannel(channel);
         };
     }, [currentOutlet, currentProperty, canView, selectedDate]);
-
-    const loadData = async () => {
-        if (!currentOutlet || !currentProperty) return;
-        setLoading(true);
-        
-        try {
-            const isProperty = viewScope === 'property';
-            const scopeId = isProperty ? currentProperty.id : currentOutlet.id;
-            const dateStr = format(selectedDate, 'yyyy-MM-dd');
-            const monthStartStr = format(startOfMonth(selectedDate), 'yyyy-MM-dd');
-            const monthEndStr = format(endOfMonth(selectedDate), 'yyyy-MM-dd');
-            
-            // Create cache keys
-            const salesCacheKey = `sales-${scopeId}-${isProperty}-${monthStartStr}-${monthEndStr}`;
-            const bookingsCacheKey = `bookings-${scopeId}-${isProperty}-${monthStartStr}-${monthEndStr}`;
-            const guestsCacheKey = `guests-${currentProperty.id}`;
-            const inventoryCacheKey = `inventory-${scopeId}-${isProperty}`;
-            
-            // Check cache first
-            const cachedSales = cache.get(salesCacheKey);
-            const cachedBookings = cache.get(bookingsCacheKey);
-            const cachedGuests = cache.get(guestsCacheKey);
-            const cachedInventory = cache.get(inventoryCacheKey);
-            
-            // Only fetch what's not in cache
-            const promises = [];
-            
-            if (cachedSales) {
-                setSales(cachedSales);
-            } else {
-                promises.push(
-                    db.getSalesByDateRange(scopeId, isProperty, monthStartStr, monthEndStr).then(data => {
-                        cache.set(salesCacheKey, data);
-                        setSales(data);
-                    })
-                );
-            }
-            
-            if (cachedBookings) {
-                setBookings(cachedBookings);
-            } else {
-                promises.push(
-                    db.getMassageBookingsByDateRange(scopeId, isProperty, monthStartStr, monthEndStr).then(data => {
-                        cache.set(bookingsCacheKey, data);
-                        setBookings(data);
-                    })
-                );
-            }
-            
-            if (cachedGuests) {
-                setGuests(cachedGuests);
-            } else {
-                promises.push(
-                    db.getGuests(currentProperty.id, { limit: 100 }).then(data => {
-                        cache.set(guestsCacheKey, data);
-                        setGuests(data);
-                    })
-                );
-            }
-            
-            if (cachedInventory) {
-                setInventory(cachedInventory);
-            } else {
-                promises.push(
-                    db.getInventory(scopeId, isProperty, { limit: 100 }).then(data => {
-                        cache.set(inventoryCacheKey, data);
-                        setInventory(data);
-                    })
-                );
-            }
-            
-            // Always fetch these as they're smaller datasets
-            promises.push(
-                db.getMassageTypes(scopeId, isProperty).then(setMassageTypes),
-                db.getUsers().then(setUsers),
-                db.getStaff(currentOutlet.id).then(setStaff)
-            );
-            
-            await Promise.all(promises);
-            
-        } catch (e) {
-            console.error(e);
-            toast.error('Failed to load data');
-        } finally {
-            setLoading(false);
-        }
-    };
 
     if (!canView) {
         return (
@@ -1197,12 +1194,20 @@ const Sales = () => {
                 </div>
             </div>
 
-            {loading ? null : activeTab === 'stock' ? (
+            {activeTab === 'stock' ? (
                 <React.Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>}>
                     <RetailStockReport embeddedViewScope={viewScope} isEmbedded={true} />
                 </React.Suspense>
             ) : activeTab === 'ledger' ? (
-                <>
+                <div className="relative">
+                    {loading && unifiedEntries.length === 0 && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-[2px] rounded-[2.5rem]">
+                            <div className="flex flex-col items-center gap-3">
+                                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Synchronizing Ledger...</p>
+                            </div>
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <Card className="p-6 rounded-3xl border-slate-200/60 shadow-sm bg-white hover:shadow-md transition-shadow">
                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1"><CalendarDays className="w-2.5 h-2.5" /> Daily Total Yield</p>
@@ -1337,7 +1342,7 @@ const Sales = () => {
                             </div>
                         )}
                     </Card>
-                </>
+                </div>
             ) : (
                 <InventoryManager 
                     inventory={inventory} 
