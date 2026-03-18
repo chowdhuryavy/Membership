@@ -49,7 +49,9 @@ import {
   ShieldAlert,
   MapPin,
   Tag,
-  FileUp
+  FileUp,
+  Download,
+  Printer
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { 
@@ -325,15 +327,56 @@ const GuestHistoryView = ({
                 <div className="flex items-center justify-between p-6 border-b border-slate-100">
                     <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Supportive ID Document</h3>
                     <div className="flex items-center gap-2">
-                        <a 
-                            href={viewingIdUrl} 
-                            download="supportive_id_document"
-                            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-indigo-600"
-                            title="Download Document"
+                        <Button 
+                            onClick={() => {
+                                const link = document.createElement('a');
+                                link.href = viewingIdUrl;
+                                link.download = `ID_Document_${new Date().getTime()}`;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            }} 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-9 px-4 text-[10px] font-black uppercase tracking-widest border-slate-200 text-slate-600 hover:bg-slate-50"
                         >
-                            <FileUp className="w-5 h-5 rotate-180" />
-                        </a>
-                        <button onClick={() => setViewingIdUrl(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                            <Download className="w-3.5 h-3.5 mr-2" /> Download
+                        </Button>
+                        <Button 
+                            onClick={() => {
+                                const printWindow = window.open('', '_blank');
+                                if (printWindow) {
+                                    printWindow.document.write(`
+                                        <html>
+                                            <head>
+                                                <title>Print ID Document</title>
+                                                <style>
+                                                    body { margin: 0; display: flex; justify-content: center; align-items: center; background: white; min-height: 100vh; }
+                                                    img { max-width: 100%; height: auto; }
+                                                    @media print {
+                                                        body { margin: 0; }
+                                                        img { max-width: 100%; }
+                                                    }
+                                                </style>
+                                            </head>
+                                            <body onload="window.print(); window.close();">
+                                                ${viewingIdUrl.startsWith('data:application/pdf') 
+                                                    ? `<embed src="${viewingIdUrl}" type="application/pdf" width="100%" height="100%">`
+                                                    : `<img src="${viewingIdUrl}" />`
+                                                }
+                                            </body>
+                                        </html>
+                                    `);
+                                    printWindow.document.close();
+                                }
+                            }} 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-9 px-4 text-[10px] font-black uppercase tracking-widest border-indigo-100 text-indigo-600 hover:bg-indigo-50"
+                        >
+                            <Printer className="w-3.5 h-3.5 mr-2" /> Print
+                        </Button>
+                        <button onClick={() => setViewingIdUrl(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors ml-2">
                             <X className="w-5 h-5 text-slate-500" />
                         </button>
                     </div>
@@ -1173,18 +1216,18 @@ NOTIFY pgrst, 'reload schema';`}
                                         <div className="text-[10px] text-slate-400">{g.email || 'No email registered'}</div>
                                     </td>
                                     <td className="px-8 py-6">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{format(new Date(g.created_at), 'dd MMM yyyy')}</span>
-                                            {(g.id_card_url || bookings.find(b => b.guest_id === g.id && b.discount_id_url)?.discount_id_url) && (
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); setViewingIdUrl(g.id_card_url || bookings.find(b => b.guest_id === g.id && b.discount_id_url)?.discount_id_url!); }}
-                                                    className="text-indigo-500 hover:text-indigo-700 transition-colors"
-                                                    title="View ID Card"
-                                                >
-                                                    <FileUp className="w-3.5 h-3.5" />
-                                                </button>
-                                            )}
-                                        </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{format(new Date(g.created_at), 'dd MMM yyyy')}</span>
+                                                {g.id_card_url && (
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setViewingIdUrl(g.id_card_url!); }}
+                                                        className="text-indigo-500 hover:text-indigo-700 transition-colors"
+                                                        title="View Guest ID Card"
+                                                    >
+                                                        <FileUp className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
                                     </td>
                                     <td className="px-8 py-6 text-right" onClick={e => e.stopPropagation()}>
                                         <div className="flex justify-end gap-2">
@@ -1548,9 +1591,60 @@ NOTIFY pgrst, 'reload schema';`}
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="flex items-center justify-between p-6 border-b border-slate-100">
                     <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Supportive ID Document</h3>
-                    <button onClick={() => setViewingIdUrl(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                        <X className="w-5 h-5 text-slate-500" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <Button 
+                            onClick={() => {
+                                const link = document.createElement('a');
+                                link.href = viewingIdUrl;
+                                link.download = `ID_Document_${new Date().getTime()}`;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            }} 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-9 px-4 text-[10px] font-black uppercase tracking-widest border-slate-200 text-slate-600 hover:bg-slate-50"
+                        >
+                            <Download className="w-3.5 h-3.5 mr-2" /> Download
+                        </Button>
+                        <Button 
+                            onClick={() => {
+                                const printWindow = window.open('', '_blank');
+                                if (printWindow) {
+                                    printWindow.document.write(`
+                                        <html>
+                                            <head>
+                                                <title>Print ID Document</title>
+                                                <style>
+                                                    body { margin: 0; display: flex; justify-content: center; align-items: center; background: white; min-height: 100vh; }
+                                                    img { max-width: 100%; height: auto; }
+                                                    @media print {
+                                                        body { margin: 0; }
+                                                        img { max-width: 100%; }
+                                                    }
+                                                </style>
+                                            </head>
+                                            <body onload="window.print(); window.close();">
+                                                ${viewingIdUrl.startsWith('data:application/pdf') 
+                                                    ? `<embed src="${viewingIdUrl}" type="application/pdf" width="100%" height="100%">`
+                                                    : `<img src="${viewingIdUrl}" />`
+                                                }
+                                            </body>
+                                        </html>
+                                    `);
+                                    printWindow.document.close();
+                                }
+                            }} 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-9 px-4 text-[10px] font-black uppercase tracking-widest border-indigo-100 text-indigo-600 hover:bg-indigo-50"
+                        >
+                            <Printer className="w-3.5 h-3.5 mr-2" /> Print
+                        </Button>
+                        <button onClick={() => setViewingIdUrl(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors ml-2">
+                            <X className="w-5 h-5 text-slate-500" />
+                        </button>
+                    </div>
                 </div>
                 <div className="p-6 overflow-auto flex items-center justify-center bg-slate-50">
                     {viewingIdUrl.startsWith('data:image') ? (

@@ -7,7 +7,7 @@ import {
   Zap, CalendarClock, Activity, AlertTriangle, X, Coins, ExternalLink,
   Shield, UserCheck, CalendarDays, ClipboardList, TrendingUp, History,
   LayoutDashboard, Calendar, Pencil, ArrowRight, AlertCircle, List,
-  Milestone, MousePointer, PenTool, Wallet, Tag, FileUp
+  Milestone, MousePointer, PenTool, Wallet, Tag, FileUp, Download, Printer
 } from 'lucide-react';
 import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, MassageType } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -734,19 +734,19 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                     {viewingMember.id_card_url && (
                         <div className="p-4 border rounded-2xl bg-slate-50">
                             <p className="text-[9px] font-black uppercase text-slate-400">Main Member ID</p>
-                            <Button onClick={() => window.open(viewingMember.id_card_url!, '_blank')} variant="outline" className="mt-2 w-full text-xs">View/Print</Button>
+                            <Button onClick={() => setViewingIdUrl(viewingMember.id_card_url!)} variant="outline" className="mt-2 w-full text-xs">View/Print</Button>
                         </div>
                     )}
                     {viewingMember.spouse_id_card_url && (
                         <div className="p-4 border rounded-2xl bg-slate-50">
                             <p className="text-[9px] font-black uppercase text-slate-400">Spouse ID</p>
-                            <Button onClick={() => window.open(viewingMember.spouse_id_card_url!, '_blank')} variant="outline" className="mt-2 w-full text-xs">View/Print</Button>
+                            <Button onClick={() => setViewingIdUrl(viewingMember.spouse_id_card_url!)} variant="outline" className="mt-2 w-full text-xs">View/Print</Button>
                         </div>
                     )}
                     {viewingMember.kids?.map((kid, i) => kid.id_card_url && (
                         <div key={i} className="p-4 border rounded-2xl bg-slate-50">
                             <p className="text-[9px] font-black uppercase text-slate-400">{kid.name} ID</p>
-                            <Button onClick={() => window.open(kid.id_card_url!, '_blank')} variant="outline" className="mt-2 w-full text-xs">View/Print</Button>
+                            <Button onClick={() => setViewingIdUrl(kid.id_card_url!)} variant="outline" className="mt-2 w-full text-xs">View/Print</Button>
                         </div>
                     ))}
                 </div>
@@ -963,9 +963,60 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="flex items-center justify-between p-6 border-b border-slate-100">
                     <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Supportive ID Document</h3>
-                    <button onClick={() => setViewingIdUrl(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                        <X className="w-5 h-5 text-slate-500" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <Button 
+                            onClick={() => {
+                                const link = document.createElement('a');
+                                link.href = viewingIdUrl;
+                                link.download = `ID_Document_${viewingMember.membership_number}_${new Date().getTime()}`;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            }} 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-9 px-4 text-[10px] font-black uppercase tracking-widest border-slate-200 text-slate-600 hover:bg-slate-50"
+                        >
+                            <Download className="w-3.5 h-3.5 mr-2" /> Download
+                        </Button>
+                        <Button 
+                            onClick={() => {
+                                const printWindow = window.open('', '_blank');
+                                if (printWindow) {
+                                    printWindow.document.write(`
+                                        <html>
+                                            <head>
+                                                <title>Print ID Document</title>
+                                                <style>
+                                                    body { margin: 0; display: flex; justify-content: center; align-items: center; background: white; min-height: 100vh; }
+                                                    img { max-width: 100%; height: auto; }
+                                                    @media print {
+                                                        body { margin: 0; }
+                                                        img { max-width: 100%; }
+                                                    }
+                                                </style>
+                                            </head>
+                                            <body onload="window.print(); window.close();">
+                                                ${viewingIdUrl.startsWith('data:application/pdf') 
+                                                    ? `<embed src="${viewingIdUrl}" type="application/pdf" width="100%" height="100%">`
+                                                    : `<img src="${viewingIdUrl}" />`
+                                                }
+                                            </body>
+                                        </html>
+                                    `);
+                                    printWindow.document.close();
+                                }
+                            }} 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-9 px-4 text-[10px] font-black uppercase tracking-widest border-indigo-100 text-indigo-600 hover:bg-indigo-50"
+                        >
+                            <Printer className="w-3.5 h-3.5 mr-2" /> Print
+                        </Button>
+                        <button onClick={() => setViewingIdUrl(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors ml-2">
+                            <X className="w-5 h-5 text-slate-500" />
+                        </button>
+                    </div>
                 </div>
                 <div className="p-6 overflow-auto flex items-center justify-center bg-slate-50">
                     {viewingIdUrl.startsWith('data:image') ? (
