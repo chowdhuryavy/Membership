@@ -219,15 +219,15 @@ const TopHeader = () => {
 
 const ProtectedLayout = () => {
   const { user, logout, isLoading: isAuthLoading } = useAuth();
-  const { checkShortcut, isLoading: isSettingsLoading, currentOutlet } = useSettings();
+  const { checkShortcut, isLoading: isSettingsLoading, currentOutlet, outlets } = useSettings();
   const [showSplash, setShowSplash] = useState(true);
   const navigate = useNavigate();
 
-  const combinedLoading = isAuthLoading || isSettingsLoading;
+  const combinedLoading = isAuthLoading || isSettingsLoading || (user && outlets.length > 0 && !currentOutlet);
 
   useEffect(() => {
     if (!combinedLoading) {
-      const timer = setTimeout(() => setShowSplash(false), 2000); 
+      const timer = setTimeout(() => setShowSplash(false), 3000); 
       return () => clearTimeout(timer);
     }
   }, [combinedLoading]);
@@ -263,20 +263,24 @@ const ProtectedLayout = () => {
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [checkShortcut, navigate]);
 
-  if (showSplash) return <SplashLoading />;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user && !combinedLoading) return <Navigate to="/login" replace />;
   
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible">
-      <Sidebar onLogout={handleLogout} />
-      <div className="flex-1 flex flex-col min-w-0 relative overflow-y-auto custom-scrollbar print:overflow-visible print:block">
-        <TopHeader />
-        <MobileHeader onLogout={handleLogout} />
-        <main className="flex-1 p-4 md:p-8 print:p-0 print:overflow-visible print:block">
-          <RouterOutlet />
-        </main>
-      </div>
-    </div>
+    <>
+      {showSplash && <SplashLoading />}
+      {user && (
+        <div className={`flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible ${showSplash ? 'hidden' : ''}`}>
+          <Sidebar onLogout={handleLogout} />
+          <div className="flex-1 flex flex-col min-w-0 relative overflow-y-auto custom-scrollbar print:overflow-visible print:block">
+            <TopHeader />
+            <MobileHeader onLogout={handleLogout} />
+            <main className="flex-1 p-4 md:p-8 print:p-0 print:overflow-visible print:block">
+              <RouterOutlet />
+            </main>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
