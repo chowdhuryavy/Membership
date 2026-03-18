@@ -39,7 +39,7 @@ import StaffProfileView from './StaffProfileView';
 
 const StaffPage = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, hasPermission, outlets = [] } = useSettings();
+  const { currentOutlet, currentProperty, hasPermission, outlets = [], setPageLoading } = useSettings();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -116,6 +116,7 @@ const StaffPage = () => {
   const loadStaff = async () => {
     if (!currentOutlet || !currentProperty) return;
     setLoading(true);
+    setPageLoading(true);
     setErrorMessage(null);
     setIsSchemaMissing(false);
     try {
@@ -135,6 +136,7 @@ const StaffPage = () => {
       }
     } finally {
       setLoading(false);
+      setPageLoading(false);
     }
   };
 
@@ -220,11 +222,7 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
     </Card>
   );
 
-  const rosterContent = loading ? (
-    <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-    </div>
-  ) : (
+  const rosterContent = loading ? null : (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredStaff.map(s => (
         <Card key={s.id} onClick={() => setSelectedStaff(s)} className="rounded-[2rem] border-slate-200/60 shadow-sm hover:shadow-xl transition-all group overflow-hidden bg-white cursor-pointer">

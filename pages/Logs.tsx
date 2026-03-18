@@ -9,7 +9,7 @@ import { History, Search, RefreshCcw, Shield, Clock, Terminal, Filter, X, Calend
 
 const Logs = () => {
     const { user } = useAuth();
-    const { currentOutlet, hasPermission } = useSettings();
+    const { currentOutlet, hasPermission, setPageLoading } = useSettings();
 
     const [logs, setLogs] = useState<SystemLog[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -28,6 +28,7 @@ const Logs = () => {
         if (!currentOutlet?.id) return;
 
         setLoading(true);
+        setPageLoading(true);
         try {
             const data = await db.getLogs(currentOutlet.id);
 
@@ -44,7 +45,10 @@ const Logs = () => {
         } catch (err) {
             console.error('Failed to load logs:', err);
         } finally {
-            if (isMounted.current) setLoading(false);
+            if (isMounted.current) {
+                setLoading(false);
+                setPageLoading(false);
+            }
         }
     }, [currentOutlet?.id]);
 

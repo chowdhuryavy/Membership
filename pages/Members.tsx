@@ -11,7 +11,7 @@ import { ConfirmationModal } from '../components/ui';
 
 const Members = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, hasPermission, outlets } = useSettings();
+  const { currentOutlet, currentProperty, hasPermission, outlets, setPageLoading } = useSettings();
   
   // View State
   const [view, setView] = useState<'list' | 'form' | 'detail'>('list');
@@ -46,6 +46,7 @@ const Members = () => {
   const loadData = async () => {
     if (!currentOutlet || !currentProperty || !canView) return;
     setLoading(true);
+    setPageLoading(true);
     try {
       const isPropertyScope = viewScope === 'property';
       const scopeId = isPropertyScope ? currentProperty.id : currentOutlet.id;
@@ -73,6 +74,7 @@ const Members = () => {
       }
     } finally {
       setLoading(false);
+      setPageLoading(false);
     }
   };
 

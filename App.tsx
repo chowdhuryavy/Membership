@@ -219,16 +219,18 @@ const TopHeader = () => {
 
 const ProtectedLayout = () => {
   const { user, logout, isLoading: isAuthLoading } = useAuth();
-  const { checkShortcut, isLoading: isSettingsLoading, currentOutlet, outlets } = useSettings();
+  const { checkShortcut, isLoading: isSettingsLoading, currentOutlet, outlets, pageLoading } = useSettings();
   const [showSplash, setShowSplash] = useState(true);
   const navigate = useNavigate();
 
-  const combinedLoading = isAuthLoading || isSettingsLoading || (user && outlets.length > 0 && !currentOutlet);
+  const combinedLoading = isAuthLoading || isSettingsLoading || (user && outlets.length > 0 && !currentOutlet) || pageLoading;
 
   useEffect(() => {
     if (!combinedLoading) {
       const timer = setTimeout(() => setShowSplash(false), 3000); 
       return () => clearTimeout(timer);
+    } else {
+      setShowSplash(true);
     }
   }, [combinedLoading]);
   
@@ -269,7 +271,7 @@ const ProtectedLayout = () => {
     <>
       {showSplash && <SplashLoading />}
       {user && (
-        <div className={`flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible ${showSplash ? 'hidden' : ''}`}>
+        <div className={`flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible transition-opacity duration-1000 ${showSplash ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
           <Sidebar onLogout={handleLogout} />
           <div className="flex-1 flex flex-col min-w-0 relative overflow-y-auto custom-scrollbar print:overflow-visible print:block">
             <TopHeader />

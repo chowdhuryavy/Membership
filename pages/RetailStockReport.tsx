@@ -48,7 +48,7 @@ interface RetailStockReportProps {
 }
 
 const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportProps = {}) => {
-  const { currentOutlet, currentProperty, formatMoney } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, setPageLoading } = useSettings();
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [inventoryLogs, setInventoryLogs] = useState<InventoryLog[]>([]);
@@ -73,6 +73,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
   const loadData = async () => {
     if (!currentOutlet || !currentProperty) return;
     setLoading(true);
+    setPageLoading(true);
     try {
       const isProperty = viewScope === 'property';
       const scopeId = isProperty ? currentProperty.id : currentOutlet.id;
@@ -97,6 +98,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
       console.error("Failed to load report data", err);
     } finally {
       setLoading(false);
+      setPageLoading(false);
     }
   };
 
@@ -577,11 +579,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
 
           {/* Data Table */}
           <div className="p-0 no-print">
-             {loading ? (
-                 <div className="flex items-center justify-center py-24">
-                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-                 </div>
-             ) : (
+             {loading ? null : (
                  <div className="overflow-x-auto">
                      <table className="w-full text-sm text-left">
                          <thead className="bg-slate-900 text-white font-black uppercase text-[9px] tracking-[0.2em]">

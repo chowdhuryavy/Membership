@@ -19,6 +19,8 @@ interface SettingsContextType {
   hasPermission: (userRoleId: string, permission: Permission, userId?: string) => boolean;
   checkShortcut: (e: KeyboardEvent, actionId: string) => boolean;
   isLoading: boolean;
+  pageLoading: boolean;
+  setPageLoading: (loading: boolean) => void;
   permissionRegistry: PermissionGroup[];
 }
 
@@ -34,6 +36,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [currency, setCurrency] = useState<Currency | null>(null);
   const [currentOutlet, setCurrentOutletState] = useState<Outlet | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(false);
 
   const permissionRegistry = useMemo(() => db.getPermissionRegistry(), []);
 
@@ -222,6 +225,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       hasPermission,
       checkShortcut,
       isLoading,
+      pageLoading,
+      setPageLoading,
       permissionRegistry
     }}>
       {children}

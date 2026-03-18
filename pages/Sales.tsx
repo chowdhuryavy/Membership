@@ -842,7 +842,7 @@ export const InventoryManager = ({
 
 const Sales = () => {
     const { user } = useAuth();
-    const { currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
+    const { currentOutlet, currentProperty, formatMoney, hasPermission, setPageLoading } = useSettings();
     const [activeTab, setActiveTab] = useState<'ledger' | 'inventory' | 'stock'>('ledger');
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
@@ -953,6 +953,7 @@ const Sales = () => {
     const loadData = async () => {
         if (!currentOutlet || !currentProperty) return;
         setLoading(true);
+        setPageLoading(true);
         
         try {
             const isProperty = viewScope === 'property';
@@ -1034,6 +1035,7 @@ const Sales = () => {
             toast.error('Failed to load data');
         } finally {
             setLoading(false);
+            setPageLoading(false);
         }
     };
 
@@ -1197,11 +1199,7 @@ const Sales = () => {
                 </div>
             </div>
 
-            {loading ? (
-                <div className="flex items-center justify-center h-96">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-                </div>
-            ) : activeTab === 'stock' ? (
+            {loading ? null : activeTab === 'stock' ? (
                 <React.Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>}>
                     <RetailStockReport embeddedViewScope={viewScope} isEmbedded={true} />
                 </React.Suspense>
