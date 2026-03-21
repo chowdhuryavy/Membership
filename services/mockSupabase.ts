@@ -201,32 +201,68 @@ class DatabaseService {
   }
 
   private async syncMemberEndDate(memberId: string) {
-    if (!this.isSupabase()) return;
-    try {
-        const [{ data: m }, { data: freezes }] = await Promise.all([
-          supabase.from('members').select('id, original_end_date, status').eq('id', memberId).single(),
-          // Fix: Included start_date and end_date in the select query to satisfy requirements for current status calculation
-          supabase.from('freezes').select('total_days, start_date, end_date').eq('member_id', memberId)
-        ]);
-        if (!m || m.status === MemberStatus.TENTATIVE) return;
-        const totalDeferred = (freezes || []).reduce((sum, f) => sum + (Number(f.total_days) || 0), 0);
+    if (!this.isSupabase()) {
+        // Local Mode Sync
+        const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+        const freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
+        
+        const mIndex = members.findIndex((mem: any) => mem.id === memberId);
+        if (mIndex === -1) return null;
+        const m = members[mIndex];
+
+        const memberFreezes = freezes.filter((f: any) => f.member_id === memberId);
+        const totalDeferred = memberFreezes.reduce((sum: number, f: any) => sum + (Number(f.total_days) || 0), 0);
+        
         const baselineDate = startOfDay(parseISO(m.original_end_date));
         const calculatedEndDate = addDays(baselineDate, totalDeferred);
         const newEndDateStr = format(calculatedEndDate, 'yyyy-MM-dd');
-        
-        // Find if member is currently frozen based on today's date
+
         const today = startOfDay(new Date());
-        const isCurrentlyFrozen = (freezes || []).some(f => {
-            // Fix: Accessing start_date and end_date which are now selected in the query above
-            // @ts-ignore
+        const isCurrentlyFrozen = memberFreezes.some((f: any) => {
             const start = startOfDay(parseISO(f.start_date));
-            // @ts-ignore
             const end = startOfDay(parseISO(f.end_date));
             return today >= start && today <= end;
         });
 
         const newStatus = isCurrentlyFrozen ? MemberStatus.FROZEN : MemberStatus.ACTIVE;
-        await supabase.from('members').update({ status: newStatus, current_end_date: newEndDateStr }).eq('id', memberId);
+        
+        // Check if expired
+        const finalStatus = (newStatus === MemberStatus.ACTIVE && today > startOfDay(parseISO(newEndDateStr))) 
+            ? MemberStatus.EXPIRED 
+            : newStatus;
+
+        members[mIndex] = { ...m, status: finalStatus, current_end_date: newEndDateStr };
+        localStorage.setItem('membership_members', JSON.stringify(members));
+        return newEndDateStr;
+    }
+
+    try {
+        const [{ data: m }, { data: freezes }] = await Promise.all([
+          supabase.from('members').select('id, original_end_date, status').eq('id', memberId).single(),
+          supabase.from('freezes').select('total_days, start_date, end_date').eq('member_id', memberId)
+        ]);
+        if (!m || m.status === MemberStatus.TENTATIVE) return;
+
+        const totalDeferred = (freezes || []).reduce((sum, f) => sum + (Number(f.total_days) || 0), 0);
+        const baselineDate = startOfDay(parseISO(m.original_end_date));
+        const calculatedEndDate = addDays(baselineDate, totalDeferred);
+        const newEndDateStr = format(calculatedEndDate, 'yyyy-MM-dd');
+        
+        const today = startOfDay(new Date());
+        const isCurrentlyFrozen = (freezes || []).some(f => {
+            const start = startOfDay(parseISO(f.start_date));
+            const end = startOfDay(parseISO(f.end_date));
+            return today >= start && today <= end;
+        });
+
+        const newStatus = isCurrentlyFrozen ? MemberStatus.FROZEN : MemberStatus.ACTIVE;
+        
+        // Final check for expiry
+        const finalStatus = (newStatus === MemberStatus.ACTIVE && today > startOfDay(parseISO(newEndDateStr))) 
+            ? MemberStatus.EXPIRED 
+            : newStatus;
+
+        await supabase.from('members').update({ status: finalStatus, current_end_date: newEndDateStr }).eq('id', memberId);
         return newEndDateStr;
     } catch (err) { console.error(err); }
   }
@@ -736,11 +772,10 @@ class DatabaseService {
   }
 
   async deleteBulkFreeze(batchId: string) {
-    if (this.isSupabase()) {
-        let memberIds: string[] = [];
+    let memberIds: string[] = [];
 
+    if (this.isSupabase()) {
         if (batchId.startsWith('synthetic_')) {
-            // Handle legacy orphaned freezes
             const parts = batchId.split('_');
             const startDate = parts[1];
             const endDate = parts[2];
@@ -759,22 +794,35 @@ class DatabaseService {
             
             await deleteQuery;
         } else {
-            // Handle new dedicated batches
-            const { data: freezes } = await supabase
-                .from('freezes')
-                .select('member_id')
-                .eq('maintenance_batch_id', batchId);
+            // Try both maintenance_batch_id and batch_id
+            const { data: f1 } = await supabase.from('freezes').select('member_id').eq('maintenance_batch_id', batchId);
+            const { data: f2 } = await supabase.from('freezes').select('member_id').eq('batch_id', batchId);
             
-            memberIds = Array.from(new Set((freezes || []).map(f => f.member_id)));
-
-            // Delete the batch (Cascade will handle individual freezes)
+            memberIds = Array.from(new Set([...(f1 || []), ...(f2 || [])].map(f => f.member_id)));
+            
+            await supabase.from('freezes').delete().eq('maintenance_batch_id', batchId);
+            await supabase.from('freezes').delete().eq('batch_id', batchId);
             await supabase.from('maintenance_batches').delete().eq('id', batchId);
         }
-
-        // Sync all affected members
-        await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
-        await this.logAction('DELETE_BULK_FREEZE', `Bulk suspension revoked for batch: ${batchId}`);
+    } else {
+        // Local Mode Delete
+        let freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
+        const toDelete = freezes.filter((f: any) => {
+            if (batchId.startsWith('synthetic_')) {
+                const parts = batchId.split('_');
+                return f.start_date === parts[1] && f.end_date === parts[2] && f.is_maintenance;
+            }
+            return f.batch_id === batchId || f.maintenance_batch_id === batchId;
+        });
+        
+        memberIds = Array.from(new Set(toDelete.map((f: any) => f.member_id)));
+        freezes = freezes.filter((f: any) => !toDelete.some((td: any) => td.id === f.id));
+        localStorage.setItem('membership_freezes', JSON.stringify(freezes));
     }
+
+    // Sync all affected members
+    await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
+    await this.logAction('DELETE_BULK_FREEZE', `Bulk suspension revoked for batch: ${batchId}`);
   }
 
   async updateBulkFreeze(batchId: string, updates: { start_date: string, end_date: string, total_days: number, reason: string }) {
@@ -801,20 +849,44 @@ class DatabaseService {
             
             await updateQuery;
         } else {
-            // Handle new dedicated batches
+            // Handle new dedicated batches - try both maintenance_batch_id and batch_id
             await supabase.from('maintenance_batches').update(updates).eq('id', batchId);
             await supabase.from('freezes').update(updates).eq('maintenance_batch_id', batchId);
+            await supabase.from('freezes').update(updates).eq('batch_id', batchId);
 
-            const { data: freezes } = await supabase
-                .from('freezes')
-                .select('member_id')
-                .eq('maintenance_batch_id', batchId);
+            const { data: f1 } = await supabase.from('freezes').select('member_id').eq('maintenance_batch_id', batchId);
+            const { data: f2 } = await supabase.from('freezes').select('member_id').eq('batch_id', batchId);
             
-            memberIds = Array.from(new Set((freezes || []).map(f => f.member_id)));
+            memberIds = Array.from(new Set([...(f1 || []), ...(f2 || [])].map(f => f.member_id)));
         }
 
         await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
         await this.logAction('UPDATE_BULK_FREEZE', `Bulk suspension modified for batch: ${batchId}`);
+    } else {
+        // Local Mode Update
+        let freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
+        const affected = freezes.filter((f: any) => {
+            if (batchId.startsWith('synthetic_')) {
+                const parts = batchId.split('_');
+                return f.start_date === parts[1] && f.end_date === parts[2] && f.is_maintenance;
+            }
+            return f.batch_id === batchId || f.maintenance_batch_id === batchId;
+        });
+
+        const memberIds = Array.from(new Set(affected.map((f: any) => f.member_id)));
+        
+        const updated = freezes.map((f: any) => {
+            const isMatch = batchId.startsWith('synthetic_') 
+                ? (f.start_date === batchId.split('_')[1] && f.end_date === batchId.split('_')[2] && f.is_maintenance)
+                : (f.batch_id === batchId || f.maintenance_batch_id === batchId);
+            
+            if (isMatch) return { ...f, ...updates };
+            return f;
+        });
+
+        localStorage.setItem('membership_freezes', JSON.stringify(updated));
+        await Promise.all(memberIds.map(id => this.syncMemberEndDate(id as string)));
+        await this.logAction('UPDATE_BULK_FREEZE', `Bulk suspension updated for batch: ${batchId}`);
     }
   }
 

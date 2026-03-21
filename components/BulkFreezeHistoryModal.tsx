@@ -27,6 +27,7 @@ export const BulkFreezeHistoryModal: React.FC<BulkFreezeHistoryModalProps> = ({ 
     const [isLoading, setIsLoading] = useState(true);
     const [editingBatch, setEditingBatch] = useState<BulkFreezeBatch | null>(null);
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
     const fetchHistory = async () => {
         setIsLoading(true);
@@ -47,16 +48,14 @@ export const BulkFreezeHistoryModal: React.FC<BulkFreezeHistoryModalProps> = ({ 
     }, [isOpen]);
 
     const handleDelete = async (batchId: string) => {
-        if (!window.confirm('Are you sure you want to revoke this bulk suspension? All affected memberships will have their end dates recalculated.')) return;
-        
         setIsDeleting(batchId);
         try {
             await db.deleteBulkFreeze(batchId);
+            setConfirmDelete(null);
             await fetchHistory();
             onRefresh();
         } catch (error) {
             console.error('Failed to delete bulk freeze:', error);
-            alert('Failed to revoke bulk suspension.');
         } finally {
             setIsDeleting(null);
         }
@@ -187,7 +186,7 @@ export const BulkFreezeHistoryModal: React.FC<BulkFreezeHistoryModalProps> = ({ 
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
                                             <button 
-                                                onClick={() => handleDelete(batch.batch_id)}
+                                                onClick={() => setConfirmDelete(batch.batch_id)}
                                                 disabled={isDeleting === batch.batch_id}
                                                 className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-all flex items-center justify-center disabled:opacity-50"
                                                 title="Revoke Batch"
@@ -211,6 +210,43 @@ export const BulkFreezeHistoryModal: React.FC<BulkFreezeHistoryModalProps> = ({ 
                         Close History
                     </button>
                 </div>
+
+                {/* Confirm Delete Overlay */}
+                <AnimatePresence>
+                    {confirmDelete && (
+                        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+                            <motion.div 
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.9 }}
+                                className="bg-white rounded-[40px] shadow-2xl w-full max-w-md p-10 text-center"
+                            >
+                                <div className="w-20 h-20 bg-red-50 rounded-[32px] flex items-center justify-center mx-auto mb-6">
+                                    <AlertCircle className="w-10 h-10 text-red-600" />
+                                </div>
+                                <h3 className="text-2xl font-black text-slate-900 mb-4 uppercase tracking-tight">Revoke Suspension?</h3>
+                                <p className="text-slate-500 font-medium mb-8">
+                                    This will remove the suspension for all affected members and recalculate their end dates. This action cannot be undone.
+                                </p>
+                                <div className="flex flex-col gap-3">
+                                    <button 
+                                        onClick={() => handleDelete(confirmDelete)}
+                                        disabled={isDeleting !== null}
+                                        className="w-full py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-red-700 transition-all shadow-lg shadow-red-200 disabled:opacity-50"
+                                    >
+                                        {isDeleting ? 'Revoking...' : 'Yes, Revoke All'}
+                                    </button>
+                                    <button 
+                                        onClick={() => setConfirmDelete(null)}
+                                        className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-slate-200 transition-all"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
             </motion.div>
 
             {/* Edit Modal Overlay */}

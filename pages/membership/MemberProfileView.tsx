@@ -250,15 +250,38 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
   const [isLoading, setLoading] = useState(false);
 
-  const handleEditFreeze = (f: Freeze) => {
+  const handleEditFreeze = (f: any) => {
+      const isBulk = f.batch_id || f.maintenance_batch_id;
+      if (isBulk) {
+          toast.error("This is a bulk suspension. Please edit it from the Bulk History modal to ensure consistency across all members.");
+          return;
+      }
       setEditingFreezeId(f.id);
       setFreezeForm({ start_date: f.start_date, end_date: f.end_date, reason: f.reason || '' });
       setFreezeError(null);
       setShowFreezeModal(true);
   };
 
-  const handleDeleteFreeze = async (fId: string) => {
-      await db.deleteFreeze(fId, viewingMember.id);
+  const handleDeleteFreeze = async (f: any) => {
+      const isBulk = f.batch_id || f.maintenance_batch_id;
+      if (isBulk) {
+          const confirmMsg = "This suspension was applied as part of a bulk operation. Deleting it here will revoke the suspension for ALL members in this batch. Are you sure you want to proceed?";
+          if (!window.confirm(confirmMsg)) return;
+          
+          setLoading(true);
+          try {
+              await db.deleteBulkFreeze(isBulk);
+              toast.success("Bulk suspension deleted successfully.");
+          } catch (err) {
+              console.error(err);
+              toast.error("Failed to delete bulk suspension.");
+          } finally {
+              setLoading(true);
+          }
+      } else {
+          await db.deleteFreeze(f.id, viewingMember.id);
+          toast.success("Suspension deleted.");
+      }
       onUpdate();
       loadForensics(viewingMember);
   };
@@ -638,7 +661,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                                       {canFreeze && effectiveStatus !== MemberStatus.EXPIRED && (
                                                         <>
                                                           <button onClick={() => handleEditFreeze(f)} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors" title="Modify"><Pencil className="w-3.5 h-3.5"/></button>
-                                                          <button onClick={() => handleDeleteFreeze(f.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5"/></button>
+                                                          <button onClick={() => handleDeleteFreeze(f)} className="p-2 text-slate-300 hover:text-red-500 transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5"/></button>
                                                         </>
                                                       )}
                                                   </div>
@@ -667,7 +690,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                   <tr>
                                       <th className="px-6 py-4 w-[35%]">Commence</th>
                                       <th className="px-6 py-4 w-[35%]">Terminate</th>
-                                      <th className="px-6 py-4 w-[30%] text-center">Span</th>
+                                      <th className="px-6 py-4 w-[20%] text-center">Span</th>
+                                      <th className="px-6 py-4 w-[10%] text-right">Ops</th>
                                   </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-50">
@@ -683,7 +707,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                           <tr key={f.id} className="hover:bg-amber-50/20 transition-colors group">
                                               <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">
                                                   {format(parseISO(f.start_date), 'dd MMM yyyy')}
-                                                  {f.batch_id && <span className="ml-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[7px] uppercase tracking-widest">Bulk</span>}
+                                                  {(f.batch_id || f.maintenance_batch_id) && <span className="ml-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[7px] uppercase tracking-widest">Bulk</span>}
                                                   {f.reason && <div className="text-[8px] font-bold text-slate-400 mt-1 truncate max-w-[120px]">{f.reason}</div>}
                                               </td>
                                               <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(f.end_date), 'dd MMM yyyy')}</td>
@@ -693,6 +717,12 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                                           {f.total_days}
                                                       </div>
                                                       <span className="text-[7px] font-black text-amber-600 uppercase mt-1 tracking-tighter">Days</span>
+                                                  </div>
+                                              </td>
+                                              <td className="px-6 py-5 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                                                  <div className="flex justify-end gap-1">
+                                                      <button onClick={() => handleEditFreeze(f)} className="p-2 text-slate-300 hover:text-indigo-500 transition-colors" title="Edit"><Edit2 className="w-3.5 h-3.5"/></button>
+                                                      <button onClick={() => handleDeleteFreeze(f)} className="p-2 text-slate-300 hover:text-red-500 transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5"/></button>
                                                   </div>
                                               </td>
                                           </tr>
