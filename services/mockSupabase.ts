@@ -602,30 +602,39 @@ class DatabaseService {
   }
 
   async bulkFreezeMembers(memberIds: string[], startDate: string, endDate: string, totalDays: number, reason: string) {
+    const batchId = this.generateUUID();
+    const timestamp = new Date().toISOString();
+    
+    const newFreezes = memberIds.map(id => ({
+      id: this.generateUUID(),
+      member_id: id,
+      start_date: startDate,
+      end_date: endDate,
+      total_days: totalDays,
+      reason: reason,
+      is_maintenance: true,
+      batch_id: batchId,
+      created_at: timestamp
+    }));
+
     if (this.isSupabase()) {
-      const batchId = this.generateUUID();
-      const freezes = memberIds.map(id => ({
-        id: this.generateUUID(),
-        member_id: id,
-        start_date: startDate,
-        end_date: endDate,
-        total_days: totalDays,
-        reason: reason,
-        is_maintenance: true,
-        batch_id: batchId
-      }));
-
-      const { error } = await supabase.from('freezes').insert(freezes);
+      const { error } = await supabase.from('freezes').insert(newFreezes);
       if (error) throw error;
-
-      // Sync all affected members
-      await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
-      
-      await this.logAction('BULK_FREEZE', `Bulk suspension applied to ${memberIds.length} members. Batch ID: ${batchId}. Reason: ${reason}`);
+    } else {
+      const existing = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
+      localStorage.setItem('membership_freezes', JSON.stringify([...existing, ...newFreezes]));
     }
+
+    // Sync all affected members
+    await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
+    
+    await this.logAction('BULK_FREEZE', `Bulk suspension applied to ${memberIds.length} members. Batch ID: ${batchId}. Reason: ${reason}`);
+    return batchId;
   }
 
   async getBulkFreezeHistory(): Promise<{ batch_id: string, start_date: string, end_date: string, total_days: number, reason: string, member_count: number, created_at: string }[]> {
+    let allFreezes: any[] = [];
+
     if (this.isSupabase()) {
         const { data, error } = await supabase
             .from('freezes')
@@ -633,27 +642,33 @@ class DatabaseService {
             .not('batch_id', 'is', null);
         
         if (error) throw error;
-        
-        // Group by batch_id
-        const grouped = (data || []).reduce((acc: any, curr: any) => {
-            if (!acc[curr.batch_id]) {
-                acc[curr.batch_id] = {
-                    batch_id: curr.batch_id,
-                    start_date: curr.start_date,
-                    end_date: curr.end_date,
-                    total_days: curr.total_days,
-                    reason: curr.reason,
-                    member_count: 0,
-                    created_at: curr.created_at
-                };
-            }
-            acc[curr.batch_id].member_count++;
-            return acc;
-        }, {});
-
-        return Object.values(grouped);
+        allFreezes = data || [];
+    } else {
+        const localData = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
+        allFreezes = localData.filter((f: any) => f.batch_id && f.batch_id !== '');
     }
-    return [];
+    
+    if (allFreezes.length === 0) return [];
+
+    // Group by batch_id
+    const grouped = allFreezes.reduce((acc: any, curr: any) => {
+        const bid = curr.batch_id;
+        if (!acc[bid]) {
+            acc[bid] = {
+                batch_id: bid,
+                start_date: curr.start_date,
+                end_date: curr.end_date,
+                total_days: curr.total_days,
+                reason: curr.reason || 'Global Maintenance',
+                member_count: 0,
+                created_at: curr.created_at || new Date().toISOString()
+            };
+        }
+        acc[bid].member_count++;
+        return acc;
+    }, {});
+
+    return Object.values(grouped);
   }
 
   async deleteBulkFreeze(batchId: string) {
