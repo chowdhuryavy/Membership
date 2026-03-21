@@ -4,12 +4,15 @@ import {
   Search, Filter, Layers, Building2, Store, RefreshCcw, 
   Milestone, Edit2, Trash2, ShieldCheck,
   Zap, UserPlus, Snowflake, ChevronDown, 
-  CheckCircle, Calendar, Clock, MousePointer, X, Eraser
+  CheckCircle, Calendar, Clock, MousePointer, X, Eraser,
+  PackagePlus, History
 } from 'lucide-react';
 import { Member, MembershipCategory, MemberStatus, MembershipType } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { format, isBefore, startOfDay, parse } from 'date-fns';
+import { BulkFreezeModal } from '../../components/BulkFreezeModal';
+import { BulkFreezeHistoryModal } from '../../components/BulkFreezeHistoryModal';
 
 const parseISO = (dateString: string) => {
   if (!dateString) return new Date();
@@ -48,6 +51,8 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   
   const [statusFilter, setStatusFilter] = useState<MemberStatus | 'All'>(MemberStatus.ACTIVE);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [showBulkFreeze, setShowBulkFreeze] = useState(false);
+  const [showBulkHistory, setShowBulkHistory] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
 
   const allowedOutletsInProperty = useMemo(() => {
@@ -76,6 +81,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   const canDelete = user && hasPermission(user.role_id, 'members:delete');
   const canRenew = user && hasPermission(user.role_id, 'members:renew');
   const canFreeze = user && hasPermission(user.role_id, 'members:freeze');
+  const canBulkFreeze = user && hasPermission(user.role_id, 'members:bulk_freeze');
   const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
 
   const getEffectiveStatus = (member: Member) => {
@@ -253,6 +259,25 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
               </button>
             )}
           </div>
+          
+          {canBulkFreeze && (
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button 
+                onClick={() => setShowBulkHistory(true)}
+                className="w-14 h-14 bg-white border-2 border-slate-100 rounded-2xl flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-600/20 hover:shadow-xl hover:shadow-indigo-500/5 transition-all group"
+                title="Suspension History"
+              >
+                <History className="w-6 h-6 transition-transform group-hover:scale-110" />
+              </button>
+              <Button 
+                onClick={() => setShowBulkFreeze(true)} 
+                variant="outline" 
+                className="flex-1 sm:flex-none h-14 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest border-indigo-100 text-indigo-600 hover:bg-indigo-50 shadow-sm transition-all"
+              >
+                <PackagePlus className="w-4 h-4 mr-2" /> Bulk Freeze
+              </Button>
+            </div>
+          )}
 
           {canCreate && (membershipTypes.length === 0 || selectedTypeId !== 'all') && (
             <Button onClick={onAdd} className="w-full sm:w-auto h-14 px-8 rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95">
@@ -344,6 +369,27 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
             </Card>
         ))}
       </div>
+
+      {showBulkFreeze && (
+        <BulkFreezeModal 
+          isOpen={showBulkFreeze}
+          onClose={() => setShowBulkFreeze(false)}
+          members={members}
+          onSuccess={() => {
+            window.location.reload(); 
+          }}
+        />
+      )}
+
+      {showBulkHistory && (
+        <BulkFreezeHistoryModal 
+          isOpen={showBulkHistory}
+          onClose={() => setShowBulkHistory(false)}
+          onRefresh={() => {
+            window.location.reload();
+          }}
+        />
+      )}
     </div>
   );
 };

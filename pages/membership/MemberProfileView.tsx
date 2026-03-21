@@ -7,7 +7,8 @@ import {
   Zap, CalendarClock, Activity, AlertTriangle, X, Coins, ExternalLink,
   Shield, UserCheck, CalendarDays, ClipboardList, TrendingUp, History,
   LayoutDashboard, Calendar, Pencil, ArrowRight, AlertCircle, List,
-  Milestone, MousePointer, PenTool, Wallet, Tag, FileUp, Download, Printer
+  Milestone, MousePointer, PenTool, Wallet, Tag, FileUp, Download, Printer,
+  ShieldAlert
 } from 'lucide-react';
 import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, MassageType } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -52,12 +53,14 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   
   const [showFreezeModal, setShowFreezeModal] = useState(false);
   const [editingFreezeId, setEditingFreezeId] = useState<string | null>(null);
-  const [freezeForm, setFreezeForm] = useState({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' });
+  const [freezeForm, setFreezeForm] = useState({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '', reason: '' });
   const [freezeError, setFreezeError] = useState<string | null>(null);
 
   const [showAgreement, setShowAgreement] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showNotesModal, setShowNotesModal] = useState(false);
+  const [memberNotes, setMemberNotes] = useState(viewingMember.notes || '');
   const [cancelDate, setCancelDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
 
@@ -90,6 +93,21 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         proratedAmount: viewingMember.net_amount
     };
   }, [viewingMember]);
+
+  const handleSaveNotes = async () => {
+    try {
+      setLoading(true);
+      await db.updateMemberNotes(viewingMember.id, memberNotes);
+      setViewingMember({ ...viewingMember, notes: memberNotes });
+      toast.success("Member notes updated successfully.");
+      setShowNotesModal(false);
+    } catch (err) {
+      console.error("Failed to update notes:", err);
+      toast.error("Failed to update notes.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSaveSignatures = async (memberSig: string, staffSig: string) => {
     try {
@@ -137,8 +155,11 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   }, [viewingMember.id, viewingMember.membership_number, currentProperty, currentOutlet]);
 
   const usedFreezeDays = useMemo(() => {
-    return freezes.reduce((sum, f) => sum + (f.total_days || 0), 0);
+    return freezes.filter(f => !f.is_maintenance).reduce((sum, f) => sum + (f.total_days || 0), 0);
   }, [freezes]);
+
+  const tierFreezes = useMemo(() => freezes.filter(f => !f.is_maintenance), [freezes]);
+  const maintenanceFreezes = useMemo(() => freezes.filter(f => !!f.is_maintenance), [freezes]);
 
   const totalRevenue = useMemo(() => {
     return lifecycleHistory.reduce((sum, hist) => sum + (hist.net_amount || 0), 0);
@@ -205,7 +226,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             await db.updateFreeze(editingFreezeId, { 
                 start_date: freezeForm.start_date, 
                 end_date: freezeForm.end_date, 
-                total_days: validation.impact.days 
+                total_days: validation.impact.days,
+                reason: freezeForm.reason
             });
         } else {
             await db.addFreeze({ 
@@ -213,7 +235,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                 member_id: viewingMember.id, 
                 start_date: freezeForm.start_date, 
                 end_date: freezeForm.end_date, 
-                total_days: validation.impact.days 
+                total_days: validation.impact.days,
+                reason: freezeForm.reason
             });
         }
         setShowFreezeModal(false);
@@ -229,7 +252,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
   const handleEditFreeze = (f: Freeze) => {
       setEditingFreezeId(f.id);
-      setFreezeForm({ start_date: f.start_date, end_date: f.end_date });
+      setFreezeForm({ start_date: f.start_date, end_date: f.end_date, reason: f.reason || '' });
       setFreezeError(null);
       setShowFreezeModal(true);
   };
@@ -340,7 +363,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
           
           {canFreeze && effectiveStatus !== MemberStatus.EXPIRED && (
             <Button 
-                onClick={() => { setEditingFreezeId(null); setFreezeForm({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' }); setFreezeError(null); setShowFreezeModal(true); }} 
+                onClick={() => { setEditingFreezeId(null); setFreezeForm({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '', reason: '' }); setFreezeError(null); setShowFreezeModal(true); }} 
                 variant="secondary" 
                 className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase bg-white border-2 border-amber-100 text-amber-600 hover:bg-amber-50 shadow-sm transition-all"
             >
@@ -356,6 +379,10 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
           <Button onClick={() => onRenew(viewingMember)} className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase bg-slate-900 text-white hover:bg-slate-800 shadow-xl transition-all active:scale-95">
               <RotateCcw className="w-4 h-4 mr-2" /> Renew Logic
+          </Button>
+
+          <Button onClick={() => setShowNotesModal(true)} variant="secondary" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase bg-white border-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50 shadow-sm transition-all">
+              <ClipboardList className="w-4 h-4 mr-2" /> Member Notes
           </Button>
 
           {canDelete && (
@@ -562,7 +589,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center border border-indigo-100 shadow-sm"><Snowflake className="w-5 h-5 text-indigo-600" /></div>
                             <div>
-                                <CardTitle className="text-[11px] font-black uppercase tracking-widest leading-none text-slate-900">Account Suspensions</CardTitle>
+                                <CardTitle className="text-[11px] font-black uppercase tracking-widest leading-none text-slate-900">Tier-Based Suspensions</CardTitle>
                                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Utilized: {usedFreezeDays} / {maxAllowed} Days</p>
                             </div>
                           </div>
@@ -583,17 +610,20 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                   </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-50">
-                                  {(!Array.isArray(freezes) || freezes.length === 0) ? (
+                                  {tierFreezes.length === 0 ? (
                                       <tr><td colSpan={4} className="px-8 py-28 text-center">
                                           <div className="flex flex-col items-center gap-4 opacity-30">
                                               <Milestone className="w-12 h-12 text-slate-300" />
-                                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No historical suspensions</p>
+                                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No tier-based suspensions</p>
                                           </div>
                                       </td></tr>
                                   ) : (
-                                      Array.isArray(freezes) && freezes.map(f => (
+                                      tierFreezes.map(f => (
                                           <tr key={f.id} className="hover:bg-indigo-50/20 transition-colors group">
-                                              <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(f.start_date), 'dd MMM yyyy')}</td>
+                                              <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">
+                                                  {format(parseISO(f.start_date), 'dd MMM yyyy')}
+                                                  {f.reason && <div className="text-[8px] font-bold text-slate-400 mt-1 truncate max-w-[100px]">{f.reason}</div>}
+                                              </td>
                                               <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(f.end_date), 'dd MMM yyyy')}</td>
                                               <td className="px-6 py-5 text-center">
                                                   <div className="inline-flex flex-col items-center justify-center">
@@ -611,6 +641,58 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                                           <button onClick={() => handleDeleteFreeze(f.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5"/></button>
                                                         </>
                                                       )}
+                                                  </div>
+                                              </td>
+                                          </tr>
+                                      ))
+                                  )}
+                              </tbody>
+                          </table>
+                      </CardContent>
+                  </Card>
+
+                  <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white flex flex-col min-h-[460px]">
+                      <CardHeader className="bg-slate-50 p-8 flex justify-between items-center border-b shrink-0">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center border border-amber-100 shadow-sm"><ShieldAlert className="w-5 h-5 text-amber-600" /></div>
+                            <div>
+                                <CardTitle className="text-[11px] font-black uppercase tracking-widest leading-none text-slate-900">Maintenance Suspensions</CardTitle>
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Global & Operational Holds</p>
+                            </div>
+                          </div>
+                      </CardHeader>
+                      <CardContent className="p-0 flex-1 overflow-y-auto custom-scrollbar">
+                          <table className="w-full text-left table-fixed">
+                              <thead className="bg-slate-50/30 text-[8px] font-black uppercase text-slate-400 tracking-[0.2em] border-b sticky top-0 z-10">
+                                  <tr>
+                                      <th className="px-6 py-4 w-[35%]">Commence</th>
+                                      <th className="px-6 py-4 w-[35%]">Terminate</th>
+                                      <th className="px-6 py-4 w-[30%] text-center">Span</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-50">
+                                  {maintenanceFreezes.length === 0 ? (
+                                      <tr><td colSpan={3} className="px-8 py-28 text-center">
+                                          <div className="flex flex-col items-center gap-4 opacity-30">
+                                              <AlertCircle className="w-12 h-12 text-slate-300" />
+                                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No maintenance suspensions</p>
+                                          </div>
+                                      </td></tr>
+                                  ) : (
+                                      maintenanceFreezes.map(f => (
+                                          <tr key={f.id} className="hover:bg-amber-50/20 transition-colors group">
+                                              <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">
+                                                  {format(parseISO(f.start_date), 'dd MMM yyyy')}
+                                                  {f.batch_id && <span className="ml-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[7px] uppercase tracking-widest">Bulk</span>}
+                                                  {f.reason && <div className="text-[8px] font-bold text-slate-400 mt-1 truncate max-w-[120px]">{f.reason}</div>}
+                                              </td>
+                                              <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(f.end_date), 'dd MMM yyyy')}</td>
+                                              <td className="px-6 py-5 text-center">
+                                                  <div className="inline-flex flex-col items-center justify-center">
+                                                      <div className="w-12 h-6 bg-amber-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black shadow-lg shadow-amber-200/50">
+                                                          {f.total_days}
+                                                      </div>
+                                                      <span className="text-[7px] font-black text-amber-600 uppercase mt-1 tracking-tighter">Days</span>
                                                   </div>
                                               </td>
                                           </tr>
@@ -843,8 +925,11 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                     <div className="w-14 h-14 bg-indigo-500/20 rounded-2xl flex items-center justify-center mb-6 border border-indigo-500/30">
                         <Snowflake className="w-7 h-7 text-indigo-400" />
                     </div>
-                    <CardTitle className="text-2xl font-black uppercase tracking-tight leading-none mb-2">Authorize Suspension</CardTitle>
-                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Temporary Portfolio Hold</p>
+                            <CardTitle className="text-2xl font-black uppercase tracking-tight leading-none mb-2">Authorize Suspension</CardTitle>
+                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Temporary Portfolio Hold</p>
+                            {editingFreezeId && freezes.find(f => f.id === editingFreezeId)?.is_maintenance && (
+                                <div className="mt-2 px-3 py-1 bg-amber-100 text-amber-700 rounded-lg text-[8px] font-black uppercase tracking-widest">Maintenance Freeze</div>
+                            )}
                     <button onClick={() => setShowFreezeModal(false)} className="absolute top-8 right-8 p-2.5 rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90 shadow-lg border border-white/5">
                         <X className="w-5 h-5 text-slate-400"/>
                     </button>
@@ -900,11 +985,21 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                     type="date" 
                                     value={freezeForm.end_date} 
                                     onChange={e => setFreezeForm({...freezeForm, end_date: e.target.value})} 
-                                    disabled={maxAllowed === 0}
-                                    className={`w-full h-16 pl-6 pr-14 rounded-2xl border-2 focus:ring-0 font-black text-sm uppercase tracking-wider transition-all appearance-none cursor-pointer ${validation.error || maxAllowed === 0 ? 'border-red-500 bg-red-50/10 text-red-900 focus:border-red-600 opacity-50' : 'border-slate-100 focus:border-indigo-600 bg-white'}`}
+                                    disabled={maxAllowed === 0 && !freezes.find(f => f.id === editingFreezeId)?.is_maintenance}
+                                    className={`w-full h-16 pl-6 pr-14 rounded-2xl border-2 focus:ring-0 font-black text-sm uppercase tracking-wider transition-all appearance-none cursor-pointer ${validation.error || (maxAllowed === 0 && !freezes.find(f => f.id === editingFreezeId)?.is_maintenance) ? 'border-red-500 bg-red-50/10 text-red-900 focus:border-red-600 opacity-50' : 'border-slate-100 focus:border-indigo-600 bg-white'}`}
                                 />
-                                <Calendar className={`absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none transition-colors ${validation.error || maxAllowed === 0 ? 'text-red-500' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
+                                <Calendar className={`absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none transition-colors ${validation.error || (maxAllowed === 0 && !freezes.find(f => f.id === editingFreezeId)?.is_maintenance) ? 'text-red-500' : 'text-slate-400 group-focus-within:text-indigo-600'}`} />
                             </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[11px] font-bold text-slate-600 ml-1">Reason / Note</label>
+                            <textarea 
+                                value={freezeForm.reason} 
+                                onChange={e => setFreezeForm({...freezeForm, reason: e.target.value})} 
+                                placeholder="Enter reason for suspension..."
+                                className="w-full h-24 p-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-600 bg-white font-bold text-xs transition-all resize-none"
+                            />
                         </div>
 
                         {!validation.error && validation.impact && maxAllowed > 0 && (
@@ -1033,6 +1128,50 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                     )}
                 </div>
             </div>
+        </div>
+      )}
+      {showNotesModal && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
+            <Card className="w-full max-w-[500px] rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden bg-white border border-white/20">
+                <CardHeader className="bg-[#0f172a] text-white p-10 relative flex flex-col items-center text-center">
+                    <div className="w-14 h-14 bg-indigo-500/20 rounded-2xl flex items-center justify-center mb-6 border border-indigo-500/30">
+                        <ClipboardList className="w-7 h-7 text-indigo-400" />
+                    </div>
+                    <CardTitle className="text-2xl font-black uppercase tracking-tight leading-none mb-2">Member Intelligence Notes</CardTitle>
+                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Confidential Operational Records</p>
+                    <button onClick={() => setShowNotesModal(false)} className="absolute top-8 right-8 p-2.5 rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90 shadow-lg border border-white/5">
+                        <X className="w-5 h-5 text-slate-400"/>
+                    </button>
+                </CardHeader>
+                <CardContent className="p-10 space-y-6">
+                    <div className="space-y-2">
+                        <label className="text-[11px] font-bold text-slate-600 ml-1">Detailed Observations & History</label>
+                        <textarea 
+                            value={memberNotes} 
+                            onChange={e => setMemberNotes(e.target.value)} 
+                            className="w-full p-6 rounded-2xl border-2 border-slate-100 focus:border-indigo-600 bg-white font-medium text-sm leading-relaxed transition-all min-h-[250px]"
+                            placeholder="Enter detailed notes about this member's preferences, history, or special requirements..."
+                        />
+                    </div>
+
+                    <div className="flex gap-3">
+                        <Button 
+                            onClick={() => setShowNotesModal(false)}
+                            variant="outline"
+                            className="flex-1 h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em]"
+                        >
+                            Discard
+                        </Button>
+                        <Button 
+                            onClick={handleSaveNotes}
+                            isLoading={isLoading}
+                            className="flex-[2] h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl bg-indigo-600 hover:bg-indigo-700 text-white"
+                        >
+                            Save Intelligence
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
         </div>
       )}
     </div>

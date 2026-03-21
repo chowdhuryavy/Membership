@@ -1,6 +1,6 @@
 export type Permission = 
   | 'dashboard:view' | 'dashboard:view_financials' | 'dashboard:view_insights'
-  | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:renew' | 'members:print_contract' | 'members:view_history'
+  | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:bulk_freeze' | 'members:renew' | 'members:print_contract' | 'members:view_history'
   | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete'
   | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email' | 'users:manage_overrides' | 'users:edit_self'
   | 'staff:view' | 'staff:manage' | 'staff:manage_leaves'
@@ -196,6 +196,7 @@ export interface Member {
   staff_signature?: string;
   id_card_url?: string;
   spouse_id_card_url?: string;
+  notes?: string;
 }
 
 export interface Freeze {
@@ -204,6 +205,9 @@ export interface Freeze {
   start_date: string;
   end_date: string;
   total_days: number;
+  reason?: string;
+  is_maintenance?: boolean; // If true, doesn't count towards tier limits
+  batch_id?: string; // Groups bulk freezes together
 }
 
 export interface Guest {

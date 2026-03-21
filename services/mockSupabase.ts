@@ -28,6 +28,16 @@ class DatabaseService {
     return !!supabase;
   }
 
+  private generateUUID() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
   private getShadowClient() {
     return createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
@@ -60,6 +70,7 @@ class DatabaseService {
           { key: 'members:delete', label: 'Revoke Records', description: 'Permanently remove members from the system.' },
           { key: 'members:view_contact_info', label: 'PII Visibility', description: 'Access to sensitive data like phone numbers and emails.' },
           { key: 'members:freeze', label: 'Handle Suspensions', description: 'Authorize or cancel membership freeze periods.' },
+          { key: 'members:bulk_freeze', label: 'Bulk Suspension Protocol', description: 'Authorize global portfolio holds for maintenance or holidays.' },
           { key: 'members:renew', label: 'Process Renewals', description: 'Ability to trigger re-enrollment logic.' },
           { key: 'members:print_contract', label: 'Legal Documentation', description: 'Generate and print membership agreements.' },
           { key: 'members:view_history', label: 'Audit History', description: 'View historical changes to member records.' },
@@ -553,7 +564,8 @@ class DatabaseService {
 
   async addFreeze(freeze: Freeze) {
     if (this.isSupabase()) {
-      await supabase.from('freezes').insert([freeze]);
+      const data = { ...freeze, id: freeze.id || this.generateUUID() };
+      await supabase.from('freezes').insert([data]);
       const newEndDate = await this.syncMemberEndDate(freeze.member_id);
       
       // Fetch member name for better logging
@@ -586,6 +598,93 @@ class DatabaseService {
         const memberName = member?.guest_name || 'Unknown Member';
 
         await this.logAction('DELETE_FREEZE', `Suspension revoked for ${memberName}. Membership reduced to ${newEndDate}`);
+    }
+  }
+
+  async bulkFreezeMembers(memberIds: string[], startDate: string, endDate: string, totalDays: number, reason: string) {
+    if (this.isSupabase()) {
+      const batchId = this.generateUUID();
+      const freezes = memberIds.map(id => ({
+        id: this.generateUUID(),
+        member_id: id,
+        start_date: startDate,
+        end_date: endDate,
+        total_days: totalDays,
+        reason: reason,
+        is_maintenance: true,
+        batch_id: batchId
+      }));
+
+      const { error } = await supabase.from('freezes').insert(freezes);
+      if (error) throw error;
+
+      // Sync all affected members
+      await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
+      
+      await this.logAction('BULK_FREEZE', `Bulk suspension applied to ${memberIds.length} members. Batch ID: ${batchId}. Reason: ${reason}`);
+    }
+  }
+
+  async getBulkFreezeHistory(): Promise<{ batch_id: string, start_date: string, end_date: string, total_days: number, reason: string, member_count: number, created_at: string }[]> {
+    if (this.isSupabase()) {
+        const { data, error } = await supabase
+            .from('freezes')
+            .select('batch_id, start_date, end_date, total_days, reason, created_at')
+            .not('batch_id', 'is', null);
+        
+        if (error) throw error;
+        
+        // Group by batch_id
+        const grouped = (data || []).reduce((acc: any, curr: any) => {
+            if (!acc[curr.batch_id]) {
+                acc[curr.batch_id] = {
+                    batch_id: curr.batch_id,
+                    start_date: curr.start_date,
+                    end_date: curr.end_date,
+                    total_days: curr.total_days,
+                    reason: curr.reason,
+                    member_count: 0,
+                    created_at: curr.created_at
+                };
+            }
+            acc[curr.batch_id].member_count++;
+            return acc;
+        }, {});
+
+        return Object.values(grouped);
+    }
+    return [];
+  }
+
+  async deleteBulkFreeze(batchId: string) {
+    if (this.isSupabase()) {
+        // Find affected members before deletion
+        const { data: freezes } = await supabase.from('freezes').select('member_id').eq('batch_id', batchId);
+        const memberIds = Array.from(new Set((freezes || []).map(f => f.member_id)));
+
+        // Delete all records in batch
+        await supabase.from('freezes').delete().eq('batch_id', batchId);
+
+        // Sync all affected members
+        await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
+
+        await this.logAction('DELETE_BULK_FREEZE', `Bulk suspension revoked for batch: ${batchId}`);
+    }
+  }
+
+  async updateBulkFreeze(batchId: string, updates: { start_date: string, end_date: string, total_days: number, reason: string }) {
+    if (this.isSupabase()) {
+        // Find affected members
+        const { data: freezes } = await supabase.from('freezes').select('member_id').eq('batch_id', batchId);
+        const memberIds = Array.from(new Set((freezes || []).map(f => f.member_id)));
+
+        // Update all records in batch
+        await supabase.from('freezes').update(updates).eq('batch_id', batchId);
+
+        // Sync all affected members
+        await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
+
+        await this.logAction('UPDATE_BULK_FREEZE', `Bulk suspension modified for batch: ${batchId}`);
     }
   }
 
@@ -1471,7 +1570,14 @@ class DatabaseService {
   async deleteIncentiveRule(id: string) {
     if (this.isSupabase()) {
         await supabase.from('incentive_rules').delete().eq('id', id);
-        await this.logAction('DELETE_INCENTIVE', `Incentive rule retired: ${id}`);
+        await this.logAction('DELETE_INCENTIVE', `Incentive rule decommissioned: ${id}`);
+    }
+  }
+
+  async updateMemberNotes(id: string, notes: string) {
+    if (this.isSupabase()) {
+        await supabase.from('members').update({ notes }).eq('id', id);
+        await this.logAction('UPDATE_MEMBER_NOTES', `Member notes updated for ID: ${id}`);
     }
   }
 }
