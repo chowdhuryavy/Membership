@@ -602,103 +602,218 @@ class DatabaseService {
   }
 
   async bulkFreezeMembers(memberIds: string[], startDate: string, endDate: string, totalDays: number, reason: string) {
-    const batchId = this.generateUUID();
     const timestamp = new Date().toISOString();
     
-    const newFreezes = memberIds.map(id => ({
-      id: this.generateUUID(),
-      member_id: id,
-      start_date: startDate,
-      end_date: endDate,
-      total_days: totalDays,
-      reason: reason,
-      is_maintenance: true,
-      batch_id: batchId,
-      created_at: timestamp
-    }));
-
     if (this.isSupabase()) {
-      const { error } = await supabase.from('freezes').insert(newFreezes);
-      if (error) throw error;
+      // 1. Create the Batch record first
+      const { data: batch, error: batchError } = await supabase
+        .from('maintenance_batches')
+        .insert([{
+          start_date: startDate,
+          end_date: endDate,
+          total_days: totalDays,
+          reason: reason
+        }])
+        .select()
+        .single();
+
+      if (batchError) throw batchError;
+
+      // 2. Create individual freeze records linked to this batch
+      const newFreezes = memberIds.map(id => ({
+        id: this.generateUUID(),
+        member_id: id,
+        start_date: startDate,
+        end_date: endDate,
+        total_days: totalDays,
+        reason: reason,
+        is_maintenance: true,
+        maintenance_batch_id: batch.id,
+        created_at: timestamp
+      }));
+
+      const { error: freezeError } = await supabase.from('freezes').insert(newFreezes);
+      if (freezeError) throw freezeError;
+
+      // 3. Sync all affected members to update their status and end dates
+      await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
+      
+      await this.logAction('BULK_FREEZE', `Bulk suspension applied to ${memberIds.length} members. Reason: ${reason}`);
+      return batch.id;
     } else {
+      // Local Mode Fallback
+      const batchId = this.generateUUID();
+      const newFreezes = memberIds.map(id => ({
+        id: this.generateUUID(),
+        member_id: id,
+        start_date: startDate,
+        end_date: endDate,
+        total_days: totalDays,
+        reason: reason,
+        is_maintenance: true,
+        batch_id: batchId,
+        created_at: timestamp
+      }));
       const existing = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
       localStorage.setItem('membership_freezes', JSON.stringify([...existing, ...newFreezes]));
+      await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
+      return batchId;
     }
-
-    // Sync all affected members
-    await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
-    
-    await this.logAction('BULK_FREEZE', `Bulk suspension applied to ${memberIds.length} members. Batch ID: ${batchId}. Reason: ${reason}`);
-    return batchId;
   }
 
   async getBulkFreezeHistory(): Promise<{ batch_id: string, start_date: string, end_date: string, total_days: number, reason: string, member_count: number, created_at: string }[]> {
-    let allFreezes: any[] = [];
-
     if (this.isSupabase()) {
-        const { data, error } = await supabase
-            .from('freezes')
-            .select('batch_id, start_date, end_date, total_days, reason, created_at')
-            .not('batch_id', 'is', null);
+        // 1. Get dedicated batches
+        const { data: batches, error: batchError } = await supabase
+            .from('maintenance_batches')
+            .select('*')
+            .order('created_at', { ascending: false });
         
-        if (error) throw error;
-        allFreezes = data || [];
+        if (batchError) throw batchError;
+
+        // 2. Get ALL maintenance freezes to find orphaned ones
+        const { data: allMaintenance, error: freezeError } = await supabase
+            .from('freezes')
+            .select('maintenance_batch_id, start_date, end_date, total_days, reason, created_at')
+            .eq('is_maintenance', true);
+        
+        if (freezeError) throw freezeError;
+
+        // 3. Process dedicated batches
+        const history = (batches || []).map(batch => ({
+            batch_id: batch.id,
+            start_date: batch.start_date,
+            end_date: batch.end_date,
+            total_days: batch.total_days,
+            reason: batch.reason,
+            member_count: (allMaintenance || []).filter(c => c.maintenance_batch_id === batch.id).length,
+            created_at: batch.created_at
+        }));
+
+        // 4. Find and group orphaned freezes (those without a batch_id)
+        const orphaned = (allMaintenance || []).filter(f => !f.maintenance_batch_id);
+        const groupedOrphaned = orphaned.reduce((acc: Record<string, any>, curr: any) => {
+            const key = `synthetic_${curr.start_date}_${curr.end_date}_${curr.reason || 'none'}`;
+            if (!acc[key]) {
+                acc[key] = {
+                    batch_id: key,
+                    start_date: curr.start_date,
+                    end_date: curr.end_date,
+                    total_days: curr.total_days,
+                    reason: curr.reason || 'Legacy Maintenance',
+                    member_count: 0,
+                    created_at: curr.created_at || new Date().toISOString()
+                };
+            }
+            acc[key].member_count++;
+            return acc;
+        }, {});
+
+        const orphanedList = Object.values(groupedOrphaned) as { batch_id: string, start_date: string, end_date: string, total_days: number, reason: string, member_count: number, created_at: string }[];
+        return [...history, ...orphanedList];
     } else {
+        // Local Mode Fallback
         const localData = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
-        allFreezes = localData.filter((f: any) => f.batch_id && f.batch_id !== '');
+        const allFreezes = localData.filter((f: any) => !!f.is_maintenance);
+        const grouped = allFreezes.reduce((acc: any, curr: any) => {
+            const bid = curr.batch_id || `synthetic_${curr.start_date}_${curr.end_date}_${curr.reason || 'none'}`;
+            if (!acc[bid]) {
+                acc[bid] = {
+                    batch_id: bid,
+                    start_date: curr.start_date,
+                    end_date: curr.end_date,
+                    total_days: curr.total_days,
+                    reason: curr.reason || 'Global Maintenance',
+                    member_count: 0,
+                    created_at: curr.created_at || new Date().toISOString()
+                };
+            }
+            acc[bid].member_count++;
+            return acc;
+        }, {});
+        return Object.values(grouped);
     }
-    
-    if (allFreezes.length === 0) return [];
-
-    // Group by batch_id
-    const grouped = allFreezes.reduce((acc: any, curr: any) => {
-        const bid = curr.batch_id;
-        if (!acc[bid]) {
-            acc[bid] = {
-                batch_id: bid,
-                start_date: curr.start_date,
-                end_date: curr.end_date,
-                total_days: curr.total_days,
-                reason: curr.reason || 'Global Maintenance',
-                member_count: 0,
-                created_at: curr.created_at || new Date().toISOString()
-            };
-        }
-        acc[bid].member_count++;
-        return acc;
-    }, {});
-
-    return Object.values(grouped);
   }
 
   async deleteBulkFreeze(batchId: string) {
     if (this.isSupabase()) {
-        // Find affected members before deletion
-        const { data: freezes } = await supabase.from('freezes').select('member_id').eq('batch_id', batchId);
-        const memberIds = Array.from(new Set((freezes || []).map(f => f.member_id)));
+        let memberIds: string[] = [];
 
-        // Delete all records in batch
-        await supabase.from('freezes').delete().eq('batch_id', batchId);
+        if (batchId.startsWith('synthetic_')) {
+            // Handle legacy orphaned freezes
+            const parts = batchId.split('_');
+            const startDate = parts[1];
+            const endDate = parts[2];
+            const reason = parts[3] === 'none' ? null : parts[3];
+
+            let query = supabase.from('freezes').select('member_id').eq('start_date', startDate).eq('end_date', endDate).eq('is_maintenance', true);
+            if (reason === null) query = query.is('reason', null);
+            else query = query.eq('reason', reason);
+
+            const { data: freezes } = await query;
+            memberIds = Array.from(new Set((freezes || []).map(f => f.member_id)));
+
+            let deleteQuery = supabase.from('freezes').delete().eq('start_date', startDate).eq('end_date', endDate).eq('is_maintenance', true);
+            if (reason === null) deleteQuery = deleteQuery.is('reason', null);
+            else deleteQuery = deleteQuery.eq('reason', reason);
+            
+            await deleteQuery;
+        } else {
+            // Handle new dedicated batches
+            const { data: freezes } = await supabase
+                .from('freezes')
+                .select('member_id')
+                .eq('maintenance_batch_id', batchId);
+            
+            memberIds = Array.from(new Set((freezes || []).map(f => f.member_id)));
+
+            // Delete the batch (Cascade will handle individual freezes)
+            await supabase.from('maintenance_batches').delete().eq('id', batchId);
+        }
 
         // Sync all affected members
         await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
-
         await this.logAction('DELETE_BULK_FREEZE', `Bulk suspension revoked for batch: ${batchId}`);
     }
   }
 
   async updateBulkFreeze(batchId: string, updates: { start_date: string, end_date: string, total_days: number, reason: string }) {
     if (this.isSupabase()) {
-        // Find affected members
-        const { data: freezes } = await supabase.from('freezes').select('member_id').eq('batch_id', batchId);
-        const memberIds = Array.from(new Set((freezes || []).map(f => f.member_id)));
+        let memberIds: string[] = [];
 
-        // Update all records in batch
-        await supabase.from('freezes').update(updates).eq('batch_id', batchId);
+        if (batchId.startsWith('synthetic_')) {
+            // Handle legacy orphaned freezes
+            const parts = batchId.split('_');
+            const startDate = parts[1];
+            const endDate = parts[2];
+            const reason = parts[3] === 'none' ? null : parts[3];
 
-        // Sync all affected members
+            let query = supabase.from('freezes').select('member_id').eq('start_date', startDate).eq('end_date', endDate).eq('is_maintenance', true);
+            if (reason === null) query = query.is('reason', null);
+            else query = query.eq('reason', reason);
+
+            const { data: freezes } = await query;
+            memberIds = Array.from(new Set((freezes || []).map(f => f.member_id)));
+
+            let updateQuery = supabase.from('freezes').update(updates).eq('start_date', startDate).eq('end_date', endDate).eq('is_maintenance', true);
+            if (reason === null) updateQuery = updateQuery.is('reason', null);
+            else updateQuery = updateQuery.eq('reason', reason);
+            
+            await updateQuery;
+        } else {
+            // Handle new dedicated batches
+            await supabase.from('maintenance_batches').update(updates).eq('id', batchId);
+            await supabase.from('freezes').update(updates).eq('maintenance_batch_id', batchId);
+
+            const { data: freezes } = await supabase
+                .from('freezes')
+                .select('member_id')
+                .eq('maintenance_batch_id', batchId);
+            
+            memberIds = Array.from(new Set((freezes || []).map(f => f.member_id)));
+        }
+
         await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
-
         await this.logAction('UPDATE_BULK_FREEZE', `Bulk suspension modified for batch: ${batchId}`);
     }
   }
