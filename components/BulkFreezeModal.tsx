@@ -36,11 +36,22 @@ export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClos
   const [isLoading, setIsLoading] = useState(false);
 
   const filteredMembers = useMemo(() => {
-    return members.filter(m => 
-      m.guest_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.membership_number.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [members, searchTerm]);
+    return members.filter(m => {
+      const matchesSearch = m.guest_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            m.membership_number.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      let isEligible = true;
+      if (freezeForm.start_date && m.end_date) {
+        const freezeStart = startOfDay(parseISO(freezeForm.start_date));
+        const memberEnd = startOfDay(parseISO(m.end_date));
+        if (memberEnd < freezeStart) {
+          isEligible = false;
+        }
+      }
+
+      return matchesSearch && isEligible;
+    });
+  }, [members, searchTerm, freezeForm.start_date]);
 
   const toggleMember = (id: string) => {
     setSelectedMemberIds(prev => 
@@ -69,16 +80,33 @@ export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClos
       return;
     }
 
+    const freezeStart = startOfDay(parseISO(freezeForm.start_date));
+    const eligibleSelectedIds = selectedMemberIds.filter(id => {
+      const member = members.find(m => m.id === id);
+      if (!member || !member.end_date) return false;
+      const memberEnd = startOfDay(parseISO(member.end_date));
+      return memberEnd >= freezeStart;
+    });
+
+    if (eligibleSelectedIds.length === 0) {
+      toast.error("None of the selected members are eligible for this freeze period (already expired).");
+      return;
+    }
+
+    if (eligibleSelectedIds.length < selectedMemberIds.length) {
+      toast.error(`${selectedMemberIds.length - eligibleSelectedIds.length} members were excluded because their membership expires before the freeze start date.`, { duration: 5000 });
+    }
+
     setIsLoading(true);
     try {
       await db.bulkFreezeMembers(
-        selectedMemberIds,
+        eligibleSelectedIds,
         freezeForm.start_date,
         freezeForm.end_date,
         totalDays,
         freezeForm.reason
       );
-      toast.success(`Successfully applied maintenance freeze to ${selectedMemberIds.length} members.`);
+      toast.success(`Successfully applied maintenance freeze to ${eligibleSelectedIds.length} members.`);
       onSuccess();
       onClose();
     } catch (error) {
