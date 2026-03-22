@@ -143,7 +143,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
     <div className="space-y-6 pb-20">
       
       {/* LEDGER HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 lg:gap-6 bg-white p-6 lg:p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group">
         
         <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none group-hover:scale-110 transition-transform duration-1000 overflow-hidden rounded-[2.5rem] w-full h-full">
             <ShieldCheck className="absolute top-0 right-0 w-64 h-64 -mr-10 -mt-10" />
@@ -152,7 +152,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
         <div className="flex flex-1 items-center gap-6 relative z-10">
            <div className="w-16 h-16 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white shadow-2xl ring-8 ring-slate-50 shrink-0"><Building2 className="w-8 h-8" /></div>
            <div className="flex-1 min-w-0">
-              <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-2 truncate">Members Ledger</h1>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-2 truncate">Members Ledger</h1>
               <div className="flex flex-wrap items-center gap-4">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2 shrink-0">
                     <Store className="w-3.5 h-3.5 text-indigo-400" /> {currentOutlet?.name || 'Loading...'}
@@ -190,17 +190,17 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
            </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto relative z-50 shrink-0">
+        <div className="flex flex-wrap items-center justify-start lg:justify-end gap-3 w-full lg:w-auto relative z-50">
           
           {/* SEARCH COMPONENT */}
-          <div className="relative group w-full md:min-w-[300px]">
+          <div className="relative group w-full sm:w-64 lg:w-72">
             <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-focus-within:bg-indigo-600 group-focus-within:text-white transition-all"><Search className="h-4 w-4" /></div>
             <input placeholder="Search identity..." className="w-full h-14 pl-14 pr-4 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold placeholder:text-slate-400 shadow-inner" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
 
           {/* STATUS PROTOCOL SWITCHER */}
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <div className="relative w-full md:w-48" ref={filterRef}>
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <div className="relative w-full sm:w-48" ref={filterRef}>
               <button 
                 onClick={() => setIsFilterOpen(!isFilterOpen)}
                 className={`h-14 w-full px-5 rounded-2xl border transition-all flex items-center justify-between group/btn shadow-sm ${isFilterOpen ? 'bg-white border-indigo-500 ring-4 ring-indigo-500/10' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}
@@ -264,10 +264,10 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <button 
                 onClick={() => setShowBulkHistory(true)}
-                className="w-14 h-14 bg-white border-2 border-slate-100 rounded-2xl flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-600/20 hover:shadow-xl hover:shadow-indigo-500/5 transition-all group"
-                title="Suspension History"
+                className="h-14 px-6 bg-white border-2 border-slate-100 rounded-2xl flex items-center justify-center gap-2 text-slate-400 hover:text-indigo-600 hover:border-indigo-600/20 hover:shadow-xl hover:shadow-indigo-500/5 transition-all group"
               >
-                <History className="w-6 h-6 transition-transform group-hover:scale-110" />
+                <History className="w-4 h-4 transition-transform group-hover:scale-110" />
+                <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Suspension History</span>
               </button>
               <Button 
                 onClick={() => setShowBulkFreeze(true)} 
@@ -280,8 +280,8 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
           )}
 
           {canCreate && (membershipTypes.length === 0 || selectedTypeId !== 'all') && (
-            <Button onClick={onAdd} className="w-full sm:w-auto h-14 px-8 rounded-2xl font-black uppercase text-xs tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95">
-              <UserPlus className="w-5 h-5 mr-2" /> New Enrollment
+            <Button onClick={onAdd} className="w-full sm:w-auto h-14 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95">
+              <UserPlus className="w-4 h-4 mr-2" /> New Enrollment
             </Button>
           )}
         </div>
