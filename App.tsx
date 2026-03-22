@@ -221,6 +221,7 @@ const ProtectedLayout = () => {
   const { user, logout, isLoading: isAuthLoading } = useAuth();
   const { checkShortcut, isLoading: isSettingsLoading, currentOutlet, outlets, pageLoading } = useSettings();
   const [showSplash, setShowSplash] = useState(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const navigate = useNavigate();
 
   const isInitialLoad = useRef(true);
@@ -280,7 +281,7 @@ const ProtectedLayout = () => {
       {showSplash && <SplashLoading />}
       {user && (
         <div className={`flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible transition-opacity duration-1000 ${showSplash ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-          <Sidebar onLogout={handleLogout} />
+          <Sidebar onLogout={handleLogout} isCollapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
           <div className="flex-1 flex flex-col min-w-0 relative overflow-y-auto custom-scrollbar print:overflow-visible print:block">
             <TopHeader />
             <MobileHeader onLogout={handleLogout} />
@@ -294,7 +295,7 @@ const ProtectedLayout = () => {
   );
 };
 
-const Sidebar = ({ onLogout }: { onLogout: () => void }) => {
+const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, isCollapsed: boolean, onToggle: () => void }) => {
     const { user } = useAuth();
     const { settings, hasPermission, currentOutlet } = useSettings();
     const location = useLocation();
@@ -334,55 +335,63 @@ const Sidebar = ({ onLogout }: { onLogout: () => void }) => {
         return (
             <Link 
                 to={to} 
-                className={`flex items-center px-5 py-4 text-xs font-black uppercase tracking-widest rounded-2xl transition-all ${
+                className={`flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-5'} py-4 text-xs font-black uppercase tracking-widest rounded-2xl transition-all ${
                     isActive 
                     ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200/50' 
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                 }`}
+                title={isCollapsed ? label : ""}
             >
-                <Icon className={`w-5 h-5 mr-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                {label}
+                <Icon className={`w-5 h-5 ${isCollapsed ? 'mr-0' : 'mr-4'} ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                {!isCollapsed && <span>{label}</span>}
             </Link>
         );
     };
 
     return (
-        <aside className="hidden md:flex w-72 flex-col bg-white border-r border-slate-200 h-screen sticky top-0 print:hidden shrink-0 shadow-sm overflow-hidden">
-            <div className="p-8 shrink-0">
-                <div className="flex items-center gap-4">
+        <aside className={`hidden md:flex ${isCollapsed ? 'w-24' : 'w-72'} flex-col bg-white border-r border-slate-200 h-screen sticky top-0 print:hidden shrink-0 shadow-sm overflow-hidden transition-all duration-300 ease-in-out`}>
+            <div className={`p-8 shrink-0 ${isCollapsed ? 'flex justify-center' : ''}`}>
+                <button 
+                    onClick={onToggle}
+                    className="flex items-center gap-4 group/logo transition-all active:scale-95 outline-none"
+                    title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                >
                     {settings?.logo_url ? (
-                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-xl shadow-slate-100 p-2 overflow-hidden border border-slate-100">
-                             <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain" />
+                        <div className="w-14 h-14 flex items-center justify-center shrink-0 transition-all duration-500 group-hover/logo:scale-110 group-hover/logo:rotate-[5deg]">
+                             <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain drop-shadow-md" />
                         </div>
                     ) : (
-                        <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100">
-                            <Sparkles className="w-6 h-6" />
+                        <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100 shrink-0 transition-all duration-500 group-hover/logo:scale-110 group-hover/logo:rotate-[5deg]">
+                            <Sparkles className="w-7 h-7" />
                         </div>
                     )}
-                    <div className="overflow-hidden text-left">
-                        <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-snug">
-                            {settings?.name || 'System Identity'}
-                        </h1>
-                        <span className="block text-[9px] text-slate-400 uppercase tracking-[0.2em] font-black mt-1 whitespace-nowrap">
-                            Designed by Perfection
-                        </span>
-                    </div>
-                </div>
+                    {!isCollapsed && (
+                        <div className="overflow-hidden text-left transition-all duration-300 group-hover/logo:translate-x-1">
+                            <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-snug">
+                                {settings?.name || 'System Identity'}
+                            </h1>
+                            <span className="block text-[9px] text-slate-400 uppercase tracking-[0.2em] font-black mt-1 whitespace-nowrap">
+                                Designed by Perfection
+                            </span>
+                        </div>
+                    )}
+                </button>
             </div>
             
-            <nav className="flex-1 space-y-1.5 px-4 mt-4 overflow-y-auto custom-scrollbar pb-8">
+            <nav className={`flex-1 space-y-1.5 ${isCollapsed ? 'px-4' : 'px-4'} mt-4 overflow-y-auto custom-scrollbar pb-8`}>
                 {orderedNavItems.map((item) => (
                     <NavItem key={item.id} to={item.to} icon={item.icon} label={item.label} permission={item.permission} />
                 ))}
             </nav>
 
-            <div className="p-6 border-t-2 border-slate-100 bg-slate-50/50 shrink-0">
+            <div className={`p-6 border-t-2 border-slate-100 bg-slate-50/50 shrink-0 ${isCollapsed ? 'flex justify-center' : ''}`}>
                 <button 
                     onClick={onLogout}
-                    className="flex w-full items-center justify-center px-4 py-4 text-[11px] font-black uppercase tracking-widest text-red-600 bg-red-50 hover:bg-red-100 rounded-2xl transition-all border border-red-100 shadow-sm active:scale-95"
+                    className={`flex ${isCollapsed ? 'w-12 h-12 p-0' : 'w-full px-4 py-4'} items-center justify-center text-[11px] font-black uppercase tracking-widest text-red-600 bg-red-50 hover:bg-red-100 rounded-2xl transition-all border border-red-100 shadow-sm active:scale-95`}
+                    title={isCollapsed ? "Logout" : ""}
                 >
-                    <LogOut className="w-4 h-4 mr-3" />
-                    Logout
+                    <LogOut className={`w-4 h-4 ${isCollapsed ? '' : 'mr-3'}`} />
+                    {!isCollapsed && <span>Logout</span>}
                 </button>
             </div>
         </aside>

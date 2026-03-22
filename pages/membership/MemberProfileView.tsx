@@ -442,11 +442,11 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                       <div className="mt-10 space-y-3">
                         <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs font-black text-slate-700 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all cursor-default">
                            <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600"><Phone className="w-4 h-4" /></div>
-                           <span className="flex-1 text-left">{viewingMember.phone || 'No terminal record'}</span>
+                           <span className="flex-1 text-left">{viewingMember.phone || 'No Phone Number'}</span>
                         </div>
                         <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs font-black text-slate-700 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all cursor-default overflow-hidden">
                            <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600"><Mail className="w-4 h-4 shrink-0" /></div>
-                           <span className="truncate flex-1 text-left lowercase">{viewingMember.email || 'No digital ID'}</span>
+                           <span className="truncate flex-1 text-left">{viewingMember.email || 'No Email ID'}</span>
                         </div>
                         <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs font-black text-slate-700 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all cursor-default">
                            <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600"><Globe className="w-4 h-4" /></div>

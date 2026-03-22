@@ -577,6 +577,15 @@ class DatabaseService {
       if (error) throw error;
       const changedFields = Object.keys(patch).filter(k => patch[k] !== undefined && patch[k] !== null).join(', ');
       await this.logAction('UPDATE_MEMBER', `Updated member profile: ${patch.guest_name || id}. Modified fields: [${changedFields}]`, patch.outlet_id);
+    } else {
+        // Local Mode Fallback
+        const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+        const mIndex = members.findIndex((mem: any) => mem.id === id);
+        if (mIndex !== -1) {
+            members[mIndex] = { ...members[mIndex], ...member };
+            localStorage.setItem('membership_members', JSON.stringify(members));
+            await this.logAction('UPDATE_MEMBER', `Updated member profile locally: ${members[mIndex].guest_name || id}.`);
+        }
     }
   }
 
@@ -1780,6 +1789,15 @@ class DatabaseService {
     if (this.isSupabase()) {
         await supabase.from('members').update({ notes }).eq('id', id);
         await this.logAction('UPDATE_MEMBER_NOTES', `Member notes updated for ID: ${id}`);
+    } else {
+        // Local Mode Fallback
+        const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+        const mIndex = members.findIndex((mem: any) => mem.id === id);
+        if (mIndex !== -1) {
+            members[mIndex] = { ...members[mIndex], notes };
+            localStorage.setItem('membership_members', JSON.stringify(members));
+            await this.logAction('UPDATE_MEMBER_NOTES', `Member notes updated locally for ID: ${id}`);
+        }
     }
   }
 }
