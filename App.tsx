@@ -494,10 +494,34 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
 
 import RetailStockReport from './pages/RetailStockReport';
 
+const DynamicHead = () => {
+  const { settings } = useSettings();
+
+  useEffect(() => {
+    if (settings) {
+      if (settings.name) {
+        document.title = `${settings.name} | Management Console`;
+      }
+      if (settings.logo_url) {
+        let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
+          document.head.appendChild(link);
+        }
+        link.href = settings.logo_url;
+      }
+    }
+  }, [settings]);
+
+  return null;
+};
+
 const App = () => {
   return (
     <AuthProvider>
       <SettingsProvider>
+        <DynamicHead />
         <Toaster position="top-right" />
         <UserActivityTracker />
         <Router>
