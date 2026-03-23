@@ -8,13 +8,27 @@ import toast from 'react-hot-toast';
 
 const parseISO = (dateString: string) => {
   if (!dateString) return new Date();
+  
+  // Try standard YYYY-MM-DD
   let d = new Date(dateString);
   if (!isNaN(d.getTime())) return d;
+  
+  // Try DD-MM-YYYY, DD.MM.YYYY, DD/MM/YYYY
+  const cleanDate = dateString.replace(/[\.\/]/g, '-');
   try {
-    return parse(dateString, 'dd-MM-yyyy', new Date());
-  } catch (e) {
-    return new Date();
-  }
+    // Try to parse as DD-MM-YYYY
+    const parts = cleanDate.split('-');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      let year = parseInt(parts[2], 10);
+      if (year < 100) year += 2000; // Handle 2-digit years
+      const parsed = new Date(year, month, day);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+  } catch (e) {}
+
+  return new Date();
 };
 
 interface BulkFreezeModalProps {
@@ -41,9 +55,11 @@ export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClos
                             m.membership_number.toLowerCase().includes(searchTerm.toLowerCase());
       
       let isEligible = true;
-      if (freezeForm.start_date && m.end_date) {
+      if (freezeForm.start_date && m.current_end_date) {
         const freezeStart = startOfDay(parseISO(freezeForm.start_date));
-        const memberEnd = startOfDay(parseISO(m.end_date));
+        const memberEnd = startOfDay(parseISO(m.current_end_date));
+
+        // Only exclude if the membership already ended before the freeze starts
         if (memberEnd < freezeStart) {
           isEligible = false;
         }
@@ -51,7 +67,7 @@ export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClos
 
       return matchesSearch && isEligible;
     });
-  }, [members, searchTerm, freezeForm.start_date]);
+  }, [members, searchTerm, freezeForm.start_date, freezeForm.end_date]);
 
   const toggleMember = (id: string) => {
     setSelectedMemberIds(prev => 
@@ -81,10 +97,14 @@ export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClos
     }
 
     const freezeStart = startOfDay(parseISO(freezeForm.start_date));
+    
     const eligibleSelectedIds = selectedMemberIds.filter(id => {
       const member = members.find(m => m.id === id);
-      if (!member || !member.end_date) return false;
-      const memberEnd = startOfDay(parseISO(member.end_date));
+      if (!member || !member.current_end_date) return false;
+      
+      const memberEnd = startOfDay(parseISO(member.current_end_date));
+      
+      // Only exclude if the membership already ended before the freeze starts
       return memberEnd >= freezeStart;
     });
 
