@@ -204,7 +204,11 @@ serve(async (req) => {
             bookingsQuery = bookingsQuery.eq('outlet_id', recipient.outlet_id);
           }
 
+          console.log('Daily Sales Query Params:', { property_id: recipient.property_id, outlet_id: recipient.outlet_id, startStr });
+          
           const [salesRes, bookingsRes] = await Promise.all([salesQuery, bookingsQuery]);
+          console.log('Sales Query Result:', salesRes.data?.length, 'Bookings Query Result:', bookingsRes.data?.length);
+          
           const sales = salesRes.data || [];
           const bookings = bookingsRes.data || [];
 
@@ -1077,10 +1081,8 @@ serve(async (req) => {
             'Authorization': `Bearer ${RESEND_API_KEY}`
           },
           body: JSON.stringify({
-            // NOTE: If you haven't verified a domain in Resend yet, you MUST use onboarding@resend.dev
-            // and you can ONLY send emails to the email address you signed up to Resend with.
-            // Once you verify a domain, change this to: 'Reports <reports@yourdomain.com>'
-            from: 'Reports <onboarding@resend.dev>', 
+            // NOTE: Once you verify a domain at resend.com/domains, change this to: 'Reports <reports@yourdomain.com>'
+            from: 'Reports <reports@yourdomain.com>', 
             to: recipient.email,
             subject: finalSubject,
             html: reportContent,
