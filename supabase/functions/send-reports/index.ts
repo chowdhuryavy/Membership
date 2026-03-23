@@ -78,7 +78,7 @@ serve(async (req) => {
     let query = supabaseClient
       .from('report_recipients')
       .select(`
-        *,
+        id, email, property_id, outlet_id, report_type, send_time, report_date_type, is_active, created_at,
         properties ( name, logo_url )
       `)
       .eq('is_active', true)
@@ -190,6 +190,7 @@ serve(async (req) => {
 
         // 1. Handle Multiple Emails
         const emails = recipient.email.split(',').map((e: string) => e.trim());
+        console.log('Sending emails to:', emails);
 
         // 2. Fetch data based on report_type
         if (recipient.report_type === 'daily_sales') {
@@ -239,43 +240,7 @@ serve(async (req) => {
           });
 
           if (tableData.length > 0) {
-            const doc = new jsPDF();
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(24);
-            doc.setTextColor(15, 23, 42);
-            doc.text("DAILY SALES LEDGER", 105, 30, { align: 'center' });
-            
-            doc.setFontSize(10);
-            doc.setTextColor(100, 116, 139);
-            doc.text(propertyName.toUpperCase(), 105, 38, { align: 'center' });
-            
-            doc.setDrawColor(15, 23, 42);
-            doc.setLineWidth(0.5);
-            doc.line(20, 45, 190, 45);
-            
-            doc.setFontSize(11);
-            doc.setTextColor(15, 23, 42);
-            doc.text(`Outlet: ${outletName}`, 20, 55);
-            doc.text(`Date: ${startStr}`, 190, 55, { align: 'right' });
-            
-            autoTable(doc, {
-              startY: 65,
-              head: [['Date', 'Type', 'Item', 'Gross', 'Discount', 'Net']],
-              body: tableData,
-              theme: 'grid',
-              headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'normal', fontSize: 9 },
-              styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' },
-              columnStyles: {
-                3: { halign: 'right' },
-                4: { halign: 'right' },
-                5: { halign: 'right' }
-              }
-            });
-            
-            attachments.push({
-              filename: `Daily_Sales_${startStr}.pdf`,
-              content: btoa(doc.output('string')),
-            });
+            // PDF generation is handled below
           }
 
           reportContent = `
@@ -344,7 +309,7 @@ serve(async (req) => {
           doc.setFontSize(11);
           doc.setTextColor(15, 23, 42);
           doc.text(`Outlet: ${outletName}`, 20, 55);
-          doc.text(`Audit Date: ${format(yesterday, 'MMMM d, yyyy')}`, 190, 55, { align: 'right' });
+          doc.text(`Audit Date: ${format(targetDate, 'MMMM d, yyyy')}`, 190, 55, { align: 'right' });
           
           autoTable(doc, {
             startY: 65,
@@ -352,8 +317,8 @@ serve(async (req) => {
             body: sales.map(s => [format(parseISO(s.created_at), 'dd-MMM-yy'), 'Retail', s.item_name || 'Item', s.gross_amount.toFixed(2), s.discount_amount.toFixed(2), s.net_amount.toFixed(2)])
                   .concat(bookings.map(b => [format(parseISO(b.date), 'dd-MMM-yy'), 'Service', 'Booking', (Number(b.price) + Number(b.discount || 0)).toFixed(2), (b.discount || 0).toFixed(2), Number(b.price).toFixed(2)])),
             theme: 'grid',
-            headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-            styles: { fontSize: 8, cellPadding: 3 },
+            headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, font: 'helvetica' },
+            styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' },
             columnStyles: {
               3: { halign: 'right' },
               4: { halign: 'right' },
@@ -371,7 +336,7 @@ serve(async (req) => {
               ['CERTIFIED NET REVENUE', `${currencySymbol}${totalNet.toFixed(2)}`]
             ],
             theme: 'grid',
-            styles: { fontSize: 10, cellPadding: 5, fontStyle: 'bold' },
+            styles: { fontSize: 10, cellPadding: 5, fontStyle: 'bold', font: 'helvetica' },
             columnStyles: {
               0: { cellWidth: 120, fillColor: [248, 250, 252] },
               1: { halign: 'right', cellWidth: 50 }
