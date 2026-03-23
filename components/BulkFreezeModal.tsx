@@ -55,12 +55,17 @@ export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClos
                             m.membership_number.toLowerCase().includes(searchTerm.toLowerCase());
       
       let isEligible = true;
-      if (freezeForm.start_date && m.current_end_date) {
+      if (freezeForm.start_date && freezeForm.end_date && m.current_end_date) {
         const freezeStart = startOfDay(parseISO(freezeForm.start_date));
+        const freezeEnd = startOfDay(parseISO(freezeForm.end_date));
+        const memberStart = startOfDay(parseISO(m.start_date));
         const memberEnd = startOfDay(parseISO(m.current_end_date));
 
-        // Only exclude if the membership already ended before the freeze starts
-        if (memberEnd < freezeStart) {
+        // Only include if the membership period overlaps with the freeze period
+        const startsAfterFreeze = memberStart > freezeEnd;
+        const endsBeforeFreeze = memberEnd < freezeStart;
+
+        if (startsAfterFreeze || endsBeforeFreeze) {
           isEligible = false;
         }
       }
@@ -97,15 +102,19 @@ export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClos
     }
 
     const freezeStart = startOfDay(parseISO(freezeForm.start_date));
+    const freezeEnd = startOfDay(parseISO(freezeForm.end_date));
     
     const eligibleSelectedIds = selectedMemberIds.filter(id => {
       const member = members.find(m => m.id === id);
       if (!member || !member.current_end_date) return false;
       
+      const memberStart = startOfDay(parseISO(member.start_date));
       const memberEnd = startOfDay(parseISO(member.current_end_date));
       
-      // Only exclude if the membership already ended before the freeze starts
-      return memberEnd >= freezeStart;
+      const startsAfterFreeze = memberStart > freezeEnd;
+      const endsBeforeFreeze = memberEnd < freezeStart;
+      
+      return !startsAfterFreeze && !endsBeforeFreeze;
     });
 
     if (eligibleSelectedIds.length === 0) {

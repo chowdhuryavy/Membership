@@ -1,7 +1,7 @@
 import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
-import { addDays, format, parse } from 'date-fns';
+import { addDays, format, parse, differenceInCalendarDays } from 'date-fns';
 
 // Robust date parsing for the Intelligence Engine
 const parseISO = (dateString: string) => {
@@ -648,6 +648,8 @@ class DatabaseService {
 
   async bulkFreezeMembers(memberIds: string[], startDate: string, endDate: string, totalDays: number, reason: string) {
     const timestamp = new Date().toISOString();
+    const freezeStart = startOfDay(parseISO(startDate));
+    const freezeEnd = startOfDay(parseISO(endDate));
     
     if (this.isSupabase()) {
       // 1. Create the Batch record first
@@ -664,23 +666,45 @@ class DatabaseService {
 
       if (batchError) throw batchError;
 
-      // 2. Create individual freeze records linked to this batch
-      const newFreezes = memberIds.map(id => ({
-        id: this.generateUUID(),
-        member_id: id,
-        start_date: startDate,
-        end_date: endDate,
-        total_days: totalDays,
-        reason: reason,
-        is_maintenance: true,
-        maintenance_batch_id: batch.id,
-        created_at: timestamp
-      }));
+      // 2. Fetch member details to calculate individual overlap
+      const { data: members, error: membersError } = await supabase
+        .from('members')
+        .select('id, start_date, original_end_date')
+        .in('id', memberIds);
+
+      if (membersError) throw membersError;
+
+      // 3. Create individual freeze records linked to this batch
+      const newFreezes = (members || []).map(m => {
+        const memberStart = startOfDay(parseISO(m.start_date));
+        const memberEnd = startOfDay(parseISO(m.original_end_date));
+        
+        // Calculate overlap between [memberStart, memberEnd] and [freezeStart, freezeEnd]
+        const overlapStart = new Date(Math.max(memberStart.getTime(), freezeStart.getTime()));
+        const overlapEnd = new Date(Math.min(memberEnd.getTime(), freezeEnd.getTime()));
+        
+        let actualDays = 0;
+        if (overlapStart <= overlapEnd) {
+          actualDays = Math.max(0, differenceInCalendarDays(overlapEnd, overlapStart) + 1);
+        }
+
+        return {
+          id: this.generateUUID(),
+          member_id: m.id,
+          start_date: startDate,
+          end_date: endDate,
+          total_days: actualDays,
+          reason: reason,
+          is_maintenance: true,
+          maintenance_batch_id: batch.id,
+          created_at: timestamp
+        };
+      });
 
       const { error: freezeError } = await supabase.from('freezes').insert(newFreezes);
       if (freezeError) throw freezeError;
 
-      // 3. Sync all affected members to update their status and end dates
+      // 4. Sync all affected members to update their status and end dates
       await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
       
       await this.logAction('BULK_FREEZE', `Bulk suspension applied to ${memberIds.length} members. Reason: ${reason}`);
@@ -688,17 +712,38 @@ class DatabaseService {
     } else {
       // Local Mode Fallback
       const batchId = this.generateUUID();
-      const newFreezes = memberIds.map(id => ({
-        id: this.generateUUID(),
-        member_id: id,
-        start_date: startDate,
-        end_date: endDate,
-        total_days: totalDays,
-        reason: reason,
-        is_maintenance: true,
-        batch_id: batchId,
-        created_at: timestamp
-      }));
+      const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+      
+      const newFreezes = memberIds.map(id => {
+        const m = members.find((mem: any) => mem.id === id);
+        let actualDays = totalDays;
+        
+        if (m) {
+          const memberStart = startOfDay(parseISO(m.start_date));
+          const memberEnd = startOfDay(parseISO(m.original_end_date));
+          const overlapStart = new Date(Math.max(memberStart.getTime(), freezeStart.getTime()));
+          const overlapEnd = new Date(Math.min(memberEnd.getTime(), freezeEnd.getTime()));
+          
+          if (overlapStart <= overlapEnd) {
+            actualDays = Math.max(0, differenceInCalendarDays(overlapEnd, overlapStart) + 1);
+          } else {
+            actualDays = 0;
+          }
+        }
+
+        return {
+          id: this.generateUUID(),
+          member_id: id,
+          start_date: startDate,
+          end_date: endDate,
+          total_days: actualDays,
+          reason: reason,
+          is_maintenance: true,
+          batch_id: batchId,
+          created_at: timestamp
+        };
+      });
+
       const existing = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
       localStorage.setItem('membership_freezes', JSON.stringify([...existing, ...newFreezes]));
       await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
@@ -835,6 +880,9 @@ class DatabaseService {
   }
 
   async updateBulkFreeze(batchId: string, updates: { start_date: string, end_date: string, total_days: number, reason: string }) {
+    const freezeStart = startOfDay(parseISO(updates.start_date));
+    const freezeEnd = startOfDay(parseISO(updates.end_date));
+
     if (this.isSupabase()) {
         let memberIds: string[] = [];
 
@@ -852,21 +900,53 @@ class DatabaseService {
             const { data: freezes } = await query;
             memberIds = Array.from(new Set((freezes || []).map(f => f.member_id)));
 
-            let updateQuery = supabase.from('freezes').update(updates).eq('start_date', startDate).eq('end_date', endDate).eq('is_maintenance', true);
-            if (reason === null) updateQuery = updateQuery.is('reason', null);
-            else updateQuery = updateQuery.eq('reason', reason);
-            
-            await updateQuery;
-        } else {
-            // Handle new dedicated batches - try both maintenance_batch_id and batch_id
-            await supabase.from('maintenance_batches').update(updates).eq('id', batchId);
-            await supabase.from('freezes').update(updates).eq('maintenance_batch_id', batchId);
-            await supabase.from('freezes').update(updates).eq('batch_id', batchId);
+            // Fetch member details to recalculate overlap
+            const { data: members } = await supabase.from('members').select('id, start_date, original_end_date').in('id', memberIds);
 
+            // Update each freeze individually with its calculated overlap
+            await Promise.all((members || []).map(async (m) => {
+                const memberStart = startOfDay(parseISO(m.start_date));
+                const memberEnd = startOfDay(parseISO(m.original_end_date));
+                const overlapStart = new Date(Math.max(memberStart.getTime(), freezeStart.getTime()));
+                const overlapEnd = new Date(Math.min(memberEnd.getTime(), freezeEnd.getTime()));
+                
+                let actualDays = 0;
+                if (overlapStart <= overlapEnd) {
+                    actualDays = Math.max(0, differenceInCalendarDays(overlapEnd, overlapStart) + 1);
+                }
+
+                let updateQuery = supabase.from('freezes').update({ ...updates, total_days: actualDays }).eq('member_id', m.id).eq('start_date', startDate).eq('end_date', endDate).eq('is_maintenance', true);
+                if (reason === null) updateQuery = updateQuery.is('reason', null);
+                else updateQuery = updateQuery.eq('reason', reason);
+                await updateQuery;
+            }));
+        } else {
+            // Handle new dedicated batches
+            await supabase.from('maintenance_batches').update(updates).eq('id', batchId);
+            
             const { data: f1 } = await supabase.from('freezes').select('member_id').eq('maintenance_batch_id', batchId);
             const { data: f2 } = await supabase.from('freezes').select('member_id').eq('batch_id', batchId);
-            
             memberIds = Array.from(new Set([...(f1 || []), ...(f2 || [])].map(f => f.member_id)));
+
+            // Fetch member details to recalculate overlap
+            const { data: members } = await supabase.from('members').select('id, start_date, original_end_date').in('id', memberIds);
+
+            // Update each freeze individually
+            await Promise.all((members || []).map(async (m) => {
+                const memberStart = startOfDay(parseISO(m.start_date));
+                const memberEnd = startOfDay(parseISO(m.original_end_date));
+                const overlapStart = new Date(Math.max(memberStart.getTime(), freezeStart.getTime()));
+                const overlapEnd = new Date(Math.min(memberEnd.getTime(), freezeEnd.getTime()));
+                
+                let actualDays = 0;
+                if (overlapStart <= overlapEnd) {
+                    actualDays = Math.max(0, differenceInCalendarDays(overlapEnd, overlapStart) + 1);
+                }
+
+                await supabase.from('freezes').update({ ...updates, total_days: actualDays })
+                    .or(`maintenance_batch_id.eq.${batchId},batch_id.eq.${batchId}`)
+                    .eq('member_id', m.id);
+            }));
         }
 
         await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
@@ -874,6 +954,8 @@ class DatabaseService {
     } else {
         // Local Mode Update
         let freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
+        const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+        
         const affected = freezes.filter((f: any) => {
             if (batchId.startsWith('synthetic_')) {
                 const parts = batchId.split('_');
@@ -889,7 +971,22 @@ class DatabaseService {
                 ? (f.start_date === batchId.split('_')[1] && f.end_date === batchId.split('_')[2] && f.is_maintenance)
                 : (f.batch_id === batchId || f.maintenance_batch_id === batchId);
             
-            if (isMatch) return { ...f, ...updates };
+            if (isMatch) {
+                const m = members.find((mem: any) => mem.id === f.member_id);
+                let actualDays = updates.total_days;
+                if (m) {
+                    const memberStart = startOfDay(parseISO(m.start_date));
+                    const memberEnd = startOfDay(parseISO(m.original_end_date));
+                    const overlapStart = new Date(Math.max(memberStart.getTime(), freezeStart.getTime()));
+                    const overlapEnd = new Date(Math.min(memberEnd.getTime(), freezeEnd.getTime()));
+                    if (overlapStart <= overlapEnd) {
+                        actualDays = Math.max(0, differenceInCalendarDays(overlapEnd, overlapStart) + 1);
+                    } else {
+                        actualDays = 0;
+                    }
+                }
+                return { ...f, ...updates, total_days: actualDays };
+            }
             return f;
         });
 
