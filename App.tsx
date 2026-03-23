@@ -500,7 +500,7 @@ const DynamicHead = () => {
   useEffect(() => {
     if (settings) {
       if (settings.name) {
-        document.title = `${settings.name} | Management Console`;
+        document.title = `${settings.name} | Console`;
       }
       if (settings.logo_url) {
         let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
