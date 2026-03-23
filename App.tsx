@@ -193,7 +193,7 @@ const TopHeader = () => {
                 <div className="h-6 w-px bg-slate-200 mx-2"></div>
                 <div className="flex flex-col">
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 text-left">Portfolio</span>
-                    <span className="text-sm font-black text-slate-900 leading-none text-left">Management Console</span>
+                    <span className="text-sm font-black text-slate-900 leading-none text-left">Console</span>
                 </div>
             </div>
             
