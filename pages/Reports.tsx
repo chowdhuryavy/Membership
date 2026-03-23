@@ -4,7 +4,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle } from '../components/
 import { db } from '../services/mockSupabase';
 import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory, StaffLeave, MembershipType, InventoryItem } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO } from 'date-fns';
+import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO, endOfDay } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { 
@@ -131,7 +131,7 @@ const Reports = () => {
 
   useEffect(() => {
     if (currentOutlet && currentProperty && canView) loadData();
-  }, [reportMonth, dailySalesDate, reportType, incentiveDept, selectedMembershipTypeId, currentOutlet, currentProperty, canView]);
+  }, [reportMonth, reportType, incentiveDept, selectedMembershipTypeId, currentOutlet, currentProperty, canView]);
 
   const findBestRule = (rules: IncentiveRule[], applies_to: IncentiveRule['applies_to'], target_id: string, price: number, duration: number) => {
     const candidates = rules.filter(r => r.is_active && r.applies_to === applies_to);
@@ -1021,7 +1021,10 @@ const Reports = () => {
         <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
             <div className="flex items-center gap-3 bg-white border border-slate-200 px-5 py-3 rounded-2xl shadow-sm">
                 {reportType === 'daily_sales' ? (
-                    <input type="date" value={dailySalesDate} onChange={e => setDailySalesDate(e.target.value)} className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer" />
+                    <div className="flex items-center gap-2">
+                        <input type="date" value={dailySalesDate} onChange={e => setDailySalesDate(e.target.value)} className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer" />
+                        <Button onClick={loadData} className="h-8 text-[9px] px-3">Generate</Button>
+                    </div>
                 ) : (
                     <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer" />
                 )}
