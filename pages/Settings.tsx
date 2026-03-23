@@ -1464,34 +1464,34 @@ const SettingsPage = () => {
                                     className="h-14 rounded-xl border-2" 
                                 />
                             </div>
-                                <div className="space-y-1.5">
-                                    <Input 
-                                        label="Scheduled Dispatch Time *" 
-                                        type="time"
-                                        value={reportRecipientForm.send_time} 
-                                        onChange={e => setReportRecipientForm({...reportRecipientForm, send_time: e.target.value})} 
-                                        className="h-14 rounded-xl font-black border-2" 
-                                    />
-                                    {isSuperAdmin && reportRecipientForm.property_id && (
-                                        <button 
-                                            type="button"
-                                            onClick={handleApplyTimeToAllInProperty}
-                                            disabled={isSaving}
-                                            className="text-[8px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors flex items-center gap-1 ml-1"
-                                        >
-                                            <RefreshCcw className="w-2.5 h-2.5" /> Apply to All in Property
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 h-14">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={reportRecipientForm.is_active} 
-                                        onChange={e => setReportRecipientForm({...reportRecipientForm, is_active: e.target.checked})} 
-                                        className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" 
-                                    />
-                                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Active Distribution</span>
-                                </div>
+                            
+                            <div className="space-y-1.5">
+                                <Input 
+                                    label="Scheduled Dispatch Time *" 
+                                    type="time"
+                                    value={reportRecipientForm.send_time} 
+                                    onChange={e => setReportRecipientForm({...reportRecipientForm, send_time: e.target.value})} 
+                                    className="h-14 rounded-xl font-black border-2" 
+                                />
+                                {isSuperAdmin && reportRecipientForm.property_id && (
+                                    <button 
+                                        type="button"
+                                        onClick={handleApplyTimeToAllInProperty}
+                                        disabled={isSaving}
+                                        className="text-[8px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors flex items-center gap-1 ml-1"
+                                    >
+                                        <RefreshCcw className="w-2.5 h-2.5" /> Apply to All in Property
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 h-14">
+                                <input 
+                                    type="checkbox" 
+                                    checked={reportRecipientForm.is_active} 
+                                    onChange={e => setReportRecipientForm({...reportRecipientForm, is_active: e.target.checked})} 
+                                    className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" 
+                                />
+                                <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Active Distribution</span>
                             </div>
 
                             <Button 
