@@ -39,11 +39,12 @@ interface MemberLedgerProps {
   onEdit: (m: Member) => void;
   onRenew: (m: Member) => void;
   onDelete: (id: string) => void;
+  onRefresh: (isSilent?: boolean) => void;
 }
 
 const MemberLedger: React.FC<MemberLedgerProps> = ({ 
   members = [], categories = [], membershipTypes = [], selectedTypeId, onTypeChange, loading, viewScope, setViewScope, 
-  onAdd, onViewDetail, onEdit, onRenew, onDelete 
+  onAdd, onViewDetail, onEdit, onRenew, onDelete, onRefresh
 }) => {
   const { user } = useAuth();
   const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [] } = useSettings();
@@ -376,7 +377,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
           onClose={() => setShowBulkFreeze(false)}
           members={members}
           onSuccess={() => {
-            window.location.reload(); 
+            onRefresh(true); 
           }}
         />
       )}
@@ -386,7 +387,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
           isOpen={showBulkHistory}
           onClose={() => setShowBulkHistory(false)}
           onRefresh={() => {
-            window.location.reload();
+            onRefresh(true);
           }}
         />
       )}

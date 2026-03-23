@@ -1,4 +1,4 @@
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format, parse, differenceInCalendarDays } from 'date-fns';
@@ -1895,6 +1895,80 @@ class DatabaseService {
             localStorage.setItem('membership_members', JSON.stringify(members));
             await this.logAction('UPDATE_MEMBER_NOTES', `Member notes updated locally for ID: ${id}`);
         }
+    }
+  }
+
+  // --- REPORT RECIPIENTS ---
+  async getReportRecipients() {
+    if (this.isSupabase()) {
+      const { data, error } = await supabase.from('report_recipients').select('*');
+      if (error) throw error;
+      return (data || []) as ReportRecipient[];
+    }
+    return JSON.parse(localStorage.getItem('membership_report_recipients') || '[]') as ReportRecipient[];
+  }
+
+  async addReportRecipient(recipient: Omit<ReportRecipient, 'id' | 'created_at'>) {
+    const newRecipient = {
+      ...recipient,
+      id: this.generateUUID(),
+      created_at: new Date().toISOString()
+    };
+
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('report_recipients').insert([newRecipient]);
+      if (error) throw error;
+    } else {
+      const recipients = await this.getReportRecipients();
+      recipients.push(newRecipient);
+      localStorage.setItem('membership_report_recipients', JSON.stringify(recipients));
+    }
+    await this.logAction('ADD_RECIPIENT', `Report recipient added: ${recipient.email}`);
+    return newRecipient;
+  }
+
+  async deleteReportRecipient(id: string) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('report_recipients').delete().eq('id', id);
+      if (error) throw error;
+    } else {
+      const recipients = await this.getReportRecipients();
+      const filtered = recipients.filter(r => r.id !== id);
+      localStorage.setItem('membership_report_recipients', JSON.stringify(filtered));
+    }
+    await this.logAction('DELETE_RECIPIENT', `Report recipient removed: ${id}`);
+  }
+
+  async updateReportRecipient(id: string, updates: Partial<ReportRecipient>) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('report_recipients').update(updates).eq('id', id);
+      if (error) throw error;
+    } else {
+      const recipients = await this.getReportRecipients();
+      const index = recipients.findIndex(r => r.id === id);
+      if (index !== -1) {
+        recipients[index] = { ...recipients[index], ...updates };
+        localStorage.setItem('membership_report_recipients', JSON.stringify(recipients));
+      }
+    }
+    await this.logAction('UPDATE_RECIPIENT', `Report recipient updated: ${id}`);
+  }
+
+  async sendTestReport(recipientId: string) {
+    if (this.isSupabase()) {
+      const { data, error } = await supabase.functions.invoke('send-reports', {
+        body: { test: true, recipientId }
+      });
+      if (error) throw error;
+      if (data && data.success === false) throw new Error(data.error || 'Failed to send report');
+      if (data && data.results && data.results.some((r: any) => r.status === 'error')) {
+        const errResult = data.results.find((r: any) => r.status === 'error');
+        throw new Error(errResult.error || 'Failed to send email to recipient');
+      }
+      return data;
+    } else {
+      console.log('Mock: Sending test report to recipient', recipientId);
+      return { success: true, results: [{ status: 'sent (mock)' }] };
     }
   }
 }

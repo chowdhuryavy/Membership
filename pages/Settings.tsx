@@ -1,10 +1,12 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/mockSupabase';
-import { Role, Permission, Currency, CompanySettings, Outlet, Property, IncentiveRule, MassageType, MembershipCategory, PermissionGroup, InventoryItem, MassageRoom, MembershipType } from '../types';
+import { reportService } from '../services/reportService';
+import { Role, Permission, Currency, CompanySettings, Outlet, Property, IncentiveRule, MassageType, MembershipCategory, PermissionGroup, InventoryItem, MassageRoom, MembershipType, ReportRecipient } from '../types';
 import { BookingSettings } from '../components/BookingSettings';
 import { 
   Trash2, 
@@ -44,7 +46,8 @@ import {
   Info,
   RefreshCcw,
   Key,
-  Filter
+  Filter,
+  Mail
 } from 'lucide-react';
 
 const PermissionMatrix = ({ 
@@ -149,7 +152,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config';
 
 const SignatoryConfig = ({
   config = {},
@@ -280,6 +283,7 @@ const SettingsPage = () => {
       { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_outlets') && !!currentProperty, icon: Timer },
       { id: 'membership_types', label: 'Membership Types', visible: hasPermission(user?.role_id || '', 'settings:view_global') && !!currentOutlet, icon: Target },
       { id: 'massage_rooms', label: 'Massage Rooms', visible: isSuper && !!currentProperty, icon: Store },
+      { id: 'reports_config', label: 'Report Distribution', visible: hasPermission(user?.role_id || '', 'settings:view_global'), icon: Mail },
     ].filter(t => t.visible);
   }, [user, roles, hasPermission, currentProperty, currentOutlet]);
 
@@ -298,6 +302,28 @@ const SettingsPage = () => {
   const [massageRooms, setMassageRooms] = useState<MassageRoom[]>([]);
   const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
   const [membershipTypeForm, setMembershipTypeForm] = useState<Omit<MembershipType, 'id' | 'created_at'>>({ name: '', outlet_id: '' });
+  const [reportRecipients, setReportRecipients] = useState<ReportRecipient[]>([]);
+  const [reportRecipientForm, setReportRecipientForm] = useState<Omit<ReportRecipient, 'id' | 'created_at'>>({ 
+    email: '', 
+    property_id: '', 
+    outlet_id: 'all', 
+    report_type: 'revenue_recognition', 
+    send_time: '08:00',
+    is_active: true 
+  });
+
+  const filteredProperties = useMemo(() => {
+    if (isSuperAdmin) return properties;
+    return properties.filter(p => 
+      outlets.some(o => o.property_id === p.id && user?.allowed_outlets?.includes(o.id))
+    );
+  }, [properties, outlets, user, isSuperAdmin]);
+
+  const filteredOutletsForForm = useMemo(() => {
+    const propertyOutlets = outlets.filter(o => o.property_id === reportRecipientForm.property_id);
+    if (isSuperAdmin) return propertyOutlets;
+    return propertyOutlets.filter(o => user?.allowed_outlets?.includes(o.id));
+  }, [outlets, reportRecipientForm.property_id, user, isSuperAdmin]);
 
   useEffect(() => {
     if (currentOutlet) {
@@ -405,6 +431,10 @@ const SettingsPage = () => {
       if (activeTab === 'membership_types' && currentOutlet) {
           const types = await db.getMembershipTypes(currentOutlet.id);
           setMembershipTypes(types);
+      }
+      if (activeTab === 'reports_config') {
+          const recipients = await db.getReportRecipients();
+          setReportRecipients(recipients);
       }
   };
 
@@ -594,13 +624,76 @@ const SettingsPage = () => {
     }
   };
 
+  const handleReportRecipientSubmit = async () => {
+    setIsSaving(true);
+    try {
+      if (editingId) await db.updateReportRecipient(editingId, reportRecipientForm);
+      else await db.addReportRecipient(reportRecipientForm);
+      await loadData();
+      setShowForm(false);
+      showStatus('Report recipient configuration updated.');
+    } catch (e: any) {
+      showStatus(e.message, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSendTestReport = async (recipient: ReportRecipient) => {
+    try {
+      const property = properties.find(p => p.id === recipient.property_id);
+      if (!property) throw new Error('Property context not found.');
+      
+      const outlet = recipient.outlet_id === 'all' ? 'all' : outlets.find(o => o.id === recipient.outlet_id);
+      if (!outlet) throw new Error('Facility context not found.');
+
+      showStatus(`Dispatching test report intelligence to ${recipient.email}...`);
+      
+      await db.sendTestReport(recipient.id);
+      
+      showStatus(`Test report intelligence successfully dispatched to ${recipient.email}.`);
+      
+    } catch (e: any) {
+      showStatus(e.message, 'error');
+    }
+  };
+
+  const handleApplyTimeToAllInProperty = async () => {
+    if (!reportRecipientForm.property_id || !reportRecipientForm.send_time) {
+      showStatus('Please select a property and specify a time.', 'error');
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      const recipientsToUpdate = reportRecipients.filter(r => r.property_id === reportRecipientForm.property_id);
+      
+      if (recipientsToUpdate.length === 0) {
+        showStatus('No recipients found in this property to update.', 'error');
+        return;
+      }
+      
+      await Promise.all(recipientsToUpdate.map(r => 
+        db.updateReportRecipient(r.id, { ...r, send_time: reportRecipientForm.send_time })
+      ));
+      
+      const updatedRecipients = await db.getReportRecipients();
+      setReportRecipients(updatedRecipients);
+      showStatus(`Successfully updated ${recipientsToUpdate.length} recipients in this property.`);
+    } catch (e: any) {
+      showStatus(e.message, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleDeleteConfirmed = async () => { 
     if (!itemToDelete) return; 
     
     const isSuper = isSuperAdmin;
     
     // Check if destructive action is allowed
-    const superOnlyTypes = ['property', 'outlet', 'currency'];
+    const superOnlyTypes = ['property', 'outlet', 'currency', 'report_recipient'];
     if (superOnlyTypes.includes(itemToDelete.type) && !isSuper) {
         showStatus('Unauthorized: Super Admin access required for this deletion.', 'error');
         setItemToDelete(null);
@@ -628,6 +721,7 @@ const SettingsPage = () => {
       else if (itemToDelete.type === 'membership_type') await db.deleteMembershipType(itemToDelete.id);
       else if (itemToDelete.type === 'role') await db.deleteRole(itemToDelete.id);
       else if (itemToDelete.type === 'currency') await db.deleteCurrency(itemToDelete.id);
+      else if (itemToDelete.type === 'report_recipient') await db.deleteReportRecipient(itemToDelete.id);
       else if (itemToDelete.type === 'massage_room') {
           await db.deleteMassageRoom(itemToDelete.id);
           setMassageRooms(prev => prev.filter(r => r.id !== itemToDelete.id));
@@ -1080,6 +1174,119 @@ const SettingsPage = () => {
                       </CardContent>
                   </Card>
               )}
+
+              {activeTab === 'reports_config' && (
+                  <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
+                          <div className="flex items-center gap-5">
+                              <Mail className="w-8 h-8 text-indigo-600" />
+                              <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Report Distribution</CardTitle>
+                          </div>
+                          <Button 
+                              onClick={() => { 
+                                  setEditingId(null); 
+                                  setReportRecipientForm({ 
+                                      email: '', 
+                                      property_id: '', 
+                                      outlet_id: 'all', 
+                                      report_type: 'revenue_recognition', 
+                                      send_time: '08:00',
+                                      is_active: true 
+                                  }); 
+                                  setShowForm(true); 
+                              }} 
+                              className="h-14 px-8 rounded-2xl font-black text-xs uppercase"
+                          >
+                              <Plus className="w-4 h-4 mr-2" /> Authorize Recipient
+                          </Button>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                          <table className="w-full text-left">
+                              <thead className="bg-slate-50 border-b">
+                                  <tr>
+                                      <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Recipient</th>
+                                      <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Context</th>
+                                      <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Schedule</th>
+                                      <th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                  {reportRecipients.map(recipient => (
+                                      <tr key={recipient.id} className="hover:bg-indigo-50/20 group">
+                                          <td className="px-10 py-8">
+                                              <div className="flex items-center gap-4">
+                                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${recipient.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                                                      <Mail className="w-5 h-5" />
+                                                  </div>
+                                                  <div>
+                                                      <div className="font-black text-slate-900 uppercase text-base">{recipient.email}</div>
+                                                      <div className="text-[10px] font-bold text-slate-400 uppercase">{recipient.report_type.replace('_', ' ')}</div>
+                                                  </div>
+                                              </div>
+                                          </td>
+                                          <td className="px-10 py-8">
+                                              <div className="space-y-1">
+                                                  <div className="text-xs font-black text-slate-700 uppercase">{properties.find(p => p.id === recipient.property_id)?.name || 'Unknown'}</div>
+                                                  <div className="text-[10px] font-bold text-slate-400 uppercase">{recipient.outlet_id === 'all' ? 'All Facilities' : outlets.find(o => o.id === recipient.outlet_id)?.name || 'Unknown'}</div>
+                                              </div>
+                                          </td>
+                                          <td className="px-10 py-8">
+                                              <div className="flex items-center gap-2 text-indigo-600 font-black text-sm">
+                                                  <Clock className="w-4 h-4" />
+                                                  {recipient.send_time}
+                                              </div>
+                                          </td>
+                                          <td className="px-10 py-8 text-right">
+                                              <div className="flex justify-end gap-2">
+                                                  <button 
+                                                      onClick={() => handleSendTestReport(recipient)}
+                                                      className="p-2 text-slate-400 hover:text-indigo-600"
+                                                      title="Send Test Report"
+                                                  >
+                                                      <Zap className="w-4 h-4" />
+                                                  </button>
+                                                  <button 
+                                                      onClick={() => {
+                                                          setEditingId(recipient.id);
+                                                          setReportRecipientForm({
+                                                              email: recipient.email,
+                                                              property_id: recipient.property_id,
+                                                              outlet_id: recipient.outlet_id,
+                                                              report_type: recipient.report_type,
+                                                              send_time: recipient.send_time,
+                                                              is_active: recipient.is_active
+                                                          });
+                                                          setShowForm(true);
+                                                      }}
+                                                      className="p-2 text-slate-400 hover:text-indigo-600"
+                                                  >
+                                                      <Edit2 className="w-4 h-4" />
+                                                  </button>
+                                                  <button 
+                                                      onClick={() => setItemToDelete({ id: recipient.id, type: 'report_recipient', name: recipient.email })}
+                                                      className="p-2 text-slate-400 hover:text-red-500"
+                                                  >
+                                                      <Trash2 className="w-4 h-4" />
+                                                  </button>
+                                              </div>
+                                          </td>
+                                      </tr>
+                                  ))}
+                                  {reportRecipients.length === 0 && (
+                                      <tr>
+                                          <td colSpan={4} className="px-10 py-20 text-center">
+                                              <div className="flex flex-col items-center gap-3">
+                                                  <Mail className="w-12 h-12 text-slate-200" />
+                                                  <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No distribution protocols defined</p>
+                                              </div>
+                                          </td>
+                                      </tr>
+                                  )}
+                              </tbody>
+                          </table>
+                      </CardContent>
+                  </Card>
+              )}
           </div>
 
           <div className={`${showForm ? 'lg:col-span-6' : 'hidden'} animate-in slide-in-from-right-10 duration-500`}>
@@ -1087,7 +1294,7 @@ const SettingsPage = () => {
                   <CardHeader className="bg-indigo-600 text-white p-10 flex flex-col gap-1">
                       <CardTitle className="text-xl font-black uppercase tracking-widest flex items-center gap-3">
                         {editingId ? <Edit2 className="w-6 h-6"/> : <Plus className="w-6 h-6" />}
-                        {activeTab === 'properties' ? 'Property Asset Config' : activeTab === 'outlets' ? 'Outlet Context Commission' : activeTab === 'roles' ? 'Security Policy Protocol' : activeTab === 'currency' ? 'Monetary Standard' : 'Management Logic'}
+                        {activeTab === 'properties' ? 'Property Asset Config' : activeTab === 'outlets' ? 'Outlet Context Commission' : activeTab === 'roles' ? 'Security Policy Protocol' : activeTab === 'currency' ? 'Monetary Standard' : activeTab === 'reports_config' ? 'Distribution Protocol' : 'Management Logic'}
                       </CardTitle>
                       <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Authorized Synchronization</p>
                   </CardHeader>
@@ -1182,6 +1389,102 @@ const SettingsPage = () => {
                                 <span className="text-xs font-black text-slate-700 uppercase">Set as System Base Currency</span>
                             </div>
                             <Button onClick={handleCurrencySubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Sync Standard</Button>
+                        </div>
+                      )}
+                      {activeTab === 'reports_config' && (
+                        <div className="space-y-6">
+                            <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100 mb-6">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <Mail className="w-5 h-5 text-indigo-600" />
+                                    <h3 className="text-sm font-black text-indigo-900 uppercase tracking-widest">Report Distribution Engine</h3>
+                                </div>
+                                <p className="text-xs text-indigo-700 font-medium leading-relaxed">
+                                    Configure automated daily revenue reports to be delivered via email. Reports are generated in professional PDF format and sent to the designated recipients based on property and facility access.
+                                </p>
+                            </div>
+
+                            <Input 
+                                label="Recipient Email Address *" 
+                                type="email"
+                                value={reportRecipientForm.email} 
+                                onChange={e => setReportRecipientForm({...reportRecipientForm, email: e.target.value})} 
+                                placeholder="e.g. admin@property.com"
+                                className="h-14 rounded-xl font-black border-2" 
+                            />
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <Select 
+                                    label="Target Property Context *" 
+                                    options={[{value:'', label:'Select Property...'}, ...filteredProperties.map(p=>({value:p.id, label:p.name}))]} 
+                                    value={reportRecipientForm.property_id} 
+                                    onChange={e => setReportRecipientForm({...reportRecipientForm, property_id: e.target.value, outlet_id: 'all'})} 
+                                    className="h-14 rounded-xl border-2" 
+                                />
+                                <Select 
+                                    label="Facility Access *" 
+                                    options={[
+                                        {value:'all', label:'All Facilities (Consolidated)'}, 
+                                        ...filteredOutletsForForm.map(o=>({value:o.id, label:o.name}))
+                                    ]} 
+                                    value={reportRecipientForm.outlet_id} 
+                                    onChange={e => setReportRecipientForm({...reportRecipientForm, outlet_id: e.target.value})} 
+                                    disabled={!reportRecipientForm.property_id}
+                                    className="h-14 rounded-xl border-2" 
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
+                                <Select 
+                                    label="Strategic Report Type *" 
+                                    options={[
+                                        {value:'revenue_recognition', label:'Revenue Recognition'},
+                                        {value:'incentives', label:'Incentive Audit'},
+                                        {value:'daily_sales', label:'Daily Sales Ledger'},
+                                        {value:'members_joined', label:'Members Joined'},
+                                        {value:'expiring_memberships', label:'Expiring Memberships'},
+                                        {value:'massage_room_revenue', label:'Massage Room Revenue'}
+                                    ]} 
+                                    value={reportRecipientForm.report_type} 
+                                    onChange={e => setReportRecipientForm({...reportRecipientForm, report_type: e.target.value as any})} 
+                                    className="h-14 rounded-xl border-2" 
+                                />
+                                <div className="space-y-1.5">
+                                    <Input 
+                                        label="Scheduled Dispatch Time *" 
+                                        type="time"
+                                        value={reportRecipientForm.send_time} 
+                                        onChange={e => setReportRecipientForm({...reportRecipientForm, send_time: e.target.value})} 
+                                        className="h-14 rounded-xl font-black border-2" 
+                                    />
+                                    {isSuperAdmin && reportRecipientForm.property_id && (
+                                        <button 
+                                            type="button"
+                                            onClick={handleApplyTimeToAllInProperty}
+                                            disabled={isSaving}
+                                            className="text-[8px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors flex items-center gap-1 ml-1"
+                                        >
+                                            <RefreshCcw className="w-2.5 h-2.5" /> Apply to All in Property
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 h-14">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={reportRecipientForm.is_active} 
+                                        onChange={e => setReportRecipientForm({...reportRecipientForm, is_active: e.target.checked})} 
+                                        className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" 
+                                    />
+                                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Active Distribution</span>
+                                </div>
+                            </div>
+
+                            <Button 
+                                onClick={handleReportRecipientSubmit} 
+                                disabled={!reportRecipientForm.email || !reportRecipientForm.property_id || isSaving}
+                                className="w-full h-16 rounded-2xl font-black uppercase shadow-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                            >
+                                {isSaving ? 'Synchronizing...' : (editingId ? 'Update Distribution' : 'Authorize Recipient')}
+                            </Button>
                         </div>
                       )}
                       {activeTab === 'incentives' && (

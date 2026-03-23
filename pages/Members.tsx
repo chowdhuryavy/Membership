@@ -43,10 +43,10 @@ const Members = () => {
   // Permissions
   const canView = user && hasPermission(user.role_id, 'members:view');
 
-  const loadData = async () => {
+  const loadData = async (isSilent = false) => {
     if (!currentOutlet || !currentProperty || !canView) return;
-    if (members.length === 0) setLoading(true);
-    setPageLoading(true);
+    if (members.length === 0 && !isSilent) setLoading(true);
+    if (!isSilent) setPageLoading(true);
     try {
       const isPropertyScope = viewScope === 'property';
       const scopeId = isPropertyScope ? currentProperty.id : currentOutlet.id;
@@ -143,6 +143,7 @@ const Members = () => {
           onEdit={(m) => { setSelectedMember(m); setIsEditing(true); setIsRenewal(false); setView('form'); }}
           onRenew={(m) => { setSelectedMember(m); setIsRenewal(true); setIsEditing(false); setView('form'); }}
           onDelete={(id) => setDeleteId(id)}
+          onRefresh={loadData}
         />
       )}
 

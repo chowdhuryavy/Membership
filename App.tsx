@@ -517,7 +517,22 @@ const DynamicHead = () => {
   return null;
 };
 
+import { schedulerService } from './services/emailService';
+
 const App = () => {
+  // Scheduler effect
+  useEffect(() => {
+    // Run once on mount
+    schedulerService.processScheduledReports();
+
+    // Then run every minute
+    const interval = setInterval(() => {
+      schedulerService.processScheduledReports();
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <AuthProvider>
       <SettingsProvider>
