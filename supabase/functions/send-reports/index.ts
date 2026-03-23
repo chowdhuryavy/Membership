@@ -110,6 +110,7 @@ serve(async (req) => {
     // Process each recipient
     for (const recipient of recipients) {
       console.log('Processing recipient:', JSON.stringify(recipient));
+      let emails: string[] = recipient.email ? recipient.email.split(',').map((e: string) => e.trim()) : [];
       try {
         let reportContent = ''
         let subject = ''
@@ -189,7 +190,6 @@ serve(async (req) => {
         let attachments: any[] = [];
 
         // 1. Handle Multiple Emails
-        const emails = recipient.email.split(',').map((e: string) => e.trim());
         console.log('Sending emails to:', emails);
 
         // 2. Fetch data based on report_type
