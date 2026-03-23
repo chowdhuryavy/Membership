@@ -109,6 +109,7 @@ serve(async (req) => {
 
     // Process each recipient
     for (const recipient of recipients) {
+      console.log('Processing recipient:', JSON.stringify(recipient));
       try {
         let reportContent = ''
         let subject = ''
@@ -210,15 +211,14 @@ serve(async (req) => {
           let totalGross = 0;
           let totalDiscount = 0;
           let totalNet = 0;
-          let transactions = sales.length + bookings.length;
-
-          const csvRows = ['Date,Type,Item,Gross Amount,Discount,Net Revenue'];
+          
+          const tableData: any[] = [];
 
           sales.forEach(s => {
             totalGross += Number(s.gross_amount || 0);
             totalDiscount += Number(s.discount_amount || 0);
             totalNet += Number(s.net_amount || 0);
-            csvRows.push(`"${s.created_at}","Retail","${s.item_name || 'Item'}","${s.gross_amount}","${s.discount_amount}","${s.net_amount}"`);
+            tableData.push([s.created_at, "Retail", s.item_name || 'Item', Number(s.gross_amount || 0).toFixed(2), Number(s.discount_amount || 0).toFixed(2), Number(s.net_amount || 0).toFixed(2)]);
           });
 
           bookings.forEach(b => {
@@ -228,13 +228,48 @@ serve(async (req) => {
             totalGross += gross;
             totalDiscount += disc;
             totalNet += price;
-            csvRows.push(`"${b.date} ${b.start_time}","Service","Service Booking","${gross}","${disc}","${price}"`);
+            tableData.push([`${b.date} ${b.start_time}`, "Service", "Service Booking", gross.toFixed(2), disc.toFixed(2), price.toFixed(2)]);
           });
 
-          attachments.push({
-            filename: `Daily_Sales_${startStr}.csv`,
-            content: btoa(csvRows.join('\n')),
-          });
+          if (tableData.length > 0) {
+            const doc = new jsPDF();
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(24);
+            doc.setTextColor(15, 23, 42);
+            doc.text("DAILY SALES LEDGER", 105, 30, { align: 'center' });
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100, 116, 139);
+            doc.text(propertyName.toUpperCase(), 105, 38, { align: 'center' });
+            
+            doc.setDrawColor(15, 23, 42);
+            doc.setLineWidth(0.5);
+            doc.line(20, 45, 190, 45);
+            
+            doc.setFontSize(11);
+            doc.setTextColor(15, 23, 42);
+            doc.text(`Outlet: ${outletName}`, 20, 55);
+            doc.text(`Date: ${startStr}`, 190, 55, { align: 'right' });
+            
+            autoTable(doc, {
+              startY: 65,
+              head: [['Date', 'Type', 'Item', 'Gross', 'Discount', 'Net']],
+              body: tableData,
+              theme: 'grid',
+              headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
+              styles: { fontSize: 8, cellPadding: 3 },
+              columnStyles: {
+                3: { halign: 'right' },
+                4: { halign: 'right' },
+                5: { halign: 'right' }
+              }
+            });
+            
+            attachments.push({
+              filename: `Daily_Sales_${startStr}.pdf`,
+              content: btoa(doc.output('string')),
+            });
+          }
 
           reportContent = `
             <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; max-width: 900px; margin: 20px auto; background: #ffffff; border-radius: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); overflow: hidden; border: 1px solid #e2e8f0;">
@@ -914,7 +949,8 @@ serve(async (req) => {
           });
           
           // Generate PDF for Incentives
-          const doc = new jsPDF();
+          if (bookings && bookings.length > 0) {
+            const doc = new jsPDF();
           doc.setFont("helvetica", "bold");
           doc.setFontSize(24);
           doc.setTextColor(15, 23, 42);
@@ -970,6 +1006,7 @@ serve(async (req) => {
             filename: `Incentives_${format(now, 'yyyy-MM')}.pdf`,
             content: doc.output('datauristring').split(',')[1],
           });
+          }
 
           reportContent = `
             <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; max-width: 900px; margin: 20px auto; background: #ffffff; border-radius: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); overflow: hidden; border: 1px solid #e2e8f0;">
