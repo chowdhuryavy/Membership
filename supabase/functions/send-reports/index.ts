@@ -87,12 +87,11 @@ serve(async (req) => {
       // If it's a test, only fetch the specific recipient
       query = query.eq('id', testRecipientId)
     } else if (!isTest) {
-      // If it's a cron run, filter by current hour and day
+      // If it's a cron run, filter by current hour
       const now = new Date()
       const currentHour = now.getUTCHours().toString().padStart(2, '0')
       const currentTime = `${currentHour}:00`
-      const currentDay = format(now, 'EEEE')
-      query = query.eq('send_time', currentTime).eq('send_day', currentDay)
+      query = query.eq('send_time', currentTime)
     }
 
     const { data: recipients, error: fetchError } = await query

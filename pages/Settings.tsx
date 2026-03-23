@@ -1433,22 +1433,7 @@ const SettingsPage = () => {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <Select 
-                                    label="Report Send Day *" 
-                                    options={[
-                                        {value:'Monday', label:'Monday'},
-                                        {value:'Tuesday', label:'Tuesday'},
-                                        {value:'Wednesday', label:'Wednesday'},
-                                        {value:'Thursday', label:'Thursday'},
-                                        {value:'Friday', label:'Friday'},
-                                        {value:'Saturday', label:'Saturday'},
-                                        {value:'Sunday', label:'Sunday'}
-                                    ]} 
-                                    value={reportRecipientForm.send_day || 'Monday'} 
-                                    onChange={e => setReportRecipientForm({...reportRecipientForm, send_day: e.target.value})} 
-                                    className="h-14 rounded-xl border-2" 
-                                />
+                            <div className="grid grid-cols-1 gap-4">
                                 <Select 
                                     label="Strategic Report Type *" 
                                     options={[
