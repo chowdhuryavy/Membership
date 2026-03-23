@@ -87,11 +87,12 @@ serve(async (req) => {
       // If it's a test, only fetch the specific recipient
       query = query.eq('id', testRecipientId)
     } else if (!isTest) {
-      // If it's a cron run, filter by current hour
+      // If it's a cron run, filter by current hour and day
       const now = new Date()
       const currentHour = now.getUTCHours().toString().padStart(2, '0')
       const currentTime = `${currentHour}:00`
-      query = query.eq('send_time', currentTime)
+      const currentDay = format(now, 'EEEE')
+      query = query.eq('send_time', currentTime).eq('send_day', currentDay)
     }
 
     const { data: recipients, error: fetchError } = await query
@@ -281,7 +282,7 @@ serve(async (req) => {
                 <div style="background-color: #0f172a; padding: 32px; border-radius: 20px; margin-bottom: 40px; color: #ffffff; display: flex; justify-content: space-between; align-items: center; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);">
                   <div>
                     <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 3px;">Audit Period</p>
-                    <p style="margin: 8px 0 0 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">${format(yesterday, 'MMMM d, yyyy')}</p>
+                    <p style="margin: 8px 0 0 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">${format(parseISO(startStr), 'MMMM d, yyyy')}</p>
                   </div>
                   <div style="text-align: right;">
                     <p style="margin: 0; color: #94a3b8; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 3px;">Verification Status</p>
