@@ -1404,11 +1404,11 @@ const SettingsPage = () => {
                             </div>
 
                             <Input 
-                                label="Recipient Email Address *" 
-                                type="email"
+                                label="Recipient Email Address(es) *" 
+                                type="text"
                                 value={reportRecipientForm.email} 
                                 onChange={e => setReportRecipientForm({...reportRecipientForm, email: e.target.value})} 
-                                placeholder="e.g. admin@property.com"
+                                placeholder="e.g. admin@property.com, manager@property.com"
                                 className="h-14 rounded-xl font-black border-2" 
                             />
 
@@ -1464,6 +1464,19 @@ const SettingsPage = () => {
                                     className="h-14 rounded-xl border-2" 
                                 />
                             </div>
+                            
+                            {reportRecipientForm.report_type === 'daily_sales' && (
+                                <Select 
+                                    label="Report Date Context *" 
+                                    options={[
+                                        {value:'today', label:'Today'},
+                                        {value:'yesterday', label:'Yesterday'}
+                                    ]} 
+                                    value={reportRecipientForm.report_date_type || 'today'} 
+                                    onChange={e => setReportRecipientForm({...reportRecipientForm, report_date_type: e.target.value as any})} 
+                                    className="h-14 rounded-xl border-2" 
+                                />
+                            )}
                             
                             <div className="space-y-1.5">
                                 <Input 

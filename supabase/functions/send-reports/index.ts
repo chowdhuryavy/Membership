@@ -189,12 +189,16 @@ serve(async (req) => {
         
         let attachments: any[] = [];
 
-        // 1. Fetch data based on report_type
+        // 1. Handle Multiple Emails
+        const emails = recipient.email.split(',').map((e: string) => e.trim());
+
+        // 2. Fetch data based on report_type
         if (recipient.report_type === 'daily_sales') {
           subject = `${reportTitle} - ${propertyName} (${outletName})`
           
-          const today = new Date();
-          const startStr = format(today, 'yyyy-MM-dd');
+          const now = new Date();
+          const targetDate = recipient.report_date_type === 'yesterday' ? subDays(now, 1) : now;
+          const startStr = format(targetDate, 'yyyy-MM-dd');
           
           let salesQuery = supabaseClient.from('sales').select('*').eq('property_id', recipient.property_id).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`);
           let bookingsQuery = supabaseClient.from('bookings').select('*').eq('property_id', recipient.property_id).eq('status', 'completed').eq('date', startStr);
@@ -1083,7 +1087,7 @@ serve(async (req) => {
           body: JSON.stringify({
             // NOTE: Once you verify a domain at resend.com/domains, change this to: 'Reports <reports@yourdomain.com>'
             from: 'Reports <reports@yourdomain.com>', 
-            to: recipient.email,
+            to: emails,
             subject: finalSubject,
             html: reportContent,
             attachments: attachments.length > 0 ? attachments : undefined
@@ -1093,10 +1097,10 @@ serve(async (req) => {
         const resData = await res.json()
         if (!res.ok) throw new Error(resData.message || 'Failed to send email')
         
-        results.push({ email: recipient.email, status: 'sent', id: resData.id })
+        results.push({ emails: emails, status: 'sent', id: resData.id })
       } catch (err) {
-        console.error(`Failed to send to ${recipient.email}:`, err)
-        results.push({ email: recipient.email, status: 'error', error: String(err) })
+        console.error(`Failed to send to ${emails.join(', ')}:`, err)
+        results.push({ emails: emails, status: 'error', error: String(err) })
       }
     }
 

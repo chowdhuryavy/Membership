@@ -32,11 +32,13 @@ export interface UserPermissionOverride {
 
 export interface ReportRecipient {
   id: string;
-  email: string;
+  email: string; // Can be comma-separated list
   property_id: string;
   outlet_id: string; // 'all' for all outlets in property
   report_type: 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'expiring_memberships' | 'massage_room_revenue' | 'daily_revenue' | 'monthly_summary';
   send_time: string; // HH:mm format
+  send_day: string; // Day of week
+  report_date_type?: 'today' | 'yesterday'; // For daily reports
   is_active: boolean;
   created_at: string;
 }
