@@ -193,8 +193,7 @@ serve(async (req) => {
           subject = `${reportTitle} - ${propertyName} (${outletName})`
           
           const today = new Date();
-          const yesterday = subDays(today, 1);
-          const startStr = format(yesterday, 'yyyy-MM-dd');
+          const startStr = format(today, 'yyyy-MM-dd');
           
           let salesQuery = supabaseClient.from('sales').select('*').eq('property_id', recipient.property_id).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`);
           let bookingsQuery = supabaseClient.from('bookings').select('*').eq('property_id', recipient.property_id).eq('status', 'completed').eq('date', startStr);
@@ -237,7 +236,7 @@ serve(async (req) => {
 
           if (tableData.length > 0) {
             const doc = new jsPDF();
-            doc.setFont("helvetica", "bold");
+            doc.setFont("helvetica", "normal");
             doc.setFontSize(24);
             doc.setTextColor(15, 23, 42);
             doc.text("DAILY SALES LEDGER", 105, 30, { align: 'center' });
@@ -260,8 +259,8 @@ serve(async (req) => {
               head: [['Date', 'Type', 'Item', 'Gross', 'Discount', 'Net']],
               body: tableData,
               theme: 'grid',
-              headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-              styles: { fontSize: 8, cellPadding: 3 },
+              headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'normal', fontSize: 9 },
+              styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' },
               columnStyles: {
                 3: { halign: 'right' },
                 4: { halign: 'right' },

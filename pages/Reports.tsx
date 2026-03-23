@@ -89,6 +89,7 @@ const Reports = () => {
   const [reportType, setReportType] = useState<ReportType>('revenue_recognition');
   const [incentiveDept, setIncentiveDept] = useState<'Massage' | 'Membership' | 'Personal Training'>('Massage');
   const [reportMonth, setReportMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [dailySalesDate, setDailySalesDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   
   // Data States
   const [rows, setRows] = useState<ReportRow[]>([]); // For Incentives & Sales
@@ -130,7 +131,7 @@ const Reports = () => {
 
   useEffect(() => {
     if (currentOutlet && currentProperty && canView) loadData();
-  }, [reportMonth, reportType, incentiveDept, selectedMembershipTypeId, currentOutlet, currentProperty, canView]);
+  }, [reportMonth, dailySalesDate, reportType, incentiveDept, selectedMembershipTypeId, currentOutlet, currentProperty, canView]);
 
   const findBestRule = (rules: IncentiveRule[], applies_to: IncentiveRule['applies_to'], target_id: string, price: number, duration: number) => {
     const candidates = rules.filter(r => r.is_active && r.applies_to === applies_to);
@@ -214,8 +215,8 @@ const Reports = () => {
   const loadData = async () => {
     if (!currentOutlet || !currentProperty) return;
     try {
-      const start = startOfDay(parseISO(reportMonth + '-01'));
-      const end = endOfMonth(start);
+      const start = reportType === 'daily_sales' ? startOfDay(parseISO(dailySalesDate)) : startOfDay(parseISO(reportMonth + '-01'));
+      const end = reportType === 'daily_sales' ? endOfDay(start) : endOfMonth(start);
       
       const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests, freezes, users, leaves, types, inventory] = await Promise.all([
           db.getIncentiveRules(currentProperty.id, currentOutlet.id),
@@ -1019,7 +1020,11 @@ const Reports = () => {
         </div>
         <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
             <div className="flex items-center gap-3 bg-white border border-slate-200 px-5 py-3 rounded-2xl shadow-sm">
-                <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer" />
+                {reportType === 'daily_sales' ? (
+                    <input type="date" value={dailySalesDate} onChange={e => setDailySalesDate(e.target.value)} className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer" />
+                ) : (
+                    <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer" />
+                )}
             </div>
             <Button variant="outline" onClick={() => setShowConfig(!showConfig)} className={`h-12 px-5 rounded-2xl border-slate-200 ${showConfig ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-inner' : ''}`}><Settings2 className="w-4 h-4 mr-2" /> <span className="text-[10px] font-black uppercase tracking-widest">Layout Config</span></Button>
             <Button onClick={handleExportPDF} isLoading={isGeneratingPDF} className="h-12 px-8 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 transition-all active:scale-95"><FileDown className="w-4 h-4 mr-2" /> Export Audit</Button>
@@ -1225,7 +1230,11 @@ const Reports = () => {
                               </h3>
                               <div className="bg-slate-950 text-white px-6 py-3 rounded-2xl shadow-2xl">
                                   <span className="text-[9px] font-black uppercase opacity-60 block tracking-widest">Audit Period</span>
-                                  <span className="text-sm font-black uppercase">{format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}</span>
+                                  <span className="text-sm font-black uppercase">
+                                    {reportType === 'daily_sales' 
+                                      ? format(parseISO(dailySalesDate), 'dd MMMM yyyy') 
+                                      : format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
+                                  </span>
                               </div>
                               <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-lg">
                                   <Shield className="w-3 h-3 text-slate-400"/>
