@@ -30,12 +30,16 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     if (outletId !== 'all') {
       membersQuery = membersQuery.eq('outlet_id', outletId);
     }
+    
+    console.log(`DEBUG: Fetching members for propertyId: ${propertyId}, outletId: ${outletId}`);
 
     const [membersRes, freezesRes, categoriesRes] = await Promise.all([
       membersQuery,
       supabase.from('membership_freezes').select('*'),
       supabase.from('membership_categories').select('id, name')
     ]);
+
+    console.log(`DEBUG: Members query result: ${JSON.stringify(membersRes.data?.length)}`);
 
     const members = membersRes.data || [];
     const freezes = freezesRes.data || [];

@@ -76,15 +76,15 @@ serve(async (req) => {
       }
       const [h, m] = r.send_time.split(':').map(Number)
       
-      // Scheduler Logic: Check if current time is at or after scheduled time, within 60 mins (in Qatar Time)
+      // Scheduler Logic: Check if current time is at or after scheduled time, within 120 mins (in Qatar Time)
       const scheduledTotalMins = h * 60 + m
       const currentTotalMins = currentHour * 60 + currentMinute
       const diff = currentTotalMins - scheduledTotalMins
       
       console.log(`Recipient ${r.email}: Scheduled for ${r.send_time} (${scheduledTotalMins} mins), Current ${currentHour}:${currentMinute} (${currentTotalMins} mins), Diff: ${diff} mins`);
 
-      if (diff < 0 || diff >= 60) {
-        console.log(`Recipient ${r.email}: Outside window (must be 0-60 mins after scheduled time).`);
+      if (diff < 0 || diff >= 120) {
+        console.log(`Recipient ${r.email}: Outside window (must be 0-120 mins after scheduled time).`);
         return false;
       }
 
@@ -111,7 +111,11 @@ serve(async (req) => {
     for (const recipient of filteredRecipients) {
       try {
         // Fetch property and currency info
-        const { data: property } = await supabase.from('properties').select('name, currency_id, logo_url').eq('id', recipient.property_id).single()
+        const { data: property, error: propertyError } = await supabase.from('properties').select('name, currency_id, logo_url').eq('id', recipient.property_id).single()
+        if (propertyError) {
+          console.error(`Error fetching property ${recipient.property_id}:`, propertyError);
+        }
+        console.log(`DEBUG: Fetched property: ${JSON.stringify(property)}`);
         const { data: currency } = await supabase.from('currencies').select('symbol').eq('id', property?.currency_id || 'default').single()
         const currencySymbol = currency?.symbol || '$'
         const propertyName = property?.name || 'Property'
