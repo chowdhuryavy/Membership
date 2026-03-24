@@ -723,7 +723,8 @@ const Reports = () => {
         currencySymbol,
         reportTitle,
         date: startDate,
-        logoUrl: currentProperty.logo_url
+        logoUrl: currentProperty.logo_url,
+        reportType: reportType
       });
 
       doc.save(`${reportType}_report_${format(startDate, 'yyyy-MM-dd')}.pdf`);

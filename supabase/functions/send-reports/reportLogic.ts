@@ -1,3 +1,4 @@
+import { format } from 'npm:date-fns';
 
 /**
  * SHARED REPORT LOGIC
@@ -23,7 +24,6 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
   
   // Helper to parse dates consistently
   const parseISO = (s: string) => new Date(s);
-  const formatISO = (d: Date) => d.toISOString().split('T')[0];
 
   if (reportType === 'revenue_recognition') {
     let membersQuery = supabase.from('members').select('*').eq('property_id', propertyId);
@@ -102,13 +102,14 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       summary: {
         totalNetFees,
         totalEarned,
-        totalDeferred
+        totalDeferred,
+        count: rows.length
       }
     };
   }
 
   if (reportType === 'daily_sales') {
-    const startStr = formatISO(date);
+    const startStr = format(date, 'yyyy-MM-dd');
     
     let salesQuery = supabase.from('sales').select('*').eq('property_id', propertyId).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`);
     let bookingsQuery = supabase.from('bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr);
@@ -128,16 +129,19 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     const rows = [
       ...sales.map((s: any) => {
-        totalGross += Number(s.gross_amount || 0);
-        totalDiscount += Number(s.discount_amount || 0);
-        totalNet += Number(s.net_amount || 0);
+        const gross = Number(s.gross_amount || 0);
+        const disc = Number(s.discount_amount || 0);
+        const net = Number(s.net_amount || 0);
+        totalGross += gross;
+        totalDiscount += disc;
+        totalNet += net;
         return {
-          date: s.created_at,
+          date: s.created_at ? format(new Date(s.created_at), 'yyyy-MM-dd HH:mm') : 'N/A',
           type: 'Retail',
           item: s.item_name || 'Item',
-          gross: Number(s.gross_amount || 0),
-          discount: Number(s.discount_amount || 0),
-          net: Number(s.net_amount || 0)
+          gross,
+          discount: disc,
+          net
         };
       }),
       ...bookings.map((b: any) => {
@@ -163,17 +167,17 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       summary: {
         totalGross,
         totalDiscount,
-        totalNet
+        totalNet,
+        count: rows.length
       }
     };
   }
 
   if (reportType === 'members_joined' || reportType === 'expiring_memberships') {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const startStr = start.toISOString().split('T')[0];
-    const endStr = end.toISOString().split('T')[0];
+    const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+    const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    const startStr = format(startOfMonth, 'yyyy-MM-dd');
+    const endStr = format(endOfMonth, 'yyyy-MM-dd');
     
     const dateField = reportType === 'members_joined' ? 'start_date' : 'end_date';
     let query = supabase.from('members').select('*').eq('property_id', propertyId).gte(dateField, startStr).lte(dateField, endStr);
@@ -182,22 +186,23 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       query = query.eq('outlet_id', outletId);
     }
     const { data: members } = await query;
+    const rows = (members || []).map((m: any) => ({
+      name: m.name,
+      email: m.email,
+      phone: m.phone,
+      date: m[dateField],
+      status: m.status
+    }));
     
     return {
-      rows: (members || []).map((m: any) => ({
-        name: m.name,
-        email: m.email,
-        phone: m.phone,
-        date: m[dateField],
-        status: m.status
-      })),
+      rows,
       summary: {
-        count: (members || []).length
+        count: rows.length
       }
     };
   }
 
-  return { rows: [], summary: {} };
+  return { rows: [], summary: { count: 0 } };
 };
 
 export interface PDFOptions {
@@ -210,14 +215,17 @@ export interface PDFOptions {
   reportTitle: string;
   date: Date;
   logoUrl?: string;
+  reportType: string;
 }
 
 export const generateReportPDF = (options: PDFOptions) => {
-  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, reportTitle, date, logoUrl } = options;
+  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, reportTitle, date, logoUrl, reportType } = options;
   
-  const isLandscape = data.rows.length > 0 && 'deferred' in data.rows[0];
+  const isRevenueReport = reportType === 'revenue_recognition';
+  const isDailySalesReport = reportType === 'daily_sales';
+  
   const doc = new jsPDF({ 
-    orientation: isLandscape ? 'landscape' : 'portrait',
+    orientation: isRevenueReport ? 'landscape' : 'portrait',
     unit: 'mm',
     format: 'a4'
   });
@@ -228,15 +236,11 @@ export const generateReportPDF = (options: PDFOptions) => {
   const contentWidth = pageWidth - (margin * 2);
 
   // --- HEADER SECTION ---
-  // Background for the whole header area could be subtle, but let's stick to clean white with accents
-  
   let currentY = margin;
 
   // 1. Logo & Property Info (Left)
   if (logoUrl) {
     try {
-      // Note: In Edge Functions, we might need to pre-fetch this or handle it carefully
-      // For now, we assume the caller provides a valid URL or base64
       doc.addImage(logoUrl, 'PNG', margin, currentY, 25, 25);
     } catch (e) {
       console.error('Logo add error:', e);
@@ -294,7 +298,7 @@ export const generateReportPDF = (options: PDFOptions) => {
   currentY += 45;
 
   // --- TABLE SECTION ---
-  if (isLandscape) {
+  if (isRevenueReport) {
     // Revenue Recognition Style
     const grouped = data.rows.reduce((acc: any, row: any) => {
       if (!acc[row.category_name]) acc[row.category_name] = [];
@@ -302,117 +306,123 @@ export const generateReportPDF = (options: PDFOptions) => {
       return acc;
     }, {} as Record<string, any[]>);
 
-    Object.entries(grouped).forEach(([category, groupRows]: [string, any]) => {
-      // Category Header Row
-      autoTable(doc, {
-        startY: currentY,
-        body: [[`${category.toUpperCase()} (${groupRows.length} LEDGER EVENTS)`]],
-        theme: 'plain',
-        styles: { 
-          fillColor: [241, 245, 249], 
-          textColor: [15, 23, 42], 
-          fontStyle: 'bold', 
-          fontSize: 9, 
-          cellPadding: 3,
-          font: 'helvetica'
-        },
-        margin: { left: margin, right: margin }
+    if (data.rows.length === 0) {
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text("No revenue recognition data found for this period.", margin, currentY);
+    } else {
+      Object.entries(grouped).forEach(([category, groupRows]: [string, any]) => {
+        // Category Header Row
+        autoTable(doc, {
+          startY: currentY,
+          body: [[`${category.toUpperCase()} (${groupRows.length} LEDGER EVENTS)`]],
+          theme: 'plain',
+          styles: { 
+            fillColor: [241, 245, 249], 
+            textColor: [15, 23, 42], 
+            fontStyle: 'bold', 
+            fontSize: 9, 
+            cellPadding: 3,
+            font: 'helvetica'
+          },
+          margin: { left: margin, right: margin }
+        });
+        
+        currentY = (doc as any).lastAutoTable.finalY;
+
+        autoTable(doc, {
+          startY: currentY,
+          head: [['SL.', 'GUEST NAME / PROFILE', 'START DATE', 'END DATE', 'DAYS', 'ACTUAL', 'DISC', 'NET', 'PREV', 'PERIOD', 'DEFERRED']],
+          body: groupRows.map((r: any, idx: number) => [
+            idx + 1,
+            r.guest_name,
+            r.start_date,
+            r.end_date,
+            r.total_days,
+            r.actual_rate.toFixed(2),
+            r.discount.toFixed(2),
+            r.net_fees.toFixed(2),
+            r.prev_accrual.toFixed(2),
+            r.period_rev.toFixed(2),
+            r.deferred.toFixed(2)
+          ]),
+          theme: 'grid',
+          headStyles: { 
+            fillColor: [15, 23, 42], 
+            textColor: [255, 255, 255], 
+            fontStyle: 'bold', 
+            fontSize: 7, 
+            halign: 'center',
+            font: 'helvetica'
+          },
+          styles: { fontSize: 7, cellPadding: 2, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+          columnStyles: {
+            0: { halign: 'center', cellWidth: 8 },
+            1: { fontStyle: 'bold' },
+            2: { halign: 'center', cellWidth: 20 },
+            3: { halign: 'center', cellWidth: 20 },
+            4: { halign: 'center', cellWidth: 10 },
+            5: { halign: 'right' },
+            6: { halign: 'right' },
+            7: { halign: 'right' },
+            8: { halign: 'right', textColor: [100, 116, 139] },
+            9: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
+            10: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
+          },
+          margin: { left: margin, right: margin }
+        });
+
+        // Subtotal Row for Category
+        const subActual = groupRows.reduce((s: number, r: any) => s + r.actual_rate, 0);
+        const subDiscount = groupRows.reduce((s: number, r: any) => s + r.discount, 0);
+        const subNetFees = groupRows.reduce((s: number, r: any) => s + r.net_fees, 0);
+        const subPrevAccrual = groupRows.reduce((s: number, r: any) => s + r.prev_accrual, 0);
+        const subPeriodRev = groupRows.reduce((s: number, r: any) => s + r.period_rev, 0);
+        const subDeferred = groupRows.reduce((s: number, r: any) => s + r.deferred, 0);
+
+        autoTable(doc, {
+          startY: (doc as any).lastAutoTable.finalY,
+          body: [[
+            `CLUSTER SUBTOTAL: ${category.toUpperCase()}`,
+            subActual.toFixed(2),
+            subDiscount.toFixed(2),
+            subNetFees.toFixed(2),
+            subPrevAccrual.toFixed(2),
+            subPeriodRev.toFixed(2),
+            subDeferred.toFixed(2)
+          ]],
+          theme: 'plain',
+          styles: { 
+            fillColor: [238, 242, 255], 
+            textColor: [49, 46, 129], 
+            fontStyle: 'bold', 
+            fontSize: 7, 
+            cellPadding: 2,
+            font: 'helvetica'
+          },
+          columnStyles: {
+            0: { halign: 'right', cellWidth: pageWidth - (margin * 2) - 120 },
+            1: { halign: 'right', cellWidth: 20 },
+            2: { halign: 'right', cellWidth: 20 },
+            3: { halign: 'right', cellWidth: 20 },
+            4: { halign: 'right', cellWidth: 20 },
+            5: { halign: 'right', cellWidth: 20 },
+            6: { halign: 'right', cellWidth: 20 }
+          },
+          margin: { left: margin, right: margin }
+        });
+
+        currentY = (doc as any).lastAutoTable.finalY + 5;
       });
-      
-      currentY = (doc as any).lastAutoTable.finalY;
-
-      autoTable(doc, {
-        startY: currentY,
-        head: [['SL.', 'GUEST NAME / PROFILE', 'START DATE', 'END DATE', 'DAYS', 'ACTUAL', 'DISC', 'NET', 'PREV', 'PERIOD', 'DEFERRED']],
-        body: groupRows.map((r: any, idx: number) => [
-          idx + 1,
-          r.guest_name,
-          r.start_date,
-          r.end_date,
-          r.total_days,
-          r.actual_rate.toFixed(2),
-          r.discount.toFixed(2),
-          r.net_fees.toFixed(2),
-          r.prev_accrual.toFixed(2),
-          r.period_rev.toFixed(2),
-          r.deferred.toFixed(2)
-        ]),
-        theme: 'grid',
-        headStyles: { 
-          fillColor: [15, 23, 42], 
-          textColor: [255, 255, 255], 
-          fontStyle: 'bold', 
-          fontSize: 7, 
-          halign: 'center',
-          font: 'helvetica'
-        },
-        styles: { fontSize: 7, cellPadding: 2, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
-        columnStyles: {
-          0: { halign: 'center', cellWidth: 8 },
-          1: { fontStyle: 'bold' },
-          2: { halign: 'center', cellWidth: 20 },
-          3: { halign: 'center', cellWidth: 20 },
-          4: { halign: 'center', cellWidth: 10 },
-          5: { halign: 'right' },
-          6: { halign: 'right' },
-          7: { halign: 'right' },
-          8: { halign: 'right', textColor: [100, 116, 139] },
-          9: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
-          10: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
-        },
-        margin: { left: margin, right: margin }
-      });
-
-      // Subtotal Row for Category
-      const subActual = groupRows.reduce((s: number, r: any) => s + r.actual_rate, 0);
-      const subDiscount = groupRows.reduce((s: number, r: any) => s + r.discount, 0);
-      const subNetFees = groupRows.reduce((s: number, r: any) => s + r.net_fees, 0);
-      const subPrevAccrual = groupRows.reduce((s: number, r: any) => s + r.prev_accrual, 0);
-      const subPeriodRev = groupRows.reduce((s: number, r: any) => s + r.period_rev, 0);
-      const subDeferred = groupRows.reduce((s: number, r: any) => s + r.deferred, 0);
-
-      autoTable(doc, {
-        startY: (doc as any).lastAutoTable.finalY,
-        body: [[
-          `CLUSTER SUBTOTAL: ${category.toUpperCase()}`,
-          subActual.toFixed(2),
-          subDiscount.toFixed(2),
-          subNetFees.toFixed(2),
-          subPrevAccrual.toFixed(2),
-          subPeriodRev.toFixed(2),
-          subDeferred.toFixed(2)
-        ]],
-        theme: 'plain',
-        styles: { 
-          fillColor: [238, 242, 255], 
-          textColor: [49, 46, 129], 
-          fontStyle: 'bold', 
-          fontSize: 7, 
-          cellPadding: 2,
-          font: 'helvetica'
-        },
-        columnStyles: {
-          0: { halign: 'right', cellWidth: pageWidth - (margin * 2) - 120 },
-          1: { halign: 'right', cellWidth: 20 },
-          2: { halign: 'right', cellWidth: 20 },
-          3: { halign: 'right', cellWidth: 20 },
-          4: { halign: 'right', cellWidth: 20 },
-          5: { halign: 'right', cellWidth: 20 },
-          6: { halign: 'right', cellWidth: 20 }
-        },
-        margin: { left: margin, right: margin }
-      });
-
-      currentY = (doc as any).lastAutoTable.finalY + 5;
-    });
+    }
 
     // Grand Totals Table
     autoTable(doc, {
       startY: currentY + 5,
       body: [
-        ['TOTAL NET FEES', `${currencySymbol}${data.summary.totalNetFees.toFixed(2)}`],
-        ['PERIOD REVENUE RECOGNIZED', `${currencySymbol}${data.summary.totalEarned.toFixed(2)}`],
-        ['TOTAL DEFERRED REVENUE', `${currencySymbol}${data.summary.totalDeferred.toFixed(2)}`]
+        ['TOTAL NET FEES', `${currencySymbol}${(data.summary.totalNetFees || 0).toFixed(2)}`],
+        ['PERIOD REVENUE RECOGNIZED', `${currencySymbol}${(data.summary.totalEarned || 0).toFixed(2)}`],
+        ['TOTAL DEFERRED REVENUE', `${currencySymbol}${(data.summary.totalDeferred || 0).toFixed(2)}`]
       ],
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.2 },
@@ -422,44 +432,50 @@ export const generateReportPDF = (options: PDFOptions) => {
       },
       margin: { left: margin, right: margin }
     });
-  } else if (data.rows.length > 0 && 'gross' in data.rows[0]) {
+  } else if (isDailySalesReport) {
     // Daily Sales Style
-    autoTable(doc, {
-      startY: currentY,
-      head: [['DATE', 'TYPE', 'ITEM / SERVICE', 'GROSS', 'DISCOUNT', 'NET']],
-      body: data.rows.map((r: any) => [
-        r.date,
-        r.type,
-        r.item,
-        r.gross.toFixed(2),
-        r.discount.toFixed(2),
-        r.net.toFixed(2)
-      ]),
-      theme: 'grid',
-      headStyles: { 
-        fillColor: [15, 23, 42], 
-        textColor: [255, 255, 255], 
-        fontStyle: 'bold', 
-        fontSize: 9, 
-        halign: 'center',
-        font: 'helvetica'
-      },
-      styles: { fontSize: 8, cellPadding: 3, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
-      columnStyles: {
-        3: { halign: 'right' },
-        4: { halign: 'right' },
-        5: { halign: 'right', fontStyle: 'bold' }
-      },
-      margin: { left: margin, right: margin }
-    });
+    if (data.rows.length === 0) {
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text("No sales data found for this period.", margin, currentY);
+    } else {
+      autoTable(doc, {
+        startY: currentY,
+        head: [['DATE', 'TYPE', 'ITEM / SERVICE', 'GROSS', 'DISCOUNT', 'NET']],
+        body: data.rows.map((r: any) => [
+          r.date,
+          r.type,
+          r.item,
+          r.gross.toFixed(2),
+          r.discount.toFixed(2),
+          r.net.toFixed(2)
+        ]),
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [15, 23, 42], 
+          textColor: [255, 255, 255], 
+          fontStyle: 'bold', 
+          fontSize: 9, 
+          halign: 'center',
+          font: 'helvetica'
+        },
+        styles: { fontSize: 8, cellPadding: 3, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+        columnStyles: {
+          3: { halign: 'right' },
+          4: { halign: 'right' },
+          5: { halign: 'right', fontStyle: 'bold' }
+        },
+        margin: { left: margin, right: margin }
+      });
+    }
 
-    const finalY = (doc as any).lastAutoTable.finalY || 150;
+    const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
     autoTable(doc, {
       startY: finalY + 10,
       body: [
-        ['PORTFOLIO GROSS REVENUE', `${currencySymbol}${data.summary.totalGross.toFixed(2)}`],
-        ['TOTAL REDUCTION / DISCOUNT', `-${currencySymbol}${data.summary.totalDiscount.toFixed(2)}`],
-        ['CERTIFIED NET REVENUE', `${currencySymbol}${data.summary.totalNet.toFixed(2)}`]
+        ['PORTFOLIO GROSS REVENUE', `${currencySymbol}${(data.summary.totalGross || 0).toFixed(2)}`],
+        ['TOTAL REDUCTION / DISCOUNT', `-${currencySymbol}${(data.summary.totalDiscount || 0).toFixed(2)}`],
+        ['CERTIFIED NET REVENUE', `${currencySymbol}${(data.summary.totalNet || 0).toFixed(2)}`]
       ],
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.2 },
@@ -471,34 +487,40 @@ export const generateReportPDF = (options: PDFOptions) => {
     });
   } else {
     // Generic List Style
-    autoTable(doc, {
-      startY: currentY,
-      head: [['NAME', 'EMAIL', 'PHONE', 'DATE', 'STATUS']],
-      body: data.rows.map((r: any) => [
-        r.name,
-        r.email,
-        r.phone,
-        r.date,
-        r.status
-      ]),
-      theme: 'grid',
-      headStyles: { 
-        fillColor: [15, 23, 42], 
-        textColor: [255, 255, 255], 
-        fontStyle: 'bold', 
-        fontSize: 9, 
-        halign: 'center',
-        font: 'helvetica'
-      },
-      styles: { fontSize: 8, cellPadding: 3, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
-      margin: { left: margin, right: margin }
-    });
+    if (data.rows.length === 0) {
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text("No records found for this period.", margin, currentY);
+    } else {
+      autoTable(doc, {
+        startY: currentY,
+        head: [['NAME', 'EMAIL', 'PHONE', 'DATE', 'STATUS']],
+        body: data.rows.map((r: any) => [
+          r.name,
+          r.email,
+          r.phone,
+          r.date,
+          r.status
+        ]),
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [15, 23, 42], 
+          textColor: [255, 255, 255], 
+          fontStyle: 'bold', 
+          fontSize: 9, 
+          halign: 'center',
+          font: 'helvetica'
+        },
+        styles: { fontSize: 8, cellPadding: 3, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+        margin: { left: margin, right: margin }
+      });
+    }
 
-    const finalY = (doc as any).lastAutoTable.finalY || 150;
+    const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
     autoTable(doc, {
       startY: finalY + 10,
       body: [
-        ['TOTAL RECORD COUNT', `${data.summary.count}`]
+        ['TOTAL RECORD COUNT', `${data.summary.count || 0}`]
       ],
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.2 },

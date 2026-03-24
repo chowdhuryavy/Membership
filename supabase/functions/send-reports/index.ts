@@ -42,29 +42,43 @@ serve(async (req) => {
     if (recipientsError) throw recipientsError
 
     const now = new Date()
-    const currentHour = now.getUTCHours()
-    const currentMinute = now.getUTCMinutes()
+    
+    // Use Intl.DateTimeFormat to get current time in Qatar (Asia/Qatar)
+    const qatarFormatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Qatar',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false
+    });
+    
+    const parts = qatarFormatter.formatToParts(now);
+    const getPart = (type: string) => parts.find(p => p.type === type)?.value || '';
+    
+    const currentHour = parseInt(getPart('hour'));
+    const currentMinute = parseInt(getPart('minute'));
+    const currentDayStr = `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
 
     const filteredRecipients = recipients?.filter(r => {
       if (isTest) return true
       if (!r.send_time) return false
       const [h, m] = r.send_time.split(':').map(Number)
       
-      // Scheduler Logic: Check if current time is within 30 mins of scheduled time
-      // AND check if it was already sent today
+      // Scheduler Logic: Check if current time is within 30 mins of scheduled time (in Qatar Time)
       const scheduledTotalMins = h * 60 + m
       const currentTotalMins = currentHour * 60 + currentMinute
       const diff = Math.abs(scheduledTotalMins - currentTotalMins)
       
       if (diff >= 30) return false
 
-      // Check if already sent today (UTC)
+      // Check if already sent today (using Qatar calendar day)
       if (r.last_sent_at) {
-        const lastSent = new Date(r.last_sent_at)
-        const isSameDay = lastSent.getUTCFullYear() === now.getUTCFullYear() &&
-                         lastSent.getUTCMonth() === now.getUTCMonth() &&
-                         lastSent.getUTCDate() === now.getUTCDate()
-        if (isSameDay) return false
+        const lastSentParts = qatarFormatter.formatToParts(new Date(r.last_sent_at));
+        const lastSentDayStr = `${lastSentParts.find(p => p.type === 'year')?.value}-${lastSentParts.find(p => p.type === 'month')?.value}-${lastSentParts.find(p => p.type === 'day')?.value}`;
+        
+        if (lastSentDayStr === currentDayStr) return false
       }
 
       return true
@@ -108,8 +122,12 @@ serve(async (req) => {
           }
         }
 
-        // Determine report date (yesterday for daily reports)
-        const reportDate = new Date()
+        // Determine report date (today or yesterday) relative to Qatar calendar
+        const qatarYear = parseInt(getPart('year'));
+        const qatarMonth = parseInt(getPart('month')) - 1; // 0-indexed
+        const qatarDay = parseInt(getPart('day'));
+        const reportDate = new Date(qatarYear, qatarMonth, qatarDay);
+
         if (recipient.report_date_type === 'yesterday') {
           reportDate.setDate(reportDate.getDate() - 1)
         }
@@ -141,10 +159,27 @@ serve(async (req) => {
           currencySymbol,
           reportTitle,
           date: reportDate,
-          logoUrl
+          logoUrl,
+          reportType: recipient.report_type
         })
 
         const pdfBase64 = doc.output('datauristring').split(',')[1]
+
+        // Build dynamic summary text for email body
+        let summaryListItems = '';
+        if (reportData.summary) {
+          summaryListItems = Object.entries(reportData.summary)
+            .map(([key, value]) => {
+              const label = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+              const formattedValue = typeof value === 'number' ? 
+                (key.includes('revenue') || key.includes('amount') || key.includes('total') ? 
+                  `${currencySymbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 
+                  value.toLocaleString()) : 
+                value;
+              return `<li><strong>${label}:</strong> ${formattedValue}</li>`;
+            })
+            .join('\n');
+        }
 
         // Send email
         const emails = recipient.email ? recipient.email.split(',').map((e: string) => e.trim()) : [];
@@ -166,6 +201,7 @@ serve(async (req) => {
                   <li><strong>Outlet:</strong> ${outletName}</li>
                   <li><strong>Report Type:</strong> ${reportTitle}</li>
                   <li><strong>Date:</strong> ${reportDate.toLocaleDateString()}</li>
+                  ${summaryListItems}
                 </ul>
               </div>
 
