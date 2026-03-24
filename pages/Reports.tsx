@@ -4,9 +4,10 @@ import { Button, Card, CardContent, CardHeader, CardTitle } from '../components/
 import { db } from '../services/mockSupabase';
 import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory, StaffLeave, MembershipType, InventoryItem } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO, endOfDay } from 'date-fns';
+import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO, endOfDay, startOfMonth } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 import { 
   ShieldCheck, 
   FileText, 
@@ -28,7 +29,9 @@ import {
   Building2,
   CalendarX
 } from 'lucide-react';
+import { getReportData, generateReportPDF } from '../src/services/reportLogic';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import ExpiringMembershipsReport from './ExpiringMembershipsReport';
 import MassageRoomRevenueReport from './MassageRoomRevenueReport';
@@ -673,8 +676,61 @@ const Reports = () => {
     } catch (e) { console.error(e); }
   };
 
-  const handleExportPDF = () => {
-    window.print();
+  const handleExportPDF = async () => {
+    if (!currentProperty) {
+      toast.error('No property selected');
+      return;
+    }
+
+    try {
+      const toastId = toast.loading('Generating PDF report...');
+      
+      const startDate = reportType === 'daily_sales' ? parseISO(dailySalesDate) : parseISO(`${reportMonth}-01`);
+      const outletId = currentOutlet?.id || 'all';
+
+      // Use shared logic to get data
+      const reportData = await getReportData({
+        supabase: db,
+        propertyId: currentProperty.id,
+        outletId: outletId,
+        reportType: reportType,
+        date: startDate
+      });
+
+      if (!reportData.rows || reportData.rows.length === 0) {
+        toast.error('No data found for the selected period', { id: toastId });
+        return;
+      }
+
+      // Use shared logic to generate PDF
+      const reportTitles: Record<string, string> = {
+        'daily_sales': 'Daily Sales & Revenue Report',
+        'revenue_recognition': 'Revenue Recognition Audit',
+        'members_joined': 'Membership Acquisition Log',
+        'expiring_memberships': 'Membership Retention Audit'
+      };
+      const reportTitle = reportTitles[reportType] || reportType.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+      
+      const outletName = currentOutlet?.name || 'All Outlets';
+      const currencySymbol = settings?.currency_symbol || '$';
+
+      const doc = generateReportPDF({
+        jsPDF,
+        autoTable,
+        data: reportData,
+        propertyName: currentProperty.name,
+        outletName,
+        currencySymbol,
+        reportTitle,
+        date: startDate
+      });
+
+      doc.save(`${reportType}_report_${format(startDate, 'yyyy-MM-dd')}.pdf`);
+      toast.success('Report exported successfully', { id: toastId });
+    } catch (error) {
+      console.error('PDF Export Error:', error);
+      toast.error('Failed to export PDF report');
+    }
   };
 
   const signatoryConfig = useMemo(() => {
