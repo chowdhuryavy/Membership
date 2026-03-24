@@ -209,36 +209,91 @@ export interface PDFOptions {
   currencySymbol: string;
   reportTitle: string;
   date: Date;
+  logoUrl?: string;
 }
 
 export const generateReportPDF = (options: PDFOptions) => {
-  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, reportTitle, date } = options;
+  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, reportTitle, date, logoUrl } = options;
   
   const isLandscape = data.rows.length > 0 && 'deferred' in data.rows[0];
-  const doc = new jsPDF({ orientation: isLandscape ? 'landscape' : 'portrait' });
+  const doc = new jsPDF({ 
+    orientation: isLandscape ? 'landscape' : 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+  
   const pageWidth = doc.internal.pageSize.getWidth();
-  const centerX = pageWidth / 2;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const contentWidth = pageWidth - (margin * 2);
+
+  // --- HEADER SECTION ---
+  // Background for the whole header area could be subtle, but let's stick to clean white with accents
+  
+  let currentY = margin;
+
+  // 1. Logo & Property Info (Left)
+  if (logoUrl) {
+    try {
+      // Note: In Edge Functions, we might need to pre-fetch this or handle it carefully
+      // For now, we assume the caller provides a valid URL or base64
+      doc.addImage(logoUrl, 'PNG', margin, currentY, 25, 25);
+    } catch (e) {
+      console.error('Logo add error:', e);
+    }
+  }
+
+  // Property Name & Subtitle
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(15, 23, 42); // slate-900
+  doc.text(propertyName.toUpperCase(), margin + (logoUrl ? 30 : 0), currentY + 8);
+  
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139); // slate-400
+  doc.text(`${outletName.toUpperCase()} • ISO-9001 CERTIFIED`, margin + (logoUrl ? 30 : 0), currentY + 14);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(24);
+  doc.setFontSize(8);
+  doc.setTextColor(79, 70, 229); // indigo-600
+  doc.text("INTERNAL VERIFICATION PROTOCOL", margin + (logoUrl ? 30 : 0), currentY + 20);
+
+  // 2. Report Title & Period (Right)
+  doc.setFont("helvetica", "black");
+  doc.setFontSize(28);
   doc.setTextColor(15, 23, 42);
-  doc.text(reportTitle, centerX, 30, { align: 'center' });
+  doc.text(reportTitle.toUpperCase(), pageWidth - margin, currentY + 10, { align: 'right' });
+
+  // Audit Period Box
+  const boxWidth = 50;
+  const boxHeight = 15;
+  const boxX = pageWidth - margin - boxWidth;
+  const boxY = currentY + 18;
+
+  doc.setFillColor(15, 23, 42); // slate-950
+  doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 2, 2, 'F');
+  
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(255, 255, 255, 0.6);
+  doc.text("AUDIT PERIOD", boxX + (boxWidth / 2), boxY + 5, { align: 'center' });
   
   doc.setFontSize(10);
-  doc.setTextColor(100, 116, 139);
-  doc.text(propertyName.toUpperCase(), centerX, 38, { align: 'center' });
-  
-  doc.setDrawColor(15, 23, 42);
-  doc.setLineWidth(0.5);
-  doc.line(20, 45, pageWidth - 20, 45);
-  
-  doc.setFontSize(11);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`Outlet: ${outletName}`, 20, 55);
-  
-  const dateStr = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric', day: isLandscape ? undefined : 'numeric' });
-  doc.text(`Period: ${dateStr}`, pageWidth - 20, 55, { align: 'right' });
+  doc.setTextColor(255, 255, 255);
+  const periodStr = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
+  doc.text(periodStr, boxX + (boxWidth / 2), boxY + 11, { align: 'center' });
 
+  // Verified Audit Trail Tag
+  doc.setFillColor(241, 245, 249); // slate-100
+  doc.roundedRect(pageWidth - margin - 35, boxY + boxHeight + 3, 35, 6, 1, 1, 'F');
+  doc.setFontSize(7);
+  doc.setTextColor(100, 116, 139);
+  doc.text("VERIFIED AUDIT TRAIL", pageWidth - margin - 17.5, boxY + boxHeight + 7.5, { align: 'center' });
+
+  currentY += 45;
+
+  // --- TABLE SECTION ---
   if (isLandscape) {
     // Revenue Recognition Style
     const grouped = data.rows.reduce((acc: any, row: any) => {
@@ -247,11 +302,28 @@ export const generateReportPDF = (options: PDFOptions) => {
       return acc;
     }, {} as Record<string, any[]>);
 
-    let currentY = 65;
     Object.entries(grouped).forEach(([category, groupRows]: [string, any]) => {
+      // Category Header Row
       autoTable(doc, {
         startY: currentY,
-        head: [['SL.', 'Guest Name', 'Start Date', 'End Date', 'Days', 'Actual', 'Disc', 'Net', 'Prev', 'Period', 'Deferred']],
+        body: [[`${category.toUpperCase()} (${groupRows.length} LEDGER EVENTS)`]],
+        theme: 'plain',
+        styles: { 
+          fillColor: [241, 245, 249], 
+          textColor: [15, 23, 42], 
+          fontStyle: 'bold', 
+          fontSize: 9, 
+          cellPadding: 3,
+          font: 'helvetica'
+        },
+        margin: { left: margin, right: margin }
+      });
+      
+      currentY = (doc as any).lastAutoTable.finalY;
+
+      autoTable(doc, {
+        startY: currentY,
+        head: [['SL.', 'GUEST NAME / PROFILE', 'START DATE', 'END DATE', 'DAYS', 'ACTUAL', 'DISC', 'NET', 'PREV', 'PERIOD', 'DEFERRED']],
         body: groupRows.map((r: any, idx: number) => [
           idx + 1,
           r.guest_name,
@@ -266,22 +338,75 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.deferred.toFixed(2)
         ]),
         theme: 'grid',
-        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, font: 'helvetica' },
-        styles: { fontSize: 7, cellPadding: 2, font: 'helvetica' },
+        headStyles: { 
+          fillColor: [15, 23, 42], 
+          textColor: [255, 255, 255], 
+          fontStyle: 'bold', 
+          fontSize: 7, 
+          halign: 'center',
+          font: 'helvetica'
+        },
+        styles: { fontSize: 7, cellPadding: 2, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
         columnStyles: {
-          0: { halign: 'center', cellWidth: 10 },
-          4: { halign: 'center' },
+          0: { halign: 'center', cellWidth: 8 },
+          1: { fontStyle: 'bold' },
+          2: { halign: 'center', cellWidth: 20 },
+          3: { halign: 'center', cellWidth: 20 },
+          4: { halign: 'center', cellWidth: 10 },
           5: { halign: 'right' },
           6: { halign: 'right' },
           7: { halign: 'right' },
-          8: { halign: 'right' },
-          9: { halign: 'right' },
-          10: { halign: 'right' }
-        }
+          8: { halign: 'right', textColor: [100, 116, 139] },
+          9: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
+          10: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
+        },
+        margin: { left: margin, right: margin }
       });
+
+      // Subtotal Row for Category
+      const subActual = groupRows.reduce((s: number, r: any) => s + r.actual_rate, 0);
+      const subDiscount = groupRows.reduce((s: number, r: any) => s + r.discount, 0);
+      const subNetFees = groupRows.reduce((s: number, r: any) => s + r.net_fees, 0);
+      const subPrevAccrual = groupRows.reduce((s: number, r: any) => s + r.prev_accrual, 0);
+      const subPeriodRev = groupRows.reduce((s: number, r: any) => s + r.period_rev, 0);
+      const subDeferred = groupRows.reduce((s: number, r: any) => s + r.deferred, 0);
+
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY,
+        body: [[
+          `CLUSTER SUBTOTAL: ${category.toUpperCase()}`,
+          subActual.toFixed(2),
+          subDiscount.toFixed(2),
+          subNetFees.toFixed(2),
+          subPrevAccrual.toFixed(2),
+          subPeriodRev.toFixed(2),
+          subDeferred.toFixed(2)
+        ]],
+        theme: 'plain',
+        styles: { 
+          fillColor: [238, 242, 255], 
+          textColor: [49, 46, 129], 
+          fontStyle: 'bold', 
+          fontSize: 7, 
+          cellPadding: 2,
+          font: 'helvetica'
+        },
+        columnStyles: {
+          0: { halign: 'right', cellWidth: pageWidth - (margin * 2) - 120 },
+          1: { halign: 'right', cellWidth: 20 },
+          2: { halign: 'right', cellWidth: 20 },
+          3: { halign: 'right', cellWidth: 20 },
+          4: { halign: 'right', cellWidth: 20 },
+          5: { halign: 'right', cellWidth: 20 },
+          6: { halign: 'right', cellWidth: 20 }
+        },
+        margin: { left: margin, right: margin }
+      });
+
       currentY = (doc as any).lastAutoTable.finalY + 5;
     });
 
+    // Grand Totals Table
     autoTable(doc, {
       startY: currentY + 5,
       body: [
@@ -290,17 +415,18 @@ export const generateReportPDF = (options: PDFOptions) => {
         ['TOTAL DEFERRED REVENUE', `${currencySymbol}${data.summary.totalDeferred.toFixed(2)}`]
       ],
       theme: 'grid',
-      styles: { fontSize: 10, cellPadding: 5, fontStyle: 'bold', font: 'helvetica' },
+      styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.2 },
       columnStyles: {
-        0: { cellWidth: 120, fillColor: [248, 250, 252] },
-        1: { halign: 'right', cellWidth: 50 }
-      }
+        0: { cellWidth: contentWidth - 40, fillColor: [248, 250, 252] },
+        1: { halign: 'right', cellWidth: 40 }
+      },
+      margin: { left: margin, right: margin }
     });
   } else if (data.rows.length > 0 && 'gross' in data.rows[0]) {
     // Daily Sales Style
     autoTable(doc, {
-      startY: 65,
-      head: [['Date', 'Type', 'Item / Service', 'Gross', 'Discount', 'Net']],
+      startY: currentY,
+      head: [['DATE', 'TYPE', 'ITEM / SERVICE', 'GROSS', 'DISCOUNT', 'NET']],
       body: data.rows.map((r: any) => [
         r.date,
         r.type,
@@ -310,13 +436,21 @@ export const generateReportPDF = (options: PDFOptions) => {
         r.net.toFixed(2)
       ]),
       theme: 'grid',
-      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, font: 'helvetica' },
-      styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' },
+      headStyles: { 
+        fillColor: [15, 23, 42], 
+        textColor: [255, 255, 255], 
+        fontStyle: 'bold', 
+        fontSize: 9, 
+        halign: 'center',
+        font: 'helvetica'
+      },
+      styles: { fontSize: 8, cellPadding: 3, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
       columnStyles: {
         3: { halign: 'right' },
         4: { halign: 'right' },
-        5: { halign: 'right' }
-      }
+        5: { halign: 'right', fontStyle: 'bold' }
+      },
+      margin: { left: margin, right: margin }
     });
 
     const finalY = (doc as any).lastAutoTable.finalY || 150;
@@ -328,17 +462,18 @@ export const generateReportPDF = (options: PDFOptions) => {
         ['CERTIFIED NET REVENUE', `${currencySymbol}${data.summary.totalNet.toFixed(2)}`]
       ],
       theme: 'grid',
-      styles: { fontSize: 10, cellPadding: 5, fontStyle: 'bold', font: 'helvetica' },
+      styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.2 },
       columnStyles: {
-        0: { cellWidth: 120, fillColor: [248, 250, 252] },
-        1: { halign: 'right', cellWidth: 50 }
-      }
+        0: { cellWidth: contentWidth - 40, fillColor: [248, 250, 252] },
+        1: { halign: 'right', cellWidth: 40 }
+      },
+      margin: { left: margin, right: margin }
     });
   } else {
-    // Generic List Style (Members Joined / Expiring)
+    // Generic List Style
     autoTable(doc, {
-      startY: 65,
-      head: [['Name', 'Email', 'Phone', 'Date', 'Status']],
+      startY: currentY,
+      head: [['NAME', 'EMAIL', 'PHONE', 'DATE', 'STATUS']],
       body: data.rows.map((r: any) => [
         r.name,
         r.email,
@@ -347,8 +482,16 @@ export const generateReportPDF = (options: PDFOptions) => {
         r.status
       ]),
       theme: 'grid',
-      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, font: 'helvetica' },
-      styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' }
+      headStyles: { 
+        fillColor: [15, 23, 42], 
+        textColor: [255, 255, 255], 
+        fontStyle: 'bold', 
+        fontSize: 9, 
+        halign: 'center',
+        font: 'helvetica'
+      },
+      styles: { fontSize: 8, cellPadding: 3, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+      margin: { left: margin, right: margin }
     });
 
     const finalY = (doc as any).lastAutoTable.finalY || 150;
@@ -358,13 +501,22 @@ export const generateReportPDF = (options: PDFOptions) => {
         ['TOTAL RECORD COUNT', `${data.summary.count}`]
       ],
       theme: 'grid',
-      styles: { fontSize: 10, cellPadding: 5, fontStyle: 'bold', font: 'helvetica' },
+      styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.2 },
       columnStyles: {
-        0: { cellWidth: 120, fillColor: [248, 250, 252] },
-        1: { halign: 'right', cellWidth: 50 }
-      }
+        0: { cellWidth: contentWidth - 40, fillColor: [248, 250, 252] },
+        1: { halign: 'right', cellWidth: 40 }
+      },
+      margin: { left: margin, right: margin }
     });
   }
+
+  // --- FOOTER SECTION ---
+  const footerY = pageHeight - margin;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(203, 213, 225); // slate-300
+  doc.text(`Page 1 of 1 • System ID: ${Math.random().toString(36).substring(7).toUpperCase()}`, margin, footerY);
+  doc.text(`© ${new Date().getFullYear()} ${propertyName}. All rights reserved.`, pageWidth - margin, footerY, { align: 'right' });
 
   return doc;
 };

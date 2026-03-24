@@ -75,10 +75,29 @@ serve(async (req) => {
     for (const recipient of filteredRecipients) {
       try {
         // Fetch property and currency info
-        const { data: property } = await supabase.from('properties').select('name, currency_id').eq('id', recipient.property_id).single()
+        const { data: property } = await supabase.from('properties').select('name, currency_id, logo_url').eq('id', recipient.property_id).single()
         const { data: currency } = await supabase.from('currencies').select('symbol').eq('id', property?.currency_id || 'default').single()
         const currencySymbol = currency?.symbol || '$'
         const propertyName = property?.name || 'Property'
+        let logoUrl = property?.logo_url || null
+
+        // Fetch and convert logo to base64 if it's a URL
+        if (logoUrl && logoUrl.startsWith('http')) {
+          try {
+            const logoRes = await fetch(logoUrl)
+            if (logoRes.ok) {
+              const blob = await logoRes.blob()
+              const reader = new FileReader()
+              const base64Promise = new Promise((resolve) => {
+                reader.onloadend = () => resolve(reader.result)
+                reader.readAsDataURL(blob)
+              })
+              logoUrl = await base64Promise as string
+            }
+          } catch (e) {
+            console.error('Error fetching logo:', e)
+          }
+        }
 
         // Fetch Outlet Name
         let outletName = 'All Outlets';
@@ -121,7 +140,8 @@ serve(async (req) => {
           outletName,
           currencySymbol,
           reportTitle,
-          date: reportDate
+          date: reportDate,
+          logoUrl
         })
 
         const pdfBase64 = doc.output('datauristring').split(',')[1]

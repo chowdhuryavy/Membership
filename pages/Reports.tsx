@@ -722,7 +722,8 @@ const Reports = () => {
         outletName,
         currencySymbol,
         reportTitle,
-        date: startDate
+        date: startDate,
+        logoUrl: currentProperty.logo_url
       });
 
       doc.save(`${reportType}_report_${format(startDate, 'yyyy-MM-dd')}.pdf`);
