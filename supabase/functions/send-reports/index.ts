@@ -41,6 +41,8 @@ serve(async (req) => {
     const { data: recipients, error: recipientsError } = await recipientsQuery
     if (recipientsError) throw recipientsError
 
+    console.log(`Fetched ${recipients?.length || 0} active recipients.`);
+
     const now = new Date()
     
     // Use Intl.DateTimeFormat to get current time in Qatar (Asia/Qatar)
@@ -59,30 +61,50 @@ serve(async (req) => {
     
     const currentHour = parseInt(getPart('hour'));
     const currentMinute = parseInt(getPart('minute'));
-    const currentDayStr = `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
+    const currentDayStr = `${parseInt(getPart('year'))}-${parseInt(getPart('month'))}-${parseInt(getPart('day'))}`;
+
+    console.log(`Current Qatar Time: ${currentHour}:${currentMinute}, Day: ${currentDayStr}`);
 
     const filteredRecipients = recipients?.filter(r => {
-      if (isTest) return true
-      if (!r.send_time) return false
+      if (isTest) {
+        console.log(`Recipient ${r.email}: Test mode enabled.`);
+        return true;
+      }
+      if (!r.send_time) {
+        console.log(`Recipient ${r.email}: No send_time set.`);
+        return false;
+      }
       const [h, m] = r.send_time.split(':').map(Number)
       
-      // Scheduler Logic: Check if current time is within 30 mins of scheduled time (in Qatar Time)
+      // Scheduler Logic: Check if current time is at or after scheduled time, within 60 mins (in Qatar Time)
       const scheduledTotalMins = h * 60 + m
       const currentTotalMins = currentHour * 60 + currentMinute
-      const diff = Math.abs(scheduledTotalMins - currentTotalMins)
+      const diff = currentTotalMins - scheduledTotalMins
       
-      if (diff >= 30) return false
+      console.log(`Recipient ${r.email}: Scheduled for ${r.send_time} (${scheduledTotalMins} mins), Current ${currentHour}:${currentMinute} (${currentTotalMins} mins), Diff: ${diff} mins`);
+
+      if (diff < 0 || diff >= 60) {
+        console.log(`Recipient ${r.email}: Outside window (must be 0-60 mins after scheduled time).`);
+        return false;
+      }
 
       // Check if already sent today (using Qatar calendar day)
       if (r.last_sent_at) {
         const lastSentParts = qatarFormatter.formatToParts(new Date(r.last_sent_at));
-        const lastSentDayStr = `${lastSentParts.find(p => p.type === 'year')?.value}-${lastSentParts.find(p => p.type === 'month')?.value}-${lastSentParts.find(p => p.type === 'day')?.value}`;
+        const lastSentDayStr = `${parseInt(lastSentParts.find(p => p.type === 'year')?.value || '0')}-${parseInt(lastSentParts.find(p => p.type === 'month')?.value || '0')}-${parseInt(lastSentParts.find(p => p.type === 'day')?.value || '0')}`;
         
-        if (lastSentDayStr === currentDayStr) return false
+        console.log(`Recipient ${r.email}: Last sent at ${r.last_sent_at} (Day: ${lastSentDayStr}), Current Day: ${currentDayStr}`);
+        if (lastSentDayStr === currentDayStr) {
+          console.log(`Recipient ${r.email}: Already sent today.`);
+          return false;
+        }
       }
 
+      console.log(`Recipient ${r.email}: Passed all filters. Proceeding to send.`);
       return true
     }) || []
+
+    console.log(`Recipients to process after filtering: ${filteredRecipients.length}`);
 
     const results = []
 

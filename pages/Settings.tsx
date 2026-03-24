@@ -1155,7 +1155,17 @@ const SettingsPage = () => {
                                                   </div>
                                               </td>
                                               <td className="px-10 py-8 text-right font-black text-indigo-600 text-base">{rule.calculation_type === 'Percentage' ? `${rule.value}%` : formatMoney(rule.value)}</td>
-                                              <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-opacity"><button onClick={() => { 
+                                              <td className="px-10 py-8">
+                                               <div className="text-xs font-black text-slate-700 uppercase">
+                                                   {recipient.last_sent_at ? format(new Date(recipient.last_sent_at), 'MMM d, yyyy HH:mm') : 'Never'}
+                                               </div>
+                                           </td>
+                                           <td className="px-10 py-8">
+                                               <div className="text-xs font-black text-slate-700 uppercase">
+                                                   {recipient.last_sent_at ? format(new Date(recipient.last_sent_at), 'MMM d, yyyy HH:mm') : 'Never'}
+                                               </div>
+                                           </td>
+                                           <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-opacity"><button onClick={() => { 
                                                 setEditingId(rule.id); 
                                                 setIncentiveForm({
                                                   ...rule,
@@ -1207,6 +1217,7 @@ const SettingsPage = () => {
                                       <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Recipient</th>
                                       <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Context</th>
                                       <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Schedule</th>
+                                       <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Last Sent</th>
                                       <th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th>
                                   </tr>
                               </thead>

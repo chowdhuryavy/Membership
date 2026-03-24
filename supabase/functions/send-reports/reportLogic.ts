@@ -202,6 +202,138 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     };
   }
 
+  if (reportType === 'incentives') {
+    const startStr = format(date, 'yyyy-MM-dd');
+    
+    // Fetch all completed revenue events for the day
+    const [salesRes, bookingsRes, membersRes, rulesRes, staffRes] = await Promise.all([
+      supabase.from('sales').select('*').eq('property_id', propertyId).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`),
+      supabase.from('bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr),
+      supabase.from('members').select('*').eq('property_id', propertyId).eq('status', 'Active').eq('start_date', startStr),
+      supabase.from('incentive_rules').select('*').eq('is_active', true),
+      supabase.from('staff').select('id, name').eq('is_active', true)
+    ]);
+
+    const sales = salesRes.data || [];
+    const bookings = bookingsRes.data || [];
+    const members = membersRes.data || [];
+    const rules = rulesRes.data || [];
+    const staffMap = Object.fromEntries((staffRes.data || []).map((s: any) => [s.id, s.name]));
+
+    const rows: any[] = [];
+    let totalIncentive = 0;
+
+    // Helper to calculate incentive for an item
+    const calculateIncentive = (type: string, targetId: string, amount: number) => {
+      const applicableRules = rules.filter((r: any) => 
+        (r.applies_to === type) && 
+        (r.target_id === 'all' || r.target_id === targetId)
+      );
+      
+      let itemIncentive = 0;
+      applicableRules.forEach((rule: any) => {
+        if (rule.calculation_type === 'Percentage') {
+          itemIncentive += (amount * (rule.value / 100));
+        } else {
+          itemIncentive += rule.value;
+        }
+      });
+      return itemIncentive;
+    };
+
+    // Process Sales
+    sales.forEach((s: any) => {
+      const inc = calculateIncentive('Sale', s.item_id || 'all', s.net_amount);
+      if (inc > 0) {
+        totalIncentive += inc;
+        rows.push({
+          staff_name: staffMap[s.sold_by_id] || 'Unknown',
+          type: 'Sale',
+          item: s.item_name,
+          amount: s.net_amount,
+          incentive: inc
+        });
+      }
+    });
+
+    // Process Bookings
+    bookings.forEach((b: any) => {
+      const inc = calculateIncentive('Massage', b.massage_type_id || 'all', b.price);
+      if (inc > 0) {
+        totalIncentive += inc;
+        rows.push({
+          staff_name: staffMap[b.therapist_id] || 'Unknown',
+          type: 'Massage',
+          item: 'Service Booking',
+          amount: b.price,
+          incentive: inc
+        });
+      }
+    });
+
+    // Process Memberships
+    members.forEach((m: any) => {
+      const inc = calculateIncentive('Membership', m.category_id || 'all', m.net_amount);
+      if (inc > 0) {
+        totalIncentive += inc;
+        rows.push({
+          staff_name: staffMap[m.sales_rep_id] || 'Unknown',
+          type: 'Membership',
+          item: m.guest_name,
+          amount: m.net_amount,
+          incentive: inc
+        });
+      }
+    });
+
+    return {
+      rows,
+      summary: {
+        totalIncentive,
+        count: rows.length
+      }
+    };
+  }
+
+  if (reportType === 'massage_room_revenue') {
+    const startStr = format(date, 'yyyy-MM-dd');
+    const [bookingsRes, roomsRes] = await Promise.all([
+      supabase.from('bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr),
+      supabase.from('massage_rooms').select('*').eq('property_id', propertyId)
+    ]);
+
+    const bookings = bookingsRes.data || [];
+    const rooms = roomsRes.data || [];
+    const roomMap = Object.fromEntries(rooms.map((r: any) => [r.id, r.name]));
+
+    const roomRevenue: Record<string, { name: string, revenue: number, count: number }> = {};
+    rooms.forEach((r: any) => {
+      roomRevenue[r.id] = { name: r.name, revenue: 0, count: 0 };
+    });
+
+    bookings.forEach((b: any) => {
+      if (b.room_id && roomRevenue[b.room_id]) {
+        roomRevenue[b.room_id].revenue += (b.price || 0);
+        roomRevenue[b.room_id].count += 1;
+      }
+    });
+
+    const rows = Object.values(roomRevenue).filter(r => r.count > 0).map(r => ({
+      room_name: r.name,
+      revenue: r.revenue,
+      bookings_count: r.count
+    }));
+
+    return {
+      rows,
+      summary: {
+        totalRevenue: rows.reduce((s, r) => s + r.revenue, 0),
+        totalBookings: rows.reduce((s, r) => s + r.bookings_count, 0),
+        count: rows.length
+      }
+    };
+  }
+
   return { rows: [], summary: { count: 0 } };
 };
 
@@ -479,6 +611,87 @@ export const generateReportPDF = (options: PDFOptions) => {
       ],
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.2 },
+      columnStyles: {
+        0: { cellWidth: contentWidth - 40, fillColor: [248, 250, 252] },
+        1: { halign: 'right', cellWidth: 40 }
+      },
+      margin: { left: margin, right: margin }
+    });
+  } else if (reportType === 'incentives') {
+    if (data.rows.length === 0) {
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text("No incentive data found for this period.", margin, currentY);
+    } else {
+      autoTable(doc, {
+        startY: currentY,
+        head: [['STAFF NAME', 'TYPE', 'ITEM', 'AMOUNT', 'INCENTIVE']],
+        body: data.rows.map((r: any) => [
+          r.staff_name,
+          r.type,
+          r.item,
+          r.amount.toFixed(2),
+          r.incentive.toFixed(2)
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
+        styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' },
+        columnStyles: {
+          3: { halign: 'right' },
+          4: { halign: 'right', fontStyle: 'bold' }
+        },
+        margin: { left: margin, right: margin }
+      });
+    }
+
+    const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
+    autoTable(doc, {
+      startY: finalY + 10,
+      body: [
+        ['TOTAL INCENTIVE PAYABLE', `${currencySymbol}${(data.summary.totalIncentive || 0).toFixed(2)}`]
+      ],
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica' },
+      columnStyles: {
+        0: { cellWidth: contentWidth - 40, fillColor: [248, 250, 252] },
+        1: { halign: 'right', cellWidth: 40 }
+      },
+      margin: { left: margin, right: margin }
+    });
+  } else if (reportType === 'massage_room_revenue') {
+    if (data.rows.length === 0) {
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text("No room revenue data found for this period.", margin, currentY);
+    } else {
+      autoTable(doc, {
+        startY: currentY,
+        head: [['ROOM NAME', 'BOOKINGS', 'REVENUE']],
+        body: data.rows.map((r: any) => [
+          r.room_name,
+          r.bookings_count,
+          r.revenue.toFixed(2)
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
+        styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' },
+        columnStyles: {
+          1: { halign: 'center' },
+          2: { halign: 'right', fontStyle: 'bold' }
+        },
+        margin: { left: margin, right: margin }
+      });
+    }
+
+    const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
+    autoTable(doc, {
+      startY: finalY + 10,
+      body: [
+        ['TOTAL ROOM REVENUE', `${currencySymbol}${(data.summary.totalRevenue || 0).toFixed(2)}`],
+        ['TOTAL BOOKINGS', `${data.summary.totalBookings || 0}`]
+      ],
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica' },
       columnStyles: {
         0: { cellWidth: contentWidth - 40, fillColor: [248, 250, 252] },
         1: { halign: 'right', cellWidth: 40 }
