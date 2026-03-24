@@ -111,12 +111,12 @@ serve(async (req) => {
     for (const recipient of filteredRecipients) {
       try {
         // Fetch property and currency info
-        const { data: property, error: propertyError } = await supabase.from('properties').select('name, currency_id, logo_url').eq('id', recipient.property_id).single()
+        const { data: property, error: propertyError } = await supabase.from('properties').select('name, logo_url').eq('id', recipient.property_id).single()
         if (propertyError) {
           console.error(`Error fetching property ${recipient.property_id}:`, propertyError);
         }
         console.log(`DEBUG: Fetched property: ${JSON.stringify(property)}`);
-        const { data: currency } = await supabase.from('currencies').select('symbol').eq('id', property?.currency_id || 'default').single()
+        const { data: currency } = await supabase.from('currencies').select('symbol').eq('id', 'default').single()
         const currencySymbol = currency?.symbol || '$'
         const propertyName = property?.name || 'Property'
         let logoUrl = property?.logo_url || null

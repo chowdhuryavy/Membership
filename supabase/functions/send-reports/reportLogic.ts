@@ -39,6 +39,9 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       supabase.from('membership_categories').select('id, name')
     ]);
 
+    if (membersRes.error) {
+      console.error(`DEBUG: Members query error: ${JSON.stringify(membersRes.error)}`);
+    }
     console.log(`DEBUG: Members query result: ${JSON.stringify(membersRes.data?.length)}`);
 
     const members = membersRes.data || [];
