@@ -80,11 +80,10 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         return recognizedDays;
       };
 
-      const dailyRate = Number(m.daily_rate || 0);
       const prevAccrualDays = mStart < start ? calculateRevenueDays(mStart, new Date(start.getTime() - 86400000)) : 0;
       const periodRevDays = calculateRevenueDays(start, end);
-      const totalActiveDays = calculateRevenueDays(mStart, mEnd);
       
+      const dailyRate = Number(m.daily_rate || 0);
       const prevAccrual = prevAccrualDays * dailyRate;
       const periodRev = periodRevDays * dailyRate;
       
@@ -100,8 +99,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         category_name: categoryMap[m.category_id] || 'Other',
         start_date: m.start_date,
         end_date: m.current_end_date,
-        total_days: totalActiveDays,
-        daily_rate: dailyRate,
+        total_days: Math.ceil((mEnd.getTime() - mStart.getTime()) / 86400000) + 1,
         actual_rate: Number(m.actual_rate || 0),
         discount: Number(m.discount || 0),
         net_fees: Number(m.net_amount || 0),
@@ -521,20 +519,19 @@ export const generateReportPDF = (options: PDFOptions) => {
 
         autoTable(doc, {
           startY: currentY,
-          head: [['SL.', 'GUEST NAME / PROFILE', 'START DATE', 'END DATE', 'DAYS', 'DAILY', 'ACTUAL', 'DISC', 'NET', 'PREV', 'PERIOD', 'DEFERRED']],
+          head: [['SL.', 'GUEST NAME / PROFILE', 'START DATE', 'END DATE', 'DAYS', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
           body: groupRows.map((r: any, idx: number) => [
             idx + 1,
             r.guest_name,
             r.start_date,
             r.end_date,
             r.total_days,
-            r.daily_rate.toFixed(2),
-            r.actual_rate.toFixed(2),
-            r.discount.toFixed(2),
-            r.net_fees.toFixed(2),
-            r.prev_accrual.toFixed(2),
-            r.period_rev.toFixed(2),
-            r.deferred.toFixed(2)
+            `${r.actual_rate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
+            `${r.discount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
+            `${r.net_fees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
+            `${r.prev_accrual.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
+            `${r.period_rev.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
+            `${r.deferred.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`
           ]),
           theme: 'grid',
           headStyles: { 
@@ -552,13 +549,12 @@ export const generateReportPDF = (options: PDFOptions) => {
             2: { halign: 'center', cellWidth: 20 },
             3: { halign: 'center', cellWidth: 20 },
             4: { halign: 'center', cellWidth: 10 },
-            5: { halign: 'right', cellWidth: 15 },
+            5: { halign: 'right' },
             6: { halign: 'right' },
             7: { halign: 'right' },
-            8: { halign: 'right' },
-            9: { halign: 'right', textColor: [100, 116, 139] },
-            10: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
-            11: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
+            8: { halign: 'right', textColor: [100, 116, 139] },
+            9: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
+            10: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
           },
           margin: { left: margin, right: margin }
         });
@@ -574,13 +570,13 @@ export const generateReportPDF = (options: PDFOptions) => {
         autoTable(doc, {
           startY: (doc as any).lastAutoTable.finalY,
           body: [[
-            `CLUSTER SUBTOTAL: ${category.toUpperCase()}`,
-            subActual.toFixed(2),
-            subDiscount.toFixed(2),
-            subNetFees.toFixed(2),
-            subPrevAccrual.toFixed(2),
-            subPeriodRev.toFixed(2),
-            subDeferred.toFixed(2)
+            { content: `CLUSTER SUBTOTAL: ${category.toUpperCase()}`, colSpan: 5, styles: { halign: 'right' } },
+            `${subActual.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
+            `${subDiscount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
+            `${subNetFees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
+            `${subPrevAccrual.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
+            `${subPeriodRev.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
+            `${subDeferred.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`
           ]],
           theme: 'plain',
           styles: { 
@@ -592,13 +588,12 @@ export const generateReportPDF = (options: PDFOptions) => {
             font: 'helvetica'
           },
           columnStyles: {
-            0: { halign: 'right', cellWidth: pageWidth - (margin * 2) - 120 },
-            1: { halign: 'right', cellWidth: 20 },
-            2: { halign: 'right', cellWidth: 20 },
-            3: { halign: 'right', cellWidth: 20 },
-            4: { halign: 'right', cellWidth: 20 },
-            5: { halign: 'right', cellWidth: 20 },
-            6: { halign: 'right', cellWidth: 20 }
+            5: { halign: 'right' },
+            6: { halign: 'right' },
+            7: { halign: 'right' },
+            8: { halign: 'right' },
+            9: { halign: 'right' },
+            10: { halign: 'right' }
           },
           margin: { left: margin, right: margin }
         });
