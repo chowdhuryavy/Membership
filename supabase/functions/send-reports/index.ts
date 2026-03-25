@@ -21,10 +21,11 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    console.log(`DEBUG: Supabase URL: ${supabaseUrl.substring(0, 15)}...`);
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     const resend = new Resend(Deno.env.get('RESEND_API_KEY'))
     const body = await req.json().catch(() => ({}))

@@ -23,18 +23,41 @@ export interface ReportContext {
 // Helper for safe date parsing
 const safeParseDate = (dateStr: string | null | undefined) => {
   if (!dateStr) return null;
-  const parsed = parse(dateStr, 'dd-MM-yyyy', new Date());
-  return isNaN(parsed.getTime()) ? null : parsed;
+  
+  // Try YYYY-MM-DD first (ISO-ish)
+  if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // Try DD-MM-YYYY
+  try {
+    const parsed = parse(dateStr, 'dd-MM-yyyy', new Date());
+    if (!isNaN(parsed.getTime())) return parsed;
+  } catch (e) {}
+
+  // Fallback to generic Date constructor
+  const fallback = new Date(dateStr);
+  return isNaN(fallback.getTime()) ? null : fallback;
 };
 
 export const getReportData = async (ctx: ReportContext): Promise<ReportData> => {
   const { supabase, propertyId, outletId, reportType, date } = ctx;
   
   if (reportType === 'revenue_recognition') {
-    let membersQuery = supabase.from('members').select('*').eq('property_id', propertyId);
-    if (outletId !== 'all') {
-      membersQuery = membersQuery.eq('outlet_id', outletId);
+    console.log(`DEBUG: Fetching members for Property: ${propertyId}, Outlet: ${outletId}`);
+    
+    let outletIds: string[] = [];
+    if (outletId === 'all') {
+      const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', propertyId);
+      outletIds = (outlets || []).map((o: any) => o.id);
+    } else {
+      outletIds = [outletId];
     }
+
+    if (outletIds.length === 0) return { rows: [], summary: { totalNetFees: 0, totalEarned: 0, totalDeferred: 0, count: 0 } };
+
+    let membersQuery = supabase.from('members').select('*').in('outlet_id', outletIds);
 
     const [membersRes, freezesRes, categoriesRes] = await Promise.all([
       membersQuery,
@@ -42,10 +65,17 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       supabase.from('membership_categories').select('id, name')
     ]);
 
+    if (membersRes.error) {
+      console.error('Error fetching members:', membersRes.error);
+      throw new Error(`Failed to fetch members: ${membersRes.error.message}`);
+    }
+
     const members = membersRes.data || [];
     const freezes = freezesRes.data || [];
     const categories = categoriesRes.data || [];
     const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
+
+    console.log(`DEBUG: Found ${members.length} members for property ${propertyId}`);
 
     // Calculate for the month of the provided date
     const start = new Date(date.getFullYear(), date.getMonth(), 1);
@@ -196,11 +226,18 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const startStr = format(startOfMonth, 'yyyy-MM-dd');
     const endStr = format(endOfMonth, 'yyyy-MM-dd');
     
+    let outletIds: string[] = [];
+    if (outletId === 'all') {
+      const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', propertyId);
+      outletIds = (outlets || []).map((o: any) => o.id);
+    } else {
+      outletIds = [outletId];
+    }
+
+    if (outletIds.length === 0) return { rows: [], summary: { count: 0 } };
+
     if (reportType === 'members_joined') {
-      let query = supabase.from('members').select('*').eq('property_id', propertyId).gte('start_date', startStr).lte('start_date', endStr);
-      if (outletId !== 'all') {
-        query = query.eq('outlet_id', outletId);
-      }
+      let query = supabase.from('members').select('*').in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr);
       const { data: members } = await query;
       const rows = (members || []).map((m: any) => ({
         name: m.guest_name || m.name,
@@ -215,12 +252,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       // Use .or to check both current_end_date and end_date
       let query = supabase.from('members')
         .select('*')
-        .eq('property_id', propertyId)
+        .in('outlet_id', outletIds)
         .or(`current_end_date.gte.${startStr},end_date.gte.${startStr}`);
-
-      if (outletId !== 'all') {
-        query = query.eq('outlet_id', outletId);
-      }
 
       const { data: members, error } = await query;
       if (error) console.error('Error fetching expiring memberships:', error);
@@ -252,10 +285,20 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const startStr = format(date, 'yyyy-MM-dd');
     
     // Fetch all completed revenue events for the day
+    let outletIds: string[] = [];
+    if (outletId === 'all') {
+      const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', propertyId);
+      outletIds = (outlets || []).map((o: any) => o.id);
+    } else {
+      outletIds = [outletId];
+    }
+
+    if (outletIds.length === 0) return { rows: [], summary: { totalIncentive: 0, count: 0 } };
+
     const [salesRes, bookingsRes, membersRes, rulesRes, staffRes] = await Promise.all([
       supabase.from('sales').select('*').eq('property_id', propertyId).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`),
       supabase.from('massage_bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr),
-      supabase.from('members').select('*').eq('property_id', propertyId).eq('status', 'Active').eq('start_date', startStr),
+      supabase.from('members').select('*').in('outlet_id', outletIds).eq('status', 'Active').eq('start_date', startStr),
       supabase.from('incentive_rules').select('*').eq('is_active', true),
       supabase.from('staff').select('id, name').eq('is_active', true)
     ]);
@@ -413,6 +456,14 @@ export const generateReportPDF = (options: PDFOptions) => {
   const margin = 15;
   const contentWidth = pageWidth - (margin * 2);
 
+  // Helper to handle currency symbols that might not render in default PDF fonts
+  const formatCurrency = (val: number) => {
+    const formatted = val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // If currency symbol is Arabic (ر.ق), use QR instead for PDF compatibility
+    const safeSymbol = (currencySymbol === 'ر.ق' || currencySymbol.includes('\u0631')) ? 'QR' : currencySymbol;
+    return `${formatted} ${safeSymbol}`;
+  };
+
   // --- HEADER SECTION ---
   let currentY = margin;
 
@@ -517,12 +568,12 @@ export const generateReportPDF = (options: PDFOptions) => {
             r.start_date,
             r.end_date,
             r.total_days,
-            `${r.actual_rate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
-            `${r.discount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
-            `${r.net_fees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
-            `${r.prev_accrual.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
-            `${r.period_rev.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
-            `${r.deferred.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`
+            formatCurrency(r.actual_rate),
+            formatCurrency(r.discount),
+            formatCurrency(r.net_fees),
+            formatCurrency(r.prev_accrual),
+            formatCurrency(r.period_rev),
+            formatCurrency(r.deferred)
           ]),
           theme: 'grid',
           headStyles: { 
@@ -562,12 +613,12 @@ export const generateReportPDF = (options: PDFOptions) => {
           startY: (doc as any).lastAutoTable.finalY,
           body: [[
             { content: `CLUSTER SUBTOTAL: ${category.toUpperCase()}`, colSpan: 5, styles: { halign: 'right' } },
-            `${subActual.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
-            `${subDiscount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
-            `${subNetFees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
-            `${subPrevAccrual.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
-            `${subPeriodRev.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`,
-            `${subDeferred.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`
+            formatCurrency(subActual),
+            formatCurrency(subDiscount),
+            formatCurrency(subNetFees),
+            formatCurrency(subPrevAccrual),
+            formatCurrency(subPeriodRev),
+            formatCurrency(subDeferred)
           ]],
           theme: 'plain',
           styles: { 
@@ -579,12 +630,13 @@ export const generateReportPDF = (options: PDFOptions) => {
             font: 'helvetica'
           },
           columnStyles: {
-            5: { halign: 'right' },
-            6: { halign: 'right' },
-            7: { halign: 'right' },
-            8: { halign: 'right' },
-            9: { halign: 'right' },
-            10: { halign: 'right' }
+            0: { cellWidth: 'auto' }, // Let the colSpan handle it
+            5: { halign: 'right', cellWidth: 22 },
+            6: { halign: 'right', cellWidth: 22 },
+            7: { halign: 'right', cellWidth: 22 },
+            8: { halign: 'right', cellWidth: 22 },
+            9: { halign: 'right', cellWidth: 22 },
+            10: { halign: 'right', cellWidth: 22 }
           },
           margin: { left: margin, right: margin }
         });
@@ -597,9 +649,9 @@ export const generateReportPDF = (options: PDFOptions) => {
     autoTable(doc, {
       startY: currentY + 5,
       body: [
-        ['TOTAL NET FEES', `${(data.summary.totalNetFees || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`],
-        ['PERIOD REVENUE RECOGNIZED', `${(data.summary.totalEarned || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`],
-        ['TOTAL DEFERRED REVENUE', `${(data.summary.totalDeferred || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`]
+        ['TOTAL NET FEES', formatCurrency(data.summary.totalNetFees || 0)],
+        ['PERIOD REVENUE RECOGNIZED', formatCurrency(data.summary.totalEarned || 0)],
+        ['TOTAL DEFERRED REVENUE', formatCurrency(data.summary.totalDeferred || 0)]
       ],
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.2 },
@@ -650,9 +702,9 @@ export const generateReportPDF = (options: PDFOptions) => {
     autoTable(doc, {
       startY: finalY + 10,
       body: [
-        ['PORTFOLIO GROSS REVENUE', `${currencySymbol}${(data.summary.totalGross || 0).toFixed(2)}`],
-        ['TOTAL REDUCTION / DISCOUNT', `-${currencySymbol}${(data.summary.totalDiscount || 0).toFixed(2)}`],
-        ['CERTIFIED NET REVENUE', `${currencySymbol}${(data.summary.totalNet || 0).toFixed(2)}`]
+        ['PORTFOLIO GROSS REVENUE', formatCurrency(data.summary.totalGross || 0)],
+        ['TOTAL REDUCTION / DISCOUNT', `-${formatCurrency(data.summary.totalDiscount || 0)}`],
+        ['CERTIFIED NET REVENUE', formatCurrency(data.summary.totalNet || 0)]
       ],
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.2 },
@@ -675,8 +727,8 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.staff_name,
           r.type,
           r.item,
-          r.amount.toFixed(2),
-          r.incentive.toFixed(2)
+          formatCurrency(r.amount),
+          formatCurrency(r.incentive)
         ]),
         theme: 'grid',
         headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
@@ -693,7 +745,7 @@ export const generateReportPDF = (options: PDFOptions) => {
     autoTable(doc, {
       startY: finalY + 10,
       body: [
-        ['TOTAL INCENTIVE PAYABLE', `${currencySymbol}${(data.summary.totalIncentive || 0).toFixed(2)}`]
+        ['TOTAL INCENTIVE PAYABLE', formatCurrency(data.summary.totalIncentive || 0)]
       ],
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica' },
@@ -715,7 +767,7 @@ export const generateReportPDF = (options: PDFOptions) => {
         body: data.rows.map((r: any) => [
           r.room_name,
           r.bookings_count,
-          r.revenue.toFixed(2)
+          formatCurrency(r.revenue)
         ]),
         theme: 'grid',
         headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
@@ -732,7 +784,7 @@ export const generateReportPDF = (options: PDFOptions) => {
     autoTable(doc, {
       startY: finalY + 10,
       body: [
-        ['TOTAL ROOM REVENUE', `${currencySymbol}${(data.summary.totalRevenue || 0).toFixed(2)}`],
+        ['TOTAL ROOM REVENUE', formatCurrency(data.summary.totalRevenue || 0)],
         ['TOTAL BOOKINGS', `${data.summary.totalBookings || 0}`]
       ],
       theme: 'grid',
