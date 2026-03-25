@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths } from 'date-fns';
 
 /**
  * SHARED REPORT LOGIC
@@ -22,9 +22,6 @@ export interface ReportContext {
 export const getReportData = async (ctx: ReportContext): Promise<ReportData> => {
   const { supabase, propertyId, outletId, reportType, date } = ctx;
   
-  // Helper to parse dates consistently
-  const parseISO = (s: string) => new Date(s);
-
   if (reportType === 'revenue_recognition') {
     let membersQuery = supabase.from('members').select('*').eq('property_id', propertyId);
     if (outletId !== 'all') {
@@ -56,25 +53,34 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
 
       // Helper for revenue calculation
-      const calculateRevenue = (pStart: Date, pEnd: Date) => {
+      const calculateRevenueDays = (pStart: Date, pEnd: Date) => {
         const activeStart = new Date(Math.max(mStart.getTime(), pStart.getTime()));
         const activeEnd = new Date(Math.min(mEnd.getTime(), pEnd.getTime()));
         if (activeStart > activeEnd) return 0;
 
         let days = 0;
-        for (let d = new Date(activeStart); d <= activeEnd; d.setDate(d.getDate() + 1)) {
-          const isFrozen = memberFreezes.some((f: any) => {
-            const fStart = parseISO(f.start_date);
-            const fEnd = parseISO(f.end_date);
-            return d >= fStart && d <= fEnd;
-          });
-          if (!isFrozen) days++;
+        try {
+          const potentialDays = eachDayOfInterval({ start: activeStart, end: activeEnd });
+          for (const day of potentialDays) {
+            const isFrozen = memberFreezes.some((f: any) => 
+              isWithinInterval(day, { start: parseISO(f.start_date), end: parseISO(f.end_date) })
+            );
+            if (!isFrozen) days++;
+          }
+        } catch (e) {
+          console.error("Error calculating revenue interval:", e);
         }
-        return days * (m.daily_rate || 0);
+        return days;
       };
 
-      const prevAccrual = mStart < start ? calculateRevenue(mStart, new Date(start.getTime() - 86400000)) : 0;
-      const periodRev = calculateRevenue(start, end);
+      const dailyRate = Number(m.daily_rate || 0);
+      const prevAccrualDays = mStart < start ? calculateRevenueDays(mStart, new Date(start.getTime() - 86400000)) : 0;
+      const periodRevDays = calculateRevenueDays(start, end);
+      const totalActiveDays = calculateRevenueDays(mStart, mEnd);
+      
+      const prevAccrual = prevAccrualDays * dailyRate;
+      const periodRev = periodRevDays * dailyRate;
+      
       let deferred = (m.net_amount || 0) - (prevAccrual + periodRev);
       if (deferred < 0) deferred = 0;
 
@@ -87,7 +93,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         category_name: categoryMap[m.category_id] || 'Other',
         start_date: m.start_date,
         end_date: m.current_end_date,
-        total_days: Math.ceil((mEnd.getTime() - mStart.getTime()) / 86400000) + 1,
+        total_days: totalActiveDays,
+        daily_rate: dailyRate,
         actual_rate: Number(m.actual_rate || 0),
         discount: Number(m.discount || 0),
         net_fees: Number(m.net_amount || 0),
@@ -493,13 +500,14 @@ export const generateReportPDF = (options: PDFOptions) => {
 
         autoTable(doc, {
           startY: currentY,
-          head: [['SL.', 'GUEST NAME / PROFILE', 'START DATE', 'END DATE', 'DAYS', 'ACTUAL', 'DISC', 'NET', 'PREV', 'PERIOD', 'DEFERRED']],
+          head: [['SL.', 'GUEST NAME / PROFILE', 'START DATE', 'END DATE', 'DAYS', 'DAILY', 'ACTUAL', 'DISC', 'NET', 'PREV', 'PERIOD', 'DEFERRED']],
           body: groupRows.map((r: any, idx: number) => [
             idx + 1,
             r.guest_name,
             r.start_date,
             r.end_date,
             r.total_days,
+            r.daily_rate.toFixed(2),
             r.actual_rate.toFixed(2),
             r.discount.toFixed(2),
             r.net_fees.toFixed(2),
@@ -523,12 +531,13 @@ export const generateReportPDF = (options: PDFOptions) => {
             2: { halign: 'center', cellWidth: 20 },
             3: { halign: 'center', cellWidth: 20 },
             4: { halign: 'center', cellWidth: 10 },
-            5: { halign: 'right' },
+            5: { halign: 'right', cellWidth: 15 },
             6: { halign: 'right' },
             7: { halign: 'right' },
-            8: { halign: 'right', textColor: [100, 116, 139] },
-            9: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
-            10: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
+            8: { halign: 'right' },
+            9: { halign: 'right', textColor: [100, 116, 139] },
+            10: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
+            11: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
           },
           margin: { left: margin, right: margin }
         });

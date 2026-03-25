@@ -2,34 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, Button } from './ui';
 import { X, Snowflake, Calendar, AlertCircle, CheckCircle2, Users, Search } from 'lucide-react';
 import { Member } from '../types';
-import { format, differenceInCalendarDays, parse, addDays, startOfDay } from 'date-fns';
+import { format, differenceInCalendarDays, parse, addDays, startOfDay, parseISO } from 'date-fns';
 import { db } from '../services/mockSupabase';
 import toast from 'react-hot-toast';
-
-const parseISO = (dateString: string) => {
-  if (!dateString) return new Date();
-  
-  // Try standard YYYY-MM-DD
-  let d = new Date(dateString);
-  if (!isNaN(d.getTime())) return d;
-  
-  // Try DD-MM-YYYY, DD.MM.YYYY, DD/MM/YYYY
-  const cleanDate = dateString.replace(/[\.\/]/g, '-');
-  try {
-    // Try to parse as DD-MM-YYYY
-    const parts = cleanDate.split('-');
-    if (parts.length === 3) {
-      const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1;
-      let year = parseInt(parts[2], 10);
-      if (year < 100) year += 2000; // Handle 2-digit years
-      const parsed = new Date(year, month, day);
-      if (!isNaN(parsed.getTime())) return parsed;
-    }
-  } catch (e) {}
-
-  return new Date();
-};
 
 interface BulkFreezeModalProps {
   isOpen: boolean;
@@ -90,8 +65,8 @@ export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClos
 
   const totalDays = useMemo(() => {
     if (!freezeForm.start_date || !freezeForm.end_date) return 0;
-    const start = parseISO(freezeForm.start_date);
-    const end = parseISO(freezeForm.end_date);
+    const start = startOfDay(parseISO(freezeForm.start_date));
+    const end = startOfDay(parseISO(freezeForm.end_date));
     return Math.max(0, differenceInCalendarDays(end, start) + 1);
   }, [freezeForm.start_date, freezeForm.end_date]);
 

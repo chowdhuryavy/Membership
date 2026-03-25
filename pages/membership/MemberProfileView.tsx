@@ -14,20 +14,9 @@ import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, Massa
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../services/mockSupabase';
-import { format, differenceInCalendarDays, parse, isAfter, addDays, isBefore, startOfDay } from 'date-fns';
+import { format, differenceInCalendarDays, parse, isAfter, addDays, isBefore, startOfDay, parseISO } from 'date-fns';
 import { MembersAgreement } from '../../components/MembersAgreement';
 import { SignatureModal } from '../../components/SignatureModal';
-
-const parseISO = (dateString: string) => {
-  if (!dateString) return new Date();
-  let d = new Date(dateString);
-  if (!isNaN(d.getTime())) return d;
-  try {
-    return parse(dateString, 'dd-MM-yyyy', new Date());
-  } catch (e) {
-    return new Date();
-  }
-};
 
 interface MemberProfileViewProps {
   member: Member;
@@ -189,8 +178,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const validation = useMemo(() => {
     if (!freezeForm.start_date || !freezeForm.end_date) return { error: null, impact: null };
     
-    const start = parseISO(freezeForm.start_date);
-    const end = parseISO(freezeForm.end_date);
+    const start = startOfDay(parseISO(freezeForm.start_date));
+    const end = startOfDay(parseISO(freezeForm.end_date));
     const days = differenceInCalendarDays(end, start) + 1;
 
     if (days <= 0) {
