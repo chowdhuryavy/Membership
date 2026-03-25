@@ -1,4 +1,4 @@
-import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths, parse } from 'date-fns';
+import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths, parse, startOfDay, endOfDay } from 'date-fns';
 
 /**
  * SHARED REPORT LOGIC
@@ -20,25 +20,28 @@ export interface ReportContext {
   dateType?: 'today' | 'yesterday';
 }
 
-// Helper for safe date parsing
+// Helper for safe date parsing - ensures consistent UTC/Local handling
 const safeParseDate = (dateStr: string | null | undefined) => {
   if (!dateStr) return null;
   
   // Try YYYY-MM-DD first (ISO-ish)
   if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
-    const d = new Date(dateStr);
-    if (!isNaN(d.getTime())) return d;
+    try {
+      // Use parseISO to avoid timezone shifts if possible, or force to start of day
+      const d = parseISO(dateStr.split('T')[0]);
+      if (!isNaN(d.getTime())) return startOfDay(d);
+    } catch (e) {}
   }
 
   // Try DD-MM-YYYY
   try {
     const parsed = parse(dateStr, 'dd-MM-yyyy', new Date());
-    if (!isNaN(parsed.getTime())) return parsed;
+    if (!isNaN(parsed.getTime())) return startOfDay(parsed);
   } catch (e) {}
 
   // Fallback to generic Date constructor
   const fallback = new Date(dateStr);
-  return isNaN(fallback.getTime()) ? null : fallback;
+  return isNaN(fallback.getTime()) ? null : startOfDay(fallback);
 };
 
 export const getReportData = async (ctx: ReportContext): Promise<ReportData> => {
@@ -221,11 +224,13 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
   }
 
   if (reportType === 'members_joined' || reportType === 'expiring_memberships') {
-    const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-    const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-    const startStr = format(startOfMonth, 'yyyy-MM-dd');
-    const endStr = format(endOfMonth, 'yyyy-MM-dd');
+    const reportStart = startOfMonth(date);
+    const reportEnd = endOfMonth(date);
+    const startStr = format(reportStart, 'yyyy-MM-dd');
+    const endStr = format(reportEnd, 'yyyy-MM-dd');
     
+    console.log(`DEBUG: ${reportType} for period ${startStr} to ${endStr}`);
+
     let outletIds: string[] = [];
     if (outletId === 'all') {
       const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', propertyId);
@@ -258,18 +263,39 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       const categories = categoriesRes.data || [];
       const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
 
+      console.log(`DEBUG: Found ${members.length} total members to check for expiration`);
+      console.log(`DEBUG: Report Month Range: ${startStr} to ${endStr}`);
+
       // Filter in-memory for precise range and status
       const filtered = (members || []).filter((m: any) => {
         // Exclude tentative/pending
-        if (m.status === 'tentative' || m.status === 'pending') return false;
+        if (m.status === 'tentative' || m.status === 'pending') {
+          console.log(`DEBUG: Skipping ${m.name} due to status: ${m.status}`);
+          return false;
+        }
 
         const endDateStr = m.current_end_date || m.end_date;
-        if (!endDateStr) return false;
+        if (!endDateStr) {
+          console.log(`DEBUG: Skipping ${m.name} - no expiry date`);
+          return false;
+        }
 
         const parsedEnd = safeParseDate(endDateStr);
-        if (!parsedEnd) return false;
+        if (!parsedEnd) {
+          console.log(`DEBUG: Skipping ${m.name} - invalid expiry date: ${endDateStr}`);
+          return false;
+        }
 
-        return parsedEnd >= startOfMonth && parsedEnd <= endOfMonth;
+        // Normalize both to start of day for comparison
+        const checkDate = startOfDay(parsedEnd);
+        const rangeStart = startOfDay(reportStart);
+        const rangeEnd = endOfDay(reportEnd); // Use end of day for the end of the range
+
+        const isMatch = checkDate >= rangeStart && checkDate <= rangeEnd;
+        
+        console.log(`DEBUG: Checking Member: ${m.name.padEnd(20)} | Expiry: ${endDateStr.padEnd(12)} | Parsed: ${format(checkDate, 'yyyy-MM-dd')} | Range: ${format(rangeStart, 'yyyy-MM-dd')} to ${format(rangeEnd, 'yyyy-MM-dd')} | Match: ${isMatch}`);
+        
+        return isMatch;
       });
 
       const rows = filtered.map((m: any) => ({
@@ -283,6 +309,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         status: m.status
       }));
 
+      console.log(`DEBUG: Returning ${rows.length} expiring memberships`);
       return { rows, summary: { count: rows.length } };
     }
   }
@@ -482,27 +509,31 @@ export const generateReportPDF = (options: PDFOptions) => {
     }
   }
 
+  const titleX = pageWidth - margin;
+  const propertyX = margin + (logoUrl ? 30 : 0);
+  const availableWidth = (pageWidth / 2) - margin - 5; // Give each half of the page
+
   // Property Name & Subtitle
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18); // Reduced from 22 to prevent overlap
+  doc.setFontSize(14); // Smaller for better fit
   doc.setTextColor(15, 23, 42); // slate-900
-  doc.text(propertyName.toUpperCase(), margin + (logoUrl ? 30 : 0), currentY + 8);
+  doc.text(propertyName.toUpperCase(), propertyX, currentY + 8, { maxWidth: availableWidth });
   
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   doc.setTextColor(100, 116, 139); // slate-400
-  doc.text(`${outletName.toUpperCase()} • ISO-9001 CERTIFIED`, margin + (logoUrl ? 30 : 0), currentY + 14);
+  doc.text(`${outletName.toUpperCase()} • ISO-9001 CERTIFIED`, propertyX, currentY + 16);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(7);
   doc.setTextColor(79, 70, 229); // indigo-600
-  doc.text("INTERNAL VERIFICATION PROTOCOL", margin + (logoUrl ? 30 : 0), currentY + 20);
+  doc.text("INTERNAL VERIFICATION PROTOCOL", propertyX, currentY + 21);
 
   // 2. Report Title & Period (Right)
   doc.setFont("helvetica", "black");
-  doc.setFontSize(24); // Reduced from 28 to prevent overlap
+  doc.setFontSize(18); // Smaller for better fit
   doc.setTextColor(15, 23, 42);
-  doc.text(reportTitle.toUpperCase(), pageWidth - margin, currentY + 10, { align: 'right' });
+  doc.text(reportTitle.toUpperCase(), titleX, currentY + 10, { align: 'right', maxWidth: availableWidth });
 
   // Audit Period Box
   const boxWidth = 50;
