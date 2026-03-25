@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
-    "deploy:functions": "npx tsx scripts/sync-report-logic.ts && npx supabase functions deploy admin-reset-user && npx supabase functions deploy dynamic-action"
+    "deploy:functions": "npx tsx scripts/sync-report-logic.ts && npx supabase functions deploy admin-reset-user && npx supabase functions deploy dynamic-action && npx supabase functions deploy send-reports"
   },
   "dependencies": {
     "@google/genai": "^1.39.0",

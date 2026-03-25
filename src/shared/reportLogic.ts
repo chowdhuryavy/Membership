@@ -9,6 +9,8 @@ import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCale
 export interface ReportData {
   rows: any[];
   summary: any;
+  totals?: any;
+  rooms?: any[];
 }
 
 export interface ReportContext {
@@ -44,8 +46,61 @@ const safeParseDate = (dateStr: string | null | undefined) => {
   return isNaN(fallback.getTime()) ? null : startOfDay(fallback);
 };
 
-export const getReportData = async (ctx: ReportContext): Promise<ReportData> => {
-  const { supabase, propertyId, outletId, reportType, date } = ctx;
+const findBestRule = (rules: any[], applies_to: string, target_id: string, price: number, duration: number) => {
+  const candidates = rules.filter(r => r.is_active && r.applies_to === applies_to);
+  const sorted = candidates.sort((a, b) => {
+      if (a.target_id !== 'all' && b.target_id === 'all') return -1;
+      const scopeOrder: Record<string, number> = { 'Outlet': 0, 'Property': 1, 'Global': 2 };
+      return (scopeOrder[a.scope] || 2) - (scopeOrder[b.scope] || 2);
+  });
+  return sorted.find(r => {
+      if (r.target_id !== 'all' && r.target_id !== target_id) return false;
+      if (price < (r.min_price || 0) || price > (r.max_price || 999999)) return false;
+      return true;
+  });
+};
+
+const isStaffOnLeaveOnDate = (s: any, targetDateStr: string, staffLeaves: any[]) => {
+  const target = startOfDay(new Date(targetDateStr));
+  
+  // Check probation (legacy)
+  if (s.probation_start_date && s.probation_end_date) {
+      try {
+          const start = startOfDay(new Date(s.probation_start_date));
+          const end = startOfDay(new Date(s.probation_end_date));
+          if (isWithinInterval(target, { start, end })) return true;
+      } catch (e) {}
+  }
+  
+  // Check staff_leaves table
+  const leaves = staffLeaves.filter(l => l.staff_id === s.id);
+  if (leaves.length > 0) {
+      try {
+          return leaves.some(l => {
+              const start = startOfDay(new Date(l.start_date));
+              const end = startOfDay(new Date(l.end_date));
+              return isWithinInterval(target, { start, end });
+          });
+      } catch (e) {}
+  }
+
+  return false;
+};
+
+const isStaffOnProbationOnDate = (s: any, targetDateStr: string) => {
+  if (s.probation_start_date && s.probation_end_date) {
+      try {
+          const target = startOfDay(new Date(targetDateStr));
+          const start = startOfDay(new Date(s.probation_start_date));
+          const end = startOfDay(new Date(s.probation_end_date));
+          return isWithinInterval(target, { start, end });
+      } catch (e) {}
+  }
+  return false;
+};
+
+export const getReportData = async (ctx: any): Promise<ReportData> => {
+  const { supabase, propertyId, outletId, reportType, date, incentiveDept = 'Massage', selectedMembershipTypeId = 'all' } = ctx;
   
   if (reportType === 'revenue_recognition') {
     console.log(`DEBUG: Fetching members for Property: ${propertyId}, Outlet: ${outletId}`);
@@ -78,8 +133,6 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const categories = categoriesRes.data || [];
     const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
 
-    console.log(`DEBUG: Found ${members.length} members for property ${propertyId}`);
-
     // Calculate for the month of the provided date
     const start = new Date(date.getFullYear(), date.getMonth(), 1);
     const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
@@ -88,20 +141,21 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     let totalDeferred = 0;
     let totalNetFees = 0;
 
-    const rows = members.filter((m: any) => m.status !== 'tentative').map((m: any) => {
+    const rows = members.filter((m: any) => m.status !== 'tentative' && m.status !== 'pending').map((m: any) => {
       const mStart = safeParseDate(m.start_date);
       const mEnd = safeParseDate(m.current_end_date);
       
+      if (!mStart || !mEnd) return null;
+
       const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
 
-      // Helper for revenue calculation
-      const calculateRevenueDays = (pStart: Date, pEnd: Date) => {
-        if (!mStart || !mEnd) return 0;
+      // Helper for revenue calculation (Replicating RevenueEngine.calculateRevenuePeriod)
+      const calculateRevenuePeriod = (pStart: Date, pEnd: Date) => {
         const activeStart = new Date(Math.max(mStart.getTime(), pStart.getTime()));
         const activeEnd = new Date(Math.min(mEnd.getTime(), pEnd.getTime()));
         if (activeStart > activeEnd) return 0;
 
-        let days = 0;
+        let recognizedDays = 0;
         try {
           const potentialDays = eachDayOfInterval({ start: activeStart, end: activeEnd });
           for (const day of potentialDays) {
@@ -110,49 +164,55 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
               const fEnd = safeParseDate(f.end_date);
               return fStart && fEnd && isWithinInterval(day, { start: fStart, end: fEnd });
             });
-            if (!isFrozen) days++;
+            if (!isFrozen) recognizedDays++;
           }
         } catch (e) {
           console.error("Error calculating revenue interval:", e);
         }
-        return days;
+        return recognizedDays * (m.daily_rate || 0);
       };
 
-      const prevAccrualDays = mStart && mStart < start ? calculateRevenueDays(mStart, new Date(start.getTime() - 86400000)) : 0;
-      const periodRevDays = calculateRevenueDays(start, end);
-      
-      const dailyRate = Number(m.daily_rate || 0);
-      const prevAccrual = prevAccrualDays * dailyRate;
-      const periodRev = periodRevDays * dailyRate;
+      const prevAccrual = mStart < start ? calculateRevenuePeriod(mStart, new Date(start.getTime() - 86400000)) : 0;
+      const periodRev = calculateRevenuePeriod(start, end);
       
       let deferred = (m.net_amount || 0) - (prevAccrual + periodRev);
-      if (deferred < 0) deferred = 0;
+      if (deferred < 0.01) deferred = 0;
 
-      totalEarned += periodRev;
-      totalDeferred += deferred;
-      totalNetFees += (m.net_amount || 0);
+      const isActiveInPeriod = (mStart <= end && mEnd >= start);
+      if (!isActiveInPeriod && deferred <= 0) return null;
 
       return {
+        id: m.id,
         guest_name: m.guest_name || m.name,
-        category_name: categoryMap[m.category_id] || 'Other',
-        start_date: m.start_date,
-        end_date: m.current_end_date,
-        total_days: mStart && mEnd ? Math.ceil((mEnd.getTime() - mStart.getTime()) / 86400000) + 1 : 0,
-        actual_rate: Number(m.actual_rate || 0),
+        category_name: (categoryMap[m.category_id] || 'OTHER').toUpperCase(),
+        start_date: m.start_date ? format(parseISO(m.start_date), 'dd-MM-yyyy') : 'N/A',
+        end_date: m.current_end_date ? format(parseISO(m.current_end_date), 'dd-MM-yyyy') : 'N/A',
+        total_days: differenceInCalendarDays(mEnd, mStart) + 1,
+        actual_rate: Number(m.actual_rate || (m.net_amount + (m.discount || 0)) || 0),
         discount: Number(m.discount || 0),
         net_fees: Number(m.net_amount || 0),
         prev_accrual: prevAccrual,
         period_rev: periodRev,
         deferred: deferred
       };
+    }).filter(Boolean);
+
+    // Sort by Category then Name
+    rows.sort((a, b) => {
+        if (a.category_name < b.category_name) return -1;
+        if (a.category_name > b.category_name) return 1;
+        return a.guest_name.localeCompare(b.guest_name);
     });
+
+    // Assign SL
+    rows.forEach((row: any, i: number) => row.sl_no = i + 1);
 
     return {
       rows,
       summary: {
-        totalNetFees,
-        totalEarned,
-        totalDeferred,
+        totalNetFees: rows.reduce((s: number, r: any) => s + r.net_fees, 0),
+        totalEarned: rows.reduce((s: number, r: any) => s + r.period_rev, 0),
+        totalDeferred: rows.reduce((s: number, r: any) => s + r.deferred, 0),
         count: rows.length
       }
     };
@@ -169,9 +229,17 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       bookingsQuery = bookingsQuery.eq('outlet_id', outletId);
     }
 
-    const [salesRes, bookingsRes] = await Promise.all([salesQuery, bookingsQuery]);
+    const [salesRes, bookingsRes, guestsRes, typesRes] = await Promise.all([
+        salesQuery, 
+        bookingsQuery,
+        supabase.from('guests').select('id, name').eq('property_id', propertyId),
+        supabase.from('massage_types').select('id, name')
+    ]);
     const sales = salesRes.data || [];
     const bookings = bookingsRes.data || [];
+    const guests = guestsRes.data || [];
+    const guestMap = Object.fromEntries(guests.map((g: any) => [g.id, g.name]));
+    const typeMap = Object.fromEntries((typesRes.data || []).map((t: any) => [t.id, t.name]));
 
     let totalGross = 0;
     let totalDiscount = 0;
@@ -182,35 +250,63 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const gross = Number(s.gross_amount || 0);
         const disc = Number(s.discount_amount || 0);
         const net = Number(s.net_amount || 0);
+        const discPercent = gross > 0 ? (disc / gross) * 100 : 0;
         totalGross += gross;
         totalDiscount += disc;
         totalNet += net;
         return {
-          date: s.created_at ? format(new Date(s.created_at), 'yyyy-MM-dd HH:mm') : 'N/A',
+          sl_no: 0,
+          date: s.created_at ? format(new Date(s.created_at), 'dd-MMM-yy HH:mm') : 'N/A',
+          guest_name: s.guest_name || 'Walk-in',
           type: 'Retail',
+          reference: 'Retail',
           item: s.item_name || 'Item',
+          item_name: s.item_name || 'Item',
+          mode_of_payment: s.payment_method || 'N/A',
+          payment_mode: s.payment_method || 'N/A',
+          gross_amount: gross,
+          discount_percent: discPercent,
+          discount_amount: disc,
+          net_revenue: net,
           gross,
           discount: disc,
-          net
+          net,
+          check_no: s.check_no || '#---',
+          remarks: s.remarks || ''
         };
       }),
       ...bookings.map((b: any) => {
         const price = Number(b.price || 0);
         const disc = Number(b.discount || 0);
         const gross = price + disc;
+        const discPercent = gross > 0 ? (disc / gross) * 100 : 0;
         totalGross += gross;
         totalDiscount += disc;
         totalNet += price;
         return {
-          date: `${b.date} ${b.start_time}`,
+          sl_no: 0,
+          date: `${format(parseISO(b.date), 'dd-MMM-yy')} ${b.start_time}`,
+          guest_name: guestMap[b.guest_id] || 'Guest',
           type: 'Service',
-          item: 'Service Booking',
+          reference: 'Service',
+          item: typeMap[b.massage_type_id || b.inventory_item_id] || 'Service',
+          item_name: typeMap[b.massage_type_id || b.inventory_item_id] || 'Service',
+          mode_of_payment: 'Service',
+          payment_mode: 'Service',
+          gross_amount: gross,
+          discount_percent: discPercent,
+          discount_amount: disc,
+          net_revenue: price,
           gross,
           discount: disc,
-          net: price
+          net: price,
+          check_no: '#BOOK',
+          remarks: b.status
         };
       })
-    ];
+    ].sort((a, b) => a.date.localeCompare(b.date));
+
+    rows.forEach((r, i) => r.sl_no = i + 1);
 
     return {
       rows,
@@ -229,8 +325,6 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const startStr = format(reportStart, 'yyyy-MM-dd');
     const endStr = format(reportEnd, 'yyyy-MM-dd');
     
-    console.log(`DEBUG: ${reportType} for period ${startStr} to ${endStr}`);
-
     let outletIds: string[] = [];
     if (outletId === 'all') {
       const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', propertyId);
@@ -242,15 +336,37 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     if (outletIds.length === 0) return { rows: [], summary: { count: 0 } };
 
     if (reportType === 'members_joined') {
-      let query = supabase.from('members').select('*').in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr);
-      const { data: members } = await query;
-      const rows = (members || []).map((m: any) => ({
-        name: m.guest_name || m.name,
-        email: m.email,
-        phone: m.phone,
-        date: m.start_date,
-        status: m.status
-      }));
+      const [membersRes, categoriesRes] = await Promise.all([
+        supabase.from('members').select('*').in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr),
+        supabase.from('membership_categories').select('id, name')
+      ]);
+      const members = membersRes.data || [];
+      const categoryMap = Object.fromEntries((categoriesRes.data || []).map((c: any) => [c.id, c.name]));
+
+      const rows = (members || []).filter((m: any) => m.status !== 'tentative').map((m: any, i: number) => {
+        const actualPrice = Number(m.actual_rate || (m.net_amount + (m.discount || 0)) || 0);
+        const discountAmount = Number(m.discount || 0);
+        const discountPercent = actualPrice > 0 ? (discountAmount / actualPrice) * 100 : 0;
+
+        return {
+          sl_no: i + 1,
+          date: m.start_date ? format(parseISO(m.start_date), 'dd-MM-yyyy') : 'N/A',
+          guest_name: m.guest_name || m.name,
+          type_of_membership: categoryMap[m.category_id] || 'Unknown',
+          check_no: m.check_no || '#---',
+          item_name: 'Membership',
+          actual_price: actualPrice,
+          discount_percent: discountPercent,
+          discount_amount: discountAmount,
+          net_revenue: Number(m.net_amount || 0),
+          remarks: m.status,
+          inc_total: 0,
+          inc_discount_percent: 0,
+          inc_discount_val: 0,
+          inc_net: 0,
+          staff_splits: {}
+        };
+      });
       return { rows, summary: { count: rows.length } };
     } else {
       // expiring_memberships
@@ -263,61 +379,50 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       const categories = categoriesRes.data || [];
       const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
 
-      console.log(`DEBUG: Found ${members.length} total members to check for expiration`);
-      console.log(`DEBUG: Report Month Range: ${startStr} to ${endStr}`);
-
       // Filter in-memory for precise range and status
       const filtered = (members || []).filter((m: any) => {
-        // Exclude tentative/pending
-        if (m.status === 'tentative' || m.status === 'pending') {
-          console.log(`DEBUG: Skipping ${m.name} due to status: ${m.status}`);
-          return false;
-        }
+        if (m.status === 'tentative' || m.status === 'pending') return false;
 
         const endDateStr = m.current_end_date || m.end_date;
-        if (!endDateStr) {
-          console.log(`DEBUG: Skipping ${m.name} - no expiry date`);
-          return false;
-        }
+        if (!endDateStr) return false;
 
         const parsedEnd = safeParseDate(endDateStr);
-        if (!parsedEnd) {
-          console.log(`DEBUG: Skipping ${m.name} - invalid expiry date: ${endDateStr}`);
-          return false;
-        }
+        if (!parsedEnd) return false;
 
-        // Normalize both to start of day for comparison
         const checkDate = startOfDay(parsedEnd);
         const rangeStart = startOfDay(reportStart);
-        const rangeEnd = endOfDay(reportEnd); // Use end of day for the end of the range
+        const rangeEnd = endOfDay(reportEnd);
 
-        const isMatch = checkDate >= rangeStart && checkDate <= rangeEnd;
-        
-        console.log(`DEBUG: Checking Member: ${m.name.padEnd(20)} | Expiry: ${endDateStr.padEnd(12)} | Parsed: ${format(checkDate, 'yyyy-MM-dd')} | Range: ${format(rangeStart, 'yyyy-MM-dd')} to ${format(rangeEnd, 'yyyy-MM-dd')} | Match: ${isMatch}`);
-        
-        return isMatch;
+        return checkDate >= rangeStart && checkDate <= rangeEnd;
+      }).sort((a: any, b: any) => {
+        const dateA = safeParseDate(a.current_end_date || a.end_date)?.getTime() || 0;
+        const dateB = safeParseDate(b.current_end_date || b.end_date)?.getTime() || 0;
+        return dateA - dateB;
       });
 
-      const rows = filtered.map((m: any) => ({
+      const rows = filtered.map((m: any, idx: number) => ({
+        sl_no: idx + 1,
         name: m.guest_name || m.name,
-        membership_no: m.membership_no || 'N/A',
+        guest_name: m.guest_name || m.name,
+        membership_no: m.membership_number || m.membership_no || 'N/A',
         category_name: categoryMap[m.category_id] || 'Other',
         email: m.email,
         phone: m.phone,
-        start_date: m.start_date,
-        date: m.current_end_date || m.end_date,
+        start_date: m.start_date ? format(parseISO(m.start_date), 'dd MMM yyyy') : 'N/A',
+        date: m.current_end_date ? format(parseISO(m.current_end_date), 'dd MMM yyyy') : 'N/A',
         status: m.status
       }));
 
-      console.log(`DEBUG: Returning ${rows.length} expiring memberships`);
       return { rows, summary: { count: rows.length } };
     }
   }
 
   if (reportType === 'incentives') {
-    const startStr = format(date, 'yyyy-MM-dd');
+    const start = startOfMonth(date);
+    const end = endOfMonth(date);
+    const startStr = format(start, 'yyyy-MM-dd');
+    const endStr = format(end, 'yyyy-MM-dd');
     
-    // Fetch all completed revenue events for the day
     let outletIds: string[] = [];
     if (outletId === 'all') {
       const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', propertyId);
@@ -328,99 +433,299 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     if (outletIds.length === 0) return { rows: [], summary: { totalIncentive: 0, count: 0 } };
 
-    const [salesRes, bookingsRes, membersRes, rulesRes, staffRes] = await Promise.all([
-      supabase.from('sales').select('*').eq('property_id', propertyId).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`),
-      supabase.from('massage_bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr),
-      supabase.from('members').select('*').in('outlet_id', outletIds).eq('status', 'Active').eq('start_date', startStr),
-      supabase.from('incentive_rules').select('*').eq('is_active', true),
-      supabase.from('staff').select('id, name').eq('is_active', true)
+    const [salesRes, bookingsRes, membersRes, rulesRes, staffRes, leavesRes, guestsRes, typesRes, categoriesRes] = await Promise.all([
+      supabase.from('sales').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59`),
+      supabase.from('massage_bookings').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('date', startStr).lte('date', endStr),
+      supabase.from('members').select('*').in('outlet_id', outletIds).neq('status', 'tentative').gte('start_date', startStr).lte('start_date', endStr),
+      supabase.from('incentive_rules').select('*').eq('property_id', propertyId).eq('is_active', true),
+      supabase.from('staff').select('*').in('outlet_id', outletIds),
+      supabase.from('staff_leaves').select('*'),
+      supabase.from('guests').select('id, name').eq('property_id', propertyId),
+      supabase.from('massage_types').select('*'),
+      supabase.from('membership_categories').select('*')
     ]);
 
     const sales = salesRes.data || [];
     const bookings = bookingsRes.data || [];
     const members = membersRes.data || [];
     const rules = rulesRes.data || [];
-    const staffMap = Object.fromEntries((staffRes.data || []).map((s: any) => [s.id, s.name]));
+    const staffList = staffRes.data || [];
+    const staffLeaves = leavesRes.data || [];
+    const guests = guestsRes.data || [];
+    const guestMap = Object.fromEntries(guests.map((g: any) => [g.id, g.name]));
+    const mTypes = typesRes.data || [];
+    const mCats = categoriesRes.data || [];
 
     const rows: any[] = [];
     let totalIncentive = 0;
+    const staffTotals: Record<string, number> = {};
 
-    // Helper to calculate incentive for an item
-    const calculateIncentive = (type: string, targetId: string, amount: number) => {
-      const applicableRules = rules.filter((r: any) => 
-        (r.applies_to === type) && 
-        (r.target_id === 'all' || r.target_id === targetId)
-      );
-      
-      let itemIncentive = 0;
-      applicableRules.forEach((rule: any) => {
-        if (rule.calculation_type === 'Percentage') {
-          itemIncentive += (amount * (rule.value / 100));
-        } else {
-          itemIncentive += rule.value;
-        }
-      });
-      return itemIncentive;
-    };
+    if (incentiveDept === 'Massage') {
+        bookings.forEach(b => {
+            const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
+            if (!type || type.category !== 'Massage') return;
+            
+            const rule = findBestRule(rules, 'Massage', type.id, type.price, type.duration_minutes);
+            const actualPrice = type.price;
+            const discountAmt = b.discount || 0;
+            const netRev = actualPrice - discountAmt;
+            const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
-    // Process Sales
-    sales.forEach((s: any) => {
-      const inc = calculateIncentive('Sale', s.item_id || 'all', s.net_amount);
-      if (inc > 0) {
-        totalIncentive += inc;
-        rows.push({
-          staff_name: staffMap[s.sold_by_id] || 'Unknown',
-          type: 'Sale',
-          item: s.item_name,
-          amount: s.net_amount,
-          incentive: inc
+            let baseInc = 0;
+            let incDiscVal = 0;
+            let incNet = 0;
+            const staffSplits: Record<string, number> = {};
+
+            if (rule) {
+                baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+                incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
+                incNet = baseInc - incDiscVal;
+
+                if (b.therapist_id) {
+                    const therapist = staffList.find(s => s.id === b.therapist_id);
+                    if (therapist && therapist.is_eligible_for_incentives !== false && !isStaffOnLeaveOnDate(therapist, b.date, staffLeaves) && !isStaffOnProbationOnDate(therapist, b.date)) {
+                        staffSplits[b.therapist_id] = incNet;
+                        staffTotals[b.therapist_id] = (staffTotals[b.therapist_id] || 0) + incNet;
+                        totalIncentive += incNet;
+                    }
+                }
+            }
+
+            rows.push({
+                sl_no: rows.length + 1,
+                date: format(parseISO(b.date), 'dd-MMM-yy'),
+                guest_name: guestMap[b.guest_id] || 'Guest',
+                duration: `${type.duration_minutes}m`,
+                check_no: '#---',
+                item_name: type.name,
+                therapist_name: staffList.find(s => s.id === b.therapist_id)?.name || 'N/A',
+                actual_price: actualPrice,
+                discount_percent: discPercent,
+                discount_amount: discountAmt,
+                net_revenue: netRev,
+                inc_total: baseInc,
+                inc_discount_percent: discPercent,
+                inc_discount_val: incDiscVal,
+                inc_net: incNet,
+                remarks: b.status === 'confirmed' ? 'Pending Completion' : (discPercent > 50 ? 'Complimentary' : (!rule ? 'No Incentive Rule' : '')),
+                staff_splits: staffSplits
+            });
         });
-      }
-    });
+    } else if (incentiveDept === 'Membership') {
+        members.forEach(m => {
+            const cat = mCats.find(c => c.id === m.category_id);
+            if (!cat) return;
+            
+            const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0);
+            if (!rule) return;
 
-    // Process Bookings
-    bookings.forEach((b: any) => {
-      const inc = calculateIncentive('Massage', b.massage_type_id || 'all', b.price);
-      if (inc > 0) {
-        totalIncentive += inc;
-        rows.push({
-          staff_name: staffMap[b.therapist_id] || 'Unknown',
-          type: 'Massage',
-          item: 'Service Booking',
-          amount: b.price,
-          incentive: inc
-        });
-      }
-    });
+            const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
+            const discountAmt = m.discount || 0;
+            const netRev = m.net_amount;
+            const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
-    // Process Memberships
-    members.forEach((m: any) => {
-      const inc = calculateIncentive('Membership', m.category_id || 'all', m.net_amount);
-      if (inc > 0) {
-        totalIncentive += inc;
-        rows.push({
-          staff_name: staffMap[m.sales_rep_id] || 'Unknown',
-          type: 'Membership',
-          item: m.guest_name,
-          amount: m.net_amount,
-          incentive: inc
+            const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+            const incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
+            const incNet = baseInc - incDiscVal;
+
+            const staffSplits: Record<string, number> = {};
+            if (rule.distribution_type === 'Shared') {
+                const available = staffList.filter(s => s.is_active && s.is_eligible_for_incentives !== false && !isStaffOnLeaveOnDate(s, m.start_date, staffLeaves) && !isStaffOnProbationOnDate(s, m.start_date));
+                if (available.length > 0) {
+                    const share = incNet / available.length;
+                    available.forEach(s => {
+                        staffSplits[s.id] = share;
+                        staffTotals[s.id] = (staffTotals[s.id] || 0) + share;
+                    });
+                    totalIncentive += incNet;
+                }
+            } else if (m.sales_rep_id) {
+                const staff = staffList.find(s => s.id === m.sales_rep_id);
+                if (staff && staff.is_eligible_for_incentives !== false) {
+                    staffSplits[m.sales_rep_id] = incNet;
+                    staffTotals[m.sales_rep_id] = (staffTotals[m.sales_rep_id] || 0) + incNet;
+                    totalIncentive += incNet;
+                }
+            }
+
+            rows.push({
+                sl_no: rows.length + 1,
+                date: format(parseISO(m.start_date), 'dd-MMM-yy'),
+                guest_name: m.guest_name,
+                item_name: cat.name,
+                type_of_membership: m.package_type || 'Single',
+                duration: `${cat.duration_months} Months`,
+                check_no: m.check_no || '#---',
+                mode_of_payment: 'Cash/Card',
+                therapist_name: rule.distribution_type === 'Shared' ? 'Shared' : (staffList.find(s => s.id === m.sales_rep_id)?.name || 'N/A'),
+                actual_price: actualPrice,
+                discount_percent: discPercent,
+                discount_amount: discountAmt,
+                net_revenue: netRev,
+                inc_total: baseInc,
+                inc_discount_percent: discPercent,
+                inc_discount_val: incDiscVal,
+                inc_net: incNet,
+                remarks: m.remarks || '',
+                staff_splits: staffSplits
+            });
         });
-      }
-    });
+    } else if (incentiveDept === 'Personal Training') {
+        // 1. Process Bookings categorized as Personal Training
+        bookings.forEach(b => {
+            const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
+            if (!type || type.category !== 'Personal Training') return;
+            
+            const rule = findBestRule(rules, 'Personal Training', type.id, type.price, 0);
+            const actualPrice = type.price;
+            const discountAmt = b.discount || 0;
+            const netRev = actualPrice - discountAmt;
+            const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+            let baseInc = 0;
+            let incDiscVal = 0;
+            let incNet = 0;
+            const staffSplits: Record<string, number> = {};
+
+            if (rule) {
+                baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+                incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
+                incNet = baseInc - incDiscVal;
+
+                if (b.therapist_id) {
+                    const therapist = staffList.find(s => s.id === b.therapist_id);
+                    if (therapist && therapist.is_eligible_for_incentives !== false && !isStaffOnLeaveOnDate(therapist, b.date, staffLeaves) && !isStaffOnProbationOnDate(therapist, b.date)) {
+                        staffSplits[b.therapist_id] = incNet;
+                        staffTotals[b.therapist_id] = (staffTotals[b.therapist_id] || 0) + incNet;
+                        totalIncentive += incNet;
+                    }
+                }
+            }
+
+            rows.push({
+                sl_no: rows.length + 1,
+                date: format(parseISO(b.date), 'dd-MMM-yy'),
+                guest_name: guestMap[b.guest_id] || 'Guest',
+                duration: '-',
+                check_no: '#BOOK',
+                item_name: type.name,
+                therapist_name: staffList.find(s => s.id === b.therapist_id)?.name || 'N/A',
+                actual_price: actualPrice,
+                discount_percent: discPercent,
+                discount_amount: discountAmt,
+                net_revenue: netRev,
+                inc_total: baseInc,
+                inc_discount_percent: discPercent,
+                inc_discount_val: incDiscVal,
+                inc_net: incNet,
+                remarks: !rule ? 'No PT Incentive Rule' : '',
+                staff_splits: staffSplits
+            });
+        });
+
+        // 2. Process Sales categorized as Personal Training (POS)
+        sales.forEach(s => {
+            const isPT = s.category?.toLowerCase() === 'personal training';
+            if (!isPT) return;
+
+            const rule = findBestRule(rules, 'Personal Training', s.item_id || 'all', s.net_amount, 0) || 
+                         findBestRule(rules, 'Sale', s.category, s.net_amount, 0);
+            if (!rule) return;
+
+            const actualPrice = s.gross_amount;
+            const discountAmt = s.discount_amount;
+            const netRev = s.net_amount;
+            const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+            const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+            const incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
+            const incNet = baseInc - incDiscVal;
+
+            const staffSplits: Record<string, number> = {};
+            if (rule.distribution_type === 'Shared') {
+                const available = staffList.filter(staff => staff.is_active && staff.is_eligible_for_incentives !== false && !isStaffOnLeaveOnDate(staff, s.created_at, staffLeaves) && !isStaffOnProbationOnDate(staff, s.created_at));
+                const ptStaff = available.filter(st => /trainer|coach|instructor|pt|gym|fitness/i.test(st.role));
+                if (ptStaff.length > 0) {
+                    const share = incNet / ptStaff.length;
+                    ptStaff.forEach(staff => {
+                        staffSplits[staff.id] = share;
+                        staffTotals[staff.id] = (staffTotals[staff.id] || 0) + share;
+                    });
+                    totalIncentive += incNet;
+                }
+            } else {
+                if (s.sold_by_id && s.secondary_sold_by_id) {
+                    const share = incNet / 2;
+                    const staff1 = staffList.find(st => st.id === s.sold_by_id);
+                    const staff2 = staffList.find(st => st.id === s.secondary_sold_by_id);
+                    
+                    if (staff1 && staff1.is_eligible_for_incentives !== false) {
+                        staffSplits[s.sold_by_id] = share;
+                        staffTotals[s.sold_by_id] = (staffTotals[s.sold_by_id] || 0) + share;
+                    }
+                    if (staff2 && staff2.is_eligible_for_incentives !== false) {
+                        staffSplits[s.secondary_sold_by_id] = share;
+                        staffTotals[s.secondary_sold_by_id] = (staffTotals[s.secondary_sold_by_id] || 0) + share;
+                    }
+                    totalIncentive += incNet;
+                } else if (s.sold_by_id) {
+                    const staff = staffList.find(st => st.id === s.sold_by_id);
+                    if (staff && staff.is_eligible_for_incentives !== false) {
+                        staffSplits[s.sold_by_id] = incNet;
+                        staffTotals[s.sold_by_id] = (staffTotals[s.sold_by_id] || 0) + incNet;
+                        totalIncentive += incNet;
+                    }
+                }
+            }
+
+            let therapistName = staffList.find(st => st.id === s.sold_by_id)?.name || 'N/A';
+            if (s.secondary_sold_by_id) {
+                const secName = staffList.find(st => st.id === s.secondary_sold_by_id)?.name;
+                if (secName) therapistName += ` & ${secName}`;
+            }
+
+            rows.push({
+                sl_no: rows.length + 1,
+                date: format(parseISO(s.created_at), 'dd-MMM-yy'),
+                guest_name: s.guest_name,
+                duration: `x${s.quantity}`,
+                check_no: '#POS',
+                item_name: s.item_name,
+                therapist_name: therapistName,
+                actual_price: actualPrice,
+                discount_percent: discPercent,
+                discount_amount: discountAmt,
+                net_revenue: netRev,
+                inc_total: baseInc,
+                inc_discount_percent: discPercent,
+                inc_discount_val: incDiscVal,
+                inc_net: incNet,
+                remarks: s.remarks || '',
+                staff_splits: staffSplits
+            });
+        });
+    }
 
     return {
       rows,
       summary: {
         totalIncentive,
         count: rows.length
+      },
+      totals: {
+          staffTotals
       }
     };
   }
 
   if (reportType === 'massage_room_revenue') {
-    const startStr = format(date, 'yyyy-MM-dd');
+    const start = startOfMonth(date);
+    const end = endOfMonth(date);
+    const startStr = format(start, 'yyyy-MM-dd');
+    const endStr = format(end, 'yyyy-MM-dd');
+
     const [bookingsRes, roomsRes] = await Promise.all([
-      supabase.from('massage_bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr),
+      supabase.from('massage_bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').gte('date', startStr).lte('date', endStr),
       supabase.from('massage_rooms').select('*').eq('property_id', propertyId)
     ]);
 
@@ -428,31 +733,33 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const rooms = roomsRes.data || [];
     const roomMap = Object.fromEntries(rooms.map((r: any) => [r.id, r.name]));
 
-    const roomRevenue: Record<string, { name: string, revenue: number, count: number }> = {};
-    rooms.forEach((r: any) => {
-      roomRevenue[r.id] = { name: r.name, revenue: 0, count: 0 };
-    });
-
+    const dailyData: Record<string, Record<string, number>> = {};
+    
     bookings.forEach((b: any) => {
-      if (b.room_id && roomRevenue[b.room_id]) {
-        roomRevenue[b.room_id].revenue += (b.price || 0);
-        roomRevenue[b.room_id].count += 1;
-      }
+      const dateStr = b.date;
+      const roomId = b.room_id || 'unassigned';
+      if (!dailyData[dateStr]) dailyData[dateStr] = {};
+      dailyData[dateStr][roomId] = (dailyData[dateStr][roomId] || 0) + (b.price || 0);
     });
 
-    const rows = Object.values(roomRevenue).filter(r => r.count > 0).map(r => ({
-      room_name: r.name,
-      revenue: r.revenue,
-      bookings_count: r.count
-    }));
+    const rows = Object.keys(dailyData).sort().map(dateStr => {
+      const roomRevenue = dailyData[dateStr];
+      const dailyTotal = Object.values(roomRevenue).reduce((s, v) => s + v, 0);
+      return {
+        date: format(parseISO(dateStr), 'dd MMM yyyy'),
+        ...roomRevenue,
+        daily_total: dailyTotal
+      };
+    });
 
     return {
       rows,
       summary: {
-        totalRevenue: rows.reduce((s, r) => s + r.revenue, 0),
-        totalBookings: rows.reduce((s, r) => s + r.bookings_count, 0),
+        totalRevenue: bookings.reduce((s, b) => s + (b.price || 0), 0),
+        totalBookings: bookings.length,
         count: rows.length
-      }
+      },
+      rooms: rooms // Pass room metadata for PDF generation
     };
   }
 
@@ -707,14 +1014,15 @@ export const generateReportPDF = (options: PDFOptions) => {
     } else {
       autoTable(doc, {
         startY: currentY,
-        head: [['DATE', 'TYPE', 'ITEM / SERVICE', 'GROSS', 'DISCOUNT', 'NET']],
+        head: [['#', 'DATE', 'GUEST / MEMBER', 'ITEM / SERVICE', 'GROSS', 'DISC', 'NET']],
         body: data.rows.map((r: any) => [
+          r.sl_no,
           r.date,
-          r.type,
-          r.item,
-          r.gross.toFixed(2),
-          r.discount.toFixed(2),
-          r.net.toFixed(2)
+          r.guest_name,
+          r.item_name,
+          formatCurrency(r.gross_amount),
+          formatCurrency(r.discount_amount),
+          formatCurrency(r.net_revenue)
         ]),
         theme: 'grid',
         headStyles: { 
@@ -727,9 +1035,10 @@ export const generateReportPDF = (options: PDFOptions) => {
         },
         styles: { fontSize: 8, cellPadding: 3, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
         columnStyles: {
-          3: { halign: 'right' },
+          0: { halign: 'center', cellWidth: 10 },
           4: { halign: 'right' },
-          5: { halign: 'right', fontStyle: 'bold' }
+          5: { halign: 'right' },
+          6: { halign: 'right', fontStyle: 'bold' }
         },
         margin: { left: margin, right: margin }
       });
@@ -757,25 +1066,52 @@ export const generateReportPDF = (options: PDFOptions) => {
       doc.setTextColor(100, 116, 139);
       doc.text("No incentive data found for this period.", margin, currentY);
     } else {
+      const head = [['#', 'DATE', 'GUEST', 'ITEM', 'NET REV', 'INC TOTAL', 'INC NET', 'REMARKS']];
+      const body = data.rows.map((r: any) => [
+        r.sl_no,
+        r.date,
+        r.guest_name,
+        r.item_name,
+        formatCurrency(r.net_revenue),
+        formatCurrency(r.inc_total),
+        formatCurrency(r.inc_net),
+        r.remarks
+      ]);
+
       autoTable(doc, {
         startY: currentY,
-        head: [['STAFF NAME', 'TYPE', 'ITEM', 'AMOUNT', 'INCENTIVE']],
-        body: data.rows.map((r: any) => [
-          r.staff_name,
-          r.type,
-          r.item,
-          formatCurrency(r.amount),
-          formatCurrency(r.incentive)
-        ]),
+        head: head,
+        body: body,
         theme: 'grid',
         headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
-        styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' },
+        styles: { fontSize: 7, cellPadding: 2, font: 'helvetica' },
         columnStyles: {
-          3: { halign: 'right' },
-          4: { halign: 'right', fontStyle: 'bold' }
+          0: { cellWidth: 8 },
+          4: { halign: 'right' },
+          5: { halign: 'right' },
+          6: { halign: 'right', fontStyle: 'bold' }
         },
         margin: { left: margin, right: margin }
       });
+
+      const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
+      
+      const staffRows = Object.entries(data.totals?.staffTotals || {}).map(([id, amount]) => {
+          return ['Staff ID: ' + id, formatCurrency(amount as number)];
+      });
+
+      if (staffRows.length > 0) {
+          autoTable(doc, {
+              startY: finalY + 5,
+              head: [['STAFF BREAKDOWN', 'TOTAL INCENTIVE']],
+              body: staffRows,
+              theme: 'grid',
+              headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+              styles: { fontSize: 8, cellPadding: 2 },
+              columnStyles: { 1: { halign: 'right' } },
+              margin: { left: margin, right: margin }
+          });
+      }
     }
 
     const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
@@ -798,20 +1134,24 @@ export const generateReportPDF = (options: PDFOptions) => {
       doc.setTextColor(100, 116, 139);
       doc.text("No room revenue data found for this period.", margin, currentY);
     } else {
+      const rooms = data.rooms || [];
+      const head = [['DATE', ...rooms.map((r: any) => r.name.toUpperCase()), 'DAILY TOTAL']];
+      const body = data.rows.map((r: any) => [
+        r.date,
+        ...rooms.map((room: any) => formatCurrency(r[room.id] || 0)),
+        formatCurrency(r.daily_total)
+      ]);
+
       autoTable(doc, {
         startY: currentY,
-        head: [['ROOM NAME', 'BOOKINGS', 'REVENUE']],
-        body: data.rows.map((r: any) => [
-          r.room_name,
-          r.bookings_count,
-          formatCurrency(r.revenue)
-        ]),
+        head: head,
+        body: body,
         theme: 'grid',
-        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
-        styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' },
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
+        styles: { fontSize: 7, cellPadding: 2, font: 'helvetica' },
         columnStyles: {
-          1: { halign: 'center' },
-          2: { halign: 'right', fontStyle: 'bold' }
+          0: { cellWidth: 25 },
+          [rooms.length + 1]: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] }
         },
         margin: { left: margin, right: margin }
       });
@@ -821,8 +1161,8 @@ export const generateReportPDF = (options: PDFOptions) => {
     autoTable(doc, {
       startY: finalY + 10,
       body: [
-        ['TOTAL ROOM REVENUE', formatCurrency(data.summary.totalRevenue || 0)],
-        ['TOTAL BOOKINGS', `${data.summary.totalBookings || 0}`]
+        ['TOTAL PORTFOLIO REVENUE', formatCurrency(data.summary.totalRevenue || 0)],
+        ['TOTAL BOOKING COUNT', `${data.summary.totalBookings || 0}`]
       ],
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica' },

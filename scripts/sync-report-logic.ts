@@ -7,7 +7,7 @@ const edgeFunctionPath = path.join(process.cwd(), 'supabase/functions/send-repor
 let content = fs.readFileSync(sharedPath, 'utf-8');
 
 // Replace date-fns import for Deno/Supabase Edge Functions
-content = content.replace(/from 'date-fns'/g, "from 'npm:date-fns'");
+content = content.replace(/from ['"]date-fns['"]/g, "from 'npm:date-fns'");
 
 fs.writeFileSync(edgeFunctionPath, content);
 console.log('Report logic synced to Edge Function.');
