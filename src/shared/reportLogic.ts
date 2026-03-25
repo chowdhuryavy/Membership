@@ -20,6 +20,13 @@ export interface ReportContext {
   dateType?: 'today' | 'yesterday';
 }
 
+// Helper for safe date parsing
+const safeParseDate = (dateStr: string | null | undefined) => {
+  if (!dateStr) return null;
+  const parsed = parse(dateStr, 'dd-MM-yyyy', new Date());
+  return isNaN(parsed.getTime()) ? null : parsed;
+};
+
 export const getReportData = async (ctx: ReportContext): Promise<ReportData> => {
   const { supabase, propertyId, outletId, reportType, date } = ctx;
   
@@ -49,8 +56,14 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     let totalNetFees = 0;
 
     const rows = members.filter((m: any) => m.status !== 'tentative').map((m: any) => {
-      const mStart = parse(m.start_date, 'dd-MM-yyyy', new Date());
-      const mEnd = parse(m.current_end_date, 'dd-MM-yyyy', new Date());
+      const mStart = safeParseDate(m.start_date);
+      const mEnd = safeParseDate(m.current_end_date);
+      
+      if (!mStart || !mEnd) {
+        console.error(`Skipping member ${m.id} due to invalid dates: ${m.start_date} / ${m.current_end_date}`);
+        return null;
+      }
+
       const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
 
       // Helper for revenue calculation
@@ -62,14 +75,14 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         let days = 0;
         try {
           const potentialDays = eachDayOfInterval({ start: activeStart, end: activeEnd });
-          console.log(`DEBUG: Calculating revenue for ${m.guest_name || m.name}, interval: ${activeStart.toISOString()} to ${activeEnd.toISOString()}, freezes: ${memberFreezes.length}`);
           for (const day of potentialDays) {
-            const isFrozen = memberFreezes.some((f: any) => 
-              isWithinInterval(day, { start: parse(f.start_date, 'dd-MM-yyyy', new Date()), end: parse(f.end_date, 'dd-MM-yyyy', new Date()) })
-            );
+            const isFrozen = memberFreezes.some((f: any) => {
+              const fStart = safeParseDate(f.start_date);
+              const fEnd = safeParseDate(f.end_date);
+              return fStart && fEnd && isWithinInterval(day, { start: fStart, end: fEnd });
+            });
             if (!isFrozen) days++;
           }
-          console.log(`DEBUG: Calculated ${days} active days for ${m.guest_name || m.name}`);
         } catch (e) {
           console.error("Error calculating revenue interval:", e);
         }
@@ -103,7 +116,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         period_rev: periodRev,
         deferred: deferred
       };
-    });
+    }).filter(Boolean); // Remove skipped records
 
     return {
       rows,
