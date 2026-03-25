@@ -59,15 +59,11 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       const mStart = safeParseDate(m.start_date);
       const mEnd = safeParseDate(m.current_end_date);
       
-      if (!mStart || !mEnd) {
-        console.error(`Skipping member ${m.id} due to invalid dates: ${m.start_date} / ${m.current_end_date}`);
-        return null;
-      }
-
       const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
 
       // Helper for revenue calculation
       const calculateRevenueDays = (pStart: Date, pEnd: Date) => {
+        if (!mStart || !mEnd) return 0;
         const activeStart = new Date(Math.max(mStart.getTime(), pStart.getTime()));
         const activeEnd = new Date(Math.min(mEnd.getTime(), pEnd.getTime()));
         if (activeStart > activeEnd) return 0;
@@ -89,7 +85,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         return days;
       };
 
-      const prevAccrualDays = mStart < start ? calculateRevenueDays(mStart, new Date(start.getTime() - 86400000)) : 0;
+      const prevAccrualDays = mStart && mStart < start ? calculateRevenueDays(mStart, new Date(start.getTime() - 86400000)) : 0;
       const periodRevDays = calculateRevenueDays(start, end);
       
       const dailyRate = Number(m.daily_rate || 0);
@@ -108,7 +104,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         category_name: categoryMap[m.category_id] || 'Other',
         start_date: m.start_date,
         end_date: m.current_end_date,
-        total_days: Math.ceil((mEnd.getTime() - mStart.getTime()) / 86400000) + 1,
+        total_days: mStart && mEnd ? Math.ceil((mEnd.getTime() - mStart.getTime()) / 86400000) + 1 : 0,
         actual_rate: Number(m.actual_rate || 0),
         discount: Number(m.discount || 0),
         net_fees: Number(m.net_amount || 0),
@@ -116,7 +112,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         period_rev: periodRev,
         deferred: deferred
       };
-    }).filter(Boolean); // Remove skipped records
+    });
 
     return {
       rows,
