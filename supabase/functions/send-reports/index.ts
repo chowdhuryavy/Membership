@@ -7,10 +7,15 @@ import { getReportData, generateReportPDF } from "./reportLogic.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-customer-id',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
 }
 
 serve(async (req) => {
+  console.log(`DEBUG: Received ${req.method} request to send-reports`);
+  const authHeader = req.headers.get('Authorization');
+  console.log(`DEBUG: Authorization header: ${authHeader ? authHeader.substring(0, 20) + '...' : 'NONE'}`);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -25,11 +30,12 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     const isTest = body.test === true
     const testRecipientId = body.recipientId
+    console.log(`DEBUG: Request params - isTest: ${isTest}, testRecipientId: ${testRecipientId}`);
 
     // Fetch company settings
     const { data: settings } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle()
-    const appName = settings?.report_title || 'The Torch Reports'
-    const fromEmail = Deno.env.get('EMAIL_FROM') || 'reports@resend.dev'
+    const appName = settings?.report_title || 'Health Club Management'
+    const fromEmail = Deno.env.get('EMAIL_FROM') || 'info@saavargroup.com'
 
     // Fetch recipients
     let recipientsQuery = supabase.from('report_recipients').select('*').eq('is_active', true)
@@ -74,33 +80,51 @@ serve(async (req) => {
         console.log(`Recipient ${r.email}: No send_time set.`);
         return false;
       }
-      const [h, m] = r.send_time.split(':').map(Number)
+      let h: number, m: number;
+      const timeStr = r.send_time.trim().toUpperCase();
+      const timeMatch = timeStr.match(/^(\d+):(\d+)\s*(AM|PM)?$/);
+      
+      if (timeMatch) {
+        h = parseInt(timeMatch[1]);
+        m = parseInt(timeMatch[2]);
+        const modifier = timeMatch[3];
+        if (modifier === 'PM' && h < 12) h += 12;
+        if (modifier === 'AM' && h === 12) h = 0;
+      } else {
+        [h, m] = timeStr.split(':').map(Number);
+      }
       
       // Scheduler Logic: Check if current time is at or after scheduled time, within 120 mins (in Qatar Time)
       const scheduledTotalMins = h * 60 + m
       const currentTotalMins = currentHour * 60 + currentMinute
       const diff = currentTotalMins - scheduledTotalMins
       
-      console.log(`Recipient ${r.email}: Scheduled for ${r.send_time} (${scheduledTotalMins} mins), Current ${currentHour}:${currentMinute} (${currentTotalMins} mins), Diff: ${diff} mins`);
+      console.log(`[DEBUG] Recipient ${r.email}:`);
+      console.log(`  - Scheduled: ${r.send_time} (Parsed: ${h}:${m}, ${scheduledTotalMins} mins)`);
+      console.log(`  - Current Qatar Time: ${currentHour}:${currentMinute} (${currentTotalMins} mins)`);
+      console.log(`  - Diff: ${diff} mins`);
 
-      if (diff < 0 || diff >= 120) {
-        console.log(`Recipient ${r.email}: Outside window (must be 0-120 mins after scheduled time).`);
+      // Allow sending if it's within the 120 minute window OR if it's slightly before (e.g., -5 mins) to account for cron jitter
+      if (diff < -5 || diff >= 120) {
+        console.log(`  - Result: FAILED (Outside window: -5 to 120 mins)`);
         return false;
       }
 
-      // Check if already sent today (using Qatar calendar day)
+        // Check if already sent today (using Qatar calendar day)
       if (r.last_sent_at) {
-        const lastSentParts = qatarFormatter.formatToParts(new Date(r.last_sent_at));
+        // Parse the UTC date from the database and format it to Qatar time to get the day string
+        const lastSentDate = new Date(r.last_sent_at);
+        const lastSentParts = qatarFormatter.formatToParts(lastSentDate);
         const lastSentDayStr = `${parseInt(lastSentParts.find(p => p.type === 'year')?.value || '0')}-${parseInt(lastSentParts.find(p => p.type === 'month')?.value || '0')}-${parseInt(lastSentParts.find(p => p.type === 'day')?.value || '0')}`;
         
-        console.log(`Recipient ${r.email}: Last sent at ${r.last_sent_at} (Day: ${lastSentDayStr}), Current Day: ${currentDayStr}`);
+        console.log(`  - Last sent at: ${r.last_sent_at} (Day: ${lastSentDayStr}), Current Day: ${currentDayStr}`);
         if (lastSentDayStr === currentDayStr) {
-          console.log(`Recipient ${r.email}: Already sent today.`);
+          console.log(`  - Result: FAILED (Already sent today)`);
           return false;
         }
       }
 
-      console.log(`Recipient ${r.email}: Passed all filters. Proceeding to send.`);
+      console.log(`  - Result: PASSED (Proceeding to send)`);
       return true
     }) || []
 
@@ -159,6 +183,7 @@ serve(async (req) => {
         }
 
         // Use shared logic to get data
+        console.log(`DEBUG: Fetching data for ${recipient.report_type} (Property: ${recipient.property_id}, Outlet: ${recipient.outlet_id})`);
         const reportData = await getReportData({
           supabase,
           propertyId: recipient.property_id,
@@ -166,13 +191,14 @@ serve(async (req) => {
           reportType: recipient.report_type,
           date: reportDate
         })
+        console.log(`DEBUG: Report Data rows: ${reportData.rows.length}`);
 
         // Use shared logic to generate PDF
         const reportTitles: Record<string, string> = {
           'daily_sales': 'Daily Sales & Revenue Report',
           'revenue_recognition': 'Revenue Recognition Audit',
           'members_joined': 'Membership Acquisition Log',
-          'expiring_memberships': 'Membership Retention Audit'
+          'expiring_memberships': 'Expiring Memberships Audit'
         };
         const reportTitle = reportTitles[recipient.report_type] || recipient.report_type.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         
@@ -207,19 +233,31 @@ serve(async (req) => {
             .join('\n');
         }
 
+        // Professional message for email body
+        const professionalMessage = `
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">
+            We are pleased to provide you with the latest ${reportTitle} for your review. 
+            This automated report contains comprehensive data regarding the specified period.
+          </p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">
+            Please find the detailed report attached as a PDF document. Should you require any further information or have questions regarding the data presented, please do not hesitate to contact our support team.
+          </p>
+        `;
+
         // Send email
         const emails = recipient.email ? recipient.email.split(',').map((e: string) => e.trim()) : [];
+        console.log(`DEBUG: Sending email to ${emails.join(', ')} with PDF size: ${pdfBase64.length}`);
         const { data: emailRes, error: emailError } = await resend.emails.send({
           from: `${appName} <${fromEmail}>`,
           to: emails,
           subject: `${reportTitle} - ${propertyName} - ${reportDate.toLocaleDateString()}`,
           html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-              <h2 style="color: #0f172a; margin-top: 0;">${reportTitle}</h2>
+            <div style="font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+              <h2 style="color: #0f172a; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">${reportTitle}</h2>
               <p style="color: #475569;">Hello,</p>
               <p style="color: #475569;">This is an automated report from <strong>${appName}</strong>. Please find the details below.</p>
               
-              <div style="margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 6px;">
+              <div style="margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;">
                 <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Report Summary</h3>
                 <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 14px;">
                   <li><strong>Application:</strong> ${appName}</li>
@@ -231,7 +269,7 @@ serve(async (req) => {
                 </ul>
               </div>
 
-              <p style="color: #475569; font-size: 14px;">The full report is attached as a PDF for your review.</p>
+              ${professionalMessage}
               
               <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
               <p style="color: #94a3b8; font-size: 12px; text-align: center;">&copy; ${new Date().getFullYear()} ${propertyName}. All rights reserved.</p>
@@ -244,13 +282,23 @@ serve(async (req) => {
               content: pdfBase64,
             },
           ],
-        })
+        });
+        
+        if (emailError) {
+          console.error(`DEBUG: Email sending error: ${JSON.stringify(emailError)}`);
+          throw emailError;
+        }
+        console.log(`DEBUG: Email sent successfully. ID: ${emailRes?.id}`);
 
         if (emailError) throw emailError
 
-        // Update last_sent_at to prevent duplicate sends today
+        // Update last_sent_at to prevent duplicate sends today, using the actual current timestamp
+        // Only update if it's NOT a test send, so automated schedules can still run
         if (!isTest) {
           await supabase.from('report_recipients').update({ last_sent_at: new Date().toISOString() }).eq('id', recipient.id)
+          console.log(`DEBUG: Updated last_sent_at for ${recipient.email}`);
+        } else {
+          console.log(`DEBUG: Test mode - skipping last_sent_at update for ${recipient.email}`);
         }
 
         results.push({ recipient: recipient.email, status: 'success', id: emailRes?.id })

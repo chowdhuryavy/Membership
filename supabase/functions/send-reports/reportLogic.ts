@@ -1,4 +1,4 @@
-import { format } from 'npm:date-fns';
+import { format, isWithinInterval, eachDayOfInterval, parseISO } from 'npm:date-fns';
 
 /**
  * SHARED REPORT LOGIC
@@ -26,16 +26,16 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
   const parseISO = (s: string) => new Date(s);
 
   if (reportType === 'revenue_recognition') {
-    let membersQuery = supabase.from('members').select('*').eq('property_id', propertyId);
+    let membersQuery = supabase.from('members').select('*');
     if (outletId !== 'all') {
       membersQuery = membersQuery.eq('outlet_id', outletId);
     }
     
-    console.log(`DEBUG: Fetching members for propertyId: ${propertyId}, outletId: ${outletId}`);
+    console.log(`DEBUG: Fetching members for outletId: ${outletId}`);
 
     const [membersRes, freezesRes, categoriesRes] = await Promise.all([
       membersQuery,
-      supabase.from('membership_freezes').select('*'),
+      supabase.from('freezes').select('*'),
       supabase.from('membership_categories').select('id, name')
     ]);
 
@@ -68,16 +68,19 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const activeEnd = new Date(Math.min(mEnd.getTime(), pEnd.getTime()));
         if (activeStart > activeEnd) return 0;
 
-        let days = 0;
-        for (let d = new Date(activeStart); d <= activeEnd; d.setDate(d.getDate() + 1)) {
-          const isFrozen = memberFreezes.some((f: any) => {
-            const fStart = parseISO(f.start_date);
-            const fEnd = parseISO(f.end_date);
-            return d >= fStart && d <= fEnd;
-          });
-          if (!isFrozen) days++;
-        }
-        return days * (m.daily_rate || 0);
+        const potentialDays = eachDayOfInterval({ start: activeStart, end: activeEnd });
+        
+        let recognizedDays = 0;
+        potentialDays.forEach(day => {
+          const isFrozen = memberFreezes.some(freeze => 
+            isWithinInterval(day, { 
+              start: parseISO(freeze.start_date), 
+              end: parseISO(freeze.end_date) 
+            })
+          );
+          if (!isFrozen) recognizedDays++;
+        });
+        return recognizedDays * (m.daily_rate || 0);
       };
 
       const prevAccrual = mStart < start ? calculateRevenue(mStart, new Date(start.getTime() - 86400000)) : 0;
@@ -119,7 +122,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const startStr = format(date, 'yyyy-MM-dd');
     
     let salesQuery = supabase.from('sales').select('*').eq('property_id', propertyId).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`);
-    let bookingsQuery = supabase.from('bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr);
+    let bookingsQuery = supabase.from('massage_bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr);
     
     if (outletId !== 'all') {
       salesQuery = salesQuery.eq('outlet_id', outletId);
@@ -186,18 +189,55 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const startStr = format(startOfMonth, 'yyyy-MM-dd');
     const endStr = format(endOfMonth, 'yyyy-MM-dd');
     
-    const dateField = reportType === 'members_joined' ? 'start_date' : 'end_date';
-    let query = supabase.from('members').select('*').eq('property_id', propertyId).gte(dateField, startStr).lte(dateField, endStr);
+    console.log(`DEBUG: Fetching ${reportType} for property: ${propertyId}, outlet: ${outletId}, range: ${startStr} to ${endStr}`);
+    let query = supabase.from('members').select('*').eq('property_id', propertyId);
+    
+    if (reportType === 'members_joined') {
+        query = query.gte('start_date', startStr).lte('start_date', endStr);
+    } else if (reportType === 'expiring_memberships') {
+        // Fetch members where either current_end_date or end_date is in range
+        // We'll do a broad fetch and filter more precisely in memory to be safe
+        query = query.or(`current_end_date.gte.${startStr},end_date.gte.${startStr}`);
+    }
     
     if (outletId !== 'all') {
       query = query.eq('outlet_id', outletId);
     }
-    const { data: members } = await query;
-    const rows = (members || []).map((m: any) => ({
-      name: m.name,
-      email: m.email,
-      phone: m.phone,
-      date: m[dateField],
+
+    const [membersRes, categoriesRes] = await Promise.all([
+      query,
+      supabase.from('membership_categories').select('id, name')
+    ]);
+
+    if (membersRes.error) {
+      console.error(`DEBUG: ${reportType} query error:`, membersRes.error);
+    }
+    
+    let members = membersRes.data || [];
+    console.log(`DEBUG: ${reportType} query returned ${members.length} raw rows`);
+    
+    if (reportType === 'expiring_memberships') {
+        // Precise filtering in memory
+        members = members.filter((m: any) => {
+          const endDate = m.current_end_date || m.end_date;
+          if (!endDate) return false;
+          
+          const isPendingOrTentative = m.status === 'tentative' || m.status === 'pending';
+          if (isPendingOrTentative) return false;
+
+          return endDate >= startStr && endDate <= endStr;
+        });
+        console.log(`DEBUG: ${reportType} after memory filtering: ${members.length} rows`);
+    }
+    const categories = categoriesRes.data || [];
+    const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
+
+    const rows = members.map((m: any) => ({
+      name: m.guest_name || m.name,
+      membership_number: m.membership_number,
+      category: categoryMap[m.category_id] || 'Unknown',
+      start_date: m.start_date,
+      end_date: m.current_end_date || m.end_date,
       status: m.status
     }));
     
@@ -215,7 +255,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     // Fetch all completed revenue events for the day
     const [salesRes, bookingsRes, membersRes, rulesRes, staffRes] = await Promise.all([
       supabase.from('sales').select('*').eq('property_id', propertyId).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`),
-      supabase.from('bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr),
+      supabase.from('massage_bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr),
       supabase.from('members').select('*').eq('property_id', propertyId).eq('status', 'Active').eq('start_date', startStr),
       supabase.from('incentive_rules').select('*').eq('is_active', true),
       supabase.from('staff').select('id, name').eq('is_active', true)
@@ -303,25 +343,30 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
   }
 
   if (reportType === 'massage_room_revenue') {
-    const startStr = format(date, 'yyyy-MM-dd');
+    const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+    const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    const startStr = format(startOfMonth, 'yyyy-MM-dd');
+    const endStr = format(endOfMonth, 'yyyy-MM-dd');
+    
     const [bookingsRes, roomsRes] = await Promise.all([
-      supabase.from('bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr),
+      supabase.from('massage_bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').gte('date', startStr).lte('date', endStr),
       supabase.from('massage_rooms').select('*').eq('property_id', propertyId)
     ]);
 
     const bookings = bookingsRes.data || [];
     const rooms = roomsRes.data || [];
-    const roomMap = Object.fromEntries(rooms.map((r: any) => [r.id, r.name]));
 
     const roomRevenue: Record<string, { name: string, revenue: number, count: number }> = {};
     rooms.forEach((r: any) => {
       roomRevenue[r.id] = { name: r.name, revenue: 0, count: 0 };
     });
+    roomRevenue['unassigned'] = { name: 'Unassigned', revenue: 0, count: 0 };
 
     bookings.forEach((b: any) => {
-      if (b.room_id && roomRevenue[b.room_id]) {
-        roomRevenue[b.room_id].revenue += (b.price || 0);
-        roomRevenue[b.room_id].count += 1;
+      const roomId = b.room_id || 'unassigned';
+      if (roomRevenue[roomId]) {
+        roomRevenue[roomId].revenue += (b.price || 0);
+        roomRevenue[roomId].count += 1;
       }
     });
 
@@ -364,7 +409,7 @@ export const generateReportPDF = (options: PDFOptions) => {
   const isDailySalesReport = reportType === 'daily_sales';
   
   const doc = new jsPDF({ 
-    orientation: isRevenueReport ? 'landscape' : 'portrait',
+    orientation: 'landscape',
     unit: 'mm',
     format: 'a4'
   });
@@ -403,10 +448,11 @@ export const generateReportPDF = (options: PDFOptions) => {
   doc.text("INTERNAL VERIFICATION PROTOCOL", margin + (logoUrl ? 30 : 0), currentY + 20);
 
   // 2. Report Title & Period (Right)
-  doc.setFont("helvetica", "black");
-  doc.setFontSize(28);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18); // Reduced font size
   doc.setTextColor(15, 23, 42);
-  doc.text(reportTitle.toUpperCase(), pageWidth - margin, currentY + 10, { align: 'right' });
+  // Adjusted position to avoid overlap
+  doc.text(reportTitle.toUpperCase(), pageWidth - margin, currentY + 5, { align: 'right', maxWidth: 80 });
 
   // Audit Period Box
   const boxWidth = 50;
@@ -559,9 +605,9 @@ export const generateReportPDF = (options: PDFOptions) => {
     autoTable(doc, {
       startY: currentY + 5,
       body: [
-        ['TOTAL NET FEES', `${currencySymbol}${(data.summary.totalNetFees || 0).toFixed(2)}`],
-        ['PERIOD REVENUE RECOGNIZED', `${currencySymbol}${(data.summary.totalEarned || 0).toFixed(2)}`],
-        ['TOTAL DEFERRED REVENUE', `${currencySymbol}${(data.summary.totalDeferred || 0).toFixed(2)}`]
+        ['TOTAL NET FEES', `${(data.summary.totalNetFees || 0).toFixed(2)}`],
+        ['PERIOD REVENUE RECOGNIZED', `${(data.summary.totalEarned || 0).toFixed(2)}`],
+        ['TOTAL DEFERRED REVENUE', `${(data.summary.totalDeferred || 0).toFixed(2)}`]
       ],
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.2 },
@@ -705,8 +751,7 @@ export const generateReportPDF = (options: PDFOptions) => {
       },
       margin: { left: margin, right: margin }
     });
-  } else {
-    // Generic List Style
+  } else if (reportType === 'expiring_memberships') {
     if (data.rows.length === 0) {
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139);
@@ -714,12 +759,69 @@ export const generateReportPDF = (options: PDFOptions) => {
     } else {
       autoTable(doc, {
         startY: currentY,
-        head: [['NAME', 'EMAIL', 'PHONE', 'DATE', 'STATUS']],
+        head: [['#', 'MEMBER NAME', 'MEMBERSHIP NO.', 'CATEGORY', 'START DATE', 'END DATE', 'STATUS']],
+        body: data.rows.map((r: any, idx: number) => [
+          idx + 1,
+          r.name,
+          r.membership_number || '-',
+          r.category,
+          r.start_date ? format(parseISO(r.start_date), 'dd MMM yyyy') : '-',
+          r.end_date ? format(parseISO(r.end_date), 'dd MMM yyyy') : '-',
+          r.status.toUpperCase()
+        ]),
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [15, 23, 42], 
+          textColor: [255, 255, 255], 
+          fontStyle: 'bold', 
+          fontSize: 8, 
+          halign: 'left',
+          font: 'helvetica'
+        },
+        styles: { fontSize: 8, cellPadding: 4, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+        columnStyles: {
+          0: { halign: 'center', fontStyle: 'bold' },
+          1: { fontStyle: 'bold' },
+          2: { halign: 'center' },
+          3: { textColor: [79, 70, 229], fontStyle: 'bold' },
+          4: { halign: 'center' },
+          5: { halign: 'center', textColor: [225, 29, 72], fontStyle: 'bold' }, // rose-600
+          6: { halign: 'center', textColor: [5, 150, 105], fontStyle: 'bold' } // emerald-600
+        },
+        margin: { left: margin, right: margin }
+      });
+
+      const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
+      autoTable(doc, {
+        startY: finalY,
+        body: [
+          ['AGGREGATE EXPIRATION TOTAL', `${data.summary.count || 0}`]
+        ],
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+        columnStyles: {
+          0: { cellWidth: contentWidth - 40, halign: 'right' },
+          1: { halign: 'center', cellWidth: 40, textColor: [79, 70, 229] }
+        },
+        margin: { left: margin, right: margin }
+      });
+    }
+  } else {
+    // Generic List Style (for members_joined)
+    if (data.rows.length === 0) {
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text("No records found for this period.", margin, currentY);
+    } else {
+      autoTable(doc, {
+        startY: currentY,
+        head: [['NAME', 'MEMBERSHIP NO.', 'CATEGORY', 'START DATE', 'END DATE', 'STATUS']],
         body: data.rows.map((r: any) => [
           r.name,
-          r.email,
-          r.phone,
-          r.date,
+          r.membership_number || '-',
+          r.category,
+          r.start_date ? format(parseISO(r.start_date), 'dd MMM yyyy') : '-',
+          r.end_date ? format(parseISO(r.end_date), 'dd MMM yyyy') : '-',
           r.status
         ]),
         theme: 'grid',
@@ -756,9 +858,9 @@ export const generateReportPDF = (options: PDFOptions) => {
   const footerY = pageHeight - margin;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.setTextColor(203, 213, 225); // slate-300
+  doc.setTextColor(150, 150, 150); // Standard gray
   doc.text(`Page 1 of 1 • System ID: ${Math.random().toString(36).substring(7).toUpperCase()}`, margin, footerY);
-  doc.text(`© ${new Date().getFullYear()} ${propertyName}. All rights reserved.`, pageWidth - margin, footerY, { align: 'right' });
+  doc.text(`${propertyName}. All rights reserved.`, pageWidth - margin, footerY, { align: 'right' });
 
   return doc;
 };

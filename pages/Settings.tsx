@@ -1155,27 +1155,17 @@ const SettingsPage = () => {
                                                   </div>
                                               </td>
                                               <td className="px-10 py-8 text-right font-black text-indigo-600 text-base">{rule.calculation_type === 'Percentage' ? `${rule.value}%` : formatMoney(rule.value)}</td>
-                                              <td className="px-10 py-8">
-                                               <div className="text-xs font-black text-slate-700 uppercase">
-                                                   {recipient.last_sent_at ? format(new Date(recipient.last_sent_at), 'MMM d, yyyy HH:mm') : 'Never'}
-                                               </div>
-                                           </td>
-                                           <td className="px-10 py-8">
-                                               <div className="text-xs font-black text-slate-700 uppercase">
-                                                   {recipient.last_sent_at ? format(new Date(recipient.last_sent_at), 'MMM d, yyyy HH:mm') : 'Never'}
-                                               </div>
-                                           </td>
-                                           <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-opacity"><button onClick={() => { 
-                                                setEditingId(rule.id); 
-                                                setIncentiveForm({
-                                                  ...rule,
-                                                  min_price: rule.min_price || 0,
-                                                  max_price: rule.max_price || 99999,
-                                                  min_duration_minutes: rule.min_duration_minutes || 0,
-                                                  max_duration_minutes: rule.max_duration_minutes || 999
-                                                }); 
-                                                setShowForm(true); 
-                                              }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={() => setItemToDelete({type:'incentive', id:rule.id, name:rule.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
+                                              <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-opacity"><button onClick={() => { 
+                                                   setEditingId(rule.id); 
+                                                   setIncentiveForm({
+                                                     ...rule,
+                                                     min_price: rule.min_price || 0,
+                                                     max_price: rule.max_price || 99999,
+                                                     min_duration_minutes: rule.min_duration_minutes || 0,
+                                                     max_duration_minutes: rule.max_duration_minutes || 999
+                                                   }); 
+                                                   setShowForm(true); 
+                                                 }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={() => setItemToDelete({type:'incentive', id:rule.id, name:rule.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
                                           </tr>
                                       ))}
                                   </tbody>

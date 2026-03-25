@@ -33,7 +33,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     const [membersRes, freezesRes, categoriesRes] = await Promise.all([
       membersQuery,
-      supabase.from('membership_freezes').select('*'),
+      supabase.from('freezes').select('*'),
       supabase.from('membership_categories').select('id, name')
     ]);
 
@@ -112,7 +112,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const startStr = format(date, 'yyyy-MM-dd');
     
     let salesQuery = supabase.from('sales').select('*').eq('property_id', propertyId).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`);
-    let bookingsQuery = supabase.from('bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr);
+    let bookingsQuery = supabase.from('massage_bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr);
     
     if (outletId !== 'all') {
       salesQuery = salesQuery.eq('outlet_id', outletId);
@@ -179,27 +179,56 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const startStr = format(startOfMonth, 'yyyy-MM-dd');
     const endStr = format(endOfMonth, 'yyyy-MM-dd');
     
-    const dateField = reportType === 'members_joined' ? 'start_date' : 'end_date';
-    let query = supabase.from('members').select('*').eq('property_id', propertyId).gte(dateField, startStr).lte(dateField, endStr);
-    
-    if (outletId !== 'all') {
-      query = query.eq('outlet_id', outletId);
-    }
-    const { data: members } = await query;
-    const rows = (members || []).map((m: any) => ({
-      name: m.name,
-      email: m.email,
-      phone: m.phone,
-      date: m[dateField],
-      status: m.status
-    }));
-    
-    return {
-      rows,
-      summary: {
-        count: rows.length
+    if (reportType === 'members_joined') {
+      let query = supabase.from('members').select('*').eq('property_id', propertyId).gte('start_date', startStr).lte('start_date', endStr);
+      if (outletId !== 'all') {
+        query = query.eq('outlet_id', outletId);
       }
-    };
+      const { data: members } = await query;
+      const rows = (members || []).map((m: any) => ({
+        name: m.guest_name || m.name,
+        email: m.email,
+        phone: m.phone,
+        date: m.start_date,
+        status: m.status
+      }));
+      return { rows, summary: { count: rows.length } };
+    } else {
+      // expiring_memberships
+      // Use .or to check both current_end_date and end_date
+      let query = supabase.from('members')
+        .select('*')
+        .eq('property_id', propertyId)
+        .or(`current_end_date.gte.${startStr},end_date.gte.${startStr}`);
+
+      if (outletId !== 'all') {
+        query = query.eq('outlet_id', outletId);
+      }
+
+      const { data: members, error } = await query;
+      if (error) console.error('Error fetching expiring memberships:', error);
+
+      // Filter in-memory for precise range and status
+      const filtered = (members || []).filter((m: any) => {
+        // Exclude tentative/pending
+        if (m.status === 'tentative' || m.status === 'pending') return false;
+
+        const endDate = m.current_end_date || m.end_date;
+        if (!endDate) return false;
+
+        return endDate >= startStr && endDate <= endStr;
+      });
+
+      const rows = filtered.map((m: any) => ({
+        name: m.guest_name || m.name,
+        email: m.email,
+        phone: m.phone,
+        date: m.current_end_date || m.end_date,
+        status: m.status
+      }));
+
+      return { rows, summary: { count: rows.length } };
+    }
   }
 
   if (reportType === 'incentives') {
@@ -208,7 +237,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     // Fetch all completed revenue events for the day
     const [salesRes, bookingsRes, membersRes, rulesRes, staffRes] = await Promise.all([
       supabase.from('sales').select('*').eq('property_id', propertyId).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`),
-      supabase.from('bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr),
+      supabase.from('massage_bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr),
       supabase.from('members').select('*').eq('property_id', propertyId).eq('status', 'Active').eq('start_date', startStr),
       supabase.from('incentive_rules').select('*').eq('is_active', true),
       supabase.from('staff').select('id, name').eq('is_active', true)
@@ -298,7 +327,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
   if (reportType === 'massage_room_revenue') {
     const startStr = format(date, 'yyyy-MM-dd');
     const [bookingsRes, roomsRes] = await Promise.all([
-      supabase.from('bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr),
+      supabase.from('massage_bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr),
       supabase.from('massage_rooms').select('*').eq('property_id', propertyId)
     ]);
 
