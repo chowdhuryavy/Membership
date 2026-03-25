@@ -293,7 +293,10 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
         const isMatch = checkDate >= rangeStart && checkDate <= rangeEnd;
         
-        console.log(`DEBUG: Checking Member: ${m.name.padEnd(20)} | Expiry: ${endDateStr.padEnd(12)} | Parsed: ${format(checkDate, 'yyyy-MM-dd')} | Range: ${format(rangeStart, 'yyyy-MM-dd')} to ${format(rangeEnd, 'yyyy-MM-dd')} | Match: ${isMatch}`);
+        const memberName = m.name || m.guest_name || 'Unknown';
+        const displayEndDate = String(endDateStr || '');
+        
+        console.log(`DEBUG: Checking Member: ${memberName.padEnd(20)} | Expiry: ${displayEndDate.padEnd(12)} | Parsed: ${format(checkDate, 'yyyy-MM-dd')} | Range: ${format(rangeStart, 'yyyy-MM-dd')} to ${format(rangeEnd, 'yyyy-MM-dd')} | Match: ${isMatch}`);
         
         return isMatch;
       });
