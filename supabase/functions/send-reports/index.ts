@@ -111,7 +111,7 @@ serve(async (req) => {
         return false;
       }
 
-        // Check if already sent today (using Qatar calendar day)
+      // Check if already sent today (using Qatar calendar day)
       if (r.last_sent_at) {
         // Parse the UTC date from the database and format it to Qatar time to get the day string
         const lastSentDate = new Date(r.last_sent_at);
@@ -183,14 +183,20 @@ serve(async (req) => {
           reportDate.setDate(reportDate.getDate() - 1)
         }
 
+        // Parse incentive_dept from recipient if available (for incentive reports)
+        const incentiveDept = recipient.incentive_dept || 'Massage';
+        const selectedMembershipTypeId = recipient.selected_membership_type_id || 'all';
+
         // Use shared logic to get data
-        console.log(`DEBUG: Fetching data for ${recipient.report_type} (Property: ${recipient.property_id}, Outlet: ${recipient.outlet_id})`);
+        console.log(`DEBUG: Fetching data for ${recipient.report_type} (Property: ${recipient.property_id}, Outlet: ${recipient.outlet_id}, Dept: ${incentiveDept})`);
         const reportData = await getReportData({
           supabase,
           propertyId: recipient.property_id,
           outletId: recipient.outlet_id,
           reportType: recipient.report_type,
-          date: reportDate
+          date: reportDate,
+          incentiveDept: incentiveDept,
+          selectedMembershipTypeId: selectedMembershipTypeId
         })
         console.log(`DEBUG: Report Data rows: ${reportData.rows.length}`);
 
@@ -199,7 +205,9 @@ serve(async (req) => {
           'daily_sales': 'Daily Sales & Revenue Report',
           'revenue_recognition': 'Revenue Recognition Audit',
           'members_joined': 'Membership Acquisition Log',
-          'expiring_memberships': 'Expiring Memberships Audit'
+          'expiring_memberships': 'Membership Retention Audit',
+          'massage_room_revenue': 'Massage Room Revenue Report',
+          'incentives': `${incentiveDept} Incentive Audit`
         };
         const reportTitle = reportTitles[recipient.report_type] || recipient.report_type.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         
@@ -224,14 +232,33 @@ serve(async (req) => {
           summaryListItems = Object.entries(reportData.summary)
             .map(([key, value]) => {
               const label = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-              const formattedValue = typeof value === 'number' ? 
-                (key.includes('revenue') || key.includes('amount') || key.includes('total') ? 
-                  `${currencySymbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 
-                  value.toLocaleString()) : 
-                value;
+              let formattedValue = value;
+              if (typeof value === 'number') {
+                if (key.includes('revenue') || key.includes('amount') || key.includes('total') || key.includes('earned') || key.includes('deferred')) {
+                  formattedValue = `${currencySymbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                } else {
+                  formattedValue = value.toLocaleString();
+                }
+              }
               return `<li><strong>${label}:</strong> ${formattedValue}</li>`;
             })
             .join('\n');
+        }
+
+        // Add staff totals for incentive reports
+        let staffTotalsHtml = '';
+        if (reportType === 'incentives' && reportData.totals?.staffTotals && Object.keys(reportData.totals.staffTotals).length > 0) {
+          staffTotalsHtml = `
+            <div style="margin: 20px 0; padding: 15px; background: #fef3c7; border-radius: 6px; border: 1px solid #f59e0b;">
+              <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #92400e;">Staff Incentive Breakdown</h3>
+              <ul style="margin: 0; padding-left: 20px; color: #78350f; font-size: 14px;">
+                ${Object.entries(reportData.totals.staffTotals).map(([staffId, amount]) => {
+                  // Try to get staff name from context (we don't have it here, so we'll use ID)
+                  return `<li><strong>Staff ${staffId.substring(0, 8)}:</strong> ${currencySymbol}${(amount as number).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>`;
+                }).join('\n')}
+              </ul>
+            </div>
+          `;
         }
 
         // Professional message for email body
@@ -248,35 +275,40 @@ serve(async (req) => {
         // Send email
         const emails = recipient.email ? recipient.email.split(',').map((e: string) => e.trim()) : [];
         console.log(`DEBUG: Sending email to ${emails.join(', ')} with PDF size: ${pdfBase64.length}`);
+        
+        const emailHtml = `
+          <div style="font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <h2 style="color: #0f172a; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">${reportTitle}</h2>
+            <p style="color: #475569;">Hello,</p>
+            <p style="color: #475569;">This is an automated report from <strong>${appName}</strong>. Please find the details below.</p>
+            
+            <div style="margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;">
+              <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Report Summary</h3>
+              <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 14px;">
+                <li><strong>Application:</strong> ${appName}</li>
+                <li><strong>Property:</strong> ${propertyName}</li>
+                <li><strong>Outlet:</strong> ${outletName}</li>
+                <li><strong>Report Type:</strong> ${reportTitle}</li>
+                <li><strong>Date:</strong> ${reportDate.toLocaleDateString()}</li>
+                ${summaryListItems}
+              </ul>
+            </div>
+
+            ${staffTotalsHtml}
+
+            ${professionalMessage}
+            
+            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+            <p style="color: #94a3b8; font-size: 12px; text-align: center;">&copy; ${new Date().getFullYear()} ${propertyName}. All rights reserved.</p>
+            <p style="color: #94a3b8; font-size: 10px; text-align: center;">Powered by ${appName}</p>
+          </div>
+        `;
+
         const { data: emailRes, error: emailError } = await resend.emails.send({
           from: `${appName} <${fromEmail}>`,
           to: emails,
           subject: `${reportTitle} - ${propertyName} - ${reportDate.toLocaleDateString()}`,
-          html: `
-            <div style="font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-              <h2 style="color: #0f172a; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">${reportTitle}</h2>
-              <p style="color: #475569;">Hello,</p>
-              <p style="color: #475569;">This is an automated report from <strong>${appName}</strong>. Please find the details below.</p>
-              
-              <div style="margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;">
-                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Report Summary</h3>
-                <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 14px;">
-                  <li><strong>Application:</strong> ${appName}</li>
-                  <li><strong>Property:</strong> ${propertyName}</li>
-                  <li><strong>Outlet:</strong> ${outletName}</li>
-                  <li><strong>Report Type:</strong> ${reportTitle}</li>
-                  <li><strong>Date:</strong> ${reportDate.toLocaleDateString()}</li>
-                  ${summaryListItems}
-                </ul>
-              </div>
-
-              ${professionalMessage}
-              
-              <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-              <p style="color: #94a3b8; font-size: 12px; text-align: center;">&copy; ${new Date().getFullYear()} ${propertyName}. All rights reserved.</p>
-              <p style="color: #94a3b8; font-size: 10px; text-align: center;">Powered by ${appName}</p>
-            </div>
-          `,
+          html: emailHtml,
           attachments: [
             {
               filename: `${recipient.report_type}_report_${reportDate.toISOString().split('T')[0]}.pdf`,
@@ -290,8 +322,6 @@ serve(async (req) => {
           throw emailError;
         }
         console.log(`DEBUG: Email sent successfully. ID: ${emailRes?.id}`);
-
-        if (emailError) throw emailError
 
         // Update last_sent_at to prevent duplicate sends today, using the actual current timestamp
         // Only update if it's NOT a test send, so automated schedules can still run
@@ -316,6 +346,7 @@ serve(async (req) => {
     })
 
   } catch (error) {
+    console.error('Fatal error:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
