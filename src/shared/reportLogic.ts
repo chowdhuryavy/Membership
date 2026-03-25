@@ -249,30 +249,36 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       return { rows, summary: { count: rows.length } };
     } else {
       // expiring_memberships
-      // Use .or to check both current_end_date and end_date
-      let query = supabase.from('members')
-        .select('*')
-        .in('outlet_id', outletIds)
-        .or(`current_end_date.gte.${startStr},end_date.gte.${startStr}`);
+      const [membersRes, categoriesRes] = await Promise.all([
+        supabase.from('members').select('*').in('outlet_id', outletIds),
+        supabase.from('membership_categories').select('id, name')
+      ]);
 
-      const { data: members, error } = await query;
-      if (error) console.error('Error fetching expiring memberships:', error);
+      const members = membersRes.data || [];
+      const categories = categoriesRes.data || [];
+      const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
 
       // Filter in-memory for precise range and status
       const filtered = (members || []).filter((m: any) => {
         // Exclude tentative/pending
         if (m.status === 'tentative' || m.status === 'pending') return false;
 
-        const endDate = m.current_end_date || m.end_date;
-        if (!endDate) return false;
+        const endDateStr = m.current_end_date || m.end_date;
+        if (!endDateStr) return false;
 
-        return endDate >= startStr && endDate <= endStr;
+        const parsedEnd = safeParseDate(endDateStr);
+        if (!parsedEnd) return false;
+
+        return parsedEnd >= startOfMonth && parsedEnd <= endOfMonth;
       });
 
       const rows = filtered.map((m: any) => ({
         name: m.guest_name || m.name,
+        membership_no: m.membership_no || 'N/A',
+        category_name: categoryMap[m.category_id] || 'Other',
         email: m.email,
         phone: m.phone,
+        start_date: m.start_date,
         date: m.current_end_date || m.end_date,
         status: m.status
       }));
@@ -478,7 +484,7 @@ export const generateReportPDF = (options: PDFOptions) => {
 
   // Property Name & Subtitle
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
+  doc.setFontSize(18); // Reduced from 22 to prevent overlap
   doc.setTextColor(15, 23, 42); // slate-900
   doc.text(propertyName.toUpperCase(), margin + (logoUrl ? 30 : 0), currentY + 8);
   
@@ -494,7 +500,7 @@ export const generateReportPDF = (options: PDFOptions) => {
 
   // 2. Report Title & Period (Right)
   doc.setFont("helvetica", "black");
-  doc.setFontSize(28);
+  doc.setFontSize(24); // Reduced from 28 to prevent overlap
   doc.setTextColor(15, 23, 42);
   doc.text(reportTitle.toUpperCase(), pageWidth - margin, currentY + 10, { align: 'right' });
 
@@ -796,22 +802,37 @@ export const generateReportPDF = (options: PDFOptions) => {
       margin: { left: margin, right: margin }
     });
   } else {
-    // Generic List Style
+    // Generic List Style (including Expiring Memberships)
     if (data.rows.length === 0) {
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139);
       doc.text("No records found for this period.", margin, currentY);
     } else {
+      const isExpiring = reportType === 'expiring_memberships';
+      const head = isExpiring 
+        ? [['#', 'MEMBER NAME', 'MEMBERSHIP NO.', 'CATEGORY', 'START DATE', 'END DATE', 'STATUS']]
+        : [['NAME', 'EMAIL', 'PHONE', 'DATE', 'STATUS']];
+
+      const body = data.rows.map((r: any, idx: number) => isExpiring ? [
+        idx + 1,
+        r.name,
+        r.membership_no,
+        r.category_name,
+        r.start_date,
+        r.date,
+        r.status
+      ] : [
+        r.name,
+        r.email,
+        r.phone,
+        r.date,
+        r.status
+      ]);
+
       autoTable(doc, {
         startY: currentY,
-        head: [['NAME', 'EMAIL', 'PHONE', 'DATE', 'STATUS']],
-        body: data.rows.map((r: any) => [
-          r.name,
-          r.email,
-          r.phone,
-          r.date,
-          r.status
-        ]),
+        head: head,
+        body: body,
         theme: 'grid',
         headStyles: { 
           fillColor: [15, 23, 42], 
@@ -822,6 +843,12 @@ export const generateReportPDF = (options: PDFOptions) => {
           font: 'helvetica'
         },
         styles: { fontSize: 8, cellPadding: 3, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+        columnStyles: isExpiring ? {
+          0: { halign: 'center', cellWidth: 10 },
+          4: { halign: 'center' },
+          5: { halign: 'center', fontStyle: 'bold', textColor: [239, 68, 68] }, // Red for end date
+          6: { halign: 'center' }
+        } : {},
         margin: { left: margin, right: margin }
       });
     }
