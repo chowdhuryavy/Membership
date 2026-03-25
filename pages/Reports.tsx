@@ -29,7 +29,7 @@ import {
   Building2,
   CalendarX
 } from 'lucide-react';
-import { getReportData, generateReportPDF } from '../src/services/reportLogic';
+import { getReportData, generateReportPDF } from '../src/shared/reportLogic';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';

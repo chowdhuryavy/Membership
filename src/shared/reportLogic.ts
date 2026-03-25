@@ -1,8 +1,9 @@
-import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths } from 'date-fns';
+import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths, parse } from 'date-fns';
 
 /**
  * SHARED REPORT LOGIC
- * This file is used by both the Supabase Edge Function and the Frontend.
+ * This file is the single source of truth for report calculations.
+ * It is synced to the Supabase Edge Function via a build script.
  */
 
 export interface ReportData {
@@ -48,8 +49,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     let totalNetFees = 0;
 
     const rows = members.filter((m: any) => m.status !== 'tentative').map((m: any) => {
-      const mStart = parseISO(m.start_date);
-      const mEnd = parseISO(m.current_end_date);
+      const mStart = parse(m.start_date, 'dd-MM-yyyy', new Date());
+      const mEnd = parse(m.current_end_date, 'dd-MM-yyyy', new Date());
       const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
 
       // Helper for revenue calculation
@@ -61,12 +62,14 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         let days = 0;
         try {
           const potentialDays = eachDayOfInterval({ start: activeStart, end: activeEnd });
+          console.log(`DEBUG: Calculating revenue for ${m.guest_name || m.name}, interval: ${activeStart.toISOString()} to ${activeEnd.toISOString()}, freezes: ${memberFreezes.length}`);
           for (const day of potentialDays) {
             const isFrozen = memberFreezes.some((f: any) => 
-              isWithinInterval(day, { start: parseISO(f.start_date), end: parseISO(f.end_date) })
+              isWithinInterval(day, { start: parse(f.start_date, 'dd-MM-yyyy', new Date()), end: parse(f.end_date, 'dd-MM-yyyy', new Date()) })
             );
             if (!isFrozen) days++;
           }
+          console.log(`DEBUG: Calculated ${days} active days for ${m.guest_name || m.name}`);
         } catch (e) {
           console.error("Error calculating revenue interval:", e);
         }
