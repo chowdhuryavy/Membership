@@ -1226,8 +1226,14 @@ const SettingsPage = () => {
                                                       <Mail className="w-5 h-5" />
                                                   </div>
                                                   <div>
-                                                      <div className="font-black text-slate-900 uppercase text-base">{recipient.email}</div>
-                                                      <div className="text-[10px] font-bold text-slate-400 uppercase">{recipient.report_type.replace('_', ' ')}</div>
+                                                      <div className="flex flex-wrap gap-1 max-w-xs">
+                                                          {recipient.email.split(',').map((email, i) => (
+                                                              <span key={i} className="text-[9px] font-black bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md border border-indigo-100 uppercase">
+                                                                  {email.trim()}
+                                                              </span>
+                                                          ))}
+                                                      </div>
+                                                      <div className="text-[10px] font-bold text-slate-400 uppercase mt-1">{recipient.report_type.replace('_', ' ')}</div>
                                                   </div>
                                               </div>
                                           </td>
@@ -1413,14 +1419,49 @@ const SettingsPage = () => {
                                 </p>
                             </div>
 
-                            <Input 
-                                label="Recipient Email Address(es) *" 
-                                type="text"
-                                value={reportRecipientForm.email} 
-                                onChange={e => setReportRecipientForm({...reportRecipientForm, email: e.target.value})} 
-                                placeholder="e.g. admin@property.com, manager@property.com"
-                                className="h-14 rounded-xl font-black border-2" 
-                            />
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Recipient Email Addresses *</label>
+                                {(reportRecipientForm.email ? reportRecipientForm.email.split(',').map(e => e.trim()) : ['']).map((email, index, arr) => (
+                                    <div key={index} className="flex gap-2 animate-in slide-in-from-left-2 duration-200">
+                                        <div className="relative flex-1">
+                                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                            <Input 
+                                                value={email} 
+                                                onChange={e => {
+                                                    const newEmails = [...arr];
+                                                    newEmails[index] = e.target.value;
+                                                    setReportRecipientForm({...reportRecipientForm, email: newEmails.filter(val => val !== undefined).join(', ')});
+                                                }} 
+                                                placeholder="e.g. admin@property.com"
+                                                className="h-14 pl-12 rounded-xl font-black border-2 w-full" 
+                                            />
+                                        </div>
+                                        {arr.length > 1 && (
+                                            <Button 
+                                                variant="ghost" 
+                                                onClick={() => {
+                                                    const newEmails = arr.filter((_, i) => i !== index);
+                                                    setReportRecipientForm({...reportRecipientForm, email: newEmails.join(', ')});
+                                                }}
+                                                className="h-14 w-14 rounded-xl border-2 border-slate-100 text-red-500 hover:bg-red-50 hover:border-red-100 shrink-0"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                ))}
+                                <Button 
+                                    variant="outline" 
+                                    type="button"
+                                    onClick={() => {
+                                        const currentEmails = reportRecipientForm.email ? reportRecipientForm.email.split(',').map(e => e.trim()) : [];
+                                        setReportRecipientForm({...reportRecipientForm, email: [...currentEmails, ''].join(', ')});
+                                    }}
+                                    className="w-full h-12 rounded-xl border-dashed border-2 text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all"
+                                >
+                                    <Plus className="w-3 h-3 mr-2" /> Add Email Recipient
+                                </Button>
+                            </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <Select 

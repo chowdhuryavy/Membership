@@ -560,7 +560,7 @@ export const generateReportPDF = (options: PDFOptions) => {
 
   // Property Name & Subtitle
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(14); // Smaller for better fit
+  doc.setFontSize(16); // Slightly larger for property name
   doc.setTextColor(15, 23, 42); // slate-900
   doc.text(propertyName.toUpperCase(), propertyX, currentY + 8, { maxWidth: availableWidth });
   
@@ -576,7 +576,7 @@ export const generateReportPDF = (options: PDFOptions) => {
 
   // 2. Report Title & Period (Right)
   doc.setFont("helvetica", "black");
-  doc.setFontSize(18); // Smaller for better fit
+  doc.setFontSize(16); // Reduced from 18 to prevent overlap
   doc.setTextColor(15, 23, 42);
   doc.text(reportTitle.toUpperCase(), titleX, currentY + 10, { align: 'right', maxWidth: availableWidth });
 
@@ -584,7 +584,7 @@ export const generateReportPDF = (options: PDFOptions) => {
   const boxWidth = 50;
   const boxHeight = 15;
   const boxX = pageWidth - margin - boxWidth;
-  const boxY = currentY + 18;
+  const boxY = currentY + 22; // Moved down from 18 to avoid overlap with wrapped titles
 
   doc.setFillColor(15, 23, 42); // slate-950
   doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 2, 2, 'F');
