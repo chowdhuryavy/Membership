@@ -132,12 +132,28 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       totalDeferred += deferred;
       totalNetFees += (m.net_amount || 0);
 
+      const totalDurationDays = mStart && mEnd ? Math.ceil((mEnd.getTime() - mStart.getTime()) / 86400000) + 1 : 0;
+      let freezeDays = 0;
+      memberFreezes.forEach((f: any) => {
+          const fStart = safeParseDate(f.start_date);
+          const fEnd = safeParseDate(f.end_date);
+          if (fStart && fEnd && mStart && mEnd) {
+              const activeStart = new Date(Math.max(mStart.getTime(), fStart.getTime()));
+              const activeEnd = new Date(Math.min(mEnd.getTime(), fEnd.getTime()));
+              if (activeStart <= activeEnd) {
+                  freezeDays += Math.ceil((activeEnd.getTime() - activeStart.getTime()) / 86400000) + 1;
+              }
+          }
+      });
+      const totalActiveDays = totalDurationDays - freezeDays;
+
       return {
         guest_name: m.guest_name || m.name,
         category_name: categoryMap[m.category_id] || 'Other',
         start_date: m.start_date,
         end_date: m.current_end_date,
-        total_days: mStart && mEnd ? Math.ceil((mEnd.getTime() - mStart.getTime()) / 86400000) + 1 : 0,
+        total_days: totalActiveDays,
+        daily_rate: dailyRate,
         actual_rate: Number(m.actual_rate || 0),
         discount: Number(m.discount || 0),
         net_fees: Number(m.net_amount || 0),

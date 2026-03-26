@@ -84,6 +84,7 @@ interface RevenueRow {
     period_rev: number;
     deferred: number;
     category_name: string;
+    daily_rate: number;
 }
 
 const Reports = () => {
@@ -169,6 +170,7 @@ const Reports = () => {
       end_date: true,
       days: true,
       rev_actual: true,
+      daily_rate: true,
       rev_discount: true,
       net_fees: true,
       prev_accrual: true,
@@ -325,7 +327,8 @@ const Reports = () => {
                       prev_accrual: prevAccrual,
                       period_rev: periodRev,
                       deferred: deferred,
-                      category_name: cat ? cat.name.toUpperCase() : 'UNCATEGORIZED'
+                      category_name: cat ? cat.name.toUpperCase() : 'UNCATEGORIZED',
+                      daily_rate: Number(m.daily_rate || 0)
                   });
               }
           });
@@ -803,6 +806,7 @@ const Reports = () => {
                           {visibleColumns.start_date && <th className="border border-black px-2 py-3 w-20">Start Date</th>}
                           {visibleColumns.end_date && <th className="border border-black px-2 py-3 w-20">End Date</th>}
                           {visibleColumns.days && <th className="border border-black px-2 py-3 w-12 text-center">Days</th>}
+                          {visibleColumns.daily_rate && <th className="border border-black px-2 py-3 text-right w-24">Daily Rate</th>}
                           {visibleColumns.rev_actual && <th className="border border-black px-2 py-3 text-right w-24">Actual Rate</th>}
                           {visibleColumns.rev_discount && <th className="border border-black px-2 py-3 text-right w-24">Discount</th>}
                           {visibleColumns.net_fees && <th className="border border-black px-2 py-3 text-right w-24">Net Fees</th>}
@@ -838,6 +842,7 @@ const Reports = () => {
                                           (visibleColumns.start_date ? 1 : 0) +
                                           (visibleColumns.end_date ? 1 : 0) +
                                           (visibleColumns.days ? 1 : 0) +
+                                          (visibleColumns.daily_rate ? 1 : 0) +
                                           (visibleColumns.rev_actual ? 1 : 0) +
                                           (visibleColumns.rev_discount ? 1 : 0) +
                                           (visibleColumns.net_fees ? 1 : 0) +
@@ -860,6 +865,7 @@ const Reports = () => {
                                           {visibleColumns.start_date && <td className="border border-black px-2 py-1 text-center text-slate-600">{row.start_date}</td>}
                                           {visibleColumns.end_date && <td className="border border-black px-2 py-1 text-center text-slate-600">{row.end_date}</td>}
                                           {visibleColumns.days && <td className="border border-black px-2 py-1 text-center text-slate-500">{row.total_days}</td>}
+                                          {visibleColumns.daily_rate && <td className="border border-black px-2 py-1 text-right text-slate-500">{formatMoney(row.daily_rate)}</td>}
                                           {visibleColumns.rev_actual && <td className="border border-black px-2 py-1 text-right text-slate-500">{formatMoney(row.actual_rate)}</td>}
                                           {visibleColumns.rev_discount && <td className="border border-black px-2 py-1 text-right text-slate-500">{formatMoney(row.discount)}</td>}
                                           {visibleColumns.net_fees && <td className="border border-black px-2 py-1 text-right text-slate-500">{formatMoney(row.net_fees)}</td>}
