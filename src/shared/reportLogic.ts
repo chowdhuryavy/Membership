@@ -110,8 +110,13 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
               const fEnd = f.end_date ? endOfDay(parseISO(f.end_date)) : null;
               return fStart && fEnd && isWithinInterval(day, { start: fStart, end: fEnd });
             });
-            if (!isFrozen) days++;
+            if (!isFrozen) {
+                days++;
+            } else {
+                console.log(`DEBUG: Day ${format(day, 'yyyy-MM-dd')} is frozen`);
+            }
           }
+          console.log(`DEBUG: Active days for interval ${format(activeStart, 'yyyy-MM-dd')} to ${format(activeEnd, 'yyyy-MM-dd')}: ${days}`);
         } catch (e) {
           console.error("Error calculating revenue interval:", e);
         }
@@ -141,6 +146,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           if (fStart && fEnd && mStart && mEnd) {
               const activeStart = new Date(Math.max(mStart.getTime(), fStart.getTime()));
               const activeEnd = new Date(Math.min(mEnd.getTime(), fEnd.getTime()));
+              console.log(`DEBUG: Member: ${m.guest_name || m.name}, ActiveStart: ${activeStart}, ActiveEnd: ${activeEnd}`);
               if (activeStart <= activeEnd) {
                   const days = differenceInCalendarDays(activeEnd, activeStart) + 1;
                   freezeDays += days;
@@ -149,6 +155,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           }
       });
       const totalActiveDays = totalDurationDays - freezeDays;
+      console.log(`DEBUG: Member: ${m.guest_name || m.name}, Total Duration: ${totalDurationDays}, Freeze Days: ${freezeDays}, Total Active Days: ${totalActiveDays}`);
       console.log(`DEBUG: Member: ${m.guest_name || m.name}, Total Duration: ${totalDurationDays}, Freeze Days: ${freezeDays}, Total Active Days: ${totalActiveDays}`);
 
       return {
