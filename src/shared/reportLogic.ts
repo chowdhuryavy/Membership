@@ -132,7 +132,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       totalDeferred += deferred;
       totalNetFees += (m.net_amount || 0);
 
-      const totalDurationDays = mStart && mEnd ? Math.ceil((mEnd.getTime() - mStart.getTime()) / 86400000) + 1 : 0;
+      const totalDurationDays = mStart && mEnd ? differenceInCalendarDays(mEnd, mStart) + 1 : 0;
       let freezeDays = 0;
       memberFreezes.forEach((f: any) => {
           const fStart = safeParseDate(f.start_date);
@@ -141,7 +141,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
               const activeStart = new Date(Math.max(mStart.getTime(), fStart.getTime()));
               const activeEnd = new Date(Math.min(mEnd.getTime(), fEnd.getTime()));
               if (activeStart <= activeEnd) {
-                  freezeDays += Math.ceil((activeEnd.getTime() - activeStart.getTime()) / 86400000) + 1;
+                  freezeDays += differenceInCalendarDays(activeEnd, activeStart) + 1;
               }
           }
       });
