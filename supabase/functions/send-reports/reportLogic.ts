@@ -660,8 +660,9 @@ export const generateReportPDF = (options: PDFOptions) => {
   currentY = boxY + boxHeight + 20;
 
   const callAutoTable = (doc: any, options: any) => {
-    if (typeof autoTable === 'function') {
-      return autoTable(doc, options);
+    const plugin = (autoTable as any).default || autoTable;
+    if (typeof plugin === 'function') {
+      return plugin(doc, options);
     }
     console.error('autoTable is not a function.');
     return null;

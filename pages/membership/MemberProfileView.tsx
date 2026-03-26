@@ -311,6 +311,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start) + 1);
         const proratedAmount = daysUsed * viewingMember.daily_rate;
         const originalAmount = (viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : viewingMember.net_amount;
+        const refundAmount = Math.max(0, originalAmount - proratedAmount);
         
         console.log("Updating member with ID:", viewingMember.id);
         console.log("Updating member with data:", {
@@ -328,6 +329,33 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             original_net_amount: originalAmount
         });
         console.log("Member updated successfully");
+
+        // Record the refund in sales if there is an amount to refund
+        if (refundAmount > 0 && currentProperty && currentOutlet) {
+            try {
+                await db.addSale({
+                    property_id: currentProperty.id,
+                    outlet_id: currentOutlet.id,
+                    guest_name: viewingMember.guest_name,
+                    category: 'Other',
+                    item_name: `Membership Refund - ${viewingMember.membership_number}`,
+                    quantity: 1,
+                    unit_price: -refundAmount,
+                    gross_amount: -refundAmount,
+                    discount_amount: 0,
+                    net_amount: -refundAmount,
+                    payment_method: 'Refund',
+                    status: 'completed'
+                });
+                console.log("Refund recorded in sales");
+                toast.success(`Membership cancelled. Refund amount: ${formatMoney(refundAmount)}`);
+            } catch (saleErr) {
+                console.error("Failed to record refund sale:", saleErr);
+                toast.error("Membership cancelled, but failed to record refund in sales.");
+            }
+        } else {
+            toast.success("Membership cancelled successfully.");
+        }
         
         setViewingMember({
             ...viewingMember,
@@ -911,9 +939,9 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         <X className="w-5 h-5 text-slate-400"/>
                     </button>
                 </CardHeader>
-                <CardContent className="p-10 space-y-8">
+                <CardContent className="p-10 space-y-6">
                     <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex justify-between items-center">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Original Membership Amount</p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Original Amount</p>
                         <p className="text-sm font-black text-slate-900">{formatMoney((viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : viewingMember.net_amount)}</p>
                     </div>
                     <div className="space-y-2">
@@ -925,6 +953,33 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                             className="w-full h-16 pl-6 pr-6 rounded-2xl border-2 border-slate-100 focus:border-red-600 bg-white font-black text-sm uppercase tracking-wider transition-all appearance-none cursor-pointer"
                         />
                     </div>
+                    
+                    {(() => {
+                        const start = parseISO(viewingMember.start_date);
+                        const cancel = parseISO(cancelDate);
+                        const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start) + 1);
+                        const proratedAmount = daysUsed * viewingMember.daily_rate;
+                        const originalAmount = (viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : viewingMember.net_amount;
+                        const refundAmount = Math.max(0, originalAmount - proratedAmount);
+                        
+                        return (
+                            <div className="space-y-3 pt-4 border-t border-slate-100">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Days Used</span>
+                                    <span className="text-sm font-black text-slate-900">{daysUsed} days</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Prorated Charge</span>
+                                    <span className="text-sm font-black text-slate-900">{formatMoney(proratedAmount)}</span>
+                                </div>
+                                <div className="flex justify-between items-center bg-green-50 p-4 rounded-xl border border-green-100 mt-4">
+                                    <span className="text-[11px] font-black text-green-600 uppercase tracking-wider">Refund Amount</span>
+                                    <span className="text-lg font-black text-green-700">{formatMoney(refundAmount)}</span>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     <Button 
                         onClick={handleCancelMembership}
                         isLoading={isLoading}

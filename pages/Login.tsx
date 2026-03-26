@@ -64,7 +64,7 @@ const Login = () => {
       }
   };
 
-  const companyName = settings?.name || 'The Torch Hospitality';
+  const companyName = settings?.name || 'Health Club Management';
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#fcfdfe] selection:bg-indigo-100">

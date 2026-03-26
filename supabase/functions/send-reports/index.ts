@@ -5,13 +5,6 @@ import { jsPDF } from "https://esm.sh/jspdf@2.5.1"
 import autoTable from "https://esm.sh/jspdf-autotable@3.8.1"
 import { getReportData, generateReportPDF } from "./reportLogic.ts"
 
-// Apply the plugin
-const plugin = (autoTable as any).default || autoTable;
-(jsPDF as any).API.autoTable = plugin;
-
-// Check if it was applied
-console.log('jsPDF.API.autoTable exists:', !!(jsPDF as any).API.autoTable);
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-customer-id',
@@ -67,7 +60,7 @@ serve(async (req) => {
       day: 'numeric',
       hour: 'numeric',
       minute: 'numeric',
-      hour12: false
+      hourCycle: 'h23'
     });
     
     const parts = qatarFormatter.formatToParts(now);
@@ -126,20 +119,24 @@ serve(async (req) => {
         if (modifier === 'PM' && h < 12) h += 12;
         if (modifier === 'AM' && h === 12) h = 0;
       } else {
+        // Fallback for 24h format if no AM/PM
         [h, m] = timeStr.split(':').map(Number);
       }
       
       const scheduledTotalMins = h * 60 + m
       const currentTotalMins = currentHour * 60 + currentMinute
-      const diff = currentTotalMins - scheduledTotalMins
+      
+      // Handle day wrap-around (e.g., scheduled at 23:45, runs at 00:00)
+      const diff = (currentTotalMins - scheduledTotalMins + 1440) % 1440
       
       console.log(`[DEBUG] Recipient ${r.email}:`);
       console.log(`  - Scheduled: ${r.send_time} (Parsed: ${h}:${m}, ${scheduledTotalMins} mins)`);
       console.log(`  - Current Qatar Time: ${currentHour}:${currentMinute} (${currentTotalMins} mins)`);
       console.log(`  - Diff: ${diff} mins`);
 
-      if (diff < -5 || diff >= 45) {
-        console.log(`  - Result: FAILED (Outside window: -5 to 45 mins)`);
+      // Allow a wider window to ensure it triggers (up to 60 mins for hourly cron jobs)
+      if (diff > 60) {
+        console.log(`  - Result: FAILED (Outside window: 0 to 60 mins)`);
         return false;
       }
 
@@ -179,9 +176,7 @@ serve(async (req) => {
 
     console.log(`Recipients to process after filtering: ${filteredRecipients.length}`);
 
-    const results = []
-
-    for (const recipient of filteredRecipients) {
+    const results = await Promise.all(filteredRecipients.map(async (recipient) => {
       try {
         // Fetch property and currency info
         const { data: property, error: propertyError } = await supabase.from('properties').select('name, logo_url').eq('id', recipient.property_id).single()
@@ -394,13 +389,13 @@ serve(async (req) => {
           console.log(`DEBUG: Test mode - skipping last_sent_at update for ${recipient.email}`);
         }
 
-        results.push({ recipient: recipient.email, status: 'success', id: emailRes?.id })
+        return { recipient: recipient.email, status: 'success', id: emailRes?.id }
 
-      } catch (err) {
+      } catch (err: any) {
         console.error(`Error sending to ${recipient.email}:`, err)
-        results.push({ recipient: recipient.email, status: 'error', error: err.message })
+        return { recipient: recipient.email, status: 'error', error: err.message }
       }
-    }
+    }));
 
     return new Response(JSON.stringify({ results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
