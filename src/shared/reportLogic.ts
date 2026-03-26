@@ -137,15 +137,19 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       memberFreezes.forEach((f: any) => {
           const fStart = safeParseDate(f.start_date);
           const fEnd = f.end_date ? endOfDay(parseISO(f.end_date)) : null;
+          console.log(`DEBUG: Member: ${m.guest_name || m.name}, Freeze: ${f.start_date} to ${f.end_date}, Parsed: ${fStart} to ${fEnd}`);
           if (fStart && fEnd && mStart && mEnd) {
               const activeStart = new Date(Math.max(mStart.getTime(), fStart.getTime()));
               const activeEnd = new Date(Math.min(mEnd.getTime(), fEnd.getTime()));
               if (activeStart <= activeEnd) {
-                  freezeDays += differenceInCalendarDays(activeEnd, activeStart) + 1;
+                  const days = differenceInCalendarDays(activeEnd, activeStart) + 1;
+                  freezeDays += days;
+                  console.log(`DEBUG: Member: ${m.guest_name || m.name}, Freeze Days for this interval: ${days}`);
               }
           }
       });
       const totalActiveDays = totalDurationDays - freezeDays;
+      console.log(`DEBUG: Member: ${m.guest_name || m.name}, Total Duration: ${totalDurationDays}, Freeze Days: ${freezeDays}, Total Active Days: ${totalActiveDays}`);
 
       return {
         guest_name: m.guest_name || m.name,
@@ -159,7 +163,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         net_fees: Number(m.net_amount || 0),
         prev_accrual: prevAccrual,
         period_rev: periodRev,
-        deferred: deferred
+        deferred: deferred,
+        debug_info: `Total: ${totalDurationDays}, Freeze: ${freezeDays}, Active: ${totalActiveDays}`
       };
     });
 
