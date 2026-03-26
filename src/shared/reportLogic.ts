@@ -18,6 +18,8 @@ export interface ReportContext {
   reportType: string;
   date: Date;
   dateType?: 'today' | 'yesterday';
+  incentiveDept?: 'Massage' | 'Membership' | 'Personal Training';
+  selectedMembershipTypeId?: string | 'all';
 }
 
 // Helper for safe date parsing - ensures consistent Local handling
@@ -46,7 +48,7 @@ const safeParseDate = (dateStr: string | null | undefined) => {
 };
 
 export const getReportData = async (ctx: ReportContext): Promise<ReportData> => {
-  const { supabase, propertyId, outletId, reportType, date } = ctx;
+  const { supabase, propertyId, outletId, reportType, date, incentiveDept, selectedMembershipTypeId } = ctx;
   
   if (reportType === 'revenue_recognition') {
     console.log(`DEBUG: Fetching members for Property: ${propertyId}, Outlet: ${outletId}`);
@@ -62,6 +64,9 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     if (outletIds.length === 0) return { rows: [], summary: { totalNetFees: 0, totalEarned: 0, totalDeferred: 0, count: 0 } };
 
     let membersQuery = supabase.from('members').select('*').in('outlet_id', outletIds);
+    if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
+      membersQuery = membersQuery.eq('membership_type_id', selectedMembershipTypeId);
+    }
 
     const [membersRes, freezesRes, categoriesRes] = await Promise.all([
       membersQuery,
@@ -309,11 +314,6 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
         const isMatch = checkDate >= rangeStart && checkDate <= rangeEnd;
         
-        const memberName = m.name || m.guest_name || 'Unknown';
-        const displayEndDate = String(endDateStr || '');
-        
-        console.log(`DEBUG: Checking Member: ${memberName.padEnd(20)} | Expiry: ${displayEndDate.padEnd(12)} | Parsed: ${format(checkDate, 'yyyy-MM-dd')} | Range: ${format(rangeStart, 'yyyy-MM-dd')} to ${format(rangeEnd, 'yyyy-MM-dd')} | Match: ${isMatch}`);
-        
         return isMatch;
       });
 
@@ -347,18 +347,24 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     if (outletIds.length === 0) return { rows: [], summary: { totalIncentive: 0, count: 0 } };
 
-    const [salesRes, bookingsRes, membersRes, rulesRes, staffRes] = await Promise.all([
-      supabase.from('sales').select('*').eq('property_id', propertyId).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`),
-      supabase.from('massage_bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr),
-      supabase.from('members').select('*').in('outlet_id', outletIds).eq('status', 'Active').eq('start_date', startStr),
+    const dept = incentiveDept || 'Massage';
+
+    const [salesRes, bookingsRes, membersRes, rulesRes, staffRes, inventoryRes, mTypesRes] = await Promise.all([
+      dept === 'Massage' || dept === 'Personal Training' ? supabase.from('sales').select('*').eq('property_id', propertyId).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`) : Promise.resolve({ data: [] }),
+      dept === 'Massage' || dept === 'Personal Training' ? supabase.from('massage_bookings').select('*').eq('property_id', propertyId).eq('status', 'completed').eq('date', startStr) : Promise.resolve({ data: [] }),
+      dept === 'Membership' ? supabase.from('members').select('*').in('outlet_id', outletIds).eq('status', 'Active').eq('start_date', startStr) : Promise.resolve({ data: [] }),
       supabase.from('incentive_rules').select('*').eq('is_active', true),
-      supabase.from('staff').select('id, name').eq('is_active', true)
+      supabase.from('staff').select('id, name').eq('is_active', true),
+      supabase.from('inventory_items').select('*'),
+      supabase.from('massage_types').select('*')
     ]);
 
     const sales = salesRes.data || [];
     const bookings = bookingsRes.data || [];
     const members = membersRes.data || [];
     const rules = rulesRes.data || [];
+    const inventory = inventoryRes.data || [];
+    const mTypes = mTypesRes.data || [];
     const staffMap = Object.fromEntries((staffRes.data || []).map((s: any) => [s.id, s.name]));
 
     const rows: any[] = [];
@@ -382,50 +388,70 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       return itemIncentive;
     };
 
-    // Process Sales
-    sales.forEach((s: any) => {
-      const inc = calculateIncentive('Sale', s.item_id || 'all', s.net_amount);
-      if (inc > 0) {
-        totalIncentive += inc;
-        rows.push({
-          staff_name: staffMap[s.sold_by_id] || 'Unknown',
-          type: 'Sale',
-          item: s.item_name,
-          amount: s.net_amount,
-          incentive: inc
-        });
-      }
-    });
+    // Process Sales (Only if relevant to dept)
+    if (dept === 'Massage' || dept === 'Personal Training') {
+      sales.forEach((s: any) => {
+        const item = inventory.find(i => i.id === s.item_id);
+        if (!item) return;
+        
+        // Filter by dept
+        if (dept === 'Massage' && item.category !== 'Massage') return;
+        if (dept === 'Personal Training' && item.category !== 'Personal Training') return;
+
+        const inc = calculateIncentive(dept, s.item_id || 'all', s.net_amount);
+        if (inc > 0) {
+          totalIncentive += inc;
+          rows.push({
+            staff_name: staffMap[s.sold_by_id] || 'Unknown',
+            type: dept,
+            item: s.item_name,
+            amount: s.net_amount,
+            incentive: inc
+          });
+        }
+      });
+    }
 
     // Process Bookings
-    bookings.forEach((b: any) => {
-      const inc = calculateIncentive('Massage', b.massage_type_id || 'all', b.price);
-      if (inc > 0) {
-        totalIncentive += inc;
-        rows.push({
-          staff_name: staffMap[b.therapist_id] || 'Unknown',
-          type: 'Massage',
-          item: 'Service Booking',
-          amount: b.price,
-          incentive: inc
-        });
-      }
-    });
+    if (dept === 'Massage' || dept === 'Personal Training') {
+      bookings.forEach((b: any) => {
+        const type = mTypes.find(t => t.id === (b.massage_type_id || b.inventory_item_id));
+        if (!type) return;
+
+        // Filter by dept
+        if (dept === 'Massage' && type.category !== 'Massage') return;
+        if (dept === 'Personal Training' && type.category !== 'Personal Training') return;
+
+        const inc = calculateIncentive(dept, (b.massage_type_id || b.inventory_item_id || 'all'), b.price);
+        if (inc > 0) {
+          totalIncentive += inc;
+          rows.push({
+            staff_name: staffMap[b.therapist_id] || 'Unknown',
+            type: dept,
+            item: type.name,
+            amount: b.price,
+            incentive: inc
+          });
+        }
+      });
+    }
 
     // Process Memberships
-    members.forEach((m: any) => {
-      const inc = calculateIncentive('Membership', m.category_id || 'all', m.net_amount);
-      if (inc > 0) {
-        totalIncentive += inc;
-        rows.push({
-          staff_name: staffMap[m.sales_rep_id] || 'Unknown',
-          type: 'Membership',
-          item: m.guest_name,
-          amount: m.net_amount,
-          incentive: inc
-        });
-      }
-    });
+    if (dept === 'Membership') {
+      members.forEach((m: any) => {
+        const inc = calculateIncentive('Membership', m.category_id || 'all', m.net_amount);
+        if (inc > 0) {
+          totalIncentive += inc;
+          rows.push({
+            staff_name: staffMap[m.sales_rep_id] || 'Unknown',
+            type: 'Membership',
+            item: m.guest_name,
+            amount: m.net_amount,
+            incentive: inc
+          });
+        }
+      });
+    }
 
     return {
       rows,

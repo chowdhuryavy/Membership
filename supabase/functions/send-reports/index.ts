@@ -247,18 +247,26 @@ serve(async (req) => {
 
         // Add staff totals for incentive reports
         let staffTotalsHtml = '';
-        if (reportType === 'incentives' && reportData.totals?.staffTotals && Object.keys(reportData.totals.staffTotals).length > 0) {
-          staffTotalsHtml = `
-            <div style="margin: 20px 0; padding: 15px; background: #fef3c7; border-radius: 6px; border: 1px solid #f59e0b;">
-              <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #92400e;">Staff Incentive Breakdown</h3>
-              <ul style="margin: 0; padding-left: 20px; color: #78350f; font-size: 14px;">
-                ${Object.entries(reportData.totals.staffTotals).map(([staffId, amount]) => {
-                  // Try to get staff name from context (we don't have it here, so we'll use ID)
-                  return `<li><strong>Staff ${staffId.substring(0, 8)}:</strong> ${currencySymbol}${(amount as number).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>`;
-                }).join('\n')}
-              </ul>
-            </div>
-          `;
+        if (recipient.report_type === 'incentives' && reportData.rows.length > 0) {
+          const staffTotals: Record<string, number> = {};
+          reportData.rows.forEach((r: any) => {
+            if (r.staff_name) {
+              staffTotals[r.staff_name] = (staffTotals[r.staff_name] || 0) + (r.incentive || 0);
+            }
+          });
+
+          if (Object.keys(staffTotals).length > 0) {
+            staffTotalsHtml = `
+              <div style="margin: 20px 0; padding: 15px; background: #fef3c7; border-radius: 6px; border: 1px solid #f59e0b;">
+                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #92400e;">Staff Incentive Breakdown</h3>
+                <ul style="margin: 0; padding-left: 20px; color: #78350f; font-size: 14px;">
+                  ${Object.entries(staffTotals).map(([staffName, amount]) => {
+                    return `<li><strong>${staffName}:</strong> ${currencySymbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>`;
+                  }).join('\n')}
+                </ul>
+              </div>
+            `;
+          }
         }
 
         // Professional message for email body

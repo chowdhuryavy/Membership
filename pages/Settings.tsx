@@ -309,6 +309,9 @@ const SettingsPage = () => {
     outlet_id: 'all', 
     report_type: 'revenue_recognition', 
     send_time: '08:00',
+    report_date_type: 'today',
+    incentive_dept: 'Massage',
+    selected_membership_type_id: 'all',
     is_active: true 
   });
 
@@ -1191,6 +1194,9 @@ const SettingsPage = () => {
                                       outlet_id: 'all', 
                                       report_type: 'revenue_recognition', 
                                       send_time: '08:00',
+                                      report_date_type: 'today',
+                                      incentive_dept: 'Massage',
+                                      selected_membership_type_id: 'all',
                                       is_active: true 
                                   }); 
                                   setShowForm(true); 
@@ -1255,6 +1261,9 @@ const SettingsPage = () => {
                                                               outlet_id: recipient.outlet_id,
                                                               report_type: recipient.report_type,
                                                               send_time: recipient.send_time,
+                                                              report_date_type: recipient.report_date_type || 'today',
+                                                              incentive_dept: recipient.incentive_dept || 'Massage',
+                                                              selected_membership_type_id: recipient.selected_membership_type_id || 'all',
                                                               is_active: recipient.is_active
                                                           });
                                                           setShowForm(true);
@@ -1450,6 +1459,33 @@ const SettingsPage = () => {
                                     className="h-14 rounded-xl border-2" 
                                 />
                             </div>
+                            
+                            {reportRecipientForm.report_type === 'incentives' && (
+                                <Select 
+                                    label="Reward Department *" 
+                                    options={[
+                                        {value:'Massage', label:'Massage'},
+                                        {value:'Membership', label:'Membership'},
+                                        {value:'Personal Training', label:'Personal Training'}
+                                    ]} 
+                                    value={reportRecipientForm.incentive_dept || 'Massage'} 
+                                    onChange={e => setReportRecipientForm({...reportRecipientForm, incentive_dept: e.target.value as any})} 
+                                    className="h-14 rounded-xl border-2" 
+                                />
+                            )}
+
+                            {reportRecipientForm.report_type === 'revenue_recognition' && (
+                                <Select 
+                                    label="Membership Type Context *" 
+                                    options={[
+                                        {value:'all', label:'All Types'},
+                                        ...membershipTypes.map(t => ({value:t.id, label:t.name}))
+                                    ]} 
+                                    value={reportRecipientForm.selected_membership_type_id || 'all'} 
+                                    onChange={e => setReportRecipientForm({...reportRecipientForm, selected_membership_type_id: e.target.value})} 
+                                    className="h-14 rounded-xl border-2" 
+                                />
+                            )}
                             
                             {reportRecipientForm.report_type === 'daily_sales' && (
                                 <Select 

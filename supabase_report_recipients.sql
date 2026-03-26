@@ -9,6 +9,8 @@ CREATE TABLE report_recipients (
     report_type TEXT NOT NULL CHECK (report_type IN ('daily_revenue', 'monthly_summary', 'revenue_recognition', 'daily_sales', 'incentives', 'members_joined', 'expiring_memberships', 'massage_room_revenue')),
     send_time TEXT NOT NULL DEFAULT '08:00',
     report_date_type TEXT DEFAULT 'today',
+    incentive_dept TEXT DEFAULT 'Massage',
+    selected_membership_type_id TEXT DEFAULT 'all',
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
