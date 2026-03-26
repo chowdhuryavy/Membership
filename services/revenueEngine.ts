@@ -7,7 +7,8 @@ import {
   endOfMonth, 
   eachDayOfInterval, 
   format,
-  addMonths
+  addMonths,
+  startOfDay
 } from 'date-fns';
 import { Member, Freeze, MemberStatus } from '../types';
 
@@ -70,24 +71,61 @@ export const RevenueEngine = {
     const memEnd = parseISO(member.current_end_date);
 
     // Intersection of Membership Period and Requested Period
-    const activeStart = max([memStart, periodStart]);
-    const activeEnd = min([memEnd, periodEnd]);
+    // Ensure we use startOfDay for consistent comparison
+    const activeStart = new Date(Math.max(startOfDay(memStart).getTime(), startOfDay(periodStart).getTime()));
+    const activeEnd = new Date(Math.min(startOfDay(memEnd).getTime(), startOfDay(periodEnd).getTime()));
 
     if (activeStart > activeEnd) return 0;
 
-    const potentialDays = eachDayOfInterval({ start: activeStart, end: activeEnd });
-    
     let recognizedDays = 0;
-    potentialDays.forEach(day => {
-      const isFrozen = freezes.some(freeze => 
-        isWithinInterval(day, { 
-          start: parseISO(freeze.start_date), 
-          end: parseISO(freeze.end_date) 
-        })
-      );
-      if (!isFrozen) recognizedDays++;
-    });
+    try {
+      const potentialDays = eachDayOfInterval({ start: startOfDay(activeStart), end: startOfDay(activeEnd) });
+      
+      potentialDays.forEach(day => {
+        const dStr = format(day, 'yyyy-MM-dd');
+        const isFrozen = freezes.some(freeze => {
+          const fStart = parseISO(freeze.start_date);
+          const fEnd = parseISO(freeze.end_date);
+          const fsStr = format(fStart, 'yyyy-MM-dd');
+          const feStr = format(fEnd, 'yyyy-MM-dd');
+          return dStr >= fsStr && dStr <= feStr;
+        });
+        if (!isFrozen) recognizedDays++;
+      });
+    } catch (e) {
+      console.error("Error in calculateRevenuePeriod:", e);
+    }
 
-    return recognizedDays * member.daily_rate;
+    return recognizedDays * (member.daily_rate || 0);
+  },
+
+  /**
+   * Calculates total active days for a membership, excluding freezes.
+   */
+  calculateTotalActiveDays: (
+    member: Member,
+    freezes: Freeze[]
+  ): number => {
+    if (!member.start_date || !member.current_end_date) return 0;
+    
+    const mStart = parseISO(member.start_date);
+    const mEnd = parseISO(member.current_end_date);
+    
+    const potentialDays = eachDayOfInterval({ start: startOfDay(mStart), end: startOfDay(mEnd) });
+    
+    let activeDays = 0;
+    potentialDays.forEach(day => {
+      const dStr = format(day, 'yyyy-MM-dd');
+      const isFrozen = freezes.some(freeze => {
+        const fStart = parseISO(freeze.start_date);
+        const fEnd = parseISO(freeze.end_date);
+        const fsStr = format(fStart, 'yyyy-MM-dd');
+        const feStr = format(fEnd, 'yyyy-MM-dd');
+        return dStr >= fsStr && dStr <= feStr;
+      });
+      if (!isFrozen) activeDays++;
+    });
+    
+    return activeDays;
   }
 };

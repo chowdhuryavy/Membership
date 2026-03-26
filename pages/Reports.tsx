@@ -312,7 +312,7 @@ const Reports = () => {
               
               if (isActiveInPeriod || deferred > 0) {
                   const cat = mCats.find(c => c.id === m.category_id);
-                  const totalDays = differenceInCalendarDays(mEnd, mStart) + 1;
+                  const totalDays = RevenueEngine.calculateTotalActiveDays(m, memberFreezes);
 
                   revData.push({
                       id: m.id,
@@ -795,6 +795,7 @@ const Reports = () => {
       let grandPrevAccrual = 0;
       let grandPeriodRev = 0;
       let grandDeferred = 0;
+      let grandDailyRate = 0;
 
       return (
           <div className="w-full">
@@ -818,6 +819,7 @@ const Reports = () => {
                   <tbody>
                       {Object.entries(grouped).map(([category, groupRowsData]) => {
                           const groupRows = groupRowsData as RevenueRow[];
+                          const subDailyRate = groupRows.reduce((s, r) => s + r.daily_rate, 0);
                           const subActual = groupRows.reduce((s, r) => s + r.actual_rate, 0);
                           const subDiscount = groupRows.reduce((s, r) => s + r.discount, 0);
                           const subNetFees = groupRows.reduce((s, r) => s + r.net_fees, 0);
@@ -831,6 +833,7 @@ const Reports = () => {
                           grandPrevAccrual += subPrevAccrual;
                           grandPeriodRev += subPeriodRev;
                           grandDeferred += subDeferred;
+                          grandDailyRate += subDailyRate;
 
                           return (
                               <React.Fragment key={category}>
@@ -884,6 +887,7 @@ const Reports = () => {
                                           (visibleColumns.end_date ? 1 : 0) +
                                           (visibleColumns.days ? 1 : 0)
                                       } className="border border-black px-4 py-2 text-right uppercase text-indigo-900 tracking-widest">Cluster Subtotal: {category}</td>
+                                      {visibleColumns.daily_rate && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subDailyRate)}</td>}
                                       {visibleColumns.rev_actual && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subActual)}</td>}
                                       {visibleColumns.rev_discount && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subDiscount)}</td>}
                                       {visibleColumns.net_fees && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subNetFees)}</td>}
@@ -904,6 +908,7 @@ const Reports = () => {
                               (visibleColumns.end_date ? 1 : 0) +
                               (visibleColumns.days ? 1 : 0)
                           } className="border border-black px-4 py-3 text-right uppercase tracking-[0.2em]">Verified Portfolio Total</td>
+                          {visibleColumns.daily_rate && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandDailyRate)}</td>}
                           {visibleColumns.rev_actual && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandActual)}</td>}
                           {visibleColumns.rev_discount && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandDiscount)}</td>}
                           {visibleColumns.net_fees && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandNetFees)}</td>}

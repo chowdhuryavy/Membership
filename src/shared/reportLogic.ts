@@ -20,15 +20,16 @@ export interface ReportContext {
   dateType?: 'today' | 'yesterday';
 }
 
-// Helper for safe date parsing - ensures consistent UTC/Local handling
+// Helper for safe date parsing - ensures consistent Local handling
 const safeParseDate = (dateStr: string | null | undefined) => {
   if (!dateStr) return null;
   
   // Try YYYY-MM-DD first (ISO-ish)
   if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
     try {
-      // Use parseISO to avoid timezone shifts if possible, or force to start of day
-      const d = parseISO(dateStr.split('T')[0]);
+      const parts = dateStr.split('T')[0].split('-');
+      // Use new Date(y, m, d) to ensure local time parsing
+      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
       if (!isNaN(d.getTime())) return startOfDay(d);
     } catch (e) {}
   }
@@ -97,28 +98,31 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       // Helper for revenue calculation
       const calculateRevenueDays = (pStart: Date, pEnd: Date) => {
         if (!mStart || !mEnd) return 0;
-        const activeStart = new Date(Math.max(mStart.getTime(), pStart.getTime()));
-        const activeEnd = new Date(Math.min(mEnd.getTime(), pEnd.getTime()));
-        if (activeStart > activeEnd) return 0;
+        
+        // Ensure we only look at the intersection of the membership and the requested period
+        const activeStart = new Date(Math.max(startOfDay(mStart).getTime(), startOfDay(pStart).getTime()));
+        const activeEnd = new Date(Math.min(startOfDay(mEnd).getTime(), startOfDay(pEnd).getTime()));
+        
+        if (startOfDay(activeStart) > startOfDay(activeEnd)) return 0;
 
         let days = 0;
         try {
-          const potentialDays = eachDayOfInterval({ start: activeStart, end: activeEnd });
+          const potentialDays = eachDayOfInterval({ start: startOfDay(activeStart), end: startOfDay(activeEnd) });
           for (const day of potentialDays) {
+            const dStr = format(day, 'yyyy-MM-dd');
             const isFrozen = memberFreezes.some((f: any) => {
               const fStart = safeParseDate(f.start_date);
-              const fEnd = f.end_date ? endOfDay(parseISO(f.end_date)) : null;
-              const frozen = fStart && fEnd && isWithinInterval(day, { start: fStart, end: fEnd });
-              if (frozen) console.log(`DEBUG: Day ${format(day, 'yyyy-MM-dd')} is frozen by ${f.start_date} to ${f.end_date}`);
-              return frozen;
+              const fEnd = safeParseDate(f.end_date);
+              if (!fStart || !fEnd) return false;
+              
+              const fsStr = format(fStart, 'yyyy-MM-dd');
+              const feStr = format(fEnd, 'yyyy-MM-dd');
+              return dStr >= fsStr && dStr <= feStr;
             });
             if (!isFrozen) {
                 days++;
-            } else {
-                console.log(`DEBUG: Day ${format(day, 'yyyy-MM-dd')} is frozen`);
             }
           }
-          console.log(`DEBUG: Active days for interval ${format(activeStart, 'yyyy-MM-dd')} to ${format(activeEnd, 'yyyy-MM-dd')}: ${days}`);
         } catch (e) {
           console.error("Error calculating revenue interval:", e);
         }
@@ -139,27 +143,9 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       totalDeferred += deferred;
       totalNetFees += (m.net_amount || 0);
 
-      const totalDurationDays = mStart && mEnd ? differenceInCalendarDays(mEnd, mStart) + 1 : 0;
-      let freezeDays = 0;
-      memberFreezes.forEach((f: any) => {
-          const fStart = safeParseDate(f.start_date);
-          const fEnd = f.end_date ? endOfDay(parseISO(f.end_date)) : null;
-          console.log(`DEBUG: Member: ${m.guest_name || m.name}, Freeze: ${f.start_date} to ${f.end_date}, Parsed: ${fStart} to ${fEnd}`);
-          if (fStart && fEnd && mStart && mEnd) {
-              const activeStart = new Date(Math.max(mStart.getTime(), fStart.getTime()));
-              const activeEnd = new Date(Math.min(mEnd.getTime(), fEnd.getTime()));
-              console.log(`DEBUG: Member: ${m.guest_name || m.name}, ActiveStart: ${activeStart}, ActiveEnd: ${activeEnd}`);
-              if (activeStart <= activeEnd) {
-                  const days = differenceInCalendarDays(activeEnd, activeStart) + 1;
-                  freezeDays += days;
-                  console.log(`DEBUG: Member: ${m.guest_name || m.name}, Freeze Days for this interval: ${days}`);
-              }
-          }
-      });
-      const totalActiveDays = totalDurationDays - freezeDays;
-      console.log(`DEBUG: Member: ${m.guest_name || m.name}, Total Duration: ${totalDurationDays}, Freeze Days: ${freezeDays}, Total Active Days: ${totalActiveDays}`);
-      console.log(`DEBUG: Member: ${m.guest_name || m.name}, Total Duration: ${totalDurationDays}, Freeze Days: ${freezeDays}, Total Active Days: ${totalActiveDays}`);
-
+      // Calculate total active days for the entire membership duration
+      const totalActiveDays = calculateRevenueDays(mStart, mEnd);
+      
       return {
         guest_name: m.guest_name || m.name,
         category_name: categoryMap[m.category_id] || 'Other',
@@ -173,7 +159,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         prev_accrual: prevAccrual,
         period_rev: periodRev,
         deferred: deferred,
-        debug_info: `Total: ${totalDurationDays}, Freeze: ${freezeDays}, Active: ${totalActiveDays}`
+        debug_info: `Total Active Days: ${totalActiveDays}, Period Days: ${periodRevDays}`
       };
     });
 
@@ -631,13 +617,14 @@ export const generateReportPDF = (options: PDFOptions) => {
 
         autoTable(doc, {
           startY: currentY,
-          head: [['SL.', 'GUEST NAME / PROFILE', 'START DATE', 'END DATE', 'DAYS', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
+          head: [['SL.', 'GUEST NAME / PROFILE', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
           body: groupRows.map((r: any, idx: number) => [
             idx + 1,
             r.guest_name,
             r.start_date,
             r.end_date,
             r.total_days,
+            formatCurrency(r.daily_rate),
             formatCurrency(r.actual_rate),
             formatCurrency(r.discount),
             formatCurrency(r.net_fees),
@@ -658,20 +645,22 @@ export const generateReportPDF = (options: PDFOptions) => {
           columnStyles: {
             0: { halign: 'center', cellWidth: 8 },
             1: { fontStyle: 'bold' },
-            2: { halign: 'center', cellWidth: 20 },
-            3: { halign: 'center', cellWidth: 20 },
+            2: { halign: 'center', cellWidth: 18 },
+            3: { halign: 'center', cellWidth: 18 },
             4: { halign: 'center', cellWidth: 10 },
             5: { halign: 'right' },
             6: { halign: 'right' },
             7: { halign: 'right' },
-            8: { halign: 'right', textColor: [100, 116, 139] },
-            9: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
-            10: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
+            8: { halign: 'right' },
+            9: { halign: 'right', textColor: [100, 116, 139] },
+            10: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
+            11: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
           },
           margin: { left: margin, right: margin }
         });
 
         // Subtotal Row for Category
+        const subDailyRate = groupRows.reduce((s: number, r: any) => s + r.daily_rate, 0);
         const subActual = groupRows.reduce((s: number, r: any) => s + r.actual_rate, 0);
         const subDiscount = groupRows.reduce((s: number, r: any) => s + r.discount, 0);
         const subNetFees = groupRows.reduce((s: number, r: any) => s + r.net_fees, 0);
@@ -683,6 +672,7 @@ export const generateReportPDF = (options: PDFOptions) => {
           startY: (doc as any).lastAutoTable.finalY,
           body: [[
             { content: `CLUSTER SUBTOTAL: ${category.toUpperCase()}`, colSpan: 5, styles: { halign: 'right' } },
+            formatCurrency(subDailyRate),
             formatCurrency(subActual),
             formatCurrency(subDiscount),
             formatCurrency(subNetFees),
@@ -701,12 +691,13 @@ export const generateReportPDF = (options: PDFOptions) => {
           },
           columnStyles: {
             0: { cellWidth: 'auto' }, // Let the colSpan handle it
-            5: { halign: 'right', cellWidth: 22 },
-            6: { halign: 'right', cellWidth: 22 },
-            7: { halign: 'right', cellWidth: 22 },
-            8: { halign: 'right', cellWidth: 22 },
-            9: { halign: 'right', cellWidth: 22 },
-            10: { halign: 'right', cellWidth: 22 }
+            5: { halign: 'right', cellWidth: 20 },
+            6: { halign: 'right', cellWidth: 20 },
+            7: { halign: 'right', cellWidth: 20 },
+            8: { halign: 'right', cellWidth: 20 },
+            9: { halign: 'right', cellWidth: 20 },
+            10: { halign: 'right', cellWidth: 20 },
+            11: { halign: 'right', cellWidth: 20 }
           },
           margin: { left: margin, right: margin }
         });
@@ -716,9 +707,11 @@ export const generateReportPDF = (options: PDFOptions) => {
     }
 
     // Grand Totals Table
+    const totalDailyRate = data.rows.reduce((s: number, r: any) => s + r.daily_rate, 0);
     autoTable(doc, {
       startY: currentY + 5,
       body: [
+        ['TOTAL DAILY RATE', formatCurrency(totalDailyRate)],
         ['TOTAL NET FEES', formatCurrency(data.summary.totalNetFees || 0)],
         ['PERIOD REVENUE RECOGNIZED', formatCurrency(data.summary.totalEarned || 0)],
         ['TOTAL DEFERRED REVENUE', formatCurrency(data.summary.totalDeferred || 0)]
