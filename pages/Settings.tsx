@@ -1421,7 +1421,7 @@ const SettingsPage = () => {
 
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Recipient Email Addresses *</label>
-                                {(reportRecipientForm.email ? reportRecipientForm.email.split(',').map(e => e.trim()) : ['']).map((email, index, arr) => (
+                                {(reportRecipientForm.email ? reportRecipientForm.email.split(',').map(e => e.trim()).filter(e => e !== '') : ['']).map((email, index, arr) => (
                                     <div key={index} className="flex gap-2 animate-in slide-in-from-left-2 duration-200">
                                         <div className="relative flex-1">
                                             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1430,7 +1430,7 @@ const SettingsPage = () => {
                                                 onChange={e => {
                                                     const newEmails = [...arr];
                                                     newEmails[index] = e.target.value;
-                                                    setReportRecipientForm({...reportRecipientForm, email: newEmails.filter(val => val !== undefined).join(', ')});
+                                                    setReportRecipientForm({...reportRecipientForm, email: newEmails.join(', ')});
                                                 }} 
                                                 placeholder="e.g. admin@property.com"
                                                 className="h-14 pl-12 rounded-xl font-black border-2 w-full" 
@@ -1454,7 +1454,7 @@ const SettingsPage = () => {
                                     variant="outline" 
                                     type="button"
                                     onClick={() => {
-                                        const currentEmails = reportRecipientForm.email ? reportRecipientForm.email.split(',').map(e => e.trim()) : [];
+                                        const currentEmails = reportRecipientForm.email ? reportRecipientForm.email.split(',').map(e => e.trim()).filter(e => e !== '') : [];
                                         setReportRecipientForm({...reportRecipientForm, email: [...currentEmails, ''].join(', ')});
                                     }}
                                     className="w-full h-12 rounded-xl border-dashed border-2 text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all"

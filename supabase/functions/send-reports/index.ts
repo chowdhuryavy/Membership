@@ -2,8 +2,15 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7"
 import { Resend } from "https://esm.sh/resend@3.1.0"
 import { jsPDF } from "https://esm.sh/jspdf@2.5.1"
-import autoTable from "https://esm.sh/jspdf-autotable@3.8.1"
+import autoTable from "https://esm.sh/jspdf-autotable@3.8.1?deps=jspdf@2.5.1"
 import { getReportData, generateReportPDF } from "./reportLogic.ts"
+
+// Apply the plugin to jsPDF
+if (typeof (jsPDF as any).API.autoTable !== 'function') {
+  (jsPDF as any).API.autoTable = function(options: any) {
+    return autoTable(this, options);
+  };
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

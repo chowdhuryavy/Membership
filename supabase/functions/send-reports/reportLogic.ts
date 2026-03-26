@@ -548,56 +548,56 @@ export const generateReportPDF = (options: PDFOptions) => {
   // 1. Logo & Property Info (Left)
   if (logoUrl) {
     try {
-      doc.addImage(logoUrl, 'PNG', margin, currentY, 25, 25);
+      doc.addImage(logoUrl, 'PNG', margin, currentY, 22, 22);
     } catch (e) {
       console.error('Logo add error:', e);
     }
   }
 
   const titleX = pageWidth - margin;
-  const propertyX = margin + (logoUrl ? 30 : 0);
-  const availableWidth = (pageWidth / 2) - margin - 5; // Give each half of the page
+  const propertyX = margin + (logoUrl ? 28 : 0);
+  const availableWidth = (pageWidth / 2) - margin - 10;
 
   // Property Name & Subtitle
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16); // Slightly larger for property name
+  doc.setFontSize(14);
   doc.setTextColor(15, 23, 42); // slate-900
-  doc.text(propertyName.toUpperCase(), propertyX, currentY + 8, { maxWidth: availableWidth });
+  doc.text(propertyName.toUpperCase(), propertyX, currentY + 7, { maxWidth: availableWidth });
   
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139); // slate-400
-  doc.text(`${outletName.toUpperCase()} • ISO-9001 CERTIFIED`, propertyX, currentY + 16);
+  doc.text(`${outletName.toUpperCase()} • OPERATIONAL CONTEXT`, propertyX, currentY + 14);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
   doc.setTextColor(79, 70, 229); // indigo-600
-  doc.text("INTERNAL VERIFICATION PROTOCOL", propertyX, currentY + 21);
+  doc.text("INTERNAL AUDIT & VERIFICATION PROTOCOL", propertyX, currentY + 19);
 
   // 2. Report Title & Period (Right)
   doc.setFont("helvetica", "black");
-  doc.setFontSize(16); // Reduced from 18 to prevent overlap
+  doc.setFontSize(14);
   doc.setTextColor(15, 23, 42);
-  doc.text(reportTitle.toUpperCase(), titleX, currentY + 10, { align: 'right', maxWidth: availableWidth });
+  doc.text(reportTitle.toUpperCase(), titleX, currentY + 8, { align: 'right', maxWidth: availableWidth });
 
   // Audit Period Box
-  const boxWidth = 50;
-  const boxHeight = 15;
+  const boxWidth = 45;
+  const boxHeight = 12;
   const boxX = pageWidth - margin - boxWidth;
-  const boxY = currentY + 22; // Moved down from 18 to avoid overlap with wrapped titles
+  const boxY = currentY + 18;
 
   doc.setFillColor(15, 23, 42); // slate-950
-  doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 2, 2, 'F');
+  doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 1.5, 1.5, 'F');
   
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
-  doc.setTextColor(255, 255, 255, 0.6);
-  doc.text("AUDIT PERIOD", boxX + (boxWidth / 2), boxY + 5, { align: 'center' });
+  doc.setFontSize(6);
+  doc.setTextColor(255, 255, 255, 0.7);
+  doc.text("AUDIT PERIOD", boxX + (boxWidth / 2), boxY + 4, { align: 'center' });
   
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setTextColor(255, 255, 255);
   const periodStr = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
-  doc.text(periodStr, boxX + (boxWidth / 2), boxY + 11, { align: 'center' });
+  doc.text(periodStr, boxX + (boxWidth / 2), boxY + 9, { align: 'center' });
 
   // Verified Audit Trail Tag
   doc.setFillColor(241, 245, 249); // slate-100
@@ -606,7 +606,20 @@ export const generateReportPDF = (options: PDFOptions) => {
   doc.setTextColor(100, 116, 139);
   doc.text("VERIFIED AUDIT TRAIL", pageWidth - margin - 17.5, boxY + boxHeight + 7.5, { align: 'center' });
 
-  currentY += 45;
+  // Subtle Header Divider
+  doc.setDrawColor(226, 232, 240); // slate-200
+  doc.setLineWidth(0.5);
+  doc.line(margin, boxY + boxHeight + 12, pageWidth - margin, boxY + boxHeight + 12);
+
+  currentY = boxY + boxHeight + 20;
+
+  const callAutoTable = (doc: any, options: any) => {
+    if (typeof doc.autoTable === 'function') {
+      return doc.autoTable(options);
+    } else {
+      return autoTable(doc, options);
+    }
+  };
 
   // --- TABLE SECTION ---
   if (isRevenueReport) {
@@ -624,7 +637,7 @@ export const generateReportPDF = (options: PDFOptions) => {
     } else {
       Object.entries(grouped).forEach(([category, groupRows]: [string, any]) => {
         // Category Header Row
-        autoTable(doc, {
+        callAutoTable(doc, {
           startY: currentY,
           body: [[`${category.toUpperCase()} (${groupRows.length} LEDGER EVENTS)`]],
           theme: 'plain',
@@ -639,9 +652,9 @@ export const generateReportPDF = (options: PDFOptions) => {
           margin: { left: margin, right: margin }
         });
         
-        currentY = (doc as any).lastAutoTable.finalY;
+        currentY = (doc as any).lastAutoTable?.finalY || currentY + 10;
 
-        autoTable(doc, {
+        callAutoTable(doc, {
           startY: currentY,
           head: [['SL.', 'GUEST NAME / PROFILE', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
           body: groupRows.map((r: any, idx: number) => [
@@ -694,8 +707,8 @@ export const generateReportPDF = (options: PDFOptions) => {
         const subPeriodRev = groupRows.reduce((s: number, r: any) => s + r.period_rev, 0);
         const subDeferred = groupRows.reduce((s: number, r: any) => s + r.deferred, 0);
 
-        autoTable(doc, {
-          startY: (doc as any).lastAutoTable.finalY,
+        callAutoTable(doc, {
+          startY: (doc as any).lastAutoTable?.finalY || currentY + 10,
           body: [[
             { content: `CLUSTER SUBTOTAL: ${category.toUpperCase()}`, colSpan: 5, styles: { halign: 'right' } },
             formatCurrency(subDailyRate),
@@ -728,13 +741,13 @@ export const generateReportPDF = (options: PDFOptions) => {
           margin: { left: margin, right: margin }
         });
 
-        currentY = (doc as any).lastAutoTable.finalY + 5;
+        currentY = (doc as any).lastAutoTable?.finalY || currentY + 15;
       });
     }
 
     // Grand Totals Table
     const totalDailyRate = data.rows.reduce((s: number, r: any) => s + r.daily_rate, 0);
-    autoTable(doc, {
+    callAutoTable(doc, {
       startY: currentY + 5,
       body: [
         ['TOTAL DAILY RATE', formatCurrency(totalDailyRate)],
@@ -757,7 +770,7 @@ export const generateReportPDF = (options: PDFOptions) => {
       doc.setTextColor(100, 116, 139);
       doc.text("No sales data found for this period.", margin, currentY);
     } else {
-      autoTable(doc, {
+      callAutoTable(doc, {
         startY: currentY,
         head: [['DATE', 'TYPE', 'ITEM / SERVICE', 'GROSS', 'DISCOUNT', 'NET']],
         body: data.rows.map((r: any) => [
@@ -788,7 +801,7 @@ export const generateReportPDF = (options: PDFOptions) => {
     }
 
     const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
-    autoTable(doc, {
+    callAutoTable(doc, {
       startY: finalY + 10,
       body: [
         ['PORTFOLIO GROSS REVENUE', formatCurrency(data.summary.totalGross || 0)],
@@ -809,7 +822,7 @@ export const generateReportPDF = (options: PDFOptions) => {
       doc.setTextColor(100, 116, 139);
       doc.text("No incentive data found for this period.", margin, currentY);
     } else {
-      autoTable(doc, {
+      callAutoTable(doc, {
         startY: currentY,
         head: [['STAFF NAME', 'TYPE', 'ITEM', 'AMOUNT', 'INCENTIVE']],
         body: data.rows.map((r: any) => [
@@ -831,7 +844,7 @@ export const generateReportPDF = (options: PDFOptions) => {
     }
 
     const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
-    autoTable(doc, {
+    callAutoTable(doc, {
       startY: finalY + 10,
       body: [
         ['TOTAL INCENTIVE PAYABLE', formatCurrency(data.summary.totalIncentive || 0)]
@@ -850,7 +863,7 @@ export const generateReportPDF = (options: PDFOptions) => {
       doc.setTextColor(100, 116, 139);
       doc.text("No room revenue data found for this period.", margin, currentY);
     } else {
-      autoTable(doc, {
+      callAutoTable(doc, {
         startY: currentY,
         head: [['ROOM NAME', 'BOOKINGS', 'REVENUE']],
         body: data.rows.map((r: any) => [
@@ -870,7 +883,7 @@ export const generateReportPDF = (options: PDFOptions) => {
     }
 
     const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
-    autoTable(doc, {
+    callAutoTable(doc, {
       startY: finalY + 10,
       body: [
         ['TOTAL ROOM REVENUE', formatCurrency(data.summary.totalRevenue || 0)],
@@ -912,7 +925,7 @@ export const generateReportPDF = (options: PDFOptions) => {
         r.status
       ]);
 
-      autoTable(doc, {
+      callAutoTable(doc, {
         startY: currentY,
         head: head,
         body: body,
@@ -937,7 +950,7 @@ export const generateReportPDF = (options: PDFOptions) => {
     }
 
     const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
-    autoTable(doc, {
+    callAutoTable(doc, {
       startY: finalY + 10,
       body: [
         ['TOTAL RECORD COUNT', `${data.summary.count || 0}`]
