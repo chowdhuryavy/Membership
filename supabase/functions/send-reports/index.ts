@@ -5,16 +5,12 @@ import { jsPDF } from "https://esm.sh/jspdf@2.5.1"
 import autoTable from "https://esm.sh/jspdf-autotable@3.8.1"
 import { getReportData, generateReportPDF } from "./reportLogic.ts"
 
-// Apply the plugin to jsPDF properly for esm.sh
-try {
-  if (typeof (jsPDF as any).API.autoTable !== 'function') {
-    (jsPDF as any).API.autoTable = function(options: any) {
-      return autoTable(this, options);
-    };
-  }
-} catch (e) {
-  console.error('Error applying autoTable plugin:', e);
-}
+// Apply the plugin
+const plugin = (autoTable as any).default || autoTable;
+(jsPDF as any).API.autoTable = plugin;
+
+// Check if it was applied
+console.log('jsPDF.API.autoTable exists:', !!(jsPDF as any).API.autoTable);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -86,20 +82,6 @@ serve(async (req) => {
       const year = p.find(part => part.type === 'year')?.value || '0';
       const month = p.find(part => part.type === 'month')?.value || '0';
       const day = p.find(part => part.type === 'day')?.value || '0';
-      // Ensure consistent format by parsing and re-stringifying
-      return `${parseInt(year)}-${parseInt(month)}-${parseInt(day)}`;
-    };
-
-    const currentDay = parseInt(getPart('day'));
-    const currentMonth = parseInt(getPart('month'));
-    const currentYear = parseInt(getPart('year'));
-
-    // Helper to get a consistent day string for Qatar time
-    const getQatarDayStr = (date: Date) => {
-      const p = qatarFormatter.formatToParts(date);
-      const year = p.find(part => part.type === 'year')?.value || '0';
-      const month = p.find(part => part.type === 'month')?.value || '0';
-      const day = p.find(part => part.type === 'day')?.value || '0';
       return `${parseInt(year)}-${parseInt(month)}-${parseInt(day)}`;
     };
 
@@ -110,6 +92,10 @@ serve(async (req) => {
       const month = p.find(part => part.type === 'month')?.value || '0';
       return `${parseInt(year)}-${parseInt(month)}`;
     };
+
+    const currentDay = parseInt(getPart('day'));
+    const currentMonth = parseInt(getPart('month'));
+    const currentYear = parseInt(getPart('year'));
 
     const currentDayStr = getQatarDayStr(now);
     const currentMonthStr = getQatarMonthStr(now);
@@ -270,7 +256,7 @@ serve(async (req) => {
           'daily_sales': 'Daily Sales & Revenue Report',
           'revenue_recognition': 'Revenue Recognition Audit',
           'members_joined': 'Membership Acquisition Log',
-          'expiring_memberships': 'Membership Retention Audit',
+          'expiring_memberships': 'EXPIRING MEMBERSHIPS AUDIT',
           'massage_room_revenue': 'Massage Room Revenue Report',
           'incentives': `${incentiveDept} Incentive Audit`
         };
@@ -278,7 +264,6 @@ serve(async (req) => {
         
         const doc = generateReportPDF({
           jsPDF,
-          autoTable,
           data: reportData,
           propertyName,
           outletName,

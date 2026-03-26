@@ -1,4 +1,5 @@
 import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths, parse, startOfDay, endOfDay } from 'npm:date-fns';
+import autoTable from "https://esm.sh/jspdf-autotable@3.8.1"
 
 /**
  * SHARED REPORT LOGIC
@@ -552,7 +553,6 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
 export interface PDFOptions {
   jsPDF: any;
-  autoTable: any;
   data: ReportData;
   propertyName: string;
   outletName: string;
@@ -564,13 +564,13 @@ export interface PDFOptions {
 }
 
 export const generateReportPDF = (options: PDFOptions) => {
-  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, reportTitle, date, logoUrl, reportType } = options;
+  const { jsPDF, data, propertyName, outletName, currencySymbol, reportTitle, date, logoUrl, reportType } = options;
   
   const isRevenueReport = reportType === 'revenue_recognition';
   const isDailySalesReport = reportType === 'daily_sales';
   
   const doc = new jsPDF({ 
-    orientation: isRevenueReport ? 'landscape' : 'portrait',
+    orientation: 'landscape',
     unit: 'mm',
     format: 'a4'
   });
@@ -660,17 +660,11 @@ export const generateReportPDF = (options: PDFOptions) => {
   currentY = boxY + boxHeight + 20;
 
   const callAutoTable = (doc: any, options: any) => {
-    // Some ESM environments might wrap the function in a default property
-    const actualAutoTable = typeof autoTable === 'function' ? autoTable : (autoTable?.default || autoTable);
-    
-    if (typeof doc.autoTable === 'function') {
-      return doc.autoTable(options);
-    } else if (typeof actualAutoTable === 'function') {
-      return actualAutoTable(doc, options);
-    } else {
-      console.error('autoTable function not found on doc or as standalone function');
-      return null;
+    if (typeof autoTable === 'function') {
+      return autoTable(doc, options);
     }
+    console.error('autoTable is not a function.');
+    return null;
   };
 
   // --- TABLE SECTION ---
