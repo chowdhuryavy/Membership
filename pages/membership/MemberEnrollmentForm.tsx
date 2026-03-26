@@ -16,16 +16,32 @@ import { RevenueEngine } from '../../services/revenueEngine';
 import { format, addDays, parse, isAfter, differenceInDays, startOfDay } from 'date-fns';
 import { useSettings } from '../../contexts/SettingsContext';
 
-const parseISO = (dateString: string) => {
-  if (!dateString) return new Date();
-  let d = new Date(dateString);
-  if (!isNaN(d.getTime())) return d;
-  try {
-    return parse(dateString, 'dd-MM-yyyy', new Date());
-  } catch (e) {
-    return new Date();
+// Helper for safe date parsing - ensures consistent Local handling
+const safeParseDate = (dateStr: string | null | undefined) => {
+  if (!dateStr) return null;
+  
+  // Try YYYY-MM-DD first (ISO-ish)
+  if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+    try {
+      const parts = dateStr.split('T')[0].split('-');
+      // Use new Date(y, m, d) to ensure local time parsing
+      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      if (!isNaN(d.getTime())) return startOfDay(d);
+    } catch (e) {}
   }
+
+  // Try DD-MM-YYYY
+  try {
+    const parsed = parse(dateStr, 'dd-MM-yyyy', new Date());
+    if (!isNaN(parsed.getTime())) return startOfDay(parsed);
+  } catch (e) {}
+
+  // Fallback to generic Date constructor
+  const fallback = new Date(dateStr);
+  return isNaN(fallback.getTime()) ? null : startOfDay(fallback);
 };
+
+const parseISO = safeParseDate;
 
 const memberSchema = z.object({
   membership_number: z.string().min(1, "ID required"),

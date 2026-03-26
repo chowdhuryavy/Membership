@@ -13,7 +13,17 @@ import {
 import { Member, Freeze, MemberStatus } from '../types';
 
 // Fix: Local implementations for missing date-fns members to resolve environment-specific import errors
-const parseISO = (dateString: string) => new Date(dateString);
+const parseISO = (dateString: string) => {
+  if (!dateString) return new Date();
+  // Try YYYY-MM-DD first (ISO-ish) to ensure local time parsing
+  if (dateString.match(/^\d{4}-\d{2}-\d{2}/)) {
+    try {
+      const parts = dateString.split('T')[0].split('-');
+      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    } catch (e) {}
+  }
+  return new Date(dateString);
+};
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 const min = (dates: Date[]) => new Date(Math.min(...dates.map(d => d.getTime())));
 const max = (dates: Date[]) => new Date(Math.max(...dates.map(d => d.getTime())));
