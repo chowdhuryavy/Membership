@@ -136,7 +136,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       let freezeDays = 0;
       memberFreezes.forEach((f: any) => {
           const fStart = safeParseDate(f.start_date);
-          const fEnd = safeParseDate(f.end_date);
+          const fEnd = f.end_date ? endOfDay(parseISO(f.end_date)) : null;
           if (fStart && fEnd && mStart && mEnd) {
               const activeStart = new Date(Math.max(mStart.getTime(), fStart.getTime()));
               const activeEnd = new Date(Math.min(mEnd.getTime(), fEnd.getTime()));
