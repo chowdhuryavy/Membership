@@ -707,10 +707,11 @@ const Reports = () => {
 
       // Use shared logic to generate PDF
       const reportTitles: Record<string, string> = {
-        'daily_sales': 'Daily Sales & Revenue Report',
+        'daily_sales': 'Daily Sales Ledger',
         'revenue_recognition': 'Revenue Recognition Audit',
-        'members_joined': 'Membership Acquisition Log',
-        'expiring_memberships': 'Membership Retention Audit'
+        'members_joined': 'Members Joined Audit',
+        'expiring_memberships': 'Expiring Memberships Audit',
+        'massage_room_revenue': 'Massage Room Revenue'
       };
       const reportTitle = reportTitles[reportType] || reportType.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
       

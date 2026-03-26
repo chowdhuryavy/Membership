@@ -2,14 +2,18 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7"
 import { Resend } from "https://esm.sh/resend@3.1.0"
 import { jsPDF } from "https://esm.sh/jspdf@2.5.1"
-import autoTable from "https://esm.sh/jspdf-autotable@3.8.1?deps=jspdf@2.5.1"
+import autoTable from "https://esm.sh/jspdf-autotable@3.8.1"
 import { getReportData, generateReportPDF } from "./reportLogic.ts"
 
-// Apply the plugin to jsPDF
-if (typeof (jsPDF as any).API.autoTable !== 'function') {
-  (jsPDF as any).API.autoTable = function(options: any) {
-    return autoTable(this, options);
-  };
+// Apply the plugin to jsPDF properly for esm.sh
+try {
+  if (typeof (jsPDF as any).API.autoTable !== 'function') {
+    (jsPDF as any).API.autoTable = function(options: any) {
+      return autoTable(this, options);
+    };
+  }
+} catch (e) {
+  console.error('Error applying autoTable plugin:', e);
 }
 
 const corsHeaders = {
@@ -75,9 +79,42 @@ serve(async (req) => {
     
     const currentHour = parseInt(getPart('hour'));
     const currentMinute = parseInt(getPart('minute'));
-    const currentDayStr = `${parseInt(getPart('year'))}-${parseInt(getPart('month'))}-${parseInt(getPart('day'))}`;
+    
+    // Helper to get a consistent day string for Qatar time
+    const getQatarDayStr = (date: Date) => {
+      const p = qatarFormatter.formatToParts(date);
+      const year = p.find(part => part.type === 'year')?.value || '0';
+      const month = p.find(part => part.type === 'month')?.value || '0';
+      const day = p.find(part => part.type === 'day')?.value || '0';
+      // Ensure consistent format by parsing and re-stringifying
+      return `${parseInt(year)}-${parseInt(month)}-${parseInt(day)}`;
+    };
 
-    console.log(`Current Qatar Time: ${currentHour}:${currentMinute}, Day: ${currentDayStr}`);
+    const currentDay = parseInt(getPart('day'));
+    const currentMonth = parseInt(getPart('month'));
+    const currentYear = parseInt(getPart('year'));
+
+    // Helper to get a consistent day string for Qatar time
+    const getQatarDayStr = (date: Date) => {
+      const p = qatarFormatter.formatToParts(date);
+      const year = p.find(part => part.type === 'year')?.value || '0';
+      const month = p.find(part => part.type === 'month')?.value || '0';
+      const day = p.find(part => part.type === 'day')?.value || '0';
+      return `${parseInt(year)}-${parseInt(month)}-${parseInt(day)}`;
+    };
+
+    // Helper to get a consistent month string for Qatar time
+    const getQatarMonthStr = (date: Date) => {
+      const p = qatarFormatter.formatToParts(date);
+      const year = p.find(part => part.type === 'year')?.value || '0';
+      const month = p.find(part => part.type === 'month')?.value || '0';
+      return `${parseInt(year)}-${parseInt(month)}`;
+    };
+
+    const currentDayStr = getQatarDayStr(now);
+    const currentMonthStr = getQatarMonthStr(now);
+
+    console.log(`Current Qatar Time: ${currentHour}:${currentMinute}, Day: ${currentDayStr}, Month: ${currentMonthStr}`);
 
     const filteredRecipients = recipients?.filter(r => {
       if (isTest) {
@@ -88,6 +125,10 @@ serve(async (req) => {
         console.log(`Recipient ${r.email}: No send_time set.`);
         return false;
       }
+      
+      const isDaily = r.report_type === 'daily_sales';
+
+      // 1. Time of day check (applies to all)
       let h: number, m: number;
       const timeStr = r.send_time.trim().toUpperCase();
       const timeMatch = timeStr.match(/^(\d+):(\d+)\s*(AM|PM)?$/);
@@ -102,7 +143,6 @@ serve(async (req) => {
         [h, m] = timeStr.split(':').map(Number);
       }
       
-      // Scheduler Logic: Check if current time is at or after scheduled time, within 120 mins (in Qatar Time)
       const scheduledTotalMins = h * 60 + m
       const currentTotalMins = currentHour * 60 + currentMinute
       const diff = currentTotalMins - scheduledTotalMins
@@ -112,23 +152,38 @@ serve(async (req) => {
       console.log(`  - Current Qatar Time: ${currentHour}:${currentMinute} (${currentTotalMins} mins)`);
       console.log(`  - Diff: ${diff} mins`);
 
-      // Allow sending if it's within the 120 minute window OR if it's slightly before (e.g., -5 mins) to account for cron jitter
-      if (diff < -5 || diff >= 120) {
-        console.log(`  - Result: FAILED (Outside window: -5 to 120 mins)`);
+      if (diff < -5 || diff >= 45) {
+        console.log(`  - Result: FAILED (Outside window: -5 to 45 mins)`);
         return false;
       }
 
-      // Check if already sent today (using Qatar calendar day)
-      if (r.last_sent_at) {
-        // Parse the UTC date from the database and format it to Qatar time to get the day string
-        const lastSentDate = new Date(r.last_sent_at);
-        const lastSentParts = qatarFormatter.formatToParts(lastSentDate);
-        const lastSentDayStr = `${parseInt(lastSentParts.find(p => p.type === 'year')?.value || '0')}-${parseInt(lastSentParts.find(p => p.type === 'month')?.value || '0')}-${parseInt(lastSentParts.find(p => p.type === 'day')?.value || '0')}`;
-        
-        console.log(`  - Last sent at: ${r.last_sent_at} (Day: ${lastSentDayStr}), Current Day: ${currentDayStr}`);
-        if (lastSentDayStr === currentDayStr) {
-          console.log(`  - Result: FAILED (Already sent today)`);
+      // 2. Frequency check
+      if (!isDaily) {
+        // Monthly check: must be 1st of the month
+        if (currentDay !== 1) {
+          console.log(`  - Result: FAILED (Not 1st of month)`);
           return false;
+        }
+      }
+
+      // 3. Already sent check
+      if (r.last_sent_at) {
+        const lastSentDate = new Date(r.last_sent_at);
+        
+        if (isDaily) {
+          // Daily check: already sent today?
+          const lastSentDayStr = getQatarDayStr(lastSentDate);
+          if (lastSentDayStr === currentDayStr) {
+            console.log(`  - Result: FAILED (Already sent today)`);
+            return false;
+          }
+        } else {
+          // Monthly check: already sent this month?
+          const lastSentMonthStr = getQatarMonthStr(lastSentDate);
+          if (lastSentMonthStr === currentMonthStr) {
+            console.log(`  - Result: FAILED (Already sent this month)`);
+            return false;
+          }
         }
       }
 
@@ -188,6 +243,9 @@ serve(async (req) => {
 
         if (recipient.report_date_type === 'yesterday') {
           reportDate.setDate(reportDate.getDate() - 1)
+        } else if (recipient.report_type !== 'daily_sales') {
+          // Monthly report: send for previous month
+          reportDate.setMonth(reportDate.getMonth() - 1);
         }
 
         // Parse incentive_dept from recipient if available (for incentive reports)
@@ -341,8 +399,12 @@ serve(async (req) => {
         // Update last_sent_at to prevent duplicate sends today, using the actual current timestamp
         // Only update if it's NOT a test send, so automated schedules can still run
         if (!isTest) {
-          await supabase.from('report_recipients').update({ last_sent_at: new Date().toISOString() }).eq('id', recipient.id)
-          console.log(`DEBUG: Updated last_sent_at for ${recipient.email}`);
+          const { error: updateError } = await supabase.from('report_recipients').update({ last_sent_at: new Date().toISOString() }).eq('id', recipient.id)
+          if (updateError) {
+            console.error(`DEBUG: Error updating last_sent_at for ${recipient.email}:`, updateError);
+          } else {
+            console.log(`DEBUG: Updated last_sent_at for ${recipient.email}`);
+          }
         } else {
           console.log(`DEBUG: Test mode - skipping last_sent_at update for ${recipient.email}`);
         }

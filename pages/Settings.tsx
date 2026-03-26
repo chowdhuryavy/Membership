@@ -1488,12 +1488,12 @@ const SettingsPage = () => {
                                 <Select 
                                     label="Strategic Report Type *" 
                                     options={[
-                                        {value:'revenue_recognition', label:'Revenue Recognition'},
-                                        {value:'incentives', label:'Incentive Audit'},
-                                        {value:'daily_sales', label:'Daily Sales Ledger'},
-                                        {value:'members_joined', label:'Members Joined'},
-                                        {value:'expiring_memberships', label:'Expiring Memberships'},
-                                        {value:'massage_room_revenue', label:'Massage Room Revenue'}
+                                        {value:'revenue_recognition', label:'Revenue Recognition (Monthly)'},
+                                        {value:'incentives', label:'Incentive Audit (Monthly)'},
+                                        {value:'daily_sales', label:'Daily Sales Ledger (Daily)'},
+                                        {value:'members_joined', label:'Members Joined (Monthly)'},
+                                        {value:'expiring_memberships', label:'Expiring Memberships (Monthly)'},
+                                        {value:'massage_room_revenue', label:'Massage Room Revenue (Monthly)'}
                                     ]} 
                                     value={reportRecipientForm.report_type} 
                                     onChange={e => setReportRecipientForm({...reportRecipientForm, report_type: e.target.value as any})} 

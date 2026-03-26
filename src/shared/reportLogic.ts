@@ -151,6 +151,16 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       // Calculate total active days for the entire membership duration
       const totalActiveDays = calculateRevenueDays(mStart, mEnd);
       
+      if (m.guest_name?.includes('Test') || m.name?.includes('Test')) {
+        console.log(`DEBUG [RevRec]: ${m.guest_name || m.name}`);
+        console.log(`  - Membership: ${m.start_date} to ${m.current_end_date}`);
+        console.log(`  - Total Active Days: ${totalActiveDays}`);
+        console.log(`  - Daily Rate: ${dailyRate}`);
+        console.log(`  - Period: ${format(start, 'yyyy-MM-dd')} to ${format(end, 'yyyy-MM-dd')}`);
+        console.log(`  - Period Days: ${periodRevDays}`);
+        console.log(`  - Period Rev: ${periodRev}`);
+      }
+
       return {
         guest_name: m.guest_name || m.name,
         category_name: categoryMap[m.category_id] || 'Other',
@@ -263,16 +273,52 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     if (outletIds.length === 0) return { rows: [], summary: { count: 0 } };
 
     if (reportType === 'members_joined') {
-      let query = supabase.from('members').select('*').in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr);
-      const { data: members } = await query;
-      const rows = (members || []).map((m: any) => ({
-        name: m.guest_name || m.name,
-        email: m.email,
-        phone: m.phone,
-        date: m.start_date,
-        status: m.status
-      }));
-      return { rows, summary: { count: rows.length } };
+      const [membersRes, categoriesRes] = await Promise.all([
+        supabase.from('members').select('*').in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr),
+        supabase.from('membership_categories').select('id, name')
+      ]);
+
+      const members = membersRes.data || [];
+      const categories = categoriesRes.data || [];
+      const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
+
+      let totalGross = 0;
+      let totalDiscount = 0;
+      let totalNet = 0;
+
+      const rows = members.filter((m: any) => m.status !== 'tentative').map((m: any) => {
+        const actualPrice = Number(m.actual_rate || (m.net_amount + (m.discount || 0)) || 0);
+        const discountAmt = Number(m.discount || 0);
+        const netRev = Number(m.net_amount || 0);
+        const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+        totalGross += actualPrice;
+        totalDiscount += discountAmt;
+        totalNet += netRev;
+
+        return {
+          date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd-MM-yyyy') : 'N/A',
+          name: m.guest_name || m.name,
+          category: categoryMap[m.category_id] || 'Other',
+          check_no: m.check_no || '#---',
+          item: 'Membership',
+          gross: actualPrice,
+          discount_percent: discPercent,
+          discount_amt: discountAmt,
+          net: netRev,
+          status: m.status
+        };
+      });
+
+      return { 
+        rows, 
+        summary: { 
+          count: rows.length,
+          totalGross,
+          totalDiscount,
+          totalNet
+        } 
+      };
     } else {
       // expiring_memberships
       const [membersRes, categoriesRes] = await Promise.all([
@@ -323,8 +369,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         category_name: categoryMap[m.category_id] || 'Other',
         email: m.email,
         phone: m.phone,
-        start_date: m.start_date,
-        date: m.current_end_date || m.end_date,
+        start_date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd MMM yyyy') : 'N/A',
+        date: (m.current_end_date || m.end_date) ? format(safeParseDate(m.current_end_date || m.end_date)!, 'dd MMM yyyy') : 'N/A',
         status: m.status
       }));
 
@@ -614,10 +660,16 @@ export const generateReportPDF = (options: PDFOptions) => {
   currentY = boxY + boxHeight + 20;
 
   const callAutoTable = (doc: any, options: any) => {
+    // Some ESM environments might wrap the function in a default property
+    const actualAutoTable = typeof autoTable === 'function' ? autoTable : (autoTable?.default || autoTable);
+    
     if (typeof doc.autoTable === 'function') {
       return doc.autoTable(options);
+    } else if (typeof actualAutoTable === 'function') {
+      return actualAutoTable(doc, options);
     } else {
-      return autoTable(doc, options);
+      console.error('autoTable function not found on doc or as standalone function');
+      return null;
     }
   };
 
@@ -763,6 +815,82 @@ export const generateReportPDF = (options: PDFOptions) => {
       },
       margin: { left: margin, right: margin }
     });
+  } else if (reportType === 'members_joined') {
+    // Members Joined Audit Style (Image 1)
+    if (data.rows.length === 0) {
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text("No membership acquisitions found for this period.", margin, currentY);
+    } else {
+      callAutoTable(doc, {
+        startY: currentY,
+        head: [['SL.NO.', 'DATE', 'GUEST / MEMBER', 'CATEGORY', 'CHECK NO.', 'ITEM / SERVICE', 'GROSS AMOUNT', 'DISC %', 'DISCOUNT AMT', 'NET REVENUE', 'REMARKS']],
+        body: data.rows.map((r: any, idx: number) => [
+          idx + 1,
+          r.date,
+          r.name,
+          r.category,
+          r.check_no,
+          r.item,
+          r.gross.toFixed(2),
+          r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
+          r.discount_amt.toFixed(2),
+          r.net.toFixed(2),
+          r.status
+        ]),
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [15, 23, 42], 
+          textColor: [255, 255, 255], 
+          fontStyle: 'bold', 
+          fontSize: 7, 
+          halign: 'center',
+          font: 'helvetica'
+        },
+        styles: { fontSize: 7, cellPadding: 2, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 },
+          1: { halign: 'center', cellWidth: 18 },
+          4: { halign: 'center' },
+          6: { halign: 'right' },
+          7: { halign: 'center' },
+          8: { halign: 'right' },
+          9: { halign: 'right', fontStyle: 'bold' },
+          10: { fontSize: 6, fontStyle: 'italic', textColor: [100, 116, 139] }
+        },
+        margin: { left: margin, right: margin }
+      });
+
+      const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
+      callAutoTable(doc, {
+        startY: finalY,
+        body: [[
+          { content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: 6, styles: { halign: 'right' } },
+          data.summary.totalGross.toFixed(2),
+          '',
+          data.summary.totalDiscount.toFixed(2),
+          data.summary.totalNet.toFixed(2),
+          ''
+        ]],
+        theme: 'plain',
+        styles: { 
+          fillColor: [15, 23, 42], 
+          textColor: [255, 255, 255], 
+          fontStyle: 'bold', 
+          fontSize: 8, 
+          cellPadding: 3,
+          font: 'helvetica'
+        },
+        columnStyles: {
+          6: { halign: 'right', cellWidth: 22 },
+          7: { halign: 'center', cellWidth: 15 },
+          8: { halign: 'right', cellWidth: 22 },
+          9: { halign: 'right', cellWidth: 22 },
+          10: { cellWidth: 20 }
+        },
+        margin: { left: margin, right: margin }
+      });
+    }
   } else if (isDailySalesReport) {
     // Daily Sales Style
     if (data.rows.length === 0) {
@@ -916,13 +1044,13 @@ export const generateReportPDF = (options: PDFOptions) => {
         r.category_name,
         r.start_date,
         r.date,
-        r.status
+        r.status?.toUpperCase() || 'N/A'
       ] : [
         r.name,
         r.email,
         r.phone,
         r.date,
-        r.status
+        r.status?.toUpperCase() || 'N/A'
       ]);
 
       callAutoTable(doc, {
@@ -945,6 +1073,20 @@ export const generateReportPDF = (options: PDFOptions) => {
           5: { halign: 'center', fontStyle: 'bold', textColor: [239, 68, 68] }, // Red for end date
           6: { halign: 'center' }
         } : {},
+        didParseCell: (data: any) => {
+          if (isExpiring && data.section === 'body' && data.column.index === 6) {
+            const status = String(data.cell.raw || '').toUpperCase();
+            if (status === 'ACTIVE') {
+              data.cell.styles.fillColor = [187, 247, 208]; // green-100
+              data.cell.styles.textColor = [22, 101, 52]; // green-800
+              data.cell.styles.fontStyle = 'bold';
+            } else if (status === 'EXPIRED') {
+              data.cell.styles.fillColor = [254, 226, 226]; // red-100
+              data.cell.styles.textColor = [153, 27, 27]; // red-800
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+        },
         margin: { left: margin, right: margin }
       });
     }

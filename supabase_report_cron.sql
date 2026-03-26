@@ -13,8 +13,8 @@ END $$;
 -- Create a cron job to call the send-reports edge function every 10 minutes
 -- NOTE: Replace <YOUR_PROJECT_REF> and <YOUR_ANON_KEY> with your actual Supabase project details
 SELECT cron.schedule(
-  'send-reports-frequent',
-  '*/10 * * * *', -- Runs every 10 minutes
+  'send-reports-hourly',
+  '0 * * * *', -- Runs every hour
   $$
   SELECT net.http_post(
       url:='https://fqwfffkkaeknaqjorygy.supabase.co/functions/v1/send-reports',
