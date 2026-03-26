@@ -107,7 +107,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           for (const day of potentialDays) {
             const isFrozen = memberFreezes.some((f: any) => {
               const fStart = safeParseDate(f.start_date);
-              const fEnd = safeParseDate(f.end_date);
+              const fEnd = f.end_date ? endOfDay(parseISO(f.end_date)) : null;
               return fStart && fEnd && isWithinInterval(day, { start: fStart, end: fEnd });
             });
             if (!isFrozen) days++;
