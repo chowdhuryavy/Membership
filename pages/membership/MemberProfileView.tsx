@@ -48,6 +48,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const [showAgreement, setShowAgreement] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showRevertCancelModal, setShowRevertCancelModal] = useState(false);
+  const [bulkFreezeToDelete, setBulkFreezeToDelete] = useState<any>(null);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [memberNotes, setMemberNotes] = useState(viewingMember.notes || '');
   const [cancelDate, setCancelDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -254,31 +256,51 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const handleDeleteFreeze = async (f: any) => {
       const isBulk = f.batch_id || f.maintenance_batch_id;
       if (isBulk) {
-          const confirmMsg = "This suspension was applied as part of a bulk operation. Deleting it here will revoke the suspension for ALL members in this batch. Are you sure you want to proceed?";
-          if (!window.confirm(confirmMsg)) return;
-          
+          setBulkFreezeToDelete(f);
+      } else {
           setLoading(true);
           try {
-              await db.deleteBulkFreeze(isBulk);
-              toast.success("Bulk suspension deleted successfully.");
+              await db.deleteFreeze(f.id, viewingMember.id);
+              toast.success("Suspension deleted.");
+              onUpdate();
+              loadForensics(viewingMember);
           } catch (err) {
               console.error(err);
-              toast.error("Failed to delete bulk suspension.");
+              toast.error("Failed to delete suspension.");
           } finally {
-              setLoading(true);
+              setLoading(false);
           }
-      } else {
-          await db.deleteFreeze(f.id, viewingMember.id);
-          toast.success("Suspension deleted.");
       }
-      onUpdate();
-      loadForensics(viewingMember);
   };
 
-  const handleDeleteCancellation = async () => {
+  const confirmDeleteBulkFreeze = async () => {
+      if (!bulkFreezeToDelete) return;
+      const isBulk = bulkFreezeToDelete.batch_id || bulkFreezeToDelete.maintenance_batch_id;
+      setLoading(true);
+      try {
+          await db.deleteBulkFreeze(isBulk);
+          toast.success("Bulk suspension deleted successfully.");
+          setBulkFreezeToDelete(null);
+          onUpdate();
+          loadForensics(viewingMember);
+      } catch (err) {
+          console.error(err);
+          toast.error("Failed to delete bulk suspension.");
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  const handleDeleteCancellation = () => {
+      setShowRevertCancelModal(true);
+  };
+
+  const confirmRevertCancellation = async () => {
     setLoading(true);
     try {
         const restoredAmount = (viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : (viewingMember.actual_rate - viewingMember.discount);
+        const refundAmount = Math.max(0, restoredAmount - (viewingMember.net_amount || 0));
+
         await db.updateMember(viewingMember.id, {
             status: MemberStatus.ACTIVE,
             cancellation_date: null,
@@ -287,17 +309,47 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             original_net_amount: null
         });
         
+        // Recalculate current_end_date based on freezes
+        const newEndDate = await db.syncMemberEndDate(viewingMember.id);
+        
+        // Offset the refund if there was one
+        if (refundAmount > 0 && currentProperty && currentOutlet) {
+            try {
+                await db.addSale({
+                    property_id: currentProperty.id,
+                    outlet_id: currentOutlet.id,
+                    guest_name: viewingMember.guest_name,
+                    category: 'Other',
+                    item_name: `Cancellation Reversal - ${viewingMember.membership_number}`,
+                    quantity: 1,
+                    unit_price: refundAmount,
+                    gross_amount: refundAmount,
+                    discount_amount: 0,
+                    net_amount: refundAmount,
+                    payment_method: 'Adjustment',
+                    status: 'completed'
+                });
+                console.log("Refund reversal recorded in sales");
+            } catch (saleErr) {
+                console.error("Failed to record refund reversal sale:", saleErr);
+                toast.error("Cancellation reverted, but failed to record reversal in sales.");
+            }
+        }
+
         setViewingMember({
             ...viewingMember,
             status: MemberStatus.ACTIVE,
             cancellation_date: null,
-            current_end_date: viewingMember.original_end_date,
+            current_end_date: newEndDate || viewingMember.original_end_date,
             net_amount: restoredAmount,
             original_net_amount: null
         });
+        toast.success("Cancellation reverted successfully.");
+        setShowRevertCancelModal(false);
         onUpdate();
     } catch (err) {
         console.error("Failed to delete cancellation:", err);
+        toast.error("Failed to revert cancellation.");
     } finally {
         setLoading(false);
     }
@@ -311,7 +363,17 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start) + 1);
         const proratedAmount = daysUsed * viewingMember.daily_rate;
         const originalAmount = (viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : viewingMember.net_amount;
-        const refundAmount = Math.max(0, originalAmount - proratedAmount);
+        const newRefundAmount = Math.max(0, originalAmount - proratedAmount);
+        
+        let saleAmount = -newRefundAmount;
+        let isEdit = viewingMember.status === MemberStatus.CANCELLED;
+        
+        if (isEdit) {
+            const oldRefundAmount = Math.max(0, originalAmount - (viewingMember.net_amount || 0));
+            // If new refund is 100 and old was 80, we need to refund 20 more (saleAmount = -20)
+            // If new refund is 50 and old was 80, we need to charge 30 (saleAmount = +30)
+            saleAmount = oldRefundAmount - newRefundAmount;
+        }
         
         console.log("Updating member with ID:", viewingMember.id);
         console.log("Updating member with data:", {
@@ -330,28 +392,32 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         });
         console.log("Member updated successfully");
 
-        // Record the refund in sales if there is an amount to refund
-        if (refundAmount > 0 && currentProperty && currentOutlet) {
+        // Record the refund in sales if there is an amount to refund/adjust
+        if (saleAmount !== 0 && currentProperty && currentOutlet) {
             try {
                 await db.addSale({
                     property_id: currentProperty.id,
                     outlet_id: currentOutlet.id,
                     guest_name: viewingMember.guest_name,
                     category: 'Other',
-                    item_name: `Membership Refund - ${viewingMember.membership_number}`,
+                    item_name: isEdit ? `Cancellation Adjustment - ${viewingMember.membership_number}` : `Membership Refund - ${viewingMember.membership_number}`,
                     quantity: 1,
-                    unit_price: -refundAmount,
-                    gross_amount: -refundAmount,
+                    unit_price: saleAmount,
+                    gross_amount: saleAmount,
                     discount_amount: 0,
-                    net_amount: -refundAmount,
-                    payment_method: 'Refund',
+                    net_amount: saleAmount,
+                    payment_method: saleAmount < 0 ? 'Refund' : 'Adjustment',
                     status: 'completed'
                 });
-                console.log("Refund recorded in sales");
-                toast.success(`Membership cancelled. Refund amount: ${formatMoney(refundAmount)}`);
+                console.log("Refund/Adjustment recorded in sales");
+                if (saleAmount < 0) {
+                    toast.success(`Membership cancelled. Refund amount: ${formatMoney(Math.abs(saleAmount))}`);
+                } else {
+                    toast.success(`Cancellation adjusted. Charge amount: ${formatMoney(saleAmount)}`);
+                }
             } catch (saleErr) {
-                console.error("Failed to record refund sale:", saleErr);
-                toast.error("Membership cancelled, but failed to record refund in sales.");
+                console.error("Failed to record refund/adjustment sale:", saleErr);
+                toast.error("Membership cancelled, but failed to record refund/adjustment in sales.");
             }
         } else {
             toast.success("Membership cancelled successfully.");
@@ -398,6 +464,12 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
           {isActive && (
             <Button onClick={() => setShowCancelModal(true)} variant="secondary" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase bg-red-50 border-2 border-red-100 text-red-600 hover:bg-red-100 shadow-sm transition-all">
                 <X className="w-4 h-4 mr-2" /> Cancel Membership
+            </Button>
+          )}
+
+          {viewingMember.status === MemberStatus.CANCELLED && (
+            <Button onClick={handleDeleteCancellation} variant="secondary" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase bg-amber-50 border-2 border-amber-100 text-amber-600 hover:bg-amber-100 shadow-sm transition-all">
+                <RotateCcw className="w-4 h-4 mr-2" /> Revert Cancellation
             </Button>
           )}
           
@@ -908,7 +980,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         </div>
                         <div className="col-span-1 md:col-span-4 flex gap-2">
                             <Button onClick={() => { setCancelDate(cancellationDetails.date); setShowCancelModal(true); }} variant="outline" className="text-xs">Edit Cancellation</Button>
-                            <Button onClick={handleDeleteCancellation} variant="secondary" className="text-xs bg-red-50 text-red-600 hover:bg-red-100">Delete Cancellation</Button>
+                            <Button onClick={handleDeleteCancellation} variant="secondary" className="text-xs bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200">Revert Cancellation</Button>
                         </div>
                     </div>
                 </Card>
@@ -987,6 +1059,82 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                     >
                         Confirm Cancellation
                     </Button>
+                </CardContent>
+            </Card>
+        </div>
+      )}
+
+      {showRevertCancelModal && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
+            <Card className="w-full max-w-[400px] rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden bg-white border border-white/20">
+                <CardHeader className="bg-[#0f172a] text-white p-10 relative flex flex-col items-center text-center">
+                    <div className="w-14 h-14 bg-amber-500/20 rounded-2xl flex items-center justify-center mb-6 border border-amber-500/30">
+                        <RotateCcw className="w-7 h-7 text-amber-400" />
+                    </div>
+                    <CardTitle className="text-2xl font-black uppercase tracking-tight leading-none mb-2">Revert Cancellation</CardTitle>
+                    <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest">Restore Membership</p>
+                    <button onClick={() => setShowRevertCancelModal(false)} className="absolute top-8 right-8 p-2.5 rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90 shadow-lg border border-white/5">
+                        <X className="w-5 h-5 text-slate-400"/>
+                    </button>
+                </CardHeader>
+                <CardContent className="p-10 space-y-6">
+                    <p className="text-sm text-slate-600 text-center font-medium">
+                        Are you sure you want to revert this cancellation? This will restore the membership to active status and reverse any recorded refunds.
+                    </p>
+                    <div className="flex gap-4 mt-6">
+                        <Button 
+                            onClick={() => setShowRevertCancelModal(false)}
+                            variant="outline"
+                            className="flex-1 h-14 rounded-[1.5rem] font-black uppercase text-xs tracking-wider"
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={confirmRevertCancellation}
+                            isLoading={isLoading}
+                            className="flex-1 h-14 rounded-[1.5rem] font-black uppercase text-xs tracking-wider bg-amber-500 hover:bg-amber-600 text-white"
+                        >
+                            Confirm
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+      )}
+
+      {bulkFreezeToDelete && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
+            <Card className="w-full max-w-[400px] rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden bg-white border border-white/20">
+                <CardHeader className="bg-[#0f172a] text-white p-10 relative flex flex-col items-center text-center">
+                    <div className="w-14 h-14 bg-red-500/20 rounded-2xl flex items-center justify-center mb-6 border border-red-500/30">
+                        <Trash2 className="w-7 h-7 text-red-400" />
+                    </div>
+                    <CardTitle className="text-2xl font-black uppercase tracking-tight leading-none mb-2">Delete Bulk Suspension</CardTitle>
+                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Warning</p>
+                    <button onClick={() => setBulkFreezeToDelete(null)} className="absolute top-8 right-8 p-2.5 rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90 shadow-lg border border-white/5">
+                        <X className="w-5 h-5 text-slate-400"/>
+                    </button>
+                </CardHeader>
+                <CardContent className="p-10 space-y-6">
+                    <p className="text-sm text-slate-600 text-center font-medium">
+                        This suspension was applied as part of a bulk operation. Deleting it here will revoke the suspension for <strong>ALL members</strong> in this batch. Are you sure you want to proceed?
+                    </p>
+                    <div className="flex gap-4 mt-6">
+                        <Button 
+                            onClick={() => setBulkFreezeToDelete(null)}
+                            variant="outline"
+                            className="flex-1 h-14 rounded-[1.5rem] font-black uppercase text-xs tracking-wider"
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={confirmDeleteBulkFreeze}
+                            isLoading={isLoading}
+                            className="flex-1 h-14 rounded-[1.5rem] font-black uppercase text-xs tracking-wider bg-red-600 hover:bg-red-700 text-white"
+                        >
+                            Delete All
+                        </Button>
+                    </div>
                 </CardContent>
             </Card>
         </div>

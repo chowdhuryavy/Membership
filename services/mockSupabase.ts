@@ -200,7 +200,7 @@ class DatabaseService {
     await this.logAction('SECURITY_OVERRIDE_PURGE', `Removed override for ${key} on User ID: ${userId}`);
   }
 
-  private async syncMemberEndDate(memberId: string) {
+  async syncMemberEndDate(memberId: string) {
     if (!this.isSupabase()) {
         // Local Mode Sync
         const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
