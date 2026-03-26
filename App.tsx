@@ -184,6 +184,8 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
     );
 };
 
+import { NotificationBell } from './components/NotificationBell';
+
 const TopHeader = () => {
     const { user } = useAuth();
     return (
@@ -198,10 +200,7 @@ const TopHeader = () => {
             </div>
             
             <div className="flex items-center gap-4">
-                <button className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-xl transition-all relative">
-                    <Bell className="w-5 h-5" />
-                    <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-                </button>
+                <NotificationBell />
                 <div className="h-8 w-px bg-slate-100 mx-2"></div>
                 <Link to="/profile" className="flex items-center gap-3 p-1.5 pl-3 pr-1.5 hover:bg-slate-50 rounded-2xl transition-all group">
                     <div className="flex flex-col items-end">
@@ -357,11 +356,11 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
                     title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
                 >
                     {settings?.logo_url ? (
-                        <div className="w-14 h-14 flex items-center justify-center shrink-0 transition-all duration-500 group-hover/logo:scale-110 group-hover/logo:rotate-[5deg]">
+                        <div className={`w-14 h-14 flex items-center justify-center shrink-0 transition-all duration-500 group-hover/logo:scale-110 group-hover/logo:rotate-[5deg] ${isCollapsed ? 'rotate-0' : 'rotate-[360deg]'}`}>
                              <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain drop-shadow-md" />
                         </div>
                     ) : (
-                        <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100 shrink-0 transition-all duration-500 group-hover/logo:scale-110 group-hover/logo:rotate-[5deg]">
+                        <div className={`w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100 shrink-0 transition-all duration-500 group-hover/logo:scale-110 group-hover/logo:rotate-[5deg] ${isCollapsed ? 'rotate-0' : 'rotate-[360deg]'}`}>
                             <Sparkles className="w-7 h-7" />
                         </div>
                     )}
@@ -453,11 +452,11 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
             <div className="flex justify-between items-center w-full mb-3">
                 <div className="flex items-center gap-3">
                      {settings?.logo_url ? (
-                         <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-lg p-1 overflow-hidden border border-slate-100">
+                         <div className={`w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-lg p-1 overflow-hidden border border-slate-100 transition-transform duration-500 ${isOpen ? 'rotate-[360deg]' : 'rotate-0'}`}>
                              <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain" />
                          </div>
                      ) : (
-                         <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white">
+                         <div className={`w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white transition-transform duration-500 ${isOpen ? 'rotate-[360deg]' : 'rotate-0'}`}>
                              <Sparkles className="w-5 h-5" />
                          </div>
                      )}
@@ -468,9 +467,12 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
                         <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Corporate Solution</span>
                      </div>
                 </div>
-                <button onClick={() => setIsOpen(!isOpen)} className="text-slate-600 p-3 bg-slate-50 rounded-xl transition-colors border border-slate-100">
-                    {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-                </button>
+                <div className="flex items-center gap-2">
+                    <NotificationBell />
+                    <button onClick={() => setIsOpen(!isOpen)} className="text-slate-600 p-3 bg-slate-50 rounded-xl transition-colors border border-slate-100">
+                        {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                    </button>
+                </div>
             </div>
 
             <PortfolioSelector isMobile />
