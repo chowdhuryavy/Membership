@@ -152,7 +152,11 @@ const Members = () => {
           existingMember={selectedMember}
           isEditing={isEditing}
           isRenewal={isRenewal}
-          categories={filteredCategories}
+          categories={
+            (isEditing || isRenewal) && selectedMember?.membership_type_id
+              ? categories.filter(c => c.membership_type_id === selectedMember.membership_type_id)
+              : filteredCategories
+          }
           membershipTypes={membershipTypes}
           selectedTypeId={selectedTypeId}
           staff={staffList}
