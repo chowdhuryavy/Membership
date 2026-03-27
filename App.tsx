@@ -189,7 +189,7 @@ import { NotificationBell } from './components/NotificationBell';
 const TopHeader = () => {
     const { user } = useAuth();
     return (
-        <header className="hidden md:flex h-20 items-center justify-between px-8 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 sticky top-0 z-[40] print:hidden shadow-sm">
+        <header className="hidden md:flex h-20 items-center justify-between px-8 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 sticky top-0 z-[100] print:hidden shadow-sm">
             <div className="flex items-center gap-4">
                 <PortfolioSelector />
                 <div className="h-6 w-px bg-slate-200 mx-2"></div>
@@ -448,7 +448,7 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
     };
 
     return (
-        <div className="md:hidden bg-white/90 backdrop-blur-xl border-b border-slate-200/60 px-6 py-4 flex flex-col sticky top-0 z-[50] print:hidden shadow-sm">
+        <div className="md:hidden bg-white/90 backdrop-blur-xl border-b border-slate-200/60 px-6 py-4 flex flex-col sticky top-0 z-[100] print:hidden shadow-sm">
             <div className="flex justify-between items-center w-full mb-3">
                 <div className="flex items-center gap-3">
                      {settings?.logo_url ? (

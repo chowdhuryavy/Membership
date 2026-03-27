@@ -4,11 +4,7 @@ import { Bell, Check, X } from 'lucide-react';
 export const NotificationBell = () => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const [notifications, setNotifications] = useState([
-        { id: 1, title: 'New Member Registered', message: 'John Doe has joined the club.', time: '5m ago', read: false },
-        { id: 2, title: 'Membership Expiring', message: 'Jane Smith membership expires in 3 days.', time: '1h ago', read: false },
-        { id: 3, title: 'System Update', message: 'System maintenance scheduled for tonight.', time: '2h ago', read: true },
-    ]);
+    const [notifications, setNotifications] = useState<any[]>([]);
 
     const unreadCount = notifications.filter(n => !n.read).length;
 
