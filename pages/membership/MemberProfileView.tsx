@@ -77,7 +77,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
     if (viewingMember.status !== MemberStatus.CANCELLED || !viewingMember.cancellation_date) return null;
     const start = parseISO(viewingMember.start_date);
     const cancel = parseISO(viewingMember.cancellation_date);
-    const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start) + 1);
+    const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start));
     return {
         date: viewingMember.cancellation_date,
         daysUsed,
@@ -360,7 +360,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
     try {
         const start = parseISO(viewingMember.start_date);
         const cancel = parseISO(cancelDate);
-        const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start) + 1);
+        const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start));
         const proratedAmount = daysUsed * viewingMember.daily_rate;
         const originalAmount = (viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : viewingMember.net_amount;
         const newRefundAmount = Math.max(0, originalAmount - proratedAmount);
@@ -1029,7 +1029,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                     {(() => {
                         const start = parseISO(viewingMember.start_date);
                         const cancel = parseISO(cancelDate);
-                        const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start) + 1);
+                        const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start));
                         const proratedAmount = daysUsed * viewingMember.daily_rate;
                         const originalAmount = (viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : viewingMember.net_amount;
                         const refundAmount = Math.max(0, originalAmount - proratedAmount);
