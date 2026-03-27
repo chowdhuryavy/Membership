@@ -349,7 +349,7 @@ const POSForm = ({
                         </div>
                         <Select 
                             label="Revenue Department *" 
-                            options={['Retail', 'Personal Training', 'Entrance Fee', 'Massage', 'Other'].map(c => ({ value: c, label: c }))} 
+                            options={['Retail', 'Personal Training', 'Entrance Fee', 'Other'].map(c => ({ value: c, label: c }))} 
                             value={saleData.category}
                             onChange={e => {
                                 setSaleData({...saleData, category: e.target.value as any, item_id: '', item_name: '', unit_price: 0});
