@@ -8,29 +8,18 @@ import {
   eachDayOfInterval, 
   format,
   addMonths,
-  startOfDay
+  startOfDay,
+  parseISO
 } from 'date-fns';
 import { Member, Freeze, MemberStatus } from '../types';
 
-// Fix: Local implementations for missing date-fns members to resolve environment-specific import errors
-const parseISO = (dateString: string) => {
-  if (!dateString) return new Date();
-  // Try YYYY-MM-DD first (ISO-ish) to ensure local time parsing
-  if (dateString.match(/^\d{4}-\d{2}-\d{2}/)) {
-    try {
-      const parts = dateString.split('T')[0].split('-');
-      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-    } catch (e) {}
-  }
-  return new Date(dateString);
-};
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 const min = (dates: Date[]) => new Date(Math.min(...dates.map(d => d.getTime())));
 const max = (dates: Date[]) => new Date(Math.max(...dates.map(d => d.getTime())));
 
 export const RevenueEngine = {
   calculateDailyRate: (netAmount: number, startDate: Date, endDate: Date): number => {
-    const totalDays = Math.max(1, differenceInCalendarDays(endDate, startDate));
+    const totalDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
     if (totalDays <= 0) return 0;
     return Number((netAmount / totalDays).toFixed(4));
   },
@@ -85,15 +74,14 @@ export const RevenueEngine = {
     const activeStart = startOfDay(max([memStart, periodStart]));
     const activeEnd = startOfDay(min([memEnd, periodEnd]));
 
-    if (activeStart >= activeEnd) return 0;
+    if (activeStart > activeEnd) return 0;
 
     let recognizedDays = 0;
     try {
-      // We exclude the membership end date from the count (exclusive end date)
-      // So we iterate until activeEnd - 1 day
+      // We include the membership end date in the count (inclusive end date)
       const potentialDays = eachDayOfInterval({ 
         start: activeStart, 
-        end: addDays(activeEnd, -1) 
+        end: activeEnd 
       });
       
       potentialDays.forEach(day => {
@@ -126,11 +114,11 @@ export const RevenueEngine = {
     const mStart = startOfDay(parseISO(member.start_date));
     const mEnd = startOfDay(parseISO(member.current_end_date));
     
-    if (mStart >= mEnd) return 0;
+    if (mStart > mEnd) return 0;
 
     const potentialDays = eachDayOfInterval({ 
       start: mStart, 
-      end: addDays(mEnd, -1) 
+      end: mEnd 
     });
     
     let activeDays = 0;

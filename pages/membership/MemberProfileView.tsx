@@ -1000,29 +1000,29 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
       {showCancelModal && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
-            <Card className="w-full max-w-[400px] rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden bg-white border border-white/20">
-                <CardHeader className="bg-[#0f172a] text-white p-10 relative flex flex-col items-center text-center">
-                    <div className="w-14 h-14 bg-red-500/20 rounded-2xl flex items-center justify-center mb-6 border border-red-500/30">
-                        <X className="w-7 h-7 text-red-400" />
+            <Card className="w-full max-w-[360px] rounded-[2rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden bg-white border border-white/20">
+                <CardHeader className="bg-[#0f172a] text-white p-6 relative flex flex-col items-center text-center">
+                    <div className="w-12 h-12 bg-red-500/20 rounded-2xl flex items-center justify-center mb-4 border border-red-500/30">
+                        <X className="w-6 h-6 text-red-400" />
                     </div>
-                    <CardTitle className="text-2xl font-black uppercase tracking-tight leading-none mb-2">Cancel Membership</CardTitle>
-                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Prorated Revenue Calculation</p>
-                    <button onClick={() => setShowCancelModal(false)} className="absolute top-8 right-8 p-2.5 rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90 shadow-lg border border-white/5">
-                        <X className="w-5 h-5 text-slate-400"/>
+                    <CardTitle className="text-xl font-black uppercase tracking-tight leading-none mb-1">Cancel Membership</CardTitle>
+                    <p className="text-[9px] font-black text-red-400 uppercase tracking-widest">Prorated Revenue Calculation</p>
+                    <button onClick={() => setShowCancelModal(false)} className="absolute top-4 right-4 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90 shadow-lg border border-white/5">
+                        <X className="w-4 h-4 text-slate-400"/>
                     </button>
                 </CardHeader>
-                <CardContent className="p-10 space-y-6">
-                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex justify-between items-center">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Original Amount</p>
+                <CardContent className="p-6 space-y-5">
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Original Amount</p>
                         <p className="text-sm font-black text-slate-900">{formatMoney((viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : viewingMember.net_amount)}</p>
                     </div>
-                    <div className="space-y-2">
-                        <label className="text-[11px] font-bold text-slate-600 ml-1">Cancellation Date</label>
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-600 ml-1">Cancellation Date</label>
                         <input 
                             type="date" 
                             value={cancelDate} 
                             onChange={e => setCancelDate(e.target.value)} 
-                            className="w-full h-16 pl-6 pr-6 rounded-2xl border-2 border-slate-100 focus:border-red-600 bg-white font-black text-sm uppercase tracking-wider transition-all appearance-none cursor-pointer"
+                            className="w-full h-12 pl-4 pr-4 rounded-xl border-2 border-slate-100 focus:border-red-600 bg-white font-black text-sm uppercase tracking-wider transition-all appearance-none cursor-pointer"
                         />
                     </div>
                     
@@ -1035,18 +1035,18 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         const refundAmount = Math.max(0, originalAmount - proratedAmount);
                         
                         return (
-                            <div className="space-y-3 pt-4 border-t border-slate-100">
+                            <div className="space-y-2 pt-3 border-t border-slate-100">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Days Used</span>
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Days Used</span>
                                     <span className="text-sm font-black text-slate-900">{daysUsed} days</span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Prorated Charge</span>
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Prorated Charge</span>
                                     <span className="text-sm font-black text-slate-900">{formatMoney(proratedAmount)}</span>
                                 </div>
-                                <div className="flex justify-between items-center bg-green-50 p-4 rounded-xl border border-green-100 mt-4">
-                                    <span className="text-[11px] font-black text-green-600 uppercase tracking-wider">Refund Amount</span>
-                                    <span className="text-lg font-black text-green-700">{formatMoney(refundAmount)}</span>
+                                <div className="flex justify-between items-center bg-green-50 p-3 rounded-xl border border-green-100 mt-3">
+                                    <span className="text-[10px] font-black text-green-600 uppercase tracking-wider">Refund Amount</span>
+                                    <span className="text-base font-black text-green-700">{formatMoney(refundAmount)}</span>
                                 </div>
                             </div>
                         );
@@ -1055,7 +1055,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                     <Button 
                         onClick={handleCancelMembership}
                         isLoading={isLoading}
-                        className="w-full h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl mt-4 active:scale-95 transition-all bg-red-600 hover:bg-red-700 text-white"
+                        className="w-full h-12 rounded-[1.2rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-lg mt-3 active:scale-95 transition-all bg-red-600 hover:bg-red-700 text-white"
                     >
                         Confirm Cancellation
                     </Button>
