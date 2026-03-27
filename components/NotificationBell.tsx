@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, Check, X } from 'lucide-react';
+import { Bell, Check, X, Loader2 } from 'lucide-react';
+import { useNotifications } from '../hooks/useNotifications';
+import { formatDistanceToNow } from 'date-fns';
 
 export const NotificationBell = () => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const [notifications, setNotifications] = useState<any[]>([]);
+    const { notifications, isLoading, markAsRead, markAllAsRead, removeNotification } = useNotifications();
 
     const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -17,18 +19,6 @@ export const NotificationBell = () => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
-
-    const markAllAsRead = () => {
-        setNotifications(notifications.map(n => ({ ...n, read: true })));
-    };
-
-    const markAsRead = (id: number) => {
-        setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n));
-    };
-
-    const removeNotification = (id: number) => {
-        setNotifications(notifications.filter(n => n.id !== id));
-    };
 
     return (
         <div className="relative" ref={dropdownRef}>
@@ -53,7 +43,11 @@ export const NotificationBell = () => {
                         )}
                     </div>
                     <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
-                        {notifications.length === 0 ? (
+                        {isLoading && notifications.length === 0 ? (
+                            <div className="p-8 flex justify-center items-center text-slate-400">
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                            </div>
+                        ) : notifications.length === 0 ? (
                             <div className="p-8 text-center text-slate-400 text-xs font-medium">
                                 No notifications
                             </div>
@@ -69,7 +63,7 @@ export const NotificationBell = () => {
                                                 {notification.title}
                                             </h4>
                                             <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap ml-2">
-                                                {notification.time}
+                                                {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                                             </span>
                                         </div>
                                         <p className="text-[11px] text-slate-500 leading-relaxed pr-6">

@@ -329,6 +329,16 @@ export interface InventoryLog {
   created_at: string;
 }
 
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  created_at: string;
+  read: boolean;
+  user_id?: string;
+  type?: 'info' | 'warning' | 'success' | 'error';
+}
+
 export interface IncentiveRule {
   id: string;
   name: string;

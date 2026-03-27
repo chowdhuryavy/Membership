@@ -1,4 +1,4 @@
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, Notification } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format, parse, differenceInCalendarDays } from 'date-fns';
@@ -564,6 +564,21 @@ class DatabaseService {
       const { error } = await supabase.from('members').insert([member]);
       if (error) throw error;
       await this.logAction('CREATE_MEMBER', `Enrolled new member: ${member.guest_name} (ID: ${member.membership_number}, Tier: ${member.category_id})`, member.outlet_id);
+      await this.addNotification({
+        title: 'New Member Enrolled',
+        message: `${member.guest_name} has joined with membership ${member.membership_number}.`,
+        type: 'success'
+      });
+    } else {
+      const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+      members.push(member);
+      localStorage.setItem('membership_members', JSON.stringify(members));
+      await this.logAction('CREATE_MEMBER', `Enrolled new member locally: ${member.guest_name}`);
+      await this.addNotification({
+        title: 'New Member Enrolled',
+        message: `${member.guest_name} has joined with membership ${member.membership_number}.`,
+        type: 'success'
+      });
     }
   }
 
@@ -577,6 +592,15 @@ class DatabaseService {
       if (error) throw error;
       const changedFields = Object.keys(patch).filter(k => patch[k] !== undefined && patch[k] !== null).join(', ');
       await this.logAction('UPDATE_MEMBER', `Updated member profile: ${patch.guest_name || id}. Modified fields: [${changedFields}]`, patch.outlet_id);
+      
+      if (patch.status === MemberStatus.CANCELLED) {
+        const { data: m } = await supabase.from('members').select('guest_name, membership_number').eq('id', id).single();
+        await this.addNotification({
+          title: 'Membership Cancelled',
+          message: `${m?.guest_name || id} (${m?.membership_number || id}) has cancelled their membership.`,
+          type: 'error'
+        });
+      }
     } else {
         // Local Mode Fallback
         const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
@@ -585,6 +609,14 @@ class DatabaseService {
             members[mIndex] = { ...members[mIndex], ...member };
             localStorage.setItem('membership_members', JSON.stringify(members));
             await this.logAction('UPDATE_MEMBER', `Updated member profile locally: ${members[mIndex].guest_name || id}.`);
+            
+            if (member.status === MemberStatus.CANCELLED) {
+              await this.addNotification({
+                title: 'Membership Cancelled',
+                message: `${members[mIndex].guest_name || id} (${members[mIndex].membership_number || id}) has cancelled their membership.`,
+                type: 'error'
+              });
+            }
         }
     }
   }
@@ -614,10 +646,36 @@ class DatabaseService {
       const newEndDate = await this.syncMemberEndDate(freeze.member_id);
       
       // Fetch member name for better logging
-      const { data: member } = await supabase.from('members').select('guest_name').eq('id', freeze.member_id).single();
+      const { data: member } = await supabase.from('members').select('guest_name, membership_number').eq('id', freeze.member_id).single();
       const memberName = member?.guest_name || 'Unknown Member';
+      const memberId = member?.membership_number || freeze.member_id;
       
       await this.logAction('FREEZE_MEMBER', `Account suspended: ${memberName}. Membership extended to ${newEndDate}`);
+      
+      await this.addNotification({
+        title: 'Membership Suspended',
+        message: `${memberName} (${memberId}) has been suspended for ${freeze.total_days} days.`,
+        type: 'warning'
+      });
+    } else {
+      const freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
+      const data = { ...freeze, id: freeze.id || this.generateUUID() };
+      freezes.push(data);
+      localStorage.setItem('membership_freezes', JSON.stringify(freezes));
+      
+      const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+      const mIndex = members.findIndex((m: any) => m.id === freeze.member_id);
+      if (mIndex !== -1) {
+        members[mIndex].status = MemberStatus.FROZEN;
+        localStorage.setItem('membership_members', JSON.stringify(members));
+        
+        await this.logAction('FREEZE_MEMBER', `Suspended membership locally for ${members[mIndex].guest_name}.`);
+        await this.addNotification({
+          title: 'Membership Suspended',
+          message: `${members[mIndex].guest_name} has suspended their membership for ${freeze.total_days} days.`,
+          type: 'warning'
+        });
+      }
     }
   }
 
@@ -1970,6 +2028,198 @@ class DatabaseService {
       console.log('Mock: Sending test report to recipient', recipientId);
       return { success: true, results: [{ status: 'sent (mock)' }] };
     }
+  }
+  // --- NOTIFICATIONS ---
+  async getNotifications(userId?: string): Promise<Notification[]> {
+    if (this.isSupabase()) {
+      let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
+      if (userId) {
+        query = query.or(`user_id.eq.${userId},user_id.is.null`);
+      } else {
+        query = query.is('user_id', null);
+      }
+      const { data, error } = await query;
+      if (error) {
+        // PGRST205 is "Could not find the table in the schema cache"
+        if (error.code !== 'PGRST205') {
+          console.warn("Failed to fetch notifications from Supabase, falling back to local storage", error);
+        }
+        return this.getLocalNotifications(userId);
+      }
+      return (data || []) as Notification[];
+    }
+    return this.getLocalNotifications(userId);
+  }
+
+  private getLocalNotifications(userId?: string): Notification[] {
+    const all = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    if (userId) {
+      return all.filter(n => !n.user_id || n.user_id === userId).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+    return all.filter(n => !n.user_id).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  async addNotification(notification: Omit<Notification, 'id' | 'created_at' | 'read'>) {
+    const newNotification: Notification = {
+      ...notification,
+      id: this.generateUUID(),
+      created_at: new Date().toISOString(),
+      read: false
+    };
+
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('notifications').insert([newNotification]);
+      if (error) {
+        if (error.code !== 'PGRST205') {
+          console.warn("Failed to insert notification to Supabase, saving locally", error);
+        }
+        this.saveLocalNotification(newNotification);
+      }
+    } else {
+      this.saveLocalNotification(newNotification);
+      // Broadcast for local mode real-time updates across tabs
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('notifications_channel');
+        bc.postMessage(newNotification);
+        bc.close();
+      }
+      // Dispatch custom event for same-tab updates
+      window.dispatchEvent(new CustomEvent('notification_received', { detail: newNotification }));
+    }
+    return newNotification;
+  }
+
+  private saveLocalNotification(notification: Notification) {
+    const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]');
+    notifications.push(notification);
+    localStorage.setItem('membership_notifications', JSON.stringify(notifications));
+  }
+
+  async markNotificationAsRead(id: string) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('notifications').update({ read: true }).eq('id', id);
+      if (error) {
+        if (error.code !== 'PGRST205') {
+          console.warn("Failed to update notification in Supabase", error);
+        }
+        this.updateLocalNotification(id, { read: true });
+      }
+    } else {
+      this.updateLocalNotification(id, { read: true });
+    }
+  }
+
+  async markAllNotificationsAsRead(userId?: string) {
+    if (this.isSupabase()) {
+      let query = supabase.from('notifications').update({ read: true }).eq('read', false);
+      if (userId) {
+        query = query.or(`user_id.eq.${userId},user_id.is.null`);
+      } else {
+        query = query.is('user_id', null);
+      }
+      const { error } = await query;
+      if (error) {
+        if (error.code !== 'PGRST205') {
+          console.warn("Failed to update notifications in Supabase", error);
+        }
+        this.markAllLocalNotificationsAsRead(userId);
+      }
+    } else {
+      this.markAllLocalNotificationsAsRead(userId);
+    }
+  }
+
+  private updateLocalNotification(id: string, updates: Partial<Notification>) {
+    const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    const index = notifications.findIndex(n => n.id === id);
+    if (index !== -1) {
+      notifications[index] = { ...notifications[index], ...updates };
+      localStorage.setItem('membership_notifications', JSON.stringify(notifications));
+    }
+  }
+
+  private markAllLocalNotificationsAsRead(userId?: string) {
+    const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    const updated = notifications.map(n => {
+      if (!n.read && (!userId || !n.user_id || n.user_id === userId)) {
+        return { ...n, read: true };
+      }
+      return n;
+    });
+    localStorage.setItem('membership_notifications', JSON.stringify(updated));
+  }
+
+  async deleteNotification(id: string) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('notifications').delete().eq('id', id);
+      if (error) {
+        if (error.code !== 'PGRST205') {
+          console.warn("Failed to delete notification from Supabase", error);
+        }
+        this.deleteLocalNotification(id);
+      }
+    } else {
+      this.deleteLocalNotification(id);
+    }
+  }
+
+  subscribeToNotifications(userId: string, callback: (notification: Notification) => void) {
+    if (this.isSupabase()) {
+      const channel = supabase
+        .channel('notifications-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications'
+          },
+          (payload) => {
+            const newNotification = payload.new as Notification;
+            // Check if it's for this user or global
+            if (!newNotification.user_id || newNotification.user_id === userId) {
+              callback(newNotification);
+            }
+          }
+        )
+        .subscribe();
+      
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } else {
+      // Local mode: use BroadcastChannel for cross-tab sync
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('notifications_channel');
+        bc.onmessage = (event) => {
+          const notification = event.data as Notification;
+          if (!notification.user_id || notification.user_id === userId) {
+            callback(notification);
+          }
+        };
+        
+        // Same-tab listener for local mode
+        const handleCustomEvent = (event: any) => {
+          const notification = event.detail as Notification;
+          if (!notification.user_id || notification.user_id === userId) {
+            callback(notification);
+          }
+        };
+        window.addEventListener('notification_received', handleCustomEvent);
+        
+        return () => {
+          bc.close();
+          window.removeEventListener('notification_received', handleCustomEvent);
+        };
+      }
+      return () => {};
+    }
+  }
+
+  private deleteLocalNotification(id: string) {
+    const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    const filtered = notifications.filter(n => n.id !== id);
+    localStorage.setItem('membership_notifications', JSON.stringify(filtered));
   }
 }
 
