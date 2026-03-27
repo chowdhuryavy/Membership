@@ -299,7 +299,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
     setLoading(true);
     try {
         const restoredAmount = (viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : (viewingMember.actual_rate - viewingMember.discount);
-        const refundAmount = Math.max(0, restoredAmount - (viewingMember.net_amount || 0));
 
         await db.updateMember(viewingMember.id, {
             status: MemberStatus.ACTIVE,
@@ -312,30 +311,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         // Recalculate current_end_date based on freezes
         const newEndDate = await db.syncMemberEndDate(viewingMember.id);
         
-        // Offset the refund if there was one
-        if (refundAmount > 0 && currentProperty && currentOutlet) {
-            try {
-                await db.addSale({
-                    property_id: currentProperty.id,
-                    outlet_id: currentOutlet.id,
-                    guest_name: viewingMember.guest_name,
-                    category: 'Other',
-                    item_name: `Cancellation Reversal - ${viewingMember.membership_number}`,
-                    quantity: 1,
-                    unit_price: refundAmount,
-                    gross_amount: refundAmount,
-                    discount_amount: 0,
-                    net_amount: refundAmount,
-                    payment_method: 'Adjustment',
-                    status: 'completed'
-                });
-                console.log("Refund reversal recorded in sales");
-            } catch (saleErr) {
-                console.error("Failed to record refund reversal sale:", saleErr);
-                toast.error("Cancellation reverted, but failed to record reversal in sales.");
-            }
-        }
-
         setViewingMember({
             ...viewingMember,
             status: MemberStatus.ACTIVE,
@@ -363,17 +338,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         const daysUsed = Math.max(1, differenceInCalendarDays(cancel, start));
         const proratedAmount = daysUsed * viewingMember.daily_rate;
         const originalAmount = (viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : viewingMember.net_amount;
-        const newRefundAmount = Math.max(0, originalAmount - proratedAmount);
-        
-        let saleAmount = -newRefundAmount;
-        let isEdit = viewingMember.status === MemberStatus.CANCELLED;
-        
-        if (isEdit) {
-            const oldRefundAmount = Math.max(0, originalAmount - (viewingMember.net_amount || 0));
-            // If new refund is 100 and old was 80, we need to refund 20 more (saleAmount = -20)
-            // If new refund is 50 and old was 80, we need to charge 30 (saleAmount = +30)
-            saleAmount = oldRefundAmount - newRefundAmount;
-        }
         
         console.log("Updating member with ID:", viewingMember.id);
         console.log("Updating member with data:", {
@@ -392,36 +356,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         });
         console.log("Member updated successfully");
 
-        // Record the refund in sales if there is an amount to refund/adjust
-        if (saleAmount !== 0 && currentProperty && currentOutlet) {
-            try {
-                await db.addSale({
-                    property_id: currentProperty.id,
-                    outlet_id: currentOutlet.id,
-                    guest_name: viewingMember.guest_name,
-                    category: 'Other',
-                    item_name: isEdit ? `Cancellation Adjustment - ${viewingMember.membership_number}` : `Membership Refund - ${viewingMember.membership_number}`,
-                    quantity: 1,
-                    unit_price: saleAmount,
-                    gross_amount: saleAmount,
-                    discount_amount: 0,
-                    net_amount: saleAmount,
-                    payment_method: saleAmount < 0 ? 'Refund' : 'Adjustment',
-                    status: 'completed'
-                });
-                console.log("Refund/Adjustment recorded in sales");
-                if (saleAmount < 0) {
-                    toast.success(`Membership cancelled. Refund amount: ${formatMoney(Math.abs(saleAmount))}`);
-                } else {
-                    toast.success(`Cancellation adjusted. Charge amount: ${formatMoney(saleAmount)}`);
-                }
-            } catch (saleErr) {
-                console.error("Failed to record refund/adjustment sale:", saleErr);
-                toast.error("Membership cancelled, but failed to record refund/adjustment in sales.");
-            }
-        } else {
-            toast.success("Membership cancelled successfully.");
-        }
+        toast.success("Membership cancelled successfully.");
         
         setViewingMember({
             ...viewingMember,
