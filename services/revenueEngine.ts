@@ -30,7 +30,7 @@ const max = (dates: Date[]) => new Date(Math.max(...dates.map(d => d.getTime()))
 
 export const RevenueEngine = {
   calculateDailyRate: (netAmount: number, startDate: Date, endDate: Date): number => {
-    const totalDays = differenceInCalendarDays(endDate, startDate) + 1;
+    const totalDays = Math.max(1, differenceInCalendarDays(endDate, startDate));
     if (totalDays <= 0) return 0;
     return Number((netAmount / totalDays).toFixed(4));
   },
@@ -82,14 +82,19 @@ export const RevenueEngine = {
 
     // Intersection of Membership Period and Requested Period
     // Ensure we use startOfDay for consistent comparison
-    const activeStart = new Date(Math.max(startOfDay(memStart).getTime(), startOfDay(periodStart).getTime()));
-    const activeEnd = new Date(Math.min(startOfDay(memEnd).getTime(), startOfDay(periodEnd).getTime()));
+    const activeStart = startOfDay(max([memStart, periodStart]));
+    const activeEnd = startOfDay(min([memEnd, periodEnd]));
 
-    if (activeStart > activeEnd) return 0;
+    if (activeStart >= activeEnd) return 0;
 
     let recognizedDays = 0;
     try {
-      const potentialDays = eachDayOfInterval({ start: startOfDay(activeStart), end: startOfDay(activeEnd) });
+      // We exclude the membership end date from the count (exclusive end date)
+      // So we iterate until activeEnd - 1 day
+      const potentialDays = eachDayOfInterval({ 
+        start: activeStart, 
+        end: addDays(activeEnd, -1) 
+      });
       
       potentialDays.forEach(day => {
         const dStr = format(day, 'yyyy-MM-dd');
@@ -118,10 +123,15 @@ export const RevenueEngine = {
   ): number => {
     if (!member.start_date || !member.current_end_date) return 0;
     
-    const mStart = parseISO(member.start_date);
-    const mEnd = parseISO(member.current_end_date);
+    const mStart = startOfDay(parseISO(member.start_date));
+    const mEnd = startOfDay(parseISO(member.current_end_date));
     
-    const potentialDays = eachDayOfInterval({ start: startOfDay(mStart), end: startOfDay(mEnd) });
+    if (mStart >= mEnd) return 0;
+
+    const potentialDays = eachDayOfInterval({ 
+      start: mStart, 
+      end: addDays(mEnd, -1) 
+    });
     
     let activeDays = 0;
     potentialDays.forEach(day => {

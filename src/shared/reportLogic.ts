@@ -1,4 +1,4 @@
-import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths, parse, startOfDay, endOfDay } from 'date-fns';
+import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths, parse, startOfDay, endOfDay, addDays, subDays } from 'date-fns';
 
 /**
  * SHARED REPORT LOGIC
@@ -88,7 +88,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     // Calculate for the month of the provided date
     const start = new Date(date.getFullYear(), date.getMonth(), 1);
-    const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    const end = new Date(date.getFullYear(), date.getMonth() + 1, 1); // First day of next month for exclusive end date logic
 
     let totalEarned = 0;
     let totalDeferred = 0;
@@ -105,14 +105,20 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         if (!mStart || !mEnd) return 0;
         
         // Ensure we only look at the intersection of the membership and the requested period
-        const activeStart = new Date(Math.max(startOfDay(mStart).getTime(), startOfDay(pStart).getTime()));
-        const activeEnd = new Date(Math.min(startOfDay(mEnd).getTime(), startOfDay(pEnd).getTime()));
+        // We use startOfDay for consistent comparison
+        const activeStart = startOfDay(new Date(Math.max(mStart.getTime(), pStart.getTime())));
+        const activeEnd = startOfDay(new Date(Math.min(mEnd.getTime(), pEnd.getTime())));
         
-        if (startOfDay(activeStart) > startOfDay(activeEnd)) return 0;
+        // Exclusive end date: If start is same as end, it's 0 days
+        if (activeStart >= activeEnd) return 0;
 
         let days = 0;
         try {
-          const potentialDays = eachDayOfInterval({ start: startOfDay(activeStart), end: startOfDay(activeEnd) });
+          // We iterate until activeEnd - 1 day (exclusive end date)
+          const potentialDays = eachDayOfInterval({ 
+            start: activeStart, 
+            end: subDays(activeEnd, 1) 
+          });
           for (const day of potentialDays) {
             const dStr = format(day, 'yyyy-MM-dd');
             const isFrozen = memberFreezes.some((f: any) => {
@@ -134,7 +140,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         return days;
       };
 
-      const prevAccrualDays = mStart && mStart < start ? calculateRevenueDays(mStart, new Date(start.getTime() - 86400000)) : 0;
+      const prevAccrualDays = mStart && mStart < start ? calculateRevenueDays(mStart, start) : 0;
       const periodRevDays = calculateRevenueDays(start, end);
       
       const dailyRate = Number(m.daily_rate || 0);

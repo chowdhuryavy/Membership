@@ -4,7 +4,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle } from '../components/
 import { db } from '../services/mockSupabase';
 import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory, StaffLeave, MembershipType, InventoryItem } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO, endOfDay, startOfMonth } from 'date-fns';
+import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO, endOfDay, startOfMonth, addMonths } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -221,7 +221,7 @@ const Reports = () => {
     if (!currentOutlet || !currentProperty) return;
     try {
       const start = reportType === 'daily_sales' ? startOfDay(parseISO(dailySalesDate)) : startOfDay(parseISO(reportMonth + '-01'));
-      const end = reportType === 'daily_sales' ? endOfDay(start) : endOfMonth(start);
+      const end = reportType === 'daily_sales' ? endOfDay(start) : startOfMonth(addMonths(start, 1)); // First day of next month for exclusive end date logic
       
       const [rules, bookings, members, sales, therapists, mTypes, mCats, staffList, guests, freezes, users, leaves, types, inventory] = await Promise.all([
           db.getIncentiveRules(currentProperty.id, currentOutlet.id),
@@ -295,7 +295,7 @@ const Reports = () => {
               // 1. Calculate Prev Accrual (Start -> Before Period)
               let prevAccrual = 0;
               if (mStart < start) {
-                  prevAccrual = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, subDays(start, 1));
+                  prevAccrual = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, start);
               }
 
               // 2. Calculate Period Revenue (Period Start -> Period End)
