@@ -2074,19 +2074,25 @@ class DatabaseService {
           console.warn("Failed to insert notification to Supabase, saving locally", error);
         }
         this.saveLocalNotification(newNotification);
+        // Broadcast for local fallback
+        this.broadcastNotificationLocally(newNotification);
       }
     } else {
       this.saveLocalNotification(newNotification);
-      // Broadcast for local mode real-time updates across tabs
-      if (typeof BroadcastChannel !== 'undefined') {
-        const bc = new BroadcastChannel('notifications_channel');
-        bc.postMessage(newNotification);
-        bc.close();
-      }
-      // Dispatch custom event for same-tab updates
-      window.dispatchEvent(new CustomEvent('notification_received', { detail: newNotification }));
+      this.broadcastNotificationLocally(newNotification);
     }
     return newNotification;
+  }
+
+  private broadcastNotificationLocally(notification: Notification) {
+    // Broadcast for local mode real-time updates across tabs
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('notifications_channel');
+      bc.postMessage(notification);
+      bc.close();
+    }
+    // Dispatch custom event for same-tab updates
+    window.dispatchEvent(new CustomEvent('notification_received', { detail: notification }));
   }
 
   private saveLocalNotification(notification: Notification) {
@@ -2163,22 +2169,29 @@ class DatabaseService {
     }
   }
 
-  subscribeToNotifications(userId: string, callback: (notification: Notification) => void) {
+  subscribeToNotifications(userId: string, callback: (payload: { eventType: string, new: any, old?: any }) => void) {
     if (this.isSupabase()) {
       const channel = supabase
         .channel('notifications-realtime')
         .on(
           'postgres_changes',
           {
-            event: 'INSERT',
+            event: '*',
             schema: 'public',
             table: 'notifications'
           },
           (payload) => {
             const newNotification = payload.new as Notification;
+            const oldNotification = payload.old as Notification;
+            
             // Check if it's for this user or global
-            if (!newNotification.user_id || newNotification.user_id === userId) {
-              callback(newNotification);
+            const targetNotification = newNotification || oldNotification;
+            if (targetNotification && (!targetNotification.user_id || targetNotification.user_id === userId)) {
+              callback({
+                eventType: payload.eventType,
+                new: payload.new,
+                old: payload.old
+              });
             }
           }
         )
@@ -2194,7 +2207,7 @@ class DatabaseService {
         bc.onmessage = (event) => {
           const notification = event.data as Notification;
           if (!notification.user_id || notification.user_id === userId) {
-            callback(notification);
+            callback({ eventType: 'INSERT', new: notification });
           }
         };
         
@@ -2202,7 +2215,7 @@ class DatabaseService {
         const handleCustomEvent = (event: any) => {
           const notification = event.detail as Notification;
           if (!notification.user_id || notification.user_id === userId) {
-            callback(notification);
+            callback({ eventType: 'INSERT', new: notification });
           }
         };
         window.addEventListener('notification_received', handleCustomEvent);

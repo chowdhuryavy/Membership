@@ -16,7 +16,9 @@ export const useNotifications = () => {
     }
     try {
       setIsLoading(true);
+      console.log('Fetching notifications for user:', user.id);
       const data = await db.getNotifications(user.id);
+      console.log('Fetched notifications:', data);
       setNotifications(data);
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
@@ -31,8 +33,16 @@ export const useNotifications = () => {
     // Set up real-time subscription
     let unsubscribe: (() => void) | undefined;
     if (user) {
-      unsubscribe = db.subscribeToNotifications(user.id, (newNotification) => {
-        setNotifications(prev => [newNotification, ...prev]);
+      console.log('Subscribing to notifications for user:', user.id);
+      unsubscribe = db.subscribeToNotifications(user.id, (payload) => {
+        console.log('Received real-time notification payload:', payload);
+        if (payload.eventType === 'INSERT') {
+          setNotifications(prev => [payload.new as Notification, ...prev]);
+        } else if (payload.eventType === 'UPDATE') {
+          setNotifications(prev => prev.map(n => n.id === payload.new.id ? payload.new as Notification : n));
+        } else if (payload.eventType === 'DELETE') {
+          setNotifications(prev => prev.filter(n => n.id === payload.old.id));
+        }
       });
     }
     
