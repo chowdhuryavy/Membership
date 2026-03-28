@@ -356,12 +356,12 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
                     title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
                 >
                     {settings?.logo_url ? (
-                        <div className={`w-14 h-14 flex items-center justify-center shrink-0 transition-all duration-500 group-hover/logo:scale-110 group-hover/logo:rotate-[5deg] ${isCollapsed ? 'rotate-0' : 'rotate-[360deg]'}`}>
-                             <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain drop-shadow-md" />
+                        <div className={`w-14 h-14 flex items-center justify-center shrink-0 transition-all duration-500 group-hover/logo:scale-110`}>
+                             <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain drop-shadow-md animate-[spin_10s_linear_infinite]" />
                         </div>
                     ) : (
-                        <div className={`w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100 shrink-0 transition-all duration-500 group-hover/logo:scale-110 group-hover/logo:rotate-[5deg] ${isCollapsed ? 'rotate-0' : 'rotate-[360deg]'}`}>
-                            <Sparkles className="w-7 h-7" />
+                        <div className={`w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100 shrink-0 transition-all duration-500 group-hover/logo:scale-110`}>
+                            <Sparkles className="w-7 h-7 animate-[spin_10s_linear_infinite]" />
                         </div>
                     )}
                     {!isCollapsed && (
@@ -452,12 +452,12 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
             <div className="flex justify-between items-center w-full mb-3">
                 <div className="flex items-center gap-3">
                      {settings?.logo_url ? (
-                         <div className={`w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-lg p-1 overflow-hidden border border-slate-100 transition-transform duration-500 ${isOpen ? 'rotate-[360deg]' : 'rotate-0'}`}>
-                             <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain" />
+                         <div className={`w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-lg p-1 overflow-hidden border border-slate-100 transition-transform duration-500`}>
+                             <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain animate-[spin_15s_linear_infinite]" />
                          </div>
                      ) : (
-                         <div className={`w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white transition-transform duration-500 ${isOpen ? 'rotate-[360deg]' : 'rotate-0'}`}>
-                             <Sparkles className="w-5 h-5" />
+                         <div className={`w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white transition-transform duration-500`}>
+                             <Sparkles className="w-5 h-5 animate-[spin_15s_linear_infinite]" />
                          </div>
                      )}
                      <div className="flex flex-col text-left">
