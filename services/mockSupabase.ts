@@ -542,7 +542,51 @@ class DatabaseService {
       }
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as Member[];
+      
+      const membersList = (data || []) as Member[];
+
+      // Lazy background update for stale statuses (fire and forget)
+      setTimeout(async () => {
+        try {
+          const frozenMembers = membersList.filter(m => m.status === MemberStatus.FROZEN);
+          if (frozenMembers.length > 0) {
+            const { data: freezes } = await supabase.from('freezes').select('*').in('member_id', frozenMembers.map(m => m.id));
+            if (freezes) {
+              const today = startOfDay(new Date());
+              const membersToUpdate = frozenMembers.filter(m => {
+                const memberFreezes = freezes.filter(f => f.member_id === m.id);
+                const isCurrentlyFrozen = memberFreezes.some(f => {
+                  const start = startOfDay(parseISO(f.start_date));
+                  const end = startOfDay(parseISO(f.end_date));
+                  return today >= start && today <= end;
+                });
+                return !isCurrentlyFrozen; // They are marked as frozen, but no active freeze exists today
+              });
+              
+              // Trigger sync for members whose freeze has ended
+              for (const m of membersToUpdate) {
+                await this.syncMemberEndDate(m.id);
+              }
+            }
+          }
+
+          // Also check for members who should be expired
+          const today = startOfDay(new Date());
+          const activeMembers = membersList.filter(m => m.status === MemberStatus.ACTIVE);
+          const expiredMembers = activeMembers.filter(m => {
+             const end = parseISO(m.current_end_date || m.original_end_date);
+             return today > end;
+          });
+
+          for (const m of expiredMembers) {
+             await this.syncMemberEndDate(m.id);
+          }
+        } catch (e) {
+          console.error("Background status sync failed:", e);
+        }
+      }, 1000);
+
+      return membersList;
     }
     return [];
   }
