@@ -669,10 +669,10 @@ export const generateReportPDF = (options: PDFOptions) => {
     // Some ESM environments might wrap the function in a default property
     const actualAutoTable = typeof autoTable === 'function' ? autoTable : (autoTable?.default || autoTable);
     
-    if (typeof doc.autoTable === 'function') {
-      return doc.autoTable(options);
-    } else if (typeof actualAutoTable === 'function') {
+    if (typeof actualAutoTable === 'function') {
       return actualAutoTable(doc, options);
+    } else if (typeof doc.autoTable === 'function') {
+      return doc.autoTable(options);
     } else {
       console.error('autoTable function not found on doc or as standalone function');
       return null;

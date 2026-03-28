@@ -36,7 +36,7 @@ serve(async (req) => {
     // Fetch company settings
     const { data: settings } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle()
     const appName = settings?.report_title || 'Health Club Management'
-    const fromEmail = Deno.env.get('EMAIL_FROM') || 'info@saavargroup.com'
+    const fromEmail = Deno.env.get('EMAIL_FROM') || 'noreply@saavargroup.com'
 
     // Fetch recipients
     let recipientsQuery = supabase.from('report_recipients').select('*').eq('is_active', true)
@@ -133,6 +133,9 @@ serve(async (req) => {
       console.log(`  - Scheduled: ${r.send_time} (Parsed: ${h}:${m}, ${scheduledTotalMins} mins)`);
       console.log(`  - Current Qatar Time: ${currentHour}:${currentMinute} (${currentTotalMins} mins)`);
       console.log(`  - Diff: ${diff} mins`);
+      console.log(`  - isDaily: ${isDaily}`);
+      console.log(`  - currentDay: ${currentDay}`);
+      console.log(`  - r.last_sent_at: ${r.last_sent_at}`);
 
       // Allow a wider window to ensure it triggers (up to 60 mins for hourly cron jobs)
       if (diff > 60) {

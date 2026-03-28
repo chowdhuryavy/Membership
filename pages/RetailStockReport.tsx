@@ -419,12 +419,14 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
       };
 
       try {
-        if (typeof autoTable === 'function') {
-          autoTable(doc, tableConfig);
-        } else if ((doc as any).autoTable) {
+        const actualAutoTable = typeof autoTable === 'function' ? autoTable : ((autoTable as any).default || autoTable);
+        
+        if (typeof (doc as any).autoTable === 'function') {
           (doc as any).autoTable(tableConfig);
+        } else if (typeof actualAutoTable === 'function') {
+          actualAutoTable(doc, tableConfig);
         } else {
-          throw new Error("autoTable not found on doc or as function");
+          throw new Error("autoTable not found on doc or as standalone function");
         }
       } catch (tableErr) {
         console.error("autoTable call failed", tableErr);
