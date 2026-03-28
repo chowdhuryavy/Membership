@@ -29,7 +29,7 @@ import {
   Building2,
   CalendarX
 } from 'lucide-react';
-import { getReportData, generateReportPDF } from '../src/shared/reportLogic';
+import { getReportData, generateReportPDF, getReportTitle } from '../src/shared/reportLogic';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
@@ -706,14 +706,7 @@ const Reports = () => {
       }
 
       // Use shared logic to generate PDF
-      const reportTitles: Record<string, string> = {
-        'daily_sales': 'Daily Sales Ledger',
-        'revenue_recognition': 'Revenue Recognition Audit',
-        'members_joined': 'Members Joined Audit',
-        'expiring_memberships': 'Expiring Memberships Audit',
-        'massage_room_revenue': 'Massage Room Revenue'
-      };
-      const reportTitle = reportTitles[reportType] || reportType.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+      const reportTitle = getReportTitle(reportType, incentiveDept);
       
       const outletName = currentOutlet?.name || 'All Outlets';
       const currencySymbol = settings?.currency_symbol || '$';
@@ -1294,12 +1287,7 @@ const Reports = () => {
                           </div>
                           <div className="text-right flex flex-col items-end gap-3">
                               <h3 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">
-                                {reportType === 'incentives' ? `${incentiveDept} YIELD LEDGER` : 
-                                 reportType === 'revenue_recognition' ? 'REVENUE RECOGNITION' : 
-                                 reportType === 'expiring_memberships' ? 'EXPIRING MEMBERSHIPS AUDIT' :
-                                 reportType === 'members_joined' ? 'MEMBERS JOINED AUDIT' :
-                                 reportType === 'massage_room_revenue' ? 'MASSAGE ROOM REVENUE' :
-                                 'DAILY SALES LEDGER'}
+                                {getReportTitle(reportType, incentiveDept)}
                               </h3>
                               <div className="bg-slate-950 text-white px-6 py-3 rounded-2xl shadow-2xl">
                                   <span className="text-[9px] font-black uppercase opacity-60 block tracking-widest">Audit Period</span>

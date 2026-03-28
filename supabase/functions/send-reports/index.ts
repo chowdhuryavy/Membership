@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7"
 import { Resend } from "https://esm.sh/resend@3.1.0"
 import jsPDF from "https://esm.sh/jspdf@2.5.1"
 import autoTable from "https://esm.sh/jspdf-autotable@3.8.1"
-import { getReportData, generateReportPDF } from "./reportLogic.ts"
+import { getReportData, generateReportPDF, getReportTitle } from "./reportLogic.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -37,20 +37,40 @@ serve(async (req) => {
 
     // Explicitly patch jsPDF with autoTable for the Edge Function environment
     try {
-      const JsPDFConstructor = (jsPDF as any).default || jsPDF;
+      const JsPDFConstructor = (jsPDF as any).jsPDF || (jsPDF as any).default || jsPDF;
       const plugin = (autoTable as any).default || autoTable;
       
+      console.log(`DEBUG: JsPDFConstructor type: ${typeof JsPDFConstructor}`);
+      console.log(`DEBUG: autoTable plugin type: ${typeof plugin}`);
+
       if (typeof plugin === 'function') {
-        // Try patching the constructor prototype
-        if (JsPDFConstructor.API) {
+        // Try standard patching
+        try {
           plugin(JsPDFConstructor);
-          console.log("DEBUG: jsPDF.API patched with autoTable");
-        } else if (typeof JsPDFConstructor === 'function') {
-          plugin(JsPDFConstructor);
-          console.log("DEBUG: jsPDF constructor patched with autoTable");
+          console.log("DEBUG: jsPDF patched with plugin(JsPDFConstructor)");
+        } catch (e) {
+          console.warn("DEBUG: plugin(JsPDFConstructor) failed:", e.message);
+        }
+
+        // Try applyPlugin if it exists
+        if (typeof (autoTable as any).applyPlugin === 'function') {
+          try {
+            (autoTable as any).applyPlugin(JsPDFConstructor);
+            console.log("DEBUG: jsPDF patched with applyPlugin");
+          } catch (e) {
+            console.warn("DEBUG: applyPlugin failed:", e.message);
+          }
         }
         
-        // Also try patching the global if it exists (some versions of jspdf-autotable look for it)
+        // Manual prototype patching as a fallback
+        if (JsPDFConstructor.prototype && typeof JsPDFConstructor.prototype.autoTable !== 'function') {
+          JsPDFConstructor.prototype.autoTable = function(options: any) {
+            return plugin(this, options);
+          };
+          console.log("DEBUG: jsPDF.prototype.autoTable manually patched");
+        }
+
+        // Also try patching the global if it exists
         if (typeof (globalThis as any).jsPDF === 'undefined') {
           (globalThis as any).jsPDF = JsPDFConstructor;
         }
@@ -207,14 +227,73 @@ serve(async (req) => {
 
     console.log(`Recipients to process after filtering: ${filteredRecipients.length}`);
 
-    const results = await Promise.all(filteredRecipients.map(async (recipient) => {
+    // Group recipients by unique report parameters to avoid redundant data fetching
+    const reportGroups: Record<string, { 
+      recipients: any[], 
+      params: any 
+    }> = {};
+
+    filteredRecipients.forEach(recipient => {
+      const incentiveDept = recipient.incentive_dept || 'Massage';
+      const selectedMembershipTypeId = recipient.selected_membership_type_id || 'all';
+      
+      // Determine report date (today or yesterday) relative to Qatar calendar
+      const qatarYear = parseInt(getPart('year'));
+      const qatarMonth = parseInt(getPart('month')) - 1; // 0-indexed
+      const qatarDay = parseInt(getPart('day'));
+      const reportDate = new Date(qatarYear, qatarMonth, qatarDay);
+
+      if (recipient.report_date_type === 'yesterday') {
+        reportDate.setDate(reportDate.getDate() - 1)
+      } else if (recipient.report_type !== 'daily_sales') {
+        // Monthly report: send for previous month
+        reportDate.setMonth(reportDate.getMonth() - 1);
+      }
+
+      const key = `${recipient.property_id}|${recipient.outlet_id}|${recipient.report_type}|${reportDate.toISOString()}|${incentiveDept}|${selectedMembershipTypeId}`;
+      
+      if (!reportGroups[key]) {
+        reportGroups[key] = {
+          recipients: [],
+          params: {
+            propertyId: recipient.property_id,
+            outletId: recipient.outlet_id,
+            reportType: recipient.report_type,
+            date: reportDate,
+            incentiveDept,
+            selectedMembershipTypeId
+          }
+        };
+      }
+      reportGroups[key].recipients.push(recipient);
+    });
+
+    const results: any[] = [];
+
+    for (const group of Object.values(reportGroups)) {
       try {
-        // Fetch property and currency info
-        const { data: property, error: propertyError } = await supabase.from('properties').select('name, logo_url').eq('id', recipient.property_id).single()
+        const { params, recipients } = group;
+        
+        console.log(`DEBUG: Processing group for ${params.reportType} (Property: ${params.propertyId}, Outlet: ${params.outletId})`);
+        
+        // Fetch data once for the entire group
+        const reportData = await getReportData({
+          supabase,
+          propertyId: params.propertyId,
+          outletId: params.outletId,
+          reportType: params.reportType,
+          date: params.date,
+          incentiveDept: params.incentiveDept,
+          selectedMembershipTypeId: params.selectedMembershipTypeId
+        });
+        
+        console.log(`DEBUG: Report Data rows: ${reportData.rows.length}`);
+
+        // Fetch property and currency info (once per group)
+        const { data: property, error: propertyError } = await supabase.from('properties').select('name, logo_url').eq('id', params.propertyId).single()
         if (propertyError) {
-          console.error(`Error fetching property ${recipient.property_id}:`, propertyError);
+          console.error(`Error fetching property ${params.propertyId}:`, propertyError);
         }
-        console.log(`DEBUG: Fetched property: ${JSON.stringify(property)}`);
         const { data: currency } = await supabase.from('currencies').select('symbol').eq('id', 'default').single()
         const currencySymbol = currency?.symbol || '$'
         const propertyName = property?.name || 'Property'
@@ -225,13 +304,15 @@ serve(async (req) => {
           try {
             const logoRes = await fetch(logoUrl)
             if (logoRes.ok) {
-              const blob = await logoRes.blob()
-              const reader = new FileReader()
-              const base64Promise = new Promise((resolve) => {
-                reader.onloadend = () => resolve(reader.result)
-                reader.readAsDataURL(blob)
-              })
-              logoUrl = await base64Promise as string
+              const arrayBuffer = await logoRes.arrayBuffer();
+              const uint8Array = new Uint8Array(arrayBuffer);
+              let binary = '';
+              const len = uint8Array.byteLength;
+              for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(uint8Array[i]);
+              }
+              const base64 = btoa(binary);
+              logoUrl = `data:${logoRes.headers.get('content-type') || 'image/png'};base64,${base64}`;
             }
           } catch (e) {
             console.error('Error fetching logo:', e)
@@ -240,54 +321,16 @@ serve(async (req) => {
 
         // Fetch Outlet Name
         let outletName = 'All Outlets';
-        if (recipient.outlet_id !== 'all') {
-          const { data: outletData } = await supabase.from('outlets').select('name').eq('id', recipient.outlet_id).single();
+        if (params.outletId !== 'all') {
+          const { data: outletData } = await supabase.from('outlets').select('name').eq('id', params.outletId).single();
           if (outletData) {
             outletName = outletData.name;
           }
         }
 
-        // Determine report date (today or yesterday) relative to Qatar calendar
-        const qatarYear = parseInt(getPart('year'));
-        const qatarMonth = parseInt(getPart('month')) - 1; // 0-indexed
-        const qatarDay = parseInt(getPart('day'));
-        const reportDate = new Date(qatarYear, qatarMonth, qatarDay);
-
-        if (recipient.report_date_type === 'yesterday') {
-          reportDate.setDate(reportDate.getDate() - 1)
-        } else if (recipient.report_type !== 'daily_sales') {
-          // Monthly report: send for previous month
-          reportDate.setMonth(reportDate.getMonth() - 1);
-        }
-
-        // Parse incentive_dept from recipient if available (for incentive reports)
-        const incentiveDept = recipient.incentive_dept || 'Massage';
-        const selectedMembershipTypeId = recipient.selected_membership_type_id || 'all';
-
-        // Use shared logic to get data
-        console.log(`DEBUG: Fetching data for ${recipient.report_type} (Property: ${recipient.property_id}, Outlet: ${recipient.outlet_id}, Dept: ${incentiveDept})`);
-        const reportData = await getReportData({
-          supabase,
-          propertyId: recipient.property_id,
-          outletId: recipient.outlet_id,
-          reportType: recipient.report_type,
-          date: reportDate,
-          incentiveDept: incentiveDept,
-          selectedMembershipTypeId: selectedMembershipTypeId
-        })
-        console.log(`DEBUG: Report Data rows: ${reportData.rows.length}`);
-
-        // Use shared logic to generate PDF
-        const reportTitles: Record<string, string> = {
-          'daily_sales': 'Daily Sales & Revenue Report',
-          'revenue_recognition': 'Revenue Recognition Audit',
-          'members_joined': 'Membership Acquisition Log',
-          'expiring_memberships': 'EXPIRING MEMBERSHIPS AUDIT',
-          'massage_room_revenue': 'Massage Room Revenue Report',
-          'incentives': `${incentiveDept} Incentive Audit`
-        };
-        const reportTitle = reportTitles[recipient.report_type] || recipient.report_type.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        const reportTitle = getReportTitle(params.reportType, params.incentiveDept);
         
+        // Generate PDF once for the group
         const doc = generateReportPDF({
           jsPDF,
           autoTable,
@@ -296,139 +339,137 @@ serve(async (req) => {
           outletName,
           currencySymbol,
           reportTitle,
-          date: reportDate,
+          date: params.date,
           logoUrl,
-          reportType: recipient.report_type
-        })
+          reportType: params.reportType
+        });
 
-        const pdfBase64 = doc.output('datauristring').split(',')[1]
+        const pdfBase64 = doc.output('datauristring').split(',')[1];
 
-        // Build dynamic summary text for email body
-        let summaryListItems = '';
-        if (reportData.summary) {
-          summaryListItems = Object.entries(reportData.summary)
-            .map(([key, value]) => {
-              const label = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-              let formattedValue = value;
-              if (typeof value === 'number') {
-                if (key.includes('revenue') || key.includes('amount') || key.includes('total') || key.includes('earned') || key.includes('deferred')) {
-                  formattedValue = `${currencySymbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                } else {
-                  formattedValue = value.toLocaleString();
-                }
-              }
-              return `<li><strong>${label}:</strong> ${formattedValue}</li>`;
-            })
-            .join('\n');
-        }
-
-        // Add staff totals for incentive reports
-        let staffTotalsHtml = '';
-        if (recipient.report_type === 'incentives' && reportData.rows.length > 0) {
-          const staffTotals: Record<string, number> = {};
-          reportData.rows.forEach((r: any) => {
-            if (r.staff_name) {
-              staffTotals[r.staff_name] = (staffTotals[r.staff_name] || 0) + (r.incentive || 0);
+        // Process each recipient in the group
+        await Promise.all(recipients.map(async (recipient) => {
+          try {
+            // Build dynamic summary text for email body
+            let summaryListItems = '';
+            if (reportData.summary) {
+              summaryListItems = Object.entries(reportData.summary)
+                .map(([key, value]) => {
+                  const label = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                  let formattedValue = value;
+                  if (typeof value === 'number') {
+                    if (key.includes('revenue') || key.includes('amount') || key.includes('total') || key.includes('earned') || key.includes('deferred')) {
+                      formattedValue = `${currencySymbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    } else {
+                      formattedValue = value.toLocaleString();
+                    }
+                  }
+                  return `<li><strong>${label}:</strong> ${formattedValue}</li>`;
+                })
+                .join('\n');
             }
-          });
 
-          if (Object.keys(staffTotals).length > 0) {
-            staffTotalsHtml = `
-              <div style="margin: 20px 0; padding: 15px; background: #fef3c7; border-radius: 6px; border: 1px solid #f59e0b;">
-                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #92400e;">Staff Incentive Breakdown</h3>
-                <ul style="margin: 0; padding-left: 20px; color: #78350f; font-size: 14px;">
-                  ${Object.entries(staffTotals).map(([staffName, amount]) => {
-                    return `<li><strong>${staffName}:</strong> ${currencySymbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>`;
-                  }).join('\n')}
-                </ul>
+            // Add staff totals for incentive reports
+            let staffTotalsHtml = '';
+            if (params.reportType === 'incentives' && reportData.rows.length > 0) {
+              const staffTotals: Record<string, number> = {};
+              reportData.rows.forEach((r: any) => {
+                if (r.staff_name) {
+                  staffTotals[r.staff_name] = (staffTotals[r.staff_name] || 0) + (r.incentive || 0);
+                }
+              });
+
+              if (Object.keys(staffTotals).length > 0) {
+                staffTotalsHtml = `
+                  <div style="margin: 20px 0; padding: 15px; background: #fef3c7; border-radius: 6px; border: 1px solid #f59e0b;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #92400e;">Staff Incentive Breakdown</h3>
+                    <ul style="margin: 0; padding-left: 20px; color: #78350f; font-size: 14px;">
+                      ${Object.entries(staffTotals).map(([staffName, amount]) => {
+                        return `<li><strong>${staffName}:</strong> ${currencySymbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>`;
+                      }).join('\n')}
+                    </ul>
+                  </div>
+                `;
+              }
+            }
+
+            // Professional message for email body
+            const professionalMessage = `
+              <p style="color: #475569; font-size: 14px; line-height: 1.6;">
+                We are pleased to provide you with the latest ${reportTitle} for your review. 
+                This automated report contains comprehensive data regarding the specified period.
+              </p>
+              <p style="color: #475569; font-size: 14px; line-height: 1.6;">
+                Please find the detailed report attached as a PDF document. Should you require any further information or have questions regarding the data presented, please do not hesitate to contact our support team.
+              </p>
+            `;
+
+            // Send email
+            const emails = recipient.email ? recipient.email.split(',').map((e: string) => e.trim()) : [];
+            
+            const emailHtml = `
+              <div style="font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                <h2 style="color: #0f172a; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">${reportTitle}</h2>
+                <p style="color: #475569;">Hello,</p>
+                <p style="color: #475569;">This is an automated report from <strong>${appName}</strong>. Please find the details below.</p>
+                
+                <div style="margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;">
+                  <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Report Summary</h3>
+                  <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 14px;">
+                    <li><strong>Application:</strong> ${appName}</li>
+                    <li><strong>Property:</strong> ${propertyName}</li>
+                    <li><strong>Outlet:</strong> ${outletName}</li>
+                    <li><strong>Report Type:</strong> ${reportTitle}</li>
+                    <li><strong>Date:</strong> ${params.date.toLocaleDateString()}</li>
+                    ${summaryListItems}
+                  </ul>
+                </div>
+
+                ${staffTotalsHtml}
+
+                ${professionalMessage}
+                
+                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+                <p style="color: #94a3b8; font-size: 12px; text-align: center;">&copy; ${new Date().getFullYear()} ${propertyName}. All rights reserved.</p>
+                <p style="color: #94a3b8; font-size: 10px; text-align: center;">Powered by ${appName}</p>
               </div>
             `;
-          }
-        }
 
-        // Professional message for email body
-        const professionalMessage = `
-          <p style="color: #475569; font-size: 14px; line-height: 1.6;">
-            We are pleased to provide you with the latest ${reportTitle} for your review. 
-            This automated report contains comprehensive data regarding the specified period.
-          </p>
-          <p style="color: #475569; font-size: 14px; line-height: 1.6;">
-            Please find the detailed report attached as a PDF document. Should you require any further information or have questions regarding the data presented, please do not hesitate to contact our support team.
-          </p>
-        `;
-
-        // Send email
-        const emails = recipient.email ? recipient.email.split(',').map((e: string) => e.trim()) : [];
-        
-        const emailHtml = `
-          <div style="font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-            <h2 style="color: #0f172a; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">${reportTitle}</h2>
-            <p style="color: #475569;">Hello,</p>
-            <p style="color: #475569;">This is an automated report from <strong>${appName}</strong>. Please find the details below.</p>
+            console.log(`DEBUG: Attempting to send email to ${emails.join(', ')} from ${fromEmail}`);
             
-            <div style="margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;">
-              <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Report Summary</h3>
-              <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 14px;">
-                <li><strong>Application:</strong> ${appName}</li>
-                <li><strong>Property:</strong> ${propertyName}</li>
-                <li><strong>Outlet:</strong> ${outletName}</li>
-                <li><strong>Report Type:</strong> ${reportTitle}</li>
-                <li><strong>Date:</strong> ${reportDate.toLocaleDateString()}</li>
-                ${summaryListItems}
-              </ul>
-            </div>
-
-            ${staffTotalsHtml}
-
-            ${professionalMessage}
+            const { data: emailRes, error: emailError } = await resend.emails.send({
+              from: `${appName} <${fromEmail}>`,
+              to: emails,
+              subject: `${reportTitle} - ${propertyName} - ${params.date.toLocaleDateString()}`,
+              html: emailHtml,
+              attachments: [
+                {
+                  filename: `${recipient.report_type}_report_${params.date.toISOString().split('T')[0]}.pdf`,
+                  content: pdfBase64,
+                },
+              ],
+            });
             
-            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-            <p style="color: #94a3b8; font-size: 12px; text-align: center;">&copy; ${new Date().getFullYear()} ${propertyName}. All rights reserved.</p>
-            <p style="color: #94a3b8; font-size: 10px; text-align: center;">Powered by ${appName}</p>
-          </div>
-        `;
+            if (emailError) {
+              console.error(`DEBUG: Email sending error for ${recipient.email}:`, JSON.stringify(emailError, null, 2));
+              throw new Error(`Resend Error: ${emailError.message || JSON.stringify(emailError)}`);
+            }
+            console.log(`DEBUG: Email sent successfully to ${recipient.email}. ID: ${emailRes?.id}`);
 
-        console.log(`DEBUG: Attempting to send email to ${emails.join(', ')} from ${fromEmail}`);
-        
-        const { data: emailRes, error: emailError } = await resend.emails.send({
-          from: `${appName} <${fromEmail}>`,
-          to: emails,
-          subject: `${reportTitle} - ${propertyName} - ${reportDate.toLocaleDateString()}`,
-          html: emailHtml,
-          attachments: [
-            {
-              filename: `${recipient.report_type}_report_${reportDate.toISOString().split('T')[0]}.pdf`,
-              content: pdfBase64,
-            },
-          ],
-        });
-        
-        if (emailError) {
-          console.error(`DEBUG: Email sending error for ${recipient.email}:`, JSON.stringify(emailError, null, 2));
-          throw new Error(`Resend Error: ${emailError.message || JSON.stringify(emailError)}`);
-        }
-        console.log(`DEBUG: Email sent successfully to ${recipient.email}. ID: ${emailRes?.id}`);
+            // Update last_sent_at
+            if (!isTest) {
+              await supabase.from('report_recipients').update({ last_sent_at: new Date().toISOString() }).eq('id', recipient.id);
+            }
 
-        // Update last_sent_at to prevent duplicate sends today, using the actual current timestamp
-        // Only update if it's NOT a test send, so automated schedules can still run
-        if (!isTest) {
-          const { error: updateError } = await supabase.from('report_recipients').update({ last_sent_at: new Date().toISOString() }).eq('id', recipient.id)
-          if (updateError) {
-            console.error(`DEBUG: Error updating last_sent_at for ${recipient.email}:`, updateError);
-          } else {
-            console.log(`DEBUG: Updated last_sent_at for ${recipient.email}`);
+            results.push({ recipient: recipient.email, status: 'success', id: emailRes?.id });
+          } catch (err: any) {
+            console.error(`Error sending to ${recipient.email}:`, err);
+            results.push({ recipient: recipient.email, status: 'error', error: err.message });
           }
-        } else {
-          console.log(`DEBUG: Test mode - skipping last_sent_at update for ${recipient.email}`);
-        }
-
-        return { recipient: recipient.email, status: 'success', id: emailRes?.id }
-
+        }));
       } catch (err: any) {
-        console.error(`Error sending to ${recipient.email}:`, err)
-        return { recipient: recipient.email, status: 'error', error: err.message }
+        console.error(`Error processing group:`, err);
       }
-    }));
+    }
 
     return new Response(JSON.stringify({ results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

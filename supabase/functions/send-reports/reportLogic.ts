@@ -47,6 +47,22 @@ const safeParseDate = (dateStr: string | null | undefined) => {
   return isNaN(fallback.getTime()) ? null : startOfDay(fallback);
 };
 
+export const REPORT_TITLES: Record<string, string> = {
+  'daily_sales': 'Daily Sales & Revenue Report',
+  'revenue_recognition': 'Revenue Recognition Audit',
+  'members_joined': 'Membership Acquisition Log',
+  'expiring_memberships': 'Expiring Memberships Audit',
+  'massage_room_revenue': 'Massage Room Revenue Report',
+  'incentives': 'Incentive Audit'
+};
+
+export const getReportTitle = (type: string, dept?: string) => {
+  if (type === 'incentives' && dept) {
+    return `${dept} Incentive Audit`;
+  }
+  return REPORT_TITLES[type] || type.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+};
+
 export const getReportData = async (ctx: ReportContext): Promise<ReportData> => {
   const { supabase, propertyId, outletId, reportType, date, incentiveDept, selectedMembershipTypeId } = ctx;
   
@@ -582,6 +598,11 @@ export const generateReportPDF = (options: PDFOptions) => {
   // Robust constructor resolution
   const JsPDFConstructor = typeof jsPDF === 'function' ? jsPDF : (jsPDF.jsPDF || jsPDF.default || jsPDF);
   
+  if (!JsPDFConstructor) {
+    console.error('DEBUG: jsPDF constructor not found', { jsPDFType: typeof jsPDF });
+    throw new Error('jsPDF constructor not found');
+  }
+
   const doc = new JsPDFConstructor({ 
     orientation: 'landscape',
     unit: 'mm',
@@ -626,15 +647,15 @@ export const generateReportPDF = (options: PDFOptions) => {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139); // slate-400
-  doc.text(`${outletName.toUpperCase()} • OPERATIONAL CONTEXT`, propertyX, currentY + 14);
+  doc.text(`${outletName.toUpperCase()} • ISO-9001 CERTIFIED`, propertyX, currentY + 14);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
   doc.setTextColor(79, 70, 229); // indigo-600
-  doc.text("INTERNAL AUDIT & VERIFICATION PROTOCOL", propertyX, currentY + 19);
+  doc.text("INTERNAL VERIFICATION PROTOCOL", propertyX, currentY + 19);
 
   // 2. Report Title & Period (Right)
-  doc.setFont("helvetica", "black");
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(15, 23, 42);
   doc.text(reportTitle.toUpperCase(), titleX, currentY + 8, { align: 'right', maxWidth: availableWidth });
@@ -678,46 +699,52 @@ export const generateReportPDF = (options: PDFOptions) => {
       try {
         return doc.autoTable(options);
       } catch (e) {
-        console.error('Error calling doc.autoTable:', e);
+        console.error('DEBUG: Error calling doc.autoTable:', e.message);
       }
     }
     
     // 2. Try calling the plugin function directly (function style)
-    // In many environments, autoTable is the function itself
     const plugin = (autoTable as any).default || autoTable;
     if (typeof plugin === 'function') {
       try {
         // Modern way: autoTable(doc, options)
         return plugin(doc, options);
       } catch (e) {
-        console.error('Error calling autoTable as standalone function:', e);
+        console.error('DEBUG: Error calling autoTable as standalone function:', e.message);
         
-        // Fallback: try to patch the instance if it's a patching function
+        // Fallback: try to patch the instance manually if it's a patching function
         try {
-          if (typeof plugin.apply === 'function') {
-            plugin(doc);
-            if (typeof doc.autoTable === 'function') {
-              return doc.autoTable(options);
-            }
+          plugin(doc);
+          if (typeof doc.autoTable === 'function') {
+            return doc.autoTable(options);
           }
         } catch (e2) {
-          console.error('Error patching doc with autoTable:', e2);
+          console.error('DEBUG: Error manual patching doc with autoTable:', e2.message);
         }
       }
     }
     
-    // 3. Last ditch effort: check if it's on the constructor
-    const JsPDFConstructor = doc.constructor;
-    if (JsPDFConstructor && typeof (JsPDFConstructor as any).autoTable === 'function') {
+    // 3. Last ditch effort: check if it's on the constructor or global
+    const Constructor = doc.constructor || JsPDFConstructor;
+    if (Constructor && typeof (Constructor as any).autoTable === 'function') {
       try {
-        return (JsPDFConstructor as any).autoTable(doc, options);
+        return (Constructor as any).autoTable(doc, options);
       } catch (e) {
-        console.error('Error calling JsPDF.autoTable:', e);
+        console.error('DEBUG: Error calling Constructor.autoTable:', e.message);
       }
     }
 
-    console.error('autoTable function not found on doc or as standalone function');
-    // If we can't use autoTable, we might want to at least not crash
+    // 4. Final fallback: manually attach if we have the plugin
+    if (typeof plugin === 'function') {
+      try {
+        doc.autoTable = function(opts: any) { return plugin(this, opts); };
+        return doc.autoTable(options);
+      } catch (e) {
+        console.error('DEBUG: Final fallback autoTable failed:', e.message);
+      }
+    }
+
+    console.error('DEBUG: autoTable function not found on doc or as standalone function');
     return null;
   };
 
@@ -883,10 +910,10 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.category,
           r.check_no,
           r.item,
-          r.gross.toFixed(2),
+          formatCurrency(r.gross),
           r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
-          r.discount_amt.toFixed(2),
-          r.net.toFixed(2),
+          formatCurrency(r.discount_amt),
+          formatCurrency(r.net),
           r.status
         ]),
         theme: 'grid',
@@ -920,10 +947,10 @@ export const generateReportPDF = (options: PDFOptions) => {
         startY: finalY,
         body: [[
           { content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: 6, styles: { halign: 'right' } },
-          data.summary.totalGross.toFixed(2),
+          formatCurrency(data.summary.totalGross),
           '',
-          data.summary.totalDiscount.toFixed(2),
-          data.summary.totalNet.toFixed(2),
+          formatCurrency(data.summary.totalDiscount),
+          formatCurrency(data.summary.totalNet),
           ''
         ]],
         theme: 'plain',
@@ -959,9 +986,9 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.date,
           r.type,
           r.item,
-          r.gross.toFixed(2),
-          r.discount.toFixed(2),
-          r.net.toFixed(2)
+          formatCurrency(r.gross),
+          formatCurrency(r.discount),
+          formatCurrency(r.net)
         ]),
         theme: 'grid',
         headStyles: { 
