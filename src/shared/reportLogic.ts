@@ -169,6 +169,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
       return {
         guest_name: m.guest_name || m.name,
+        membership_no: m.membership_number || m.membership_no || 'N/A',
         category_name: categoryMap[m.category_id] || 'Other',
         start_date: m.start_date,
         end_date: m.current_end_date,
@@ -582,7 +583,7 @@ export const generateReportPDF = (options: PDFOptions) => {
   const JsPDFConstructor = typeof jsPDF === 'function' ? jsPDF : (jsPDF.jsPDF || jsPDF.default || jsPDF);
   
   const doc = new JsPDFConstructor({ 
-    orientation: (isRevenueReport || isExpiringReport || isMembersJoinedReport) ? 'landscape' : 'portrait',
+    orientation: 'landscape',
     unit: 'mm',
     format: 'a4'
   });
@@ -674,29 +675,49 @@ export const generateReportPDF = (options: PDFOptions) => {
   const callAutoTable = (doc: any, options: any) => {
     // 1. Try doc.autoTable if it exists (plugin style)
     if (typeof doc.autoTable === 'function') {
-      return doc.autoTable(options);
+      try {
+        return doc.autoTable(options);
+      } catch (e) {
+        console.error('Error calling doc.autoTable:', e);
+      }
     }
     
     // 2. Try calling the plugin function directly (function style)
+    // In many environments, autoTable is the function itself
     const plugin = (autoTable as any).default || autoTable;
     if (typeof plugin === 'function') {
       try {
         // Modern way: autoTable(doc, options)
         return plugin(doc, options);
       } catch (e) {
+        console.error('Error calling autoTable as standalone function:', e);
+        
         // Fallback: try to patch the instance if it's a patching function
         try {
-          plugin(doc);
-          if (typeof doc.autoTable === 'function') {
-            return doc.autoTable(options);
+          if (typeof plugin.apply === 'function') {
+            plugin(doc);
+            if (typeof doc.autoTable === 'function') {
+              return doc.autoTable(options);
+            }
           }
         } catch (e2) {
-          console.error('Error calling autoTable plugin:', e, e2);
+          console.error('Error patching doc with autoTable:', e2);
         }
       }
     }
     
+    // 3. Last ditch effort: check if it's on the constructor
+    const JsPDFConstructor = doc.constructor;
+    if (JsPDFConstructor && typeof (JsPDFConstructor as any).autoTable === 'function') {
+      try {
+        return (JsPDFConstructor as any).autoTable(doc, options);
+      } catch (e) {
+        console.error('Error calling JsPDF.autoTable:', e);
+      }
+    }
+
     console.error('autoTable function not found on doc or as standalone function');
+    // If we can't use autoTable, we might want to at least not crash
     return null;
   };
 
@@ -735,10 +756,11 @@ export const generateReportPDF = (options: PDFOptions) => {
 
         callAutoTable(doc, {
           startY: currentY,
-          head: [['SL.', 'GUEST NAME / PROFILE', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
+          head: [['SL.', 'GUEST NAME / PROFILE', 'MEMBERSHIP NO.', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
           body: groupRows.map((r: any, idx: number) => [
             idx + 1,
             r.guest_name,
+            r.membership_no,
             r.start_date,
             r.end_date,
             r.total_days,
@@ -763,16 +785,17 @@ export const generateReportPDF = (options: PDFOptions) => {
           columnStyles: {
             0: { halign: 'center', cellWidth: 8 },
             1: { fontStyle: 'bold' },
-            2: { halign: 'center', cellWidth: 18 },
+            2: { halign: 'center', cellWidth: 20 },
             3: { halign: 'center', cellWidth: 18 },
-            4: { halign: 'center', cellWidth: 10 },
-            5: { halign: 'right' },
+            4: { halign: 'center', cellWidth: 18 },
+            5: { halign: 'center', cellWidth: 10 },
             6: { halign: 'right' },
             7: { halign: 'right' },
             8: { halign: 'right' },
-            9: { halign: 'right', textColor: [100, 116, 139] },
-            10: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
-            11: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
+            9: { halign: 'right' },
+            10: { halign: 'right', textColor: [100, 116, 139] },
+            11: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
+            12: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
           },
           margin: { left: margin, right: margin }
         });
@@ -789,7 +812,7 @@ export const generateReportPDF = (options: PDFOptions) => {
         callAutoTable(doc, {
           startY: (doc as any).lastAutoTable?.finalY || currentY + 10,
           body: [[
-            { content: `CLUSTER SUBTOTAL: ${category.toUpperCase()}`, colSpan: 5, styles: { halign: 'right' } },
+            { content: `CLUSTER SUBTOTAL: ${category.toUpperCase()}`, colSpan: 6, styles: { halign: 'right' } },
             formatCurrency(subDailyRate),
             formatCurrency(subActual),
             formatCurrency(subDiscount),
@@ -879,12 +902,15 @@ export const generateReportPDF = (options: PDFOptions) => {
         columnStyles: {
           0: { halign: 'center', cellWidth: 10 },
           1: { halign: 'center', cellWidth: 18 },
+          2: { fontStyle: 'bold' },
+          3: { halign: 'center', cellWidth: 20 },
           4: { halign: 'center' },
-          6: { halign: 'right' },
-          7: { halign: 'center' },
-          8: { halign: 'right' },
-          9: { halign: 'right', fontStyle: 'bold' },
-          10: { fontSize: 6, fontStyle: 'italic', textColor: [100, 116, 139] }
+          5: { halign: 'center' },
+          7: { halign: 'right' },
+          8: { halign: 'center' },
+          9: { halign: 'right' },
+          10: { halign: 'right', fontStyle: 'bold' },
+          11: { fontSize: 6, fontStyle: 'italic', textColor: [100, 116, 139] }
         },
         margin: { left: margin, right: margin }
       });

@@ -27,11 +27,39 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    const resend = new Resend(Deno.env.get('RESEND_API_KEY'))
+    const resendApiKey = Deno.env.get('RESEND_API_KEY')
+    console.log(`DEBUG: Resend API Key present: ${!!resendApiKey}`);
+    const resend = new Resend(resendApiKey)
     const body = await req.json().catch(() => ({}))
     const isTest = body.test === true
     const testRecipientId = body.recipientId
     console.log(`DEBUG: Request params - isTest: ${isTest}, testRecipientId: ${testRecipientId}`);
+
+    // Explicitly patch jsPDF with autoTable for the Edge Function environment
+    try {
+      const JsPDFConstructor = (jsPDF as any).default || jsPDF;
+      const plugin = (autoTable as any).default || autoTable;
+      
+      if (typeof plugin === 'function') {
+        // Try patching the constructor prototype
+        if (JsPDFConstructor.API) {
+          plugin(JsPDFConstructor);
+          console.log("DEBUG: jsPDF.API patched with autoTable");
+        } else if (typeof JsPDFConstructor === 'function') {
+          plugin(JsPDFConstructor);
+          console.log("DEBUG: jsPDF constructor patched with autoTable");
+        }
+        
+        // Also try patching the global if it exists (some versions of jspdf-autotable look for it)
+        if (typeof (globalThis as any).jsPDF === 'undefined') {
+          (globalThis as any).jsPDF = JsPDFConstructor;
+        }
+      } else {
+        console.warn("DEBUG: autoTable plugin is not a function, skipping patch");
+      }
+    } catch (e) {
+      console.error("DEBUG: Error patching jsPDF with autoTable:", e);
+    }
 
     // Fetch company settings
     const { data: settings } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle()
