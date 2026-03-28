@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7"
 import { Resend } from "https://esm.sh/resend@3.1.0"
-import { jsPDF } from "https://esm.sh/jspdf@2.5.1"
+import jsPDF from "https://esm.sh/jspdf@2.5.1"
 import autoTable from "https://esm.sh/jspdf-autotable@3.8.1"
 import { getReportData, generateReportPDF } from "./reportLogic.ts"
 
@@ -262,6 +262,7 @@ serve(async (req) => {
         
         const doc = generateReportPDF({
           jsPDF,
+          autoTable,
           data: reportData,
           propertyName,
           outletName,
@@ -330,7 +331,6 @@ serve(async (req) => {
 
         // Send email
         const emails = recipient.email ? recipient.email.split(',').map((e: string) => e.trim()) : [];
-        console.log(`DEBUG: Sending email to ${emails.join(', ')} with PDF size: ${pdfBase64.length}`);
         
         const emailHtml = `
           <div style="font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
@@ -360,6 +360,8 @@ serve(async (req) => {
           </div>
         `;
 
+        console.log(`DEBUG: Attempting to send email to ${emails.join(', ')} from ${fromEmail}`);
+        
         const { data: emailRes, error: emailError } = await resend.emails.send({
           from: `${appName} <${fromEmail}>`,
           to: emails,
@@ -374,10 +376,10 @@ serve(async (req) => {
         });
         
         if (emailError) {
-          console.error(`DEBUG: Email sending error: ${JSON.stringify(emailError)}`);
-          throw emailError;
+          console.error(`DEBUG: Email sending error for ${recipient.email}:`, JSON.stringify(emailError, null, 2));
+          throw new Error(`Resend Error: ${emailError.message || JSON.stringify(emailError)}`);
         }
-        console.log(`DEBUG: Email sent successfully. ID: ${emailRes?.id}`);
+        console.log(`DEBUG: Email sent successfully to ${recipient.email}. ID: ${emailRes?.id}`);
 
         // Update last_sent_at to prevent duplicate sends today, using the actual current timestamp
         // Only update if it's NOT a test send, so automated schedules can still run

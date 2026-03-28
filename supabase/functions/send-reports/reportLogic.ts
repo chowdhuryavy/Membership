@@ -1,5 +1,4 @@
-import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths, parse, startOfDay, endOfDay } from 'npm:date-fns';
-import autoTable from "https://esm.sh/jspdf-autotable@3.8.1"
+import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths, parse, startOfDay, endOfDay, addDays, subDays } from 'npm:date-fns';
 
 /**
  * SHARED REPORT LOGIC
@@ -89,7 +88,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     // Calculate for the month of the provided date
     const start = new Date(date.getFullYear(), date.getMonth(), 1);
-    const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    const end = new Date(date.getFullYear(), date.getMonth() + 1, 1); // First day of next month for exclusive end date logic
 
     let totalEarned = 0;
     let totalDeferred = 0;
@@ -106,14 +105,20 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         if (!mStart || !mEnd) return 0;
         
         // Ensure we only look at the intersection of the membership and the requested period
-        const activeStart = new Date(Math.max(startOfDay(mStart).getTime(), startOfDay(pStart).getTime()));
-        const activeEnd = new Date(Math.min(startOfDay(mEnd).getTime(), startOfDay(pEnd).getTime()));
+        // We use startOfDay for consistent comparison
+        const activeStart = startOfDay(new Date(Math.max(mStart.getTime(), pStart.getTime())));
+        const activeEnd = startOfDay(new Date(Math.min(mEnd.getTime(), pEnd.getTime())));
         
-        if (startOfDay(activeStart) > startOfDay(activeEnd)) return 0;
+        // Exclusive end date: If start is same as end, it's 0 days
+        if (activeStart >= activeEnd) return 0;
 
         let days = 0;
         try {
-          const potentialDays = eachDayOfInterval({ start: startOfDay(activeStart), end: startOfDay(activeEnd) });
+          // We iterate until activeEnd - 1 day (exclusive end date)
+          const potentialDays = eachDayOfInterval({ 
+            start: activeStart, 
+            end: subDays(activeEnd, 1) 
+          });
           for (const day of potentialDays) {
             const dStr = format(day, 'yyyy-MM-dd');
             const isFrozen = memberFreezes.some((f: any) => {
@@ -135,7 +140,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         return days;
       };
 
-      const prevAccrualDays = mStart && mStart < start ? calculateRevenueDays(mStart, new Date(start.getTime() - 86400000)) : 0;
+      const prevAccrualDays = mStart && mStart < start ? calculateRevenueDays(mStart, start) : 0;
       const periodRevDays = calculateRevenueDays(start, end);
       
       const dailyRate = Number(m.daily_rate || 0);
@@ -298,8 +303,9 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         totalNet += netRev;
 
         return {
-          date: m.start_date,
+          date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd-MM-yyyy') : 'N/A',
           name: m.guest_name || m.name,
+          membership_no: m.membership_number || m.membership_no || 'N/A',
           category: categoryMap[m.category_id] || 'Other',
           check_no: m.check_no || '#---',
           item: 'Membership',
@@ -366,12 +372,12 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
       const rows = filtered.map((m: any) => ({
         name: m.guest_name || m.name,
-        membership_no: m.membership_no || 'N/A',
+        membership_no: m.membership_number || m.membership_no || 'N/A',
         category_name: categoryMap[m.category_id] || 'Other',
         email: m.email,
         phone: m.phone,
-        start_date: m.start_date,
-        date: m.current_end_date || m.end_date,
+        start_date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd MMM yyyy') : 'N/A',
+        date: (m.current_end_date || m.end_date) ? format(safeParseDate(m.current_end_date || m.end_date)!, 'dd MMM yyyy') : 'N/A',
         status: m.status
       }));
 
@@ -553,6 +559,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
 export interface PDFOptions {
   jsPDF: any;
+  autoTable: any;
   data: ReportData;
   propertyName: string;
   outletName: string;
@@ -564,13 +571,18 @@ export interface PDFOptions {
 }
 
 export const generateReportPDF = (options: PDFOptions) => {
-  const { jsPDF, data, propertyName, outletName, currencySymbol, reportTitle, date, logoUrl, reportType } = options;
+  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, reportTitle, date, logoUrl, reportType } = options;
   
   const isRevenueReport = reportType === 'revenue_recognition';
   const isDailySalesReport = reportType === 'daily_sales';
+  const isExpiringReport = reportType === 'expiring_memberships';
+  const isMembersJoinedReport = reportType === 'members_joined';
   
-  const doc = new jsPDF({ 
-    orientation: 'landscape',
+  // Robust constructor resolution
+  const JsPDFConstructor = typeof jsPDF === 'function' ? jsPDF : (jsPDF.jsPDF || jsPDF.default || jsPDF);
+  
+  const doc = new JsPDFConstructor({ 
+    orientation: (isRevenueReport || isExpiringReport || isMembersJoinedReport) ? 'landscape' : 'portrait',
     unit: 'mm',
     format: 'a4'
   });
@@ -660,11 +672,31 @@ export const generateReportPDF = (options: PDFOptions) => {
   currentY = boxY + boxHeight + 20;
 
   const callAutoTable = (doc: any, options: any) => {
+    // 1. Try doc.autoTable if it exists (plugin style)
+    if (typeof doc.autoTable === 'function') {
+      return doc.autoTable(options);
+    }
+    
+    // 2. Try calling the plugin function directly (function style)
     const plugin = (autoTable as any).default || autoTable;
     if (typeof plugin === 'function') {
-      return plugin(doc, options);
+      try {
+        // Modern way: autoTable(doc, options)
+        return plugin(doc, options);
+      } catch (e) {
+        // Fallback: try to patch the instance if it's a patching function
+        try {
+          plugin(doc);
+          if (typeof doc.autoTable === 'function') {
+            return doc.autoTable(options);
+          }
+        } catch (e2) {
+          console.error('Error calling autoTable plugin:', e, e2);
+        }
+      }
     }
-    console.error('autoTable is not a function.');
+    
+    console.error('autoTable function not found on doc or as standalone function');
     return null;
   };
 
@@ -819,11 +851,12 @@ export const generateReportPDF = (options: PDFOptions) => {
     } else {
       callAutoTable(doc, {
         startY: currentY,
-        head: [['SL.NO.', 'DATE', 'GUEST / MEMBER', 'CATEGORY', 'CHECK NO.', 'ITEM / SERVICE', 'GROSS AMOUNT', 'DISC %', 'DISCOUNT AMT', 'NET REVENUE', 'REMARKS']],
+        head: [['SL.NO.', 'DATE', 'GUEST / MEMBER', 'MEMBERSHIP NO.', 'CATEGORY', 'CHECK NO.', 'ITEM / SERVICE', 'GROSS AMOUNT', 'DISC %', 'DISCOUNT AMT', 'NET REVENUE', 'REMARKS']],
         body: data.rows.map((r: any, idx: number) => [
           idx + 1,
           r.date,
           r.name,
+          r.membership_no,
           r.category,
           r.check_no,
           r.item,
@@ -1039,13 +1072,13 @@ export const generateReportPDF = (options: PDFOptions) => {
         r.category_name,
         r.start_date,
         r.date,
-        r.status
+        r.status?.toUpperCase() || 'N/A'
       ] : [
         r.name,
         r.email,
         r.phone,
         r.date,
-        r.status
+        r.status?.toUpperCase() || 'N/A'
       ]);
 
       callAutoTable(doc, {

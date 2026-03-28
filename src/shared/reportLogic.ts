@@ -305,6 +305,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         return {
           date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd-MM-yyyy') : 'N/A',
           name: m.guest_name || m.name,
+          membership_no: m.membership_number || m.membership_no || 'N/A',
           category: categoryMap[m.category_id] || 'Other',
           check_no: m.check_no || '#---',
           item: 'Membership',
@@ -371,7 +372,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
       const rows = filtered.map((m: any) => ({
         name: m.guest_name || m.name,
-        membership_no: m.membership_no || 'N/A',
+        membership_no: m.membership_number || m.membership_no || 'N/A',
         category_name: categoryMap[m.category_id] || 'Other',
         email: m.email,
         phone: m.phone,
@@ -574,9 +575,14 @@ export const generateReportPDF = (options: PDFOptions) => {
   
   const isRevenueReport = reportType === 'revenue_recognition';
   const isDailySalesReport = reportType === 'daily_sales';
+  const isExpiringReport = reportType === 'expiring_memberships';
+  const isMembersJoinedReport = reportType === 'members_joined';
   
-  const doc = new jsPDF({ 
-    orientation: isRevenueReport ? 'landscape' : 'portrait',
+  // Robust constructor resolution
+  const JsPDFConstructor = typeof jsPDF === 'function' ? jsPDF : (jsPDF.jsPDF || jsPDF.default || jsPDF);
+  
+  const doc = new JsPDFConstructor({ 
+    orientation: (isRevenueReport || isExpiringReport || isMembersJoinedReport) ? 'landscape' : 'portrait',
     unit: 'mm',
     format: 'a4'
   });
@@ -666,17 +672,32 @@ export const generateReportPDF = (options: PDFOptions) => {
   currentY = boxY + boxHeight + 20;
 
   const callAutoTable = (doc: any, options: any) => {
-    // Some ESM environments might wrap the function in a default property
-    const actualAutoTable = typeof autoTable === 'function' ? autoTable : (autoTable?.default || autoTable);
-    
-    if (typeof actualAutoTable === 'function') {
-      return actualAutoTable(doc, options);
-    } else if (typeof doc.autoTable === 'function') {
+    // 1. Try doc.autoTable if it exists (plugin style)
+    if (typeof doc.autoTable === 'function') {
       return doc.autoTable(options);
-    } else {
-      console.error('autoTable function not found on doc or as standalone function');
-      return null;
     }
+    
+    // 2. Try calling the plugin function directly (function style)
+    const plugin = (autoTable as any).default || autoTable;
+    if (typeof plugin === 'function') {
+      try {
+        // Modern way: autoTable(doc, options)
+        return plugin(doc, options);
+      } catch (e) {
+        // Fallback: try to patch the instance if it's a patching function
+        try {
+          plugin(doc);
+          if (typeof doc.autoTable === 'function') {
+            return doc.autoTable(options);
+          }
+        } catch (e2) {
+          console.error('Error calling autoTable plugin:', e, e2);
+        }
+      }
+    }
+    
+    console.error('autoTable function not found on doc or as standalone function');
+    return null;
   };
 
   // --- TABLE SECTION ---
@@ -830,11 +851,12 @@ export const generateReportPDF = (options: PDFOptions) => {
     } else {
       callAutoTable(doc, {
         startY: currentY,
-        head: [['SL.NO.', 'DATE', 'GUEST / MEMBER', 'CATEGORY', 'CHECK NO.', 'ITEM / SERVICE', 'GROSS AMOUNT', 'DISC %', 'DISCOUNT AMT', 'NET REVENUE', 'REMARKS']],
+        head: [['SL.NO.', 'DATE', 'GUEST / MEMBER', 'MEMBERSHIP NO.', 'CATEGORY', 'CHECK NO.', 'ITEM / SERVICE', 'GROSS AMOUNT', 'DISC %', 'DISCOUNT AMT', 'NET REVENUE', 'REMARKS']],
         body: data.rows.map((r: any, idx: number) => [
           idx + 1,
           r.date,
           r.name,
+          r.membership_no,
           r.category,
           r.check_no,
           r.item,
