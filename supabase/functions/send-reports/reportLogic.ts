@@ -8,6 +8,7 @@ import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCale
 
 export interface ReportData {
   rows: any[];
+  groupedRows?: any; // For revenue recognition grouped data
   summary: any;
 }
 
@@ -173,22 +174,13 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       // Calculate total active days for the entire membership duration
       const totalActiveDays = calculateRevenueDays(mStart, mEnd);
       
-      if (m.guest_name?.includes('Test') || m.name?.includes('Test')) {
-        console.log(`DEBUG [RevRec]: ${m.guest_name || m.name}`);
-        console.log(`  - Membership: ${m.start_date} to ${m.current_end_date}`);
-        console.log(`  - Total Active Days: ${totalActiveDays}`);
-        console.log(`  - Daily Rate: ${dailyRate}`);
-        console.log(`  - Period: ${format(start, 'yyyy-MM-dd')} to ${format(end, 'yyyy-MM-dd')}`);
-        console.log(`  - Period Days: ${periodRevDays}`);
-        console.log(`  - Period Rev: ${periodRev}`);
-      }
-
       return {
+        id: m.id,
         guest_name: m.guest_name || m.name,
         membership_no: m.membership_number || m.membership_no || 'N/A',
         category_name: categoryMap[m.category_id] || 'Other',
-        start_date: m.start_date,
-        end_date: m.current_end_date,
+        start_date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd-MM-yyyy') : 'N/A',
+        end_date: m.current_end_date ? format(safeParseDate(m.current_end_date)!, 'dd-MM-yyyy') : 'N/A',
         total_days: totalActiveDays,
         daily_rate: dailyRate,
         actual_rate: Number(m.actual_rate || 0),
@@ -196,13 +188,20 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         net_fees: Number(m.net_amount || 0),
         prev_accrual: prevAccrual,
         period_rev: periodRev,
-        deferred: deferred,
-        debug_info: `Total Active Days: ${totalActiveDays}, Period Days: ${periodRevDays}`
+        deferred: deferred
       };
     });
 
+    // Group by category for the frontend/email
+    const grouped = rows.reduce((acc: any, row: any) => {
+      if (!acc[row.category_name]) acc[row.category_name] = [];
+      acc[row.category_name].push(row);
+      return acc;
+    }, {});
+
     return {
       rows,
+      groupedRows: grouped,
       summary: {
         totalNetFees,
         totalEarned,
@@ -227,7 +226,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       salesQuery, 
       bookingsQuery,
       supabase.from('guests').select('id, name'),
-      supabase.from('massage_types').select('id, name')
+      supabase.from('massage_types').select('id, name, duration_minutes')
     ]);
 
     const sales = salesRes.data || [];
@@ -235,7 +234,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const guests = guestsRes.data || [];
     const mTypes = mTypesRes.data || [];
     const guestMap = Object.fromEntries(guests.map((g: any) => [g.id, g.name]));
-    const mTypeMap = Object.fromEntries(mTypes.map((t: any) => [t.id, t.name]));
+    const mTypeMap = Object.fromEntries(mTypes.map((t: any) => [t.id, t]));
 
     let totalGross = 0;
     let totalDiscount = 0;
@@ -252,7 +251,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         discount: Number(s.discount_amount || 0),
         net: Number(s.net_amount || 0),
         type: 'Retail',
-        remarks: s.remarks || '',
+        remarks: s.remarks || '-',
         duration: '-'
       })),
       ...bookings.map((b: any) => {
@@ -270,7 +269,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           discount: disc,
           net: price,
           type: 'Service',
-          remarks: b.notes || '',
+          remarks: b.notes || '-',
           duration: type ? `${type.duration_minutes}m` : '-'
         };
       })
@@ -283,6 +282,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       const discPercent = c.gross > 0 ? (c.discount / c.gross * 100) : 0;
       
       return {
+        id: `sale_${idx}`,
         sl_no: idx + 1,
         date: format(new Date(c.date), 'dd-MMM-yy'),
         guest_name: c.guest_name,
@@ -309,7 +309,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     };
   }
 
-  if (reportType === 'members_joined' || reportType === 'expiring_memberships') {
+  if (reportType === 'members_joined') {
     const reportStart = startOfMonth(date);
     const reportEnd = endOfMonth(date);
     const startStr = format(reportStart, 'yyyy-MM-dd');
@@ -327,112 +327,128 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     if (outletIds.length === 0) return { rows: [], summary: { count: 0 } };
 
-    if (reportType === 'members_joined') {
-      const [membersRes, categoriesRes] = await Promise.all([
-        supabase.from('members').select('*').in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr),
-        supabase.from('membership_categories').select('id, name')
-      ]);
+    const [membersRes, categoriesRes] = await Promise.all([
+      supabase.from('members').select('*').in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr),
+      supabase.from('membership_categories').select('id, name')
+    ]);
 
-      const members = membersRes.data || [];
-      const categories = categoriesRes.data || [];
-      const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
+    const members = membersRes.data || [];
+    const categories = categoriesRes.data || [];
+    const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
 
-      let totalGross = 0;
-      let totalDiscount = 0;
-      let totalNet = 0;
+    let totalGross = 0;
+    let totalDiscount = 0;
+    let totalNet = 0;
 
-      const rows = members.filter((m: any) => m.status !== 'tentative').map((m: any) => {
-        const actualPrice = Number(m.actual_rate || (m.net_amount + (m.discount || 0)) || 0);
-        const discountAmt = Number(m.discount || 0);
-        const netRev = Number(m.net_amount || 0);
-        const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+    const rows = members.filter((m: any) => m.status !== 'tentative').map((m: any, idx: number) => {
+      const actualPrice = Number(m.actual_rate || (m.net_amount + (m.discount || 0)) || 0);
+      const discountAmt = Number(m.discount || 0);
+      const netRev = Number(m.net_amount || 0);
+      const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
-        totalGross += actualPrice;
-        totalDiscount += discountAmt;
-        totalNet += netRev;
+      totalGross += actualPrice;
+      totalDiscount += discountAmt;
+      totalNet += netRev;
 
-        return {
-          date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd-MM-yyyy') : 'N/A',
-          name: m.guest_name || m.name,
-          membership_no: m.membership_number || m.membership_no || 'N/A',
-          category: categoryMap[m.category_id] || 'Other',
-          check_no: m.check_no || '#---',
-          item: 'Membership',
-          gross: actualPrice,
-          discount_percent: discPercent,
-          discount_amt: discountAmt,
-          net: netRev,
-          remarks: m.status
-        };
-      });
-
-      return { 
-        rows, 
-        summary: { 
-          count: rows.length,
-          totalGross,
-          totalDiscount,
-          totalNet
-        } 
-      };
-    } else {
-      // expiring_memberships
-      const [membersRes, categoriesRes] = await Promise.all([
-        supabase.from('members').select('*').in('outlet_id', outletIds),
-        supabase.from('membership_categories').select('id, name')
-      ]);
-
-      const members = membersRes.data || [];
-      const categories = categoriesRes.data || [];
-      const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
-
-      console.log(`DEBUG: Found ${members.length} total members to check for expiration`);
-      console.log(`DEBUG: Report Month Range: ${startStr} to ${endStr}`);
-
-      // Filter in-memory for precise range and status
-      const filtered = (members || []).filter((m: any) => {
-        // Exclude tentative/pending
-        if (m.status === 'tentative' || m.status === 'pending') {
-          console.log(`DEBUG: Skipping ${m.name} due to status: ${m.status}`);
-          return false;
-        }
-
-        const endDateStr = m.current_end_date || m.end_date;
-        if (!endDateStr) {
-          console.log(`DEBUG: Skipping ${m.name} - no expiry date`);
-          return false;
-        }
-
-        const parsedEnd = safeParseDate(endDateStr);
-        if (!parsedEnd) {
-          console.log(`DEBUG: Skipping ${m.name} - invalid expiry date: ${endDateStr}`);
-          return false;
-        }
-
-        // Normalize both to start of day for comparison
-        const checkDate = startOfDay(parsedEnd);
-        const rangeStart = startOfDay(reportStart);
-        const rangeEnd = endOfDay(reportEnd); // Use end of day for the end of the range
-
-        const isMatch = checkDate >= rangeStart && checkDate <= rangeEnd;
-        
-        return isMatch;
-      });
-
-      const rows = filtered.map((m: any) => ({
+      return {
+        id: m.id,
+        sl_no: idx + 1,
+        date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd-MM-yyyy') : 'N/A',
         name: m.guest_name || m.name,
         membership_no: m.membership_number || m.membership_no || 'N/A',
-        category_name: categoryMap[m.category_id] || 'Other',
-        email: m.email,
-        phone: m.phone,
-        start_date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd MMM yyyy') : 'N/A',
-        date: (m.current_end_date || m.end_date) ? format(safeParseDate(m.current_end_date || m.end_date)!, 'dd MMM yyyy') : 'N/A',
-        status: m.status
-      }));
+        category: categoryMap[m.category_id] || 'Other',
+        check_no: m.check_no || '#---',
+        item: 'Membership',
+        gross: actualPrice,
+        discount_percent: discPercent,
+        discount_amt: discountAmt,
+        net: netRev,
+        remarks: m.status
+      };
+    });
 
-      console.log(`DEBUG: Returning ${rows.length} expiring memberships`);
-      return { rows, summary: { count: rows.length } };
+    return { 
+      rows, 
+      summary: { 
+        count: rows.length,
+        totalGross,
+        totalDiscount,
+        totalNet
+      } 
+    };
+  }
+
+  if (reportType === 'expiring_memberships') {
+    const reportStart = startOfMonth(date);
+    const reportEnd = endOfMonth(date);
+    const startStr = format(reportStart, 'yyyy-MM-dd');
+    const endStr = format(reportEnd, 'yyyy-MM-dd');
+    
+    console.log(`DEBUG: Expiring memberships for period ${startStr} to ${endStr}`);
+
+    let outletIds: string[] = [];
+    if (outletId === 'all') {
+      const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', propertyId);
+      outletIds = (outlets || []).map((o: any) => o.id);
+    } else {
+      outletIds = [outletId];
     }
+
+    if (outletIds.length === 0) return { rows: [], summary: { count: 0 } };
+
+    const [membersRes, categoriesRes] = await Promise.all([
+      supabase.from('members').select('*').in('outlet_id', outletIds),
+      supabase.from('membership_categories').select('id, name')
+    ]);
+
+    const members = membersRes.data || [];
+    const categories = categoriesRes.data || [];
+    const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
+
+    console.log(`DEBUG: Found ${members.length} total members to check for expiration`);
+
+    // Filter in-memory for precise range and status
+    const filtered = (members || []).filter((m: any) => {
+      // Exclude tentative/pending
+      if (m.status === 'tentative' || m.status === 'pending') {
+        return false;
+      }
+
+      const endDateStr = m.current_end_date || m.end_date;
+      if (!endDateStr) {
+        return false;
+      }
+
+      const parsedEnd = safeParseDate(endDateStr);
+      if (!parsedEnd) {
+        return false;
+      }
+
+      // Normalize both to start of day for comparison
+      const checkDate = startOfDay(parsedEnd);
+      const rangeStart = startOfDay(reportStart);
+      const rangeEnd = endOfDay(reportEnd); // Use end of day for the end of the range
+
+      const isMatch = checkDate >= rangeStart && checkDate <= rangeEnd;
+      
+      return isMatch;
+    });
+
+    const rows = filtered.map((m: any, idx: number) => ({
+      id: m.id,
+      sl_no: idx + 1,
+      name: m.guest_name || m.name,
+      membership_no: m.membership_number || m.membership_no || 'N/A',
+      category_name: categoryMap[m.category_id] || 'Other',
+      email: m.email,
+      phone: m.phone,
+      start_date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd MMM yyyy') : 'N/A',
+      date: (m.current_end_date || m.end_date) ? format(safeParseDate(m.current_end_date || m.end_date)!, 'dd MMM yyyy') : 'N/A',
+      status: m.status
+    }));
+
+    console.log(`DEBUG: Returning ${rows.length} expiring memberships`);
+    return { rows, summary: { count: rows.length } };
   }
 
   if (reportType === 'incentives') {
@@ -446,7 +462,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       outletIds = [outletId];
     }
 
-    if (outletIds.length === 0) return { rows: [], summary: { totalIncentive: 0, count: 0 } };
+    if (outletIds.length === 0) return { rows: [], summary: { totalIncentive: 0, count: 0, staffList: [] } };
 
     const dept = incentiveDept || 'Massage';
 
@@ -508,6 +524,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         }
 
         rows.push({
+          id: b.id,
           sl_no: sl++,
           date: format(new Date(`${b.date}T${b.start_time}`), 'dd-MMM-yy'),
           guest_name: guestMap[b.guest_id] || 'Guest',
@@ -556,6 +573,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         }
 
         rows.push({
+          id: m.id,
           sl_no: sl++,
           date: format(new Date(m.start_date), 'dd-MMM-yy'),
           guest_name: m.guest_name,
@@ -596,32 +614,34 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     const bookings = bookingsRes.data || [];
     const rooms = roomsRes.data || [];
-    const roomMap = Object.fromEntries(rooms.map((r: any) => [r.id, r.name]));
-
-    const roomRevenue: Record<string, { name: string, revenue: number, count: number }> = {};
-    rooms.forEach((r: any) => {
-      roomRevenue[r.id] = { name: r.name, revenue: 0, count: 0 };
+    
+    // Group by date for a more detailed report (though for a single day it's just one row)
+    const dates = [...new Set(bookings.map(b => b.date))].sort();
+    
+    const dailyData = dates.map(date => {
+      const dayBookings = bookings.filter(b => b.date === date);
+      const roomRevenue: Record<string, number> = {};
+      rooms.forEach(r => {
+        roomRevenue[r.name] = dayBookings.filter(b => b.room_id === r.id).reduce((sum, b) => sum + b.price, 0);
+      });
+      const unassigned = dayBookings.filter(b => !b.room_id).reduce((sum, b) => sum + b.price, 0);
+      const total = dayBookings.reduce((sum, b) => sum + b.price, 0);
+      
+      return {
+        date,
+        ...roomRevenue,
+        unassigned,
+        total
+      };
     });
-
-    bookings.forEach((b: any) => {
-      if (b.room_id && roomRevenue[b.room_id]) {
-        roomRevenue[b.room_id].revenue += (b.price || 0);
-        roomRevenue[b.room_id].count += 1;
-      }
-    });
-
-    const rows = Object.values(roomRevenue).filter(r => r.count > 0).map(r => ({
-      room_name: r.name,
-      revenue: r.revenue,
-      bookings_count: r.count
-    }));
 
     return {
-      rows,
+      rows: dailyData,
       summary: {
-        totalRevenue: rows.reduce((s, r) => s + r.revenue, 0),
-        totalBookings: rows.reduce((s, r) => s + r.bookings_count, 0),
-        count: rows.length
+        rooms: rooms.map(r => r.name),
+        totalRevenue: bookings.reduce((s, b) => s + (b.price || 0), 0),
+        totalBookings: bookings.length,
+        count: dailyData.length
       }
     };
   }
@@ -674,7 +694,7 @@ export const generateReportPDF = (options: PDFOptions) => {
     const formatted = val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     // If currency symbol is Arabic (ر.ق), use QR instead for PDF compatibility
     const safeSymbol = (currencySymbol === 'ر.ق' || currencySymbol.includes('\u0631')) ? 'QR' : currencySymbol;
-    return `${formatted} ${safeSymbol}`;
+    return `${safeSymbol} ${formatted}`;
   };
 
   // --- HEADER SECTION ---
@@ -822,22 +842,50 @@ export const generateReportPDF = (options: PDFOptions) => {
   // --- TABLE SECTION ---
   if (isRevenueReport) {
     // Revenue Recognition Style
-    const grouped = data.rows.reduce((acc: any, row: any) => {
-      if (!acc[row.category_name]) acc[row.category_name] = [];
-      acc[row.category_name].push(row);
-      return acc;
-    }, {} as Record<string, any[]>);
-
+    const grouped = data.groupedRows || {};
+    
     if (data.rows.length === 0) {
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139);
       doc.text("No revenue recognition data found for this period.", margin, currentY);
     } else {
+      let grandTotals = {
+        daily_rate: 0,
+        actual_rate: 0,
+        discount: 0,
+        net_fees: 0,
+        prev_accrual: 0,
+        period_rev: 0,
+        deferred: 0
+      };
+      
       Object.entries(grouped).forEach(([category, groupRows]: [string, any]) => {
+        const groupRowsArray = groupRows as any[];
+        
+        // Calculate subtotals for this category
+        const subtotals = {
+          daily_rate: groupRowsArray.reduce((s: number, r: any) => s + r.daily_rate, 0),
+          actual_rate: groupRowsArray.reduce((s: number, r: any) => s + r.actual_rate, 0),
+          discount: groupRowsArray.reduce((s: number, r: any) => s + r.discount, 0),
+          net_fees: groupRowsArray.reduce((s: number, r: any) => s + r.net_fees, 0),
+          prev_accrual: groupRowsArray.reduce((s: number, r: any) => s + r.prev_accrual, 0),
+          period_rev: groupRowsArray.reduce((s: number, r: any) => s + r.period_rev, 0),
+          deferred: groupRowsArray.reduce((s: number, r: any) => s + r.deferred, 0)
+        };
+        
+        // Update grand totals
+        grandTotals.daily_rate += subtotals.daily_rate;
+        grandTotals.actual_rate += subtotals.actual_rate;
+        grandTotals.discount += subtotals.discount;
+        grandTotals.net_fees += subtotals.net_fees;
+        grandTotals.prev_accrual += subtotals.prev_accrual;
+        grandTotals.period_rev += subtotals.period_rev;
+        grandTotals.deferred += subtotals.deferred;
+        
         // Category Header Row
         callAutoTable(doc, {
           startY: currentY,
-          body: [[`${category.toUpperCase()} (${groupRows.length} LEDGER EVENTS)`]],
+          body: [[`${category.toUpperCase()} (${groupRowsArray.length} LEDGER EVENTS)`]],
           theme: 'plain',
           styles: { 
             fillColor: [241, 245, 249], 
@@ -855,7 +903,7 @@ export const generateReportPDF = (options: PDFOptions) => {
         callAutoTable(doc, {
           startY: currentY,
           head: [['SL.', 'GUEST NAME / PROFILE', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
-          body: groupRows.map((r: any, idx: number) => [
+          body: groupRowsArray.map((r: any, idx: number) => [
             idx + 1,
             r.guest_name,
             r.start_date,
@@ -897,25 +945,17 @@ export const generateReportPDF = (options: PDFOptions) => {
         });
 
         // Subtotal Row for Category
-        const subDailyRate = groupRows.reduce((s: number, r: any) => s + r.daily_rate, 0);
-        const subActual = groupRows.reduce((s: number, r: any) => s + r.actual_rate, 0);
-        const subDiscount = groupRows.reduce((s: number, r: any) => s + r.discount, 0);
-        const subNetFees = groupRows.reduce((s: number, r: any) => s + r.net_fees, 0);
-        const subPrevAccrual = groupRows.reduce((s: number, r: any) => s + r.prev_accrual, 0);
-        const subPeriodRev = groupRows.reduce((s: number, r: any) => s + r.period_rev, 0);
-        const subDeferred = groupRows.reduce((s: number, r: any) => s + r.deferred, 0);
-
         callAutoTable(doc, {
           startY: (doc as any).lastAutoTable?.finalY || currentY + 10,
           body: [[
             { content: `CLUSTER SUBTOTAL: ${category.toUpperCase()}`, colSpan: 5, styles: { halign: 'right' } },
-            formatCurrency(subDailyRate),
-            formatCurrency(subActual),
-            formatCurrency(subDiscount),
-            formatCurrency(subNetFees),
-            formatCurrency(subPrevAccrual),
-            formatCurrency(subPeriodRev),
-            formatCurrency(subDeferred)
+            formatCurrency(subtotals.daily_rate),
+            formatCurrency(subtotals.actual_rate),
+            formatCurrency(subtotals.discount),
+            formatCurrency(subtotals.net_fees),
+            formatCurrency(subtotals.prev_accrual),
+            formatCurrency(subtotals.period_rev),
+            formatCurrency(subtotals.deferred)
           ]],
           theme: 'plain',
           styles: { 
@@ -927,7 +967,6 @@ export const generateReportPDF = (options: PDFOptions) => {
             font: 'helvetica'
           },
           columnStyles: {
-            0: { cellWidth: 'auto' }, // Let the colSpan handle it
             5: { halign: 'right', cellWidth: 20 },
             6: { halign: 'right', cellWidth: 20 },
             7: { halign: 'right', cellWidth: 20 },
@@ -941,26 +980,41 @@ export const generateReportPDF = (options: PDFOptions) => {
 
         currentY = (doc as any).lastAutoTable?.finalY || currentY + 15;
       });
+      
+      // Grand Total Row
+      callAutoTable(doc, {
+        startY: currentY + 5,
+        body: [[
+          { content: "VERIFIED PORTFOLIO TOTAL", colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+          formatCurrency(grandTotals.daily_rate),
+          formatCurrency(grandTotals.actual_rate),
+          formatCurrency(grandTotals.discount),
+          formatCurrency(grandTotals.net_fees),
+          formatCurrency(grandTotals.prev_accrual),
+          formatCurrency(grandTotals.period_rev),
+          formatCurrency(grandTotals.deferred)
+        ]],
+        theme: 'plain',
+        styles: { 
+          fillColor: [15, 23, 42], 
+          textColor: [255, 255, 255], 
+          fontStyle: 'bold', 
+          fontSize: 7, 
+          cellPadding: 2,
+          font: 'helvetica'
+        },
+        columnStyles: {
+          5: { halign: 'right', cellWidth: 20 },
+          6: { halign: 'right', cellWidth: 20 },
+          7: { halign: 'right', cellWidth: 20 },
+          8: { halign: 'right', cellWidth: 20 },
+          9: { halign: 'right', cellWidth: 20 },
+          10: { halign: 'right', cellWidth: 20 },
+          11: { halign: 'right', cellWidth: 20 }
+        },
+        margin: { left: margin, right: margin }
+      });
     }
-
-    // Grand Totals Table
-    const totalDailyRate = data.rows.reduce((s: number, r: any) => s + r.daily_rate, 0);
-    callAutoTable(doc, {
-      startY: currentY + 5,
-      body: [
-        ['TOTAL DAILY RATE', formatCurrency(totalDailyRate)],
-        ['TOTAL NET FEES', formatCurrency(data.summary.totalNetFees || 0)],
-        ['PERIOD REVENUE RECOGNIZED', formatCurrency(data.summary.totalEarned || 0)],
-        ['TOTAL DEFERRED REVENUE', formatCurrency(data.summary.totalDeferred || 0)]
-      ],
-      theme: 'grid',
-      styles: { fontSize: 9, cellPadding: 4, fontStyle: 'bold', font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.2 },
-      columnStyles: {
-        0: { cellWidth: contentWidth - 40, fillColor: [248, 250, 252] },
-        1: { halign: 'right', cellWidth: 40 }
-      },
-      margin: { left: margin, right: margin }
-    });
   } else if (reportType === 'members_joined') {
     // Members Joined Audit Style
     if (data.rows.length === 0) {
@@ -982,8 +1036,24 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
           formatCurrency(r.discount_amt),
           formatCurrency(r.net),
-          r.status
+          r.remarks
         ]),
+        foot: [[
+          { content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: 6, styles: { halign: 'right' } },
+          { content: formatCurrency(data.summary.totalGross), styles: { halign: 'right' } },
+          { content: '', styles: {} },
+          { content: formatCurrency(data.summary.totalDiscount), styles: { halign: 'right' } },
+          { content: formatCurrency(data.summary.totalNet), styles: { halign: 'right' } },
+          { content: '', styles: {} }
+        ]],
+        footStyles: { 
+          fillColor: [15, 23, 42], 
+          textColor: [255, 255, 255], 
+          fontStyle: 'bold', 
+          fontSize: 7, 
+          cellPadding: 2,
+          font: 'helvetica'
+        },
         theme: 'grid',
         headStyles: { 
           fillColor: [15, 23, 42], 
@@ -1005,36 +1075,6 @@ export const generateReportPDF = (options: PDFOptions) => {
           8: { halign: 'right' },
           9: { halign: 'right', fontStyle: 'bold' },
           10: { fontSize: 6, fontStyle: 'italic', textColor: [100, 116, 139] }
-        },
-        margin: { left: margin, right: margin }
-      });
-
-      const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
-      callAutoTable(doc, {
-        startY: finalY,
-        body: [[
-          { content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: 6, styles: { halign: 'right' } },
-          formatCurrency(data.summary.totalGross),
-          '',
-          formatCurrency(data.summary.totalDiscount),
-          formatCurrency(data.summary.totalNet),
-          ''
-        ]],
-        theme: 'plain',
-        styles: { 
-          fillColor: [15, 23, 42], 
-          textColor: [255, 255, 255], 
-          fontStyle: 'bold', 
-          fontSize: 8, 
-          cellPadding: 3,
-          font: 'helvetica'
-        },
-        columnStyles: {
-          6: { halign: 'right', cellWidth: 22 },
-          7: { halign: 'center', cellWidth: 15 },
-          8: { halign: 'right', cellWidth: 22 },
-          9: { halign: 'right', cellWidth: 22 },
-          10: { cellWidth: 20 }
         },
         margin: { left: margin, right: margin }
       });
@@ -1063,6 +1103,22 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.net_revenue.toFixed(2),
           r.remarks
         ]),
+        foot: [[
+          { content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: 7, styles: { halign: 'right' } },
+          { content: data.summary.totalGross.toFixed(2), styles: { halign: 'right' } },
+          { content: '', styles: {} },
+          { content: data.summary.totalDiscount.toFixed(2), styles: { halign: 'right' } },
+          { content: data.summary.totalNet.toFixed(2), styles: { halign: 'right' } },
+          { content: '', styles: {} }
+        ]],
+        footStyles: { 
+          fillColor: [15, 23, 42], 
+          textColor: [255, 255, 255], 
+          fontStyle: 'bold', 
+          fontSize: 6, 
+          cellPadding: 2,
+          font: 'helvetica'
+        },
         theme: 'grid',
         headStyles: { 
           fillColor: [15, 23, 42], 
@@ -1090,34 +1146,6 @@ export const generateReportPDF = (options: PDFOptions) => {
         margin: { left: margin, right: margin }
       });
     }
-
-    const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
-    callAutoTable(doc, {
-      startY: finalY,
-      body: [
-        [{ content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: 7, styles: { halign: 'right' } }, data.summary.totalGross.toFixed(2), '', data.summary.totalDiscount.toFixed(2), data.summary.totalNet.toFixed(2), '']
-      ],
-      theme: 'grid',
-      styles: { 
-        fontSize: 8, 
-        cellPadding: 3, 
-        fontStyle: 'bold', 
-        font: 'helvetica', 
-        lineColor: [0, 0, 0], 
-        lineWidth: 0.2,
-        fillColor: [15, 23, 42],
-        textColor: [255, 255, 255]
-      },
-      columnStyles: {
-        0: { halign: 'right', cellWidth: 138 },
-        1: { halign: 'right', cellWidth: 20 },
-        2: { cellWidth: 12 },
-        3: { halign: 'right', cellWidth: 20 },
-        4: { halign: 'right', cellWidth: 20 },
-        5: { cellWidth: 25 }
-      },
-      margin: { left: margin, right: margin }
-    });
   } else if (reportType === 'incentives') {
     if (data.rows.length === 0) {
       doc.setFontSize(10);
@@ -1158,10 +1186,29 @@ export const generateReportPDF = (options: PDFOptions) => {
         return row;
       });
 
+      const staffTotals = staffList.map((s: any) => {
+        const total = data.rows.reduce((sum: number, r: any) => sum + (r.staff_splits[s.id] || 0), 0);
+        return total > 0 ? total.toFixed(2) : '0.00';
+      });
+
       callAutoTable(doc, {
         startY: currentY,
         head: head,
         body: body,
+        foot: [[
+          { content: 'AGGREGATE INCENTIVE TOTALS', colSpan: 12, styles: { halign: 'right' } },
+          { content: data.summary.totalIncentive.toFixed(2), styles: { halign: 'right' } },
+          { content: '', styles: {} },
+          ...staffTotals.map((t: string) => ({ content: t, styles: { halign: 'right' } }))
+        ]],
+        footStyles: { 
+          fillColor: [15, 23, 42], 
+          textColor: [255, 255, 255], 
+          fontStyle: 'bold', 
+          fontSize: 5, 
+          cellPadding: 1,
+          font: 'helvetica'
+        },
         theme: 'grid',
         headStyles: { 
           fillColor: [15, 23, 42], 
@@ -1191,57 +1238,51 @@ export const generateReportPDF = (options: PDFOptions) => {
         margin: { left: margin, right: margin }
       });
     }
-
-    const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
-    const staffList = data.summary.staffList || [];
-    const staffTotals = staffList.map((s: any) => {
-      const total = data.rows.reduce((sum: number, r: any) => sum + (r.staff_splits[s.id] || 0), 0);
-      return total > 0 ? total.toFixed(2) : '0.00';
-    });
-
-    callAutoTable(doc, {
-      startY: finalY,
-      body: [
-        [{ content: 'AGGREGATE INCENTIVE TOTALS', colSpan: 12, styles: { halign: 'right' } }, data.summary.totalIncentive.toFixed(2), '', ...staffTotals]
-      ],
-      theme: 'grid',
-      styles: { 
-        fontSize: 6, 
-        cellPadding: 2, 
-        fontStyle: 'bold', 
-        font: 'helvetica', 
-        lineColor: [0, 0, 0], 
-        lineWidth: 0.2,
-        fillColor: [15, 23, 42],
-        textColor: [255, 255, 255]
-      },
-      columnStyles: {
-        0: { halign: 'right', cellWidth: 163 },
-        1: { halign: 'right', cellWidth: 14 },
-        2: { cellWidth: 15 }
-      },
-      margin: { left: margin, right: margin }
-    });
   } else if (reportType === 'massage_room_revenue') {
     if (data.rows.length === 0) {
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139);
       doc.text("No room revenue data found for this period.", margin, currentY);
     } else {
+      const rooms = data.summary.rooms || [];
+      const tableHeaders = [
+        'DATE',
+        ...rooms,
+        'UNASSIGNED',
+        'DAILY TOTAL'
+      ];
+
+      const tableData = data.rows.map((item: any) => [
+        item.date,
+        ...rooms.map((r: string) => formatCurrency(item[r] || 0)),
+        formatCurrency(item.unassigned || 0),
+        formatCurrency(item.total || 0)
+      ]);
+
       callAutoTable(doc, {
         startY: currentY,
-        head: [['ROOM NAME', 'BOOKINGS', 'REVENUE']],
-        body: data.rows.map((r: any) => [
-          r.room_name,
-          r.bookings_count,
-          formatCurrency(r.revenue)
-        ]),
+        head: [tableHeaders],
+        body: tableData,
+        foot: [[
+          { content: 'TOTAL REVENUE', colSpan: rooms.length + 2, styles: { halign: 'right' } },
+          { content: formatCurrency(data.summary.totalRevenue || 0), styles: { halign: 'right' } }
+        ]],
+        footStyles: { 
+          fillColor: [15, 23, 42], 
+          textColor: [255, 255, 255], 
+          fontStyle: 'bold', 
+          fontSize: 6, 
+          cellPadding: 2,
+          font: 'helvetica'
+        },
         theme: 'grid',
-        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
-        styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' },
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7, halign: 'center' },
+        styles: { fontSize: 6, cellPadding: 2, font: 'helvetica' },
         columnStyles: {
-          1: { halign: 'center' },
-          2: { halign: 'right', fontStyle: 'bold' }
+          0: { fontStyle: 'bold', cellWidth: 20 },
+          ...Object.fromEntries(rooms.map((_: any, i: number) => [i + 1, { halign: 'right' }])),
+          [rooms.length + 1]: { halign: 'right' },
+          [rooms.length + 2]: { halign: 'right', fontStyle: 'bold', fillColor: [248, 250, 252] }
         },
         margin: { left: margin, right: margin }
       });

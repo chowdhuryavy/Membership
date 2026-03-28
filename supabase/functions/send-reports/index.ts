@@ -270,6 +270,20 @@ serve(async (req) => {
 
     const results: any[] = [];
 
+    // Helper function to format currency for email
+    const formatCurrency = (val: number, symbol: string) => {
+      const formatted = val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const safeSymbol = (symbol === 'ر.ق' || symbol.includes('\u0631')) ? 'QR' : symbol;
+      return `${safeSymbol} ${formatted}`;
+    };
+
+    // Common styles
+    const tableStyle = "width: 100%; border-collapse: collapse; font-size: 13px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin-bottom: 20px;";
+    const headerStyle = "background: #0f172a; color: white; font-weight: bold; padding: 12px 8px; border: 1px solid #cbd5e1; text-align: left;";
+    const cellStyle = "padding: 8px; border: 1px solid #cbd5e1; color: #334155; text-align: left;";
+    const numericCellStyle = "padding: 8px; border: 1px solid #cbd5e1; color: #334155; text-align: right;";
+    const headerNumericStyle = "background: #0f172a; color: white; font-weight: bold; padding: 12px 8px; border: 1px solid #cbd5e1; text-align: right;";
+
     for (const group of Object.values(reportGroups)) {
       try {
         const { params, recipients } = group;
@@ -290,10 +304,20 @@ serve(async (req) => {
         console.log(`DEBUG: Report Data rows: ${reportData.rows.length}`);
 
         // Fetch property and currency info (once per group)
-        const { data: property, error: propertyError } = await supabase.from('properties').select('name, logo_url').eq('id', params.propertyId).single()
+        const { data: property, error: propertyError } = await supabase.from('properties').select('name, logo_url, signatory_config').eq('id', params.propertyId).single()
         if (propertyError) {
           console.error(`Error fetching property ${params.propertyId}:`, propertyError);
         }
+        
+        // Fetch outlet specific signatory config
+        let outletSignatoryConfig = null;
+        if (params.outletId !== 'all') {
+          const { data: outletData } = await supabase.from('outlets').select('signatory_config').eq('id', params.outletId).single();
+          if (outletData) {
+            outletSignatoryConfig = outletData.signatory_config;
+          }
+        }
+        
         const { data: currency } = await supabase.from('currencies').select('symbol').eq('id', 'default').single()
         const currencySymbol = currency?.symbol || '$'
         const propertyName = property?.name || 'Property'
@@ -346,31 +370,344 @@ serve(async (req) => {
 
         const pdfBase64 = doc.output('datauristring').split(',')[1];
 
-        // Process each recipient in the group
-        await Promise.all(recipients.map(async (recipient) => {
-          try {
-            // Build dynamic summary text for email body
-            let summaryListItems = '';
-            if (reportData.summary) {
-              summaryListItems = Object.entries(reportData.summary)
-                .map(([key, value]) => {
-                  const label = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                  let formattedValue = value;
-                  if (typeof value === 'number') {
-                    if (key.includes('revenue') || key.includes('amount') || key.includes('total') || key.includes('earned') || key.includes('deferred')) {
-                      formattedValue = `${currencySymbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                    } else {
-                      formattedValue = value.toLocaleString();
-                    }
-                  }
-                  return `<li><strong>${label}:</strong> ${formattedValue}</li>`;
-                })
-                .join('\n');
-            }
+        // Generate HTML for email based on report type
+        let reportTableHtml = '';
+        
+        // Helper function to get signatory config hierarchy
+        const getSignatoryConfig = () => {
+          const resolveConfig = (config: any, type: string) => {
+            if (!config) return null;
+            const specific = config[type];
+            if (!specific) return null;
+            return {
+              prepared: specific.prepared || 'Accountant',
+              reviewed: specific.reviewed || '',
+              approved: specific.approved || 'General Manager'
+            };
+          };
+          
+          // Hierarchy: Outlet Specific -> Property Specific -> Global
+          const outletRes = resolveConfig(outletSignatoryConfig, params.reportType);
+          if (outletRes) return outletRes;
+          
+          const propertyRes = resolveConfig(property?.signatory_config, params.reportType);
+          if (propertyRes) return propertyRes;
+          
+          const globalRes = resolveConfig(settings?.signatory_config, params.reportType);
+          if (globalRes) return globalRes;
+          
+          return null;
+        };
+        
+        const signatoryConfig = getSignatoryConfig();
+        
+        // Build summary list items
+        let summaryListItems = '';
+        if (reportData.summary) {
+          summaryListItems = Object.entries(reportData.summary)
+            .filter(([key]) => !['staffList', 'count', 'rooms'].includes(key))
+            .map(([key, value]) => {
+              const label = key.split(/(?=[A-Z])/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+              let formattedValue = value;
+              if (typeof value === 'number') {
+                if (key.toLowerCase().includes('revenue') || key.toLowerCase().includes('amount') || key.toLowerCase().includes('total') || key.toLowerCase().includes('earned') || key.toLowerCase().includes('deferred') || key.toLowerCase().includes('gross') || key.toLowerCase().includes('discount') || key.toLowerCase().includes('net')) {
+                  formattedValue = formatCurrency(value, currencySymbol);
+                } else {
+                  formattedValue = value.toLocaleString();
+                }
+              }
+              return `
+                <tr>
+                  <td align="left" style="padding: 8px 0; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 500;">${label}</td>
+                  <td align="right" style="padding: 8px 0; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600;">${formattedValue}</td>
+                </tr>`;
+            })
+            .join('\n');
+        }
 
+        // Generate detailed report table based on report type
+        if (reportData.rows.length > 0) {
+          if (params.reportType === 'revenue_recognition') {
+            // Use grouped data from reportData
+            const grouped = reportData.groupedRows || {};
+            
+            // Calculate grand totals
+            let grandTotals = {
+              daily_rate: 0,
+              actual_rate: 0,
+              discount: 0,
+              net_fees: 0,
+              prev_accrual: 0,
+              period_rev: 0,
+              deferred: 0
+            };
+            
+            let allRowsHtml = '';
+            
+            // Process each category group
+            for (const [category, rows] of Object.entries(grouped)) {
+              const categoryRows = rows as any[];
+              
+              // Calculate subtotals for this category
+              const subtotals = {
+                daily_rate: categoryRows.reduce((s: number, r: any) => s + (r.daily_rate || 0), 0),
+                actual_rate: categoryRows.reduce((s: number, r: any) => s + (r.actual_rate || 0), 0),
+                discount: categoryRows.reduce((s: number, r: any) => s + (r.discount || 0), 0),
+                net_fees: categoryRows.reduce((s: number, r: any) => s + (r.net_fees || 0), 0),
+                prev_accrual: categoryRows.reduce((s: number, r: any) => s + (r.prev_accrual || 0), 0),
+                period_rev: categoryRows.reduce((s: number, r: any) => s + (r.period_rev || 0), 0),
+                deferred: categoryRows.reduce((s: number, r: any) => s + (r.deferred || 0), 0)
+              };
+              
+              // Update grand totals
+              grandTotals.daily_rate += subtotals.daily_rate;
+              grandTotals.actual_rate += subtotals.actual_rate;
+              grandTotals.discount += subtotals.discount;
+              grandTotals.net_fees += subtotals.net_fees;
+              grandTotals.prev_accrual += subtotals.prev_accrual;
+              grandTotals.period_rev += subtotals.period_rev;
+              grandTotals.deferred += subtotals.deferred;
+              
+              // Category header
+              allRowsHtml += `
+                <tr style="background: #f1f5f9;">
+                  <td colspan="12" style="${cellStyle} padding: 12px; font-weight: bold; font-size: 12px;">
+                    ${category} (${categoryRows.length} Ledger Events)
+                  </td>
+                </tr>
+              `;
+              
+              // Category rows
+              categoryRows.forEach((row: any, idx: number) => {
+                allRowsHtml += `
+                  <tr style="border-bottom: 1px solid #e2e8f0;">
+                    <td style="${cellStyle} text-align: center;">${idx + 1}</td>
+                    <td style="${cellStyle} font-weight: 500;">${row.guest_name}</td>
+                    <td style="${cellStyle} text-align: center;">${row.start_date}</td>
+                    <td style="${cellStyle} text-align: center;">${row.end_date}</td>
+                    <td style="${cellStyle} text-align: center;">${row.total_days}</td>
+                    <td style="${numericCellStyle}">${formatCurrency(row.daily_rate, currencySymbol)}</td>
+                    <td style="${numericCellStyle}">${formatCurrency(row.actual_rate, currencySymbol)}</td>
+                    <td style="${numericCellStyle}">${formatCurrency(row.discount, currencySymbol)}</td>
+                    <td style="${numericCellStyle}">${formatCurrency(row.net_fees, currencySymbol)}</td>
+                    <td style="${numericCellStyle} color: #64748b;">${formatCurrency(row.prev_accrual, currencySymbol)}</td>
+                    <td style="${numericCellStyle} font-weight: bold; color: #4f46e5;">${formatCurrency(row.period_rev, currencySymbol)}</td>
+                    <td style="${numericCellStyle} font-weight: bold; color: #ef4444;">${formatCurrency(row.deferred, currencySymbol)}</td>
+                  </tr>
+                `;
+              });
+              
+              // Subtotal row for category
+              allRowsHtml += `
+                <tr style="background: #eef2ff; font-weight: bold;">
+                  <td colspan="5" style="${cellStyle} text-align: right;">Cluster Subtotal: ${category}</td>
+                  <td style="${numericCellStyle}">${formatCurrency(subtotals.daily_rate, currencySymbol)}</td>
+                  <td style="${numericCellStyle}">${formatCurrency(subtotals.actual_rate, currencySymbol)}</td>
+                  <td style="${numericCellStyle}">${formatCurrency(subtotals.discount, currencySymbol)}</td>
+                  <td style="${numericCellStyle}">${formatCurrency(subtotals.net_fees, currencySymbol)}</td>
+                  <td style="${numericCellStyle}">${formatCurrency(subtotals.prev_accrual, currencySymbol)}</td>
+                  <td style="${numericCellStyle}">${formatCurrency(subtotals.period_rev, currencySymbol)}</td>
+                  <td style="${numericCellStyle}">${formatCurrency(subtotals.deferred, currencySymbol)}</td>
+                </tr>
+              `;
+            }
+            
+            // Grand total row
+            allRowsHtml += `
+              <tr style="background: #0f172a; color: white; font-weight: bold;">
+                <td colspan="5" style="${cellStyle} text-align: right; padding: 12px; color: white;">Verified Portfolio Total</td>
+                <td style="${numericCellStyle} padding: 12px; color: white;">${formatCurrency(grandTotals.daily_rate, currencySymbol)}</td>
+                <td style="${numericCellStyle} padding: 12px; color: white;">${formatCurrency(grandTotals.actual_rate, currencySymbol)}</td>
+                <td style="${numericCellStyle} padding: 12px; color: white;">${formatCurrency(grandTotals.discount, currencySymbol)}</td>
+                <td style="${numericCellStyle} padding: 12px; color: white;">${formatCurrency(grandTotals.net_fees, currencySymbol)}</td>
+                <td style="${numericCellStyle} padding: 12px; color: #cbd5e1;">${formatCurrency(grandTotals.prev_accrual, currencySymbol)}</td>
+                <td style="${numericCellStyle} padding: 12px; color: #818cf8;">${formatCurrency(grandTotals.period_rev, currencySymbol)}</td>
+                <td style="${numericCellStyle} padding: 12px; color: #f87171;">${formatCurrency(grandTotals.deferred, currencySymbol)}</td>
+              </tr>
+            `;
+            
+            reportTableHtml = `
+              <div style="margin: 20px 0; overflow-x: auto;">
+                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Revenue Recognition Ledger</h3>
+                <table style="${tableStyle}">
+                  <thead>
+                    <tr style="background: #0f172a; color: white; font-weight: bold;">
+                      <th style="${headerStyle} text-align: center;">SL.</th>
+                      <th style="${headerStyle} text-align: left;">Guest Name / Profile</th>
+                      <th style="${headerStyle} text-align: center;">Start Date</th>
+                      <th style="${headerStyle} text-align: center;">End Date</th>
+                      <th style="${headerStyle} text-align: center;">Days</th>
+                      <th style="${headerNumericStyle}">Daily Rate</th>
+                      <th style="${headerNumericStyle}">Actual Rate</th>
+                      <th style="${headerNumericStyle}">Discount</th>
+                      <th style="${headerNumericStyle}">Net Fees</th>
+                      <th style="${headerNumericStyle}">Prev. Accrual</th>
+                      <th style="${headerNumericStyle}">Period Rev</th>
+                      <th style="${headerNumericStyle}">Deferred</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${allRowsHtml}
+                  </tbody>
+                </table>
+              </div>
+            `;
+          } else if (params.reportType === 'daily_sales') {
+            reportTableHtml = `
+              <div style="margin: 20px 0; overflow-x: auto;">
+                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Daily Sales Ledger</h3>
+                <table style="${tableStyle}">
+                  <thead>
+                    <tr style="background: #0f172a; color: white; font-weight: bold;">
+                      <th style="${headerStyle} text-align: center;">SL</th>
+                      <th style="${headerStyle} text-align: left;">Date</th>
+                      <th style="${headerStyle} text-align: left;">Guest</th>
+                      <th style="${headerStyle} text-align: left;">Item/Service</th>
+                      <th style="${headerStyle} text-align: left;">Check #</th>
+                      <th style="${headerStyle} text-align: left;">Payment</th>
+                      <th style="${headerNumericStyle}">Gross</th>
+                      <th style="${headerNumericStyle}">Disc%</th>
+                      <th style="${headerNumericStyle}">Disc Amt</th>
+                      <th style="${headerNumericStyle}">Net Rev</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${reportData.rows.map((row: any) => `
+                      <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="${cellStyle} text-align: center;">${row.sl_no}</td>
+                        <td style="${cellStyle}">${row.date}</td>
+                        <td style="${cellStyle} font-weight: 500;">${row.guest_name}</td>
+                        <td style="${cellStyle}">${row.item_name}</td>
+                        <td style="${cellStyle}">${row.check_no}</td>
+                        <td style="${cellStyle}">${row.mode_of_payment}</td>
+                        <td style="${numericCellStyle}">${formatCurrency(row.actual_price, currencySymbol)}</td>
+                        <td style="${numericCellStyle}">${row.discount_percent > 0 ? row.discount_percent.toFixed(1) + '%' : ''}</td>
+                        <td style="${numericCellStyle}">${formatCurrency(row.discount_amount, currencySymbol)}</td>
+                        <td style="${numericCellStyle} font-weight: 600;">${formatCurrency(row.net_revenue, currencySymbol)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                  <tfoot>
+                    <tr style="background: #f8fafc; font-weight: bold;">
+                      <td colspan="6" style="${cellStyle} text-align: right;">TOTALS</td>
+                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalGross, currencySymbol)}</td>
+                      <td style="${cellStyle}"></td>
+                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalDiscount, currencySymbol)}</td>
+                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalNet, currencySymbol)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            `;
+          } else if (params.reportType === 'members_joined') {
+            reportTableHtml = `
+              <div style="margin: 20px 0; overflow-x: auto;">
+                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Membership Acquisition Log</h3>
+                <table style="${tableStyle}">
+                  <thead>
+                    <tr style="background: #0f172a; color: white; font-weight: bold;">
+                      <th style="${headerStyle} text-align: center;">SL</th>
+                      <th style="${headerStyle} text-align: left;">Date</th>
+                      <th style="${headerStyle} text-align: left;">Guest</th>
+                      <th style="${headerStyle} text-align: left;">Mem. No</th>
+                      <th style="${headerStyle} text-align: left;">Category</th>
+                      <th style="${headerNumericStyle}">Gross</th>
+                      <th style="${headerNumericStyle}">Disc Amt</th>
+                      <th style="${headerNumericStyle}">Net Rev</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${reportData.rows.map((row: any) => `
+                      <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="${cellStyle} text-align: center;">${row.sl_no}</td>
+                        <td style="${cellStyle}">${row.date}</td>
+                        <td style="${cellStyle} font-weight: 500;">${row.name}</td>
+                        <td style="${cellStyle}">${row.membership_no}</td>
+                        <td style="${cellStyle}">${row.category}</td>
+                        <td style="${numericCellStyle}">${formatCurrency(row.gross, currencySymbol)}</td>
+                        <td style="${numericCellStyle}">${formatCurrency(row.discount_amt, currencySymbol)}</td>
+                        <td style="${numericCellStyle} font-weight: 600;">${formatCurrency(row.net, currencySymbol)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                  <tfoot>
+                    <tr style="background: #f8fafc; font-weight: bold;">
+                      <td colspan="5" style="${cellStyle} text-align: right;">TOTALS</td>
+                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalGross, currencySymbol)}</td>
+                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalDiscount, currencySymbol)}</td>
+                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalNet, currencySymbol)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            `;
+          } else if (params.reportType === 'expiring_memberships') {
+            reportTableHtml = `
+              <div style="margin: 20px 0; overflow-x: auto;">
+                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Expiring Memberships</h3>
+                <table style="${tableStyle}">
+                  <thead>
+                    <tr style="background: #0f172a; color: white; font-weight: bold;">
+                      <th style="${headerStyle} text-align: center;">SL</th>
+                      <th style="${headerStyle} text-align: left;">Name</th>
+                      <th style="${headerStyle} text-align: left;">Mem. No</th>
+                      <th style="${headerStyle} text-align: left;">Category</th>
+                      <th style="${headerStyle} text-align: left;">Expiry Date</th>
+                      <th style="${headerStyle} text-align: left;">Status</th>
+                     </tr>
+                  </thead>
+                  <tbody>
+                    ${reportData.rows.map((row: any) => `
+                      <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="${cellStyle} text-align: center;">${row.sl_no}</td>
+                        <td style="${cellStyle} font-weight: 500;">${row.name}</td>
+                        <td style="${cellStyle}">${row.membership_no}</td>
+                        <td style="${cellStyle}">${row.category_name}</td>
+                        <td style="${cellStyle} color: #ef4444; font-weight: 600;">${row.date}</td>
+                        <td style="${cellStyle}">${row.status}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                 </table>
+              </div>
+            `;
+          } else if (params.reportType === 'incentives') {
+            reportTableHtml = `
+              <div style="margin: 20px 0; overflow-x: auto;">
+                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Incentive Audit</h3>
+                <table style="${tableStyle}">
+                  <thead>
+                    <tr style="background: #0f172a; color: white; font-weight: bold;">
+                      <th style="${headerStyle} text-align: left;">Date</th>
+                      <th style="${headerStyle} text-align: left;">Guest</th>
+                      <th style="${headerStyle} text-align: left;">Staff</th>
+                      <th style="${headerNumericStyle}">Net Rev</th>
+                      <th style="${headerNumericStyle}">Inc Net</th>
+                     </tr>
+                  </thead>
+                  <tbody>
+                    ${reportData.rows.map((row: any) => `
+                      <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="${cellStyle}">${row.date}</td>
+                        <td style="${cellStyle} font-weight: 500;">${row.guest_name}</td>
+                        <td style="${cellStyle}">${row.therapist_name}</td>
+                        <td style="${numericCellStyle}">${formatCurrency(row.net_revenue, currencySymbol)}</td>
+                        <td style="${numericCellStyle} font-weight: 600;">${formatCurrency(row.inc_net, currencySymbol)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                  <tfoot>
+                    <tr style="background: #f8fafc; font-weight: bold;">
+                      <td colspan="4" style="${cellStyle} text-align: right;">TOTAL INCENTIVE</td>
+                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalIncentive, currencySymbol)}</td>
+                     </tr>
+                  </tfoot>
+                 </table>
+              </div>
+            `;
+            
             // Add staff totals for incentive reports
-            let staffTotalsHtml = '';
-            if (params.reportType === 'incentives' && reportData.rows.length > 0) {
+            if (reportData.rows.length > 0) {
               const staffTotals: Record<string, number> = {};
               const staffList = reportData.summary?.staffList || [];
               const staffMap = Object.fromEntries(staffList.map((s: any) => [s.id, s.name]));
@@ -385,58 +722,130 @@ serve(async (req) => {
               });
 
               if (Object.keys(staffTotals).length > 0) {
-                staffTotalsHtml = `
-                  <div style="margin: 20px 0; padding: 15px; background: #fef3c7; border-radius: 6px; border: 1px solid #f59e0b;">
+                reportTableHtml += `
+                  <div style="margin: 20px 0; padding: 15px; background: #fffbeb; border-radius: 6px; border: 1px solid #fde68a;">
                     <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #92400e;">Staff Incentive Breakdown</h3>
-                    <ul style="margin: 0; padding-left: 20px; color: #78350f; font-size: 14px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 14px; color: #78350f;">
                       ${Object.entries(staffTotals).sort((a, b) => b[1] - a[1]).map(([staffName, amount]) => {
-                        return `<li><strong>${staffName}:</strong> ${currencySymbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>`;
+                        return `
+                          <tr>
+                            <td align="left" style="padding: 6px 0; border-bottom: 1px solid #fef3c7;">${staffName}</td>
+                            <td align="right" style="padding: 6px 0; border-bottom: 1px solid #fef3c7; font-weight: 600;">${formatCurrency(amount, currencySymbol)}</td>
+                          </tr>`;
                       }).join('\n')}
-                    </ul>
+                    </table>
                   </div>
                 `;
               }
             }
-
-            // Professional message for email body
-            const professionalMessage = `
-              <p style="color: #475569; font-size: 14px; line-height: 1.6;">
-                We are pleased to provide you with the latest ${reportTitle} for your review. 
-                This automated report contains comprehensive data regarding the specified period.
-              </p>
-              <p style="color: #475569; font-size: 14px; line-height: 1.6;">
-                Please find the detailed report attached as a PDF document. Should you require any further information or have questions regarding the data presented, please do not hesitate to contact our support team.
-              </p>
+          } else if (params.reportType === 'massage_room_revenue') {
+            const rooms = reportData.summary.rooms || [];
+            reportTableHtml = `
+              <div style="margin: 20px 0; overflow-x: auto;">
+                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Massage Room Revenue Report</h3>
+                <table style="${tableStyle}">
+                  <thead>
+                    <tr style="background: #0f172a; color: white; font-weight: bold;">
+                      <th style="${headerStyle} text-align: left;">Date</th>
+                      ${rooms.map((r: string) => `<th style="${headerNumericStyle}">${r}</th>`).join('')}
+                      <th style="${headerNumericStyle}">Unassigned</th>
+                      <th style="${headerNumericStyle}">Total</th>
+                     </tr>
+                  </thead>
+                  <tbody>
+                    ${reportData.rows.map((row: any) => `
+                      <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="${cellStyle}">${row.date}</td>
+                        ${rooms.map((r: string) => `<td style="${numericCellStyle}">${formatCurrency(row[r] || 0, currencySymbol)}</td>`).join('')}
+                        <td style="${numericCellStyle}">${formatCurrency(row.unassigned || 0, currencySymbol)}</td>
+                        <td style="${numericCellStyle} font-weight: 600;">${formatCurrency(row.total || 0, currencySymbol)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                  <tfoot>
+                    <tr style="background: #f8fafc; font-weight: bold;">
+                      <td colspan="${rooms.length + 2}" style="${cellStyle} text-align: right;">TOTAL REVENUE</td>
+                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalRevenue, currencySymbol)}</td>
+                     </tr>
+                  </tfoot>
+                 </table>
+              </div>
             `;
+          }
+        }
 
+        // Professional message for email body
+        const professionalMessage = `
+          <div style="color: #475569; font-size: 14px; line-height: 1.6; margin: 20px 0;">
+            <p>We are pleased to provide you with the latest <strong>${reportTitle}</strong> for your review. This automated report contains comprehensive data regarding the specified period.</p>
+            <p>Please find the detailed report attached as a PDF document for your records. Should you require any further information or have questions regarding the data presented, please do not hesitate to contact our support team.</p>
+          </div>
+        `;
+
+        // Process each recipient in the group
+        await Promise.all(recipients.map(async (recipient) => {
+          try {
             // Send email
             const emails = recipient.email ? recipient.email.split(',').map((e: string) => e.trim()) : [];
             
             const emailHtml = `
-              <div style="font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                <h2 style="color: #0f172a; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">${reportTitle}</h2>
-                <p style="color: #475569;">Hello,</p>
-                <p style="color: #475569;">This is an automated report from <strong>${appName}</strong>. Please find the details below.</p>
-                
-                <div style="margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;">
-                  <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Report Summary</h3>
-                  <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 14px;">
-                    <li><strong>Application:</strong> ${appName}</li>
-                    <li><strong>Property:</strong> ${propertyName}</li>
-                    <li><strong>Outlet:</strong> ${outletName}</li>
-                    <li><strong>Report Type:</strong> ${reportTitle}</li>
-                    <li><strong>Date:</strong> ${params.date.toLocaleDateString()}</li>
-                    ${summaryListItems}
-                  </ul>
+              <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 1200px; margin: 0 auto; padding: 40px 20px; background: #f1f5f9;">
+                <div style="background: #ffffff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 30px; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px;">
+                    <tr>
+                      <td align="left" valign="top">
+                        <h1 style="color: #0f172a; margin: 0; font-size: 24px; letter-spacing: -0.025em;">${reportTitle}</h1>
+                        <p style="color: #64748b; margin: 5px 0 0 0; font-size: 14px;">${propertyName} • ${outletName}</p>
+                      </td>
+                      <td align="right" valign="top">
+                        <p style="color: #64748b; margin: 0; font-size: 12px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Report Date</p>
+                        <p style="color: #0f172a; margin: 0; font-size: 16px; font-weight: 600;">${params.date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <p style="color: #475569; font-size: 16px;">Hello,</p>
+                  
+                  <div style="margin: 30px 0; padding: 25px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <h3 style="margin: 0 0 15px 0; font-size: 18px; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">Executive Summary</h3>
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 10px;">
+                      ${summaryListItems}
+                    </table>
+                  </div>
+
+                  ${reportTableHtml}
+
+                  ${professionalMessage}
+                  
+                  ${signatoryConfig ? `
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 40px;">
+                    <tr>
+                      <td width="${signatoryConfig.reviewed ? '33%' : '50%'}" align="center" valign="top" style="padding-right: 10px;">
+                        <div style="border-top: 1px solid #0f172a; margin-bottom: 10px; width: 80%; margin-left: auto; margin-right: auto;"></div>
+                        <p style="font-weight: bold; margin: 0; color: #0f172a; font-size: 14px;">Prepared By:</p>
+                        <p style="color: #64748b; margin: 5px 0 0; font-size: 14px;">${signatoryConfig.prepared}</p>
+                      </td>
+                      ${signatoryConfig.reviewed ? `
+                      <td width="33%" align="center" valign="top" style="padding-left: 10px; padding-right: 10px;">
+                        <div style="border-top: 1px solid #0f172a; margin-bottom: 10px; width: 80%; margin-left: auto; margin-right: auto;"></div>
+                        <p style="font-weight: bold; margin: 0; color: #0f172a; font-size: 14px;">Reviewed By:</p>
+                        <p style="color: #64748b; margin: 5px 0 0; font-size: 14px;">${signatoryConfig.reviewed}</p>
+                      </td>
+                      ` : ''}
+                      <td width="${signatoryConfig.reviewed ? '33%' : '50%'}" align="center" valign="top" style="padding-left: 10px;">
+                        <div style="border-top: 1px solid #0f172a; margin-bottom: 10px; width: 80%; margin-left: auto; margin-right: auto;"></div>
+                        <p style="font-weight: bold; margin: 0; color: #0f172a; font-size: 14px;">Approved By:</p>
+                        <p style="color: #64748b; margin: 5px 0 0; font-size: 14px;">${signatoryConfig.approved}</p>
+                      </td>
+                    </tr>
+                  </table>
+                  ` : ''}
+                  
+                  <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #f1f5f9; text-align: center;">
+                    <p style="color: #94a3b8; font-size: 12px; margin: 0;">&copy; ${new Date().getFullYear()} ${propertyName}. All rights reserved.</p>
+                    <p style="color: #94a3b8; font-size: 10px; margin: 5px 0 0 0;">Powered by ${appName} • Automated Audit System</p>
+                  </div>
                 </div>
-
-                ${staffTotalsHtml}
-
-                ${professionalMessage}
-                
-                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-                <p style="color: #94a3b8; font-size: 12px; text-align: center;">&copy; ${new Date().getFullYear()} ${propertyName}. All rights reserved.</p>
-                <p style="color: #94a3b8; font-size: 10px; text-align: center;">Powered by ${appName}</p>
               </div>
             `;
 
