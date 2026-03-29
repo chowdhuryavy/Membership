@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button } from '../components/ui';
-import { db } from '../services/mockSupabase';
+import { supabase } from '../services/supabase';
 import { Member, MembershipCategory, MemberStatus } from '../types';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,9 +12,10 @@ import html2canvas from 'html2canvas';
 interface ExpiringMembershipsReportProps {
     isEmbedded?: boolean;
     embeddedMonth?: string;
+    selectedMembershipTypeId?: string;
 }
 
-export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth }: ExpiringMembershipsReportProps = {}) {
+export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth, selectedMembershipTypeId = 'all' }: ExpiringMembershipsReportProps = {}) {
     const { user } = useAuth();
     const { currentOutlet, currentProperty } = useSettings();
     const [members, setMembers] = useState<Member[]>([]);
@@ -33,20 +34,24 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth }:
         if (currentOutlet && currentProperty) {
             loadData();
         }
-    }, [currentOutlet, currentProperty, reportMonth]);
+    }, [currentOutlet, currentProperty, reportMonth, selectedMembershipTypeId]);
 
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const [membersData, catsData] = await Promise.all([
-                db.getMembers(),
-                db.getCategories()
+            let query = supabase.from('members').select('*').eq('outlet_id', currentOutlet?.id);
+            
+            if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
+                query = query.eq('membership_type_id', selectedMembershipTypeId);
+            }
+
+            const [membersRes, catsRes] = await Promise.all([
+                query,
+                supabase.from('membership_categories').select('*')
             ]);
             
-            // Filter members for the current outlet
-            const outletMembers = membersData.filter(m => m.outlet_id === currentOutlet?.id);
-            setMembers(outletMembers);
-            setCategories(catsData);
+            setMembers(membersRes.data || []);
+            setCategories(catsRes.data || []);
         } catch (error) {
             console.error("Error loading data:", error);
         } finally {

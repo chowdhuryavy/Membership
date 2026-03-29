@@ -745,8 +745,8 @@ const Reports = () => {
                               </div>
                           </div>
 
-                          {/* 1.1 MEMBERSHIP TYPE TOGGLE (Only for Revenue Recognition) */}
-                          {reportType === 'revenue_recognition' && membershipTypes.length > 0 && (
+                          {/* 1.1 MEMBERSHIP TYPE TOGGLE (For Revenue Recognition, Members Joined, and Expiring Memberships) */}
+                          {['revenue_recognition', 'members_joined', 'expiring_memberships'].includes(reportType) && membershipTypes.length > 0 && (
                                <div className="space-y-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
                                    <div className="flex items-center gap-2 mb-1">
                                        <Filter className="w-3.5 h-3.5 text-indigo-600"/>
@@ -914,7 +914,7 @@ const Reports = () => {
                       
                       <div className="flex-1">
                           {reportType === 'revenue_recognition' ? <RenderRevenueTable /> : 
-                           reportType === 'expiring_memberships' ? <ExpiringMembershipsReport isEmbedded={true} embeddedMonth={reportMonth} /> : 
+                           reportType === 'expiring_memberships' ? <ExpiringMembershipsReport isEmbedded={true} embeddedMonth={reportMonth} selectedMembershipTypeId={selectedMembershipTypeId} /> : 
                            reportType === 'massage_room_revenue' ? <MassageRoomRevenueReport isEmbedded={true} embeddedMonth={reportMonth} /> :
                            <RenderStandardTable />}
                       </div>

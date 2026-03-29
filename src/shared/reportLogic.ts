@@ -297,8 +297,13 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     if (outletIds.length === 0) return { rows: [], summary: { count: 0 } };
 
+    let membersQuery = supabase.from('members').select('*').in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr);
+    if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
+      membersQuery = membersQuery.eq('membership_type_id', selectedMembershipTypeId);
+    }
+
     const [membersRes, categoriesRes] = await Promise.all([
-      supabase.from('members').select('*').in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr),
+      membersQuery,
       supabase.from('membership_categories').select('id, name')
     ]);
 
@@ -366,8 +371,13 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     if (outletIds.length === 0) return { rows: [], summary: { count: 0 } };
 
+    let membersQuery = supabase.from('members').select('*').in('outlet_id', outletIds);
+    if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
+      membersQuery = membersQuery.eq('membership_type_id', selectedMembershipTypeId);
+    }
+
     const [membersRes, categoriesRes] = await Promise.all([
-      supabase.from('members').select('*').in('outlet_id', outletIds),
+      membersQuery,
       supabase.from('membership_categories').select('id, name')
     ]);
 
