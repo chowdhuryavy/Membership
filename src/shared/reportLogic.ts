@@ -155,15 +155,15 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         };
       })
       .filter((row: any) => {
-        // 1. If they have recognized revenue this month (> 0.001), always show.
+        // 1. If they expired BEFORE the start of this month, hide them.
+        // This is the most important rule to keep the report clean of past memberships.
+        if (row._mEnd && row._mEnd < start) return false;
+
+        // 2. If they have recognized revenue this month (> 0.001), always show.
         if (row.period_rev > 0.001) return true;
         
-        // 2. If they have deferred revenue (> 0.001), always show.
+        // 3. If they have deferred revenue (> 0.001), always show.
         if (row.deferred > 0.001) return true;
-
-        // 3. If they expired BEFORE the start of this month, hide them.
-        // This prevents long-expired members from showing up due to tiny rounding differences.
-        if (row._mEnd && row._mEnd < start) return false;
         
         // 4. If they are active but have zero revenue and zero deferred, 
         // we hide them to keep the audit report focused on financial activity.
