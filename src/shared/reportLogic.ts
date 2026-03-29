@@ -112,53 +112,54 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     let totalDeferred = 0;
     let totalNetFees = 0;
 
-    const rows = members.filter((m: any) => m.status !== 'tentative').map((m: any) => {
-      const mStart = safeParseDate(m.start_date);
-      const mEnd = safeParseDate(m.current_end_date);
-      
-      const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
+    const rows = members
+      .filter((m: any) => m.status !== 'tentative')
+      .map((m: any) => {
+        const mStart = safeParseDate(m.start_date);
+        const mEnd = safeParseDate(m.current_end_date);
+        
+        const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
 
-      const prevAccrual = mStart ? RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, subDays(start, 1)) : 0;
-      const periodRev = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, start, subDays(end, 1));
-      
-      const dailyRate = Number(m.daily_rate || 0);
-      
-      let deferred = (m.net_amount || 0) - (prevAccrual + periodRev);
-      if (deferred < 0) deferred = 0;
+        const prevAccrual = mStart ? RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, subDays(start, 1)) : 0;
+        const periodRev = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, start, subDays(end, 1));
+        
+        const dailyRate = Number(m.daily_rate || 0);
+        
+        let deferred = (m.net_amount || 0) - (prevAccrual + periodRev);
+        if (deferred < 0) deferred = 0;
 
-      totalEarned += periodRev;
-      totalDeferred += deferred;
-      totalNetFees += (m.net_amount || 0);
+        // Calculate total active days for the entire membership duration
+        const totalActiveDays = Math.round((m.net_amount || 0) / dailyRate) || 0;
+        
+        return {
+          id: m.id,
+          guest_name: m.guest_name || m.name,
+          membership_no: m.membership_number || m.membership_no || 'N/A',
+          category_name: categoryMap[m.category_id] || 'Other',
+          start_date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd-MM-yyyy') : 'N/A',
+          end_date: m.current_end_date ? format(safeParseDate(m.current_end_date)!, 'dd-MM-yyyy') : 'N/A',
+          total_days: totalActiveDays,
+          daily_rate: dailyRate,
+          actual_rate: Number(m.actual_rate || 0),
+          discount: Number(m.discount || 0),
+          net_fees: Number(m.net_amount || 0),
+          prev_accrual: prevAccrual,
+          period_rev: periodRev,
+          deferred: deferred,
+          debug_info: `Total Active Days: ${totalActiveDays}`
+        };
+      })
+      .filter((row: any) => {
+        // Only show members who have revenue in this period OR have deferred revenue remaining
+        // This hides members who expired in previous months and have been fully recognized.
+        return row.period_rev > 0 || row.deferred > 0;
+      });
 
-      // Calculate total active days for the entire membership duration
-      const totalActiveDays = Math.round((m.net_amount || 0) / dailyRate) || 0;
-      
-      if (m.guest_name?.includes('Test') || m.name?.includes('Test')) {
-        console.log(`DEBUG [RevRec]: ${m.guest_name || m.name}`);
-        console.log(`  - Membership: ${m.start_date} to ${m.current_end_date}`);
-        console.log(`  - Total Active Days: ${totalActiveDays}`);
-        console.log(`  - Daily Rate: ${dailyRate}`);
-        console.log(`  - Period: ${format(start, 'yyyy-MM-dd')} to ${format(end, 'yyyy-MM-dd')}`);
-        console.log(`  - Period Rev: ${periodRev}`);
-      }
-
-      return {
-        id: m.id,
-        guest_name: m.guest_name || m.name,
-        membership_no: m.membership_number || m.membership_no || 'N/A',
-        category_name: categoryMap[m.category_id] || 'Other',
-        start_date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd-MM-yyyy') : 'N/A',
-        end_date: m.current_end_date ? format(safeParseDate(m.current_end_date)!, 'dd-MM-yyyy') : 'N/A',
-        total_days: totalActiveDays,
-        daily_rate: dailyRate,
-        actual_rate: Number(m.actual_rate || 0),
-        discount: Number(m.discount || 0),
-        net_fees: Number(m.net_amount || 0),
-        prev_accrual: prevAccrual,
-        period_rev: periodRev,
-        deferred: deferred,
-        debug_info: `Total Active Days: ${totalActiveDays}`
-      };
+    // Calculate totals from filtered rows
+    rows.forEach(row => {
+      totalEarned += row.period_rev;
+      totalDeferred += row.deferred;
+      totalNetFees += row.net_fees;
     });
 
     // Group by category for the frontend/email
