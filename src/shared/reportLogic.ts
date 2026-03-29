@@ -146,13 +146,27 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           prev_accrual: prevAccrual,
           period_rev: periodRev,
           deferred: deferred,
-          debug_info: `Total Active Days: ${totalActiveDays}`
+          debug_info: `Total Active Days: ${totalActiveDays}`,
+          _mEnd: mEnd // Internal field for filtering
         };
       })
       .filter((row: any) => {
-        // Only show members who have revenue in this period OR have deferred revenue remaining
-        // This hides members who expired in previous months and have been fully recognized.
-        return row.period_rev > 0 || row.deferred > 0;
+        // 1. If they have recognized revenue this month (> 1 cent), always show.
+        if (row.period_rev > 0.01) return true;
+        
+        // 2. If they expired BEFORE the start of this month, hide them.
+        // This prevents long-expired members from showing up due to tiny rounding differences in 'deferred'.
+        if (row._mEnd && row._mEnd < start) return false;
+        
+        // 3. If they haven't started yet or are active but have deferred revenue, show.
+        if (row.deferred > 0.01) return true;
+
+        return false;
+      })
+      .map((row: any) => {
+        // Remove internal filtering field
+        const { _mEnd, ...rest } = row;
+        return rest;
       });
 
     // Calculate totals from filtered rows
