@@ -17,6 +17,30 @@ const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(
 const min = (dates: Date[]) => new Date(Math.min(...dates.map(d => d.getTime())));
 const max = (dates: Date[]) => new Date(Math.max(...dates.map(d => d.getTime())));
 
+/**
+ * Robust date parsing that treats YYYY-MM-DD as local time start-of-day.
+ * This avoids the common issue where parseISO("2023-10-01") returns 
+ * 2023-10-01 00:00:00 UTC, which might be the previous day in local time.
+ */
+const parseLocalDate = (dateStr: string | null | undefined): Date | null => {
+  if (!dateStr) return null;
+  try {
+    // Handle ISO strings with T
+    const cleanStr = dateStr.split('T')[0];
+    const parts = cleanStr.split('-');
+    if (parts.length !== 3) return null;
+    
+    const y = parseInt(parts[0]);
+    const m = parseInt(parts[1]) - 1;
+    const d = parseInt(parts[2]);
+    
+    const date = new Date(y, m, d);
+    return isNaN(date.getTime()) ? null : startOfDay(date);
+  } catch (e) {
+    return null;
+  }
+};
+
 export const RevenueEngine = {
   calculateDailyRate: (netAmount: number, startDate: Date, endDate: Date): number => {
     const totalDays = Math.max(1, differenceInCalendarDays(endDate, startDate) + 1);
@@ -44,8 +68,9 @@ export const RevenueEngine = {
 
   checkFreezeOverlap: (newStart: Date, newEnd: Date, existingFreezes: Freeze[]): boolean => {
     return existingFreezes.some(f => {
-      const fStart = parseISO(f.start_date);
-      const fEnd = parseISO(f.end_date);
+      const fStart = parseLocalDate(f.start_date);
+      const fEnd = parseLocalDate(f.end_date);
+      if (!fStart || !fEnd) return false;
       return (
         isWithinInterval(newStart, { start: fStart, end: fEnd }) ||
         isWithinInterval(newEnd, { start: fStart, end: fEnd }) ||
@@ -66,8 +91,10 @@ export const RevenueEngine = {
     // TENTATIVE memberships do not recognize revenue
     if (member.status === MemberStatus.TENTATIVE) return 0;
 
-    const memStart = parseISO(member.start_date);
-    const memEnd = parseISO(member.current_end_date);
+    const memStart = parseLocalDate(member.start_date);
+    const memEnd = parseLocalDate(member.current_end_date);
+
+    if (!memStart || !memEnd) return 0;
 
     // Intersection of Membership Period and Requested Period
     // Ensure we use startOfDay for consistent comparison
@@ -87,8 +114,9 @@ export const RevenueEngine = {
       potentialDays.forEach(day => {
         const dStr = format(day, 'yyyy-MM-dd');
         const isFrozen = freezes.some(freeze => {
-          const fStart = parseISO(freeze.start_date);
-          const fEnd = parseISO(freeze.end_date);
+          const fStart = parseLocalDate(freeze.start_date);
+          const fEnd = parseLocalDate(freeze.end_date);
+          if (!fStart || !fEnd) return false;
           const fsStr = format(fStart, 'yyyy-MM-dd');
           const feStr = format(fEnd, 'yyyy-MM-dd');
           return dStr >= fsStr && dStr <= feStr;
@@ -109,11 +137,10 @@ export const RevenueEngine = {
     member: Member,
     freezes: Freeze[]
   ): number => {
-    if (!member.start_date || !member.current_end_date) return 0;
+    const mStart = parseLocalDate(member.start_date);
+    const mEnd = parseLocalDate(member.current_end_date);
     
-    const mStart = startOfDay(parseISO(member.start_date));
-    const mEnd = startOfDay(parseISO(member.current_end_date));
-    
+    if (!mStart || !mEnd) return 0;
     if (mStart > mEnd) return 0;
 
     const potentialDays = eachDayOfInterval({ 
@@ -125,8 +152,9 @@ export const RevenueEngine = {
     potentialDays.forEach(day => {
       const dStr = format(day, 'yyyy-MM-dd');
       const isFrozen = freezes.some(freeze => {
-        const fStart = parseISO(freeze.start_date);
-        const fEnd = parseISO(freeze.end_date);
+        const fStart = parseLocalDate(freeze.start_date);
+        const fEnd = parseLocalDate(freeze.end_date);
+        if (!fStart || !fEnd) return false;
         const fsStr = format(fStart, 'yyyy-MM-dd');
         const feStr = format(fEnd, 'yyyy-MM-dd');
         return dStr >= fsStr && dStr <= feStr;

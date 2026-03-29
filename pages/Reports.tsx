@@ -89,7 +89,7 @@ interface RevenueRow {
 
 const Reports = () => {
   const { user } = useAuth();
-  const { settings, currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
+  const { settings, currency, currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
   const [reportType, setReportType] = useState<ReportType>('revenue_recognition');
   const [incentiveDept, setIncentiveDept] = useState<'Massage' | 'Membership' | 'Personal Training'>('Massage');
   const [reportMonth, setReportMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -137,8 +137,30 @@ const Reports = () => {
   }, [canViewFinancial, canViewOperational, canViewStaffReports, canViewMembersJoined]);
 
   useEffect(() => {
-    if (currentOutlet && currentProperty && canView) loadData();
+    setSelectedMembershipTypeId('all');
+  }, [currentOutlet]);
+
+  useEffect(() => {
+    if (currentOutlet && currentProperty && canView) {
+      loadData();
+      loadMembershipTypes();
+    }
   }, [reportMonth, reportType, incentiveDept, selectedMembershipTypeId, currentOutlet, currentProperty, canView]);
+
+  const loadMembershipTypes = async () => {
+    if (!currentOutlet) return;
+    try {
+      const { data, error } = await supabase
+        .from('membership_types')
+        .select('*')
+        .eq('outlet_id', currentOutlet.id)
+        .order('name');
+      if (error) throw error;
+      setMembershipTypes(data || []);
+    } catch (err) {
+      console.error('Error loading membership types:', err);
+    }
+  };
 
   const findBestRule = (rules: IncentiveRule[], applies_to: IncentiveRule['applies_to'], target_id: string, price: number, duration: number) => {
     const candidates = rules.filter(r => r.is_active && r.applies_to === applies_to);
@@ -283,7 +305,7 @@ const Reports = () => {
 
       const reportTitle = getReportTitle(reportType, incentiveDept);
       const outletName = currentOutlet?.name || 'All Outlets';
-      const currencySymbol = settings?.currency_symbol || '$';
+      const currencySymbol = currency?.symbol || '$';
 
       const doc = generateReportPDF({
         jsPDF,

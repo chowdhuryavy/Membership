@@ -1,4 +1,5 @@
 import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths, parse, startOfDay, endOfDay, addDays, subDays } from 'date-fns';
+import { RevenueEngine } from '../../services/revenueEngine';
 
 /**
  * SHARED REPORT LOGIC
@@ -88,7 +89,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const [membersRes, freezesRes, categoriesRes] = await Promise.all([
       membersQuery,
       supabase.from('freezes').select('*'),
-      supabase.from('membership_categories').select('id, name')
+      supabase.from('membership_categories').select('id, name').in('outlet_id', outletIds)
     ]);
 
     if (membersRes.error) {
@@ -117,52 +118,10 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       
       const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
 
-      // Helper for revenue calculation
-      const calculateRevenueDays = (pStart: Date, pEnd: Date) => {
-        if (!mStart || !mEnd) return 0;
-        
-        // Ensure we only look at the intersection of the membership and the requested period
-        // We use startOfDay for consistent comparison
-        const activeStart = startOfDay(new Date(Math.max(mStart.getTime(), pStart.getTime())));
-        const activeEnd = startOfDay(new Date(Math.min(mEnd.getTime(), pEnd.getTime())));
-        
-        // Exclusive end date: If start is same as end, it's 0 days
-        if (activeStart >= activeEnd) return 0;
-
-        let days = 0;
-        try {
-          // We iterate until activeEnd - 1 day (exclusive end date)
-          const potentialDays = eachDayOfInterval({ 
-            start: activeStart, 
-            end: subDays(activeEnd, 1) 
-          });
-          for (const day of potentialDays) {
-            const dStr = format(day, 'yyyy-MM-dd');
-            const isFrozen = memberFreezes.some((f: any) => {
-              const fStart = safeParseDate(f.start_date);
-              const fEnd = safeParseDate(f.end_date);
-              if (!fStart || !fEnd) return false;
-              
-              const fsStr = format(fStart, 'yyyy-MM-dd');
-              const feStr = format(fEnd, 'yyyy-MM-dd');
-              return dStr >= fsStr && dStr <= feStr;
-            });
-            if (!isFrozen) {
-                days++;
-            }
-          }
-        } catch (e) {
-          console.error("Error calculating revenue interval:", e);
-        }
-        return days;
-      };
-
-      const prevAccrualDays = mStart && mStart < start ? calculateRevenueDays(mStart, start) : 0;
-      const periodRevDays = calculateRevenueDays(start, end);
+      const prevAccrual = mStart ? RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, subDays(start, 1)) : 0;
+      const periodRev = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, start, subDays(end, 1));
       
       const dailyRate = Number(m.daily_rate || 0);
-      const prevAccrual = prevAccrualDays * dailyRate;
-      const periodRev = periodRevDays * dailyRate;
       
       let deferred = (m.net_amount || 0) - (prevAccrual + periodRev);
       if (deferred < 0) deferred = 0;
@@ -172,7 +131,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       totalNetFees += (m.net_amount || 0);
 
       // Calculate total active days for the entire membership duration
-      const totalActiveDays = calculateRevenueDays(mStart, mEnd);
+      const totalActiveDays = Math.round((m.net_amount || 0) / dailyRate) || 0;
       
       if (m.guest_name?.includes('Test') || m.name?.includes('Test')) {
         console.log(`DEBUG [RevRec]: ${m.guest_name || m.name}`);
@@ -180,7 +139,6 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         console.log(`  - Total Active Days: ${totalActiveDays}`);
         console.log(`  - Daily Rate: ${dailyRate}`);
         console.log(`  - Period: ${format(start, 'yyyy-MM-dd')} to ${format(end, 'yyyy-MM-dd')}`);
-        console.log(`  - Period Days: ${periodRevDays}`);
         console.log(`  - Period Rev: ${periodRev}`);
       }
 
@@ -199,7 +157,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         prev_accrual: prevAccrual,
         period_rev: periodRev,
         deferred: deferred,
-        debug_info: `Total Active Days: ${totalActiveDays}, Period Days: ${periodRevDays}`
+        debug_info: `Total Active Days: ${totalActiveDays}`
       };
     });
 
@@ -703,7 +661,7 @@ export const generateReportPDF = (options: PDFOptions) => {
 
   // Helper to handle currency symbols that might not render in default PDF fonts
   const formatCurrency = (val: number) => {
-    const formatted = val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatted = val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     // If currency symbol is Arabic (ر.ق), use QR instead for PDF compatibility
     const safeSymbol = (currencySymbol === 'ر.ق' || currencySymbol.includes('\u0631')) ? 'QR' : currencySymbol;
     return `${safeSymbol} ${formatted}`;
