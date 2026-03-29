@@ -324,15 +324,15 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         id: m.id,
         sl_no: idx + 1,
         date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd-MM-yyyy') : 'N/A',
-        name: m.guest_name || m.name,
+        guest_name: m.guest_name || m.name,
         membership_no: m.membership_number || m.membership_no || 'N/A',
         category: categoryMap[m.category_id] || 'Other',
         check_no: m.check_no || '#---',
-        item: 'Membership',
-        gross: actualPrice,
+        item_name: 'Membership',
+        actual_price: actualPrice,
         discount_percent: discPercent,
-        discount_amt: discountAmt,
-        net: netRev,
+        discount_amount: discountAmt,
+        net_revenue: netRev,
         remarks: m.status
       };
     });

@@ -74,6 +74,7 @@ interface RevenueRow {
     id: string;
     sl_no: number;
     guest_name: string;
+    membership_no: string;
     start_date: string;
     end_date: string;
     total_days: number;
@@ -181,6 +182,7 @@ const Reports = () => {
       sl_no: true,
       date: true,
       guest_name: true,
+      membership_no: true,
       reference: true,
       check_no: true,
       payment_mode: true,
@@ -394,6 +396,7 @@ const Reports = () => {
                       <tr className="bg-slate-950 text-white font-black uppercase tracking-widest">
                           {visibleColumns.sl_no && <th className="border border-black px-2 py-3 w-8">SL.</th>}
                           {visibleColumns.guest_name && <th className="border border-black px-2 py-3 min-w-[150px]">Guest Name / Profile</th>}
+                          {visibleColumns.membership_no && <th className="border border-black px-2 py-3 w-24">Mem. No</th>}
                           {visibleColumns.start_date && <th className="border border-black px-2 py-3 w-20">Start Date</th>}
                           {visibleColumns.end_date && <th className="border border-black px-2 py-3 w-20">End Date</th>}
                           {visibleColumns.days && <th className="border border-black px-2 py-3 w-12 text-center">Days</th>}
@@ -432,6 +435,7 @@ const Reports = () => {
                                       <td colSpan={
                                           (visibleColumns.sl_no ? 1 : 0) +
                                           (visibleColumns.guest_name ? 1 : 0) +
+                                          (visibleColumns.membership_no ? 1 : 0) +
                                           (visibleColumns.start_date ? 1 : 0) +
                                           (visibleColumns.end_date ? 1 : 0) +
                                           (visibleColumns.days ? 1 : 0) +
@@ -455,6 +459,7 @@ const Reports = () => {
                                       <tr key={row.id} className="hover:bg-slate-50 transition-colors">
                                           {visibleColumns.sl_no && <td className="border border-black px-2 py-1 text-center text-slate-500">{idx + 1}</td>}
                                           {visibleColumns.guest_name && <td className="border border-black px-2 py-1 font-black text-slate-800">{row.guest_name}</td>}
+                                          {visibleColumns.membership_no && <td className="border border-black px-2 py-1 text-center font-mono text-xs">{row.membership_no}</td>}
                                           {visibleColumns.start_date && <td className="border border-black px-2 py-1 text-center text-slate-600">{row.start_date}</td>}
                                           {visibleColumns.end_date && <td className="border border-black px-2 py-1 text-center text-slate-600">{row.end_date}</td>}
                                           {visibleColumns.days && <td className="border border-black px-2 py-1 text-center text-slate-500">{row.total_days}</td>}
@@ -473,6 +478,7 @@ const Reports = () => {
                                       <td colSpan={
                                           (visibleColumns.sl_no ? 1 : 0) +
                                           (visibleColumns.guest_name ? 1 : 0) +
+                                          (visibleColumns.membership_no ? 1 : 0) +
                                           (visibleColumns.start_date ? 1 : 0) +
                                           (visibleColumns.end_date ? 1 : 0) +
                                           (visibleColumns.days ? 1 : 0)
@@ -494,6 +500,7 @@ const Reports = () => {
                           <td colSpan={
                               (visibleColumns.sl_no ? 1 : 0) +
                               (visibleColumns.guest_name ? 1 : 0) +
+                              (visibleColumns.membership_no ? 1 : 0) +
                               (visibleColumns.start_date ? 1 : 0) +
                               (visibleColumns.end_date ? 1 : 0) +
                               (visibleColumns.days ? 1 : 0)
@@ -810,6 +817,7 @@ const Reports = () => {
                                           reportType === 'revenue_recognition' ? {
                                               sl_no: 'Sl.No.',
                                               guest_name: 'Guest / Profile',
+                                              membership_no: 'Mem. No',
                                               start_date: 'Start Date',
                                               end_date: 'End Date',
                                               days: 'Days',
