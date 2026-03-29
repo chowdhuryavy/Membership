@@ -20,6 +20,7 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth, s
     const { currentOutlet, currentProperty } = useSettings();
     const [members, setMembers] = useState<Member[]>([]);
     const [categories, setCategories] = useState<MembershipCategory[]>([]);
+    const [membershipTypes, setMembershipTypes] = useState<{id: string, name: string}[]>([]);
     const [reportMonth, setReportMonth] = useState(embeddedMonth || format(new Date(), 'yyyy-MM'));
     const [isLoading, setIsLoading] = useState(true);
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -45,13 +46,15 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth, s
                 query = query.eq('membership_type_id', selectedMembershipTypeId);
             }
 
-            const [membersRes, catsRes] = await Promise.all([
+            const [membersRes, catsRes, typesRes] = await Promise.all([
                 query,
-                supabase.from('membership_categories').select('*')
+                supabase.from('membership_categories').select('*'),
+                supabase.from('membership_types').select('id, name').eq('outlet_id', currentOutlet?.id)
             ]);
             
             setMembers(membersRes.data || []);
             setCategories(catsRes.data || []);
+            setMembershipTypes(typesRes.data || []);
         } catch (error) {
             console.error("Error loading data:", error);
         } finally {
@@ -74,6 +77,32 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth, s
             return isWithinInterval(endDate, { start, end });
         }).sort((a, b) => parseISO(a.current_end_date).getTime() - parseISO(b.current_end_date).getTime());
     }, [members, reportMonth]);
+
+    const groupedMembers = useMemo(() => {
+        if (selectedMembershipTypeId !== 'all') {
+            const filteredGrouped: Record<string, Record<string, Member[]>> = { 'Filtered Results': {} };
+            expiringMembers.forEach(member => {
+                const cat = categories.find(c => c.id === member.category_id);
+                const catKey = cat?.name || 'Other';
+                if (!filteredGrouped['Filtered Results'][catKey]) filteredGrouped['Filtered Results'][catKey] = [];
+                filteredGrouped['Filtered Results'][catKey].push(member);
+            });
+            return filteredGrouped;
+        }
+
+        return expiringMembers.reduce((acc, member) => {
+            const type = membershipTypes.find(t => t.id === member.membership_type_id);
+            const typeKey = type?.name || 'Other';
+            const cat = categories.find(c => c.id === member.category_id);
+            const catKey = cat?.name || 'Other';
+            
+            if (!acc[typeKey]) acc[typeKey] = {};
+            if (!acc[typeKey][catKey]) acc[typeKey][catKey] = [];
+            
+            acc[typeKey][catKey].push(member);
+            return acc;
+        }, {} as Record<string, Record<string, Member[]>>);
+    }, [expiringMembers, membershipTypes, categories, selectedMembershipTypeId]);
 
     const handleExportPDF = () => {
         window.print();
@@ -157,27 +186,62 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth, s
                                             </td>
                                         </tr>
                                     ) : (
-                                        expiringMembers.map((member, idx) => {
-                                            const cat = categories.find(c => c.id === member.category_id);
+                                        Object.entries(groupedMembers).map(([type, categoriesData]) => {
+                                            const typeCategories = categoriesData as Record<string, Member[]>;
+                                            const typeTotalCount = Object.values(typeCategories).flat().length;
+
                                             return (
-                                                <tr key={member.id} className={`${isEmbedded ? 'border-b border-slate-100' : 'hover:bg-slate-50/50 transition-colors'}`}>
-                                                    <td className={`px-2 py-3 font-bold border border-black ${isEmbedded ? 'text-slate-400 text-center' : 'px-6 text-sm text-slate-400'}`}>{idx + 1}</td>
-                                                    <td className={`px-2 py-3 font-black border border-black ${isEmbedded ? 'text-slate-800' : 'px-6 text-sm text-slate-700'}`}>{member.guest_name}</td>
-                                                    <td className={`px-2 py-3 font-mono border border-black ${isEmbedded ? 'text-slate-500 text-center' : 'px-6 text-sm text-slate-500'}`}>{member.membership_number}</td>
-                                                    <td className={`px-2 py-3 font-bold border border-black ${isEmbedded ? 'text-indigo-600' : 'px-6 text-sm text-indigo-600'}`}>{cat?.name || 'Unknown'}</td>
-                                                    <td className={`px-2 py-3 border border-black ${isEmbedded ? 'text-slate-600 text-center' : 'px-6 text-sm text-slate-500'}`}>{format(parseISO(member.start_date), 'dd MMM yyyy')}</td>
-                                                    <td className={`px-2 py-3 font-black border border-black ${isEmbedded ? 'text-rose-600 text-center' : 'px-6 text-sm text-rose-600'}`}>{format(parseISO(member.current_end_date), 'dd MMM yyyy')}</td>
-                                                    <td className={`px-2 py-3 border border-black ${isEmbedded ? 'text-center' : 'px-6'}`}>
-                                                        <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-widest ${
-                                                            member.status === MemberStatus.ACTIVE ? 'bg-emerald-100 text-emerald-700' :
-                                                            member.status === MemberStatus.EXPIRED ? 'bg-rose-100 text-rose-700' :
-                                                            member.status === MemberStatus.FROZEN ? 'bg-blue-100 text-blue-700' :
-                                                            'bg-slate-100 text-slate-700'
-                                                        }`}>
-                                                            {member.status}
-                                                        </span>
-                                                    </td>
-                                                </tr>
+                                                <React.Fragment key={type}>
+                                                    {selectedMembershipTypeId === 'all' && (
+                                                        <tr className="bg-slate-900 text-white">
+                                                            <td colSpan={7} className="px-4 py-2 font-black uppercase tracking-widest text-[11px] border border-black">
+                                                                Type: {type}
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                    {Object.entries(typeCategories).map(([catName, groupMembers]) => (
+                                                        <React.Fragment key={catName}>
+                                                            <tr className="bg-slate-100">
+                                                                <td colSpan={7} className="px-4 py-2 font-black text-slate-900 uppercase tracking-tight text-[10px] border border-black pl-8">
+                                                                    Tier: {catName} ({groupMembers.length} Members)
+                                                                </td>
+                                                            </tr>
+                                                            {groupMembers.map((member, idx) => {
+                                                                const cat = categories.find(c => c.id === member.category_id);
+                                                                return (
+                                                                    <tr key={member.id} className={`${isEmbedded ? 'border-b border-slate-100' : 'hover:bg-slate-50/50 transition-colors'}`}>
+                                                                        <td className={`px-2 py-3 font-bold border border-black ${isEmbedded ? 'text-slate-400 text-center' : 'px-6 text-sm text-slate-400'}`}>{idx + 1}</td>
+                                                                        <td className={`px-2 py-3 font-black border border-black ${isEmbedded ? 'text-slate-800' : 'px-6 text-sm text-slate-700'}`}>{member.guest_name}</td>
+                                                                        <td className={`px-2 py-3 font-mono border border-black ${isEmbedded ? 'text-slate-500 text-center' : 'px-6 text-sm text-slate-500'}`}>{member.membership_number}</td>
+                                                                        <td className={`px-2 py-3 font-bold border border-black ${isEmbedded ? 'text-indigo-600' : 'px-6 text-sm text-indigo-600'}`}>{cat?.name || 'Unknown'}</td>
+                                                                        <td className={`px-2 py-3 border border-black ${isEmbedded ? 'text-slate-600 text-center' : 'px-6 text-sm text-slate-500'}`}>{format(parseISO(member.start_date), 'dd MMM yyyy')}</td>
+                                                                        <td className={`px-2 py-3 font-black border border-black ${isEmbedded ? 'text-rose-600 text-center' : 'px-6 text-sm text-rose-600'}`}>{format(parseISO(member.current_end_date), 'dd MMM yyyy')}</td>
+                                                                        <td className={`px-2 py-3 border border-black ${isEmbedded ? 'text-center' : 'px-6'}`}>
+                                                                            <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-widest ${
+                                                                                member.status === MemberStatus.ACTIVE ? 'bg-emerald-100 text-emerald-700' :
+                                                                                member.status === MemberStatus.EXPIRED ? 'bg-rose-100 text-rose-700' :
+                                                                                member.status === MemberStatus.FROZEN ? 'bg-blue-100 text-blue-700' :
+                                                                                'bg-slate-100 text-slate-700'
+                                                                            }`}>
+                                                                                {member.status}
+                                                                            </span>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                            <tr className="bg-slate-50 font-bold text-[9px]">
+                                                                <td colSpan={6} className="px-4 py-2 text-right uppercase tracking-widest border border-black italic">Tier Subtotal ({catName}):</td>
+                                                                <td className="px-2 py-2 text-center text-indigo-600 border border-black">{groupMembers.length}</td>
+                                                            </tr>
+                                                        </React.Fragment>
+                                                    ))}
+                                                    {selectedMembershipTypeId === 'all' && (
+                                                        <tr className="bg-indigo-100 font-black text-[10px]">
+                                                            <td colSpan={6} className="px-4 py-2 text-right uppercase tracking-widest border border-black">Type Total ({type}):</td>
+                                                            <td className="px-2 py-2 text-center text-indigo-900 border border-black">{typeTotalCount}</td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
                                             );
                                         })
                                     )}

@@ -86,10 +86,11 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       membersQuery = membersQuery.eq('membership_type_id', selectedMembershipTypeId);
     }
 
-    const [membersRes, freezesRes, categoriesRes] = await Promise.all([
+    const [membersRes, freezesRes, categoriesRes, typesRes] = await Promise.all([
       membersQuery,
       supabase.from('freezes').select('*'),
-      supabase.from('membership_categories').select('id, name').in('outlet_id', outletIds)
+      supabase.from('membership_categories').select('id, name').in('outlet_id', outletIds),
+      supabase.from('membership_types').select('id, name').in('outlet_id', outletIds)
     ]);
 
     if (membersRes.error) {
@@ -100,7 +101,9 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const members = membersRes.data || [];
     const freezes = freezesRes.data || [];
     const categories = categoriesRes.data || [];
+    const types = typesRes.data || [];
     const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
+    const typeMap = Object.fromEntries(types.map((t: any) => [t.id, t.name]));
 
     console.log(`DEBUG: Found ${members.length} members for property ${propertyId}`);
 
@@ -136,6 +139,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           guest_name: m.guest_name || m.name,
           membership_no: m.membership_number || m.membership_no || 'N/A',
           category_name: categoryMap[m.category_id] || 'Other',
+          membership_type_name: typeMap[m.membership_type_id] || 'Other',
           start_date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd-MM-yyyy') : 'N/A',
           end_date: m.current_end_date ? format(safeParseDate(m.current_end_date)!, 'dd-MM-yyyy') : 'N/A',
           total_days: totalActiveDays,
@@ -151,16 +155,18 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         };
       })
       .filter((row: any) => {
-        // 1. If they have recognized revenue this month (> 1 cent), always show.
-        if (row.period_rev > 0.01) return true;
+        // 1. If they have recognized revenue this month (> 0.001), always show.
+        if (row.period_rev > 0.001) return true;
         
-        // 2. If they expired BEFORE the start of this month, hide them.
-        // This prevents long-expired members from showing up due to tiny rounding differences in 'deferred'.
+        // 2. If they have deferred revenue (> 0.001), always show.
+        if (row.deferred > 0.001) return true;
+
+        // 3. If they expired BEFORE the start of this month, hide them.
+        // This prevents long-expired members from showing up due to tiny rounding differences.
         if (row._mEnd && row._mEnd < start) return false;
         
-        // 3. If they haven't started yet or are active but have deferred revenue, show.
-        if (row.deferred > 0.01) return true;
-
+        // 4. If they are active but have zero revenue and zero deferred, 
+        // we hide them to keep the audit report focused on financial activity.
         return false;
       })
       .map((row: any) => {
@@ -312,19 +318,23 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     if (outletIds.length === 0) return { rows: [], summary: { count: 0 } };
 
+    // members_joined
     let membersQuery = supabase.from('members').select('*').in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr);
     if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
       membersQuery = membersQuery.eq('membership_type_id', selectedMembershipTypeId);
     }
 
-    const [membersRes, categoriesRes] = await Promise.all([
+    const [membersRes, categoriesRes, typesRes] = await Promise.all([
       membersQuery,
-      supabase.from('membership_categories').select('id, name')
+      supabase.from('membership_categories').select('id, name'),
+      supabase.from('membership_types').select('id, name').in('outlet_id', outletIds)
     ]);
 
     const members = membersRes.data || [];
     const categories = categoriesRes.data || [];
+    const types = typesRes.data || [];
     const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
+    const typeMap = Object.fromEntries(types.map((t: any) => [t.id, t.name]));
 
     let totalGross = 0;
     let totalDiscount = 0;
@@ -347,6 +357,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         guest_name: m.guest_name || m.name,
         membership_no: m.membership_number || m.membership_no || 'N/A',
         category: categoryMap[m.category_id] || 'Other',
+        membership_type_name: typeMap[m.membership_type_id] || 'Other',
         check_no: m.check_no || '#---',
         item_name: 'Membership',
         actual_price: actualPrice,
@@ -386,19 +397,23 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     if (outletIds.length === 0) return { rows: [], summary: { count: 0 } };
 
+    // expiring_memberships
     let membersQuery = supabase.from('members').select('*').in('outlet_id', outletIds);
     if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
       membersQuery = membersQuery.eq('membership_type_id', selectedMembershipTypeId);
     }
 
-    const [membersRes, categoriesRes] = await Promise.all([
+    const [membersRes, categoriesRes, typesRes] = await Promise.all([
       membersQuery,
-      supabase.from('membership_categories').select('id, name')
+      supabase.from('membership_categories').select('id, name'),
+      supabase.from('membership_types').select('id, name').in('outlet_id', outletIds)
     ]);
 
     const members = membersRes.data || [];
     const categories = categoriesRes.data || [];
+    const types = typesRes.data || [];
     const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
+    const typeMap = Object.fromEntries(types.map((t: any) => [t.id, t.name]));
 
     console.log(`DEBUG: Found ${members.length} total members to check for expiration`);
 
@@ -435,6 +450,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       name: m.guest_name || m.name,
       membership_no: m.membership_number || m.membership_no || 'N/A',
       category_name: categoryMap[m.category_id] || 'Other',
+      membership_type_name: typeMap[m.membership_type_id] || 'Other',
       email: m.email,
       phone: m.phone,
       start_date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd MMM yyyy') : 'N/A',
