@@ -110,6 +110,11 @@ const Reports = () => {
   const [summary, setSummary] = useState<any>(null);
   const supabase = supabaseClient;
 
+  const selectedTypeName = useMemo(() => {
+    if (selectedMembershipTypeId === 'all') return 'Together All Type';
+    return membershipTypes.find(t => t.id === selectedMembershipTypeId)?.name || 'Selected Type';
+  }, [selectedMembershipTypeId, membershipTypes]);
+
   // Page-Level Security Check
   const canView = user && hasPermission(user.role_id, 'reports:view');
   const canViewFinancial = user && hasPermission(user.role_id, 'reports:view_financial');
@@ -1043,6 +1048,14 @@ const Reports = () => {
                               <h3 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">
                                 {getReportTitle(reportType, incentiveDept)}
                               </h3>
+                              {(reportType === 'revenue_recognition' || reportType === 'members_joined' || reportType === 'expiring_memberships') && (
+                                  <div className="flex items-center gap-2 px-3 py-1 bg-indigo-50 rounded-lg border border-indigo-100 mb-1">
+                                      <Layers className="w-3 h-3 text-indigo-500" />
+                                      <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">
+                                          {selectedTypeName}
+                                      </span>
+                                  </div>
+                              )}
                               <div className="bg-slate-950 text-white px-6 py-3 rounded-2xl shadow-2xl">
                                   <span className="text-[9px] font-black uppercase opacity-60 block tracking-widest">Audit Period</span>
                                   <span className="text-sm font-black uppercase">
