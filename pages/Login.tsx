@@ -103,22 +103,22 @@ const Login = () => {
           </div>
         </div>
 
-        <div className="flex flex-col justify-center p-8 md:p-12 lg:p-16 bg-white relative">
+        <div className="flex flex-col justify-start p-8 md:p-12 lg:p-16 pt-10 md:pt-16 bg-white relative">
           
-          <div className="mb-10 flex flex-col items-center text-center">
+          <div className="mb-6 flex flex-col items-center text-center">
              {settings?.logo_url ? (
                <img 
                 src={settings.logo_url} 
                 alt="Logo" 
-                className="w-20 h-auto object-contain mb-6 filter drop-shadow-[0_10px_20px_rgba(0,0,0,0.05)]" 
+                className="w-32 h-auto object-contain mb-4 filter drop-shadow-[0_10px_20px_rgba(0,0,0,0.05)]" 
                />
              ) : (
-               <div className="w-16 h-16 bg-indigo-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-100 mb-6">
-                <Sparkles className="w-8 h-8" />
+               <div className="w-24 h-24 bg-indigo-600 rounded-[1.8rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-100 mb-4">
+                <Sparkles className="w-12 h-12" />
                </div>
              )}
 
-            <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter mb-2 leading-tight">
+            <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter mb-1 leading-tight">
               {mustChangePassword ? 'Set New Password' : companyName}
             </h2>
             <div className="flex items-center justify-center gap-3">
@@ -131,7 +131,7 @@ const Login = () => {
           </div>
 
           {!mustChangePassword ? (
-            <form onSubmit={handleSubmit} className="space-y-5 max-w-sm mx-auto w-full">
+            <form onSubmit={handleSubmit} className="space-y-4 max-w-sm mx-auto w-full">
               <div className="space-y-1.5">
                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Identity Access Email</label>
                 <div className={`relative transition-all duration-300 ${isFocused === 'email' ? 'translate-x-1' : ''}`}>

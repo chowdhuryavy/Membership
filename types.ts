@@ -222,6 +222,7 @@ export interface Freeze {
   reason?: string;
   is_maintenance?: boolean; // If true, doesn't count towards tier limits
   batch_id?: string; // Groups bulk freezes together
+  outlet_id?: string;
 }
 
 export interface Guest {
@@ -274,6 +275,7 @@ export interface MassageBooking {
   discount_reason?: string;
   discount_id_url?: string;
   room_id?: string;
+  payment_method?: 'cash' | 'card' | 'transfer';
 }
 
 export type SaleCategory = 'Retail' | 'Personal Training' | 'Entrance Fee' | 'Massage' | 'Other';

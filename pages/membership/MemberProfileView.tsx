@@ -218,7 +218,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                 start_date: freezeForm.start_date, 
                 end_date: freezeForm.end_date, 
                 total_days: validation.impact.days,
-                reason: freezeForm.reason
+                reason: freezeForm.reason,
+                outlet_id: viewingMember.outlet_id
             });
         } else {
             await db.addFreeze({ 
@@ -227,7 +228,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                 start_date: freezeForm.start_date, 
                 end_date: freezeForm.end_date, 
                 total_days: validation.impact.days,
-                reason: freezeForm.reason
+                reason: freezeForm.reason,
+                outlet_id: viewingMember.outlet_id
             });
         }
         setShowFreezeModal(false);

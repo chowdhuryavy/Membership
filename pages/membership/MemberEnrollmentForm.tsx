@@ -19,7 +19,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 const memberSchema = z.object({
   membership_number: z.string().min(1, "ID required"),
   guest_name: z.string().min(2, "Name required"),
-  membership_type_id: z.string().min(1, "Type required"),
+  membership_type_id: z.string().optional().nullable(),
   category_id: z.string().min(1, "Tier required"),
   start_date: z.string().min(1, "Start date required"),
   discount: z.coerce.number().min(0),
@@ -92,6 +92,10 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     }
     return format(today, 'yyyy-MM-dd');
   };
+
+  const sortedCategories = useMemo(() => {
+    return [...categories].sort((a, b) => (a.duration_months || 0) - (b.duration_months || 0));
+  }, [categories]);
 
   const { register, handleSubmit, watch, setValue, reset, control, formState: { errors } } = useForm<MemberFormValues>({
     resolver: zodResolver(memberSchema as any),
@@ -247,6 +251,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     const sanitizedData = { ...data };
     if (sanitizedData.dob === '') sanitizedData.dob = null;
     if (sanitizedData.spouse_dob === '') sanitizedData.spouse_dob = null;
+    if (sanitizedData.membership_type_id === '') sanitizedData.membership_type_id = null;
 
     const isUpdate = !!(isEditing && !isRenewal && existingMember);
     const payload: Member = {
@@ -371,15 +376,15 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
       {getMatchBanner()}
 
-      <form onSubmit={handleSubmit(onFormSubmit as any)} className="p-10 space-y-12">
+      <form onSubmit={handleSubmit(onFormSubmit as any)} className="p-8 space-y-10">
         
-        <section className="space-y-6">
+        <section className="space-y-4">
             <div className="flex items-center gap-3 px-2">
                 <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-inner"><User className="w-4 h-4" /></div>
                 <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">Member Core Identity</h3>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Membership No. / ID *</label>
                     <div className="relative group">
@@ -442,13 +447,13 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
             </div>
         </section>
 
-        <section className="space-y-6">
+        <section className="space-y-4">
             <div className="flex items-center gap-3 px-2">
                 <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-inner"><Layers className="w-4 h-4" /></div>
                 <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">Tier & Recognition Logic</h3>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Membership Tier *</label>
                     <div className="relative">
@@ -457,15 +462,19 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                             onChange={(e) => {
                                 const catId = e.target.value;
                                 register('category_id').onChange(e);
-                                const cat = categories.find(c => c.id === catId);
+                                const cat = sortedCategories.find(c => c.id === catId);
                                 if (cat) {
-                                    setValue('membership_type_id', cat.membership_type_id);
+                                    setValue('membership_type_id', cat.membership_type_id || '');
                                 }
                             }}
                             className="w-full h-14 px-4 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm cursor-pointer appearance-none"
                         >
                             <option value="">Select Category...</option>
-                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            {sortedCategories.map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.name} — {formatMoney(c.base_rate)}
+                              </option>
+                            ))}
                         </select>
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>
@@ -583,7 +592,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
             </div>
         </section>
 
-        <div className="bg-[#f8fafc] rounded-[2.5rem] p-10 grid grid-cols-2 md:grid-cols-4 gap-8 shadow-inner border border-slate-100/50">
+        <div className="bg-[#f8fafc] rounded-[2.5rem] p-8 grid grid-cols-2 md:grid-cols-4 gap-8 shadow-inner border border-slate-100/50">
             <div className="space-y-2">
                 <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest leading-none">Base Rate</p>
                 <p className="text-base font-black text-slate-900 tracking-tight leading-none">{formatMoney(baseRate)}</p>
@@ -622,10 +631,10 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         )}
 
         <div className="flex gap-5 pt-4">
-            <button type="button" onClick={onCancel} className="flex-1 h-16 rounded-[1.8rem] font-black text-[11px] uppercase tracking-widest text-slate-500 bg-slate-50 border border-slate-200 transition-all hover:bg-slate-100 flex items-center justify-center gap-3 active:scale-95">
+            <button type="button" onClick={onCancel} className="flex-1 h-14 rounded-[1.8rem] font-black text-[11px] uppercase tracking-widest text-slate-500 bg-slate-50 border border-slate-200 transition-all hover:bg-slate-100 flex items-center justify-center gap-3 active:scale-95">
                 <Command className="w-4 h-4 opacity-30" /> Cancel
             </button>
-            <Button type="submit" isLoading={isSubmitting} className="flex-[2] h-16 rounded-[1.8rem] font-black text-[13px] uppercase tracking-[0.1em] bg-gradient-to-r from-indigo-600 to-indigo-500 shadow-[0_20px_40px_-10px_rgba(79,70,229,0.4)] transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3">
+            <Button type="submit" isLoading={isSubmitting} className="flex-[2] h-14 rounded-[1.8rem] font-black text-[13px] uppercase tracking-[0.1em] bg-gradient-to-r from-indigo-600 to-indigo-500 shadow-[0_20px_40px_-10px_rgba(79,70,229,0.4)] transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3">
                 {isRenewal ? 'Commit Renewal' : isEditing ? 'Save Profile Changes' : 'Confirm Enrollment'} <Command className="w-4 h-4 opacity-50" />
             </Button>
         </div>

@@ -18,10 +18,11 @@ interface BulkFreezeBatch {
 interface BulkFreezeHistoryModalProps {
     isOpen: boolean;
     onClose: () => void;
+    outletId?: string;
     onRefresh: () => void;
 }
 
-export const BulkFreezeHistoryModal: React.FC<BulkFreezeHistoryModalProps> = ({ isOpen, onClose, onRefresh }) => {
+export const BulkFreezeHistoryModal: React.FC<BulkFreezeHistoryModalProps> = ({ isOpen, onClose, outletId, onRefresh }) => {
     const { formatMoney } = useSettings();
     const [history, setHistory] = useState<BulkFreezeBatch[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -32,7 +33,7 @@ export const BulkFreezeHistoryModal: React.FC<BulkFreezeHistoryModalProps> = ({ 
     const fetchHistory = async () => {
         setIsLoading(true);
         try {
-            const data = await db.getBulkFreezeHistory();
+            const data = await db.getBulkFreezeHistory(outletId);
             setHistory(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
         } catch (error) {
             console.error('Failed to fetch bulk freeze history:', error);

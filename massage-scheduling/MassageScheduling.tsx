@@ -10,6 +10,7 @@ import {
   Select,
   ConfirmationModal
 } from '../components/ui';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, 
   Search, 
@@ -51,7 +52,15 @@ import {
   Tag,
   FileUp,
   Download,
-  Printer
+  Printer,
+  Timer,
+  Circle,
+  Briefcase,
+  Stethoscope,
+  CircleUser,
+  LayoutGrid,
+  Info,
+  TrendingUp
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { 
@@ -93,6 +102,15 @@ const GuestHistoryView = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'confirmed' | 'cancelled' | 'no-show'>('all');
   const [guestSales, setGuestSales] = useState<Sale[]>([]);
   const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [hoveredSlot, setHoveredSlot] = useState<{ therapistId?: string; roomId?: string; hour: number; quarter: number } | null>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -462,7 +480,17 @@ const MassageScheduling = () => {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [completingBookingId, setCompletingBookingId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<MassageBooking['payment_method']>('cash');
   const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [hoveredSlot, setHoveredSlot] = useState<{ therapistId?: string; roomId?: string; hour: number; quarter: number } | null>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const inventoryFormState = useMemo(() => ({
       showForm: showInventoryForm,
@@ -598,6 +626,7 @@ CREATE TABLE IF NOT EXISTS public.massage_bookings (
     discount_id_url TEXT,
     status TEXT DEFAULT 'confirmed',
     additional_service_ids JSONB DEFAULT '[]'::jsonb,
+    payment_method TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -805,7 +834,6 @@ NOTIFY pgrst, 'reload schema';`}
     } catch (e: any) {
       console.error("Failed to load booking data", e);
       const errorMessage = e.message || "Unknown Database Error";
-      setSchemaError(errorMessage);
       
       // Distinguish between schema errors and network errors
       const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -813,13 +841,18 @@ NOTIFY pgrst, 'reload schema';`}
       const isSchemaError = errorMessage.includes('schema cache') || e.code === '42P01' || e.code === '42703' || errorMessage.toLowerCase().includes('column') || (errorMessage.includes('Table [') && !isNetworkError);
 
       if (isSchemaError) {
+          setSchemaError(errorMessage);
           setIsTableMissing(true);
       } else if (isNetworkError) {
+          // Just log network errors, don't show blocking UI if we have any data (even if empty)
+          console.warn("Network error during data load. Falling back to local/mock data.");
           if (isOffline) {
-              setSchemaError("You are currently offline. Please check your internet connection.");
+              setSchemaError("You are currently offline. Using cached/local data.");
           }
-          console.warn("Network error detected. Please check your internet connection or Supabase project status.");
+      } else {
+          setSchemaError(errorMessage);
       }
+
     } finally {
       setLoading(false);
     }
@@ -832,10 +865,10 @@ NOTIFY pgrst, 'reload schema';`}
       return guests.filter(g => bookings.some(b => b.guest_id === g.id && b.outlet_id === currentOutlet?.id));
   }, [guests, bookings, viewScope, currentOutlet]);
 
-  const handleUpdateStatus = async (id: string, status: MassageBooking['status'], roomId?: string) => {
+  const handleUpdateStatus = async (id: string, status: MassageBooking['status'], roomId?: string, paymentMethod?: MassageBooking['payment_method']) => {
     if (!canEdit) return;
     try {
-      await db.updateMassageBookingStatus(id, status, roomId);
+      await db.updateMassageBookingStatus(id, status, roomId, paymentMethod);
       setSelectedBooking(null);
       loadData();
     } catch (e: any) {
@@ -922,17 +955,42 @@ NOTIFY pgrst, 'reload schema';`}
     return { top, height: duration * MINUTE_HEIGHT };
   };
 
+  const calculateCurrentTimePosition = () => {
+    const now = currentTime;
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    
+    if (hours < HOURS[0] || hours >= HOURS[HOURS.length - 1] + 1) return null;
+    
+    const totalMinutes = (hours - HOURS[0]) * 60 + minutes;
+    return totalMinutes * MINUTE_HEIGHT;
+  };
+
   const filteredTodayBookings = useMemo(() => {
     const dateStr = format(viewDate, 'yyyy-MM-dd');
     return bookings.filter(b => b.date === dateStr);
   }, [bookings, viewDate]);
 
-  const getStatusStyles = (status: MassageBooking['status']) => {
+  const getStatusStyles = (status: MassageBooking['status'], type?: string) => {
+    const base = 'border-l-[6px] shadow-2xl transition-all hover:z-50 overflow-hidden group hover:scale-[1.04] hover:-translate-y-1 flex flex-col justify-between backdrop-blur-xl rounded-2xl border-white/20';
+    
+    // Advanced Gradients based on type
+    const isConsultation = type?.toLowerCase().includes('consultation');
+    const isTest = type?.toLowerCase().includes('test');
+    const isFollowUp = type?.toLowerCase().includes('follow-up');
+    
     switch (status) {
-      case 'completed': return 'bg-emerald-600 border-emerald-700 text-white shadow-emerald-100/50';
-      case 'no-show': return 'bg-amber-500 border-amber-600 text-white shadow-amber-100/50';
-      case 'cancelled': return 'bg-red-100 border-red-500 text-red-800 line-through italic shadow-none opacity-90';
-      default: return 'bg-indigo-600 border-indigo-700 text-white shadow-indigo-100/50';
+      case 'completed': 
+        return `${base} bg-gradient-to-br from-emerald-500/95 via-emerald-600/90 to-teal-700/95 border-emerald-400/50 text-white shadow-emerald-500/30`;
+      case 'no-show': 
+        return `${base} bg-gradient-to-br from-rose-500/95 via-rose-600/90 to-pink-700/95 border-rose-400/50 text-white shadow-rose-500/30`;
+      case 'cancelled': 
+        return `${base} bg-slate-200/40 border-slate-400/30 text-slate-500 line-through italic shadow-none opacity-40 grayscale`;
+      default: 
+        if (isConsultation) return `${base} bg-gradient-to-br from-indigo-500/95 via-indigo-600/90 to-blue-700/95 border-indigo-400/50 text-white shadow-indigo-500/30`;
+        if (isTest) return `${base} bg-gradient-to-br from-violet-500/95 via-violet-600/90 to-purple-700/95 border-violet-400/50 text-white shadow-violet-500/30`;
+        if (isFollowUp) return `${base} bg-gradient-to-br from-cyan-500/95 via-cyan-600/90 to-sky-700/95 border-cyan-400/50 text-white shadow-cyan-500/30`;
+        return `${base} bg-gradient-to-br from-slate-800/95 via-slate-900/90 to-black/95 border-slate-600/50 text-white shadow-slate-900/40`;
     }
   };
 
@@ -966,7 +1024,7 @@ NOTIFY pgrst, 'reload schema';`}
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 mesh-gradient min-h-full">
       {schemaError && !isTableMissing && (
         <div className="bg-red-50 border border-red-200 p-4 rounded-2xl flex items-center justify-between gap-4 animate-in slide-in-from-top-2">
           <div className="flex items-center gap-3 text-red-700">
@@ -982,12 +1040,13 @@ NOTIFY pgrst, 'reload schema';`}
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm">
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Resource Management</h1>
-          <div className="flex flex-wrap items-center gap-4 mt-1">
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Store className="w-3 h-3 text-indigo-400" /> {currentOutlet?.name}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 glass p-8 rounded-[3rem] border border-slate-200/50 shadow-2xl shadow-indigo-500/5 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-[100px] rounded-full -mr-32 -mt-32"></div>
+        <div className="relative z-10">
+          <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none">Resource Management</h1>
+          <div className="flex flex-wrap items-center gap-4 mt-3">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 bg-slate-100/50 px-3 py-1 rounded-full border border-slate-200/50">
+                <Store className="w-3 h-3 text-indigo-500" /> {currentOutlet?.name}
               </p>
               {canSwitchScope && (
                 <>
@@ -1044,7 +1103,7 @@ NOTIFY pgrst, 'reload schema';`}
             <div className="flex items-center gap-4 w-full sm:w-auto">
               <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
                   <button onClick={() => setViewMode('therapists')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${viewMode === 'therapists' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                      <Users2 className="w-3 h-3" /> Specialists
+                      <Users2 className="w-3 h-3" /> Specialist Types
                   </button>
                   <button onClick={() => setViewMode('rooms')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${viewMode === 'rooms' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
                       <MapPin className="w-3 h-3" /> Rooms
@@ -1057,55 +1116,179 @@ NOTIFY pgrst, 'reload schema';`}
             </div>
           </div>
 
-          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden bg-white">
-            <div className="overflow-x-auto custom-scrollbar">
+          <Card className="rounded-[3.5rem] border-slate-200/50 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] overflow-hidden glass relative">
+            <div className="absolute inset-0 bg-dot-matrix opacity-[0.03] pointer-events-none"></div>
+            <div className="overflow-x-auto custom-scrollbar relative z-10">
               <div className="min-w-[1000px] flex relative">
-                <div className="w-20 shrink-0 border-r border-slate-100 bg-slate-50/50 sticky left-0 z-20">
-                    <div className="h-14 border-b border-slate-100 flex items-center justify-center bg-white sticky top-0 z-30 shadow-sm"><Clock className="w-5 h-5 text-indigo-400" /></div>
+                <div className="w-24 shrink-0 border-r border-slate-200/50 bg-white/40 backdrop-blur-xl sticky left-0 z-40">
+                    <div className="h-20 border-b border-slate-200/50 flex items-center justify-center bg-white/60 sticky top-0 z-50 shadow-sm">
+                      <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
+                        <Clock className="w-5 h-5 text-white animate-pulse-soft" />
+                      </div>
+                    </div>
                     {HOURS.map(hour => (
-                        <div key={hour} style={{ height: SLOT_HEIGHT }} className="relative border-b border-slate-50 flex items-center justify-center group hover:bg-indigo-50/30 transition-colors">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-600 transition-colors">{hour > 12 ? `${hour-12} PM` : hour === 12 ? '12 PM' : `${hour} AM`}</span>
+                        <div key={hour} style={{ height: SLOT_HEIGHT }} className={`relative border-b border-slate-100/50 flex items-center justify-center group transition-colors ${hour % 2 === 0 ? 'bg-slate-50/30' : 'bg-white/20'}`}>
+                            <span className="text-[10px] font-mono font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-600 transition-all group-hover:scale-110">{hour > 12 ? `${hour-12} PM` : hour === 12 ? '12 PM' : `${hour} AM`}</span>
                         </div>
                     ))}
                 </div>
                 <div className="flex flex-1 relative bg-slate-50/30">
-                    {/* Current Time Indicator Line (Optional - can be added later with real-time updates) */}
+                    {/* Current Time Indicator Line */}
+                    {calculateCurrentTimePosition() !== null && format(viewDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') && (
+                        <div 
+                            className="absolute left-0 right-0 z-50 pointer-events-none flex items-center"
+                            style={{ top: calculateCurrentTimePosition()! + 80 }}
+                        >
+                            <div className="relative flex items-center justify-center">
+                              <div className="absolute w-6 h-6 bg-red-500/30 rounded-full animate-ping"></div>
+                              <div className="w-4 h-4 rounded-full bg-red-500 shadow-[0_0_20px_rgba(239,68,68,1)] -ml-2 border-2 border-white relative z-10"></div>
+                            </div>
+                            <div className="flex-1 h-[3px] bg-gradient-to-r from-red-500 via-red-400 to-transparent shadow-[0_0_20px_rgba(239,68,68,0.8)]"></div>
+                            <div className="absolute right-4 bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-red-500/20 uppercase tracking-widest">Live</div>
+                        </div>
+                    )}
                     
                     {viewMode === 'therapists' ? (
                       <>
                         {therapists.filter(t => !therapistFilter || t.name.toLowerCase().includes(therapistFilter.toLowerCase())).map((therapist, idx) => {
                           const therapistBookings = filteredTodayBookings.filter(b => b.therapist_id === therapist.id);
                           return (
-                            <div key={therapist.id} className={`flex-1 border-r border-slate-100 relative min-w-[180px] hover:bg-white transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}>
-                              <div className="h-14 bg-white border-b border-slate-100 flex flex-col items-center justify-center sticky top-0 z-10 px-2 shadow-sm">
-                                <span className="text-xs font-black text-slate-800 uppercase truncate w-full text-center tracking-tight">{therapist.name}</span>
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate w-full text-center mt-0.5">{therapist.specialty || 'Specialist'}</span>
+                            <div key={therapist.id} className={`flex-1 border-r border-slate-100/50 relative min-w-[220px] hover:bg-white/40 transition-all group ${idx % 2 === 0 ? 'bg-white/20' : 'bg-slate-50/5'}`}>
+                              <div className="h-14 bg-white/90 backdrop-blur-md border-b border-slate-100 flex items-center justify-center sticky top-0 z-10 px-4 shadow-sm gap-3">
+                                <div className="relative">
+                                    <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-xs shadow-lg shadow-indigo-500/20 transform -rotate-3">
+                                        {therapist.name.charAt(0)}
+                                    </div>
+                                    <div className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white shadow-sm animate-pulse-soft" title="Available"></div>
+                                </div>
+                                <div className="flex flex-col items-start min-w-0">
+                                    <span className="text-[11px] font-black text-slate-900 uppercase truncate w-full tracking-tight flex items-center gap-1.5">
+                                        {therapist.name}
+                                        {therapist.type === 'Personal Trainer' ? <TrendingUp className="w-3 h-3 text-indigo-500" /> : <Briefcase className="w-3 h-3 text-indigo-500" />}
+                                    </span>
+                                    <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-widest truncate w-full">{therapist.type || 'Specialist Type'}</span>
+                                </div>
                               </div>
-                              {HOURS.map(hour => <div key={hour} style={{ height: SLOT_HEIGHT }} className="border-b border-slate-100 group hover:border-indigo-100 transition-colors relative">
-                                  <div className="absolute inset-0 group-hover:bg-indigo-50/10 pointer-events-none"></div>
-                              </div>)}
+                              {HOURS.map(hour => (
+                                <div key={hour} style={{ height: SLOT_HEIGHT }} className="border-b border-slate-100 group hover:border-indigo-100 transition-colors relative">
+                                    {/* 15-min sub-lines */}
+                                    <div className="absolute top-1/4 left-0 right-0 h-px bg-slate-100/40 pointer-events-none"></div>
+                                    <div className="absolute top-2/4 left-0 right-0 h-px bg-slate-100/60 pointer-events-none"></div>
+                                    <div className="absolute top-3/4 left-0 right-0 h-px bg-slate-100/40 pointer-events-none"></div>
+                                    
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <span className="text-[8px] font-black text-slate-200 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Available Slot</span>
+                                    </div>
+
+                                    {/* Quick Add Hover Slots */}
+                                    {[0, 1, 2, 3].map(quarter => (
+                                        <div 
+                                            key={quarter}
+                                            className="absolute left-0 right-0 h-1/4 group/slot cursor-pointer flex items-center justify-center"
+                                            style={{ top: `${quarter * 25}%` }}
+                                            onMouseEnter={() => setHoveredSlot({ therapistId: therapist.id, hour, quarter })}
+                                            onMouseLeave={() => setHoveredSlot(null)}
+                                            onClick={() => {
+                                                const startTime = `${hour.toString().padStart(2, '0')}:${(quarter * 15).toString().padStart(2, '0')}`;
+                                                const endHour = quarter === 3 ? hour + 1 : hour;
+                                                const endMin = quarter === 3 ? 0 : (quarter + 1) * 15;
+                                                const endTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`;
+                                                setEditingBooking({
+                                                    id: '',
+                                                    property_id: currentProperty?.id || '',
+                                                    outlet_id: currentOutlet?.id || '',
+                                                    therapist_id: therapist.id,
+                                                    date: format(viewDate, 'yyyy-MM-dd'),
+                                                    start_time: startTime,
+                                                    end_time: endTime,
+                                                    status: 'confirmed',
+                                                    price: 0,
+                                                    guest_id: ''
+                                                } as any);
+                                                setShowBookingForm(true);
+                                            }}
+                                        >
+                                            <motion.div 
+                                                initial={{ opacity: 0, scale: 0.8 }}
+                                                whileHover={{ opacity: 1, scale: 1 }}
+                                                className="opacity-0 group-hover/slot:opacity-100 transition-opacity bg-indigo-600 text-white px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest flex items-center gap-1 shadow-lg shadow-indigo-500/20 z-20"
+                                            >
+                                                <Plus className="w-2 h-2" /> Quick Add
+                                            </motion.div>
+                                        </div>
+                                    ))}
+                                </div>
+                              ))}
+
+                              {/* Ghost Booking Preview */}
+                              {hoveredSlot?.therapistId === therapist.id && (
+                                <div 
+                                    className="absolute left-1.5 right-1.5 rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50/30 pointer-events-none z-10 flex flex-col items-center justify-center gap-1 overflow-hidden"
+                                    style={{ 
+                                        top: ((hoveredSlot.hour - HOURS[0]) * SLOT_HEIGHT) + (hoveredSlot.quarter * (SLOT_HEIGHT / 4)) + 56,
+                                        height: SLOT_HEIGHT // Default 1 hour preview
+                                    }}
+                                >
+                                    <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center">
+                                        <Plus className="w-3 h-3 text-indigo-400" />
+                                    </div>
+                                    <span className="text-[7px] font-black text-indigo-400 uppercase tracking-widest">New Booking</span>
+                                    <div className="absolute bottom-1 right-2 text-[6px] font-black text-indigo-300 uppercase">60 min</div>
+                                </div>
+                              )}
                               {therapistBookings.map(booking => {
                                 const { top, height } = calculatePosition(booking.start_time, booking.end_time);
                                 const type = massageTypes.find(m => m.id === (booking.massage_type_id || booking.inventory_item_id));
                                 const room = massageRooms.find(r => r.id === booking.room_id);
+                                const guest = guests.find(g => g.id === booking.guest_id);
                                 return (
-                                  <button 
+                                  <motion.button 
                                     key={booking.id} 
                                     onClick={() => setSelectedBooking(booking)} 
                                     style={{ top: top + 56, height: height - 2 }} 
-                                    className={`absolute left-1.5 right-1.5 p-2.5 rounded-xl border-l-[3px] text-left shadow-sm transition-all hover:z-20 overflow-hidden group hover:scale-[1.02] hover:shadow-md flex flex-col justify-between ${getStatusStyles(booking.status)}`}
+                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    whileHover={{ scale: 1.03, y: -4, zIndex: 50 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    className={`absolute left-1.5 right-1.5 p-3 rounded-2xl ${getStatusStyles(booking.status, type?.name)}`}
                                   >
-                                    <div>
-                                        <div className="text-[10px] font-black uppercase leading-tight truncate tracking-tight">{guests.find(g => g.id === booking.guest_id)?.name || 'Guest'}</div>
-                                        <div className="text-[9px] font-bold opacity-70 uppercase tracking-widest mt-0.5 truncate">{type?.name || 'Service'}</div>
-                                        {room && <div className="text-[8px] font-black opacity-80 uppercase tracking-widest mt-0.5 truncate flex items-center gap-1"><MapPin className="w-2 h-2" /> {room.name}</div>}
-                                    </div>
-                                    {height > 60 && (
-                                        <div className="text-[8px] font-black opacity-60 uppercase tracking-widest flex items-center gap-1 mt-1">
-                                            <Clock className="w-2.5 h-2.5" /> {booking.start_time} - {booking.end_time}
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-8 h-8 rounded-xl bg-white/30 backdrop-blur-md flex items-center justify-center text-xs font-black shadow-lg border border-white/20">
+                                            {guest?.name.charAt(0) || 'G'}
                                         </div>
-                                    )}
-                                  </button>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-[11px] font-black uppercase leading-tight truncate tracking-tight flex items-center gap-2">
+                                                {guest?.name || 'Walk-in Guest'}
+                                                {booking.status === 'completed' ? (
+                                                    <div className="w-2 h-2 rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.8)]"></div>
+                                                ) : (
+                                                    <div className="w-2 h-2 rounded-full bg-white/60 animate-pulse"></div>
+                                                )}
+                                            </div>
+                                            <div className="text-[9px] font-black opacity-90 uppercase tracking-widest mt-0.5 truncate flex items-center gap-1.5">
+                                                <Zap className="w-2.5 h-2.5" /> {type?.name || 'Service'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center justify-between mt-auto pt-2 border-t border-white/10">
+                                        <div className="flex items-center gap-2">
+                                            <div className="px-2 py-0.5 rounded-lg bg-black/20 text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 backdrop-blur-sm">
+                                                <Timer className="w-2.5 h-2.5" /> {type?.duration_minutes || 60}m
+                                            </div>
+                                            {room && (
+                                                <div className="text-[8px] font-black opacity-90 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <MapPin className="w-2.5 h-2.5" /> {room.name}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {height > 80 && (
+                                            <div className="text-[8px] font-mono font-black opacity-70 uppercase tracking-widest">
+                                                {booking.start_time}
+                                            </div>
+                                        )}
+                                    </div>
+                                  </motion.button>
                                 );
                               })}
                             </div>
@@ -1113,7 +1296,7 @@ NOTIFY pgrst, 'reload schema';`}
                         })}
                         {therapists.length === 0 && (
                             <div className="flex-1 p-12 text-center text-slate-400 uppercase text-[10px] font-black tracking-widest bg-white">
-                                No active specialists registered for this scope.
+                                No active specialist types registered for this scope.
                             </div>
                         )}
                       </>
@@ -1122,36 +1305,130 @@ NOTIFY pgrst, 'reload schema';`}
                         {massageRooms.filter(r => !therapistFilter || r.name.toLowerCase().includes(therapistFilter.toLowerCase())).map((room, idx) => {
                           const roomBookings = filteredTodayBookings.filter(b => b.room_id === room.id);
                           return (
-                            <div key={room.id} className={`flex-1 border-r border-slate-100 relative min-w-[180px] hover:bg-white transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}>
-                              <div className="h-14 bg-white border-b border-slate-100 flex flex-col items-center justify-center sticky top-0 z-10 px-2 shadow-sm">
-                                <span className="text-xs font-black text-slate-800 uppercase truncate w-full text-center tracking-tight">{room.name}</span>
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate w-full text-center mt-0.5">{room.number ? `Room ${room.number}` : 'Room'}</span>
+                            <div key={room.id} className={`flex-1 border-r border-slate-100 relative min-w-[200px] hover:bg-white transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/10'}`}>
+                              <div className="h-14 bg-white border-b border-slate-100 flex items-center justify-center sticky top-0 z-10 px-4 shadow-sm gap-3">
+                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 border border-slate-200 shadow-sm">
+                                    <MapPin className="w-4 h-4" />
+                                </div>
+                                <div className="flex flex-col items-start min-w-0">
+                                    <span className="text-[10px] font-black text-slate-800 uppercase truncate w-full tracking-tight">{room.name}</span>
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest truncate w-full">{room.number ? `Room ${room.number}` : 'Standard Room'}</span>
+                                </div>
                               </div>
-                              {HOURS.map(hour => <div key={hour} style={{ height: SLOT_HEIGHT }} className="border-b border-slate-100 group hover:border-indigo-100 transition-colors relative">
-                                  <div className="absolute inset-0 group-hover:bg-indigo-50/10 pointer-events-none"></div>
-                              </div>)}
+                              {HOURS.map(hour => (
+                                <div key={hour} style={{ height: SLOT_HEIGHT }} className="border-b border-slate-100 group hover:border-indigo-100 transition-colors relative">
+                                    {/* 15-min sub-lines */}
+                                    <div className="absolute top-1/4 left-0 right-0 h-px bg-slate-100/40 pointer-events-none"></div>
+                                    <div className="absolute top-2/4 left-0 right-0 h-px bg-slate-100/60 pointer-events-none"></div>
+                                    <div className="absolute top-3/4 left-0 right-0 h-px bg-slate-100/40 pointer-events-none"></div>
+                                    
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <span className="text-[8px] font-black text-slate-200 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Open Room</span>
+                                    </div>
+
+                                    {/* Quick Add Hover Slots */}
+                                    {[0, 1, 2, 3].map(quarter => (
+                                        <div 
+                                            key={quarter}
+                                            className="absolute left-0 right-0 h-1/4 group/slot cursor-pointer flex items-center justify-center"
+                                            style={{ top: `${quarter * 25}%` }}
+                                            onMouseEnter={() => setHoveredSlot({ roomId: room.id, hour, quarter })}
+                                            onMouseLeave={() => setHoveredSlot(null)}
+                                            onClick={() => {
+                                                const startTime = `${hour.toString().padStart(2, '0')}:${(quarter * 15).toString().padStart(2, '0')}`;
+                                                const endHour = quarter === 3 ? hour + 1 : hour;
+                                                const endMin = quarter === 3 ? 0 : (quarter + 1) * 15;
+                                                const endTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`;
+                                                setEditingBooking({
+                                                    id: '',
+                                                    property_id: currentProperty?.id || '',
+                                                    outlet_id: currentOutlet?.id || '',
+                                                    room_id: room.id,
+                                                    date: format(viewDate, 'yyyy-MM-dd'),
+                                                    start_time: startTime,
+                                                    end_time: endTime,
+                                                    status: 'confirmed',
+                                                    price: 0,
+                                                    guest_id: ''
+                                                } as any);
+                                                setShowBookingForm(true);
+                                            }}
+                                        >
+                                            <motion.div 
+                                                initial={{ opacity: 0, scale: 0.8 }}
+                                                whileHover={{ opacity: 1, scale: 1 }}
+                                                className="opacity-0 group-hover/slot:opacity-100 transition-opacity bg-indigo-600 text-white px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest flex items-center gap-1 shadow-lg shadow-indigo-500/20 z-20"
+                                            >
+                                                <Plus className="w-2 h-2" /> Quick Add
+                                            </motion.div>
+                                        </div>
+                                    ))}
+                                </div>
+                              ))}
+
+                              {/* Ghost Booking Preview */}
+                              {hoveredSlot?.roomId === room.id && (
+                                <div 
+                                    className="absolute left-1.5 right-1.5 rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50/30 pointer-events-none z-10 flex flex-col items-center justify-center gap-1 overflow-hidden"
+                                    style={{ 
+                                        top: ((hoveredSlot.hour - HOURS[0]) * SLOT_HEIGHT) + (hoveredSlot.quarter * (SLOT_HEIGHT / 4)) + 56,
+                                        height: SLOT_HEIGHT // Default 1 hour preview
+                                    }}
+                                >
+                                    <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center">
+                                        <Plus className="w-3 h-3 text-indigo-400" />
+                                    </div>
+                                    <span className="text-[7px] font-black text-indigo-400 uppercase tracking-widest">New Session</span>
+                                    <div className="absolute bottom-1 right-2 text-[6px] font-black text-indigo-300 uppercase">60 min</div>
+                                </div>
+                              )}
                               {roomBookings.map(booking => {
                                 const { top, height } = calculatePosition(booking.start_time, booking.end_time);
                                 const type = massageTypes.find(m => m.id === (booking.massage_type_id || booking.inventory_item_id));
                                 const therapist = therapists.find(t => t.id === booking.therapist_id);
+                                const guest = guests.find(g => g.id === booking.guest_id);
                                 return (
-                                  <button 
+                                  <motion.button 
                                     key={booking.id} 
                                     onClick={() => setSelectedBooking(booking)} 
                                     style={{ top: top + 56, height: height - 2 }} 
-                                    className={`absolute left-1.5 right-1.5 p-2.5 rounded-xl border-l-[3px] text-left shadow-sm transition-all hover:z-20 overflow-hidden group hover:scale-[1.02] hover:shadow-md flex flex-col justify-between ${getStatusStyles(booking.status)}`}
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    whileHover={{ scale: 1.02, y: -2 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    className={`absolute left-1.5 right-1.5 p-3 rounded-xl ${getStatusStyles(booking.status, type?.name)}`}
                                   >
-                                    <div>
-                                        <div className="text-[10px] font-black uppercase leading-tight truncate tracking-tight">{guests.find(g => g.id === booking.guest_id)?.name || 'Guest'}</div>
-                                        <div className="text-[9px] font-bold opacity-70 uppercase tracking-widest mt-0.5 truncate">{type?.name || 'Service'}</div>
-                                        {therapist && <div className="text-[8px] font-black opacity-80 uppercase tracking-widest mt-0.5 truncate flex items-center gap-1"><Users2 className="w-2 h-2" /> {therapist.name}</div>}
-                                    </div>
-                                    {height > 60 && (
-                                        <div className="text-[8px] font-black opacity-60 uppercase tracking-widest flex items-center gap-1 mt-1">
-                                            <Clock className="w-2.5 h-2.5" /> {booking.start_time} - {booking.end_time}
+                                    <div className="flex items-start gap-2.5">
+                                        <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-[10px] font-black shadow-inner border border-white/10">
+                                            {guest?.name.charAt(0) || 'G'}
                                         </div>
-                                    )}
-                                  </button>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-[10px] font-black uppercase leading-tight truncate tracking-tight flex items-center gap-1.5">
+                                                {guest?.name || 'Walk-in Guest'}
+                                                <div className={`w-1.5 h-1.5 rounded-full ${booking.status === 'completed' ? 'bg-emerald-300' : 'bg-white/60'}`}></div>
+                                            </div>
+                                            <div className="text-[8px] font-bold opacity-80 uppercase tracking-widest mt-0.5 truncate">{type?.name || 'Service'}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center justify-between mt-auto pt-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className="px-1.5 py-0.5 rounded-md bg-black/10 text-[7px] font-black uppercase tracking-widest flex items-center gap-1">
+                                                <Timer className="w-2 h-2" /> {type?.duration_minutes || 60}m
+                                            </div>
+                                            {therapist && (
+                                                <div className="text-[7px] font-black opacity-80 uppercase tracking-widest flex items-center gap-1">
+                                                    <Users2 className="w-2 h-2" /> {therapist.name}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {height > 80 && (
+                                            <div className="text-[7px] font-black opacity-60 uppercase tracking-widest">
+                                                {booking.start_time} - {booking.end_time}
+                                            </div>
+                                        )}
+                                    </div>
+                                  </motion.button>
                                 );
                               })}
                             </div>
@@ -1359,7 +1636,7 @@ NOTIFY pgrst, 'reload schema';`}
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white h-fit">
                     <CardHeader className="p-8 border-b bg-slate-900 text-white relative">
                         <CardTitle className="text-lg font-black uppercase tracking-widest flex items-center gap-3">
-                            <UserCheck className="w-5 h-5 text-indigo-400" /> Facility Specialists
+                            <UserCheck className="w-5 h-5 text-indigo-400" /> Facility Specialist Types
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -1367,7 +1644,7 @@ NOTIFY pgrst, 'reload schema';`}
                             <table className="w-full text-left">
                                 <thead className="bg-slate-50 border-b">
                                     <tr>
-                                        <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Specialist Name</th>
+                                        <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Specialist Type Name</th>
                                         <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Type</th>
                                         <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Expertise</th>
                                         <th className="px-8 py-4 text-[9px] font-black uppercase text-slate-400">Origin</th>
@@ -1404,7 +1681,7 @@ NOTIFY pgrst, 'reload schema';`}
                                     ))}
                                     {therapists.length === 0 && (
                                         <tr>
-                                            <td colSpan={5} className="px-8 py-10 text-center text-slate-400 uppercase text-[9px] font-bold">No specialists enrolled.</td>
+                                            <td colSpan={5} className="px-8 py-10 text-center text-slate-400 uppercase text-[9px] font-bold">No specialist types enrolled.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -1416,7 +1693,7 @@ NOTIFY pgrst, 'reload schema';`}
                 {canManageResources && (
                     <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white h-fit">
                         <CardHeader className="p-8 border-b bg-indigo-600 text-white">
-                            <CardTitle className="text-lg font-black uppercase tracking-widest">{isEditingResource ? 'Modify Profile' : 'Enroll Specialist'}</CardTitle>
+                            <CardTitle className="text-lg font-black uppercase tracking-widest">{isEditingResource ? 'Modify Profile' : 'Enroll Specialist Type'}</CardTitle>
                         </CardHeader>
                         <CardContent className="p-10">
                             <form onSubmit={handleSaveTherapist} className="space-y-6">
@@ -1437,7 +1714,7 @@ NOTIFY pgrst, 'reload schema';`}
                                 {saveError && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-bold uppercase flex items-center gap-2 animate-in shake duration-300"><ShieldAlert className="w-4 h-4"/> {saveError}</div>}
                                 <div className="flex gap-4">
                                     {isEditingResource && <Button type="button" variant="secondary" onClick={() => { setIsEditingResource(false); setNewTherapist({id:'', name:'', specialty:'', country:'', type: 'Therapist'}); setSaveError(null); }} className="flex-1 h-14 rounded-2xl">Discard</Button>}
-                                    <Button type="submit" isLoading={isSubmitting} className="flex-1 h-14 rounded-2xl font-black uppercase shadow-xl shadow-indigo-100">{isEditingResource ? 'Update Roster' : 'Register Specialist'}</Button>
+                                    <Button type="submit" isLoading={isSubmitting} className="flex-1 h-14 rounded-2xl font-black uppercase shadow-xl shadow-indigo-100">{isEditingResource ? 'Update Roster' : 'Register Specialist Type'}</Button>
                                 </div>
                             </form>
                         </CardContent>
@@ -1447,9 +1724,16 @@ NOTIFY pgrst, 'reload schema';`}
         </div>
       )}
 
+      <AnimatePresence>
       {selectedBooking && selectedBookingDetails && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-            <Card className="w-full max-w-md rounded-[2.5rem] border-slate-200 shadow-2xl overflow-hidden bg-white">
+            <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="w-full max-w-md"
+            >
+                <Card className="rounded-[2.5rem] border-slate-200 shadow-2xl overflow-hidden bg-white">
                 <CardHeader className="bg-indigo-600 text-white p-6">
                     <div className="flex justify-between items-start">
                         <div className="space-y-1">
@@ -1476,7 +1760,7 @@ NOTIFY pgrst, 'reload schema';`}
                             <span className="font-black text-slate-900 uppercase">{selectedBookingDetails.primaryService?.name}</span>
                         </div>
                         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                            <div className="flex items-center gap-3 text-[10px] font-black uppercase text-slate-500 tracking-widest"><User className="w-4 h-4 text-indigo-600" /> Specialist</div>
+                            <div className="flex items-center gap-3 text-[10px] font-black uppercase text-slate-500 tracking-widest"><User className="w-4 h-4 text-indigo-600" /> Specialist Type</div>
                             <span className="font-black text-slate-900 uppercase">{selectedBookingDetails.therapist?.name}</span>
                         </div>
                         <div className="flex items-center justify-between">
@@ -1496,19 +1780,22 @@ NOTIFY pgrst, 'reload schema';`}
                                                 <option key={r.id} value={r.id}>{r.name} {r.number ? `(${r.number})` : ''}</option>
                                             ))}
                                         </Select>
+                                        <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest block">Payment Method</label>
+                                        <Select value={selectedPaymentMethod} onChange={e => setSelectedPaymentMethod(e.target.value as any)} className="h-11 rounded-xl font-bold text-xs">
+                                            <option value="cash">Cash</option>
+                                            <option value="card">Card</option>
+                                            <option value="transfer">Bank Transfer</option>
+                                        </Select>
                                         <div className="flex gap-2">
                                             <button onClick={() => setCompletingBookingId(null)} className="flex-1 h-11 rounded-xl border border-slate-200 text-slate-600 font-black text-[10px] uppercase hover:bg-slate-100 transition-colors">Cancel</button>
-                                            <button onClick={() => { handleUpdateStatus(selectedBooking.id, 'completed', selectedRoomId); setCompletingBookingId(null); }} className="flex-1 h-11 rounded-xl bg-emerald-600 text-white font-black text-[10px] uppercase hover:bg-emerald-700 transition-colors">Confirm</button>
+                                            <button onClick={() => { handleUpdateStatus(selectedBooking.id, 'completed', selectedRoomId, selectedPaymentMethod); setCompletingBookingId(null); }} className="flex-1 h-11 rounded-xl bg-emerald-600 text-white font-black text-[10px] uppercase hover:bg-emerald-700 transition-colors">Confirm</button>
                                         </div>
                                     </div>
                                 ) : (
                                     <button onClick={() => { 
-                                        if (selectedBooking.room_id) {
-                                            handleUpdateStatus(selectedBooking.id, 'completed', selectedBooking.room_id);
-                                        } else {
-                                            setCompletingBookingId(selectedBooking.id); 
-                                            setSelectedRoomId(''); 
-                                        }
+                                        setCompletingBookingId(selectedBooking.id); 
+                                        setSelectedRoomId(selectedBooking.room_id || ''); 
+                                        setSelectedPaymentMethod(selectedBooking.payment_method || 'cash');
                                     }} className="w-full h-11 rounded-xl bg-emerald-600 text-white font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95"><CheckCircle className="w-4 h-4" /> Served</button>
                                 )}
                                 <button onClick={() => { setEditingBooking(selectedBooking); setShowBookingForm(true); setSelectedBooking(null); }} className="w-full h-11 rounded-xl border-2 border-indigo-100 text-indigo-600 font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-indigo-50"><Settings2 className="w-4 h-4" /> Reschedule / Modify</button>
@@ -1519,7 +1806,15 @@ NOTIFY pgrst, 'reload schema';`}
                             <button onClick={() => { setEditingBooking(selectedBooking); setShowBookingForm(true); setSelectedBooking(null); }} className="w-full h-11 rounded-xl bg-indigo-600 text-white font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"><RotateCcw className="w-4 h-4" /> Restore & Modify Reservation</button>
                         )}
                         {selectedBooking.status === 'completed' && canEdit && (
-                            <button onClick={() => { setEditingBooking(selectedBooking); setShowBookingForm(true); setSelectedBooking(null); }} className="w-full h-11 rounded-xl bg-indigo-600 text-white font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"><PlusCircle className="w-4 h-4" /> New Session for Guest</button>
+                            <>
+                                <button onClick={() => { setEditingBooking(selectedBooking); setShowBookingForm(true); setSelectedBooking(null); }} className="w-full h-11 rounded-xl bg-indigo-600 text-white font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"><Settings2 className="w-4 h-4" /> Modify Completed Booking</button>
+                                <button onClick={() => { 
+                                    const newBooking = { ...selectedBooking, id: undefined, status: 'confirmed', date: format(new Date(), 'yyyy-MM-dd') };
+                                    setEditingBooking(newBooking as any); 
+                                    setShowBookingForm(true); 
+                                    setSelectedBooking(null); 
+                                }} className="w-full h-11 rounded-xl border-2 border-indigo-100 text-indigo-600 font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-indigo-50"><PlusCircle className="w-4 h-4" /> New Session for Guest</button>
+                            </>
                         )}
                         <div className="h-px bg-slate-100 my-1"></div>
                         <button onClick={() => { if (selectedBookingDetails.guest) { setSelectedGuestForHistory(selectedBookingDetails.guest); setSelectedBooking(null); } }} className="w-full h-11 rounded-xl bg-slate-900 text-white font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"><ExternalLink className="w-4 h-4" /> View Guest Profile & History</button>
@@ -1532,8 +1827,10 @@ NOTIFY pgrst, 'reload schema';`}
                     </div>
                 </CardContent>
             </Card>
+            </motion.div>
         </div>
       )}
+      </AnimatePresence>
 
       {showBookingForm && (
           <BookingForm 

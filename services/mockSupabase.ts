@@ -24,8 +24,23 @@ const startOfDay = (date: Date) => {
 };
 
 class DatabaseService {
+  private static supabaseFailed = false;
   private isSupabase() {
-    return !!supabase;
+    return !!supabase && !DatabaseService.supabaseFailed;
+  }
+
+  private async safeCall<T>(call: () => Promise<T>, fallback: T): Promise<T> {
+    try {
+      const result = await call();
+      return result;
+    } catch (e: any) {
+      if (e.message?.includes('fetch') || e.message?.includes('Load failed') || e.message?.includes('Connection Error')) {
+        console.warn("Supabase fetch failed, disabling Supabase for this session and falling back to mock data", e);
+        DatabaseService.supabaseFailed = true;
+        return fallback;
+      }
+      throw e;
+    }
   }
 
   private generateUUID() {
@@ -748,10 +763,18 @@ class DatabaseService {
     }
   }
 
-  async bulkFreezeMembers(memberIds: string[], startDate: string, endDate: string, totalDays: number, reason: string) {
+  async bulkFreezeMembers(
+    memberIds: string[],
+    startDate: string,
+    endDate: string,
+    reason: string,
+    isMaintenance: boolean = true,
+    outletId?: string
+  ) {
     const timestamp = new Date().toISOString();
     const freezeStart = startOfDay(parseISO(startDate));
     const freezeEnd = startOfDay(parseISO(endDate));
+    const totalDays = differenceInCalendarDays(freezeEnd, freezeStart) + 1;
     
     if (this.isSupabase()) {
       // 1. Create the Batch record first
@@ -761,7 +784,10 @@ class DatabaseService {
           start_date: startDate,
           end_date: endDate,
           total_days: totalDays,
-          reason: reason
+          reason: reason,
+          outlet_id: outletId,
+          is_maintenance: isMaintenance,
+          created_at: timestamp
         }])
         .select()
         .single();
@@ -797,8 +823,9 @@ class DatabaseService {
           end_date: endDate,
           total_days: actualDays,
           reason: reason,
-          is_maintenance: true,
+          is_maintenance: isMaintenance,
           maintenance_batch_id: batch.id,
+          outlet_id: outletId,
           created_at: timestamp
         };
       });
@@ -842,32 +869,51 @@ class DatabaseService {
           reason: reason,
           is_maintenance: true,
           batch_id: batchId,
+          outlet_id: outletId,
           created_at: timestamp
         };
       });
 
       const existing = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
       localStorage.setItem('membership_freezes', JSON.stringify([...existing, ...newFreezes]));
+      
+      // Store batch history locally
+      const batches = JSON.parse(localStorage.getItem('membership_maintenance_batches') || '[]');
+      batches.push({
+        id: batchId,
+        start_date: startDate,
+        end_date: endDate,
+        total_days: totalDays,
+        reason: reason,
+        outlet_id: outletId,
+        created_at: timestamp
+      });
+      localStorage.setItem('membership_maintenance_batches', JSON.stringify(batches));
+
       await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
       return batchId;
     }
   }
 
-  async getBulkFreezeHistory(): Promise<{ batch_id: string, start_date: string, end_date: string, total_days: number, reason: string, member_count: number, created_at: string }[]> {
+  async getBulkFreezeHistory(outletId?: string): Promise<{ batch_id: string, start_date: string, end_date: string, total_days: number, reason: string, member_count: number, created_at: string }[]> {
     if (this.isSupabase()) {
         // 1. Get dedicated batches
-        const { data: batches, error: batchError } = await supabase
-            .from('maintenance_batches')
-            .select('*')
-            .order('created_at', { ascending: false });
+        let query = supabase.from('maintenance_batches').select('*');
+        if (outletId) query = query.eq('outlet_id', outletId);
+        
+        const { data: batches, error: batchError } = await query.order('created_at', { ascending: false });
         
         if (batchError) throw batchError;
 
-        // 2. Get ALL maintenance freezes to find orphaned ones
-        const { data: allMaintenance, error: freezeError } = await supabase
+        // 2. Get ALL maintenance freezes
+        let freezeQuery = supabase
             .from('freezes')
-            .select('maintenance_batch_id, start_date, end_date, total_days, reason, created_at')
+            .select('maintenance_batch_id, batch_id, start_date, end_date, total_days, reason, created_at, outlet_id')
             .eq('is_maintenance', true);
+        
+        if (outletId) freezeQuery = freezeQuery.eq('outlet_id', outletId);
+
+        const { data: allMaintenance, error: freezeError } = await freezeQuery;
         
         if (freezeError) throw freezeError;
 
@@ -878,12 +924,12 @@ class DatabaseService {
             end_date: batch.end_date,
             total_days: batch.total_days,
             reason: batch.reason,
-            member_count: (allMaintenance || []).filter(c => c.maintenance_batch_id === batch.id).length,
+            member_count: (allMaintenance || []).filter(c => c.maintenance_batch_id === batch.id || c.batch_id === batch.id).length,
             created_at: batch.created_at
         }));
 
         // 4. Find and group orphaned freezes (those without a batch_id)
-        const orphaned = (allMaintenance || []).filter(f => !f.maintenance_batch_id);
+        const orphaned = (allMaintenance || []).filter(f => !f.maintenance_batch_id && !f.batch_id);
         const groupedOrphaned = orphaned.reduce((acc: Record<string, any>, curr: any) => {
             const key = `synthetic_${curr.start_date}_${curr.end_date}_${curr.reason || 'none'}`;
             if (!acc[key]) {
@@ -905,19 +951,24 @@ class DatabaseService {
         return [...history, ...orphanedList];
     } else {
         // Local Mode Fallback
-        const localData = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
-        const allFreezes = localData.filter((f: any) => !!f.is_maintenance);
+        const allFreezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]')
+            .filter((f: any) => !!f.is_maintenance && (!outletId || f.outlet_id === outletId));
+        
+        const localBatches = JSON.parse(localStorage.getItem('membership_maintenance_batches') || '[]');
+        const filteredBatches = localBatches.filter((b: any) => !outletId || b.outlet_id === outletId);
+
         const grouped = allFreezes.reduce((acc: any, curr: any) => {
-            const bid = curr.batch_id || `synthetic_${curr.start_date}_${curr.end_date}_${curr.reason || 'none'}`;
+            const bid = curr.batch_id || curr.maintenance_batch_id || `synthetic_${curr.start_date}_${curr.end_date}_${curr.reason || 'none'}`;
             if (!acc[bid]) {
+                const batchInfo = filteredBatches.find((b: any) => b.id === bid);
                 acc[bid] = {
                     batch_id: bid,
-                    start_date: curr.start_date,
-                    end_date: curr.end_date,
-                    total_days: curr.total_days,
-                    reason: curr.reason || 'Global Maintenance',
+                    start_date: batchInfo?.start_date || curr.start_date,
+                    end_date: batchInfo?.end_date || curr.end_date,
+                    total_days: batchInfo?.total_days || curr.total_days,
+                    reason: batchInfo?.reason || curr.reason || 'Global Maintenance',
                     member_count: 0,
-                    created_at: curr.created_at || new Date().toISOString()
+                    created_at: batchInfo?.created_at || curr.created_at || new Date().toISOString()
                 };
             }
             acc[bid].member_count++;
@@ -1640,56 +1691,58 @@ class DatabaseService {
 
   async getTherapists(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<Therapist[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('therapists').select('*');
-      if (isPropertyScope) {
-          if (limitToOutletIds && limitToOutletIds.length > 0) {
-              query = query.in('outlet_id', limitToOutletIds);
-          } else {
-              query = query.eq('property_id', scopeId);
-          }
-      }
-      else query = query.eq('outlet_id', scopeId);
+      return this.safeCall(async () => {
+        let query = supabase.from('therapists').select('*');
+        if (isPropertyScope) {
+            if (limitToOutletIds && limitToOutletIds.length > 0) {
+                query = query.in('outlet_id', limitToOutletIds);
+            } else {
+                query = query.eq('property_id', scopeId);
+            }
+        }
+        else query = query.eq('outlet_id', scopeId);
 
-      const { data, error } = await query;
-      if (error) throw error;
-      
-      const therapists = (data || []) as Therapist[];
-      
-      const { data: staffData } = await supabase.from('staff').select('*');
-      
-      if (staffData) {
-          // 1. Filter existing therapists based on staff role
-          const validTherapists = therapists.filter(t => {
-              const staff = staffData.find(s => s.id === t.id);
-              if (staff) {
-                  t.type = staff.role;
-                  return /therapist|specialist|masseur|masseuse|trainer|coach|instructor|pt|gym|fitness/i.test(staff.role);
-              } else {
-                  t.type = 'Therapist';
-                  return true;
-              }
-          });
+        const { data, error } = await query;
+        if (error) throw error;
+        
+        const therapists = (data || []) as Therapist[];
+        
+        const { data: staffData } = await supabase.from('staff').select('*');
+        
+        if (staffData) {
+            // 1. Filter existing therapists based on staff role
+            const validTherapists = therapists.filter(t => {
+                const staff = staffData.find(s => s.id === t.id);
+                if (staff) {
+                    t.type = staff.role;
+                    return /therapist|specialist|masseur|masseuse|trainer|coach|instructor|pt|gym|fitness/i.test(staff.role);
+                } else {
+                    t.type = 'Therapist';
+                    return true;
+                }
+            });
 
-          // 2. Add staff members who have therapist/trainer roles but aren't in therapists table
-          const existingIds = new Set(validTherapists.map(t => t.id));
-          const newTherapistsFromStaff = staffData.filter(s => 
-              !existingIds.has(s.id) && 
-              /therapist|specialist|masseur|masseuse|trainer|coach|instructor|pt|gym|fitness/i.test(s.role) &&
-              (isPropertyScope ? (limitToOutletIds?.length ? limitToOutletIds.includes(s.outlet_id) : true) : s.outlet_id === scopeId)
-          ).map(s => ({
-              id: s.id,
-              name: s.name,
-              specialty: s.role,
-              country: 'Local',
-              property_id: isPropertyScope ? scopeId : '', // We don't have property_id in staff, but it's fine for UI
-              outlet_id: s.outlet_id,
-              type: s.role
-          }));
+            // 2. Add staff members who have therapist/trainer roles but aren't in therapists table
+            const existingIds = new Set(validTherapists.map(t => t.id));
+            const newTherapistsFromStaff = staffData.filter(s => 
+                !existingIds.has(s.id) && 
+                /therapist|specialist|masseur|masseuse|trainer|coach|instructor|pt|gym|fitness/i.test(s.role) &&
+                (isPropertyScope ? (limitToOutletIds?.length ? limitToOutletIds.includes(s.outlet_id) : true) : s.outlet_id === scopeId)
+            ).map(s => ({
+                id: s.id,
+                name: s.name,
+                specialty: s.role,
+                country: 'Local',
+                property_id: isPropertyScope ? scopeId : '', // We don't have property_id in staff, but it's fine for UI
+                outlet_id: s.outlet_id,
+                type: s.role
+            }));
 
-          return [...validTherapists, ...newTherapistsFromStaff];
-      }
-      
-      return therapists;
+            return [...validTherapists, ...newTherapistsFromStaff];
+        }
+        
+        return therapists;
+      }, []);
     }
     return [];
   }
@@ -1804,19 +1857,21 @@ class DatabaseService {
 
   async getMassageBookings(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<MassageBooking[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('massage_bookings').select('*');
-      if (isPropertyScope) {
-          if (limitToOutletIds && limitToOutletIds.length > 0) {
-              query = query.in('outlet_id', limitToOutletIds);
-          } else {
-              query = query.eq('property_id', scopeId);
-          }
-      }
-      else query = query.eq('outlet_id', scopeId);
+      return this.safeCall(async () => {
+        let query = supabase.from('massage_bookings').select('*');
+        if (isPropertyScope) {
+            if (limitToOutletIds && limitToOutletIds.length > 0) {
+                query = query.in('outlet_id', limitToOutletIds);
+            } else {
+                query = query.eq('property_id', scopeId);
+            }
+        }
+        else query = query.eq('outlet_id', scopeId);
 
-      const { data, error } = await query.order('date', { ascending: false });
-      if (error) throw error;
-      return (data || []) as MassageBooking[];
+        const { data, error } = await query.order('date', { ascending: false });
+        if (error) throw error;
+        return (data || []) as MassageBooking[];
+      }, []);
     }
     return [];
   }
@@ -1853,26 +1908,31 @@ class DatabaseService {
 
   async addMassageBooking(booking: Omit<MassageBooking, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
-      const { error } = await supabase.from('massage_bookings').insert([{ ...booking, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
-      if (error) throw error;
-      await this.logAction('CREATE_BOOKING', `Created booking on ${booking.date} at ${booking.start_time} (Therapist ID: ${booking.therapist_id})`, booking.outlet_id);
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('massage_bookings').insert([{ ...booking, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
+        if (error) throw error;
+        await this.logAction('CREATE_BOOKING', `Created booking on ${booking.date} at ${booking.start_time} (Therapist ID: ${booking.therapist_id})`, booking.outlet_id);
+      }, null);
     }
   }
 
   async updateMassageBooking(id: string, updates: Partial<MassageBooking>) {
     if (this.isSupabase()) {
-      const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
-      if (error) throw error;
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
+        if (error) throw error;
+      }, null);
     }
   }
 
-  async updateMassageBookingStatus(id: string, status: MassageBooking['status'], roomId?: string) {
+  async updateMassageBookingStatus(id: string, status: MassageBooking['status'], roomId?: string, paymentMethod?: MassageBooking['payment_method']) {
     if (this.isSupabase()) {
       const { data: booking } = await supabase.from('massage_bookings').select('*').eq('id', id).single();
       if (!booking) return;
 
       const updates: any = { status };
       if (roomId) updates.room_id = roomId;
+      if (paymentMethod) updates.payment_method = paymentMethod;
 
       const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
       if (error) throw error;

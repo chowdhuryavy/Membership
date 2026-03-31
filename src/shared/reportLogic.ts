@@ -151,27 +151,30 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           period_rev: periodRev,
           deferred: deferred,
           debug_info: `Total Active Days: ${totalActiveDays}`,
-          _mEnd: mEnd // Internal field for filtering
+          _mEnd: mEnd, // Internal field for filtering
+          _mStart: mStart // Internal field for filtering
         };
       })
       .filter((row: any) => {
         // 1. If they expired BEFORE the start of this month, hide them.
-        // This is the most important rule to keep the report clean of past memberships.
         if (row._mEnd && row._mEnd < start) return false;
 
-        // 2. If they have recognized revenue this month (> 0.001), always show.
+        // 2. If they joined AFTER the end of this month, hide them.
+        if (row._mStart && row._mStart >= end) return false;
+
+        // 3. If they have recognized revenue this month (> 0.001), always show.
         if (row.period_rev > 0.001) return true;
         
-        // 3. If they have deferred revenue (> 0.001), always show.
+        // 4. If they have deferred revenue (> 0.001), always show.
         if (row.deferred > 0.001) return true;
         
-        // 4. If they are active but have zero revenue and zero deferred, 
+        // 5. If they are active but have zero revenue and zero deferred, 
         // we hide them to keep the audit report focused on financial activity.
         return false;
       })
       .map((row: any) => {
-        // Remove internal filtering field
-        const { _mEnd, ...rest } = row;
+        // Remove internal filtering fields
+        const { _mEnd, _mStart, ...rest } = row;
         return rest;
       });
 

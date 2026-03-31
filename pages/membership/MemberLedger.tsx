@@ -54,6 +54,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [showBulkFreeze, setShowBulkFreeze] = useState(false);
   const [showBulkHistory, setShowBulkHistory] = useState(false);
+  const [showTypeSelector, setShowTypeSelector] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
 
   const allowedOutletsInProperty = useMemo(() => {
@@ -85,6 +86,20 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   const canBulkFreeze = user && hasPermission(user.role_id, 'members:bulk_freeze');
   const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
 
+  const handleNewEnrollment = () => {
+    if (selectedTypeId === 'all' && membershipTypes.length > 0) {
+      setShowTypeSelector(true);
+    } else {
+      onAdd();
+    }
+  };
+
+  const handleTypeSelect = (typeId: string | 'all') => {
+    onTypeChange(typeId);
+    setShowTypeSelector(false);
+    onAdd();
+  };
+
   const getEffectiveStatus = (member: Member) => {
     if (!member) return MemberStatus.ACTIVE;
     if (member.status === MemberStatus.CANCELLED) return MemberStatus.CANCELLED;
@@ -115,16 +130,38 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
 
   const groupedMembers = useMemo(() => {
     if (!Array.isArray(categories)) return [];
+    
+    // Sort categories by duration_months (1 month, 2 month, etc)
+    const sortedCategories = [...categories].sort((a, b) => {
+      const durA = a.duration_months || 0;
+      const durB = b.duration_months || 0;
+      if (durA !== durB) return durA - durB;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
     const groups: { category: MembershipCategory | null, members: Member[] }[] = [];
     
     // Safe category iteration
-    categories.forEach(cat => {
+    sortedCategories.forEach(cat => {
         if (!cat) return;
-        const matching = filteredMembers.filter(m => m.category_id === cat.id);
+        const matching = filteredMembers
+          .filter(m => m.category_id === cat.id)
+          .sort((a, b) => {
+            const dateA = parseISO(a.start_date).getTime();
+            const dateB = parseISO(b.start_date).getTime();
+            return dateA - dateB; // Chronological sequence
+          });
         if (matching.length > 0) groups.push({ category: cat, members: matching });
     });
     
-    const uncategorized = filteredMembers.filter(m => !categories.find(c => c && c.id === m.category_id));
+    const uncategorized = filteredMembers
+      .filter(m => !categories.find(c => c && c.id === m.category_id))
+      .sort((a, b) => {
+        const dateA = parseISO(a.start_date).getTime();
+        const dateB = parseISO(b.start_date).getTime();
+        return dateA - dateB;
+      });
+      
     if (uncategorized.length > 0) groups.push({ category: null, members: uncategorized });
     return groups;
   }, [categories, filteredMembers]);
@@ -164,7 +201,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                             Outlet Scope
                         </button>
                         <button onClick={() => setViewScope('property')} className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-2 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}>
-                            Portfolio View
+                            Property View
                         </button>
                     </div>
                   )}
@@ -280,8 +317,8 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
             </div>
           )}
 
-          {canCreate && (membershipTypes.length === 0 || selectedTypeId !== 'all') && (
-            <Button onClick={onAdd} className="w-full sm:w-auto h-14 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95">
+          {canCreate && (
+            <Button onClick={handleNewEnrollment} className="w-full sm:w-auto h-14 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95">
               <UserPlus className="w-4 h-4 mr-2" /> New Enrollment
             </Button>
           )}
@@ -376,6 +413,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
           isOpen={showBulkFreeze}
           onClose={() => setShowBulkFreeze(false)}
           members={members}
+          outletId={currentOutlet?.id}
           onSuccess={() => {
             onRefresh(true); 
           }}
@@ -386,10 +424,66 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
         <BulkFreezeHistoryModal 
           isOpen={showBulkHistory}
           onClose={() => setShowBulkHistory(false)}
+          outletId={currentOutlet?.id}
           onRefresh={() => {
             onRefresh(true);
           }}
         />
+      )}
+
+      {showTypeSelector && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 border border-white/20">
+            {/* Header - Fixed */}
+            <div className="p-6 sm:p-8 border-b border-slate-100 shrink-0">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-1.5">Select Protocol</h2>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Choose enrollment type</p>
+                </div>
+                <button onClick={() => setShowTypeSelector(false)} className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content - Scrollable */}
+            <div className="p-6 sm:p-8 overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {membershipTypes.map((type) => (
+                  <button
+                    key={type.id}
+                    onClick={() => handleTypeSelect(type.id)}
+                    className="group relative p-5 rounded-2xl border-2 border-slate-100 bg-slate-50/50 hover:bg-white hover:border-indigo-600 hover:shadow-xl hover:shadow-indigo-500/5 transition-all text-left overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 p-6 opacity-[0.02] group-hover:opacity-[0.05] group-hover:scale-110 transition-all duration-700 pointer-events-none">
+                      <ShieldCheck className="w-16 h-16 -mr-4 -mt-4" />
+                    </div>
+                    
+                    <div className="w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center mb-4 group-hover:bg-indigo-600 group-hover:text-white group-hover:scale-110 transition-all duration-500">
+                      <Zap className="w-5 h-5 text-indigo-600 group-hover:text-white" />
+                    </div>
+                    
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">{type.name}</h3>
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-0.5 group-hover:text-slate-500 transition-colors">Initialize {type.name} Manifesto</p>
+                    
+                    <div className="mt-4 flex items-center gap-2 text-indigo-600 opacity-0 group-hover:opacity-100 translate-x-[-10px] group-hover:translate-x-0 transition-all duration-500">
+                      <span className="text-[9px] font-black uppercase tracking-widest">Select Protocol</span>
+                      <MousePointer className="w-3 h-3" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Footer - Fixed */}
+            <div className="bg-slate-50 p-5 border-t border-slate-100 shrink-0">
+               <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">
+                 System will filter available tiers based on your selection
+               </p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

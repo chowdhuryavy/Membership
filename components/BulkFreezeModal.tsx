@@ -10,10 +10,11 @@ interface BulkFreezeModalProps {
   isOpen: boolean;
   onClose: () => void;
   members: Member[];
+  outletId?: string;
   onSuccess: () => void;
 }
 
-export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClose, members, onSuccess }) => {
+export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClose, members, outletId, onSuccess }) => {
   const [step, setStep] = useState<'selection' | 'config'>('selection');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -107,8 +108,9 @@ export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClos
         eligibleSelectedIds,
         freezeForm.start_date,
         freezeForm.end_date,
-        totalDays,
-        freezeForm.reason
+        freezeForm.reason,
+        true, // isMaintenance
+        outletId
       );
       toast.success(`Successfully applied maintenance freeze to ${eligibleSelectedIds.length} members.`);
       onSuccess();

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import toast from 'react-hot-toast';
 import { 
   Card, 
   CardContent, 
@@ -85,7 +86,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
     discount: 0,
     discount_mode: 'amount' as 'amount' | 'percent',
     discount_reason: '',
-    discount_id_url: ''
+    discount_id_url: '',
+    payment_method: 'cash'
   });
 
   const [showSuggestions, setShowSuggestions] = useState<'name' | 'phone' | null>(null);
@@ -107,7 +109,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
         discount: initialBooking.discount || 0,
         discount_mode: 'amount', // Defaults to amount for editing existing
         discount_reason: initialBooking.discount_reason || '',
-        discount_id_url: initialBooking.discount_id_url || ''
+        discount_id_url: initialBooking.discount_id_url || '',
+        payment_method: initialBooking.payment_method || 'cash'
       });
     }
   }, [initialBooking, guests]);
@@ -238,8 +241,11 @@ const BookingForm: React.FC<BookingFormProps> = ({
        return;
     }
     setError('');
-    if (!guestData.name || !guestData.phone || !bookingData.therapist_id || !bookingData.room_id) {
-      setError("Required fields: Name, Phone, Therapist Assignment, and Room.");
+    const isPT = bookingData.category === 'Personal Training';
+    const isRoomRequired = !isPT;
+
+    if (!guestData.name || !guestData.phone || !bookingData.therapist_id || (isRoomRequired && !bookingData.room_id)) {
+      setError(`Required fields: Name, Phone, Therapist Assignment${isRoomRequired ? ', and Room' : ''}.`);
       return;
     }
     if (bookingData.discount > 0 && !bookingData.discount_reason) {
@@ -282,20 +288,21 @@ const BookingForm: React.FC<BookingFormProps> = ({
       const payload: any = {
         guest_id: guest.id,
         therapist_id: bookingData.therapist_id,
-        room_id: bookingData.room_id,
+        room_id: bookingData.room_id || null,
         date: bookingData.date,
         start_time: bookingData.start_time,
         end_time: bookingData.end_time,
-        massage_type_id: bookingData.massage_type_id,
+        massage_type_id: bookingData.massage_type_id || null,
         additional_service_ids: bookingData.additional_service_ids.filter(Boolean),
         price: netPrice,
         discount: calculatedDiscountValue,
         discount_reason: bookingData.discount > 0 ? bookingData.discount_reason : null,
-        discount_id_url: bookingData.discount > 0 ? bookingData.discount_id_url : null
+        discount_id_url: bookingData.discount > 0 ? bookingData.discount_id_url : null,
+        payment_method: bookingData.payment_method
       };
 
       if (initialBooking) { 
-        payload.status = 'confirmed';
+        payload.status = initialBooking.status || 'confirmed';
         await db.updateMassageBooking(initialBooking.id, payload); 
       } 
       else { 
@@ -306,7 +313,10 @@ const BookingForm: React.FC<BookingFormProps> = ({
             status: 'confirmed' 
         }); 
       }
-      onSuccess();
+      toast.success("Booking saved successfully. You can now make adjustments.");
+      // Keep the form open, don't call onSuccess() which closes it
+      // onSuccess(); 
+      // onClose();
     } catch (err: any) { 
         if (err.message?.includes('schema cache') || err.message?.includes('inventory_item_id') || err.message?.includes('room_id')) {
             setError("Database schema needs updating. Please close this form and refresh the page to see the required SQL script.");
@@ -330,6 +340,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
           </CardHeader>
           <CardContent className="p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
+                {/* ... existing form fields ... */}
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative" ref={suggestionRef}>
                     <div className="relative">
                         <Input 
@@ -536,7 +548,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                    <label className="text-[9px] font-black text-slate-900 uppercase tracking-widest ml-1 flex items-center gap-2"><Users className="w-3 h-3 text-indigo-600"/> Assigned Property Specialist *</label>
+                    <label className="text-[9px] font-black text-slate-900 uppercase tracking-widest ml-1 flex items-center gap-2"><Users className="w-3 h-3 text-indigo-600"/> Assigned Property Specialist Type *</label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {therapists.map(t => {
                         const isAvailable = availableTherapists.some(at => at.id === t.id);
@@ -571,7 +583,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
 
                 <div className="flex gap-3 pt-2">
                   <Button type="button" variant="secondary" onClick={onClose} className="flex-1 h-12 rounded-xl font-bold uppercase text-[10px] tracking-widest">Discard</Button>
-                  <Button type="submit" isLoading={loading} className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100">Commit Reservation</Button>
+                  <Button type="submit" isLoading={loading} className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100">Confirm Reservation</Button>
                 </div>
             </form>
           </CardContent>

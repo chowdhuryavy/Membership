@@ -9,14 +9,22 @@ CREATE TABLE IF NOT EXISTS public.maintenance_batches (
     end_date DATE NOT NULL,
     total_days INTEGER NOT NULL DEFAULT 0,
     reason TEXT,
+    outlet_id UUID,
+    is_maintenance BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Add maintenance_batch_id to freezes table
+-- 2. Add maintenance_batch_id, outlet_id, and is_maintenance to freezes table
 DO $$ 
 BEGIN 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='freezes' AND column_name='maintenance_batch_id') THEN
         ALTER TABLE public.freezes ADD COLUMN maintenance_batch_id UUID REFERENCES public.maintenance_batches(id) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='freezes' AND column_name='outlet_id') THEN
+        ALTER TABLE public.freezes ADD COLUMN outlet_id UUID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='freezes' AND column_name='is_maintenance') THEN
+        ALTER TABLE public.freezes ADD COLUMN is_maintenance BOOLEAN DEFAULT FALSE;
     END IF;
 END $$;
 

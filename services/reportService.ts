@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { format, startOfDay } from 'date-fns';
 import { db } from './mockSupabase';
 import { Property, Outlet, MemberStatus } from '../types';
@@ -93,7 +93,7 @@ export const reportService = {
     const totalRevenue = revenueData.reduce((sum, item) => sum + item.amount, 0);
 
     // Table
-    (doc as any).autoTable({
+    const tableConfig = {
       startY: 50,
       head: [['Strategic Category', 'Volume', 'Net Revenue']],
       body: revenueData.map(item => [
@@ -106,7 +106,22 @@ export const reportService = {
       headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
       footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold' },
       styles: { fontSize: 10, cellPadding: 5 }
-    });
+    };
+
+    try {
+      const actualAutoTable = typeof autoTable === 'function' ? autoTable : ((autoTable as any).default || autoTable);
+      
+      if (typeof (doc as any).autoTable === 'function') {
+        (doc as any).autoTable(tableConfig);
+      } else if (typeof actualAutoTable === 'function') {
+        actualAutoTable(doc, tableConfig);
+      } else {
+        throw new Error("autoTable not found on doc or as standalone function");
+      }
+    } catch (tableErr) {
+      console.error("autoTable call failed", tableErr);
+      throw tableErr;
+    }
 
     // Footer
     const finalY = (doc as any).lastAutoTable.finalY + 20;
