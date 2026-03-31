@@ -325,7 +325,8 @@ const Reports = () => {
         reportTitle,
         date: startDate,
         logoUrl: currentProperty.logo_url,
-        reportType: reportType
+        reportType: reportType,
+        membershipTypeName: selectedTypeName
       });
 
       doc.save(`${reportType}_report_${format(startDate, 'yyyy-MM-dd')}.pdf`);
@@ -532,7 +533,7 @@ const Reports = () => {
                                                       (visibleColumns.start_date ? 1 : 0) +
                                                       (visibleColumns.end_date ? 1 : 0) +
                                                       (visibleColumns.days ? 1 : 0)
-                                                  } className="border border-black px-4 py-2 text-right uppercase text-indigo-900 tracking-widest">Tier Subtotal: {category}</td>
+                                                  } className="border border-black px-4 py-2 text-left uppercase text-indigo-900 tracking-widest">Tier Subtotal: {category}</td>
                                                   {visibleColumns.daily_rate && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subDailyRate)}</td>}
                                                   {visibleColumns.rev_actual && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subActual)}</td>}
                                                   {visibleColumns.rev_discount && <td className="border border-black px-2 py-2 text-right text-indigo-900">{formatMoney(subDiscount)}</td>}
@@ -553,7 +554,7 @@ const Reports = () => {
                                               (visibleColumns.start_date ? 1 : 0) +
                                               (visibleColumns.end_date ? 1 : 0) +
                                               (visibleColumns.days ? 1 : 0)
-                                          } className="border border-black px-4 py-2 text-right uppercase text-indigo-950 tracking-widest">Type Total: {type}</td>
+                                          } className="border border-black px-4 py-2 text-left uppercase text-indigo-950 tracking-widest">Type Total: {type}</td>
                                           {visibleColumns.daily_rate && <td className="border border-black px-2 py-2 text-right text-indigo-950">{formatMoney(typeDailyRate)}</td>}
                                           {visibleColumns.rev_actual && <td className="border border-black px-2 py-2 text-right text-indigo-950">{formatMoney(typeActual)}</td>}
                                           {visibleColumns.rev_discount && <td className="border border-black px-2 py-2 text-right text-indigo-950">{formatMoney(typeDiscount)}</td>}
@@ -576,7 +577,7 @@ const Reports = () => {
                               (visibleColumns.start_date ? 1 : 0) +
                               (visibleColumns.end_date ? 1 : 0) +
                               (visibleColumns.days ? 1 : 0)
-                          } className="border border-black px-4 py-3 text-right uppercase tracking-[0.2em]">Verified Portfolio Total</td>
+                          } className="border border-black px-4 py-3 text-left uppercase tracking-[0.2em]">Verified Portfolio Total</td>
                           {visibleColumns.daily_rate && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandDailyRate)}</td>}
                           {visibleColumns.rev_actual && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandActual)}</td>}
                           {visibleColumns.rev_discount && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandDiscount)}</td>}
@@ -743,7 +744,7 @@ const Reports = () => {
                                                     </tr>
                                                 ))}
                                                 <tr className="bg-slate-50 font-bold">
-                                                    <td colSpan={colSpanForLabel} className="border border-black px-2 py-1 text-right italic text-[8px] pl-10">Subtotal Tier {cat}:</td>
+                                                    <td colSpan={colSpanForLabel} className="border border-black px-2 py-1 text-left italic text-[8px] pl-10">Subtotal Tier {cat}:</td>
                                                     <td className="border border-black px-2 py-1 text-right">
                                                         {groupRows.reduce((sum, r) => sum + (Number(r.actual_price) || 0), 0).toFixed(2)}
                                                     </td>
@@ -760,7 +761,7 @@ const Reports = () => {
                                         ))}
                                         {selectedMembershipTypeId === 'all' && (
                                             <tr className="bg-indigo-50 font-black">
-                                                <td colSpan={colSpanForLabel} className="border border-black px-2 py-1 text-right uppercase text-[9px]">Total Type {type}:</td>
+                                                <td colSpan={colSpanForLabel} className="border border-black px-2 py-1 text-left uppercase text-[9px]">Total Type {type}:</td>
                                                 <td className="border border-black px-2 py-1 text-right">
                                                     {typeRows.reduce((sum, r) => sum + (Number(r.actual_price) || 0), 0).toFixed(2)}
                                                 </td>

@@ -674,10 +674,11 @@ export interface PDFOptions {
   date: Date;
   logoUrl?: string;
   reportType: string;
+  membershipTypeName?: string;
 }
 
 export const generateReportPDF = (options: PDFOptions) => {
-  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, reportTitle, date, logoUrl, reportType } = options;
+  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, reportTitle, date, logoUrl, reportType, membershipTypeName } = options;
   
   const isRevenueReport = reportType === 'revenue_recognition';
   const isDailySalesReport = reportType === 'daily_sales';
@@ -758,6 +759,13 @@ export const generateReportPDF = (options: PDFOptions) => {
   doc.setFontSize(22);
   doc.setTextColor(15, 23, 42);
   doc.text(reportTitle.toUpperCase(), titleX, currentY + 8, { align: 'right', maxWidth: availableWidth });
+
+  if (membershipTypeName) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(79, 70, 229); // indigo-600
+    doc.text(membershipTypeName.toUpperCase(), titleX, currentY + 14, { align: 'right', maxWidth: availableWidth });
+  }
 
   // Audit Period Box
   const boxWidth = 50;
@@ -920,10 +928,11 @@ export const generateReportPDF = (options: PDFOptions) => {
 
         callAutoTable(doc, {
           startY: currentY,
-          head: [['SL.', 'GUEST NAME / PROFILE', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
+          head: [['SL.', 'GUEST NAME / PROFILE', 'MEMBERSHIP TYPE', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
           body: groupRowsArray.map((r: any, idx: number) => [
             idx + 1,
             r.guest_name,
+            r.membership_type_name || 'N/A',
             r.start_date,
             r.end_date,
             r.total_days,
@@ -949,15 +958,16 @@ export const generateReportPDF = (options: PDFOptions) => {
             0: { halign: 'center', cellWidth: 8 },
             1: { fontStyle: 'bold' },
             2: { halign: 'center', cellWidth: 20 },
-            3: { halign: 'center', cellWidth: 20 },
-            4: { halign: 'center', cellWidth: 10 },
-            5: { halign: 'right' },
+            3: { halign: 'center', cellWidth: 15 },
+            4: { halign: 'center', cellWidth: 15 },
+            5: { halign: 'center', cellWidth: 8 },
             6: { halign: 'right' },
             7: { halign: 'right' },
             8: { halign: 'right' },
-            9: { halign: 'right', textColor: [100, 116, 139] },
-            10: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
-            11: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
+            9: { halign: 'right' },
+            10: { halign: 'right', textColor: [100, 116, 139] },
+            11: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
+            12: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
           },
           margin: { left: margin, right: margin }
         });
@@ -966,7 +976,7 @@ export const generateReportPDF = (options: PDFOptions) => {
         callAutoTable(doc, {
           startY: (doc as any).lastAutoTable?.finalY || currentY + 10,
           body: [[
-            { content: `CLUSTER SUBTOTAL: ${category.toUpperCase()}`, colSpan: 5, styles: { halign: 'right' } },
+            { content: `CLUSTER SUBTOTAL: ${category.toUpperCase()}`, colSpan: 6, styles: { halign: 'right' } },
             formatCurrency(subtotals.daily_rate),
             formatCurrency(subtotals.actual_rate),
             formatCurrency(subtotals.discount),
@@ -985,13 +995,13 @@ export const generateReportPDF = (options: PDFOptions) => {
             font: 'helvetica'
           },
           columnStyles: {
-            5: { halign: 'right', cellWidth: 20 },
             6: { halign: 'right', cellWidth: 20 },
             7: { halign: 'right', cellWidth: 20 },
             8: { halign: 'right', cellWidth: 20 },
             9: { halign: 'right', cellWidth: 20 },
             10: { halign: 'right', cellWidth: 20 },
-            11: { halign: 'right', cellWidth: 20 }
+            11: { halign: 'right', cellWidth: 20 },
+            12: { halign: 'right', cellWidth: 20 }
           },
           margin: { left: margin, right: margin }
         });
@@ -1003,7 +1013,7 @@ export const generateReportPDF = (options: PDFOptions) => {
       callAutoTable(doc, {
         startY: currentY + 5,
         body: [[
-          { content: "VERIFIED PORTFOLIO TOTAL", colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+          { content: "VERIFIED PORTFOLIO TOTAL", colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
           formatCurrency(grandTotals.daily_rate),
           formatCurrency(grandTotals.actual_rate),
           formatCurrency(grandTotals.discount),
@@ -1022,13 +1032,13 @@ export const generateReportPDF = (options: PDFOptions) => {
           font: 'helvetica'
         },
         columnStyles: {
-          5: { halign: 'right', cellWidth: 20 },
           6: { halign: 'right', cellWidth: 20 },
           7: { halign: 'right', cellWidth: 20 },
           8: { halign: 'right', cellWidth: 20 },
           9: { halign: 'right', cellWidth: 20 },
           10: { halign: 'right', cellWidth: 20 },
-          11: { halign: 'right', cellWidth: 20 }
+          11: { halign: 'right', cellWidth: 20 },
+          12: { halign: 'right', cellWidth: 20 }
         },
         margin: { left: margin, right: margin }
       });
