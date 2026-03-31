@@ -928,11 +928,11 @@ export const generateReportPDF = (options: PDFOptions) => {
 
         callAutoTable(doc, {
           startY: currentY,
-          head: [['SL.', 'GUEST NAME / PROFILE', 'MEMBERSHIP TYPE', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
+          head: [['SL.', 'GUEST NAME / PROFILE', 'MEM. NO', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
           body: groupRowsArray.map((r: any, idx: number) => [
             idx + 1,
             r.guest_name,
-            r.membership_type_name || 'N/A',
+            r.membership_no || 'N/A',
             r.start_date,
             r.end_date,
             r.total_days,
@@ -953,7 +953,14 @@ export const generateReportPDF = (options: PDFOptions) => {
             halign: 'center',
             font: 'helvetica'
           },
-          styles: { fontSize: 7, cellPadding: 2, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+          styles: { 
+            fontSize: 7, 
+            cellPadding: 2, 
+            font: 'helvetica',
+            lineColor: [0, 0, 0], 
+            lineWidth: 0.1,
+            overflow: 'linebreak'
+          },
           columnStyles: {
             0: { halign: 'center', cellWidth: 8 },
             1: { fontStyle: 'bold' },
