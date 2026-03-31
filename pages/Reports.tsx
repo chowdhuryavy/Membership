@@ -4,7 +4,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle } from '../components/
 import { supabase as supabaseClient } from '../services/supabase';
 import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory, StaffLeave, MembershipType, InventoryItem } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
-import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO, endOfDay, startOfMonth, addMonths } from 'date-fns';
+import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO, endOfDay, startOfMonth, addMonths, parse } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -406,6 +406,27 @@ const Reports = () => {
           return acc;
       }, {} as Record<string, Record<string, RevenueRow[]>>);
 
+      // Sort categories by duration and members by start date
+      const sortedGrouped = Object.entries(grouped).reduce((acc, [type, categories]) => {
+          const sortedCategories = Object.entries(categories).sort((a, b) => {
+              // Assuming category name contains duration (e.g., "1 MONTH...")
+              const getDuration = (name: string) => parseInt(name.match(/(\d+)/)?.[0] || '0');
+              return getDuration(a[0]) - getDuration(b[0]);
+          });
+
+          const sortedCategoriesWithSortedMembers = sortedCategories.map(([catName, rows]) => {
+              const sortedRows = [...rows].sort((a, b) => {
+                  const dateA = parse(a.start_date, 'dd-MM-yyyy', new Date());
+                  const dateB = parse(b.start_date, 'dd-MM-yyyy', new Date());
+                  return dateA.getTime() - dateB.getTime();
+              });
+              return [catName, sortedRows];
+          });
+
+          acc[type] = Object.fromEntries(sortedCategoriesWithSortedMembers);
+          return acc;
+      }, {} as Record<string, Record<string, RevenueRow[]>>);
+
       let grandActual = 0;
       let grandDiscount = 0;
       let grandNetFees = 0;
@@ -435,7 +456,7 @@ const Reports = () => {
                       </tr>
                   </thead>
                   <tbody>
-                      {Object.entries(grouped).map(([type, categories]) => {
+                      {Object.entries(sortedGrouped).map(([type, categories]) => {
                           const typeRows = Object.values(categories).flat();
                           const typeDailyRate = typeRows.reduce((s, r) => s + r.daily_rate, 0);
                           const typeActual = typeRows.reduce((s, r) => s + r.actual_rate, 0);

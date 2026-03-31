@@ -1079,21 +1079,21 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
       {showFreezeModal && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
-            <Card className="w-full max-w-[400px] rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden bg-white border border-white/20">
-                <CardHeader className="bg-[#0f172a] text-white p-10 relative flex flex-col items-center text-center">
-                    <div className="w-14 h-14 bg-indigo-500/20 rounded-2xl flex items-center justify-center mb-6 border border-indigo-500/30">
-                        <Snowflake className="w-7 h-7 text-indigo-400" />
+            <Card className="w-full max-w-[600px] max-h-[85vh] rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden bg-white border border-white/20 flex flex-col">
+                <CardHeader className="bg-[#0f172a] text-white p-6 relative flex flex-col items-center text-center shrink-0">
+                    <div className="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center mb-4 border border-indigo-500/30">
+                        <Snowflake className="w-6 h-6 text-indigo-400" />
                     </div>
-                            <CardTitle className="text-2xl font-black uppercase tracking-tight leading-none mb-2">Authorize Suspension</CardTitle>
-                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Temporary Portfolio Hold</p>
+                            <CardTitle className="text-xl font-black uppercase tracking-tight leading-none mb-1">Authorize Suspension</CardTitle>
+                            <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Temporary Portfolio Hold</p>
                             {editingFreezeId && freezes.find(f => f.id === editingFreezeId)?.is_maintenance && (
                                 <div className="mt-2 px-3 py-1 bg-amber-100 text-amber-700 rounded-lg text-[8px] font-black uppercase tracking-widest">Maintenance Freeze</div>
                             )}
-                    <button onClick={() => setShowFreezeModal(false)} className="absolute top-8 right-8 p-2.5 rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90 shadow-lg border border-white/5">
-                        <X className="w-5 h-5 text-slate-400"/>
+                    <button onClick={() => setShowFreezeModal(false)} className="absolute top-6 right-6 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90 shadow-lg border border-white/5">
+                        <X className="w-4 h-4 text-slate-400"/>
                     </button>
                 </CardHeader>
-                <CardContent className="p-10 space-y-8">
+                <CardContent className="p-6 space-y-6 overflow-y-auto">
                     <div className="bg-[#f8fafc] rounded-2xl p-6 border border-slate-100 shadow-inner">
                         <div className="flex justify-between items-center mb-3">
                             <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Freeze Capacity</span>

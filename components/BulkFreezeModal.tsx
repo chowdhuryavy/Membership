@@ -127,7 +127,7 @@ export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClos
 
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-      <Card className="w-full max-w-2xl rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden bg-white border border-white/20 flex flex-col max-h-[90vh]">
+      <Card className="w-full max-w-4xl rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden bg-white border border-white/20 flex flex-col max-h-[70vh]">
         <CardHeader className="bg-[#0f172a] text-white p-8 relative flex flex-col items-center text-center shrink-0">
           <div className="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center mb-4 border border-indigo-500/30">
             <Snowflake className="w-6 h-6 text-indigo-400" />
