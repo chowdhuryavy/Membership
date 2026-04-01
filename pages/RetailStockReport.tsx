@@ -48,7 +48,7 @@ interface RetailStockReportProps {
 }
 
 const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportProps = {}) => {
-  const { currentOutlet, currentProperty, formatMoney, setPageLoading } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, setPageLoading, currency } = useSettings();
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [inventoryLogs, setInventoryLogs] = useState<InventoryLog[]>([]);
@@ -250,17 +250,15 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
 
   const formatMoneyForPDF = (amount: number) => {
     const formatted = formatMoney(amount);
-    // If the formatted string contains non-ASCII characters (like Arabic symbols),
-    // jsPDF will fail to render them correctly without custom fonts.
-    // We replace them with 'QAR' for compatibility.
-    if (/[^\x00-\x7F]/.test(formatted)) {
-      // Extract numeric part specifically (digits, commas, dots for decimals)
-      // We use a more precise regex to avoid picking up dots from currency symbols like ر.ق
+    // jsPDF default fonts only support WinAnsiEncoding (mostly Latin-1).
+    // Symbols like 'ر.ق' (Qatari Riyal) will render as garbled text (e.g. þÕ.þ-).
+    // We check if the formatted string contains characters outside the safe range.
+    // If it does, we fallback to the currency code (e.g. QAR) to ensure the PDF is readable.
+    if (/[^\x00-\xFF\u20AC]/.test(formatted)) {
       const matches = formatted.match(/[\d,.]+/g);
       const numericPart = matches ? matches.join('') : '0.00';
-      // Clean up any leading/trailing dots that might have been picked up
       const cleanNumeric = numericPart.replace(/^\.+|\.+$/g, '');
-      return `${cleanNumeric} QAR`;
+      return `${currency?.code || ''} ${cleanNumeric}`.trim();
     }
     return formatted;
   };

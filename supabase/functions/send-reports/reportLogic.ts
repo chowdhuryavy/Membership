@@ -656,6 +656,7 @@ export interface PDFOptions {
   propertyName: string;
   outletName: string;
   currencySymbol: string;
+  currencyCode?: string;
   reportTitle: string;
   date: Date;
   logoUrl?: string;
@@ -663,7 +664,7 @@ export interface PDFOptions {
 }
 
 export const generateReportPDF = (options: PDFOptions) => {
-  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, reportTitle, date, logoUrl, reportType } = options;
+  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, currencyCode, reportTitle, date, logoUrl, reportType } = options;
   
   const isRevenueReport = reportType === 'revenue_recognition';
   const isDailySalesReport = reportType === 'daily_sales';
@@ -689,12 +690,18 @@ export const generateReportPDF = (options: PDFOptions) => {
   const margin = 15;
   const contentWidth = pageWidth - (margin * 2);
 
-  // Helper to handle currency symbols that might not render in default PDF fonts
-  const formatCurrency = (val: number) => {
-    const formatted = val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    // If currency symbol is Arabic (ر.ق), use QR instead for PDF compatibility
-    const safeSymbol = (currencySymbol === 'ر.ق' || currencySymbol.includes('\u0631')) ? 'QR' : currencySymbol;
-    return `${safeSymbol} ${formatted}`;
+  // Helper to handle currency formatting
+  const formatCurrency = (val: number | undefined | null) => {
+    const safeAmount = (val === null || val === undefined || isNaN(Number(val))) ? 0 : Number(val);
+    const formatted = safeAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // jsPDF default fonts only support WinAnsiEncoding (mostly Latin-1).
+    // Symbols like 'ر.ق' (Qatari Riyal) will render as garbled text (e.g. þÕ.þ-).
+    // We check if the currency symbol contains characters outside the safe range.
+    // If it does, we fallback to the currency code (e.g. QAR) to ensure the PDF is readable.
+    if (/[^\x00-\xFF\u20AC]/.test(currencySymbol)) {
+      return `${currencyCode || ''} ${formatted}`.trim();
+    }
+    return `${currencySymbol} ${formatted}`;
   };
 
   // --- HEADER SECTION ---
@@ -842,8 +849,21 @@ export const generateReportPDF = (options: PDFOptions) => {
   // --- TABLE SECTION ---
   if (isRevenueReport) {
     // Revenue Recognition Style
-    const grouped = data.groupedRows || {};
-    
+    const grouped = data.groupedRows || data.rows.reduce((acc: any, row: any) => {
+      if (!acc[row.category_name]) acc[row.category_name] = [];
+      acc[row.category_name].push(row);
+      return acc;
+    }, {} as Record<string, any[]>);
+
+    // Sort categories (tiers) by name/duration and then sort rows within each category by start date
+    const sortedCategories = Object.keys(grouped).sort((a, b) => {
+      const getDuration = (name: string) => parseInt(name.match(/(\d+)/)?.[0] || '0');
+      const durA = getDuration(a);
+      const durB = getDuration(b);
+      if (durA !== durB) return durA - durB;
+      return a.localeCompare(b);
+    });
+
     if (data.rows.length === 0) {
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139);
@@ -859,8 +879,13 @@ export const generateReportPDF = (options: PDFOptions) => {
         deferred: 0
       };
       
-      Object.entries(grouped).forEach(([category, groupRows]: [string, any]) => {
-        const groupRowsArray = groupRows as any[];
+      sortedCategories.forEach((category: string) => {
+        const groupRows = grouped[category];
+        const groupRowsArray = [...groupRows].sort((a: any, b: any) => {
+          const dateA = parse(a.start_date, 'dd-MM-yyyy', new Date());
+          const dateB = parse(b.start_date, 'dd-MM-yyyy', new Date());
+          return dateA.getTime() - dateB.getTime();
+        });
         
         // Calculate subtotals for this category
         const subtotals = {
@@ -1097,18 +1122,18 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.check_no,
           r.mode_of_payment,
           r.item_name,
-          r.actual_price.toFixed(2),
+          formatCurrency(r.actual_price),
           r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
-          r.discount_amount.toFixed(2),
-          r.net_revenue.toFixed(2),
+          formatCurrency(r.discount_amount),
+          formatCurrency(r.net_revenue),
           r.remarks
         ]),
         foot: [[
           { content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: 7, styles: { halign: 'right' } },
-          { content: data.summary.totalGross.toFixed(2), styles: { halign: 'right' } },
+          { content: formatCurrency(data.summary.totalGross), styles: { halign: 'right' } },
           { content: '', styles: {} },
-          { content: data.summary.totalDiscount.toFixed(2), styles: { halign: 'right' } },
-          { content: data.summary.totalNet.toFixed(2), styles: { halign: 'right' } },
+          { content: formatCurrency(data.summary.totalDiscount), styles: { halign: 'right' } },
+          { content: formatCurrency(data.summary.totalNet), styles: { halign: 'right' } },
           { content: '', styles: {} }
         ]],
         footStyles: { 
@@ -1166,21 +1191,21 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.guest_name,
           r.item_name,
           r.therapist_name,
-          r.actual_price.toFixed(2),
+          formatCurrency(r.actual_price),
           r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
-          r.discount_amount.toFixed(2),
-          r.net_revenue.toFixed(2),
-          r.inc_total.toFixed(2),
+          formatCurrency(r.discount_amount),
+          formatCurrency(r.net_revenue),
+          formatCurrency(r.inc_total),
           r.inc_discount_percent > 0 ? `${r.inc_discount_percent.toFixed(0)}%` : '',
-          r.inc_discount_val.toFixed(2),
-          r.inc_net.toFixed(2),
+          formatCurrency(r.inc_discount_val),
+          formatCurrency(r.inc_net),
           r.remarks
         ];
         
         // Add staff splits
         staffList.forEach((s: any) => {
           const split = r.staff_splits[s.id];
-          row.push(split && split > 0 ? split.toFixed(2) : '');
+          row.push(split && split > 0 ? formatCurrency(split) : '');
         });
         
         return row;
@@ -1188,7 +1213,7 @@ export const generateReportPDF = (options: PDFOptions) => {
 
       const staffTotals = staffList.map((s: any) => {
         const total = data.rows.reduce((sum: number, r: any) => sum + (r.staff_splits[s.id] || 0), 0);
-        return total > 0 ? total.toFixed(2) : '0.00';
+        return total > 0 ? formatCurrency(total) : formatCurrency(0);
       });
 
       callAutoTable(doc, {
@@ -1197,7 +1222,7 @@ export const generateReportPDF = (options: PDFOptions) => {
         body: body,
         foot: [[
           { content: 'AGGREGATE INCENTIVE TOTALS', colSpan: 12, styles: { halign: 'right' } },
-          { content: data.summary.totalIncentive.toFixed(2), styles: { halign: 'right' } },
+          { content: formatCurrency(data.summary.totalIncentive), styles: { halign: 'right' } },
           { content: '', styles: {} },
           ...staffTotals.map((t: string) => ({ content: t, styles: { halign: 'right' } }))
         ]],

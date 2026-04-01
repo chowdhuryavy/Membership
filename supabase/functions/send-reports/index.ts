@@ -273,8 +273,7 @@ serve(async (req) => {
     // Helper function to format currency for email
     const formatCurrency = (val: number, symbol: string) => {
       const formatted = val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const safeSymbol = (symbol === 'ر.ق' || symbol.includes('\u0631')) ? 'QR' : symbol;
-      return `${safeSymbol} ${formatted}`;
+      return `${symbol} ${formatted}`;
     };
 
     // Common styles
@@ -318,8 +317,17 @@ serve(async (req) => {
           }
         }
         
-        const { data: currency } = await supabase.from('currencies').select('symbol').eq('id', 'default').single()
-        const currencySymbol = currency?.symbol || '$'
+        let currencySymbol = '$';
+        let currencyCode = 'USD';
+        if (settings?.currency_id) {
+          const { data: currency } = await supabase.from('currencies').select('symbol, code').eq('id', settings.currency_id).single();
+          if (currency?.symbol) currencySymbol = currency.symbol;
+          if (currency?.code) currencyCode = currency.code;
+        } else {
+          const { data: currency } = await supabase.from('currencies').select('symbol, code').eq('is_default', true).limit(1).maybeSingle();
+          if (currency?.symbol) currencySymbol = currency.symbol;
+          if (currency?.code) currencyCode = currency.code;
+        }
         const propertyName = property?.name || 'Property'
         let logoUrl = property?.logo_url || null
 
@@ -362,6 +370,7 @@ serve(async (req) => {
           propertyName,
           outletName,
           currencySymbol,
+          currencyCode,
           reportTitle,
           date: params.date,
           logoUrl,

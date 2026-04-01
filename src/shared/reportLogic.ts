@@ -670,6 +670,7 @@ export interface PDFOptions {
   propertyName: string;
   outletName: string;
   currencySymbol: string;
+  currencyCode?: string;
   reportTitle: string;
   date: Date;
   logoUrl?: string;
@@ -678,7 +679,7 @@ export interface PDFOptions {
 }
 
 export const generateReportPDF = (options: PDFOptions) => {
-  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, reportTitle, date, logoUrl, reportType, membershipTypeName } = options;
+  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, currencyCode, reportTitle, date, logoUrl, reportType, membershipTypeName } = options;
   
   const isRevenueReport = reportType === 'revenue_recognition';
   const isDailySalesReport = reportType === 'daily_sales';
@@ -704,12 +705,18 @@ export const generateReportPDF = (options: PDFOptions) => {
   const margin = 15;
   const contentWidth = pageWidth - (margin * 2);
 
-  // Helper to handle currency symbols that might not render in default PDF fonts
-  const formatCurrency = (val: number) => {
-    const formatted = val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    // If currency symbol is Arabic (ر.ق), use QR instead for PDF compatibility
-    const safeSymbol = (currencySymbol === 'ر.ق' || currencySymbol.includes('\u0631')) ? 'QR' : currencySymbol;
-    return `${safeSymbol} ${formatted}`;
+  // Helper to handle currency formatting
+  const formatCurrency = (val: number | undefined | null) => {
+    const safeAmount = (val === null || val === undefined || isNaN(Number(val))) ? 0 : Number(val);
+    const formatted = safeAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // jsPDF default fonts only support WinAnsiEncoding (mostly Latin-1).
+    // Symbols like 'ر.ق' (Qatari Riyal) will render as garbled text (e.g. þÕ.þ-).
+    // We check if the currency symbol contains characters outside the safe range.
+    // If it does, we fallback to the currency code (e.g. QAR) to ensure the PDF is readable.
+    if (/[^\x00-\xFF\u20AC]/.test(currencySymbol)) {
+      return `${currencyCode || ''} ${formatted}`.trim();
+    }
+    return `${currencySymbol} ${formatted}`;
   };
 
   // --- HEADER SECTION ---
@@ -761,50 +768,59 @@ export const generateReportPDF = (options: PDFOptions) => {
   doc.text(reportTitle.toUpperCase(), titleX, currentY + 8, { align: 'right', maxWidth: availableWidth });
 
   if (membershipTypeName) {
+    // Membership Type Tag (Top Right)
+    const tagWidth = 45;
+    const tagHeight = 6;
+    const tagX = pageWidth - margin - tagWidth;
+    const tagY = currentY + 12;
+    
+    doc.setFillColor(238, 242, 255); // indigo-50
+    doc.roundedRect(tagX, tagY, tagWidth, tagHeight, 1, 1, 'F');
+    
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
+    doc.setFontSize(6);
     doc.setTextColor(79, 70, 229); // indigo-600
-    doc.text(membershipTypeName.toUpperCase(), titleX, currentY + 14, { align: 'right', maxWidth: availableWidth });
+    doc.text(membershipTypeName.toUpperCase(), tagX + (tagWidth / 2), tagY + 4.5, { align: 'center' });
   }
 
   // Audit Period Box
-  const boxWidth = 50;
-  const boxHeight = 14;
+  const boxWidth = 30;
+  const boxHeight = 12;
   const boxX = pageWidth - margin - boxWidth;
-  const boxY = currentY + 18;
+  const boxY = currentY + 22;
 
   doc.setFillColor(15, 23, 42); // slate-950
   doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 2, 2, 'F');
   
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6);
+  doc.setFontSize(5);
   doc.setTextColor(255, 255, 255, 0.7);
-  doc.text("AUDIT PERIOD", boxX + (boxWidth / 2), boxY + 5, { align: 'center' });
+  doc.text("AUDIT PERIOD", boxX + (boxWidth / 2), boxY + 4, { align: 'center' });
   
-  doc.setFontSize(10);
+  doc.setFontSize(8);
   doc.setTextColor(255, 255, 255);
   // For daily sales, show the full date. For others, show month/year.
   const periodStr = reportType === 'daily_sales' 
     ? format(date, 'dd MMMM yyyy').toUpperCase()
     : format(date, 'MMMM yyyy').toUpperCase();
-  doc.text(periodStr, boxX + (boxWidth / 2), boxY + 10, { align: 'center' });
+  doc.text(periodStr, boxX + (boxWidth / 2), boxY + 9, { align: 'center' });
 
   // Verified Audit Trail Tag
   doc.setFillColor(248, 250, 252); // slate-50
-  doc.roundedRect(pageWidth - margin - 40, boxY + boxHeight + 4, 40, 7, 1, 1, 'F');
-  doc.setFontSize(7);
+  doc.roundedRect(pageWidth - margin - 35, boxY + boxHeight + 4, 35, 6, 1, 1, 'F');
+  doc.setFontSize(6);
   doc.setTextColor(100, 116, 139);
   // Small circle for audit trail
   doc.setDrawColor(203, 213, 225); // slate-300
-  doc.circle(pageWidth - margin - 37, boxY + boxHeight + 7.5, 0.8, 'D');
-  doc.text("VERIFIED AUDIT TRAIL", pageWidth - margin - 18, boxY + boxHeight + 8.5, { align: 'center' });
+  doc.circle(pageWidth - margin - 32, boxY + boxHeight + 7, 0.6, 'D');
+  doc.text("VERIFIED AUDIT TRAIL", pageWidth - margin - 16, boxY + boxHeight + 7.8, { align: 'center' });
 
   // Subtle Header Divider
   doc.setDrawColor(226, 232, 240); // slate-200
   doc.setLineWidth(0.5);
   doc.line(margin, boxY + boxHeight + 15, pageWidth - margin, boxY + boxHeight + 15);
 
-  currentY = boxY + boxHeight + 22;
+  currentY = boxY + boxHeight + 25;
 
   const callAutoTable = (doc: any, options: any) => {
     // 1. Try doc.autoTable if it exists (plugin style)
@@ -870,6 +886,15 @@ export const generateReportPDF = (options: PDFOptions) => {
       return acc;
     }, {} as Record<string, any[]>);
 
+    // Sort categories (tiers) by name/duration and then sort rows within each category by start date
+    const sortedCategories = Object.keys(grouped).sort((a, b) => {
+      const getDuration = (name: string) => parseInt(name.match(/(\d+)/)?.[0] || '0');
+      const durA = getDuration(a);
+      const durB = getDuration(b);
+      if (durA !== durB) return durA - durB;
+      return a.localeCompare(b);
+    });
+
     if (data.rows.length === 0) {
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139);
@@ -885,8 +910,13 @@ export const generateReportPDF = (options: PDFOptions) => {
         deferred: 0
       };
       
-      Object.entries(grouped).forEach(([category, groupRows]: [string, any]) => {
-        const groupRowsArray = groupRows as any[];
+      sortedCategories.forEach((category: string) => {
+        const groupRows = grouped[category];
+        const groupRowsArray = [...groupRows].sort((a: any, b: any) => {
+          const dateA = parse(a.start_date, 'dd-MM-yyyy', new Date());
+          const dateB = parse(b.start_date, 'dd-MM-yyyy', new Date());
+          return dateA.getTime() - dateB.getTime();
+        });
         
         // Calculate subtotals for this category
         const subtotals = {
@@ -911,17 +941,18 @@ export const generateReportPDF = (options: PDFOptions) => {
         // Category Header Row
         callAutoTable(doc, {
           startY: currentY,
-          body: [[`${category.toUpperCase()} (${groupRowsArray.length} LEDGER EVENTS)`]],
+          body: [[{ content: `TIER: ${category.toUpperCase()}`, colSpan: 13 }]],
           theme: 'plain',
           styles: { 
-            fillColor: [241, 245, 249], 
-            textColor: [15, 23, 42], 
+            fillColor: [238, 242, 255], 
+            textColor: [49, 46, 129], 
             fontStyle: 'bold', 
-            fontSize: 9, 
-            cellPadding: 3,
+            fontSize: 8, 
+            cellPadding: 2,
             font: 'helvetica'
           },
-          margin: { left: margin, right: margin }
+          margin: { left: margin, right: margin },
+          tableWidth: contentWidth
         });
         
         currentY = (doc as any).lastAutoTable?.finalY || currentY + 10;
@@ -929,21 +960,34 @@ export const generateReportPDF = (options: PDFOptions) => {
         callAutoTable(doc, {
           startY: currentY,
           head: [['SL.', 'GUEST NAME / PROFILE', 'MEM. NO', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
-          body: groupRowsArray.map((r: any, idx: number) => [
-            idx + 1,
-            r.guest_name,
-            r.membership_no || 'N/A',
-            r.start_date,
-            r.end_date,
-            r.total_days,
-            formatCurrency(r.daily_rate),
-            formatCurrency(r.actual_rate),
-            formatCurrency(r.discount),
-            formatCurrency(r.net_fees),
-            formatCurrency(r.prev_accrual),
-            formatCurrency(r.period_rev),
-            formatCurrency(r.deferred)
-          ]),
+          body: [
+            ...groupRowsArray.map((r: any, idx: number) => [
+              idx + 1,
+              r.guest_name,
+              r.membership_no || 'N/A',
+              r.start_date,
+              r.end_date,
+              r.total_days,
+              formatCurrency(r.daily_rate),
+              formatCurrency(r.actual_rate),
+              formatCurrency(r.discount),
+              formatCurrency(r.net_fees),
+              formatCurrency(r.prev_accrual),
+              formatCurrency(r.period_rev),
+              formatCurrency(r.deferred)
+            ]),
+            // Subtotal Row integrated into the same table for perfect alignment
+            [
+              { content: `TIER SUBTOTAL: ${category.toUpperCase()}`, colSpan: 6, styles: { halign: 'left', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+              { content: formatCurrency(subtotals.daily_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+              { content: formatCurrency(subtotals.actual_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+              { content: formatCurrency(subtotals.discount), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+              { content: formatCurrency(subtotals.net_fees), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+              { content: formatCurrency(subtotals.prev_accrual), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+              { content: formatCurrency(subtotals.period_rev), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+              { content: formatCurrency(subtotals.deferred), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } }
+            ]
+          ],
           theme: 'grid',
           headStyles: { 
             fillColor: [15, 23, 42], 
@@ -962,55 +1006,22 @@ export const generateReportPDF = (options: PDFOptions) => {
             overflow: 'linebreak'
           },
           columnStyles: {
-            0: { halign: 'center', cellWidth: 8 },
-            1: { fontStyle: 'bold' },
+            0: { halign: 'center', cellWidth: 10 },
+            1: { fontStyle: 'bold', cellWidth: 77 },
             2: { halign: 'center', cellWidth: 20 },
-            3: { halign: 'center', cellWidth: 15 },
-            4: { halign: 'center', cellWidth: 15 },
-            5: { halign: 'center', cellWidth: 8 },
-            6: { halign: 'right' },
-            7: { halign: 'right' },
-            8: { halign: 'right' },
-            9: { halign: 'right' },
-            10: { halign: 'right', textColor: [100, 116, 139] },
-            11: { halign: 'right', fontStyle: 'bold', textColor: [79, 70, 229] },
-            12: { halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] }
+            3: { halign: 'center', cellWidth: 20 },
+            4: { halign: 'center', cellWidth: 20 },
+            5: { halign: 'center', cellWidth: 10 },
+            6: { halign: 'right', cellWidth: 15 },
+            7: { halign: 'right', cellWidth: 15 },
+            8: { halign: 'right', cellWidth: 15 },
+            9: { halign: 'right', cellWidth: 15 },
+            10: { halign: 'right', cellWidth: 15, textColor: [100, 116, 139] },
+            11: { halign: 'right', fontStyle: 'bold', cellWidth: 15, textColor: [79, 70, 229] },
+            12: { halign: 'right', fontStyle: 'bold', cellWidth: 20, textColor: [239, 68, 68] }
           },
-          margin: { left: margin, right: margin }
-        });
-
-        // Subtotal Row for Category
-        callAutoTable(doc, {
-          startY: (doc as any).lastAutoTable?.finalY || currentY + 10,
-          body: [[
-            { content: `CLUSTER SUBTOTAL: ${category.toUpperCase()}`, colSpan: 6, styles: { halign: 'right' } },
-            formatCurrency(subtotals.daily_rate),
-            formatCurrency(subtotals.actual_rate),
-            formatCurrency(subtotals.discount),
-            formatCurrency(subtotals.net_fees),
-            formatCurrency(subtotals.prev_accrual),
-            formatCurrency(subtotals.period_rev),
-            formatCurrency(subtotals.deferred)
-          ]],
-          theme: 'plain',
-          styles: { 
-            fillColor: [238, 242, 255], 
-            textColor: [49, 46, 129], 
-            fontStyle: 'bold', 
-            fontSize: 7, 
-            cellPadding: 2,
-            font: 'helvetica'
-          },
-          columnStyles: {
-            6: { halign: 'right', cellWidth: 20 },
-            7: { halign: 'right', cellWidth: 20 },
-            8: { halign: 'right', cellWidth: 20 },
-            9: { halign: 'right', cellWidth: 20 },
-            10: { halign: 'right', cellWidth: 20 },
-            11: { halign: 'right', cellWidth: 20 },
-            12: { halign: 'right', cellWidth: 20 }
-          },
-          margin: { left: margin, right: margin }
+          margin: { left: margin, right: margin },
+          tableWidth: contentWidth
         });
 
         currentY = (doc as any).lastAutoTable?.finalY || currentY + 15;
@@ -1020,14 +1031,14 @@ export const generateReportPDF = (options: PDFOptions) => {
       callAutoTable(doc, {
         startY: currentY + 5,
         body: [[
-          { content: "VERIFIED PORTFOLIO TOTAL", colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
-          formatCurrency(grandTotals.daily_rate),
-          formatCurrency(grandTotals.actual_rate),
-          formatCurrency(grandTotals.discount),
-          formatCurrency(grandTotals.net_fees),
-          formatCurrency(grandTotals.prev_accrual),
-          formatCurrency(grandTotals.period_rev),
-          formatCurrency(grandTotals.deferred)
+          { content: "VERIFIED PORTFOLIO TOTAL", colSpan: 6, styles: { halign: 'left', fontStyle: 'bold' } },
+          { content: formatCurrency(grandTotals.daily_rate), styles: { halign: 'right', fontStyle: 'bold' } },
+          { content: formatCurrency(grandTotals.actual_rate), styles: { halign: 'right', fontStyle: 'bold' } },
+          { content: formatCurrency(grandTotals.discount), styles: { halign: 'right', fontStyle: 'bold' } },
+          { content: formatCurrency(grandTotals.net_fees), styles: { halign: 'right', fontStyle: 'bold' } },
+          { content: formatCurrency(grandTotals.prev_accrual), styles: { halign: 'right', fontStyle: 'bold' } },
+          { content: formatCurrency(grandTotals.period_rev), styles: { halign: 'right', fontStyle: 'bold' } },
+          { content: formatCurrency(grandTotals.deferred), styles: { halign: 'right', fontStyle: 'bold' } }
         ]],
         theme: 'plain',
         styles: { 
@@ -1039,15 +1050,22 @@ export const generateReportPDF = (options: PDFOptions) => {
           font: 'helvetica'
         },
         columnStyles: {
-          6: { halign: 'right', cellWidth: 20 },
-          7: { halign: 'right', cellWidth: 20 },
-          8: { halign: 'right', cellWidth: 20 },
-          9: { halign: 'right', cellWidth: 20 },
-          10: { halign: 'right', cellWidth: 20 },
-          11: { halign: 'right', cellWidth: 20 },
+          0: { halign: 'center', cellWidth: 10 },
+          1: { fontStyle: 'bold', cellWidth: 77 },
+          2: { halign: 'center', cellWidth: 20 },
+          3: { halign: 'center', cellWidth: 20 },
+          4: { halign: 'center', cellWidth: 20 },
+          5: { halign: 'center', cellWidth: 10 },
+          6: { halign: 'right', cellWidth: 15 },
+          7: { halign: 'right', cellWidth: 15 },
+          8: { halign: 'right', cellWidth: 15 },
+          9: { halign: 'right', cellWidth: 15 },
+          10: { halign: 'right', cellWidth: 15 },
+          11: { halign: 'right', cellWidth: 15 },
           12: { halign: 'right', cellWidth: 20 }
         },
-        margin: { left: margin, right: margin }
+        margin: { left: margin, right: margin },
+        tableWidth: contentWidth
       });
     }
   } else if (reportType === 'members_joined') {
@@ -1132,18 +1150,18 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.check_no,
           r.mode_of_payment,
           r.item_name,
-          r.actual_price.toFixed(2),
+          formatCurrency(r.actual_price),
           r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
-          r.discount_amount.toFixed(2),
-          r.net_revenue.toFixed(2),
+          formatCurrency(r.discount_amount),
+          formatCurrency(r.net_revenue),
           r.remarks
         ]),
         foot: [[
           { content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: 7, styles: { halign: 'right' } },
-          { content: data.summary.totalGross.toFixed(2), styles: { halign: 'right' } },
+          { content: formatCurrency(data.summary.totalGross), styles: { halign: 'right' } },
           { content: '', styles: {} },
-          { content: data.summary.totalDiscount.toFixed(2), styles: { halign: 'right' } },
-          { content: data.summary.totalNet.toFixed(2), styles: { halign: 'right' } },
+          { content: formatCurrency(data.summary.totalDiscount), styles: { halign: 'right' } },
+          { content: formatCurrency(data.summary.totalNet), styles: { halign: 'right' } },
           { content: '', styles: {} }
         ]],
         footStyles: { 
@@ -1201,21 +1219,21 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.guest_name,
           r.item_name,
           r.therapist_name,
-          r.actual_price.toFixed(2),
+          formatCurrency(r.actual_price),
           r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
-          r.discount_amount.toFixed(2),
-          r.net_revenue.toFixed(2),
-          r.inc_total.toFixed(2),
+          formatCurrency(r.discount_amount),
+          formatCurrency(r.net_revenue),
+          formatCurrency(r.inc_total),
           r.inc_discount_percent > 0 ? `${r.inc_discount_percent.toFixed(0)}%` : '',
-          r.inc_discount_val.toFixed(2),
-          r.inc_net.toFixed(2),
+          formatCurrency(r.inc_discount_val),
+          formatCurrency(r.inc_net),
           r.remarks
         ];
         
         // Add staff splits
         staffList.forEach((s: any) => {
           const split = r.staff_splits[s.id];
-          row.push(split && split > 0 ? split.toFixed(2) : '');
+          row.push(split && split > 0 ? formatCurrency(split) : '');
         });
         
         return row;
@@ -1223,7 +1241,7 @@ export const generateReportPDF = (options: PDFOptions) => {
 
       const staffTotals = staffList.map((s: any) => {
         const total = data.rows.reduce((sum: number, r: any) => sum + (r.staff_splits[s.id] || 0), 0);
-        return total > 0 ? total.toFixed(2) : '0.00';
+        return total > 0 ? formatCurrency(total) : formatCurrency(0);
       });
 
       callAutoTable(doc, {
@@ -1232,7 +1250,7 @@ export const generateReportPDF = (options: PDFOptions) => {
         body: body,
         foot: [[
           { content: 'AGGREGATE INCENTIVE TOTALS', colSpan: 12, styles: { halign: 'right' } },
-          { content: data.summary.totalIncentive.toFixed(2), styles: { halign: 'right' } },
+          { content: formatCurrency(data.summary.totalIncentive), styles: { halign: 'right' } },
           { content: '', styles: {} },
           ...staffTotals.map((t: string) => ({ content: t, styles: { halign: 'right' } }))
         ]],

@@ -1397,8 +1397,8 @@ const SettingsPage = () => {
                       )}
                       {activeTab === 'currency' && (
                         <div className="space-y-6">
-                            <Input label="ISO Currency Code *" value={currencyForm.code} onChange={e => setCurrencyForm({...currencyForm, code: e.target.value.toUpperCase()})} placeholder="e.g. QAR" className="h-14 rounded-xl" />
-                            <Input label="Graphic Symbol *" value={currencyForm.symbol} onChange={e => setCurrencyForm({...currencyForm, symbol: e.target.value})} placeholder="e.g. ر.ق" className="h-14 rounded-xl" />
+                            <Input label="ISO Currency Code *" value={currencyForm.code} onChange={e => setCurrencyForm({...currencyForm, code: e.target.value.toUpperCase()})} placeholder="e.g. USD" className="h-14 rounded-xl" />
+                            <Input label="Graphic Symbol *" value={currencyForm.symbol} onChange={e => setCurrencyForm({...currencyForm, symbol: e.target.value})} placeholder="e.g. $" className="h-14 rounded-xl" />
                             <Input label="Exchange Rate (Rel. to USD)" type="number" value={currencyForm.rate} onChange={e => setCurrencyForm({...currencyForm, rate: parseFloat(e.target.value) || 1})} className="h-14 rounded-xl" />
                             <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
                                 <input type="checkbox" checked={currencyForm.is_default} onChange={e => setCurrencyForm({...currencyForm, is_default: e.target.checked})} className="w-5 h-5 rounded border-slate-300" />

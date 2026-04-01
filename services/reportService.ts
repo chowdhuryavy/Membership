@@ -88,9 +88,31 @@ export const reportService = {
         } catch (e) {}
     }
 
-    // Fetch Real Data
-    const revenueData = await this.fetchRevenueData(property.id, outlet === 'all' ? 'all' : outlet.id, date);
+    // Fetch Real Data & Currency
+    const [revenueData, currencies, settings] = await Promise.all([
+      this.fetchRevenueData(property.id, outlet === 'all' ? 'all' : outlet.id, date),
+      db.getCurrencies(),
+      db.getSettings()
+    ]);
+
+    const defaultCurrency = (settings && currencies.find(c => c.id === settings.currency_id)) || currencies.find(c => c.is_default) || currencies[0];
+    const currencySymbol = defaultCurrency?.symbol || '';
+    const currencyCode = defaultCurrency?.code || '';
     const totalRevenue = revenueData.reduce((sum, item) => sum + item.amount, 0);
+
+    // Helper to handle currency formatting
+    const formatCurrency = (val: number | undefined | null) => {
+      const safeAmount = (val === null || val === undefined || isNaN(Number(val))) ? 0 : Number(val);
+      const formatted = safeAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      // jsPDF default fonts only support WinAnsiEncoding (mostly Latin-1).
+      // Symbols like 'ر.ق' (Qatari Riyal) will render as garbled text (e.g. þÕ.þ-).
+      // We check if the currency symbol contains characters outside the safe range.
+      // If it does, we fallback to the currency code (e.g. QAR) to ensure the PDF is readable.
+      if (/[^\x00-\xFF\u20AC]/.test(currencySymbol)) {
+        return `${currencyCode || ''} ${formatted}`.trim();
+      }
+      return `${currencySymbol} ${formatted}`;
+    };
 
     // Table
     const tableConfig = {
@@ -99,9 +121,9 @@ export const reportService = {
       body: revenueData.map(item => [
         item.category,
         item.count.toString(),
-        `QAR ${item.amount.toLocaleString()}`
+        formatCurrency(item.amount)
       ]),
-      foot: [['TOTAL PORTFOLIO YIELD', '', `QAR ${totalRevenue.toLocaleString()}`]],
+      foot: [['TOTAL PORTFOLIO YIELD', '', formatCurrency(totalRevenue)]],
       theme: 'grid',
       headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
       footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold' },
@@ -138,7 +160,14 @@ export const reportService = {
     const outletName = outlet === 'all' ? 'All Outlets (Consolidated)' : outlet.name;
     const logoUrl = property.logo_url || 'https://picsum.photos/seed/tth/200/200';
 
-    const revenueData = await this.fetchRevenueData(property.id, outlet === 'all' ? 'all' : outlet.id, date);
+    const [revenueData, currencies, settings] = await Promise.all([
+      this.fetchRevenueData(property.id, outlet === 'all' ? 'all' : outlet.id, date),
+      db.getCurrencies(),
+      db.getSettings()
+    ]);
+
+    const defaultCurrency = (settings && currencies.find(c => c.id === settings.currency_id)) || currencies.find(c => c.is_default) || currencies[0];
+    const currencySymbol = defaultCurrency?.symbol || '';
     const totalRevenue = revenueData.reduce((sum, item) => sum + item.amount, 0);
     const totalCount = revenueData.reduce((sum, item) => sum + item.count, 0);
 
@@ -180,7 +209,7 @@ export const reportService = {
               <div class="stat-grid">
                 <div class="stat-card">
                   <div class="stat-label">Total Revenue</div>
-                  <div class="stat-value">QAR ${totalRevenue.toLocaleString()}</div>
+                  <div class="stat-value">${currencySymbol} ${totalRevenue.toLocaleString()}</div>
                 </div>
                 <div class="stat-card">
                   <div class="stat-label">Transactions</div>

@@ -313,7 +313,8 @@ const Reports = () => {
 
       const reportTitle = getReportTitle(reportType, incentiveDept);
       const outletName = currentOutlet?.name || 'All Outlets';
-      const currencySymbol = currency?.symbol || '$';
+      const currencySymbol = currency?.symbol || '';
+      const currencyCode = currency?.code || '';
 
       const doc = generateReportPDF({
         jsPDF,
@@ -322,6 +323,7 @@ const Reports = () => {
         propertyName: currentProperty.name,
         outletName,
         currencySymbol,
+        currencyCode,
         reportTitle,
         date: startDate,
         logoUrl: currentProperty.logo_url,
@@ -735,10 +737,10 @@ const Reports = () => {
                                                         {visibleColumns.item_name && <td className="border border-black px-2 py-1">{row.item_name}</td>}
                                                         {(isIncentiveReport && visibleColumns.specialist) && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
                                                         
-                                                        {visibleColumns.gross_amount && <td className="border border-black px-2 py-1 text-right">{(Number(row.actual_price) || 0).toFixed(2)}</td>}
+                                                        {visibleColumns.gross_amount && <td className="border border-black px-2 py-1 text-right">{formatMoney(row.actual_price)}</td>}
                                                         {visibleColumns.disc_percent && <td className="border border-black px-2 py-1 text-center text-slate-400">{row.discount_percent > 0 ? `${(Number(row.discount_percent) || 0).toFixed(0)}%` : ''}</td>}
-                                                        {visibleColumns.discount_amt && <td className="border border-black px-2 py-1 text-right">{(Number(row.discount_amount) || 0).toFixed(2)}</td>}
-                                                        {visibleColumns.net_revenue && <td className="border border-black px-2 py-1 text-right font-black bg-slate-50">{(Number(row.net_revenue) || 0).toFixed(2)}</td>}
+                                                        {visibleColumns.discount_amt && <td className="border border-black px-2 py-1 text-right">{formatMoney(row.discount_amount)}</td>}
+                                                        {visibleColumns.net_revenue && <td className="border border-black px-2 py-1 text-right font-black bg-slate-50">{formatMoney(row.net_revenue)}</td>}
                                                         
                                                         {visibleColumns.remarks && <td className="border border-black px-2 py-1 text-[8px] text-slate-400 italic truncate max-w-[120px]">{row.remarks}</td>}
                                                     </tr>
@@ -746,14 +748,14 @@ const Reports = () => {
                                                 <tr className="bg-slate-50 font-bold">
                                                     <td colSpan={colSpanForLabel} className="border border-black px-2 py-1 text-left italic text-[8px] pl-10">Subtotal Tier {cat}:</td>
                                                     <td className="border border-black px-2 py-1 text-right">
-                                                        {groupRows.reduce((sum, r) => sum + (Number(r.actual_price) || 0), 0).toFixed(2)}
+                                                        {formatMoney(groupRows.reduce((sum, r) => sum + (Number(r.actual_price) || 0), 0))}
                                                     </td>
                                                     <td className="border border-black px-2 py-1"></td>
                                                     <td className="border border-black px-2 py-1 text-right">
-                                                        {groupRows.reduce((sum, r) => sum + (Number(r.discount_amount) || 0), 0).toFixed(2)}
+                                                        {formatMoney(groupRows.reduce((sum, r) => sum + (Number(r.discount_amount) || 0), 0))}
                                                     </td>
                                                     <td className="border border-black px-2 py-1 text-right">
-                                                        {groupRows.reduce((sum, r) => sum + (Number(r.net_revenue) || 0), 0).toFixed(2)}
+                                                        {formatMoney(groupRows.reduce((sum, r) => sum + (Number(r.net_revenue) || 0), 0))}
                                                     </td>
                                                     <td className="border border-black px-2 py-1"></td>
                                                 </tr>
@@ -763,14 +765,14 @@ const Reports = () => {
                                             <tr className="bg-indigo-50 font-black">
                                                 <td colSpan={colSpanForLabel} className="border border-black px-2 py-1 text-left uppercase text-[9px]">Total Type {type}:</td>
                                                 <td className="border border-black px-2 py-1 text-right">
-                                                    {typeRows.reduce((sum, r) => sum + (Number(r.actual_price) || 0), 0).toFixed(2)}
+                                                    {formatMoney(typeRows.reduce((sum, r) => sum + (Number(r.actual_price) || 0), 0))}
                                                 </td>
                                                 <td className="border border-black px-2 py-1"></td>
                                                 <td className="border border-black px-2 py-1 text-right">
-                                                    {typeRows.reduce((sum, r) => sum + (Number(r.discount_amount) || 0), 0).toFixed(2)}
+                                                    {formatMoney(typeRows.reduce((sum, r) => sum + (Number(r.discount_amount) || 0), 0))}
                                                 </td>
                                                 <td className="border border-black px-2 py-1 text-right">
-                                                    {typeRows.reduce((sum, r) => sum + (Number(r.net_revenue) || 0), 0).toFixed(2)}
+                                                    {formatMoney(typeRows.reduce((sum, r) => sum + (Number(r.net_revenue) || 0), 0))}
                                                 </td>
                                                 <td className="border border-black px-2 py-1"></td>
                                             </tr>
@@ -795,17 +797,17 @@ const Reports = () => {
                                         {visibleColumns.item_name && <td className="border border-black px-2 py-1">{row.item_name}</td>}
                                         {(isIncentiveReport && visibleColumns.specialist) && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
                                         
-                                        {visibleColumns.gross_amount && <td className="border border-black px-2 py-1 text-right">{(Number(row.actual_price) || 0).toFixed(2)}</td>}
+                                        {visibleColumns.gross_amount && <td className="border border-black px-2 py-1 text-right">{formatMoney(row.actual_price)}</td>}
                                         {visibleColumns.disc_percent && <td className="border border-black px-2 py-1 text-center text-slate-400">{row.discount_percent > 0 ? `${(Number(row.discount_percent) || 0).toFixed(0)}%` : ''}</td>}
-                                        {visibleColumns.discount_amt && <td className="border border-black px-2 py-1 text-right">{(Number(row.discount_amount) || 0).toFixed(2)}</td>}
-                                        {visibleColumns.net_revenue && <td className="border border-black px-2 py-1 text-right font-black bg-slate-50">{(Number(row.net_revenue) || 0).toFixed(2)}</td>}
+                                        {visibleColumns.discount_amt && <td className="border border-black px-2 py-1 text-right">{formatMoney(row.discount_amount)}</td>}
+                                        {visibleColumns.net_revenue && <td className="border border-black px-2 py-1 text-right font-black bg-slate-50">{formatMoney(row.net_revenue)}</td>}
                                         
                                         {isIncentiveReport && (
                                             <>
-                                                <td className="border border-black px-2 py-1 text-right bg-amber-50/20">{(Number(row.inc_total) || 0).toFixed(2)}</td>
+                                                <td className="border border-black px-2 py-1 text-right bg-amber-50/20">{formatMoney(row.inc_total)}</td>
                                                 <td className="border border-black px-2 py-1 text-center bg-amber-50/20 text-slate-400">{row.inc_discount_percent > 0 ? `${(Number(row.inc_discount_percent) || 0).toFixed(0)}%` : ''}</td>
-                                                <td className="border border-black px-2 py-1 text-right bg-amber-50/20">{(Number(row.inc_discount_val) || 0).toFixed(2)}</td>
-                                                <td className="border border-black px-2 py-1 text-right font-black bg-amber-100/30">{(Number(row.inc_net) || 0).toFixed(2)}</td>
+                                                <td className="border border-black px-2 py-1 text-right bg-amber-50/20">{formatMoney(row.inc_discount_val)}</td>
+                                                <td className="border border-black px-2 py-1 text-right font-black bg-amber-100/30">{formatMoney(row.inc_net)}</td>
                                             </>
                                         )}
                                         
@@ -815,7 +817,7 @@ const Reports = () => {
                                             const val = row.staff_splits[s.id] || 0;
                                             return (
                                                 <td key={s.id} className={`border border-black px-1 py-1 text-right font-black ${val > 0 ? 'bg-indigo-50 text-indigo-700' : 'text-slate-100'}`}>
-                                                    {val > 0 ? val.toFixed(2) : '0.00'}
+                                                    {val > 0 ? formatMoney(val) : formatMoney(0)}
                                                 </td>
                                             );
                                         })}
@@ -826,19 +828,19 @@ const Reports = () => {
                     })()}
                     <tr className="bg-slate-900 text-white font-black text-[10px]">
                         <td colSpan={colSpanForLabel} className="border border-black px-4 py-3 text-right uppercase tracking-widest">Aggregate Portfolio Totals</td>
-                        {visibleColumns.gross_amount && <td className="border border-black px-2 py-3 text-right">{totals.totalActual.toFixed(2)}</td>}
+                        {visibleColumns.gross_amount && <td className="border border-black px-2 py-3 text-right">{formatMoney(totals.totalActual)}</td>}
                         {visibleColumns.disc_percent && <td className="border border-black"></td>}
-                        {visibleColumns.discount_amt && <td className="border border-black px-2 py-3 text-right text-indigo-300">{totals.totalDiscount.toFixed(2)}</td>}
-                        {visibleColumns.net_revenue && <td className="border border-black px-2 py-3 text-right">{totals.totalNetRev.toFixed(2)}</td>}
+                        {visibleColumns.discount_amt && <td className="border border-black px-2 py-3 text-right text-indigo-300">{formatMoney(totals.totalDiscount)}</td>}
+                        {visibleColumns.net_revenue && <td className="border border-black px-2 py-3 text-right">{formatMoney(totals.totalNetRev)}</td>}
                         
                         {isIncentiveReport && (
                             <>
                                 <td colSpan={3} className="border border-black"></td>
-                                <td className="border border-black px-2 py-3 text-right bg-indigo-600 font-bold">{totals.totalIncNet.toFixed(2)}</td>
+                                <td className="border border-black px-2 py-3 text-right bg-indigo-600 font-bold">{formatMoney(totals.totalIncNet)}</td>
                                 {visibleColumns.remarks && <td className="border border-black"></td>}
                                 {Array.isArray(activeStaffList) && activeStaffList.map(s => (
                                     <td key={s.id} className="border border-black px-1 py-3 text-right text-indigo-200">
-                                        {(totals.staffTotals[s.id] || 0).toFixed(2)}
+                                        {formatMoney(totals.staffTotals[s.id] || 0)}
                                     </td>
                                 ))}
                             </>
