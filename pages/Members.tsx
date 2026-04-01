@@ -138,7 +138,7 @@ const Members = () => {
           loading={loading}
           viewScope={viewScope}
           setViewScope={setViewScope}
-          onAdd={() => { setIsEditing(false); setIsRenewal(false); setSelectedMember(null); setView('form'); }}
+          onAdd={() => { if (!loading) { setIsEditing(false); setIsRenewal(false); setSelectedMember(null); setView('form'); } }}
           onViewDetail={(m) => { setSelectedMember(m); setView('detail'); }}
           onEdit={(m) => { setSelectedMember(m); setIsEditing(true); setIsRenewal(false); setView('form'); }}
           onRenew={(m) => { setSelectedMember(m); setIsRenewal(true); setIsEditing(false); setView('form'); }}

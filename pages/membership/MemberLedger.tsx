@@ -87,6 +87,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
 
   const handleNewEnrollment = () => {
+    if (loading) return;
     if (selectedTypeId === 'all' && membershipTypes.length > 0) {
       setShowTypeSelector(true);
     } else {
@@ -197,10 +198,18 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                   </p>
                   {canSwitchScope && (
                     <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
-                        <button onClick={() => setViewScope('outlet')} className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-2 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}>
+                        <button 
+                            disabled={loading}
+                            onClick={() => setViewScope('outlet')} 
+                            className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-2 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'} ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
                             Outlet Scope
                         </button>
-                        <button onClick={() => setViewScope('property')} className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-2 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}>
+                        <button 
+                            disabled={loading}
+                            onClick={() => setViewScope('property')} 
+                            className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-2 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'} ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
                             Property View
                         </button>
                     </div>
@@ -208,16 +217,18 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                   {membershipTypes.length > 0 && (
                     <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
                         <button 
+                            disabled={loading}
                             onClick={() => onTypeChange('all')}
-                            className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all ${selectedTypeId === 'all' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}
+                            className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all ${selectedTypeId === 'all' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'} ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             All Types
                         </button>
                         {membershipTypes.map(type => (
                             <button 
                                 key={type.id}
+                                disabled={loading}
                                 onClick={() => onTypeChange(type.id)}
-                                className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all ${selectedTypeId === type.id ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}
+                                className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all ${selectedTypeId === type.id ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'} ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 {type.name}
                             </button>
@@ -301,8 +312,9 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
           {canBulkFreeze && (
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <button 
+                disabled={loading}
                 onClick={() => setShowBulkHistory(true)}
-                className="h-14 px-6 bg-white border-2 border-slate-100 rounded-2xl flex items-center justify-center gap-2 text-slate-400 hover:text-indigo-600 hover:border-indigo-600/20 hover:shadow-xl hover:shadow-indigo-500/5 transition-all group"
+                className={`h-14 px-6 bg-white border-2 border-slate-100 rounded-2xl flex items-center justify-center gap-2 text-slate-400 hover:text-indigo-600 hover:border-indigo-600/20 hover:shadow-xl hover:shadow-indigo-500/5 transition-all group ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <History className="w-4 h-4 transition-transform group-hover:scale-110" />
                 <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Suspension History</span>
@@ -310,6 +322,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
               <Button 
                 onClick={() => setShowBulkFreeze(true)} 
                 variant="outline" 
+                isLoading={loading}
                 className="flex-1 sm:flex-none h-14 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest border-indigo-100 text-indigo-600 hover:bg-indigo-50 shadow-sm transition-all"
               >
                 <PackagePlus className="w-4 h-4 mr-2" /> Bulk Freeze
@@ -318,7 +331,11 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
           )}
 
           {canCreate && (
-            <Button onClick={handleNewEnrollment} className="w-full sm:w-auto h-14 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95">
+            <Button 
+              onClick={handleNewEnrollment} 
+              isLoading={loading}
+              className="w-full sm:w-auto h-14 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95"
+            >
               <UserPlus className="w-4 h-4 mr-2" /> New Enrollment
             </Button>
           )}
