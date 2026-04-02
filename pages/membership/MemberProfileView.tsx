@@ -32,7 +32,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   member: initialMember, categories, onBack, onEdit, onRenew, onUpdate, onDelete
 }) => {
   const { user } = useAuth();
-  const { formatMoney, currentOutlet, currentProperty, settings, hasPermission } = useSettings();
+  const { formatMoney, currentOutlet, currentProperty, settings, hasPermission, setPageLoading } = useSettings();
   
   const [viewingMember, setViewingMember] = useState<Member>(initialMember);
   const [freezes, setFreezes] = useState<Freeze[]>([]);
@@ -88,6 +88,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const handleSaveNotes = async () => {
     try {
       setLoading(true);
+      setPageLoading(true);
       await db.updateMemberNotes(viewingMember.id, memberNotes);
       setViewingMember({ ...viewingMember, notes: memberNotes });
       toast.success("Member notes updated successfully.");
@@ -97,6 +98,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       toast.error("Failed to update notes.");
     } finally {
       setLoading(false);
+      setPageLoading(false);
     }
   };
 
@@ -212,6 +214,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
     if (validation.error || !validation.impact) return;
     
     setLoading(true);
+    setPageLoading(true);
     try {
         if (editingFreezeId) {
             await db.updateFreeze(editingFreezeId, { 
@@ -238,6 +241,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         loadForensics(viewingMember);
     } finally {
         setLoading(false);
+        setPageLoading(false);
     }
   };
 
@@ -261,6 +265,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
           setBulkFreezeToDelete(f);
       } else {
           setLoading(true);
+          setPageLoading(true);
           try {
               await db.deleteFreeze(f.id, viewingMember.id);
               toast.success("Suspension deleted.");
@@ -271,6 +276,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
               toast.error("Failed to delete suspension.");
           } finally {
               setLoading(false);
+              setPageLoading(false);
           }
       }
   };
@@ -279,6 +285,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       if (!bulkFreezeToDelete) return;
       const isBulk = bulkFreezeToDelete.batch_id || bulkFreezeToDelete.maintenance_batch_id;
       setLoading(true);
+      setPageLoading(true);
       try {
           await db.deleteBulkFreeze(isBulk);
           toast.success("Bulk suspension deleted successfully.");
@@ -290,6 +297,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
           toast.error("Failed to delete bulk suspension.");
       } finally {
           setLoading(false);
+          setPageLoading(false);
       }
   };
 
@@ -299,6 +307,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
   const confirmRevertCancellation = async () => {
     setLoading(true);
+    setPageLoading(true);
     try {
         const restoredAmount = (viewingMember.original_net_amount && viewingMember.original_net_amount > 0) ? viewingMember.original_net_amount : (viewingMember.actual_rate - viewingMember.discount);
 
@@ -329,11 +338,13 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         toast.error("Failed to revert cancellation.");
     } finally {
         setLoading(false);
+        setPageLoading(false);
     }
   };
 
   const handleCancelMembership = async () => {
     setLoading(true);
+    setPageLoading(true);
     try {
         const start = parseISO(viewingMember.start_date);
         const cancel = parseISO(cancelDate);
@@ -375,6 +386,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         toast.error("Failed to cancel membership.");
     } finally {
         setLoading(false);
+        setPageLoading(false);
     }
   };
 
@@ -991,7 +1003,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
                     <Button 
                         onClick={handleCancelMembership}
-                        isLoading={isLoading}
                         className="w-full h-12 rounded-[1.2rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-lg mt-3 active:scale-95 transition-all bg-red-600 hover:bg-red-700 text-white"
                     >
                         Confirm Cancellation
@@ -1028,7 +1039,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         </Button>
                         <Button 
                             onClick={confirmRevertCancellation}
-                            isLoading={isLoading}
                             className="flex-1 h-14 rounded-[1.5rem] font-black uppercase text-xs tracking-wider bg-amber-500 hover:bg-amber-600 text-white"
                         >
                             Confirm
@@ -1066,7 +1076,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         </Button>
                         <Button 
                             onClick={confirmDeleteBulkFreeze}
-                            isLoading={isLoading}
                             className="flex-1 h-14 rounded-[1.5rem] font-black uppercase text-xs tracking-wider bg-red-600 hover:bg-red-700 text-white"
                         >
                             Delete All
@@ -1179,7 +1188,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         <Button 
                             type="submit" 
                             disabled={!!validation.error || !validation.impact || isLoading || maxAllowed === 0}
-                            isLoading={isLoading}
                             className={`w-full h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl mt-4 active:scale-95 transition-all ${validation.error || maxAllowed === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-[#a5b4fc] hover:bg-[#93a5f7] text-white'}`}
                         >
                             {editingFreezeId ? 'Commit Modification' : 'Commit Protocol'}
@@ -1323,7 +1331,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         </Button>
                         <Button 
                             onClick={handleSaveNotes}
-                            isLoading={isLoading}
                             className="flex-[2] h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl bg-indigo-600 hover:bg-indigo-700 text-white"
                         >
                             Save Intelligence

@@ -63,7 +63,7 @@ interface MemberEnrollmentFormProps {
 const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   existingMember, isEditing, isRenewal, categories, membershipTypes, selectedTypeId, onTypeChange, staff, allMembers, onCancel, onSuccess
 }) => {
-  const { currentOutlet, formatMoney } = useSettings();
+  const { currentOutlet, formatMoney, setPageLoading } = useSettings();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [matchedMembers, setMatchedMembers] = useState<Member[]>([]);
@@ -246,6 +246,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         return;
     }
     setIsSubmitting(true);
+    setPageLoading(true);
     setSubmitError(null);
     
     const sanitizedData = { ...data };
@@ -271,10 +272,14 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     try {
         if (isUpdate) await db.updateMember(existingMember!.id, payload);
         else await db.addMember(payload);
-        setTimeout(() => onSuccess(), 500);
+        setTimeout(() => {
+            setPageLoading(false);
+            onSuccess();
+        }, 500);
     } catch (e: any) { 
         setSubmitError(e.message || "Sync failure.");
         setIsSubmitting(false);
+        setPageLoading(false);
     }
   };
 
@@ -634,7 +639,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
             <button type="button" onClick={onCancel} className="flex-1 h-14 rounded-[1.8rem] font-black text-[11px] uppercase tracking-widest text-slate-500 bg-slate-50 border border-slate-200 transition-all hover:bg-slate-100 flex items-center justify-center gap-3 active:scale-95">
                 <Command className="w-4 h-4 opacity-30" /> Cancel
             </button>
-            <Button type="submit" isLoading={isSubmitting} className="flex-[2] h-14 rounded-[1.8rem] font-black text-[13px] uppercase tracking-[0.1em] bg-gradient-to-r from-indigo-600 to-indigo-500 shadow-[0_20px_40px_-10px_rgba(79,70,229,0.4)] transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3">
+            <Button type="submit" className="flex-[2] h-14 rounded-[1.8rem] font-black text-[13px] uppercase tracking-[0.1em] bg-gradient-to-r from-indigo-600 to-indigo-500 shadow-[0_20px_40px_-10px_rgba(79,70,229,0.4)] transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3">
                 {isRenewal ? 'Commit Renewal' : isEditing ? 'Save Profile Changes' : 'Confirm Enrollment'} <Command className="w-4 h-4 opacity-50" />
             </Button>
         </div>

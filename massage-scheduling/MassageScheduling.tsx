@@ -1024,7 +1024,7 @@ NOTIFY pgrst, 'reload schema';`}
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 mesh-gradient min-h-full">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-full">
       {schemaError && !isTableMissing && (
         <div className="bg-red-50 border border-red-200 p-4 rounded-2xl flex items-center justify-between gap-4 animate-in slide-in-from-top-2">
           <div className="flex items-center gap-3 text-red-700">

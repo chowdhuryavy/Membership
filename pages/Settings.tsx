@@ -1493,7 +1493,8 @@ const SettingsPage = () => {
                                         {value:'daily_sales', label:'Daily Sales Ledger (Daily)'},
                                         {value:'members_joined', label:'Members Joined (Monthly)'},
                                         {value:'expiring_memberships', label:'Expiring Memberships (Monthly)'},
-                                        {value:'massage_room_revenue', label:'Massage Room Revenue (Monthly)'}
+                                        {value:'massage_room_revenue', label:'Massage Room Revenue (Monthly)'},
+                                        {value:'monthly_revenue', label:'Monthly Revenue Report (Monthly)'}
                                     ]} 
                                     value={reportRecipientForm.report_type} 
                                     onChange={e => setReportRecipientForm({...reportRecipientForm, report_type: e.target.value as any})} 

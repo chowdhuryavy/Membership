@@ -3,7 +3,7 @@ import { db } from '../services/mockSupabase';
 import { Notification } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
-export const useNotifications = () => {
+export const useNotifications = (outletId?: string) => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -16,8 +16,8 @@ export const useNotifications = () => {
     }
     try {
       setIsLoading(true);
-      console.log('Fetching notifications for user:', user.id);
-      const data = await db.getNotifications(user.id);
+      console.log('Fetching notifications for user:', user.id, 'outlet:', outletId);
+      const data = await db.getNotifications(user.id, outletId);
       console.log('Fetched notifications:', data);
       setNotifications(data);
     } catch (error) {
@@ -25,7 +25,7 @@ export const useNotifications = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, outletId]);
 
   useEffect(() => {
     fetchNotifications();
@@ -33,15 +33,18 @@ export const useNotifications = () => {
     // Set up real-time subscription
     let unsubscribe: (() => void) | undefined;
     if (user) {
-      console.log('Subscribing to notifications for user:', user.id);
-      unsubscribe = db.subscribeToNotifications(user.id, (payload) => {
+      console.log('Subscribing to notifications for user:', user.id, 'outlet:', outletId);
+      unsubscribe = db.subscribeToNotifications(user.id, outletId, (payload) => {
         console.log('Received real-time notification payload:', payload);
         if (payload.eventType === 'INSERT') {
           setNotifications(prev => [payload.new as Notification, ...prev]);
         } else if (payload.eventType === 'UPDATE') {
           setNotifications(prev => prev.map(n => n.id === payload.new.id ? payload.new as Notification : n));
         } else if (payload.eventType === 'DELETE') {
-          setNotifications(prev => prev.filter(n => n.id === payload.old.id));
+          const deletedId = payload.old?.id || payload.new?.id;
+          if (deletedId) {
+            setNotifications(prev => prev.filter(n => n.id !== deletedId));
+          }
         }
       });
     }
@@ -55,7 +58,7 @@ export const useNotifications = () => {
       if (unsubscribe) unsubscribe();
       clearInterval(interval);
     };
-  }, [fetchNotifications, user]);
+  }, [fetchNotifications, user, outletId]);
 
   const markAsRead = async (id: string) => {
     try {
@@ -69,7 +72,7 @@ export const useNotifications = () => {
   const markAllAsRead = async () => {
     if (!user) return;
     try {
-      await db.markAllNotificationsAsRead(user.id);
+      await db.markAllNotificationsAsRead(user.id, outletId);
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);

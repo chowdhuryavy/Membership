@@ -218,29 +218,35 @@ const TopHeader = () => {
 
 const ProtectedLayout = () => {
   const { user, logout, isLoading: isAuthLoading } = useAuth();
+  const location = useLocation();
   const { checkShortcut, isLoading: isSettingsLoading, currentOutlet, outlets, pageLoading } = useSettings();
   const [showSplash, setShowSplash] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const navigate = useNavigate();
 
   const isInitialLoad = useRef(true);
+  const isMembersPage = location.pathname === '/members';
+  const isSalesPage = location.pathname.startsWith('/sales');
+  const isSplashPage = isMembersPage || isSalesPage;
 
   const isAppInitializing = isAuthLoading || isSettingsLoading || (user && outlets.length > 0 && !currentOutlet);
-  const combinedLoading = isAppInitializing;
+  const combinedLoading = isAppInitializing || (isSplashPage && pageLoading);
 
   useEffect(() => {
-    if (!isAppInitializing) {
+    if (!combinedLoading) {
       // Shorter delay for a snappier feel
       const timer = setTimeout(() => {
         setShowSplash(false);
         isInitialLoad.current = false;
       }, 500); 
       return () => clearTimeout(timer);
-    } else if (isInitialLoad.current) {
-      // Only re-trigger splash if we haven't finished the initial app load
-      setShowSplash(true);
+    } else {
+      // Re-trigger splash if we are initializing or on the members/sales page
+      if (isInitialLoad.current || isSplashPage) {
+        setShowSplash(true);
+      }
     }
-  }, [isAppInitializing]);
+  }, [combinedLoading, isSplashPage]);
   
   useEffect(() => {
     if (user && !combinedLoading) {

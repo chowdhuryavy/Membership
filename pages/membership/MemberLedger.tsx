@@ -88,7 +88,14 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
 
   const handleNewEnrollment = () => {
     if (loading) return;
-    if (selectedTypeId === 'all' && membershipTypes.length > 0) {
+    
+    // If we have no membership types or categories yet, we shouldn't open the form as it will be incomplete
+    if (membershipTypes.length === 0 || categories.length === 0) {
+      onRefresh(true); // Silently refresh to try and get data
+      return;
+    }
+
+    if (selectedTypeId === 'all') {
       setShowTypeSelector(true);
     } else {
       onAdd();
@@ -214,7 +221,13 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                         </button>
                     </div>
                   )}
-                  {membershipTypes.length > 0 && (
+                  {loading && membershipTypes.length === 0 ? (
+                    <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0 animate-pulse">
+                        <div className="px-4 py-1.5 rounded-lg text-[8px] font-black uppercase text-slate-300">
+                            Loading Types...
+                        </div>
+                    </div>
+                  ) : membershipTypes.length > 0 && (
                     <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
                         <button 
                             disabled={loading}
@@ -322,7 +335,6 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
               <Button 
                 onClick={() => setShowBulkFreeze(true)} 
                 variant="outline" 
-                isLoading={loading}
                 className="flex-1 sm:flex-none h-14 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest border-indigo-100 text-indigo-600 hover:bg-indigo-50 shadow-sm transition-all"
               >
                 <PackagePlus className="w-4 h-4 mr-2" /> Bulk Freeze
@@ -333,10 +345,11 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
           {canCreate && (
             <Button 
               onClick={handleNewEnrollment} 
-              isLoading={loading}
-              className="w-full sm:w-auto h-14 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95"
+              disabled={loading || membershipTypes.length === 0 || categories.length === 0}
+              className="w-full sm:w-auto h-14 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <UserPlus className="w-4 h-4 mr-2" /> New Enrollment
+              <UserPlus className="w-4 h-4 mr-2" /> 
+              {loading ? 'Loading...' : (membershipTypes.length === 0 || categories.length === 0) ? 'Loading Data...' : 'New Enrollment'}
             </Button>
           )}
         </div>

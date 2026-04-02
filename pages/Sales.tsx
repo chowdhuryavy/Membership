@@ -138,7 +138,7 @@ const POSForm = ({
     currentPropertyId: string,
     initialSale?: Sale
 }) => {
-    const { formatMoney } = useSettings();
+    const { formatMoney, setPageLoading } = useSettings();
     const { user: currentUser } = useAuth();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -266,6 +266,7 @@ const POSForm = ({
             return;
         }
         setLoading(true);
+        setPageLoading(true);
         try {
             const payload = {
                 property_id: currentPropertyId,
@@ -304,6 +305,7 @@ const POSForm = ({
             setError(err.message || "Checkout failed.");
         } finally {
             setLoading(false);
+            setPageLoading(false);
         }
     };
 
@@ -511,7 +513,7 @@ const POSForm = ({
 
                     <div className="flex gap-3 pt-2">
                         <button type="button" onClick={onCancel} className="flex-1 h-12 rounded-xl font-bold uppercase text-[10px] tracking-widest bg-slate-100 hover:bg-slate-200 transition-colors">Discard</button>
-                        <Button type="submit" isLoading={loading} className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100">Commit Transaction</Button>
+                        <Button type="submit" className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100">Commit Transaction</Button>
                     </div>
                 </form>
             </CardContent>
@@ -540,7 +542,7 @@ export const InventoryManager = ({
     }
 }) => {
     const { user } = useAuth();
-    const { formatMoney, hasPermission } = useSettings();
+    const { formatMoney, hasPermission, setPageLoading } = useSettings();
     const [loading, setLoading] = useState(false);
     const [internalShowForm, setInternalShowForm] = useState(false);
     const [internalEditingItem, setInternalEditingItem] = useState<InventoryItem | null>(null);
@@ -607,6 +609,7 @@ export const InventoryManager = ({
         e.preventDefault();
         if (!canManage) return;
         setLoading(true);
+        setPageLoading(true);
         setError(null);
         try {
             if (editingItem) {
@@ -630,6 +633,7 @@ export const InventoryManager = ({
             }
         } finally {
             setLoading(false);
+            setPageLoading(false);
         }
     };
 
@@ -637,6 +641,7 @@ export const InventoryManager = ({
         e.preventDefault();
         if (!stockForm.item || !canManage) return;
         setLoading(true);
+        setPageLoading(true);
         try {
             const change = stockForm.type === 'restock' ? stockData.quantity : stockData.quantity; 
             
@@ -657,6 +662,7 @@ export const InventoryManager = ({
             setError(e.message || "Failed to update stock.");
         } finally {
             setLoading(false);
+            setPageLoading(false);
         }
     };
 
@@ -785,7 +791,7 @@ export const InventoryManager = ({
                                     placeholder="e.g., PO-12345"
                                     className="h-12 rounded-xl" 
                                 />
-                                <Button type="submit" isLoading={loading} className="w-full h-14 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 mt-4">Confirm Restock</Button>
+                                <Button type="submit" className="w-full h-14 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 mt-4">Confirm Restock</Button>
                             </form>
                         </CardContent>
                     </Card>
@@ -822,7 +828,7 @@ export const InventoryManager = ({
                                 {formData.track_inventory && (
                                     <Input label="Initial Stock Quantity" type="number" value={formData.stock_quantity} onChange={e => setFormData({...formData, stock_quantity: parseInt(e.target.value) || 0})} className="h-12 rounded-xl animate-in slide-in-from-top-2" />
                                 )}
-                                <Button type="submit" isLoading={loading} className="w-full h-14 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 mt-4">Commit to Catalog</Button>
+                                <Button type="submit" className="w-full h-14 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 mt-4">Commit to Catalog</Button>
                             </form>
                         </CardContent>
                     </Card>
@@ -912,6 +918,7 @@ const Sales = () => {
             // Still fetch in background to ensure freshness
         } else {
             setLoading(true);
+            setPageLoading(true);
         }
         
         try {
@@ -958,6 +965,7 @@ const Sales = () => {
             toast.error('Failed to load data');
         } finally {
             setLoading(false);
+            setPageLoading(false);
         }
     }, [currentOutlet, currentProperty, selectedDate, viewScope]);
 

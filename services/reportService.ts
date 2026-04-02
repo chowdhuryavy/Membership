@@ -109,6 +109,10 @@ export const reportService = {
       // We check if the currency symbol contains characters outside the safe range.
       // If it does, we fallback to the currency code (e.g. QAR) to ensure the PDF is readable.
       if (/[^\x00-\xFF\u20AC]/.test(currencySymbol)) {
+        // Special case for Qatari Riyal which is common in this app
+        if (currencyCode === 'QAR' || currencySymbol === 'ر.ق') {
+          return `QR ${formatted}`;
+        }
         return `${currencyCode || ''} ${formatted}`.trim();
       }
       return `${currencySymbol} ${formatted}`;

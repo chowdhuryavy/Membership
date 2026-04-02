@@ -35,11 +35,12 @@ import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import ExpiringMembershipsReport from './ExpiringMembershipsReport';
 import MassageRoomRevenueReport from './MassageRoomRevenueReport';
+import MonthlyRevenueReport from './MonthlyRevenueReport';
 
 const startOfMonthLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
 // Report Types
-type ReportType = 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'expiring_memberships' | 'massage_room_revenue';
+type ReportType = 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'expiring_memberships' | 'massage_room_revenue' | 'monthly_revenue';
 
 interface ReportRow {
   sl_no: number;
@@ -331,7 +332,12 @@ const Reports = () => {
         membershipTypeName: selectedTypeName
       });
 
-      doc.save(`${reportType}_report_${format(startDate, 'yyyy-MM-dd')}.pdf`);
+      const typeSuffix = selectedMembershipTypeId !== 'all' ? `_${selectedTypeName.replace(/\s+/g, '_').toLowerCase()}` : '';
+      const filename = reportType === 'monthly_revenue' 
+        ? `${reportType}_report_${format(startDate, 'yyyy')}${typeSuffix}.pdf`
+        : `${reportType}_report_${format(startDate, 'yyyy-MM-dd')}${typeSuffix}.pdf`;
+      
+      doc.save(filename);
       toast.success('Report exported successfully', { id: toastId });
     } catch (error) {
       console.error('PDF Export Error:', error);
@@ -870,6 +876,18 @@ const Reports = () => {
                         <input type="date" value={dailySalesDate} onChange={e => setDailySalesDate(e.target.value)} className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer" />
                         <Button onClick={loadData} className="h-8 text-[9px] px-3">Generate</Button>
                     </div>
+                ) : reportType === 'monthly_revenue' ? (
+                    <div className="flex items-center gap-2">
+                        <select 
+                            value={reportMonth.split('-')[0]} 
+                            onChange={e => setReportMonth(`${e.target.value}-01`)}
+                            className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer"
+                        >
+                            {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                                <option key={year} value={year}>{year}</option>
+                            ))}
+                        </select>
+                    </div>
                 ) : (
                     <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer" />
                 )}
@@ -903,7 +921,8 @@ const Reports = () => {
                                       { id: 'daily_sales', label: 'Daily Sales Ledger', icon: CreditCard, permission: canViewOperational },
                                       { id: 'members_joined', label: 'Members Joined', icon: UserCheck, permission: canViewMembersJoined },
                                       { id: 'expiring_memberships', label: 'Expiring Memberships', icon: CalendarX, permission: canViewMembersJoined },
-                                      { id: 'massage_room_revenue', label: 'Massage Room Revenue', icon: Building2, permission: canViewFinancial }
+                                      { id: 'massage_room_revenue', label: 'Massage Room Revenue', icon: Building2, permission: canViewFinancial },
+                                      { id: 'monthly_revenue', label: 'Monthly Revenue Report', icon: TrendingUp, permission: canViewFinancial }
                                   ].filter(t => t.permission).map(type => (
                                       <button 
                                         key={type.id} 
@@ -1085,7 +1104,9 @@ const Reports = () => {
                                   <span className="text-sm font-black uppercase">
                                     {reportType === 'daily_sales' 
                                       ? format(parseISO(dailySalesDate), 'dd MMMM yyyy') 
-                                      : format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
+                                      : reportType === 'monthly_revenue' 
+                                        ? format(parseISO(reportMonth + '-01'), 'yyyy')
+                                        : format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
                                   </span>
                               </div>
                               <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-lg">
@@ -1099,6 +1120,7 @@ const Reports = () => {
                           {reportType === 'revenue_recognition' ? <RenderRevenueTable /> : 
                            reportType === 'expiring_memberships' ? <ExpiringMembershipsReport isEmbedded={true} embeddedMonth={reportMonth} selectedMembershipTypeId={selectedMembershipTypeId} /> : 
                            reportType === 'massage_room_revenue' ? <MassageRoomRevenueReport isEmbedded={true} embeddedMonth={reportMonth} /> :
+                           reportType === 'monthly_revenue' ? <MonthlyRevenueReport isEmbedded={true} embeddedYear={parseInt(reportMonth.split('-')[0])} /> :
                            <RenderStandardTable />}
                       </div>
 

@@ -2,11 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Bell, Check, X, Loader2 } from 'lucide-react';
 import { useNotifications } from '../hooks/useNotifications';
 import { formatDistanceToNow } from 'date-fns';
+import { useSettings } from '../contexts/SettingsContext';
 
 export const NotificationBell = () => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const { notifications, isLoading, markAsRead, markAllAsRead, removeNotification } = useNotifications();
+    const { currentOutlet } = useSettings();
+    const { notifications, isLoading, markAsRead, markAllAsRead, removeNotification } = useNotifications(currentOutlet?.id);
 
     const unreadCount = notifications.filter(n => !n.read).length;
 

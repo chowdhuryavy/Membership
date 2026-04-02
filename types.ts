@@ -35,7 +35,7 @@ export interface ReportRecipient {
   email: string; // Can be comma-separated list
   property_id: string;
   outlet_id: string; // 'all' for all outlets in property
-  report_type: 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'expiring_memberships' | 'massage_room_revenue' | 'daily_revenue' | 'monthly_summary';
+  report_type: 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'expiring_memberships' | 'massage_room_revenue' | 'daily_revenue' | 'monthly_summary' | 'monthly_revenue';
   send_time: string; // HH:mm format
   report_date_type?: 'today' | 'yesterday'; // For daily reports
   incentive_dept?: 'Massage' | 'Membership' | 'Personal Training';
@@ -338,6 +338,7 @@ export interface Notification {
   created_at: string;
   read: boolean;
   user_id?: string;
+  outlet_id?: string;
   type?: 'info' | 'warning' | 'success' | 'error';
 }
 

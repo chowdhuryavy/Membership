@@ -301,77 +301,86 @@ class DatabaseService {
 
   async syncAuthMetadata(profile: UserProfile) {
     if (!this.isSupabase()) return;
-    const { data: { user } } = await (supabase.auth as any).getUser();
-    if (!user) return;
-    const metaName = user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.display_name;
-    if (profile.name !== metaName) {
-      await (supabase.auth as any).updateUser({
-        data: { full_name: profile.name, display_name: profile.name, name: profile.name }
-      });
-    }
+    await this.safeCall(async () => {
+      const { data: { user } } = await (supabase.auth as any).getUser();
+      if (!user) return;
+      const metaName = user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.display_name;
+      if (profile.name !== metaName) {
+        await (supabase.auth as any).updateUser({
+          data: { full_name: profile.name, display_name: profile.name, name: profile.name }
+        });
+      }
+    }, null);
   }
 
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (!this.isSupabase()) return { user: null, error: "Cloud sync offline." };
-    const cleanEmail = email.trim().toLowerCase();
-    const { data: signUpData, error: signUpError } = await (supabase.auth as any).signUp({
-      email: cleanEmail,
-      password: passwordAttempt,
-      options: { data: { full_name: name, display_name: name, name: name } }
-    });
-    if (signUpError) return { user: null, error: signUpError.message };
-    if (signUpData.user) {
-        const { data: profile, error: profileError } = await supabase.from('profiles').upsert([{ 
-            email: cleanEmail, 
-            name: name, 
-            auth_id: signUpData.user.id,
-            role_id: 'member', 
-            allowed_outlets: []
-        }], { onConflict: 'email' }).select().single();
-        if (profileError) return { user: null, error: profileError.message };
-        return { user: profile as UserProfile, error: null };
-    }
-    return { user: null, error: "Signup failed." };
+    return this.safeCall(async () => {
+      const cleanEmail = email.trim().toLowerCase();
+      const { data: signUpData, error: signUpError } = await (supabase.auth as any).signUp({
+        email: cleanEmail,
+        password: passwordAttempt,
+        options: { data: { full_name: name, display_name: name, name: name } }
+      });
+      if (signUpError) return { user: null, error: signUpError.message };
+      if (signUpData.user) {
+          const { data: profile, error: profileError } = await supabase.from('profiles').upsert([{ 
+              email: cleanEmail, 
+              name: name, 
+              auth_id: signUpData.user.id,
+              role_id: 'member', 
+              allowed_outlets: []
+          }], { onConflict: 'email' }).select().single();
+          if (profileError) return { user: null, error: profileError.message };
+          return { user: profile as UserProfile, error: null };
+      }
+      return { user: null, error: "Signup failed." };
+    }, { user: null, error: "Network error during signup." });
   }
 
   async updateEmail(email: string) {
     if (this.isSupabase()) {
-        await (supabase.auth as any).updateUser({ email: email.trim().toLowerCase() });
+      await this.safeCall(async () => {
+        const { error } = await (supabase.auth as any).updateUser({ email: email.trim().toLowerCase() });
+        if (error) throw error;
+      }, null);
     }
   }
 
   async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null, requiresPasswordChange: boolean }> {
     if (!this.isSupabase()) return { user: null, error: "Cloud sync offline.", requiresPasswordChange: false };
-    const cleanEmail = email.trim().toLowerCase();
-    const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
-    
-    if (profile && profile.is_active === false) {
-        return { user: null, error: "Account is inactive. Please contact administration.", requiresPasswordChange: false };
-    }
+    return this.safeCall(async () => {
+      const cleanEmail = email.trim().toLowerCase();
+      const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
+      
+      if (profile && profile.is_active === false) {
+          return { user: null, error: "Account is inactive. Please contact administration.", requiresPasswordChange: false };
+      }
 
-    const { data: authData, error: authError } = await (supabase.auth as any).signInWithPassword({ email: cleanEmail, password: passwordAttempt });
-    if (authError || (profile && !profile.auth_id)) {
-        if (profile && profile.temp_password === passwordAttempt) {
-            const { data: signUpData, error: signUpError } = await (supabase.auth as any).signUp({ email: cleanEmail, password: passwordAttempt, options: { data: { full_name: profile.name, display_name: profile.name, name: profile.name } } });
-            if (signUpError) return { user: null, error: signUpError.message, requiresPasswordChange: false };
-            if (signUpData.user) {
-              await supabase.from('profiles').update({ auth_id: signUpData.user.id }).eq('id', profile.id);
-              const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
-              await this.logAction('AUTH_SIGNUP', `Identity provisioned for ${profile.email}`);
-              return { user: refreshed, error: null, requiresPasswordChange: true };
-            }
-        }
-        return { user: null, error: authError?.message || "Invalid credentials.", requiresPasswordChange: false };
-    }
-    if (authData.user && profile) {
-        if (!profile.auth_id || profile.auth_id !== authData.user.id) await supabase.from('profiles').update({ auth_id: authData.user.id }).eq('id', profile.id);
-        await this.syncAuthMetadata(profile);
-        const overrides = await this.getPermissionOverrides(profile.id);
-        const hydrated = { ...profile, overrides };
-        await this.logAction('AUTH_LOGIN', `Access authorized for ${profile.email}`, undefined, { id: profile.id, name: profile.name });
-        return { user: hydrated, error: null, requiresPasswordChange: !!profile.temp_password };
-    }
-    return { user: null, error: "Identity profile not found.", requiresPasswordChange: false };
+      const { data: authData, error: authError } = await (supabase.auth as any).signInWithPassword({ email: cleanEmail, password: passwordAttempt });
+      if (authError || (profile && !profile.auth_id)) {
+          if (profile && profile.temp_password === passwordAttempt) {
+              const { data: signUpData, error: signUpError } = await (supabase.auth as any).signUp({ email: cleanEmail, password: passwordAttempt, options: { data: { full_name: profile.name, display_name: profile.name, name: profile.name } } });
+              if (signUpError) return { user: null, error: signUpError.message, requiresPasswordChange: false };
+              if (signUpData.user) {
+                await supabase.from('profiles').update({ auth_id: signUpData.user.id }).eq('id', profile.id);
+                const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
+                await this.logAction('AUTH_SIGNUP', `Identity provisioned for ${profile.email}`);
+                return { user: refreshed, error: null, requiresPasswordChange: true };
+              }
+          }
+          return { user: null, error: authError?.message || "Invalid credentials.", requiresPasswordChange: false };
+      }
+      if (authData.user && profile) {
+          if (!profile.auth_id || profile.auth_id !== authData.user.id) await supabase.from('profiles').update({ auth_id: authData.user.id }).eq('id', profile.id);
+          await this.syncAuthMetadata(profile);
+          const overrides = await this.getPermissionOverrides(profile.id);
+          const hydrated = { ...profile, overrides };
+          await this.logAction('AUTH_LOGIN', `Access authorized for ${profile.email}`, undefined, { id: profile.id, name: profile.name });
+          return { user: hydrated, error: null, requiresPasswordChange: !!profile.temp_password };
+      }
+      return { user: null, error: "Identity profile not found.", requiresPasswordChange: false };
+    }, { user: null, error: "Network error during login.", requiresPasswordChange: false });
   }
 
   async addUser(user: Omit<UserProfile, 'id'> & { password?: string }): Promise<UserProfile> {
@@ -379,6 +388,7 @@ class DatabaseService {
     let authId: string | null = user.auth_id || null;
     let tempPassword: string | null = user.password || 'Temporary123!';
     if (this.isSupabase()) {
+      return this.safeCall(async () => {
         if (!authId) {
             const shadow = this.getShadowClient();
             const { data: authData, error: signUpError } = await (shadow.auth as any).signUp({ email: cleanEmail, password: tempPassword, options: { data: { full_name: user.name, name: user.name, display_name: user.name } } });
@@ -398,13 +408,16 @@ class DatabaseService {
         if (error) throw error;
         await this.logAction('CREATE_USER', `Identity provisioned: ${user.name} (${user.email})`);
         return data as UserProfile;
+      }, { ...user, id: crypto.randomUUID() } as UserProfile);
     }
     return { ...user, id: crypto.randomUUID() } as UserProfile;
   }
 
   async updateUser(id: string, updates: Partial<UserProfile>) { 
     if (this.isSupabase()) {
-        const { data: current } = await supabase.from('profiles').select('email, name').eq('id', id).single();
+      await this.safeCall(async () => {
+        const { data: current, error: fetchError } = await supabase.from('profiles').select('email, name').eq('id', id).single();
+        if (fetchError) throw fetchError;
         const finalUpdates: any = { 
             name: updates.name, 
             email: updates.email?.trim().toLowerCase(), 
@@ -414,50 +427,66 @@ class DatabaseService {
             updated_at: new Date().toISOString() 
         };
         Object.keys(finalUpdates).forEach(k => finalUpdates[k] === undefined && delete finalUpdates[k]);
-        await supabase.from('profiles').update(finalUpdates).eq('id', id);
+        const { error: updateError } = await supabase.from('profiles').update(finalUpdates).eq('id', id);
+        if (updateError) throw updateError;
         await this.logAction('UPDATE_USER', `Identity modified for ${current.name} (${current.email})`);
-    }
-  }
-
-  async changePassword(userId: string, currentPass: string, newPass: string) {
-    if (this.isSupabase()) {
-        await (supabase.auth as any).updateUser({ password: newPass });
-        await supabase.from('profiles').update({ temp_password: null }).eq('id', userId);
-        await this.logAction('CHANGE_PASSWORD', `Credentials updated for user ID: ${userId}`);
+      }, null);
     }
   }
 
   async getUsers(): Promise<UserProfile[]> {
     if (this.isSupabase()) {
-      const { data } = await supabase.from('profiles').select('*');
-      return (data || []) as UserProfile[];
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('profiles').select('*');
+        if (error) throw error;
+        return (data || []) as UserProfile[];
+      }, []);
     }
     return [];
   }
 
   async deleteUser(id: string) {
-    if (this.isSupabase()) await supabase.from('profiles').delete().eq('id', id);
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('profiles').delete().eq('id', id);
+        if (error) throw error;
+      }, null);
+    }
+  }
+
+  async changePassword(userId: string, currentPass: string, newPass: string) {
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        const { error: authError } = await (supabase.auth as any).updateUser({ password: newPass });
+        if (authError) throw authError;
+        const { error: profileError } = await supabase.from('profiles').update({ temp_password: null }).eq('id', userId);
+        if (profileError) throw profileError;
+        await this.logAction('CHANGE_PASSWORD', `Credentials updated for user ID: ${userId}`);
+      }, null);
+    }
   }
 
   async getStaff(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[]): Promise<Staff[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('staff').select('*').order('name');
-      if (scopeId) {
-          if (isProperty) {
-              if (limitToOutletIds && limitToOutletIds.length > 0) {
-                  query = query.in('outlet_id', limitToOutletIds);
-              } else {
-                  const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
-                  const ids = (outlets || []).map(o => o.id);
-                  query = query.in('outlet_id', ids);
-              }
-          } else {
-              query = query.eq('outlet_id', scopeId);
-          }
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []) as Staff[];
+      return this.safeCall(async () => {
+        let query = supabase.from('staff').select('*').order('name');
+        if (scopeId) {
+            if (isProperty) {
+                if (limitToOutletIds && limitToOutletIds.length > 0) {
+                    query = query.in('outlet_id', limitToOutletIds);
+                } else {
+                    const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
+                    const ids = (outlets || []).map(o => o.id);
+                    query = query.in('outlet_id', ids);
+                }
+            } else {
+                query = query.eq('outlet_id', scopeId);
+            }
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data || []) as Staff[];
+      }, []);
     }
     return [];
   }
@@ -541,67 +570,69 @@ class DatabaseService {
 
   async getMembers(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[]): Promise<Member[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('members').select('*');
-      if (scopeId) {
-          if (isProperty) {
-              if (limitToOutletIds && limitToOutletIds.length > 0) {
-                  query = query.in('outlet_id', limitToOutletIds);
-              } else {
-                  const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
-                  const ids = (outlets || []).map(o => o.id);
-                  query = query.in('outlet_id', ids);
-              }
-          } else {
-              query = query.eq('outlet_id', scopeId);
-          }
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      
-      const membersList = (data || []) as Member[];
+      return this.safeCall(async () => {
+        let query = supabase.from('members').select('*');
+        if (scopeId) {
+            if (isProperty) {
+                if (limitToOutletIds && limitToOutletIds.length > 0) {
+                    query = query.in('outlet_id', limitToOutletIds);
+                } else {
+                    const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
+                    const ids = (outlets || []).map(o => o.id);
+                    query = query.in('outlet_id', ids);
+                }
+            } else {
+                query = query.eq('outlet_id', scopeId);
+            }
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        
+        const membersList = (data || []) as Member[];
 
-      // Lazy background update for stale statuses (fire and forget)
-      setTimeout(async () => {
-        try {
-          const frozenMembers = membersList.filter(m => m.status === MemberStatus.FROZEN);
-          if (frozenMembers.length > 0) {
-            const { data: freezes } = await supabase.from('freezes').select('*').in('member_id', frozenMembers.map(m => m.id));
-            if (freezes) {
-              const today = startOfDay(new Date());
-              const membersToUpdate = frozenMembers.filter(m => {
-                const memberFreezes = freezes.filter(f => f.member_id === m.id);
-                const isCurrentlyFrozen = memberFreezes.some(f => {
-                  const start = startOfDay(parseISO(f.start_date));
-                  const end = startOfDay(parseISO(f.end_date));
-                  return today >= start && today <= end;
+        // Lazy background update for stale statuses (fire and forget)
+        setTimeout(async () => {
+          try {
+            const frozenMembers = membersList.filter(m => m.status === MemberStatus.FROZEN);
+            if (frozenMembers.length > 0) {
+              const { data: freezes } = await supabase.from('freezes').select('*').in('member_id', frozenMembers.map(m => m.id));
+              if (freezes) {
+                const today = startOfDay(new Date());
+                const membersToUpdate = frozenMembers.filter(m => {
+                  const memberFreezes = freezes.filter(f => f.member_id === m.id);
+                  const isCurrentlyFrozen = memberFreezes.some(f => {
+                    const start = startOfDay(parseISO(f.start_date));
+                    const end = startOfDay(parseISO(f.end_date));
+                    return today >= start && today <= end;
+                  });
+                  return !isCurrentlyFrozen; // They are marked as frozen, but no active freeze exists today
                 });
-                return !isCurrentlyFrozen; // They are marked as frozen, but no active freeze exists today
-              });
-              
-              // Trigger sync for members whose freeze has ended
-              for (const m of membersToUpdate) {
-                await this.syncMemberEndDate(m.id);
+                
+                // Trigger sync for members whose freeze has ended
+                for (const m of membersToUpdate) {
+                  await this.syncMemberEndDate(m.id);
+                }
               }
             }
+
+            // Also check for members who should be expired
+            const today = startOfDay(new Date());
+            const activeMembers = membersList.filter(m => m.status === MemberStatus.ACTIVE);
+            const expiredMembers = activeMembers.filter(m => {
+               const end = parseISO(m.current_end_date || m.original_end_date);
+               return today > end;
+            });
+
+            for (const m of expiredMembers) {
+               await this.syncMemberEndDate(m.id);
+            }
+          } catch (e) {
+            console.error("Background status sync failed:", e);
           }
+        }, 1000);
 
-          // Also check for members who should be expired
-          const today = startOfDay(new Date());
-          const activeMembers = membersList.filter(m => m.status === MemberStatus.ACTIVE);
-          const expiredMembers = activeMembers.filter(m => {
-             const end = parseISO(m.current_end_date || m.original_end_date);
-             return today > end;
-          });
-
-          for (const m of expiredMembers) {
-             await this.syncMemberEndDate(m.id);
-          }
-        } catch (e) {
-          console.error("Background status sync failed:", e);
-        }
-      }, 1000);
-
-      return membersList;
+        return membersList;
+      }, []);
     }
     return [];
   }
@@ -626,17 +657,19 @@ class DatabaseService {
       await this.addNotification({
         title: 'New Member Enrolled',
         message: `${member.guest_name} has joined with membership ${member.membership_number}.`,
-        type: 'success'
+        type: 'success',
+        outlet_id: member.outlet_id
       });
     } else {
       const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
       members.push(member);
       localStorage.setItem('membership_members', JSON.stringify(members));
-      await this.logAction('CREATE_MEMBER', `Enrolled new member locally: ${member.guest_name}`);
+      await this.logAction('CREATE_MEMBER', `Enrolled new member locally: ${member.guest_name}`, member.outlet_id);
       await this.addNotification({
         title: 'New Member Enrolled',
         message: `${member.guest_name} has joined with membership ${member.membership_number}.`,
-        type: 'success'
+        type: 'success',
+        outlet_id: member.outlet_id
       });
     }
   }
@@ -653,11 +686,12 @@ class DatabaseService {
       await this.logAction('UPDATE_MEMBER', `Updated member profile: ${patch.guest_name || id}. Modified fields: [${changedFields}]`, patch.outlet_id);
       
       if (patch.status === MemberStatus.CANCELLED) {
-        const { data: m } = await supabase.from('members').select('guest_name, membership_number').eq('id', id).single();
+        const { data: m } = await supabase.from('members').select('guest_name, membership_number, outlet_id').eq('id', id).single();
         await this.addNotification({
           title: 'Membership Cancelled',
           message: `${m?.guest_name || id} (${m?.membership_number || id}) has cancelled their membership.`,
-          type: 'error'
+          type: 'error',
+          outlet_id: m?.outlet_id
         });
       }
     } else {
@@ -673,7 +707,8 @@ class DatabaseService {
               await this.addNotification({
                 title: 'Membership Cancelled',
                 message: `${members[mIndex].guest_name || id} (${members[mIndex].membership_number || id}) has cancelled their membership.`,
-                type: 'error'
+                type: 'error',
+                outlet_id: members[mIndex].outlet_id
               });
             }
         }
@@ -705,16 +740,17 @@ class DatabaseService {
       const newEndDate = await this.syncMemberEndDate(freeze.member_id);
       
       // Fetch member name for better logging
-      const { data: member } = await supabase.from('members').select('guest_name, membership_number').eq('id', freeze.member_id).single();
+      const { data: member } = await supabase.from('members').select('guest_name, membership_number, outlet_id').eq('id', freeze.member_id).single();
       const memberName = member?.guest_name || 'Unknown Member';
       const memberId = member?.membership_number || freeze.member_id;
       
-      await this.logAction('FREEZE_MEMBER', `Account suspended: ${memberName}. Membership extended to ${newEndDate}`);
+      await this.logAction('FREEZE_MEMBER', `Account suspended: ${memberName}. Membership extended to ${newEndDate}`, member?.outlet_id);
       
       await this.addNotification({
         title: 'Membership Suspended',
         message: `${memberName} (${memberId}) has been suspended for ${freeze.total_days} days.`,
-        type: 'warning'
+        type: 'warning',
+        outlet_id: member?.outlet_id
       });
     } else {
       const freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
@@ -728,11 +764,12 @@ class DatabaseService {
         members[mIndex].status = MemberStatus.FROZEN;
         localStorage.setItem('membership_members', JSON.stringify(members));
         
-        await this.logAction('FREEZE_MEMBER', `Suspended membership locally for ${members[mIndex].guest_name}.`);
+        await this.logAction('FREEZE_MEMBER', `Suspended membership locally for ${members[mIndex].guest_name}.`, members[mIndex].outlet_id);
         await this.addNotification({
           title: 'Membership Suspended',
           message: `${members[mIndex].guest_name} has suspended their membership for ${freeze.total_days} days.`,
-          type: 'warning'
+          type: 'warning',
+          outlet_id: members[mIndex].outlet_id
         });
       }
     }
@@ -777,67 +814,69 @@ class DatabaseService {
     const totalDays = differenceInCalendarDays(freezeEnd, freezeStart) + 1;
     
     if (this.isSupabase()) {
-      // 1. Create the Batch record first
-      const { data: batch, error: batchError } = await supabase
-        .from('maintenance_batches')
-        .insert([{
-          start_date: startDate,
-          end_date: endDate,
-          total_days: totalDays,
-          reason: reason,
-          outlet_id: outletId,
-          is_maintenance: isMaintenance,
-          created_at: timestamp
-        }])
-        .select()
-        .single();
+      return this.safeCall(async () => {
+        // 1. Create the Batch record first
+        const { data: batch, error: batchError } = await supabase
+          .from('maintenance_batches')
+          .insert([{
+            start_date: startDate,
+            end_date: endDate,
+            total_days: totalDays,
+            reason: reason,
+            outlet_id: outletId,
+            is_maintenance: isMaintenance,
+            created_at: timestamp
+          }])
+          .select()
+          .single();
 
-      if (batchError) throw batchError;
+        if (batchError) throw batchError;
 
-      // 2. Fetch member details to calculate individual overlap
-      const { data: members, error: membersError } = await supabase
-        .from('members')
-        .select('id, start_date, original_end_date')
-        .in('id', memberIds);
+        // 2. Fetch member details to calculate individual overlap
+        const { data: members, error: membersError } = await supabase
+          .from('members')
+          .select('id, start_date, original_end_date')
+          .in('id', memberIds);
 
-      if (membersError) throw membersError;
+        if (membersError) throw membersError;
 
-      // 3. Create individual freeze records linked to this batch
-      const newFreezes = (members || []).map(m => {
-        const memberStart = startOfDay(parseISO(m.start_date));
-        const memberEnd = startOfDay(parseISO(m.original_end_date));
+        // 3. Create individual freeze records linked to this batch
+        const newFreezes = (members || []).map(m => {
+          const memberStart = startOfDay(parseISO(m.start_date));
+          const memberEnd = startOfDay(parseISO(m.original_end_date));
+          
+          // Calculate overlap between [memberStart, memberEnd] and [freezeStart, freezeEnd]
+          const overlapStart = new Date(Math.max(memberStart.getTime(), freezeStart.getTime()));
+          const overlapEnd = new Date(Math.min(memberEnd.getTime(), freezeEnd.getTime()));
+          
+          let actualDays = 0;
+          if (overlapStart <= overlapEnd) {
+            actualDays = Math.max(0, differenceInCalendarDays(overlapEnd, overlapStart) + 1);
+          }
+
+          return {
+            id: this.generateUUID(),
+            member_id: m.id,
+            start_date: startDate,
+            end_date: endDate,
+            total_days: actualDays,
+            reason: reason,
+            is_maintenance: isMaintenance,
+            maintenance_batch_id: batch.id,
+            outlet_id: outletId,
+            created_at: timestamp
+          };
+        });
+
+        const { error: freezeError } = await supabase.from('freezes').insert(newFreezes);
+        if (freezeError) throw freezeError;
+
+        // 4. Sync all affected members to update their status and end dates
+        await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
         
-        // Calculate overlap between [memberStart, memberEnd] and [freezeStart, freezeEnd]
-        const overlapStart = new Date(Math.max(memberStart.getTime(), freezeStart.getTime()));
-        const overlapEnd = new Date(Math.min(memberEnd.getTime(), freezeEnd.getTime()));
-        
-        let actualDays = 0;
-        if (overlapStart <= overlapEnd) {
-          actualDays = Math.max(0, differenceInCalendarDays(overlapEnd, overlapStart) + 1);
-        }
-
-        return {
-          id: this.generateUUID(),
-          member_id: m.id,
-          start_date: startDate,
-          end_date: endDate,
-          total_days: actualDays,
-          reason: reason,
-          is_maintenance: isMaintenance,
-          maintenance_batch_id: batch.id,
-          outlet_id: outletId,
-          created_at: timestamp
-        };
-      });
-
-      const { error: freezeError } = await supabase.from('freezes').insert(newFreezes);
-      if (freezeError) throw freezeError;
-
-      // 4. Sync all affected members to update their status and end dates
-      await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
-      
-      await this.logAction('BULK_FREEZE', `Bulk suspension applied to ${memberIds.length} members. Reason: ${reason}`);
-      return batch.id;
+        await this.logAction('BULK_FREEZE', `Bulk suspension applied to ${memberIds.length} members. Reason: ${reason}`);
+        return batch.id;
+      }, null);
     } else {
       // Local Mode Fallback
       const batchId = this.generateUUID();
@@ -897,6 +936,7 @@ class DatabaseService {
 
   async getBulkFreezeHistory(outletId?: string): Promise<{ batch_id: string, start_date: string, end_date: string, total_days: number, reason: string, member_count: number, created_at: string }[]> {
     if (this.isSupabase()) {
+      return this.safeCall(async () => {
         // 1. Get dedicated batches
         let query = supabase.from('maintenance_batches').select('*');
         if (outletId) query = query.eq('outlet_id', outletId);
@@ -949,6 +989,7 @@ class DatabaseService {
 
         const orphanedList = Object.values(groupedOrphaned) as { batch_id: string, start_date: string, end_date: string, total_days: number, reason: string, member_count: number, created_at: string }[];
         return [...history, ...orphanedList];
+      }, []);
     } else {
         // Local Mode Fallback
         const allFreezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]')
@@ -1311,8 +1352,11 @@ class DatabaseService {
 
   async getRoles(): Promise<Role[]> {
     if (this.isSupabase()) {
-      const { data } = await supabase.from('roles').select('*');
-      return (data || []) as Role[];
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('roles').select('*');
+        if (error) throw error;
+        return (data || []) as Role[];
+      }, []);
     }
     return [];
   }
@@ -1342,8 +1386,11 @@ class DatabaseService {
 
   async getOutlets(): Promise<Outlet[]> {
     if (this.isSupabase()) {
-      const { data } = await supabase.from('outlets').select('*');
-      return (data || []) as Outlet[];
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('outlets').select('*');
+        if (error) throw error;
+        return (data || []) as Outlet[];
+      }, []);
     }
     return [];
   }
@@ -2134,7 +2181,7 @@ class DatabaseService {
     }
   }
   // --- NOTIFICATIONS ---
-  async getNotifications(userId?: string): Promise<Notification[]> {
+  async getNotifications(userId?: string, outletId?: string): Promise<Notification[]> {
     if (this.isSupabase()) {
       let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
       if (userId) {
@@ -2142,25 +2189,39 @@ class DatabaseService {
       } else {
         query = query.is('user_id', null);
       }
+      
+      if (outletId) {
+        query = query.or(`outlet_id.eq.${outletId},outlet_id.is.null`);
+      }
+
       const { data, error } = await query;
       if (error) {
         // PGRST205 is "Could not find the table in the schema cache"
         if (error.code !== 'PGRST205') {
           console.warn("Failed to fetch notifications from Supabase, falling back to local storage", error);
         }
-        return this.getLocalNotifications(userId);
+        return this.getLocalNotifications(userId, outletId);
       }
       return (data || []) as Notification[];
     }
-    return this.getLocalNotifications(userId);
+    return this.getLocalNotifications(userId, outletId);
   }
 
-  private getLocalNotifications(userId?: string): Notification[] {
+  private getLocalNotifications(userId?: string, outletId?: string): Notification[] {
     const all = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    let filtered = all;
+    
     if (userId) {
-      return all.filter(n => !n.user_id || n.user_id === userId).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      filtered = filtered.filter(n => !n.user_id || n.user_id === userId);
+    } else {
+      filtered = filtered.filter(n => !n.user_id);
     }
-    return all.filter(n => !n.user_id).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    
+    if (outletId) {
+      filtered = filtered.filter(n => !n.outlet_id || n.outlet_id === outletId);
+    }
+
+    return filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
   async addNotification(notification: Omit<Notification, 'id' | 'created_at' | 'read'>) {
@@ -2219,7 +2280,7 @@ class DatabaseService {
     }
   }
 
-  async markAllNotificationsAsRead(userId?: string) {
+  async markAllNotificationsAsRead(userId?: string, outletId?: string) {
     if (this.isSupabase()) {
       let query = supabase.from('notifications').update({ read: true }).eq('read', false);
       if (userId) {
@@ -2227,15 +2288,20 @@ class DatabaseService {
       } else {
         query = query.is('user_id', null);
       }
+      
+      if (outletId) {
+        query = query.or(`outlet_id.eq.${outletId},outlet_id.is.null`);
+      }
+
       const { error } = await query;
       if (error) {
         if (error.code !== 'PGRST205') {
           console.warn("Failed to update notifications in Supabase", error);
         }
-        this.markAllLocalNotificationsAsRead(userId);
+        this.markAllLocalNotificationsAsRead(userId, outletId);
       }
     } else {
-      this.markAllLocalNotificationsAsRead(userId);
+      this.markAllLocalNotificationsAsRead(userId, outletId);
     }
   }
 
@@ -2248,10 +2314,12 @@ class DatabaseService {
     }
   }
 
-  private markAllLocalNotificationsAsRead(userId?: string) {
+  private markAllLocalNotificationsAsRead(userId?: string, outletId?: string) {
     const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
     const updated = notifications.map(n => {
-      if (!n.read && (!userId || !n.user_id || n.user_id === userId)) {
+      const userMatch = !userId || !n.user_id || n.user_id === userId;
+      const outletMatch = !outletId || !n.outlet_id || n.outlet_id === outletId;
+      if (!n.read && userMatch && outletMatch) {
         return { ...n, read: true };
       }
       return n;
@@ -2273,7 +2341,7 @@ class DatabaseService {
     }
   }
 
-  subscribeToNotifications(userId: string, callback: (payload: { eventType: string, new: any, old?: any }) => void) {
+  subscribeToNotifications(userId: string, outletId: string | undefined, callback: (payload: { eventType: string, new: any, old?: any }) => void) {
     if (this.isSupabase()) {
       const channel = supabase
         .channel('notifications-realtime')
@@ -2290,12 +2358,17 @@ class DatabaseService {
             
             // Check if it's for this user or global
             const targetNotification = newNotification || oldNotification;
-            if (targetNotification && (!targetNotification.user_id || targetNotification.user_id === userId)) {
-              callback({
-                eventType: payload.eventType,
-                new: payload.new,
-                old: payload.old
-              });
+            if (targetNotification) {
+              const userMatch = !targetNotification.user_id || targetNotification.user_id === userId;
+              const outletMatch = !outletId || !targetNotification.outlet_id || targetNotification.outlet_id === outletId;
+              
+              if (userMatch && outletMatch) {
+                callback({
+                  eventType: payload.eventType,
+                  new: payload.new,
+                  old: payload.old
+                });
+              }
             }
           }
         )
@@ -2310,7 +2383,10 @@ class DatabaseService {
         const bc = new BroadcastChannel('notifications_channel');
         bc.onmessage = (event) => {
           const notification = event.data as Notification;
-          if (!notification.user_id || notification.user_id === userId) {
+          const userMatch = !notification.user_id || notification.user_id === userId;
+          const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
+          
+          if (userMatch && outletMatch) {
             callback({ eventType: 'INSERT', new: notification });
           }
         };
@@ -2318,7 +2394,10 @@ class DatabaseService {
         // Same-tab listener for local mode
         const handleCustomEvent = (event: any) => {
           const notification = event.detail as Notification;
-          if (!notification.user_id || notification.user_id === userId) {
+          const userMatch = !notification.user_id || notification.user_id === userId;
+          const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
+          
+          if (userMatch && outletMatch) {
             callback({ eventType: 'INSERT', new: notification });
           }
         };

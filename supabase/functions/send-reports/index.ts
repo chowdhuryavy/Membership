@@ -379,9 +379,6 @@ serve(async (req) => {
 
         const pdfBase64 = doc.output('datauristring').split(',')[1];
 
-        // Generate HTML for email based on report type
-        let reportTableHtml = '';
-        
         // Helper function to get signatory config hierarchy
         const getSignatoryConfig = () => {
           const resolveConfig = (config: any, type: string) => {
@@ -434,362 +431,129 @@ serve(async (req) => {
             .join('\n');
         }
 
-        // Generate detailed report table based on report type
-        if (reportData.rows.length > 0) {
-          if (params.reportType === 'revenue_recognition') {
-            // Use grouped data from reportData
-            const grouped = reportData.groupedRows || {};
-            
-            // Calculate grand totals
-            let grandTotals = {
-              daily_rate: 0,
-              actual_rate: 0,
-              discount: 0,
-              net_fees: 0,
-              prev_accrual: 0,
-              period_rev: 0,
-              deferred: 0
-            };
-            
-            let allRowsHtml = '';
-            
-            // Process each category group
-            for (const [category, rows] of Object.entries(grouped)) {
-              const categoryRows = rows as any[];
-              
-              // Calculate subtotals for this category
-              const subtotals = {
-                daily_rate: categoryRows.reduce((s: number, r: any) => s + (r.daily_rate || 0), 0),
-                actual_rate: categoryRows.reduce((s: number, r: any) => s + (r.actual_rate || 0), 0),
-                discount: categoryRows.reduce((s: number, r: any) => s + (r.discount || 0), 0),
-                net_fees: categoryRows.reduce((s: number, r: any) => s + (r.net_fees || 0), 0),
-                prev_accrual: categoryRows.reduce((s: number, r: any) => s + (r.prev_accrual || 0), 0),
-                period_rev: categoryRows.reduce((s: number, r: any) => s + (r.period_rev || 0), 0),
-                deferred: categoryRows.reduce((s: number, r: any) => s + (r.deferred || 0), 0)
-              };
-              
-              // Update grand totals
-              grandTotals.daily_rate += subtotals.daily_rate;
-              grandTotals.actual_rate += subtotals.actual_rate;
-              grandTotals.discount += subtotals.discount;
-              grandTotals.net_fees += subtotals.net_fees;
-              grandTotals.prev_accrual += subtotals.prev_accrual;
-              grandTotals.period_rev += subtotals.period_rev;
-              grandTotals.deferred += subtotals.deferred;
-              
-              // Category header
-              allRowsHtml += `
-                <tr style="background: #f1f5f9;">
-                  <td colspan="12" style="${cellStyle} padding: 12px; font-weight: bold; font-size: 12px;">
-                    ${category} (${categoryRows.length} Ledger Events)
-                  </td>
-                </tr>
-              `;
-              
-              // Category rows
-              categoryRows.forEach((row: any, idx: number) => {
-                allRowsHtml += `
-                  <tr style="border-bottom: 1px solid #e2e8f0;">
-                    <td style="${cellStyle} text-align: center;">${idx + 1}</td>
-                    <td style="${cellStyle} font-weight: 500;">${row.guest_name}</td>
-                    <td style="${cellStyle} text-align: center;">${row.start_date}</td>
-                    <td style="${cellStyle} text-align: center;">${row.end_date}</td>
-                    <td style="${cellStyle} text-align: center;">${row.total_days}</td>
-                    <td style="${numericCellStyle}">${formatCurrency(row.daily_rate, currencySymbol)}</td>
-                    <td style="${numericCellStyle}">${formatCurrency(row.actual_rate, currencySymbol)}</td>
-                    <td style="${numericCellStyle}">${formatCurrency(row.discount, currencySymbol)}</td>
-                    <td style="${numericCellStyle}">${formatCurrency(row.net_fees, currencySymbol)}</td>
-                    <td style="${numericCellStyle} color: #64748b;">${formatCurrency(row.prev_accrual, currencySymbol)}</td>
-                    <td style="${numericCellStyle} font-weight: bold; color: #4f46e5;">${formatCurrency(row.period_rev, currencySymbol)}</td>
-                    <td style="${numericCellStyle} font-weight: bold; color: #ef4444;">${formatCurrency(row.deferred, currencySymbol)}</td>
-                  </tr>
-                `;
-              });
-              
-              // Subtotal row for category
-              allRowsHtml += `
-                <tr style="background: #eef2ff; font-weight: bold;">
-                  <td colspan="5" style="${cellStyle} text-align: right;">Cluster Subtotal: ${category}</td>
-                  <td style="${numericCellStyle}">${formatCurrency(subtotals.daily_rate, currencySymbol)}</td>
-                  <td style="${numericCellStyle}">${formatCurrency(subtotals.actual_rate, currencySymbol)}</td>
-                  <td style="${numericCellStyle}">${formatCurrency(subtotals.discount, currencySymbol)}</td>
-                  <td style="${numericCellStyle}">${formatCurrency(subtotals.net_fees, currencySymbol)}</td>
-                  <td style="${numericCellStyle}">${formatCurrency(subtotals.prev_accrual, currencySymbol)}</td>
-                  <td style="${numericCellStyle}">${formatCurrency(subtotals.period_rev, currencySymbol)}</td>
-                  <td style="${numericCellStyle}">${formatCurrency(subtotals.deferred, currencySymbol)}</td>
-                </tr>
-              `;
-            }
-            
-            // Grand total row
-            allRowsHtml += `
-              <tr style="background: #0f172a; color: white; font-weight: bold;">
-                <td colspan="5" style="${cellStyle} text-align: right; padding: 12px; color: white;">Verified Portfolio Total</td>
-                <td style="${numericCellStyle} padding: 12px; color: white;">${formatCurrency(grandTotals.daily_rate, currencySymbol)}</td>
-                <td style="${numericCellStyle} padding: 12px; color: white;">${formatCurrency(grandTotals.actual_rate, currencySymbol)}</td>
-                <td style="${numericCellStyle} padding: 12px; color: white;">${formatCurrency(grandTotals.discount, currencySymbol)}</td>
-                <td style="${numericCellStyle} padding: 12px; color: white;">${formatCurrency(grandTotals.net_fees, currencySymbol)}</td>
-                <td style="${numericCellStyle} padding: 12px; color: #cbd5e1;">${formatCurrency(grandTotals.prev_accrual, currencySymbol)}</td>
-                <td style="${numericCellStyle} padding: 12px; color: #818cf8;">${formatCurrency(grandTotals.period_rev, currencySymbol)}</td>
-                <td style="${numericCellStyle} padding: 12px; color: #f87171;">${formatCurrency(grandTotals.deferred, currencySymbol)}</td>
-              </tr>
-            `;
-            
-            reportTableHtml = `
-              <div style="margin: 20px 0; overflow-x: auto;">
-                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Revenue Recognition Ledger</h3>
-                <table style="${tableStyle}">
-                  <thead>
-                    <tr style="background: #0f172a; color: white; font-weight: bold;">
-                      <th style="${headerStyle} text-align: center;">SL.</th>
-                      <th style="${headerStyle} text-align: left;">Guest Name / Profile</th>
-                      <th style="${headerStyle} text-align: center;">Start Date</th>
-                      <th style="${headerStyle} text-align: center;">End Date</th>
-                      <th style="${headerStyle} text-align: center;">Days</th>
-                      <th style="${headerNumericStyle}">Daily Rate</th>
-                      <th style="${headerNumericStyle}">Actual Rate</th>
-                      <th style="${headerNumericStyle}">Discount</th>
-                      <th style="${headerNumericStyle}">Net Fees</th>
-                      <th style="${headerNumericStyle}">Prev. Accrual</th>
-                      <th style="${headerNumericStyle}">Period Rev</th>
-                      <th style="${headerNumericStyle}">Deferred</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${allRowsHtml}
-                  </tbody>
-                </table>
-              </div>
-            `;
-          } else if (params.reportType === 'daily_sales') {
-            reportTableHtml = `
-              <div style="margin: 20px 0; overflow-x: auto;">
-                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Daily Sales Ledger</h3>
-                <table style="${tableStyle}">
-                  <thead>
-                    <tr style="background: #0f172a; color: white; font-weight: bold;">
-                      <th style="${headerStyle} text-align: center;">SL</th>
-                      <th style="${headerStyle} text-align: left;">Date</th>
-                      <th style="${headerStyle} text-align: left;">Guest</th>
-                      <th style="${headerStyle} text-align: left;">Item/Service</th>
-                      <th style="${headerStyle} text-align: left;">Check #</th>
-                      <th style="${headerStyle} text-align: left;">Payment</th>
-                      <th style="${headerNumericStyle}">Gross</th>
-                      <th style="${headerNumericStyle}">Disc%</th>
-                      <th style="${headerNumericStyle}">Disc Amt</th>
-                      <th style="${headerNumericStyle}">Net Rev</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${reportData.rows.map((row: any) => `
-                      <tr style="border-bottom: 1px solid #e2e8f0;">
-                        <td style="${cellStyle} text-align: center;">${row.sl_no}</td>
-                        <td style="${cellStyle}">${row.date}</td>
-                        <td style="${cellStyle} font-weight: 500;">${row.guest_name}</td>
-                        <td style="${cellStyle}">${row.item_name}</td>
-                        <td style="${cellStyle}">${row.check_no}</td>
-                        <td style="${cellStyle}">${row.mode_of_payment}</td>
-                        <td style="${numericCellStyle}">${formatCurrency(row.actual_price, currencySymbol)}</td>
-                        <td style="${numericCellStyle}">${row.discount_percent > 0 ? row.discount_percent.toFixed(1) + '%' : ''}</td>
-                        <td style="${numericCellStyle}">${formatCurrency(row.discount_amount, currencySymbol)}</td>
-                        <td style="${numericCellStyle} font-weight: 600;">${formatCurrency(row.net_revenue, currencySymbol)}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                  <tfoot>
-                    <tr style="background: #f8fafc; font-weight: bold;">
-                      <td colspan="6" style="${cellStyle} text-align: right;">TOTALS</td>
-                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalGross, currencySymbol)}</td>
-                      <td style="${cellStyle}"></td>
-                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalDiscount, currencySymbol)}</td>
-                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalNet, currencySymbol)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            `;
+        // Build HTML Table for email body
+        let tableHtml = '';
+        if (reportData.rows && reportData.rows.length > 0) {
+          let headers: string[] = [];
+          if (params.reportType === 'daily_sales') {
+            headers = ['SL.NO.', 'DATE', 'GUEST / MEMBER', 'DURATION', 'CHECK NO.', 'PAYMENT MODE', 'ITEM / SERVICE', 'GROSS AMOUNT', 'DISC %', 'DISCOUNT AMT', 'NET REVENUE'];
+          } else if (params.reportType === 'revenue_recognition') {
+            headers = ['SL.NO.', 'GUEST / MEMBER', 'MEMBERSHIP NO.', 'START DATE', 'END DATE', 'DAYS', 'ACTUAL RATE', 'DAILY RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED'];
           } else if (params.reportType === 'members_joined') {
-            reportTableHtml = `
-              <div style="margin: 20px 0; overflow-x: auto;">
-                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Membership Acquisition Log</h3>
-                <table style="${tableStyle}">
-                  <thead>
-                    <tr style="background: #0f172a; color: white; font-weight: bold;">
-                      <th style="${headerStyle} text-align: center;">SL</th>
-                      <th style="${headerStyle} text-align: left;">Date</th>
-                      <th style="${headerStyle} text-align: left;">Guest</th>
-                      <th style="${headerStyle} text-align: left;">Mem. No</th>
-                      <th style="${headerStyle} text-align: left;">Category</th>
-                      <th style="${headerNumericStyle}">Gross</th>
-                      <th style="${headerNumericStyle}">Disc Amt</th>
-                      <th style="${headerNumericStyle}">Net Rev</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${reportData.rows.map((row: any) => `
-                      <tr style="border-bottom: 1px solid #e2e8f0;">
-                        <td style="${cellStyle} text-align: center;">${row.sl_no}</td>
-                        <td style="${cellStyle}">${row.date}</td>
-                        <td style="${cellStyle} font-weight: 500;">${row.name}</td>
-                        <td style="${cellStyle}">${row.membership_no}</td>
-                        <td style="${cellStyle}">${row.category}</td>
-                        <td style="${numericCellStyle}">${formatCurrency(row.gross, currencySymbol)}</td>
-                        <td style="${numericCellStyle}">${formatCurrency(row.discount_amt, currencySymbol)}</td>
-                        <td style="${numericCellStyle} font-weight: 600;">${formatCurrency(row.net, currencySymbol)}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                  <tfoot>
-                    <tr style="background: #f8fafc; font-weight: bold;">
-                      <td colspan="5" style="${cellStyle} text-align: right;">TOTALS</td>
-                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalGross, currencySymbol)}</td>
-                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalDiscount, currencySymbol)}</td>
-                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalNet, currencySymbol)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            `;
+            headers = ['SL.NO.', 'DATE', 'GUEST / MEMBER', 'CATEGORY', 'CHECK NO.', 'ITEM / SERVICE', 'GROSS AMOUNT', 'DISC %', 'DISCOUNT AMT', 'NET REVENUE'];
           } else if (params.reportType === 'expiring_memberships') {
-            reportTableHtml = `
-              <div style="margin: 20px 0; overflow-x: auto;">
-                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Expiring Memberships</h3>
-                <table style="${tableStyle}">
-                  <thead>
-                    <tr style="background: #0f172a; color: white; font-weight: bold;">
-                      <th style="${headerStyle} text-align: center;">SL</th>
-                      <th style="${headerStyle} text-align: left;">Name</th>
-                      <th style="${headerStyle} text-align: left;">Mem. No</th>
-                      <th style="${headerStyle} text-align: left;">Category</th>
-                      <th style="${headerStyle} text-align: left;">Expiry Date</th>
-                      <th style="${headerStyle} text-align: left;">Status</th>
-                     </tr>
-                  </thead>
-                  <tbody>
-                    ${reportData.rows.map((row: any) => `
-                      <tr style="border-bottom: 1px solid #e2e8f0;">
-                        <td style="${cellStyle} text-align: center;">${row.sl_no}</td>
-                        <td style="${cellStyle} font-weight: 500;">${row.name}</td>
-                        <td style="${cellStyle}">${row.membership_no}</td>
-                        <td style="${cellStyle}">${row.category_name}</td>
-                        <td style="${cellStyle} color: #ef4444; font-weight: 600;">${row.date}</td>
-                        <td style="${cellStyle}">${row.status}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                 </table>
-              </div>
-            `;
-          } else if (params.reportType === 'incentives') {
-            reportTableHtml = `
-              <div style="margin: 20px 0; overflow-x: auto;">
-                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Incentive Audit</h3>
-                <table style="${tableStyle}">
-                  <thead>
-                    <tr style="background: #0f172a; color: white; font-weight: bold;">
-                      <th style="${headerStyle} text-align: left;">Date</th>
-                      <th style="${headerStyle} text-align: left;">Guest</th>
-                      <th style="${headerStyle} text-align: left;">Staff</th>
-                      <th style="${headerNumericStyle}">Net Rev</th>
-                      <th style="${headerNumericStyle}">Inc Net</th>
-                     </tr>
-                  </thead>
-                  <tbody>
-                    ${reportData.rows.map((row: any) => `
-                      <tr style="border-bottom: 1px solid #e2e8f0;">
-                        <td style="${cellStyle}">${row.date}</td>
-                        <td style="${cellStyle} font-weight: 500;">${row.guest_name}</td>
-                        <td style="${cellStyle}">${row.therapist_name}</td>
-                        <td style="${numericCellStyle}">${formatCurrency(row.net_revenue, currencySymbol)}</td>
-                        <td style="${numericCellStyle} font-weight: 600;">${formatCurrency(row.inc_net, currencySymbol)}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                  <tfoot>
-                    <tr style="background: #f8fafc; font-weight: bold;">
-                      <td colspan="4" style="${cellStyle} text-align: right;">TOTAL INCENTIVE</td>
-                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalIncentive, currencySymbol)}</td>
-                     </tr>
-                  </tfoot>
-                 </table>
-              </div>
-            `;
-            
-            // Add staff totals for incentive reports
-            if (reportData.rows.length > 0) {
-              const staffTotals: Record<string, number> = {};
-              const staffList = reportData.summary?.staffList || [];
-              const staffMap = Object.fromEntries(staffList.map((s: any) => [s.id, s.name]));
-
-              reportData.rows.forEach((r: any) => {
-                if (r.staff_splits) {
-                  Object.entries(r.staff_splits).forEach(([staffId, amount]) => {
-                    const staffName = staffMap[staffId] || 'Unknown Staff';
-                    staffTotals[staffName] = (staffTotals[staffName] || 0) + (amount as number);
-                  });
-                }
-              });
-
-              if (Object.keys(staffTotals).length > 0) {
-                reportTableHtml += `
-                  <div style="margin: 20px 0; padding: 15px; background: #fffbeb; border-radius: 6px; border: 1px solid #fde68a;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #92400e;">Staff Incentive Breakdown</h3>
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 14px; color: #78350f;">
-                      ${Object.entries(staffTotals).sort((a, b) => b[1] - a[1]).map(([staffName, amount]) => {
-                        return `
-                          <tr>
-                            <td align="left" style="padding: 6px 0; border-bottom: 1px solid #fef3c7;">${staffName}</td>
-                            <td align="right" style="padding: 6px 0; border-bottom: 1px solid #fef3c7; font-weight: 600;">${formatCurrency(amount, currencySymbol)}</td>
-                          </tr>`;
-                      }).join('\n')}
-                    </table>
-                  </div>
-                `;
-              }
-            }
+            headers = ['SL.NO.', 'GUEST / MEMBER', 'MEMBERSHIP NO.', 'CATEGORY', 'START DATE', 'END DATE', 'DAYS LEFT', 'STATUS'];
           } else if (params.reportType === 'massage_room_revenue') {
-            const rooms = reportData.summary.rooms || [];
-            reportTableHtml = `
-              <div style="margin: 20px 0; overflow-x: auto;">
-                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #0f172a;">Massage Room Revenue Report</h3>
-                <table style="${tableStyle}">
-                  <thead>
-                    <tr style="background: #0f172a; color: white; font-weight: bold;">
-                      <th style="${headerStyle} text-align: left;">Date</th>
-                      ${rooms.map((r: string) => `<th style="${headerNumericStyle}">${r}</th>`).join('')}
-                      <th style="${headerNumericStyle}">Unassigned</th>
-                      <th style="${headerNumericStyle}">Total</th>
-                     </tr>
-                  </thead>
-                  <tbody>
-                    ${reportData.rows.map((row: any) => `
-                      <tr style="border-bottom: 1px solid #e2e8f0;">
-                        <td style="${cellStyle}">${row.date}</td>
-                        ${rooms.map((r: string) => `<td style="${numericCellStyle}">${formatCurrency(row[r] || 0, currencySymbol)}</td>`).join('')}
-                        <td style="${numericCellStyle}">${formatCurrency(row.unassigned || 0, currencySymbol)}</td>
-                        <td style="${numericCellStyle} font-weight: 600;">${formatCurrency(row.total || 0, currencySymbol)}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                  <tfoot>
-                    <tr style="background: #f8fafc; font-weight: bold;">
-                      <td colspan="${rooms.length + 2}" style="${cellStyle} text-align: right;">TOTAL REVENUE</td>
-                      <td style="${numericCellStyle}">${formatCurrency(reportData.summary.totalRevenue, currencySymbol)}</td>
-                     </tr>
-                  </tfoot>
-                 </table>
-              </div>
-            `;
+            headers = ['DATE', 'ROOM', 'REVENUE'];
+          } else if (params.reportType === 'monthly_revenue') {
+            headers = ['CATEGORY', 'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'TOTAL'];
+          } else {
+            headers = ['SL.NO.', 'DATE', 'GUEST / MEMBER', 'ITEM / SERVICE', 'NET REVENUE'];
           }
+
+          tableHtml = `
+            <div style="margin: 30px 0; overflow-x: auto;">
+              <h3 style="margin: 0 0 15px 0; font-size: 18px; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">Detailed Report Data</h3>
+              <table width="100%" cellpadding="8" cellspacing="0" border="1" style="border-collapse: collapse; border-color: #e2e8f0; font-size: 12px; text-align: left;">
+                <thead>
+                  <tr style="background-color: #f8fafc; color: #0f172a;">
+                    ${headers.map(h => `<th style="padding: 8px; border: 1px solid #e2e8f0;">${h}</th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${reportData.rows.map((r: any, idx: number) => {
+                    let cells: string[] = [];
+                    if (params.reportType === 'daily_sales') {
+                      cells = [
+                        (idx + 1).toString(),
+                        r.date || '',
+                        r.guest_name || '',
+                        r.duration || '-',
+                        r.check_no || '',
+                        r.mode_of_payment || '',
+                        r.item_name || '',
+                        formatCurrency(r.actual_price, currencySymbol),
+                        r.discount_percent > 0 ? \`\${r.discount_percent.toFixed(0)}%\` : '',
+                        formatCurrency(r.discount_amount, currencySymbol),
+                        formatCurrency(r.net_revenue, currencySymbol)
+                      ];
+                    } else if (params.reportType === 'revenue_recognition') {
+                      cells = [
+                        (idx + 1).toString(),
+                        r.guest_name || '',
+                        r.membership_no || '',
+                        r.start_date || '',
+                        r.end_date || '',
+                        (r.total_days || 0).toString(),
+                        formatCurrency(r.actual_rate, currencySymbol),
+                        formatCurrency(r.daily_rate, currencySymbol),
+                        formatCurrency(r.discount, currencySymbol),
+                        formatCurrency(r.net_fees, currencySymbol),
+                        formatCurrency(r.prev_accrual, currencySymbol),
+                        formatCurrency(r.period_rev, currencySymbol),
+                        formatCurrency(r.deferred, currencySymbol)
+                      ];
+                    } else if (params.reportType === 'members_joined') {
+                      cells = [
+                        (idx + 1).toString(),
+                        r.date || '',
+                        r.name || '',
+                        r.category || '',
+                        r.check_no || '',
+                        r.item || '',
+                        formatCurrency(r.gross, currencySymbol),
+                        r.discount_percent > 0 ? \`\${r.discount_percent.toFixed(0)}%\` : '',
+                        formatCurrency(r.discount_amt, currencySymbol),
+                        formatCurrency(r.net, currencySymbol)
+                      ];
+                    } else if (params.reportType === 'expiring_memberships') {
+                      cells = [
+                        (idx + 1).toString(),
+                        r.guest_name || '',
+                        r.membership_no || '',
+                        r.category_name || '',
+                        r.start_date || '',
+                        r.end_date || '',
+                        (r.days_left || 0).toString(),
+                        r.status || ''
+                      ];
+                    } else if (params.reportType === 'massage_room_revenue') {
+                      cells = [
+                        r.date || '',
+                        r.room_name || 'Unassigned',
+                        formatCurrency(r.revenue, currencySymbol)
+                      ];
+                    } else if (params.reportType === 'monthly_revenue') {
+                      cells = [
+                        r.category || '',
+                        ...(r.values || []).map((v: number) => v > 0 ? formatCurrency(v, currencySymbol) : '-'),
+                        formatCurrency(r.total, currencySymbol)
+                      ];
+                    } else {
+                        cells = [
+                            (idx + 1).toString(),
+                            r.date || '',
+                            r.guest_name || '',
+                            r.item_name || '',
+                            formatCurrency(r.net_revenue || r.net || 0, currencySymbol)
+                        ];
+                    }
+                    return \`<tr>\${cells.map(c => \`<td style="padding: 8px; border: 1px solid #e2e8f0;">\${c}</td>\`).join('')}</tr>\`;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
         }
 
         // Professional message for email body
         const professionalMessage = `
-          <div style="color: #475569; font-size: 14px; line-height: 1.6; margin: 20px 0;">
-            <p>We are pleased to provide you with the latest <strong>${reportTitle}</strong> for your review. This automated report contains comprehensive data regarding the specified period.</p>
-            <p>Please find the detailed report attached as a PDF document for your records. Should you require any further information or have questions regarding the data presented, please do not hesitate to contact our support team.</p>
+          <div style="color: #475569; font-size: 14px; line-height: 1.6; margin: 20px 0; padding: 20px; background: #f8fafc; border-left: 4px solid #0f172a; border-radius: 8px;">
+            <p style="margin-top: 0;">Please find the detailed <strong>${reportTitle}</strong> attached as a PDF document.</p>
+            <p style="margin-bottom: 0;">If you require further analysis or have any questions regarding this data, please contact the finance department.</p>
           </div>
         `;
+
 
         // Process each recipient in the group
         await Promise.all(recipients.map(async (recipient) => {
@@ -822,9 +586,9 @@ serve(async (req) => {
                     </table>
                   </div>
 
-                  ${reportTableHtml}
-
                   ${professionalMessage}
+                  
+                  ${tableHtml}
                   
                   ${signatoryConfig ? `
                   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 40px;">

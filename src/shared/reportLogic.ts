@@ -13,6 +13,8 @@ export interface ReportData {
   summary: any;
 }
 
+import { getMonthlyRevenueData } from './monthlyRevenueReportLogic';
+
 export interface ReportContext {
   supabase: any;
   propertyId: string;
@@ -55,6 +57,7 @@ export const REPORT_TITLES: Record<string, string> = {
   'members_joined': 'Membership Acquisition Log',
   'expiring_memberships': 'Expiring Memberships Audit',
   'massage_room_revenue': 'Massage Room Revenue Report',
+  'monthly_revenue': 'Monthly Revenue Report',
   'incentives': 'Incentive Audit'
 };
 
@@ -89,7 +92,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const [membersRes, freezesRes, categoriesRes, typesRes] = await Promise.all([
       membersQuery,
       supabase.from('freezes').select('*'),
-      supabase.from('membership_categories').select('id, name').in('outlet_id', outletIds),
+      supabase.from('membership_categories').select('id, name, duration_months').in('outlet_id', outletIds),
       supabase.from('membership_types').select('id, name').in('outlet_id', outletIds)
     ]);
 
@@ -103,6 +106,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const categories = categoriesRes.data || [];
     const types = typesRes.data || [];
     const categoryMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]));
+    const categoryDurationMap = Object.fromEntries(categories.map((c: any) => [c.id, c.duration_months]));
     const typeMap = Object.fromEntries(types.map((t: any) => [t.id, t.name]));
 
     console.log(`DEBUG: Found ${members.length} members for property ${propertyId}`);
@@ -139,6 +143,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           guest_name: m.guest_name || m.name,
           membership_no: m.membership_number || m.membership_no || 'N/A',
           category_name: categoryMap[m.category_id] || 'Other',
+          category_duration: categoryDurationMap[m.category_id] || 0,
           membership_type_name: typeMap[m.membership_type_id] || 'Other',
           start_date: m.start_date ? format(safeParseDate(m.start_date)!, 'dd-MM-yyyy') : 'N/A',
           end_date: m.current_end_date ? format(safeParseDate(m.current_end_date)!, 'dd-MM-yyyy') : 'N/A',
@@ -175,6 +180,21 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       .map((row: any) => {
         // Remove internal filtering fields
         const { _mEnd, _mStart, ...rest } = row;
+        return { ...rest, _mStart }; // Keep _mStart for sorting
+      })
+      .sort((a: any, b: any) => {
+        // Sort by membership type (tier)
+        const typeCompare = (a.membership_type_name || '').localeCompare(b.membership_type_name || '');
+        if (typeCompare !== 0) return typeCompare;
+        
+        // Then by start date
+        const dateA = a._mStart ? a._mStart.getTime() : 0;
+        const dateB = b._mStart ? b._mStart.getTime() : 0;
+        return dateA - dateB;
+      })
+      .map((row: any) => {
+        // Final cleanup of internal fields
+        const { _mStart, ...rest } = row;
         return rest;
       });
 
@@ -187,8 +207,9 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     // Group by category for the frontend/email
     const grouped = rows.reduce((acc: any, row: any) => {
-      if (!acc[row.category_name]) acc[row.category_name] = [];
-      acc[row.category_name].push(row);
+      const groupKey = `${row.category_name}|${row.category_duration}`;
+      if (!acc[groupKey]) acc[groupKey] = [];
+      acc[groupKey].push(row);
       return acc;
     }, {});
 
@@ -619,6 +640,22 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     };
   }
 
+  if (reportType === 'monthly_revenue') {
+    const year = date.getFullYear();
+    const data = await getMonthlyRevenueData(propertyId, outletId, year);
+    return {
+      rows: data.rows,
+      summary: {
+        monthlyTotals: data.monthlyTotals,
+        yearlyTotal: data.yearlyTotal,
+        previousYearTotals: data.previousYearTotals,
+        previousYearlyTotal: data.previousYearlyTotal,
+        months: data.months,
+        year: data.year
+      }
+    };
+  }
+
   if (reportType === 'massage_room_revenue') {
     const startStr = format(date, 'yyyy-MM-dd');
     const [bookingsRes, roomsRes] = await Promise.all([
@@ -706,17 +743,20 @@ export const generateReportPDF = (options: PDFOptions) => {
   const contentWidth = pageWidth - (margin * 2);
 
   // Helper to handle currency formatting
-  const formatCurrency = (val: number | undefined | null) => {
+  const formatCurrency = (val: number | undefined | null, skipSymbol = false) => {
     const safeAmount = (val === null || val === undefined || isNaN(Number(val))) ? 0 : Number(val);
     const formatted = safeAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    
+    if (skipSymbol) return formatted;
+
     // jsPDF default fonts only support WinAnsiEncoding (mostly Latin-1).
     // Symbols like 'ر.ق' (Qatari Riyal) will render as garbled text (e.g. þÕ.þ-).
     // We check if the currency symbol contains characters outside the safe range.
     // If it does, we fallback to the currency code (e.g. QAR) to ensure the PDF is readable.
-    if (/[^\x00-\xFF\u20AC]/.test(currencySymbol)) {
+    if (/[^\x00-\xFF\u20AC]/.test(currencySymbol || '')) {
       return `${currencyCode || ''} ${formatted}`.trim();
     }
-    return `${currencySymbol} ${formatted}`;
+    return `${currencySymbol || '$'} ${formatted}`;
   };
 
   // --- HEADER SECTION ---
@@ -767,7 +807,7 @@ export const generateReportPDF = (options: PDFOptions) => {
   doc.setTextColor(15, 23, 42);
   doc.text(reportTitle.toUpperCase(), titleX, currentY + 8, { align: 'right', maxWidth: availableWidth });
 
-  if (membershipTypeName) {
+  if (membershipTypeName && reportType !== 'monthly_revenue') {
     // Membership Type Tag (Top Right)
     const tagWidth = 45;
     const tagHeight = 6;
@@ -799,9 +839,11 @@ export const generateReportPDF = (options: PDFOptions) => {
   
   doc.setFontSize(8);
   doc.setTextColor(255, 255, 255);
-  // For daily sales, show the full date. For others, show month/year.
+  // For daily sales, show the full date. For monthly revenue, show year. For others, show month/year.
   const periodStr = reportType === 'daily_sales' 
     ? format(date, 'dd MMMM yyyy').toUpperCase()
+    : reportType === 'monthly_revenue'
+    ? format(date, 'yyyy').toUpperCase()
     : format(date, 'MMMM yyyy').toUpperCase();
   doc.text(periodStr, boxX + (boxWidth / 2), boxY + 9, { align: 'center' });
 
@@ -881,18 +923,22 @@ export const generateReportPDF = (options: PDFOptions) => {
   if (isRevenueReport) {
     // Use grouped data from reportData if available, otherwise group on the fly
     const grouped = data.groupedRows || data.rows.reduce((acc: any, row: any) => {
-      if (!acc[row.category_name]) acc[row.category_name] = [];
-      acc[row.category_name].push(row);
+      const groupKey = `${row.category_name}|${row.category_duration || 0}`;
+      if (!acc[groupKey]) acc[groupKey] = [];
+      acc[groupKey].push(row);
       return acc;
     }, {} as Record<string, any[]>);
 
-    // Sort categories (tiers) by name/duration and then sort rows within each category by start date
-    const sortedCategories = Object.keys(grouped).sort((a, b) => {
-      const getDuration = (name: string) => parseInt(name.match(/(\d+)/)?.[0] || '0');
-      const durA = getDuration(a);
-      const durB = getDuration(b);
-      if (durA !== durB) return durA - durB;
-      return a.localeCompare(b);
+    // Sort categories (tiers) by duration and then by name
+    const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
+      const [nameA, durA] = a.split('|');
+      const [nameB, durB] = b.split('|');
+      
+      const d1 = parseInt(durA);
+      const d2 = parseInt(durB);
+      
+      if (d1 !== d2) return d1 - d2;
+      return nameA.localeCompare(nameB);
     });
 
     if (data.rows.length === 0) {
@@ -910,8 +956,9 @@ export const generateReportPDF = (options: PDFOptions) => {
         deferred: 0
       };
       
-      sortedCategories.forEach((category: string) => {
-        const groupRows = grouped[category];
+      sortedGroupKeys.forEach((groupKey: string) => {
+        const [categoryName] = groupKey.split('|');
+        const groupRows = grouped[groupKey];
         const groupRowsArray = [...groupRows].sort((a: any, b: any) => {
           const dateA = parse(a.start_date, 'dd-MM-yyyy', new Date());
           const dateB = parse(b.start_date, 'dd-MM-yyyy', new Date());
@@ -941,7 +988,7 @@ export const generateReportPDF = (options: PDFOptions) => {
         // Category Header Row
         callAutoTable(doc, {
           startY: currentY,
-          body: [[{ content: `TIER: ${category.toUpperCase()}`, colSpan: 13 }]],
+          body: [[{ content: `TIER: ${categoryName.toUpperCase()}`, colSpan: 13 }]],
           theme: 'plain',
           styles: { 
             fillColor: [238, 242, 255], 
@@ -978,7 +1025,7 @@ export const generateReportPDF = (options: PDFOptions) => {
             ]),
             // Subtotal Row integrated into the same table for perfect alignment
             [
-              { content: `TIER SUBTOTAL: ${category.toUpperCase()}`, colSpan: 6, styles: { halign: 'left', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+              { content: `TIER SUBTOTAL: ${categoryName.toUpperCase()}`, colSpan: 6, styles: { halign: 'left', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
               { content: formatCurrency(subtotals.daily_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
               { content: formatCurrency(subtotals.actual_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
               { content: formatCurrency(subtotals.discount), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
@@ -1289,6 +1336,88 @@ export const generateReportPDF = (options: PDFOptions) => {
           13: { fontSize: 4, cellWidth: 15 }
         },
         margin: { left: margin, right: margin }
+      });
+    }
+  } else if (reportType === 'monthly_revenue') {
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    if (data.rows.length === 0) {
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text("No revenue data found for this period.", margin, currentY);
+    } else {
+      // Main Table
+      callAutoTable(doc, {
+        startY: currentY,
+        head: [['MONTH', ...monthNames, 'Total']],
+        body: [
+          ...data.rows.map((r: any) => [
+            r.category,
+            ...r.values.map((v: number) => v > 0 ? formatCurrency(v) : ''),
+            formatCurrency(r.total)
+          ]),
+          [
+            { content: 'Monthly Revenue', styles: { fontStyle: 'bold', fillColor: [226, 232, 240] } },
+            ...data.summary.monthlyTotals.map((v: number) => ({ content: v > 0 ? formatCurrency(v) : '-', styles: { fontStyle: 'bold', fillColor: [226, 232, 240] } })),
+            { content: formatCurrency(data.summary.yearlyTotal), styles: { fontStyle: 'bold', fillColor: [226, 232, 240] } }
+          ],
+          [{ content: '', colSpan: 14, styles: { fillColor: [255, 255, 255], minCellHeight: 10 } }],
+          [
+            { content: `Monthly Revenue ${data.summary.year - 1}`, styles: { fontStyle: 'bold', fillColor: [241, 245, 249] } },
+            ...data.summary.previousYearTotals.map((v: number) => ({ content: v > 0 ? formatCurrency(v) : '-', styles: { halign: 'right' } })),
+            { content: formatCurrency(data.summary.previousYearlyTotal), styles: { fontStyle: 'bold', halign: 'right' } }
+          ],
+          [
+            { content: 'Amount (+ / -)', styles: { fontStyle: 'bold' } },
+            ...data.summary.monthlyTotals.map((v: number, i: number) => {
+              const diff = v - data.summary.previousYearTotals[i];
+              const isNegative = diff < 0;
+              const text = diff !== 0 ? (isNegative ? `(${formatCurrency(Math.abs(diff))})` : formatCurrency(diff)) : '-';
+              return { content: text, styles: { halign: 'right', textColor: isNegative ? [220, 38, 38] : [15, 23, 42] } };
+            }),
+            (() => {
+              const diff = data.summary.yearlyTotal - data.summary.previousYearlyTotal;
+              const isNegative = diff < 0;
+              const text = diff !== 0 ? (isNegative ? `(${formatCurrency(Math.abs(diff))})` : formatCurrency(diff)) : '-';
+              return { content: text, styles: { fontStyle: 'bold', halign: 'right', textColor: isNegative ? [220, 38, 38] : [15, 23, 42] } };
+            })()
+          ],
+          [
+            { content: 'Percentage % (+ / -)', styles: { fontStyle: 'bold' } },
+            ...data.summary.monthlyTotals.map((v: number, i: number) => {
+              const prev = data.summary.previousYearTotals[i];
+              const diff = v - prev;
+              let pct = 0;
+              if (prev > 0) pct = (diff / prev) * 100;
+              else if (v > 0) pct = 100;
+              else if (v === 0 && prev === 0) return { content: '-', styles: { halign: 'right' } };
+              else pct = -100;
+              const isNegative = pct < 0;
+              return { content: isNegative ? `(${Math.abs(pct).toFixed(2)})` : pct.toFixed(2), styles: { halign: 'right', textColor: isNegative ? [220, 38, 38] : [15, 23, 42] } };
+            }),
+            (() => {
+              const prev = data.summary.previousYearlyTotal;
+              const diff = data.summary.yearlyTotal - prev;
+              let pct = 0;
+              if (prev > 0) pct = (diff / prev) * 100;
+              else if (data.summary.yearlyTotal > 0) pct = 100;
+              else if (data.summary.yearlyTotal === 0 && prev === 0) return { content: '-', styles: { halign: 'right' } };
+              else pct = -100;
+              const isNegative = pct < 0;
+              return { content: isNegative ? `(${Math.abs(pct).toFixed(2)})` : pct.toFixed(2), styles: { fontStyle: 'bold', halign: 'right', textColor: isNegative ? [220, 38, 38] : [15, 23, 42] } };
+            })()
+          ]
+        ],
+        theme: 'grid',
+        styles: { fontSize: 7, cellPadding: 2, textColor: [15, 23, 42] },
+        headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'center' },
+        columnStyles: {
+          0: { fontStyle: 'bold', halign: 'left', cellWidth: 30 },
+          1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
+          5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' },
+          9: { halign: 'right' }, 10: { halign: 'right' }, 11: { halign: 'right' }, 12: { halign: 'right' },
+          13: { halign: 'right', fontStyle: 'bold', fillColor: [248, 250, 252] }
+        }
       });
     }
   } else if (reportType === 'massage_room_revenue') {
