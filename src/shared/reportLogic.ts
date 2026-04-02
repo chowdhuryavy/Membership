@@ -24,6 +24,8 @@ export interface ReportContext {
   dateType?: 'today' | 'yesterday';
   incentiveDept?: 'Massage' | 'Membership' | 'Personal Training';
   selectedMembershipTypeId?: string | 'all';
+  revenueMode?: 'cash' | 'accrual';
+  endMonthIndex?: number;
 }
 
 // Helper for safe date parsing - ensures consistent Local handling
@@ -642,7 +644,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
   if (reportType === 'monthly_revenue') {
     const year = date.getFullYear();
-    const data = await getMonthlyRevenueData(propertyId, outletId, year);
+    const data = await getMonthlyRevenueData(propertyId, outletId, year, ctx.revenueMode || 'cash', ctx.endMonthIndex);
     return {
       rows: data.rows,
       summary: {
@@ -651,7 +653,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         previousYearTotals: data.previousYearTotals,
         previousYearlyTotal: data.previousYearlyTotal,
         months: data.months,
-        year: data.year
+        year: data.year,
+        revenueMode: data.revenueMode
       }
     };
   }
@@ -713,10 +716,11 @@ export interface PDFOptions {
   logoUrl?: string;
   reportType: string;
   membershipTypeName?: string;
+  userName?: string;
 }
 
 export const generateReportPDF = (options: PDFOptions) => {
-  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, currencyCode, reportTitle, date, logoUrl, reportType, membershipTypeName } = options;
+  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, currencyCode, reportTitle, date, logoUrl, reportType, membershipTypeName, userName } = options;
   
   const isRevenueReport = reportType === 'revenue_recognition';
   const isDailySalesReport = reportType === 'daily_sales';
@@ -1341,6 +1345,11 @@ export const generateReportPDF = (options: PDFOptions) => {
   } else if (reportType === 'monthly_revenue') {
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(79, 70, 229);
+    doc.text(`MODE: ${data.summary.revenueMode === 'cash' ? 'CASH BASIS' : 'AMORTIZATION'}`, margin, currentY - 5);
+
     if (data.rows.length === 0) {
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139);
@@ -1573,6 +1582,11 @@ export const generateReportPDF = (options: PDFOptions) => {
   doc.setFontSize(8);
   doc.setTextColor(203, 213, 225); // slate-300
   doc.text(`Page 1 of 1 • System ID: ${Math.random().toString(36).substring(7).toUpperCase()}`, margin, footerY);
+  
+  const exportDateStr = format(new Date(), 'dd-MMM-yyyy');
+  const exportInfo = `Exported on: ${exportDateStr}${userName ? ` by ${userName}` : ''}`;
+  doc.text(exportInfo, pageWidth / 2, footerY, { align: 'center' });
+
   doc.text(`© ${new Date().getFullYear()} ${propertyName}. All rights reserved.`, pageWidth - margin, footerY, { align: 'right' });
 
   return doc;

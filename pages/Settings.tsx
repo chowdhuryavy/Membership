@@ -1542,6 +1542,19 @@ const SettingsPage = () => {
                                 />
                             )}
                             
+                            {reportRecipientForm.report_type === 'monthly_revenue' && (
+                                <Select 
+                                    label="Revenue Recognition Basis *" 
+                                    options={[
+                                        {value:'cash', label:'Cash Basis (Join Month)'},
+                                        {value:'accrual', label:'Amortization (Accrual)'}
+                                    ]} 
+                                    value={reportRecipientForm.revenue_mode || 'cash'} 
+                                    onChange={e => setReportRecipientForm({...reportRecipientForm, revenue_mode: e.target.value as any})} 
+                                    className="h-14 rounded-xl border-2" 
+                                />
+                            )}
+                            
                             <div className="space-y-1.5">
                                 <Input 
                                     label="Scheduled Dispatch Time *" 

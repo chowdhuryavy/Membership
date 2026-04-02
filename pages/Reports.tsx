@@ -103,6 +103,7 @@ const Reports = () => {
   const [revenueRows, setRevenueRows] = useState<RevenueRow[]>([]); // For Revenue Recog
   const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
   const [selectedMembershipTypeId, setSelectedMembershipTypeId] = useState<string | 'all'>('all');
+  const [revenueMode, setRevenueMode] = useState<'cash' | 'accrual'>('cash');
   const [activeStaffList, setActiveStaffList] = useState<Staff[]>([]);
   const [showConfig, setShowConfig] = useState(true);
   const reportRef = useRef<HTMLDivElement>(null);
@@ -264,7 +265,9 @@ const Reports = () => {
         reportType: reportType as any,
         date: start,
         incentiveDept: incentiveDept as any,
-        selectedMembershipTypeId: selectedMembershipTypeId
+        selectedMembershipTypeId: selectedMembershipTypeId,
+        revenueMode: revenueMode,
+        endMonthIndex: reportType === 'monthly_revenue' ? parseInt(reportMonth.split('-')[1]) - 1 : undefined
       };
 
       const result = await getReportData(ctx);
@@ -302,7 +305,9 @@ const Reports = () => {
         reportType: reportType as any,
         date: startDate,
         incentiveDept: incentiveDept as any,
-        selectedMembershipTypeId: selectedMembershipTypeId
+        selectedMembershipTypeId: selectedMembershipTypeId,
+        revenueMode: revenueMode,
+        endMonthIndex: reportType === 'monthly_revenue' ? parseInt(reportMonth.split('-')[1]) - 1 : undefined
       };
 
       const reportData = await getReportData(ctx);
@@ -329,7 +334,8 @@ const Reports = () => {
         date: startDate,
         logoUrl: currentProperty.logo_url,
         reportType: reportType,
-        membershipTypeName: selectedTypeName
+        membershipTypeName: selectedTypeName,
+        userName: user?.name
       });
 
       const typeSuffix = selectedMembershipTypeId !== 'all' ? `_${selectedTypeName.replace(/\s+/g, '_').toLowerCase()}` : '';
@@ -876,18 +882,6 @@ const Reports = () => {
                         <input type="date" value={dailySalesDate} onChange={e => setDailySalesDate(e.target.value)} className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer" />
                         <Button onClick={loadData} className="h-8 text-[9px] px-3">Generate</Button>
                     </div>
-                ) : reportType === 'monthly_revenue' ? (
-                    <div className="flex items-center gap-2">
-                        <select 
-                            value={reportMonth.split('-')[0]} 
-                            onChange={e => setReportMonth(`${e.target.value}-01`)}
-                            className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer"
-                        >
-                            {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                                <option key={year} value={year}>{year}</option>
-                            ))}
-                        </select>
-                    </div>
                 ) : (
                     <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer" />
                 )}
@@ -993,6 +987,31 @@ const Reports = () => {
                                             }`}
                                           >
                                               {dept}
+                                          </button>
+                                      ))}
+                                  </div>
+                              </div>
+                          )}
+
+                          {/* 4. REVENUE RECOGNITION MODE (Only for Monthly Revenue) */}
+                          {reportType === 'monthly_revenue' && (
+                              <div className="space-y-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
+                                  <div className="flex items-center gap-2 mb-1">
+                                      <CreditCard className="w-3.5 h-3.5 text-indigo-600"/>
+                                      <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Revenue Recognition</label>
+                                  </div>
+                                  <div className="grid grid-cols-1 gap-2">
+                                      {(['cash', 'accrual'] as const).map(mode => (
+                                          <button 
+                                            key={mode} 
+                                            onClick={() => setRevenueMode(mode)} 
+                                            className={`w-full px-5 py-3 rounded-2xl text-left text-[9px] font-black uppercase tracking-widest transition-all border ${
+                                              revenueMode === mode 
+                                              ? 'bg-indigo-50 border-indigo-200 text-indigo-600' 
+                                              : 'bg-white border-transparent text-slate-400 hover:bg-slate-50'
+                                            }`}
+                                          >
+                                              {mode === 'cash' ? 'Cash Basis' : 'Amortization'}
                                           </button>
                                       ))}
                                   </div>
@@ -1120,7 +1139,7 @@ const Reports = () => {
                           {reportType === 'revenue_recognition' ? <RenderRevenueTable /> : 
                            reportType === 'expiring_memberships' ? <ExpiringMembershipsReport isEmbedded={true} embeddedMonth={reportMonth} selectedMembershipTypeId={selectedMembershipTypeId} /> : 
                            reportType === 'massage_room_revenue' ? <MassageRoomRevenueReport isEmbedded={true} embeddedMonth={reportMonth} /> :
-                           reportType === 'monthly_revenue' ? <MonthlyRevenueReport isEmbedded={true} embeddedYear={parseInt(reportMonth.split('-')[0])} /> :
+                           reportType === 'monthly_revenue' ? <MonthlyRevenueReport isEmbedded={true} embeddedMonth={reportMonth} revenueMode={revenueMode} /> :
                            <RenderStandardTable />}
                       </div>
 

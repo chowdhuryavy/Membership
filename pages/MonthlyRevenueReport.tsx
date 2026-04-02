@@ -4,27 +4,32 @@ import { useSettings } from '../contexts/SettingsContext';
 import { getMonthlyRevenueData, MonthlyRevenueData } from '../src/shared/monthlyRevenueReportLogic';
 import { Building2, ShieldCheck } from 'lucide-react';
 
+import { format, parseISO } from 'date-fns';
+
 interface MonthlyRevenueReportProps {
   isEmbedded?: boolean;
-  embeddedYear?: number;
+  embeddedMonth?: string;
+  revenueMode: 'cash' | 'accrual';
 }
 
-const MonthlyRevenueReport = ({ isEmbedded, embeddedYear }: MonthlyRevenueReportProps) => {
+const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode }: MonthlyRevenueReportProps) => {
   const { currentOutlet, currentProperty, settings, formatMoney } = useSettings();
   const [data, setData] = useState<MonthlyRevenueData | null>(null);
-  const [reportYear, setReportYear] = useState(embeddedYear || new Date().getFullYear());
+  const [reportMonth, setReportMonth] = useState(embeddedMonth || format(new Date(), 'yyyy-MM'));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (embeddedYear) {
-      setReportYear(embeddedYear);
+    if (embeddedMonth) {
+      setReportMonth(embeddedMonth);
     }
-  }, [embeddedYear]);
+  }, [embeddedMonth]);
 
   useEffect(() => {
     if (!currentOutlet || !currentProperty) return;
     setLoading(true);
-    getMonthlyRevenueData(currentProperty.id, currentOutlet.id, reportYear)
+    const reportYear = parseInt(reportMonth.split('-')[0]);
+    const endMonthIndex = parseInt(reportMonth.split('-')[1]) - 1;
+    getMonthlyRevenueData(currentProperty.id, currentOutlet.id, reportYear, revenueMode, endMonthIndex)
       .then(res => {
         setData(res);
         setLoading(false);
@@ -33,7 +38,7 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedYear }: MonthlyRevenueReport
         console.error('Error fetching monthly revenue data:', err);
         setLoading(false);
       });
-  }, [currentOutlet, currentProperty, reportYear]);
+  }, [currentOutlet, currentProperty, reportMonth, revenueMode]);
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -44,7 +49,12 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedYear }: MonthlyRevenueReport
       <table className={`w-full text-left border-collapse border-2 border-black ${isEmbedded ? 'text-[9px]' : 'text-sm'}`}>
         <thead>
           <tr className="bg-slate-100 text-slate-900 font-black uppercase tracking-widest">
-            <th className="px-4 py-3 border border-black text-center">MONTH</th>
+            <th className="px-4 py-3 border border-black text-center">
+              MONTH
+              <div className="text-[8px] font-black text-indigo-600 mt-1">
+                {revenueMode === 'cash' ? 'CASH BASIS' : 'AMORTIZATION'}
+              </div>
+            </th>
             {monthNames.map(m => (
               <th key={m} className="px-4 py-3 border border-black text-center">{m}</th>
             ))}
@@ -80,7 +90,7 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedYear }: MonthlyRevenueReport
             <td colSpan={14} className="h-8 border-x-2 border-black bg-white"></td>
           </tr>
           <tr className="bg-slate-100 font-black">
-            <td className="px-4 py-3 border border-black text-center text-slate-900">Monthly Revenue {reportYear - 1}</td>
+            <td className="px-4 py-3 border border-black text-center text-slate-900">Monthly Revenue {parseInt(reportMonth.split('-')[0]) - 1}</td>
             {data.previousYearTotals.map((val, i) => (
               <td key={i} className="px-4 py-3 border border-black text-right text-slate-900">
                 {val > 0 ? formatMoney(val) : '-'}
@@ -181,11 +191,13 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedYear }: MonthlyRevenueReport
             <h3 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">
               MONTHLY REVENUE REPORT
             </h3>
-            <div className="bg-slate-950 text-white px-6 py-3 rounded-2xl shadow-2xl">
-              <span className="text-[9px] font-black uppercase opacity-60 block tracking-widest">Year</span>
-              <span className="text-sm font-black uppercase">
-                {reportYear}
-              </span>
+            <div className="flex items-center gap-4">
+              <div className="bg-slate-950 text-white px-6 py-3 rounded-2xl shadow-2xl">
+                <span className="text-[9px] font-black uppercase opacity-60 block tracking-widest">Month</span>
+                <span className="text-sm font-black uppercase">
+                  {format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
+                </span>
+              </div>
             </div>
           </div>
         </div>

@@ -40,6 +40,7 @@ export interface ReportRecipient {
   report_date_type?: 'today' | 'yesterday'; // For daily reports
   incentive_dept?: 'Massage' | 'Membership' | 'Personal Training';
   selected_membership_type_id?: string | 'all';
+  revenue_mode?: 'cash' | 'accrual';
   is_active: boolean;
   created_at: string;
 }

@@ -236,6 +236,7 @@ serve(async (req) => {
     filteredRecipients.forEach(recipient => {
       const incentiveDept = recipient.incentive_dept || 'Massage';
       const selectedMembershipTypeId = recipient.selected_membership_type_id || 'all';
+      const revenueMode = recipient.revenue_mode || 'cash';
       
       // Determine report date (today or yesterday) relative to Qatar calendar
       const qatarYear = parseInt(getPart('year'));
@@ -250,7 +251,7 @@ serve(async (req) => {
         reportDate.setMonth(reportDate.getMonth() - 1);
       }
 
-      const key = `${recipient.property_id}|${recipient.outlet_id}|${recipient.report_type}|${reportDate.toISOString()}|${incentiveDept}|${selectedMembershipTypeId}`;
+      const key = `${recipient.property_id}|${recipient.outlet_id}|${recipient.report_type}|${reportDate.toISOString()}|${incentiveDept}|${selectedMembershipTypeId}|${revenueMode}`;
       
       if (!reportGroups[key]) {
         reportGroups[key] = {
@@ -261,7 +262,8 @@ serve(async (req) => {
             reportType: recipient.report_type,
             date: reportDate,
             incentiveDept,
-            selectedMembershipTypeId
+            selectedMembershipTypeId,
+            revenueMode
           }
         };
       }
@@ -297,7 +299,8 @@ serve(async (req) => {
           reportType: params.reportType,
           date: params.date,
           incentiveDept: params.incentiveDept,
-          selectedMembershipTypeId: params.selectedMembershipTypeId
+          selectedMembershipTypeId: params.selectedMembershipTypeId,
+          revenueMode: params.revenueMode
         });
         
         console.log(`DEBUG: Report Data rows: ${reportData.rows.length}`);

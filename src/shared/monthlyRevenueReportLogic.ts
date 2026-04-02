@@ -1,8 +1,10 @@
 import { supabase } from '../../services/supabase';
-import { format, startOfYear, endOfYear, parseISO, subYears, getMonth } from 'date-fns';
+import { format, startOfYear, endOfYear, parseISO, subYears, getMonth, startOfMonth, endOfMonth } from 'date-fns';
+import { RevenueEngine } from '../../services/revenueEngine';
 
 export interface MonthlyRevenueData {
   year: number;
+  revenueMode: 'cash' | 'accrual';
   months: number[]; // 0 to 11
   rows: {
     category: string;
@@ -18,7 +20,9 @@ export interface MonthlyRevenueData {
 export const getMonthlyRevenueData = async (
   propertyId: string,
   outletId: string,
-  year: number
+  year: number,
+  revenueMode: 'cash' | 'accrual' = 'cash',
+  endMonthIndex?: number
 ): Promise<MonthlyRevenueData> => {
   const startDate = startOfYear(new Date(year, 0, 1));
   const endDate = endOfYear(new Date(year, 0, 1));
@@ -41,6 +45,7 @@ export const getMonthlyRevenueData = async (
   if (outletIds.length === 0) {
     return {
       year,
+      revenueMode,
       months: Array.from({ length: 12 }, (_, i) => i),
       rows: [],
       monthlyTotals: Array(12).fill(0),
@@ -50,30 +55,43 @@ export const getMonthlyRevenueData = async (
     };
   }
 
-  // Fetch data for current year
+  // Fetch data
   const [
-    membersRes,
     bookingsRes,
     salesRes,
     typesRes,
-    prevMembersRes,
     prevBookingsRes,
-    prevSalesRes
+    prevSalesRes,
+    freezesRes
   ] = await Promise.all([
-    supabase.from('members').select('start_date, net_amount, membership_type_id').in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr),
     supabase.from('massage_bookings').select('date, net_revenue').in('outlet_id', outletIds).eq('status', 'completed').gte('date', startStr).lte('date', endStr),
     supabase.from('sales').select('created_at, net_amount, category').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59`),
     supabase.from('membership_types').select('id, name').in('outlet_id', outletIds),
-    // Previous year data for comparison
-    supabase.from('members').select('start_date, net_amount').in('outlet_id', outletIds).gte('start_date', prevStartStr).lte('start_date', prevEndStr),
     supabase.from('massage_bookings').select('date, net_revenue').in('outlet_id', outletIds).eq('status', 'completed').gte('date', prevStartStr).lte('date', prevEndStr),
-    supabase.from('sales').select('created_at, net_amount').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${prevStartStr}T00:00:00`).lte('created_at', `${prevEndStr}T23:59:59`)
+    supabase.from('sales').select('created_at, net_amount').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${prevStartStr}T00:00:00`).lte('created_at', `${prevEndStr}T23:59:59`),
+    supabase.from('freezes').select('*')
   ]);
+
+  // Fetch members differently based on mode
+  let membersRes, prevMembersRes;
+  if (revenueMode === 'cash') {
+    [membersRes, prevMembersRes] = await Promise.all([
+      supabase.from('members').select('start_date, net_amount, membership_type_id').in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr),
+      supabase.from('members').select('start_date, net_amount').in('outlet_id', outletIds).gte('start_date', prevStartStr).lte('start_date', prevEndStr)
+    ]);
+  } else {
+    // Accrual mode: fetch all members who could have active days in current or previous year
+    [membersRes, prevMembersRes] = await Promise.all([
+      supabase.from('members').select('*').in('outlet_id', outletIds).lte('start_date', endStr).gte('current_end_date', startStr),
+      supabase.from('members').select('*').in('outlet_id', outletIds).lte('start_date', prevEndStr).gte('current_end_date', prevStartStr)
+    ]);
+  }
 
   const members = membersRes.data || [];
   const bookings = bookingsRes.data || [];
   const sales = salesRes.data || [];
   const types = typesRes.data || [];
+  const freezes = freezesRes.data || [];
   const typeMap = Object.fromEntries(types.map((t: any) => [t.id, t.name]));
 
   const prevMembers = prevMembersRes.data || [];
@@ -110,20 +128,36 @@ export const getMonthlyRevenueData = async (
     } else if (s.category === 'Retail' || s.category === 'Retail Items') {
       rowMap['Retail Items'][month] += (s.net_amount || 0);
     } else {
-      // Catch-all for other categories to ensure they are not missed in the total
       const otherCat = s.category || 'Other';
       if (!rowMap[otherCat]) rowMap[otherCat] = Array(12).fill(0);
       rowMap[otherCat][month] += (s.net_amount || 0);
     }
   });
 
-  members.forEach((m: any) => {
-    if (!m.start_date) return;
-    const month = getMonth(parseISO(m.start_date));
-    const typeName = typeMap[m.membership_type_id] || 'Other Membership';
-    if (!rowMap[typeName]) rowMap[typeName] = Array(12).fill(0);
-    rowMap[typeName][month] += (m.net_amount || 0);
-  });
+  if (revenueMode === 'cash') {
+    members.forEach((m: any) => {
+      if (!m.start_date) return;
+      const month = getMonth(parseISO(m.start_date));
+      const typeName = typeMap[m.membership_type_id] || 'Other Membership';
+      if (!rowMap[typeName]) rowMap[typeName] = Array(12).fill(0);
+      rowMap[typeName][month] += (m.net_amount || 0);
+    });
+  } else {
+    // Accrual Mode
+    members.forEach((m: any) => {
+      const typeName = typeMap[m.membership_type_id] || 'Other Membership';
+      if (!rowMap[typeName]) rowMap[typeName] = Array(12).fill(0);
+      
+      const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
+      
+      for (let month = 0; month < 12; month++) {
+        const monthStart = startOfMonth(new Date(year, month, 1));
+        const monthEnd = endOfMonth(new Date(year, month, 1));
+        const periodRev = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, monthStart, monthEnd);
+        rowMap[typeName][month] += periodRev;
+      }
+    });
+  }
 
   // Calculate monthly totals
   const monthlyTotals = Array(12).fill(0);
@@ -136,22 +170,19 @@ export const getMonthlyRevenueData = async (
     return { category, values, total };
   });
 
-  // Sort rows: Massage first, then memberships, then P. Training, Entrance Fee, Retail
+  // Sort rows
   const sortedRows = [];
   const mainCats = ['Massage', 'P. Training', 'Entrance Fee', 'Retail Items'];
   const membershipRows = rows.filter(r => !mainCats.includes(r.category)).sort((a, b) => a.category.localeCompare(b.category));
   
   const massageRow = rows.find(r => r.category === 'Massage');
   if (massageRow) sortedRows.push(massageRow);
-  
   sortedRows.push(...membershipRows);
   
   const ptRow = rows.find(r => r.category === 'P. Training');
   if (ptRow) sortedRows.push(ptRow);
-  
   const entranceFeeRow = rows.find(r => r.category === 'Entrance Fee');
   if (entranceFeeRow) sortedRows.push(entranceFeeRow);
-  
   const retailRow = rows.find(r => r.category === 'Retail Items');
   if (retailRow) sortedRows.push(retailRow);
 
@@ -169,21 +200,50 @@ export const getMonthlyRevenueData = async (
     const month = getMonth(parseISO(s.created_at));
     previousYearTotals[month] += (s.net_amount || 0);
   });
-  prevMembers.forEach((m: any) => {
-    if (!m.start_date) return;
-    const month = getMonth(parseISO(m.start_date));
-    previousYearTotals[month] += (m.net_amount || 0);
-  });
 
-  const previousYearlyTotal = previousYearTotals.reduce((sum, val) => sum + val, 0);
+  if (revenueMode === 'cash') {
+    prevMembers.forEach((m: any) => {
+      if (!m.start_date) return;
+      const month = getMonth(parseISO(m.start_date));
+      previousYearTotals[month] += (m.net_amount || 0);
+    });
+  } else {
+    // Accrual Mode for previous year
+    prevMembers.forEach((m: any) => {
+      const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
+      for (let month = 0; month < 12; month++) {
+        const monthStart = startOfMonth(new Date(year - 1, month, 1));
+        const monthEnd = endOfMonth(new Date(year - 1, month, 1));
+        const periodRev = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, monthStart, monthEnd);
+        previousYearTotals[month] += periodRev;
+      }
+    });
+  }
+
+  if (endMonthIndex !== undefined) {
+    sortedRows.forEach(row => {
+      row.values = row.values.map((v, i) => i > endMonthIndex ? 0 : v);
+      row.total = row.values.reduce((sum, val) => sum + val, 0);
+    });
+    monthlyTotals.forEach((_, i) => {
+      if (i > endMonthIndex) monthlyTotals[i] = 0;
+    });
+    previousYearTotals.forEach((_, i) => {
+      if (i > endMonthIndex) previousYearTotals[i] = 0;
+    });
+  }
+
+  const finalYearlyTotal = monthlyTotals.reduce((sum, val) => sum + val, 0);
+  const finalPreviousYearlyTotal = previousYearTotals.reduce((sum, val) => sum + val, 0);
 
   return {
     year,
+    revenueMode,
     months: Array.from({ length: 12 }, (_, i) => i),
     rows: sortedRows,
     monthlyTotals,
-    yearlyTotal,
+    yearlyTotal: finalYearlyTotal,
     previousYearTotals,
-    previousYearlyTotal
+    previousYearlyTotal: finalPreviousYearlyTotal
   };
 };

@@ -24,6 +24,7 @@ export interface ReportContext {
   dateType?: 'today' | 'yesterday';
   incentiveDept?: 'Massage' | 'Membership' | 'Personal Training';
   selectedMembershipTypeId?: string | 'all';
+  revenueMode?: 'cash' | 'accrual';
 }
 
 // Helper for safe date parsing - ensures consistent Local handling
@@ -642,7 +643,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
   if (reportType === 'monthly_revenue') {
     const year = date.getFullYear();
-    const data = await getMonthlyRevenueData(supabase, propertyId, outletId, year);
+    const data = await getMonthlyRevenueData(supabase, propertyId, outletId, year, ctx.revenueMode || 'cash');
     return {
       rows: data.rows,
       summary: {
@@ -651,7 +652,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         previousYearTotals: data.previousYearTotals,
         previousYearlyTotal: data.previousYearlyTotal,
         months: data.months,
-        year: data.year
+        year: data.year,
+        revenueMode: data.revenueMode
       }
     };
   }
@@ -1349,7 +1351,7 @@ export const generateReportPDF = (options: PDFOptions) => {
       // Main Table
       callAutoTable(doc, {
         startY: currentY,
-        head: [['MONTH', ...monthNames, 'Total']],
+        head: [[`MONTH (${data.summary.revenueMode === 'cash' ? 'CASH' : 'AMORT'})`, ...monthNames, 'Total']],
         body: [
           ...data.rows.map((r: any) => [
             r.category,
