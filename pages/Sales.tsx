@@ -513,7 +513,7 @@ const POSForm = ({
 
                     <div className="flex gap-3 pt-2">
                         <button type="button" onClick={onCancel} className="flex-1 h-12 rounded-xl font-bold uppercase text-[10px] tracking-widest bg-slate-100 hover:bg-slate-200 transition-colors">Discard</button>
-                        <Button type="submit" className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100">Commit Transaction</Button>
+                        <Button type="submit" className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100">Confirm Transaction</Button>
                     </div>
                 </form>
             </CardContent>
@@ -828,7 +828,7 @@ export const InventoryManager = ({
                                 {formData.track_inventory && (
                                     <Input label="Initial Stock Quantity" type="number" value={formData.stock_quantity} onChange={e => setFormData({...formData, stock_quantity: parseInt(e.target.value) || 0})} className="h-12 rounded-xl animate-in slide-in-from-top-2" />
                                 )}
-                                <Button type="submit" className="w-full h-14 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 mt-4">Commit to Catalog</Button>
+                                <Button type="submit" className="w-full h-14 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 mt-4">Confirm to Catalog</Button>
                             </form>
                         </CardContent>
                     </Card>

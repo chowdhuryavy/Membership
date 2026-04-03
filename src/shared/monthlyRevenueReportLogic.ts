@@ -139,14 +139,14 @@ export const getMonthlyRevenueData = async (
     members.forEach((m: any) => {
       if (!m.start_date) return;
       const month = getMonth(parseISO(m.start_date));
-      const typeName = typeMap[m.membership_type_id] || 'Other Membership';
+      const typeName = typeMap[m.membership_type_id] || 'Membership';
       if (!rowMap[typeName]) rowMap[typeName] = Array(12).fill(0);
       rowMap[typeName][month] += (m.net_amount || 0);
     });
   } else {
     // Accrual Mode
     members.forEach((m: any) => {
-      const typeName = typeMap[m.membership_type_id] || 'Other Membership';
+      const typeName = typeMap[m.membership_type_id] || 'Membership';
       if (!rowMap[typeName]) rowMap[typeName] = Array(12).fill(0);
       
       const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
