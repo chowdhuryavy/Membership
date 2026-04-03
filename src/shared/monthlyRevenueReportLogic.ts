@@ -78,10 +78,10 @@ export const getMonthlyRevenueData = async (
     prevSalesRes,
     freezesRes
   ] = await Promise.all([
-    buildQuery('massage_bookings', 'date, net_revenue').eq('status', 'completed'),
+    buildQuery('massage_bookings', 'date, price, discount').eq('status', 'completed'),
     buildQuery('sales', 'created_at, net_amount, category').eq('status', 'completed'),
     buildQuery('membership_types', 'id, name'),
-    buildQuery('massage_bookings', 'date, net_revenue').eq('status', 'completed'),
+    buildQuery('massage_bookings', 'date, price, discount').eq('status', 'completed'),
     buildQuery('sales', 'created_at, net_amount').eq('status', 'completed'),
     supabase.from('freezes').select('*')
   ]);
@@ -130,7 +130,7 @@ export const getMonthlyRevenueData = async (
   bookings.forEach((b: any) => {
     if (!b.date) return;
     const month = getMonth(parseISO(b.date));
-    rowMap['Massage'][month] += (b.net_revenue || 0);
+    rowMap['Massage'][month] += ((b.price || 0) - (b.discount || 0));
   });
 
   sales.forEach((s: any) => {
@@ -208,7 +208,7 @@ export const getMonthlyRevenueData = async (
   prevBookings.forEach((b: any) => {
     if (!b.date) return;
     const month = getMonth(parseISO(b.date));
-    previousYearTotals[month] += (b.net_revenue || 0);
+    previousYearTotals[month] += ((b.price || 0) - (b.discount || 0));
   });
   prevSales.forEach((s: any) => {
     if (!s.created_at) return;
