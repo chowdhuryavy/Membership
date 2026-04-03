@@ -1860,17 +1860,19 @@ class DatabaseService {
     }
   }
 
-  async getMassageTypes(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<MassageType[]> {
+  async getMassageTypes(scopeId?: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<MassageType[]> {
     if (this.isSupabase()) {
       let query = supabase.from('massage_types').select('*');
-      if (isPropertyScope) {
-          if (limitToOutletIds && limitToOutletIds.length > 0) {
-              query = query.in('outlet_id', limitToOutletIds);
-          } else {
-              query = query.eq('property_id', scopeId);
+      if (scopeId && scopeId !== 'all') {
+          if (isPropertyScope) {
+              if (limitToOutletIds && limitToOutletIds.length > 0) {
+                  query = query.in('outlet_id', limitToOutletIds);
+              } else {
+                  query = query.eq('property_id', scopeId);
+              }
           }
+          else query = query.eq('outlet_id', scopeId);
       }
-      else query = query.eq('outlet_id', scopeId);
 
       const { data, error } = await query;
       if (error) throw error;

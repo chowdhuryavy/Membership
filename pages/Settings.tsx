@@ -420,10 +420,10 @@ const SettingsPage = () => {
       if (activeTab === 'incentives' && currentOutlet) {
           const [rules, mTypes, allCats, inv, memTypes] = await Promise.all([
               db.getIncentiveRules(), 
-              db.getMassageTypes(currentOutlet.id), 
-              db.getCategories(currentOutlet.id),
+              db.getMassageTypes('all'), 
+              db.getCategories(),
               db.getInventory('all', true),
-              db.getMembershipTypes(currentOutlet.id)
+              db.getMembershipTypes()
           ]);
           setIncentiveRules(rules);
           setAllMassageTypes(mTypes);
@@ -749,6 +749,48 @@ const SettingsPage = () => {
           }
       }));
   };
+
+  const filteredMassageTypes = useMemo(() => {
+    return allMassageTypes.filter(m => {
+        if (incentiveForm.scope === 'Global') return true;
+        if (incentiveForm.scope === 'Property') return m.property_id === incentiveForm.scope_id;
+        if (incentiveForm.scope === 'Outlet') return m.outlet_id === incentiveForm.scope_id;
+        return true;
+    });
+  }, [allMassageTypes, incentiveForm.scope, incentiveForm.scope_id]);
+
+  const filteredMembershipTypes = useMemo(() => {
+    return membershipTypes.filter(t => {
+        if (incentiveForm.scope === 'Global') return true;
+        if (incentiveForm.scope === 'Property') {
+            const outlet = outlets.find(o => o.id === t.outlet_id);
+            return outlet?.property_id === incentiveForm.scope_id;
+        }
+        if (incentiveForm.scope === 'Outlet') return t.outlet_id === incentiveForm.scope_id;
+        return true;
+    });
+  }, [membershipTypes, incentiveForm.scope, incentiveForm.scope_id, outlets]);
+
+  const filteredCategories = useMemo(() => {
+    return allCategories.filter(c => {
+        if (incentiveForm.scope === 'Global') return true;
+        if (incentiveForm.scope === 'Property') {
+            const outlet = outlets.find(o => o.id === c.outlet_id);
+            return outlet?.property_id === incentiveForm.scope_id;
+        }
+        if (incentiveForm.scope === 'Outlet') return c.outlet_id === incentiveForm.scope_id;
+        return true;
+    });
+  }, [allCategories, incentiveForm.scope, incentiveForm.scope_id, outlets]);
+
+  const filteredInventory = useMemo(() => {
+    return allInventory.filter(i => {
+        if (incentiveForm.scope === 'Global') return true;
+        if (incentiveForm.scope === 'Property') return i.property_id === incentiveForm.scope_id;
+        if (incentiveForm.scope === 'Outlet') return i.outlet_id === incentiveForm.scope_id;
+        return true;
+    });
+  }, [allInventory, incentiveForm.scope, incentiveForm.scope_id]);
 
   return (
     <div className="space-y-10 max-w-7xl mx-auto animate-in fade-in duration-700 pb-20">
@@ -1627,21 +1669,21 @@ const SettingsPage = () => {
                                           {incentiveForm.applies_to === 'Membership' && (
                                               <>
                                                   <optgroup label="Membership Types">
-                                                      {membershipTypes.map(t => (
+                                                      {filteredMembershipTypes.map(t => (
                                                           <option key={`type-${t.id}`} value={`type:${t.id}`}>{t.name} (Type)</option>
                                                       ))}
                                                   </optgroup>
                                                   <optgroup label="Membership Tiers">
-                                                      {allCategories.map(c => (
+                                                      {filteredCategories.map(c => (
                                                           <option key={c.id} value={c.id}>{c.name} (Tier)</option>
                                                       ))}
                                                   </optgroup>
                                               </>
                                           )}
-                                          {incentiveForm.applies_to === 'Massage' && allMassageTypes.map(m => (
+                                          {incentiveForm.applies_to === 'Massage' && filteredMassageTypes.map(m => (
                                               <option key={m.id} value={m.id}>{m.name} (Treatment)</option>
                                           ))}
-                                          {incentiveForm.applies_to === 'Personal Training' && allInventory.filter(i => i.category === 'Personal Training').map(i => (
+                                          {incentiveForm.applies_to === 'Personal Training' && filteredInventory.filter(i => i.category === 'Personal Training').map(i => (
                                               <option key={i.id} value={i.id}>{i.name} (PT Package)</option>
                                           ))}
                                           {incentiveForm.applies_to === 'Sale' && (['Retail', 'Entrance Fee', 'Other']).map(c => (
