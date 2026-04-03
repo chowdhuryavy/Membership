@@ -476,7 +476,7 @@ serve(async (req) => {
                         r.mode_of_payment || '',
                         r.item_name || '',
                         formatCurrency(r.actual_price, currencySymbol),
-                        r.discount_percent > 0 ? \`\${r.discount_percent.toFixed(0)}%\` : '',
+                        r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
                         formatCurrency(r.discount_amount, currencySymbol),
                         formatCurrency(r.net_revenue, currencySymbol)
                       ];
@@ -505,7 +505,7 @@ serve(async (req) => {
                         r.check_no || '',
                         r.item || '',
                         formatCurrency(r.gross, currencySymbol),
-                        r.discount_percent > 0 ? \`\${r.discount_percent.toFixed(0)}%\` : '',
+                        r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
                         formatCurrency(r.discount_amt, currencySymbol),
                         formatCurrency(r.net, currencySymbol)
                       ];
@@ -541,7 +541,7 @@ serve(async (req) => {
                             formatCurrency(r.net_revenue || r.net || 0, currencySymbol)
                         ];
                     }
-                    return \`<tr>\${cells.map(c => \`<td style="padding: 8px; border: 1px solid #e2e8f0;">\${c}</td>\`).join('')}</tr>\`;
+                    return `<tr>${cells.map(c => `<td style="padding: 8px; border: 1px solid #e2e8f0;">${c}</td>`).join('')}</tr>`;
                   }).join('')}
                 </tbody>
               </table>

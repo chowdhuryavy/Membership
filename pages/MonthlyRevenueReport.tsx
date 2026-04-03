@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
 import { getMonthlyRevenueData, MonthlyRevenueData } from '../src/shared/monthlyRevenueReportLogic';
 import { Building2, ShieldCheck } from 'lucide-react';
+import { supabase } from '../services/supabase';
 
 import { format, parseISO } from 'date-fns';
 
@@ -29,7 +30,7 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode }: Monthl
     setLoading(true);
     const reportYear = parseInt(reportMonth.split('-')[0]);
     const endMonthIndex = parseInt(reportMonth.split('-')[1]) - 1;
-    getMonthlyRevenueData(currentProperty.id, currentOutlet.id, reportYear, revenueMode, endMonthIndex)
+    getMonthlyRevenueData(supabase, currentProperty.id, currentOutlet.id, reportYear, revenueMode, endMonthIndex)
       .then(res => {
         setData(res);
         setLoading(false);

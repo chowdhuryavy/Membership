@@ -644,7 +644,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
   if (reportType === 'monthly_revenue') {
     const year = date.getFullYear();
-    const data = await getMonthlyRevenueData(propertyId, outletId, year, ctx.revenueMode || 'cash', ctx.endMonthIndex);
+    const data = await getMonthlyRevenueData(supabase, propertyId, outletId, year, ctx.revenueMode || 'cash', ctx.endMonthIndex);
     return {
       rows: data.rows,
       summary: {

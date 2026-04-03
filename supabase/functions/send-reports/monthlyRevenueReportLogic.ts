@@ -1,5 +1,6 @@
+// supabase is passed in context
 import { format, startOfYear, endOfYear, parseISO, subYears, getMonth, startOfMonth, endOfMonth } from 'npm:date-fns';
-import { RevenueEngine } from '../../services/revenueEngine';
+import { RevenueEngine } from './revenueEngine.ts';
 
 export interface MonthlyRevenueData {
   year: number;
@@ -21,7 +22,8 @@ export const getMonthlyRevenueData = async (
   propertyId: string,
   outletId: string,
   year: number,
-  revenueMode: 'cash' | 'accrual' = 'cash'
+  revenueMode: 'cash' | 'accrual' = 'cash',
+  endMonthIndex?: number
 ): Promise<MonthlyRevenueData> => {
   const startDate = startOfYear(new Date(year, 0, 1));
   const endDate = endOfYear(new Date(year, 0, 1));
@@ -79,7 +81,7 @@ export const getMonthlyRevenueData = async (
       supabase.from('members').select('start_date, net_amount').in('outlet_id', outletIds).gte('start_date', prevStartStr).lte('start_date', prevEndStr)
     ]);
   } else {
-    // Accrual mode
+    // Accrual mode: fetch all members who could have active days in current or previous year
     [membersRes, prevMembersRes] = await Promise.all([
       supabase.from('members').select('*').in('outlet_id', outletIds).lte('start_date', endStr).gte('current_end_date', startStr),
       supabase.from('members').select('*').in('outlet_id', outletIds).lte('start_date', prevEndStr).gte('current_end_date', prevStartStr)
@@ -219,7 +221,21 @@ export const getMonthlyRevenueData = async (
     });
   }
 
-  const previousYearlyTotal = previousYearTotals.reduce((sum, val) => sum + val, 0);
+  if (endMonthIndex !== undefined) {
+    sortedRows.forEach(row => {
+      row.values = row.values.map((v, i) => i > endMonthIndex ? 0 : v);
+      row.total = row.values.reduce((sum, val) => sum + val, 0);
+    });
+    monthlyTotals.forEach((_, i) => {
+      if (i > endMonthIndex) monthlyTotals[i] = 0;
+    });
+    previousYearTotals.forEach((_, i) => {
+      if (i > endMonthIndex) previousYearTotals[i] = 0;
+    });
+  }
+
+  const finalYearlyTotal = monthlyTotals.reduce((sum, val) => sum + val, 0);
+  const finalPreviousYearlyTotal = previousYearTotals.reduce((sum, val) => sum + val, 0);
 
   return {
     year,
@@ -227,8 +243,8 @@ export const getMonthlyRevenueData = async (
     months: Array.from({ length: 12 }, (_, i) => i),
     rows: sortedRows,
     monthlyTotals,
-    yearlyTotal,
+    yearlyTotal: finalYearlyTotal,
     previousYearTotals,
-    previousYearlyTotal
+    previousYearlyTotal: finalPreviousYearlyTotal
   };
 };

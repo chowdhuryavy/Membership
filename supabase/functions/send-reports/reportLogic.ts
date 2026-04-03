@@ -1,5 +1,5 @@
 import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths, parse, startOfDay, endOfDay, addDays, subDays } from 'npm:date-fns';
-import { RevenueEngine } from '../../services/revenueEngine';
+import { RevenueEngine } from './revenueEngine.ts';
 
 /**
  * SHARED REPORT LOGIC
@@ -7,13 +7,13 @@ import { RevenueEngine } from '../../services/revenueEngine';
  * It is synced to the Supabase Edge Function via a build script.
  */
 
-import { getMonthlyRevenueData } from './monthlyRevenueReportLogic.ts';
-
 export interface ReportData {
   rows: any[];
   groupedRows?: any; // For revenue recognition grouped data
   summary: any;
 }
+
+import { getMonthlyRevenueData } from './monthlyRevenueReportLogic.ts';
 
 export interface ReportContext {
   supabase: any;
@@ -25,6 +25,7 @@ export interface ReportContext {
   incentiveDept?: 'Massage' | 'Membership' | 'Personal Training';
   selectedMembershipTypeId?: string | 'all';
   revenueMode?: 'cash' | 'accrual';
+  endMonthIndex?: number;
 }
 
 // Helper for safe date parsing - ensures consistent Local handling
@@ -643,7 +644,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
   if (reportType === 'monthly_revenue') {
     const year = date.getFullYear();
-    const data = await getMonthlyRevenueData(supabase, propertyId, outletId, year, ctx.revenueMode || 'cash');
+    const data = await getMonthlyRevenueData(supabase, propertyId, outletId, year, ctx.revenueMode || 'cash', ctx.endMonthIndex);
     return {
       rows: data.rows,
       summary: {
@@ -715,10 +716,11 @@ export interface PDFOptions {
   logoUrl?: string;
   reportType: string;
   membershipTypeName?: string;
+  userName?: string;
 }
 
 export const generateReportPDF = (options: PDFOptions) => {
-  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, currencyCode, reportTitle, date, logoUrl, reportType, membershipTypeName } = options;
+  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, currencyCode, reportTitle, date, logoUrl, reportType, membershipTypeName, userName } = options;
   
   const isRevenueReport = reportType === 'revenue_recognition';
   const isDailySalesReport = reportType === 'daily_sales';
@@ -1343,6 +1345,11 @@ export const generateReportPDF = (options: PDFOptions) => {
   } else if (reportType === 'monthly_revenue') {
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(79, 70, 229);
+    doc.text(`MODE: ${data.summary.revenueMode === 'cash' ? 'CASH BASIS' : 'AMORTIZATION'}`, margin, currentY - 5);
+
     if (data.rows.length === 0) {
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139);
@@ -1351,7 +1358,7 @@ export const generateReportPDF = (options: PDFOptions) => {
       // Main Table
       callAutoTable(doc, {
         startY: currentY,
-        head: [[`MONTH (${data.summary.revenueMode === 'cash' ? 'CASH' : 'AMORT'})`, ...monthNames, 'Total']],
+        head: [['MONTH', ...monthNames, 'Total']],
         body: [
           ...data.rows.map((r: any) => [
             r.category,
@@ -1395,7 +1402,7 @@ export const generateReportPDF = (options: PDFOptions) => {
               else if (v === 0 && prev === 0) return { content: '-', styles: { halign: 'right' } };
               else pct = -100;
               const isNegative = pct < 0;
-              return { content: isNegative ? `(${Math.abs(pct).toFixed(2)}%)` : `${pct.toFixed(2)}%`, styles: { halign: 'right', textColor: isNegative ? [220, 38, 38] : [15, 23, 42] } };
+              return { content: isNegative ? `(${Math.abs(pct).toFixed(2)})` : pct.toFixed(2), styles: { halign: 'right', textColor: isNegative ? [220, 38, 38] : [15, 23, 42] } };
             }),
             (() => {
               const prev = data.summary.previousYearlyTotal;
@@ -1406,7 +1413,7 @@ export const generateReportPDF = (options: PDFOptions) => {
               else if (data.summary.yearlyTotal === 0 && prev === 0) return { content: '-', styles: { halign: 'right' } };
               else pct = -100;
               const isNegative = pct < 0;
-              return { content: isNegative ? `(${Math.abs(pct).toFixed(2)}%)` : `${pct.toFixed(2)}%`, styles: { fontStyle: 'bold', halign: 'right', textColor: isNegative ? [220, 38, 38] : [15, 23, 42] } };
+              return { content: isNegative ? `(${Math.abs(pct).toFixed(2)})` : pct.toFixed(2), styles: { fontStyle: 'bold', halign: 'right', textColor: isNegative ? [220, 38, 38] : [15, 23, 42] } };
             })()
           ]
         ],
@@ -1575,6 +1582,11 @@ export const generateReportPDF = (options: PDFOptions) => {
   doc.setFontSize(8);
   doc.setTextColor(203, 213, 225); // slate-300
   doc.text(`Page 1 of 1 • System ID: ${Math.random().toString(36).substring(7).toUpperCase()}`, margin, footerY);
+  
+  const exportDateStr = format(new Date(), 'dd-MMM-yyyy');
+  const exportInfo = `Exported on: ${exportDateStr}${userName ? ` by ${userName}` : ''}`;
+  doc.text(exportInfo, pageWidth / 2, footerY, { align: 'center' });
+
   doc.text(`© ${new Date().getFullYear()} ${propertyName}. All rights reserved.`, pageWidth - margin, footerY, { align: 'right' });
 
   return doc;

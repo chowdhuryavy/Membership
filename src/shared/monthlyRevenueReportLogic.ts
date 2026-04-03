@@ -18,6 +18,7 @@ export interface MonthlyRevenueData {
 }
 
 export const getMonthlyRevenueData = async (
+  supabase: any,
   propertyId: string,
   outletId: string,
   year: number,
