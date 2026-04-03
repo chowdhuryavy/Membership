@@ -5,7 +5,7 @@ import { db } from '../services/mockSupabase';
 import { MembershipCategory, MembershipType } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock, Plus, X, Command, Snowflake, Search, SearchCode } from 'lucide-react';
+import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock, Plus, X, Command, Snowflake, Search, SearchCode, ChevronDown, Zap, ShieldCheck, MousePointer } from 'lucide-react';
 
 // This component manages membership categories/tiers for a facility
 const Categories = () => {
@@ -18,6 +18,7 @@ const Categories = () => {
   const [formData, setFormData] = useState({ id: '', name: '', duration_months: 1, base_rate: 0, max_freeze_days: 0, membership_type_id: '' });
   const [isEditing, setIsEditing] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -111,7 +112,26 @@ const Categories = () => {
   
   const handleAddNew = () => {
       if (!canCreate) return;
-      resetForm();
+      if (selectedTypeId === 'all' && membershipTypes.length > 0) {
+          setShowTypeSelector(true);
+      } else {
+          resetForm();
+          setShowForm(true);
+      }
+  };
+
+  const handleTypeSelect = (typeId: string) => {
+      setSelectedTypeId(typeId);
+      setShowTypeSelector(false);
+      setFormData({ 
+          id: '', 
+          name: '', 
+          duration_months: 1, 
+          base_rate: 0, 
+          max_freeze_days: 0, 
+          membership_type_id: typeId
+      });
+      setIsEditing(false);
       setShowForm(true);
   };
 
@@ -185,16 +205,18 @@ const Categories = () => {
             {membershipTypes.length > 0 && (
                 <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
                     <button 
+                        disabled={loading}
                         onClick={() => setSelectedTypeId('all')}
-                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${selectedTypeId === 'all' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}
+                        className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all ${selectedTypeId === 'all' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'} ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         All Types
                     </button>
                     {membershipTypes.map(type => (
                         <button 
                             key={type.id}
+                            disabled={loading}
                             onClick={() => setSelectedTypeId(type.id)}
-                            className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${selectedTypeId === type.id ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}
+                            className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all ${selectedTypeId === type.id ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'} ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             {type.name}
                         </button>
@@ -214,7 +236,7 @@ const Categories = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
-            {canCreate && (membershipTypes.length === 0 || selectedTypeId !== 'all') && (
+            {canCreate && (
                 <Button onClick={handleAddNew} className="rounded-xl font-black h-12 px-6 shadow-xl shadow-indigo-100 whitespace-nowrap">
                     <Plus className="w-4 h-4 mr-2" /> Create Tier
                 </Button>
@@ -393,6 +415,61 @@ const Categories = () => {
         confirmText="Confirm Deletion"
         isDestructive={true}
       />
+
+      {showTypeSelector && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 border border-white/20">
+            {/* Header - Fixed */}
+            <div className="p-6 sm:p-8 border-b border-slate-100 shrink-0">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-1.5">Select Protocol</h2>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Choose tier type</p>
+                </div>
+                <button onClick={() => setShowTypeSelector(false)} className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content - Scrollable */}
+            <div className="p-6 sm:p-8 overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {membershipTypes.map((type) => (
+                  <button
+                    key={type.id}
+                    onClick={() => handleTypeSelect(type.id)}
+                    className="group relative p-5 rounded-2xl border-2 border-slate-100 bg-slate-50/50 hover:bg-white hover:border-indigo-600 hover:shadow-xl hover:shadow-indigo-500/5 transition-all text-left overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 p-6 opacity-[0.02] group-hover:opacity-[0.05] group-hover:scale-110 transition-all duration-700 pointer-events-none">
+                      <ShieldCheck className="w-16 h-16 -mr-4 -mt-4" />
+                    </div>
+                    
+                    <div className="w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center mb-4 group-hover:bg-indigo-600 group-hover:text-white group-hover:scale-110 transition-all duration-500">
+                      <Zap className="w-5 h-5 text-indigo-600 group-hover:text-white" />
+                    </div>
+                    
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">{type.name}</h3>
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-0.5 group-hover:text-slate-500 transition-colors">Initialize {type.name} Architecture</p>
+                    
+                    <div className="mt-4 flex items-center gap-2 text-indigo-600 opacity-0 group-hover:opacity-100 translate-x-[-10px] group-hover:translate-x-0 transition-all duration-500">
+                      <span className="text-[9px] font-black uppercase tracking-widest">Select Protocol</span>
+                      <MousePointer className="w-3 h-3" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Footer - Fixed */}
+            <div className="bg-slate-50 p-5 border-t border-slate-100 shrink-0">
+               <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">
+                 System will configure tier parameters based on your selection
+               </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
