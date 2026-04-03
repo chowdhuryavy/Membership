@@ -321,7 +321,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
         </div>
 
         {/* Page 2: Rules and Regulations */}
-        <div className="p-12 md:p-20 bg-white relative mt-4 print:mt-0 border-t border-slate-200 print:border-none print-page-2 print:p-0">
+        <div className="p-12 md:p-20 bg-white relative print:mt-0 print:border-none print-page-2 print:p-0">
           <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
             <div className="text-center mb-8">
               <h3 className="text-xl font-black uppercase tracking-widest border-b-2 border-black inline-block pb-2">Gymnasium Rules & Regulations</h3>
