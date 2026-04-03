@@ -65,13 +65,18 @@ export const getMonthlyRevenueData = async (
     prevSalesRes,
     freezesRes
   ] = await Promise.all([
-    supabase.from('massage_bookings').select('date, net_revenue').in('outlet_id', outletIds).eq('status', 'completed').gte('"date"', startStr).lte('"date"', endStr),
-    supabase.from('sales').select('created_at, net_amount, category').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59`),
+    supabase.from('massage_bookings').select('date, net_revenue').in('outlet_id', outletIds).eq('status', 'completed'),
+    supabase.from('sales').select('created_at, net_amount, category').in('outlet_id', outletIds).eq('status', 'completed'),
     supabase.from('membership_types').select('id, name').in('outlet_id', outletIds),
-    supabase.from('massage_bookings').select('date, net_revenue').in('outlet_id', outletIds).eq('status', 'completed').gte('"date"', prevStartStr).lte('"date"', prevEndStr),
-    supabase.from('sales').select('created_at, net_amount').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${prevStartStr}T00:00:00`).lte('created_at', `${prevEndStr}T23:59:59`),
+    supabase.from('massage_bookings').select('date, net_revenue').in('outlet_id', outletIds).eq('status', 'completed'),
+    supabase.from('sales').select('created_at, net_amount').in('outlet_id', outletIds).eq('status', 'completed'),
     supabase.from('freezes').select('*')
   ]);
+
+  const bookings = (bookingsRes.data || []).filter(b => b.date >= startStr && b.date <= endStr);
+  const sales = (salesRes.data || []).filter(s => s.created_at >= `${startStr}T00:00:00` && s.created_at <= `${endStr}T23:59:59`);
+  const prevBookings = (prevBookingsRes.data || []).filter(b => b.date >= prevStartStr && b.date <= prevEndStr);
+  const prevSales = (prevSalesRes.data || []).filter(s => s.created_at >= `${prevStartStr}T00:00:00` && s.created_at <= `${prevEndStr}T23:59:59`);
 
   // Fetch members differently based on mode
   let membersRes, prevMembersRes;
@@ -89,15 +94,11 @@ export const getMonthlyRevenueData = async (
   }
 
   const members = membersRes.data || [];
-  const bookings = bookingsRes.data || [];
-  const sales = salesRes.data || [];
   const types = typesRes.data || [];
   const freezes = freezesRes.data || [];
   const typeMap = Object.fromEntries(types.map((t: any) => [t.id, t.name]));
 
   const prevMembers = prevMembersRes.data || [];
-  const prevBookings = prevBookingsRes.data || [];
-  const prevSales = prevSalesRes.data || [];
 
   // Initialize rows
   const rowMap: Record<string, number[]> = {
