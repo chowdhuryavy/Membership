@@ -97,36 +97,31 @@ export const RevenueEngine = {
     if (!memStart || !memEnd) return 0;
 
     // Intersection of Membership Period and Requested Period
-    // Ensure we use startOfDay for consistent comparison
     const activeStart = startOfDay(max([memStart, periodStart]));
     const activeEnd = startOfDay(min([memEnd, periodEnd]));
 
     if (activeStart > activeEnd) return 0;
 
-    let recognizedDays = 0;
-    try {
-      // We include the membership end date in the count (inclusive end date)
-      const potentialDays = eachDayOfInterval({ 
-        start: activeStart, 
-        end: activeEnd 
-      });
-      
-      potentialDays.forEach(day => {
-        const dStr = format(day, 'yyyy-MM-dd');
-        const isFrozen = freezes.some(freeze => {
-          const fStart = parseLocalDate(freeze.start_date);
-          const fEnd = parseLocalDate(freeze.end_date);
-          if (!fStart || !fEnd) return false;
-          const fsStr = format(fStart, 'yyyy-MM-dd');
-          const feStr = format(fEnd, 'yyyy-MM-dd');
-          return dStr >= fsStr && dStr <= feStr;
-        });
-        if (!isFrozen) recognizedDays++;
-      });
-    } catch (e) {
-      console.error("Error in calculateRevenuePeriod:", e);
-    }
+    // Total potential days in the intersection
+    const totalPotentialDays = differenceInCalendarDays(activeEnd, activeStart) + 1;
+    
+    // Calculate frozen days within this intersection
+    let frozenDays = 0;
+    freezes.forEach(freeze => {
+      const fStart = parseLocalDate(freeze.start_date);
+      const fEnd = parseLocalDate(freeze.end_date);
+      if (!fStart || !fEnd) return;
 
+      // Intersection of Freeze Period and Active Period
+      const intersectStart = max([fStart, activeStart]);
+      const intersectEnd = min([fEnd, activeEnd]);
+
+      if (intersectStart <= intersectEnd) {
+        frozenDays += differenceInCalendarDays(intersectEnd, intersectStart) + 1;
+      }
+    });
+
+    const recognizedDays = Math.max(0, totalPotentialDays - frozenDays);
     return recognizedDays * (member.daily_rate || 0);
   },
 
@@ -143,25 +138,22 @@ export const RevenueEngine = {
     if (!mStart || !mEnd) return 0;
     if (mStart > mEnd) return 0;
 
-    const potentialDays = eachDayOfInterval({ 
-      start: mStart, 
-      end: mEnd 
+    const totalPotentialDays = differenceInCalendarDays(mEnd, mStart) + 1;
+    
+    let frozenDays = 0;
+    freezes.forEach(freeze => {
+      const fStart = parseLocalDate(freeze.start_date);
+      const fEnd = parseLocalDate(freeze.end_date);
+      if (!fStart || !fEnd) return;
+
+      const intersectStart = max([fStart, mStart]);
+      const intersectEnd = min([fEnd, mEnd]);
+
+      if (intersectStart <= intersectEnd) {
+        frozenDays += differenceInCalendarDays(intersectEnd, intersectStart) + 1;
+      }
     });
     
-    let activeDays = 0;
-    potentialDays.forEach(day => {
-      const dStr = format(day, 'yyyy-MM-dd');
-      const isFrozen = freezes.some(freeze => {
-        const fStart = parseLocalDate(freeze.start_date);
-        const fEnd = parseLocalDate(freeze.end_date);
-        if (!fStart || !fEnd) return false;
-        const fsStr = format(fStart, 'yyyy-MM-dd');
-        const feStr = format(fEnd, 'yyyy-MM-dd');
-        return dStr >= fsStr && dStr <= feStr;
-      });
-      if (!isFrozen) activeDays++;
-    });
-    
-    return activeDays;
+    return Math.max(0, totalPotentialDays - frozenDays);
   }
 };

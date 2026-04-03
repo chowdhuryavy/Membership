@@ -2190,10 +2190,6 @@ class DatabaseService {
         query = query.is('user_id', null);
       }
       
-      if (outletId) {
-        query = query.or(`outlet_id.eq.${outletId},outlet_id.is.null`);
-      }
-
       const { data, error } = await query;
       if (error) {
         // PGRST205 is "Could not find the table in the schema cache"
@@ -2202,7 +2198,12 @@ class DatabaseService {
         }
         return this.getLocalNotifications(userId, outletId);
       }
-      return (data || []) as Notification[];
+      
+      let notifications = (data || []) as Notification[];
+      if (outletId) {
+        notifications = notifications.filter(n => !n.outlet_id || n.outlet_id === outletId);
+      }
+      return notifications;
     }
     return this.getLocalNotifications(userId, outletId);
   }

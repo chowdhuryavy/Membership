@@ -22,13 +22,15 @@ filesToSync.forEach(({ src, dest }) => {
   
   // 2. Fix relative imports to be local within the edge function directory
   content = content.replace(/from ['"]\.\.\/\.\.\/services\/revenueEngine['"]/g, "from './revenueEngine.ts'");
+  content = content.replace(/from ['"]\.\.\/\.\.\/services\/supabase['"]/g, "from './supabase.ts'");
   content = content.replace(/from ['"]\.\/monthlyRevenueReportLogic['"]/g, "from './monthlyRevenueReportLogic.ts'");
   content = content.replace(/from ['"]\.\.\/types['"]/g, "from './types.ts'");
+  content = content.replace(/from ['"]\.\.\/\.\.\/types['"]/g, "from './types.ts'");
   
   // 3. Handle supabase import
   // In the edge function, we pass the supabase client in the context, so we don't need the global one.
   if (dest === 'monthlyRevenueReportLogic.ts' || dest === 'reportLogic.ts') {
-    content = content.replace(/import { supabase } from ['"]\.\.\/\.\.\/services\/supabase['"];/g, "// supabase is passed in context");
+    content = content.replace(/import { supabase } from ['"]\.\/supabase\.ts['"];/g, "// supabase is passed in context");
   }
 
   // Ensure .ts extension for Deno imports if missing

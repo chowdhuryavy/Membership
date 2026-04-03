@@ -413,7 +413,7 @@ const Reports = () => {
                       (visibleColumns.deferred ? 1 : 0);
 
       const grouped = displayRows.reduce((acc, row) => {
-          const typeKey = selectedMembershipTypeId === 'all' ? (row.membership_type_name || 'Other') : 'All';
+          const typeKey = selectedMembershipTypeId === 'all' ? (row.membership_type_name || 'Membership') : 'All';
           const catKey = row.category_name || 'Other';
           
           if (!acc[typeKey]) acc[typeKey] = {};
@@ -712,7 +712,7 @@ const Reports = () => {
                     {(() => {
                         if (isMembersJoined) {
                             const grouped = rows.reduce((acc, row) => {
-                                const typeKey = selectedMembershipTypeId === 'all' ? ((row as any).membership_type_name || 'Other') : 'Filtered Results';
+                                const typeKey = selectedMembershipTypeId === 'all' ? ((row as any).membership_type_name || 'Membership') : 'Filtered Results';
                                 const catKey = (row as any).category || 'Other';
                                 if (!acc[typeKey]) acc[typeKey] = {};
                                 if (!acc[typeKey][catKey]) acc[typeKey][catKey] = [];

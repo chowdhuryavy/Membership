@@ -1,5 +1,6 @@
 import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths, parse, startOfDay, endOfDay, addDays, subDays } from 'npm:date-fns';
 import { RevenueEngine } from './revenueEngine.ts';
+import { getMonthlyRevenueData } from './monthlyRevenueReportLogic.ts';
 
 /**
  * SHARED REPORT LOGIC
@@ -12,8 +13,6 @@ export interface ReportData {
   groupedRows?: any; // For revenue recognition grouped data
   summary: any;
 }
-
-import { getMonthlyRevenueData } from './monthlyRevenueReportLogic.ts';
 
 export interface ReportContext {
   supabase: any;

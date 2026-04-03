@@ -87,8 +87,6 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
 
   const handleNewEnrollment = () => {
-    if (loading) return;
-    
     // If we have no membership types or categories yet, we shouldn't open the form as it will be incomplete
     if (membershipTypes.length === 0 || categories.length === 0) {
       onRefresh(true); // Silently refresh to try and get data
@@ -345,7 +343,6 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
           {canCreate && (
             <Button 
               onClick={handleNewEnrollment} 
-              disabled={loading}
               className="w-full sm:w-auto h-14 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <UserPlus className="w-4 h-4 mr-2" /> 

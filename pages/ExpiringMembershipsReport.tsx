@@ -92,7 +92,7 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth, s
 
         return expiringMembers.reduce((acc, member) => {
             const type = membershipTypes.find(t => t.id === member.membership_type_id);
-            const typeKey = type?.name || 'Other';
+            const typeKey = type?.name || 'Membership';
             const cat = categories.find(c => c.id === member.category_id);
             const catKey = cat?.name || 'Other';
             
