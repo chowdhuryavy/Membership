@@ -345,11 +345,11 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
           {canCreate && (
             <Button 
               onClick={handleNewEnrollment} 
-              disabled={loading || membershipTypes.length === 0 || categories.length === 0}
+              disabled={loading}
               className="w-full sm:w-auto h-14 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <UserPlus className="w-4 h-4 mr-2" /> 
-              {loading ? 'Loading...' : (membershipTypes.length === 0 || categories.length === 0) ? 'Loading Data...' : 'New Enrollment'}
+              New Enrollment
             </Button>
           )}
         </div>
