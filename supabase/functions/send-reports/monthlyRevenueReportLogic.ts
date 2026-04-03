@@ -65,11 +65,11 @@ export const getMonthlyRevenueData = async (
     prevSalesRes,
     freezesRes
   ] = await Promise.all([
-    supabase.from('massage_bookings').select('date, net_revenue').in('outlet_id', outletIds).eq('status', 'completed').gte('date', startStr).lte('date', endStr),
-    supabase.from('sales').select('created_at, net_amount, category').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59`),
+    supabase.from('massage_bookings').select('date, net_revenue').in('outlet_id', outletIds).eq('status', 'completed').and(`date.gte.${startStr},date.lte.${endStr}`),
+    supabase.from('sales').select('created_at, net_amount, category').in('outlet_id', outletIds).eq('status', 'completed').and(`created_at.gte.${startStr}T00:00:00,created_at.lte.${endStr}T23:59:59`),
     supabase.from('membership_types').select('id, name').in('outlet_id', outletIds),
-    supabase.from('massage_bookings').select('date, net_revenue').in('outlet_id', outletIds).eq('status', 'completed').gte('date', prevStartStr).lte('date', prevEndStr),
-    supabase.from('sales').select('created_at, net_amount').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${prevStartStr}T00:00:00`).lte('created_at', `${prevEndStr}T23:59:59`),
+    supabase.from('massage_bookings').select('date, net_revenue').in('outlet_id', outletIds).eq('status', 'completed').and(`date.gte.${prevStartStr},date.lte.${prevEndStr}`),
+    supabase.from('sales').select('created_at, net_amount').in('outlet_id', outletIds).eq('status', 'completed').and(`created_at.gte.${prevStartStr}T00:00:00,created_at.lte.${prevEndStr}T23:59:59`),
     supabase.from('freezes').select('*')
   ]);
 
