@@ -114,7 +114,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
           </div>
         </div>
 
-        <div className="p-12 md:p-20 bg-white print:p-0">
+        <div className="p-12 md:p-20 bg-white print:p-0 print:block print-page-1">
           <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
             {/* Header */}
             <div className="flex justify-between items-start mb-12 border-b-4 border-black pb-6">
@@ -318,10 +318,11 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
               <p className="text-[9px] font-bold text-slate-300 uppercase tracking-[0.5em]">This is a digitally generated legal instrument &bull; System ID: {member.id.substring(0,8)}</p>
             </div>
           </div>
+          <div className="hidden print:block" style={{ breakAfter: 'page' }}></div>
         </div>
 
         {/* Page 2: Rules and Regulations */}
-        <div className="p-12 md:p-20 bg-white relative print:mt-0 print:border-none print-page-2 print:p-0">
+        <div className="p-12 md:p-20 bg-white print:mt-0 print:border-none print-page-2 print:p-0 print:block print:relative">
           <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
             <div className="text-center mb-8">
               <h3 className="text-xl font-black uppercase tracking-widest border-b-2 border-black inline-block pb-2">Gymnasium Rules & Regulations</h3>
@@ -364,38 +365,33 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             background: white !important;
           }
           .print-root {
-            position: relative !important;
-            inset: auto !important;
+            position: static !important;
             width: 100% !important;
             height: auto !important;
             overflow: visible !important;
             display: block !important;
-            background: white !important;
             padding: 0 !important;
             margin: 0 !important;
-            backdrop-filter: none !important;
-            -webkit-backdrop-filter: none !important;
-            transform: none !important;
           }
           .print-container {
             width: 100% !important;
-            max-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             border: none !important;
             box-shadow: none !important;
             display: block !important;
-            background: white !important;
           }
-          .no-print, .no-print * {
+          .no-print {
             display: none !important;
           }
-          .print-page-2 {
-            break-before: page;
+          .print-page-1 {
             display: block !important;
+            padding: 0 !important;
           }
-          .print-rule-item {
-            break-inside: avoid;
+          .print-page-2 {
+            display: block !important;
+            break-before: page !important;
+            padding: 0 !important;
           }
           @page { size: A4; margin: 15mm; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
