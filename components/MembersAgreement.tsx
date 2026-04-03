@@ -98,8 +98,8 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
   );
 
   return createPortal(
-    <div className="fixed inset-0 z-[300] bg-slate-900/90 backdrop-blur-md flex items-start justify-center p-4 md:p-8 animate-in fade-in duration-300 overflow-y-auto print:relative print:block print:bg-white print:p-0 print:m-0 print:overflow-visible print:h-auto print-root">
-      <div className="bg-white w-full max-w-[850px] rounded-2xl shadow-2xl flex flex-col border border-white/20 my-4 print:my-0 print:shadow-none print:border-none print:overflow-visible print:h-auto print:block print-container">
+    <div className="fixed inset-0 z-[300] bg-slate-900/90 backdrop-blur-md flex items-start justify-center p-4 md:p-8 animate-in fade-in duration-300 overflow-y-auto print:absolute print:inset-auto print:top-0 print:left-0 print:w-full print:h-auto print:overflow-visible print:block print:bg-white print:p-0 print:m-0 print-root">
+      <div className="bg-white w-full max-w-[850px] rounded-2xl shadow-2xl flex flex-col border border-white/20 my-4 print:w-full print:max-w-none print:m-0 print:p-0 print:border-none print:shadow-none print:block print-container">
         
         <div className="px-8 py-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-[210] rounded-t-2xl no-print">
           <div className="flex items-center gap-3">
@@ -114,10 +114,10 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
           </div>
         </div>
 
-        <div className="p-12 md:p-20 bg-white print:p-0 print:block print-page-1">
+        <div className="p-12 md:p-20 bg-white print:p-8 print-page-1">
           <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
             {/* Header */}
-            <div className="flex justify-between items-start mb-12 border-b-4 border-black pb-6">
+            <div className="flex justify-between items-start mb-12 border-b-4 border-black pb-6 print:mb-6 print:pb-4">
               <div className="flex-1">
                 <h1 className="text-3xl font-black tracking-tighter text-black uppercase mb-1">{propertyName}</h1>
                 <h2 className="text-sm font-black text-slate-500 uppercase tracking-[0.3em]">{outletName}</h2>
@@ -139,7 +139,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-12 mb-10">
+            <div className="grid grid-cols-2 gap-12 mb-10 print:gap-6 print:mb-6">
               <div className="space-y-4">
                 <div className="flex justify-between items-end border-b border-black pb-1">
                   <h3 className="text-xs font-black uppercase">Member Identity</h3>
@@ -217,7 +217,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
 
             {/* Checkbox Section */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 grid grid-cols-2 gap-8">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 grid grid-cols-2 gap-8 print:mb-4 print:gap-4 print:p-3">
                 <div className="space-y-3">
                   <Checkbox checked={member.membership_type === 'New'} labelEn="New Enrollment" labelAr="طلب جديد" />
                   <Checkbox checked={member.membership_type === 'Renew'} labelEn="Renewal" labelAr="تجديد" />
@@ -293,7 +293,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
 
             {/* Signatures */}
-            <div className="mt-12 grid grid-cols-2 gap-16 break-inside-avoid">
+            <div className="mt-12 grid grid-cols-2 gap-16 break-inside-avoid print:mt-6 print:gap-8">
                <div className="flex flex-col justify-end h-24 break-inside-avoid">
                   {member.member_signature && (
                     <img src={member.member_signature} alt="Member Signature" className="h-16 object-contain mb-2 self-start" />
@@ -318,18 +318,17 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
               <p className="text-[9px] font-bold text-slate-300 uppercase tracking-[0.5em]">This is a digitally generated legal instrument &bull; System ID: {member.id.substring(0,8)}</p>
             </div>
           </div>
-          <div className="hidden print:block" style={{ breakAfter: 'page' }}></div>
         </div>
 
         {/* Page 2: Rules and Regulations */}
-        <div className="p-12 md:p-20 bg-white print:mt-0 print:border-none print-page-2 print:p-0 print:block print:relative">
+        <div className="p-12 md:p-20 bg-white mt-4 border-t border-slate-200 print:p-8 print-page-2">
           <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
-            <div className="text-center mb-8">
+            <div className="text-center mb-8 print:mb-4">
               <h3 className="text-xl font-black uppercase tracking-widest border-b-2 border-black inline-block pb-2">Gymnasium Rules & Regulations</h3>
               <h3 className="text-lg font-bold mt-2 font-arabic" dir="rtl">القواعد و اللوائح الخاصة بصالة الألعاب الرياضية</h3>
             </div>
             
-            <div className="grid grid-cols-1 gap-y-2 text-[9px] font-medium leading-relaxed mb-8">
+            <div className="grid grid-cols-1 gap-y-2 text-[9px] font-medium leading-relaxed mb-8 print:mb-4 print:gap-y-1">
               {GYM_RULES.map((rule, idx) => (
                 <div key={idx} className="flex gap-4 items-start border-b border-slate-200 pb-1.5 print-rule-item">
                   <span className="font-black w-6">{idx + 1}.</span>
@@ -339,7 +338,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
               ))}
             </div>
             
-            <div className="mt-auto pt-6 border-t-2 border-black">
+            <div className="mt-auto pt-6 border-t-2 border-black print:pt-4">
               <div className="flex justify-between px-2">
                 <div className="w-72 flex flex-col justify-end h-24">
                   {member.member_signature && (
@@ -358,40 +357,58 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
 
       <style>{`
         @media print {
-          body > #root {
+          body > *:not(.print-root) {
             display: none !important;
           }
-          body {
+          html, body {
             background: white !important;
-          }
-          .print-root {
-            position: static !important;
-            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             height: auto !important;
             overflow: visible !important;
+          }
+          .print-root {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
             display: block !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            background: white !important;
             padding: 0 !important;
             margin: 0 !important;
           }
           .print-container {
+            display: block !important;
             width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
             border: none !important;
             box-shadow: none !important;
-            display: block !important;
           }
           .no-print {
             display: none !important;
           }
           .print-page-1 {
             display: block !important;
-            padding: 0 !important;
+            padding: 20px !important;
+            margin: 0 !important;
           }
           .print-page-2 {
             display: block !important;
+            page-break-before: always !important;
             break-before: page !important;
-            padding: 0 !important;
+            padding: 20px !important;
+            margin: 0 !important;
+            border: none !important;
+          }
+          .print-rule-item {
+            break-inside: avoid;
           }
           @page { size: A4; margin: 15mm; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
