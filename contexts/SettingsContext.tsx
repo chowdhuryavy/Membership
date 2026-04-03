@@ -209,26 +209,28 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return false;
   }, [settings]);
 
+  const settingsContextValue = useMemo(() => ({ 
+    settings, 
+    currency, 
+    roles, 
+    currencies, 
+    outlets,
+    properties,
+    currentOutlet,
+    currentProperty,
+    setCurrentOutlet,
+    refreshSettings, 
+    formatMoney,
+    hasPermission,
+    checkShortcut,
+    isLoading,
+    pageLoading,
+    setPageLoading,
+    permissionRegistry
+  }), [settings, currency, roles, currencies, outlets, properties, currentOutlet, currentProperty, setCurrentOutlet, refreshSettings, formatMoney, hasPermission, checkShortcut, isLoading, pageLoading, setPageLoading, permissionRegistry]);
+
   return (
-    <SettingsContext.Provider value={{ 
-      settings, 
-      currency, 
-      roles, 
-      currencies, 
-      outlets,
-      properties,
-      currentOutlet,
-      currentProperty,
-      setCurrentOutlet,
-      refreshSettings, 
-      formatMoney,
-      hasPermission,
-      checkShortcut,
-      isLoading,
-      pageLoading,
-      setPageLoading,
-      permissionRegistry
-    }}>
+    <SettingsContext.Provider value={settingsContextValue}>
       {children}
     </SettingsContext.Provider>
   );

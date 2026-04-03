@@ -1,10 +1,25 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { db } from '../services/mockSupabase';
 import { Notification } from '../types';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from './AuthContext';
+import { useSettings } from './SettingsContext';
 
-export const useNotifications = (outletId?: string) => {
+interface NotificationContextType {
+  notifications: Notification[];
+  isLoading: boolean;
+  markAsRead: (id: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
+  removeNotification: (id: string) => Promise<void>;
+  refresh: () => Promise<void>;
+}
+
+const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+
+export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { currentOutlet } = useSettings();
+  const outletId = currentOutlet?.id;
+
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -88,12 +103,24 @@ export const useNotifications = (outletId?: string) => {
     }
   };
 
-  return {
+  const value = React.useMemo(() => ({
     notifications,
     isLoading,
     markAsRead,
     markAllAsRead,
     removeNotification,
     refresh: fetchNotifications
-  };
+  }), [notifications, isLoading, markAsRead, markAllAsRead, removeNotification, fetchNotifications]);
+
+  return (
+    <NotificationContext.Provider value={value}>
+      {children}
+    </NotificationContext.Provider>
+  );
+};
+
+export const useNotificationContext = () => {
+  const context = useContext(NotificationContext);
+  if (!context) throw new Error('useNotificationContext must be used within a NotificationProvider');
+  return context;
 };

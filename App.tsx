@@ -12,6 +12,7 @@ import {
 } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Members from './pages/Members';
@@ -547,29 +548,31 @@ const App = () => {
   return (
     <AuthProvider>
       <SettingsProvider>
-        <DynamicHead />
-        <Toaster position="top-right" />
-        <UserActivityTracker />
-        <Router>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route element={<ProtectedLayout />}>
-                <Route index element={<Dashboard />} />
-                <Route path="members" element={<Members />} />
-                <Route path="staff" element={<StaffPage />} />
-                <Route path="bookings" element={<MassageScheduling />} />
-                <Route path="sales" element={<Sales />} />
-                <Route path="sales/stock-report" element={<RetailStockReport />} />
-                <Route path="categories" element={<Categories />} />
-                <Route path="users" element={<UsersPage />} />
-                <Route path="reports" element={<Reports />} />
-                <Route path="logs" element={<Logs />} />
-                <Route path="settings" element={<SettingsPage />} />
-                <Route path="profile" element={<Profile />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Router>
+        <NotificationProvider>
+          <DynamicHead />
+          <Toaster position="top-right" />
+          <UserActivityTracker />
+          <Router>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route element={<ProtectedLayout />}>
+                  <Route index element={<Dashboard />} />
+                  <Route path="members" element={<Members />} />
+                  <Route path="staff" element={<StaffPage />} />
+                  <Route path="bookings" element={<MassageScheduling />} />
+                  <Route path="sales" element={<Sales />} />
+                  <Route path="sales/stock-report" element={<RetailStockReport />} />
+                  <Route path="categories" element={<Categories />} />
+                  <Route path="users" element={<UsersPage />} />
+                  <Route path="reports" element={<Reports />} />
+                  <Route path="logs" element={<Logs />} />
+                  <Route path="settings" element={<SettingsPage />} />
+                  <Route path="profile" element={<Profile />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Router>
+        </NotificationProvider>
       </SettingsProvider>
     </AuthProvider>
   );

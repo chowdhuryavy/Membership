@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { UserProfile } from '../types';
 import { db } from '../services/mockSupabase';
 
@@ -123,8 +123,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('membership_last_outlet');
   };
 
+  const authContextValue = useMemo(() => ({ 
+    user, 
+    login, 
+    register, 
+    changePassword, 
+    updateProfile, 
+    refreshUser, 
+    logout, 
+    isLoading, 
+    isSuperAdmin: isSuperAdminState, 
+    checkIsSuperAdmin 
+  }), [user, login, register, changePassword, updateProfile, refreshUser, logout, isLoading, isSuperAdminState, checkIsSuperAdmin]);
+
   return (
-    <AuthContext.Provider value={{ user, login, register, changePassword, updateProfile, refreshUser, logout, isLoading, isSuperAdmin: isSuperAdminState, checkIsSuperAdmin }}>
+    <AuthContext.Provider value={authContextValue}>
       {children}
     </AuthContext.Provider>
   );
