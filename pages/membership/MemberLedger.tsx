@@ -210,7 +210,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                             onClick={() => setViewScope('outlet')} 
                             className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-2 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'} ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                            Outlet Scope
+                            Outlet
                         </button>
                         <button 
                             disabled={loading}
