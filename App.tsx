@@ -474,7 +474,11 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
                         <h1 className="font-black text-slate-900 tracking-tighter max-w-[150px] leading-tight">
                             {settings?.name || 'Identity Sync'}
                         </h1>
-                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Corporate Solution</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Corporate Solution</span>
+                            <div className="w-1 h-1 rounded-full bg-indigo-400"></div>
+                            <span className="text-[7px] font-black text-indigo-600 uppercase tracking-widest">Console</span>
+                        </div>
                      </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -515,13 +519,33 @@ const DynamicHead = () => {
         document.title = `${settings.name} | Console`;
       }
       if (settings.logo_url) {
-        let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
-        if (!link) {
-          link = document.createElement('link');
-          link.rel = 'icon';
-          document.head.appendChild(link);
+        const setLink = (rel: string, extraProps?: Record<string, string>) => {
+          let link = document.querySelector(`link[rel~='${rel}']`) as HTMLLinkElement;
+          if (!link) {
+            link = document.createElement('link');
+            link.rel = rel;
+            document.head.appendChild(link);
+          }
+          link.href = settings.logo_url;
+          if (extraProps) {
+            Object.entries(extraProps).forEach(([key, val]) => link.setAttribute(key, val));
+          }
+        };
+
+        setLink('icon');
+        setLink('shortcut icon');
+        setLink('apple-touch-icon');
+        setLink('apple-touch-icon-precomposed');
+        setLink('mask-icon', { color: '#4f46e5' });
+
+        // Set theme color for mobile browser bars
+        let meta = document.querySelector("meta[name='theme-color']") as HTMLMetaElement;
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.name = 'theme-color';
+          document.head.appendChild(meta);
         }
-        link.href = settings.logo_url;
+        meta.content = '#4f46e5';
       }
     }
   }, [settings]);
