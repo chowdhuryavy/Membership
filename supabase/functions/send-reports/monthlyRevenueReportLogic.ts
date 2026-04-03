@@ -36,11 +36,13 @@ export const getMonthlyRevenueData = async (
   const prevEndStr = format(prevEndDate, 'yyyy-MM-dd');
 
   let outletIds: string[] = [];
+  let isSingleOutlet = false;
   if (outletId === 'all') {
     const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', propertyId);
     outletIds = (outlets || []).map((o: any) => o.id);
   } else {
     outletIds = [outletId];
+    isSingleOutlet = true;
   }
 
   if (outletIds.length === 0) {
@@ -56,6 +58,17 @@ export const getMonthlyRevenueData = async (
     };
   }
 
+  // Helper to build query
+  const buildQuery = (table: string, columns: string) => {
+    let query = supabase.from(table).select(columns);
+    if (isSingleOutlet) {
+      query = query.eq('outlet_id', outletIds[0]);
+    } else {
+      query = query.in('outlet_id', outletIds);
+    }
+    return query;
+  };
+
   // Fetch data
   const [
     bookingsRes,
@@ -65,18 +78,18 @@ export const getMonthlyRevenueData = async (
     prevSalesRes,
     freezesRes
   ] = await Promise.all([
-    supabase.from('massage_bookings').select('date, net_revenue').in('outlet_id', outletIds).eq('status', 'completed').gte('date', startStr).lte('date', endStr),
-    supabase.from('sales').select('created_at, net_amount, category').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59`),
-    supabase.from('membership_types').select('id, name').in('outlet_id', outletIds),
-    supabase.from('massage_bookings').select('date, net_revenue').in('outlet_id', outletIds).eq('status', 'completed').gte('date', prevStartStr).lte('date', prevEndStr),
-    supabase.from('sales').select('created_at, net_amount').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${prevStartStr}T00:00:00`).lte('created_at', `${prevEndStr}T23:59:59`),
+    buildQuery('massage_bookings', 'date, net_revenue').eq('status', 'completed'),
+    buildQuery('sales', 'created_at, net_amount, category').eq('status', 'completed'),
+    buildQuery('membership_types', 'id, name'),
+    buildQuery('massage_bookings', 'date, net_revenue').eq('status', 'completed'),
+    buildQuery('sales', 'created_at, net_amount').eq('status', 'completed'),
     supabase.from('freezes').select('*')
   ]);
 
-  const bookings = bookingsRes.data || [];
-  const sales = salesRes.data || [];
-  const prevBookings = prevBookingsRes.data || [];
-  const prevSales = prevSalesRes.data || [];
+  const bookings = (bookingsRes.data || []).filter(b => b.date >= startStr && b.date <= endStr);
+  const sales = (salesRes.data || []).filter(s => s.created_at >= `${startStr}T00:00:00` && s.created_at <= `${endStr}T23:59:59`);
+  const prevBookings = (prevBookingsRes.data || []).filter(b => b.date >= prevStartStr && b.date <= prevEndStr);
+  const prevSales = (prevSalesRes.data || []).filter(s => s.created_at >= `${prevStartStr}T00:00:00` && s.created_at <= `${prevEndStr}T23:59:59`);
 
   // Fetch members differently based on mode
   let membersRes, prevMembersRes;
