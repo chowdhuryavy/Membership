@@ -394,10 +394,10 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                         <div className="h-3 w-px bg-slate-200 hidden sm:block"></div>
                         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
                             <button onClick={() => setViewScope('outlet')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                                <Filter className="w-2.5 h-2.5" /> Outlet View
+                                <Filter className="w-2.5 h-2.5" /> Outlet
                             </button>
                             <button onClick={() => setViewScope('property')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                                <Building2 className="w-2.5 h-2.5" /> Property View
+                                <Building2 className="w-2.5 h-2.5" /> Property
                             </button>
                         </div>
                       </>
