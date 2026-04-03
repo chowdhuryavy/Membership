@@ -92,7 +92,7 @@ interface RevenueRow {
 
 const Reports = () => {
   const { user } = useAuth();
-  const { settings, currency, currentOutlet, currentProperty, formatMoney, hasPermission } = useSettings();
+  const { settings, currency, currentOutlet, currentProperty, formatMoney, hasPermission, setPageLoading } = useSettings();
   const [reportType, setReportType] = useState<ReportType>('revenue_recognition');
   const [incentiveDept, setIncentiveDept] = useState<'Massage' | 'Membership' | 'Personal Training'>('Massage');
   const [reportMonth, setReportMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -255,6 +255,7 @@ const Reports = () => {
   const loadData = async () => {
     if (!currentOutlet || !currentProperty) return;
     setLoading(true);
+    setPageLoading(true);
     try {
       const start = reportType === 'daily_sales' ? startOfDay(parseISO(dailySalesDate)) : startOfDay(parseISO(reportMonth + '-01'));
       
@@ -289,6 +290,7 @@ const Reports = () => {
       toast.error('Failed to load report data');
     } finally {
       setLoading(false);
+      setPageLoading(false);
     }
   };
 

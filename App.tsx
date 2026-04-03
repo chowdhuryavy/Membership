@@ -225,9 +225,12 @@ const ProtectedLayout = () => {
   const navigate = useNavigate();
 
   const isInitialLoad = useRef(true);
-  const isMembersPage = location.pathname === '/members';
-  const isSalesPage = location.pathname.startsWith('/sales');
-  const isSplashPage = isMembersPage || isSalesPage;
+  const isSplashPage = useMemo(() => {
+    const splashPaths = ['/', '/members', '/sales', '/reports', '/staff', '/bookings', '/categories', '/users', '/logs'];
+    return splashPaths.some(path => 
+      path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
+    );
+  }, [location.pathname]);
 
   const isAppInitializing = isAuthLoading || isSettingsLoading || (user && outlets.length > 0 && !currentOutlet);
   const combinedLoading = isAppInitializing || (isSplashPage && pageLoading);
