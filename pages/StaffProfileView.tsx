@@ -203,7 +203,7 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
 {`-- CREATE STAFF LEAVES TABLE
 CREATE TABLE IF NOT EXISTS public.staff_leaves (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    staff_id TEXT NOT NULL REFERENCES public.staff(id) ON DELETE CASCADE,
+    staff_id UUID NOT NULL REFERENCES public.staff(id) ON DELETE CASCADE,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())

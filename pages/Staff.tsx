@@ -154,9 +154,25 @@ const StaffPage = () => {
     setIsSubmitting(true);
     setErrorMessage(null);
     try {
-      const dataToSave = { ...formData };
-      if (editingId && !dataToSave.password) {
-        delete dataToSave.password;
+      const dataToSave: any = {
+        name: formData.name,
+        role: formData.role,
+        email: formData.email,
+        phone: formData.phone,
+        is_active: formData.is_active,
+        is_eligible_for_incentives: formData.is_eligible_for_incentives,
+        probation_start_date: formData.probation_start_date,
+        probation_end_date: formData.probation_end_date,
+        property_id: formData.property_id,
+        outlet_ids: formData.outlet_ids,
+        can_login: formData.can_login,
+        employee_number: formData.employee_number
+      };
+      
+      if (formData.password && !editingId) {
+        dataToSave.password = formData.password;
+      } else if (formData.password && editingId) {
+        dataToSave.password = formData.password;
       }
       
       if (editingId) {
@@ -280,9 +296,13 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                 return null;
               })()}
               {viewScope === 'property' && (
-                <div className="inline-flex items-center px-2 py-0.5 bg-slate-100 rounded text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                  <Store className="w-2.5 h-2.5 mr-1" />
-                  {outlets.find(o => o.id === s.outlet_id)?.name || 'Unknown Outlet'}
+                <div className="flex flex-wrap gap-1">
+                  {s.outlet_ids.map(oid => (
+                    <div key={oid} className="inline-flex items-center px-2 py-0.5 bg-slate-100 rounded text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                      <Store className="w-2.5 h-2.5 mr-1" />
+                      {outlets.find(o => o.id === oid)?.name || 'Unknown'}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

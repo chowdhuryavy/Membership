@@ -469,7 +469,7 @@ class DatabaseService {
   async getStaff(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[]): Promise<Staff[]> {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
-        let query = supabase.from('staff').select('*, leaves:staff_leaves(*)').order('name');
+        let query = supabase.from('staff').select('*, leaves:staff_leaves!fk_staff_leaves_staff(*)').order('name');
         if (scopeId) {
             if (isProperty) {
                 if (limitToOutletIds && limitToOutletIds.length > 0) {
