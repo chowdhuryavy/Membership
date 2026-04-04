@@ -12,6 +12,7 @@ const StaffSchedule = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [bookings, setBookings] = useState<MassageBooking[]>([]);
   const [treatments, setTreatments] = useState<MassageType[]>([]);
+  const [inventory, setInventory] = useState<any[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [rooms, setRooms] = useState<MassageRoom[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,11 +70,17 @@ const StaffSchedule = () => {
     setLoading(true);
     try {
       const dateStr = format(currentDate, 'yyyy-MM-dd');
-      // We fetch bookings for the staff's outlet
-      const [allBookings, allTreatments, allGuests, allRooms] = await Promise.all([
+      
+      // First get the outlet to find the property_id for guests
+      const outlets = await db.getOutlets();
+      const myOutlet = outlets.find(o => o.id === staff.outlet_id);
+      const propertyId = myOutlet?.property_id || staff.outlet_id;
+
+      const [allBookings, allTreatments, allInventory, allGuests, allRooms] = await Promise.all([
         db.getMassageBookingsByDate(staff.outlet_id, false, dateStr),
         db.getMassageTypes(staff.outlet_id),
-        db.getGuests(staff.outlet_id),
+        db.getInventory(staff.outlet_id),
+        db.getGuests(propertyId),
         db.getMassageRooms(staff.outlet_id)
       ]);
 
@@ -85,6 +92,7 @@ const StaffSchedule = () => {
 
       setBookings(myBookings);
       setTreatments(allTreatments);
+      setInventory(allInventory);
       setGuests(allGuests);
       setRooms(allRooms);
     } catch (error) {
@@ -194,10 +202,17 @@ const StaffSchedule = () => {
           </button>
         </div>
 
-        <div className="flex justify-between items-center px-1">
-          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Daily Appointments</h2>
-          <button onClick={loadSchedule} disabled={loading} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 transition-colors disabled:opacity-50">
-            <RefreshCcw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+        <div className="flex justify-between items-end px-1 mb-2">
+          <div>
+            <h2 className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Daily Appointments</h2>
+            <div className="h-1 w-8 bg-indigo-500 rounded-full"></div>
+          </div>
+          <button 
+            onClick={loadSchedule} 
+            disabled={loading} 
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:bg-indigo-100 rounded-lg transition-all active:scale-95 disabled:opacity-50"
+          >
+            <RefreshCcw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </button>
         </div>
 
@@ -216,26 +231,34 @@ const StaffSchedule = () => {
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xs mx-auto leading-relaxed">You have no scheduled treatments for this day. Enjoy your free time!</p>
           </div>
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-4">
             {bookings.map(booking => {
-              const treatment = treatments.find(t => t.id === booking.massage_type_id);
+              const treatment = treatments.find(t => t.id === booking.massage_type_id) || 
+                               inventory.find(i => i.id === booking.inventory_item_id);
               const guest = guests.find(g => g.id === booking.guest_id);
               const room = rooms.find(r => r.id === booking.room_id);
 
               return (
-                <div key={booking.id} className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
-                  <div className={`absolute left-0 top-0 bottom-0 w-2 ${booking.status === 'completed' ? 'bg-emerald-500' : booking.status === 'no-show' ? 'bg-red-500' : 'bg-indigo-500'}`}></div>
+                <div key={booking.id} className="bg-white p-4 sm:p-6 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300">
+                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 sm:w-2 ${
+                    booking.status === 'completed' ? 'bg-emerald-500' : 
+                    booking.status === 'no-show' ? 'bg-red-500' : 
+                    'bg-indigo-500 animate-pulse'
+                  }`}></div>
                   
-                  <div className="flex justify-between items-start mb-5 pl-2">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
-                        <Clock className="w-5 h-5" />
+                  <div className="flex justify-between items-start mb-4 sm:mb-5 pl-2">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <div className="p-1.5 sm:p-2 bg-indigo-50 rounded-lg sm:rounded-xl text-indigo-600 group-hover:scale-110 transition-transform">
+                        <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
                       </div>
-                      <span className="font-black text-xl tracking-tight text-slate-900">
-                        {booking.start_time.substring(0, 5)} <span className="text-slate-300 mx-1">-</span> {booking.end_time.substring(0, 5)}
-                      </span>
+                      <div>
+                        <span className="font-black text-base sm:text-xl tracking-tight text-slate-900 block">
+                          {booking.start_time.substring(0, 5)} <span className="text-slate-300 mx-0.5">-</span> {booking.end_time.substring(0, 5)}
+                        </span>
+                        <p className="text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest">Scheduled Time</p>
+                      </div>
                     </div>
-                    <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl border ${
+                    <span className={`text-[8px] sm:text-[10px] font-black uppercase tracking-widest px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border shadow-sm ${
                       booking.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
                       booking.status === 'no-show' ? 'bg-red-50 text-red-700 border-red-100' : 
                       'bg-indigo-50 text-indigo-700 border-indigo-100'
@@ -245,27 +268,30 @@ const StaffSchedule = () => {
                   </div>
 
                   <div className="pl-2">
-                    <h3 className="font-black text-slate-900 uppercase tracking-tight text-lg mb-6">
-                      {treatment?.name || 'Unknown Treatment'}
-                    </h3>
+                    <div className="mb-4 sm:mb-6">
+                      <p className="text-[7px] sm:text-[9px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-1">Treatment Type</p>
+                      <h3 className="font-black text-slate-900 uppercase tracking-tight text-sm sm:text-lg leading-tight">
+                        {treatment?.name || 'Unknown Treatment'}
+                      </h3>
+                    </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
-                      <div className="flex items-center gap-4 p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm border border-slate-100">
-                          <User className="w-5 h-5 text-indigo-400" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-2">
+                      <div className="flex items-center gap-3 sm:gap-4 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-indigo-100 transition-colors">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm border border-slate-100">
+                          <User className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
                         </div>
-                        <div>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Guest</p>
-                          <p className="text-sm font-black text-slate-800 uppercase truncate">{guest?.name || 'Unknown'}</p>
+                        <div className="min-w-0">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Guest Name</p>
+                          <p className="text-xs sm:text-sm font-black text-slate-800 uppercase truncate">{guest?.name || 'Unknown'}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm border border-slate-100">
-                          <MapPin className="w-5 h-5 text-emerald-400" />
+                      <div className="flex items-center gap-3 sm:gap-4 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-emerald-100 transition-colors">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm border border-slate-100">
+                          <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
                         </div>
-                        <div>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Location</p>
-                          <p className="text-sm font-black text-slate-800 uppercase truncate">{room?.name || 'Any Room'}</p>
+                        <div className="min-w-0">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Assigned Location</p>
+                          <p className="text-xs sm:text-sm font-black text-slate-800 uppercase truncate">{room?.name || 'Any Room'}</p>
                         </div>
                       </div>
                     </div>

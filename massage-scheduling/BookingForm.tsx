@@ -320,10 +320,9 @@ const BookingForm: React.FC<BookingFormProps> = ({
             status: 'confirmed' 
         }); 
       }
-      toast.success("Booking saved successfully. You can now make adjustments.");
-      // Keep the form open, don't call onSuccess() which closes it
-      // onSuccess(); 
-      // onClose();
+      toast.success("Booking saved successfully.");
+      onSuccess(); 
+      onClose();
     } catch (err: any) { 
         const msg = err.message || "";
         if (msg.includes('schema cache') || msg.includes('inventory_item_id') || msg.includes('room_id') || msg.includes('check_no') || msg.includes('category') || msg.includes('payment_method')) {
