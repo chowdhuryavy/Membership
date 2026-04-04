@@ -92,7 +92,8 @@ export interface MassageRoom {
 
 export interface Staff {
   id: string;
-  outlet_id: string;
+  property_id: string;
+  outlet_ids: string[];
   name: string;
   role: string;
   employee_number?: string;

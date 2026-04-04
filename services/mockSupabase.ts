@@ -473,14 +473,14 @@ class DatabaseService {
         if (scopeId) {
             if (isProperty) {
                 if (limitToOutletIds && limitToOutletIds.length > 0) {
-                    query = query.in('outlet_id', limitToOutletIds);
+                    query = query.overlaps('outlet_ids', limitToOutletIds);
                 } else {
                     const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
                     const ids = (outlets || []).map(o => o.id);
-                    query = query.in('outlet_id', ids);
+                    query = query.overlaps('outlet_ids', ids);
                 }
             } else {
-                query = query.eq('outlet_id', scopeId);
+                query = query.contains('outlet_ids', [scopeId]);
             }
         }
         const { data, error } = await query;
@@ -561,7 +561,7 @@ class DatabaseService {
     if (this.isSupabase()) {
       const { data, error } = await supabase.from('staff').insert([{ ...staff, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select();
       if (error) throw error;
-      await this.logAction('CREATE_STAFF', `Added staff member: ${staff.name} (${staff.role})`, staff.outlet_id);
+      await this.logAction('CREATE_STAFF', `Added staff member: ${staff.name} (${staff.role})`, staff.outlet_ids[0]);
       return data;
     }
   }

@@ -58,7 +58,8 @@ const StaffPage = () => {
     is_eligible_for_incentives: true,
     probation_start_date: '',
     probation_end_date: '',
-    outlet_id: '' 
+    property_id: '',
+    outlet_ids: [] 
   });
   
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -161,7 +162,7 @@ const StaffPage = () => {
       if (editingId) {
         await db.updateStaff(editingId, dataToSave);
       } else {
-        await db.addStaff({ ...dataToSave, outlet_id: currentOutlet.id });
+        await db.addStaff({ ...dataToSave, property_id: currentProperty.id, outlet_ids: dataToSave.outlet_ids });
       }
       setShowForm(false);
       setEditingId(null);
@@ -249,7 +250,8 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                             phone: s.phone || '',
                             probation_start_date: s.probation_start_date || '',
                             probation_end_date: s.probation_end_date || '',
-                            outlet_id: s.outlet_id
+                            property_id: s.property_id,
+                            outlet_ids: s.outlet_ids || []
                           }); 
                           setShowForm(true); 
                         }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>
@@ -341,6 +343,29 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                 </div>
 
                 <div className="space-y-6">
+                  <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Assigned Outlets</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {allowedOutletsInProperty.map(outlet => (
+                      <label key={outlet.id} className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100">
+                        <input 
+                          type="checkbox" 
+                          checked={formData.outlet_ids.includes(outlet.id)}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setFormData({ ...formData, outlet_ids: [...formData.outlet_ids, outlet.id] });
+                            } else {
+                              setFormData({ ...formData, outlet_ids: formData.outlet_ids.filter(id => id !== outlet.id) });
+                            }
+                          }}
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-xs font-bold text-slate-700">{outlet.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-6">
                   <div className="flex items-center justify-between">
                     <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Mobile App Access</h4>
                     <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer">
@@ -416,7 +441,8 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
               phone: s.phone || '',
               probation_start_date: s.probation_start_date || '',
               probation_end_date: s.probation_end_date || '',
-              outlet_id: s.outlet_id
+              property_id: s.property_id,
+              outlet_ids: s.outlet_ids || []
             }); 
             setShowForm(true);
           }}
@@ -455,7 +481,7 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                 <input placeholder="Search personnel..." className="w-full h-11 pl-11 pr-4 rounded-xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
               {canManage && (
-                  <Button onClick={() => { setEditingId(null); setFormData({ name:'', role:'', email:'', phone:'', is_active:true, is_eligible_for_incentives: true, probation_start_date: '', probation_end_date: '', outlet_id:'' }); setShowForm(true); }} className="h-11 px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100">
+                  <Button onClick={() => { setEditingId(null); setFormData({ name:'', role:'', email:'', phone:'', is_active:true, is_eligible_for_incentives: true, probation_start_date: '', probation_end_date: '', property_id: currentProperty?.id || '', outlet_ids:[] }); setShowForm(true); }} className="h-11 px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100">
                     <Plus className="w-4 h-4 mr-2" /> Enroll Staff
                   </Button>
               )}
