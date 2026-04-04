@@ -518,7 +518,33 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const bookings = bookingsRes.data || [];
     const members = membersRes.data || [];
     const rules = rulesRes.data || [];
-    const staffList = staffRes.data || [];
+    const rawStaffList = staffRes.data || [];
+    const staffList = rawStaffList.filter((s: any) => {
+      if (!s.is_active || s.is_eligible_for_incentives === false) return false;
+      
+      // Filter by outlet
+      let sOutlets: string[] = [];
+      if (Array.isArray(s.outlet_ids)) {
+        sOutlets = s.outlet_ids;
+      } else if (typeof s.outlet_ids === 'string') {
+        try {
+          sOutlets = JSON.parse(s.outlet_ids);
+        } catch (e) {
+          sOutlets = [s.outlet_ids];
+        }
+      } else if (s.outlet_id) {
+        sOutlets = [s.outlet_id];
+      }
+      
+      const belongsToOutlet = outletIds.some(id => sOutlets.includes(id));
+      if (!belongsToOutlet) return false;
+
+      const role = (s.role || '').toLowerCase();
+      const isMultiOutlet = sOutlets.length > 1;
+      if (dept === 'Massage') return role.includes('therapist');
+      if (dept === 'Personal Training') return role.includes('trainer') || isMultiOutlet;
+      return true; // Membership shows all eligible staff
+    });
     const inventory = inventoryRes.data || [];
     const mTypes = mTypesRes.data || [];
     const mCats = categoriesRes.data || [];
@@ -528,14 +554,14 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const rows: any[] = [];
     let sl = 1;
 
-    if (dept === 'Massage') {
+    if (dept === 'Massage' || dept === 'Personal Training') {
       bookings.filter(b => {
-        const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
-        return type?.category === 'Massage';
+        const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id)) || inventory.find(i => i.id === b.inventory_item_id);
+        return type?.category === dept;
       }).forEach(b => {
-        const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
+        const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id)) || inventory.find(i => i.id === b.inventory_item_id);
         if (!type) return;
-        const rule = findBestRule(rules, 'Massage', (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes);
+        const rule = findBestRule(rules, dept, (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes);
         
         const actualPrice = type.price;
         const discountAmt = b.discount || 0;
@@ -552,9 +578,15 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
           incNet = baseInc - incDiscVal;
 
-          if (b.therapist_id) {
+          if (rule.distribution_type === 'Shared') {
+            const available = staffList.filter(s => !isStaffOnLeaveOnDate(s, b.date) && !isStaffOnProbationOnDate(s, b.date));
+            if (available.length > 0) {
+              const share = incNet / available.length;
+              available.forEach(s => staffSplits[s.id] = share);
+            }
+          } else if (b.therapist_id) {
             const therapist = staffList.find(s => s.id === b.therapist_id);
-            if (therapist && therapist.is_eligible_for_incentives !== false && !isStaffOnLeaveOnDate(therapist, b.date) && !isStaffOnProbationOnDate(therapist, b.date)) {
+            if (therapist && !isStaffOnLeaveOnDate(therapist, b.date) && !isStaffOnProbationOnDate(therapist, b.date)) {
               staffSplits[b.therapist_id] = incNet;
             }
           }

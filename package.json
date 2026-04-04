@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build --outDir dist",
+    "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "deploy:functions": "npx tsx scripts/sync-report-logic.ts && npx supabase functions deploy admin-reset-user && npx supabase functions deploy dynamic-action && npx supabase functions deploy send-reports && npx supabase functions deploy get-time"
@@ -31,7 +31,6 @@
     "recharts": "^2.12.7",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.2.1",
-    "vite": "^7.3.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

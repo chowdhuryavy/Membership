@@ -509,7 +509,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       supabase.from('massage_bookings').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('date', startStr).lte('date', endStr),
       supabase.from('members').select('*').in('outlet_id', outletIds).neq('status', 'tentative').gte('start_date', startStr).lte('start_date', endStr),
       supabase.from('incentive_rules').select('*').eq('is_active', true),
-      supabase.from('staff').select('*, leaves:staff_leaves!fk_staff_leaves_staff(*)').in('outlet_id', outletIds),
+      supabase.from('staff').select('*, leaves:staff_leaves!fk_staff_leaves_staff(*)').eq('property_id', propertyId),
       supabase.from('inventory_items').select('*').eq('property_id', propertyId),
       supabase.from('massage_types').select('*').eq('property_id', propertyId),
       supabase.from('membership_categories').select('*'),
@@ -530,9 +530,28 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const rawStaffList = staffRes.data || [];
     const staffList = rawStaffList.filter((s: any) => {
       if (!s.is_active || s.is_eligible_for_incentives === false) return false;
+      
+      // Filter by outlet
+      let sOutlets: string[] = [];
+      if (Array.isArray(s.outlet_ids)) {
+        sOutlets = s.outlet_ids;
+      } else if (typeof s.outlet_ids === 'string') {
+        try {
+          sOutlets = JSON.parse(s.outlet_ids);
+        } catch (e) {
+          sOutlets = [s.outlet_ids];
+        }
+      } else if (s.outlet_id) {
+        sOutlets = [s.outlet_id];
+      }
+      
+      const belongsToOutlet = outletIds.some(id => sOutlets.includes(id));
+      if (!belongsToOutlet) return false;
+
       const role = (s.role || '').toLowerCase();
+      const isMultiOutlet = sOutlets.length > 1;
       if (dept === 'Massage') return role.includes('therapist');
-      if (dept === 'Personal Training') return role.includes('trainer');
+      if (dept === 'Personal Training') return role.includes('trainer') || isMultiOutlet;
       return true; // Membership shows all eligible staff
     });
     const inventory = inventoryRes.data || [];

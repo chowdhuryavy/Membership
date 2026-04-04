@@ -470,22 +470,36 @@ class DatabaseService {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         let query = supabase.from('staff').select('*, leaves:staff_leaves!fk_staff_leaves_staff(*)').order('name');
+        
+        // If we know it's a property, we can filter at the DB level for efficiency
+        if (scopeId && isProperty) {
+            query = query.eq('property_id', scopeId);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        
+        let staffList = (data || []) as Staff[];
+
+        // Filter in memory to avoid Postgres Array vs JSONB issues
         if (scopeId) {
             if (isProperty) {
                 if (limitToOutletIds && limitToOutletIds.length > 0) {
-                    query = query.overlaps('outlet_ids', limitToOutletIds);
-                } else {
-                    const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
-                    const ids = (outlets || []).map(o => o.id);
-                    query = query.overlaps('outlet_ids', ids);
+                    staffList = staffList.filter(s => {
+                        const sOutlets = Array.isArray(s.outlet_ids) ? s.outlet_ids : (s.outlet_id ? [s.outlet_id] : []);
+                        return limitToOutletIds.some(id => sOutlets.includes(id));
+                    });
                 }
             } else {
-                query = query.contains('outlet_ids', [scopeId]);
+                // scopeId is an outlet ID
+                staffList = staffList.filter(s => {
+                    const sOutlets = Array.isArray(s.outlet_ids) ? s.outlet_ids : (s.outlet_id ? [s.outlet_id] : []);
+                    return sOutlets.includes(scopeId);
+                });
             }
         }
-        const { data, error } = await query;
-        if (error) throw error;
-        return (data || []) as Staff[];
+
+        return staffList;
       }, []);
     }
     return [];
