@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { Staff, MassageBooking, MassageType, Guest, MassageRoom } from '../types';
 import { format, parseISO, addDays, subDays } from 'date-fns';
-import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, KeyRound, X, ShieldCheck, Building2, Menu } from 'lucide-react';
+import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, KeyRound, X, ShieldCheck, Building2, Menu, Eye, EyeOff, Check, AlertCircle, Sparkles } from 'lucide-react';
 import { Button, Input } from '../components/ui';
+import { useSettings } from '../contexts/SettingsContext';
+import { motion, AnimatePresence } from 'motion/react';
 
 const StaffSchedule = () => {
   const [staff, setStaff] = useState<Staff | null>(null);
@@ -18,15 +20,31 @@ const StaffSchedule = () => {
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
+  const { settings } = useSettings();
+
   // Password Change State
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const navigate = useNavigate();
+
+  // Live Password Validation
+  const passwordValidation = useMemo(() => {
+    return {
+      length: newPassword.length >= 6,
+      match: newPassword !== '' && newPassword === confirmPassword,
+      hasUpperCase: /[A-Z]/.test(newPassword),
+      hasNumber: /[0-9]/.test(newPassword),
+    };
+  }, [newPassword, confirmPassword]);
+
+  const isPasswordValid = passwordValidation.length && passwordValidation.match;
 
   useEffect(() => {
     const sessionStr = localStorage.getItem('staff_session');
@@ -120,18 +138,10 @@ const StaffSchedule = () => {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isPasswordValid) return;
+
     setPasswordError('');
     setPasswordSuccess('');
-
-    if (newPassword !== confirmPassword) {
-      setPasswordError('Passwords do not match.');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      setPasswordError('Password must be at least 6 characters long.');
-      return;
-    }
 
     if (!staff) return;
 
@@ -163,12 +173,27 @@ const StaffSchedule = () => {
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-slate-900 text-white p-6">
       <div className="mb-10">
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex flex-col items-center text-center mb-8">
+          {settings?.logo_url ? (
+            <img 
+              src={settings.logo_url} 
+              alt="Logo" 
+              className="w-24 h-auto object-contain mb-4 filter drop-shadow-[0_10px_20px_rgba(255,255,255,0.1)]" 
+            />
+          ) : (
+            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-indigo-500/20 mb-4">
+              <Sparkles className="w-8 h-8" />
+            </div>
+          )}
+          <h2 className="text-sm font-black uppercase tracking-[0.2em] text-indigo-400">{settings?.name || 'Health Club'}</h2>
+        </div>
+
+        <div className="flex items-center gap-4 mb-6 p-4 bg-white/5 rounded-2xl border border-white/5">
           <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-xl font-black uppercase shadow-inner border border-white/10">
             {staff.name.charAt(0)}
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-black uppercase tracking-widest truncate">{staff.name}</h1>
+            <h1 className="text-sm font-black uppercase tracking-widest truncate">{staff.name}</h1>
             <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">{staff.role}</p>
           </div>
         </div>
@@ -187,7 +212,7 @@ const StaffSchedule = () => {
             setCurrentDate(new Date());
             setIsSidebarOpen(false);
           }}
-          className="w-full flex items-center gap-3 p-3 rounded-xl bg-indigo-600 text-white font-bold text-xs uppercase tracking-widest transition-all"
+          className="w-full flex items-center gap-3 p-3 rounded-xl bg-indigo-600 text-white font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20"
         >
           <CalendarIcon className="w-4 h-4" /> Today's Schedule
         </button>
@@ -247,9 +272,14 @@ const StaffSchedule = () => {
             >
               <Menu className="w-6 h-6" />
             </button>
-            <div className="flex flex-col items-center">
-              <h1 className="text-sm font-black uppercase tracking-widest truncate max-w-[150px]">{staff.name}</h1>
-              <p className="text-[8px] font-bold text-indigo-300 uppercase tracking-widest">{staff.role}</p>
+            <div className="flex items-center gap-3">
+              {settings?.logo_url && (
+                <img src={settings.logo_url} alt="Logo" className="h-8 w-auto object-contain" />
+              )}
+              <div className="flex flex-col items-start">
+                <h1 className="text-xs font-black uppercase tracking-widest truncate max-w-[120px]">{staff.name}</h1>
+                <p className="text-[7px] font-bold text-indigo-300 uppercase tracking-widest">{staff.role}</p>
+              </div>
             </div>
             <div className="w-10" /> {/* Spacer for centering */}
           </div>
@@ -257,13 +287,21 @@ const StaffSchedule = () => {
 
         <main className="flex-1 p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto w-full space-y-6 pb-24">
           {/* Desktop Welcome Header */}
-          <div className="hidden lg:block mb-8">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="hidden lg:block mb-8"
+          >
             <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight mb-2">Welcome Back, {staff.name.split(' ')[0]}</h1>
             <p className="text-slate-500 font-medium">Here is your schedule for today.</p>
-          </div>
+          </motion.div>
         
         {/* Date Navigation */}
-        <div className="flex items-center justify-between bg-white p-2 rounded-2xl shadow-sm border border-slate-200/60">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex items-center justify-between bg-white p-2 rounded-2xl shadow-sm border border-slate-200/60"
+        >
           <button onClick={() => setCurrentDate(subDays(currentDate, 1))} className="p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-500 hover:text-indigo-600">
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -274,7 +312,7 @@ const StaffSchedule = () => {
           <button onClick={() => setCurrentDate(addDays(currentDate, 1))} className="p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-500 hover:text-indigo-600">
             <ChevronRight className="w-5 h-5" />
           </button>
-        </div>
+        </motion.div>
 
         <div className="flex justify-between items-end px-1 mb-2">
           <div>
@@ -297,23 +335,35 @@ const StaffSchedule = () => {
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Syncing Schedule...</p>
           </div>
         ) : bookings.length === 0 ? (
-          <div className="bg-white p-12 rounded-[2rem] border border-slate-200/60 text-center shadow-sm">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white p-12 rounded-[2rem] border border-slate-200/60 text-center shadow-sm"
+          >
             <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100">
               <CalendarIcon className="w-8 h-8 text-slate-300" />
             </div>
             <h3 className="text-base font-black uppercase tracking-widest text-slate-900">No Appointments</h3>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xs mx-auto leading-relaxed">You have no scheduled treatments for this day. Enjoy your free time!</p>
-          </div>
+          </motion.div>
         ) : (
-          <div className="space-y-4">
-            {bookings.map(booking => {
-              const treatment = treatments.find(t => t.id === booking.massage_type_id) || 
-                               inventory.find(i => i.id === booking.inventory_item_id);
-              const guest = guests.find(g => g.id === booking.guest_id);
-              const room = rooms.find(r => r.id === booking.room_id);
+          <div className="grid grid-cols-1 gap-4">
+            <AnimatePresence mode="popLayout">
+              {bookings.map((booking, index) => {
+                const treatment = treatments.find(t => t.id === booking.massage_type_id) || 
+                                 inventory.find(i => i.id === booking.inventory_item_id);
+                const guest = guests.find(g => g.id === booking.guest_id);
+                const room = rooms.find(r => r.id === booking.room_id);
 
-              return (
-                <div key={booking.id} className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300">
+                return (
+                  <motion.div 
+                    key={booking.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300"
+                  >
                   <div className={`absolute left-0 top-0 bottom-0 w-1 sm:w-2 ${
                     booking.status === 'completed' ? 'bg-emerald-500' : 
                     booking.status === 'no-show' ? 'bg-red-500' : 
@@ -380,76 +430,139 @@ const StaffSchedule = () => {
                       </div>
                     )}
                   </div>
-                </div>
+                </motion.div>
               );
             })}
-          </div>
-        )}
-      </main>
-
-      {/* Password Change Modal */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="p-6 sm:p-8 bg-slate-900 text-white relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl"></div>
-              <div className="flex justify-between items-start relative z-10">
-                <div>
-                  <h2 className="text-xl font-black uppercase tracking-widest">Security</h2>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Update Password</p>
-                </div>
-                <button onClick={() => setShowPasswordModal(false)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-            
-            <form onSubmit={handleChangePassword} className="p-6 sm:p-8 space-y-6">
-              {passwordError && (
-                <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-xs font-bold uppercase tracking-widest border border-red-100 flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 shrink-0" /> {passwordError}
-                </div>
-              )}
-              {passwordSuccess && (
-                <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl text-xs font-bold uppercase tracking-widest border border-emerald-100 flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 shrink-0" /> {passwordSuccess}
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <Input 
-                  label="New Password" 
-                  type="password" 
-                  value={newPassword} 
-                  onChange={e => setNewPassword(e.target.value)} 
-                  required 
-                  className="h-14 rounded-2xl font-bold bg-slate-50 border-slate-200 focus:bg-white"
-                  placeholder="••••••••"
-                />
-                <Input 
-                  label="Confirm New Password" 
-                  type="password" 
-                  value={confirmPassword} 
-                  onChange={e => setConfirmPassword(e.target.value)} 
-                  required 
-                  className="h-14 rounded-2xl font-bold bg-slate-50 border-slate-200 focus:bg-white"
-                  placeholder="••••••••"
-                />
-              </div>
-
-              <div className="pt-2">
-                <Button 
-                  type="submit" 
-                  isLoading={isChangingPassword} 
-                  className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-200"
-                >
-                  Update Credentials
-                </Button>
-              </div>
-            </form>
-          </div>
+          </AnimatePresence>
         </div>
       )}
+    </main>
+
+      {/* Password Change Modal */}
+      <AnimatePresence>
+        {showPasswordModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden"
+            >
+              <div className="p-6 sm:p-8 bg-slate-900 text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl"></div>
+                <div className="flex justify-between items-start relative z-10">
+                  <div>
+                    <h2 className="text-xl font-black uppercase tracking-widest">Security</h2>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Update Password</p>
+                  </div>
+                  <button onClick={() => setShowPasswordModal(false)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+              
+              <form onSubmit={handleChangePassword} className="p-6 sm:p-8 space-y-6">
+                {passwordError && (
+                  <motion.div 
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="p-4 bg-red-50 text-red-600 rounded-2xl text-xs font-bold uppercase tracking-widest border border-red-100 flex items-center gap-2"
+                  >
+                    <AlertCircle className="w-4 h-4 shrink-0" /> {passwordError}
+                  </motion.div>
+                )}
+                {passwordSuccess && (
+                  <motion.div 
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl text-xs font-bold uppercase tracking-widest border border-emerald-100 flex items-center gap-2"
+                  >
+                    <Check className="w-4 h-4 shrink-0" /> {passwordSuccess}
+                  </motion.div>
+                )}
+
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">New Password</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <KeyRound className="w-5 h-5 text-slate-300" />
+                      </div>
+                      <input 
+                        type={showNewPassword ? "text" : "password"}
+                        value={newPassword} 
+                        onChange={e => setNewPassword(e.target.value)} 
+                        required 
+                        className="w-full h-14 pl-12 pr-12 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
+                        placeholder="••••••••"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirm New Password</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <KeyRound className="w-5 h-5 text-slate-300" />
+                      </div>
+                      <input 
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={confirmPassword} 
+                        onChange={e => setConfirmPassword(e.target.value)} 
+                        required 
+                        className="w-full h-14 pl-12 pr-12 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
+                        placeholder="••••••••"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Live Validation Indicators */}
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Security Requirements</p>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.length ? 'bg-emerald-500' : 'bg-slate-200'}`}>
+                        {passwordValidation.length && <Check className="w-2.5 h-2.5 text-white" />}
+                      </div>
+                      <span className={`text-[10px] font-bold ${passwordValidation.length ? 'text-emerald-600' : 'text-slate-400'}`}>At least 6 characters</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.match ? 'bg-emerald-500' : 'bg-slate-200'}`}>
+                        {passwordValidation.match && <Check className="w-2.5 h-2.5 text-white" />}
+                      </div>
+                      <span className={`text-[10px] font-bold ${passwordValidation.match ? 'text-emerald-600' : 'text-slate-400'}`}>Passwords match</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <Button 
+                    type="submit" 
+                    isLoading={isChangingPassword} 
+                    disabled={!isPasswordValid}
+                    className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-200 disabled:opacity-50 disabled:shadow-none"
+                  >
+                    Update Credentials
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       </div>
     </div>
   );

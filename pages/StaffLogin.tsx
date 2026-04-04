@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
-import { LogIn, ShieldAlert, UserCircle2, ArrowRight, Sparkles } from 'lucide-react';
+import { LogIn, ShieldAlert, UserCircle2, ArrowRight, Sparkles, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { Button, Input } from '../components/ui';
 
 const StaffLogin = () => {
   const [employeeNumber, setEmployeeNumber] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -75,6 +76,15 @@ const StaffLogin = () => {
         </div>
 
         <div className="p-8 sm:p-12 lg:p-16 flex flex-col justify-start pt-10 md:pt-16 bg-white relative">
+          {/* Admin Portal Link Icon */}
+          <button 
+            onClick={() => navigate('/login')}
+            className="absolute top-8 right-8 p-3 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all group"
+            title="Admin Portal"
+          >
+            <ShieldCheck className="w-5 h-5 group-hover:scale-110 transition-transform" />
+          </button>
+
           <div className="mb-6 flex flex-col items-center text-center">
             {settings?.logo_url ? (
               <img 
@@ -108,23 +118,46 @@ const StaffLogin = () => {
             )}
             
             <div className="space-y-4">
-              <Input 
-                label="Employee Number" 
-                value={employeeNumber} 
-                onChange={e => setEmployeeNumber(e.target.value)} 
-                required 
-                className="h-14 rounded-2xl font-bold bg-slate-50 border-slate-200 focus:bg-white"
-                placeholder="e.g. EMP001"
-              />
-              <Input 
-                label="Password" 
-                type="password" 
-                value={password} 
-                onChange={e => setPassword(e.target.value)} 
-                required 
-                className="h-14 rounded-2xl font-bold bg-slate-50 border-slate-200 focus:bg-white"
-                placeholder="••••••••"
-              />
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Employee Number</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <UserCircle2 className="w-5 h-5 text-slate-300" />
+                  </div>
+                  <input 
+                    type="text" 
+                    value={employeeNumber} 
+                    onChange={e => setEmployeeNumber(e.target.value)} 
+                    required 
+                    className="w-full h-14 pl-12 pr-4 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
+                    placeholder="e.g. EMP001"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Password</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Lock className="w-5 h-5 text-slate-300" />
+                  </div>
+                  <input 
+                    type={showPassword ? "text" : "password"}
+                    value={password} 
+                    onChange={e => setPassword(e.target.value)} 
+                    required 
+                    className="w-full h-14 pl-12 pr-12 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
+                    placeholder="••••••••"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="pt-2">
@@ -137,16 +170,6 @@ const StaffLogin = () => {
                   Authenticate <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </span>
               </Button>
-            </div>
-            
-            <div className="pt-6 text-center lg:text-left">
-              <button 
-                type="button" 
-                onClick={() => navigate('/login')}
-                className="text-[10px] font-black text-slate-400 hover:text-slate-900 uppercase tracking-widest transition-colors"
-              >
-                Return to Admin Login
-              </button>
             </div>
           </form>
         </div>
