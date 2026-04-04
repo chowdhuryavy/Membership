@@ -19,6 +19,8 @@ import Members from './pages/Members';
 import Categories from './pages/Categories';
 import UsersPage from './pages/Users';
 import StaffPage from './pages/Staff'; 
+import StaffLogin from './pages/StaffLogin';
+import StaffSchedule from './pages/StaffSchedule';
 import Reports from './pages/Reports';
 import Logs from './pages/Logs';
 import SettingsPage from './pages/Settings';
@@ -579,6 +581,8 @@ const App = () => {
           <Router>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/staff-login" element={<StaffLogin />} />
+              <Route path="/staff-schedule" element={<StaffSchedule />} />
               <Route element={<ProtectedLayout />}>
                   <Route index element={<Dashboard />} />
                   <Route path="members" element={<Members />} />

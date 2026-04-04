@@ -95,6 +95,9 @@ export interface Staff {
   outlet_id: string;
   name: string;
   role: string;
+  employee_number?: string;
+  can_login?: boolean;
+  password?: string;
   email?: string;
   phone?: string;
   is_active: boolean;

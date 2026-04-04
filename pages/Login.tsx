@@ -191,6 +191,16 @@ const Login = () => {
                   </span>
                 </Button>
               </div>
+              
+              <div className="pt-6 text-center">
+                <button 
+                  type="button" 
+                  onClick={() => navigate('/staff-login')}
+                  className="text-[10px] font-black text-slate-400 hover:text-indigo-600 uppercase tracking-widest transition-colors"
+                >
+                  Staff Portal Access
+                </button>
+              </div>
             </form>
           ) : (
             <form onSubmit={handleForcePasswordChange} className="space-y-5 max-w-sm mx-auto w-full animate-in slide-in-from-right-10 duration-500">

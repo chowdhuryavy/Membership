@@ -153,15 +153,20 @@ const StaffPage = () => {
     setIsSubmitting(true);
     setErrorMessage(null);
     try {
+      const dataToSave = { ...formData };
+      if (editingId && !dataToSave.password) {
+        delete dataToSave.password;
+      }
+      
       if (editingId) {
-        await db.updateStaff(editingId, formData);
+        await db.updateStaff(editingId, dataToSave);
       } else {
-        await db.addStaff({ ...formData, outlet_id: currentOutlet.id });
+        await db.addStaff({ ...dataToSave, outlet_id: currentOutlet.id });
       }
       setShowForm(false);
       setEditingId(null);
       if (selectedStaff && editingId === selectedStaff.id) {
-        setSelectedStaff({ ...selectedStaff, ...formData });
+        setSelectedStaff({ ...selectedStaff, ...dataToSave });
       }
       loadStaff();
     } catch (err: any) {
@@ -204,7 +209,10 @@ const StaffPage = () => {
 ALTER TABLE IF EXISTS public.staff 
 ADD COLUMN IF NOT EXISTS is_eligible_for_incentives BOOLEAN NOT NULL DEFAULT TRUE,
 ADD COLUMN IF NOT EXISTS probation_start_date TEXT,
-ADD COLUMN IF NOT EXISTS probation_end_date TEXT;
+ADD COLUMN IF NOT EXISTS probation_end_date TEXT,
+ADD COLUMN IF NOT EXISTS employee_number TEXT,
+ADD COLUMN IF NOT EXISTS can_login BOOLEAN NOT NULL DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS password TEXT;
 
 -- ENABLE RLS FOR INTERNAL SYSTEM OPERATIONS
 ALTER TABLE public.staff ENABLE ROW LEVEL SECURITY;
@@ -313,6 +321,24 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                       </div>
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Mobile App Access</h4>
+                    <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer">
+                      <input type="checkbox" checked={!!formData.can_login} onChange={e => {
+                        setFormData({ ...formData, can_login: e.target.checked });
+                      }} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                      Enable Login
+                    </label>
+                  </div>
+                  {formData.can_login && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-top-2 duration-300">
+                      <Input label="Employee Number *" value={formData.employee_number || ''} onChange={e => setFormData({ ...formData, employee_number: e.target.value })} className="h-14 rounded-2xl" placeholder="e.g. EMP001" required={formData.can_login} />
+                      <Input label={editingId ? "New Password (leave blank to keep)" : "Password *"} type="password" value={formData.password || ''} onChange={e => setFormData({ ...formData, password: e.target.value })} className="h-14 rounded-2xl" required={formData.can_login && !editingId} />
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-6">

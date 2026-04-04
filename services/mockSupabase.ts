@@ -538,6 +538,25 @@ class DatabaseService {
     }
   }
 
+  async loginStaff(employeeNumber: string, password: string): Promise<Staff | null> {
+    if (this.isSupabase()) {
+      const { data, error } = await supabase
+        .from('staff')
+        .select('*')
+        .eq('employee_number', employeeNumber)
+        .eq('password', password)
+        .eq('can_login', true)
+        .eq('is_active', true)
+        .single();
+      
+      if (error || !data) {
+        return null;
+      }
+      return data as Staff;
+    }
+    return null;
+  }
+
   async addStaff(staff: Omit<Staff, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
       const { data, error } = await supabase.from('staff').insert([{ ...staff, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select();

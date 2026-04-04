@@ -489,7 +489,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
   }
 
   if (reportType === 'incentives') {
-    const startStr = format(date, 'yyyy-MM-dd');
+    const startStr = format(startOfMonth(date), 'yyyy-MM-dd');
+    const endStr = format(endOfMonth(date), 'yyyy-MM-dd');
     
     let outletIds: string[] = [];
     if (outletId === 'all') {
@@ -504,9 +505,9 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const dept = incentiveDept || 'Massage';
 
     const [salesRes, bookingsRes, membersRes, rulesRes, staffRes, inventoryRes, mTypesRes, categoriesRes, guestsRes] = await Promise.all([
-      supabase.from('sales').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`),
-      supabase.from('massage_bookings').select('*').in('outlet_id', outletIds).eq('status', 'completed').eq('date', startStr),
-      supabase.from('members').select('*').in('outlet_id', outletIds).neq('status', 'tentative').gte('start_date', startStr).lte('start_date', startStr),
+      supabase.from('sales').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59`),
+      supabase.from('massage_bookings').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('date', startStr).lte('date', endStr),
+      supabase.from('members').select('*').in('outlet_id', outletIds).neq('status', 'tentative').gte('start_date', startStr).lte('start_date', endStr),
       supabase.from('incentive_rules').select('*').eq('property_id', propertyId).eq('is_active', true),
       supabase.from('staff').select('*, leaves:staff_leaves(*)').eq('property_id', propertyId),
       supabase.from('inventory_items').select('*').eq('property_id', propertyId),
@@ -528,14 +529,14 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const rows: any[] = [];
     let sl = 1;
 
-    if (dept === 'Massage') {
+    if (dept === 'Massage' || dept === 'Personal Training') {
       bookings.filter(b => {
         const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
-        return type?.category === 'Massage';
+        return type?.category === dept;
       }).forEach(b => {
         const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
         if (!type) return;
-        const rule = findBestRule(rules, 'Massage', (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes);
+        const rule = findBestRule(rules, dept, (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes);
         
         const actualPrice = type.price;
         const discountAmt = b.discount || 0;
