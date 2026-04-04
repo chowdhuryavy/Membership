@@ -293,19 +293,19 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
 
             {/* Signatures */}
-            <div className="mt-12 grid grid-cols-2 gap-16 break-inside-avoid print:mt-2 print:gap-8">
-               <div className="flex flex-col justify-end h-24 print:h-12 break-inside-avoid">
+            <div className="mt-12 grid grid-cols-2 gap-16 break-inside-avoid print:mt-4 print:gap-8">
+               <div className="flex flex-col justify-end h-24 print:h-16 break-inside-avoid">
                   {member.member_signature && (
-                    <img src={member.member_signature} alt="Member Signature" className="h-16 print:h-8 object-contain mb-2 self-start" />
+                    <img src={member.member_signature} alt="Member Signature" className="h-16 print:h-10 object-contain mb-2 self-start" />
                   )}
                   <div className="border-t border-black pt-2 flex justify-between items-center w-full">
                     <span className="text-[11px] font-black uppercase">Member Signature</span>
                     <span className="text-[11px] font-black uppercase font-arabic">توقيع العضو</span>
                   </div>
                </div>
-               <div className="flex flex-col justify-end h-24 print:h-12 break-inside-avoid">
+               <div className="flex flex-col justify-end h-24 print:h-16 break-inside-avoid">
                   {member.staff_signature && (
-                    <img src={member.staff_signature} alt="Staff Signature" className="h-16 print:h-8 object-contain mb-2 self-start" />
+                    <img src={member.staff_signature} alt="Staff Signature" className="h-16 print:h-10 object-contain mb-2 self-start" />
                   )}
                   <div className="border-t border-black pt-2 flex justify-between items-center w-full">
                     <span className="text-[11px] font-black uppercase">Authorized Officer</span>
@@ -314,7 +314,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                </div>
             </div>
 
-            <div className="mt-8 text-center print:mt-2">
+            <div className="mt-8 text-center print:mt-4">
               <p className="text-[9px] font-bold text-slate-300 uppercase tracking-[0.5em]">This is a digitally generated legal instrument &bull; System ID: {member.id.substring(0,8)}</p>
             </div>
           </div>
@@ -338,15 +338,15 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
               ))}
             </div>
             
-            <div className="mt-auto pt-6 border-t-2 border-black print:pt-4">
+            <div className="mt-auto pt-6 border-t-2 border-black print:pt-2 break-inside-avoid">
               <div className="flex justify-between px-2">
-                <div className="w-72 flex flex-col justify-end h-24">
+                <div className="w-72 flex flex-col justify-end h-24 print:h-16">
                   {member.member_signature && (
-                    <img src={member.member_signature} alt="Member Signature" className="h-16 object-contain mb-2 self-start" />
+                    <img src={member.member_signature} alt="Member Signature" className="h-16 object-contain mb-2 self-start print:h-10" />
                   )}
                   <div className="border-t border-black pt-2 text-[11px] flex justify-between w-full"><span className="font-bold">Member Signature</span><span className="font-bold" dir="rtl">توقيع العضو :</span></div>
                 </div>
-                <div className="w-72 flex flex-col justify-end h-24">
+                <div className="w-72 flex flex-col justify-end h-24 print:h-16">
                    <div className="border-t border-black pt-2 text-[11px] flex justify-between w-full"><span className="font-bold">Date</span><span className="font-bold" dir="rtl">التاريخ :</span></div>
                 </div>
               </div>

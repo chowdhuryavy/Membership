@@ -257,7 +257,15 @@ const StaffSchedule = () => {
 
       {/* Mobile Sidebar Drawer */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-300 ease-in-out lg:hidden ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <SidebarContent />
+        <div className="relative h-full">
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors z-50"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <SidebarContent />
+        </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -266,7 +274,7 @@ const StaffSchedule = () => {
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <div className="absolute top-[-50%] right-[-10%] w-64 h-64 bg-indigo-500/20 rounded-full blur-[80px]"></div>
           </div>
-          <div className="relative z-10 flex justify-between items-center p-3">
+          <div className="relative z-10 flex justify-between items-center px-4 py-2">
             <button 
               onClick={() => setIsSidebarOpen(true)}
               className="p-2 hover:bg-white/10 rounded-lg transition-colors"
@@ -283,8 +291,7 @@ const StaffSchedule = () => {
                 />
               )}
               <div className="flex flex-col items-start">
-                <h1 className="text-xs font-black uppercase tracking-widest truncate max-w-[120px]">{staff.name}</h1>
-                <p className="text-[7px] font-bold text-indigo-300 uppercase tracking-widest">{staff.role}</p>
+                <h1 className="text-[10px] font-black uppercase tracking-widest truncate max-w-[120px]">{staff.name}</h1>
               </div>
             </div>
             <div className="w-10" /> {/* Spacer for centering */}
