@@ -127,11 +127,11 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
             >
                 {currentOutlet?.logo_url ? (
                     <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100 overflow-hidden p-1 border border-slate-100">
-                        <img src={currentOutlet.logo_url} alt="Logo" className="w-full h-full object-contain" />
+                        <img src={currentOutlet.logo_url} alt="Logo" referrerPolicy="no-referrer" className="w-full h-full object-contain" />
                     </div>
                 ) : currentProp?.logo_url ? (
                     <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100 overflow-hidden p-1 border border-slate-100">
-                        <img src={currentProp.logo_url} alt="Logo" className="w-full h-full object-contain" />
+                        <img src={currentProp.logo_url} alt="Logo" referrerPolicy="no-referrer" className="w-full h-full object-contain" />
                     </div>
                 ) : (
                     <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100">
@@ -369,7 +369,7 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
                 >
                     {settings?.logo_url ? (
                         <div className={`w-14 h-14 flex items-center justify-center shrink-0 transition-all duration-500 group-hover/logo:scale-110`}>
-                             <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain drop-shadow-md animate-[spin_10s_linear_infinite]" />
+                             <img src={settings.logo_url} alt="Logo" referrerPolicy="no-referrer" className="w-full h-full object-contain drop-shadow-md animate-[spin_10s_linear_infinite]" />
                         </div>
                     ) : (
                         <div className={`w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100 shrink-0 transition-all duration-500 group-hover/logo:scale-110`}>
@@ -465,7 +465,7 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
                 <div className="flex items-center gap-3">
                      {settings?.logo_url ? (
                          <div className={`w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-lg p-1 overflow-hidden border border-slate-100 transition-transform duration-500`}>
-                             <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain animate-[spin_15s_linear_infinite]" />
+                             <img src={settings.logo_url} alt="Logo" referrerPolicy="no-referrer" className="w-full h-full object-contain animate-[spin_15s_linear_infinite]" />
                          </div>
                      ) : (
                          <div className={`w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white transition-transform duration-500`}>

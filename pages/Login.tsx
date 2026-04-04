@@ -110,6 +110,7 @@ const Login = () => {
                <img 
                 src={settings.logo_url} 
                 alt="Logo" 
+                referrerPolicy="no-referrer"
                 className="w-32 h-auto object-contain mb-4 filter drop-shadow-[0_10px_20px_rgba(0,0,0,0.05)]" 
                />
              ) : (

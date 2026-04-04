@@ -171,69 +171,70 @@ const StaffSchedule = () => {
   if (!staff) return null;
 
   const SidebarContent = () => (
-    <div className="flex flex-col h-full bg-slate-900 text-white p-6">
-      <div className="mb-10">
-        <div className="flex flex-col items-center text-center mb-8">
+    <div className="flex flex-col h-full bg-slate-900 text-white p-6 overflow-y-auto custom-scrollbar">
+      <div className="mb-6">
+        <div className="flex flex-col items-center text-center mb-6">
           {settings?.logo_url ? (
             <img 
               src={settings.logo_url} 
               alt="Logo" 
-              className="w-24 h-auto object-contain mb-4 filter drop-shadow-[0_10px_20px_rgba(255,255,255,0.1)]" 
+              referrerPolicy="no-referrer"
+              className="w-20 h-auto object-contain mb-3 filter drop-shadow-[0_10px_20px_rgba(255,255,255,0.1)]" 
             />
           ) : (
-            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-indigo-500/20 mb-4">
-              <Sparkles className="w-8 h-8" />
+            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-indigo-500/20 mb-3">
+              <Sparkles className="w-7 h-7" />
             </div>
           )}
-          <h2 className="text-sm font-black uppercase tracking-[0.2em] text-indigo-400">{settings?.name || 'Health Club'}</h2>
+          <h2 className="text-xs font-black uppercase tracking-[0.2em] text-indigo-400">{settings?.name || 'Health Club'}</h2>
         </div>
 
-        <div className="flex items-center gap-4 mb-6 p-4 bg-white/5 rounded-2xl border border-white/5">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-xl font-black uppercase shadow-inner border border-white/10">
+        <div className="flex items-center gap-3 mb-3 p-3 bg-white/5 rounded-2xl border border-white/5">
+          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-lg font-black uppercase shadow-inner border border-white/10 shrink-0">
             {staff.name.charAt(0)}
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-black uppercase tracking-widest truncate">{staff.name}</h1>
-            <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">{staff.role}</p>
+            <h1 className="text-xs font-black uppercase tracking-widest truncate">{staff.name}</h1>
+            <p className="text-[9px] font-bold text-indigo-300 uppercase tracking-widest">{staff.role}</p>
           </div>
         </div>
         {propertyName && (
-          <div className="flex items-center gap-2 text-slate-400 text-[10px] font-bold uppercase tracking-widest bg-white/5 p-3 rounded-xl border border-white/5">
-            <Building2 className="w-4 h-4 text-indigo-400" />
+          <div className="flex items-center gap-2 text-slate-400 text-[9px] font-bold uppercase tracking-widest bg-white/5 p-2.5 rounded-xl border border-white/5">
+            <Building2 className="w-3.5 h-3.5 text-indigo-400" />
             <span className="truncate">{propertyName}</span>
           </div>
         )}
       </div>
 
-      <nav className="flex-1 space-y-2">
-        <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 px-2">Main Menu</div>
+      <nav className="flex-1 space-y-1">
+        <div className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 px-2">Main Menu</div>
         <button 
           onClick={() => {
             setCurrentDate(new Date());
             setIsSidebarOpen(false);
           }}
-          className="w-full flex items-center gap-3 p-3 rounded-xl bg-indigo-600 text-white font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20"
+          className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-indigo-600 text-white font-bold text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20"
         >
-          <CalendarIcon className="w-4 h-4" /> Today's Schedule
+          <CalendarIcon className="w-3.5 h-3.5" /> Today's Schedule
         </button>
       </nav>
 
-      <div className="pt-6 border-t border-white/10 space-y-2">
-        <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 px-2">Account Settings</div>
+      <div className="pt-4 mt-4 border-t border-white/10 space-y-1">
+        <div className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 px-2">Account Settings</div>
         <button 
           onClick={() => {
             setShowPasswordModal(true);
             setIsSidebarOpen(false);
           }}
-          className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white font-bold text-xs uppercase tracking-widest transition-all"
+          className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white font-bold text-[10px] uppercase tracking-widest transition-all"
         >
-          <KeyRound className="w-4 h-4" /> Change Password
+          <KeyRound className="w-3.5 h-3.5" /> Change Password
         </button>
         <button 
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-red-500/10 text-red-400 hover:text-red-300 font-bold text-xs uppercase tracking-widest transition-all"
+          className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-red-500/10 text-red-400 hover:text-red-300 font-bold text-[10px] uppercase tracking-widest transition-all"
         >
-          <LogOut className="w-4 h-4" /> Sign Out
+          <LogOut className="w-3.5 h-3.5" /> Sign Out
         </button>
       </div>
     </div>
@@ -274,7 +275,12 @@ const StaffSchedule = () => {
             </button>
             <div className="flex items-center gap-3">
               {settings?.logo_url && (
-                <img src={settings.logo_url} alt="Logo" className="h-8 w-auto object-contain" />
+                <img 
+                  src={settings.logo_url} 
+                  alt="Logo" 
+                  referrerPolicy="no-referrer"
+                  className="h-8 w-auto object-contain" 
+                />
               )}
               <div className="flex flex-col items-start">
                 <h1 className="text-xs font-black uppercase tracking-widest truncate max-w-[120px]">{staff.name}</h1>

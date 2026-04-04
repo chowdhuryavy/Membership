@@ -49,7 +49,12 @@ const StaffLogin = () => {
         
         <div className="hidden lg:flex flex-col justify-between p-12 bg-slate-900 text-white relative overflow-hidden">
           <div className="absolute inset-0 z-0">
-             <img src="https://images.unsplash.com/photo-1544161515-4ab6ce6db874?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80" alt="Spa Background" className="w-full h-full object-cover opacity-40 mix-blend-overlay" />
+             <img 
+               src="https://images.unsplash.com/photo-1544161515-4ab6ce6db874?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80" 
+               alt="Spa Background" 
+               referrerPolicy="no-referrer"
+               className="w-full h-full object-cover opacity-40 mix-blend-overlay" 
+             />
              <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent"></div>
           </div>
           
@@ -90,6 +95,7 @@ const StaffLogin = () => {
               <img 
                 src={settings.logo_url} 
                 alt="Logo" 
+                referrerPolicy="no-referrer"
                 className="w-32 h-auto object-contain mb-4 filter drop-shadow-[0_10px_20px_rgba(0,0,0,0.05)]" 
               />
             ) : (

@@ -32,6 +32,7 @@ const SplashLoading = () => {
                 <img 
                   src={settings.logo_url} 
                   alt="Logo" 
+                  referrerPolicy="no-referrer"
                   className="w-full h-full object-contain filter drop-shadow-[0_0_20px_rgba(79,70,229,0.2)] animate-[spin_8s_linear_infinite]" 
                 />
               ) : (
