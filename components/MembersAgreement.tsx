@@ -114,10 +114,10 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
           </div>
         </div>
 
-        <div className="p-12 md:p-20 bg-white print:p-8 print-page-1">
+        <div className="p-12 md:p-20 bg-white print:p-4 print:pt-6 print-page-1">
           <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
             {/* Header */}
-            <div className="flex justify-between items-start mb-12 border-b-4 border-black pb-6 print:mb-6 print:pb-4">
+            <div className="flex justify-between items-start mb-12 border-b-4 border-black pb-6 print:mb-2 print:pb-1">
               <div className="flex-1">
                 <h1 className="text-3xl font-black tracking-tighter text-black uppercase mb-1">{propertyName}</h1>
                 <h2 className="text-sm font-black text-slate-500 uppercase tracking-[0.3em]">{outletName}</h2>
@@ -139,8 +139,8 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-12 mb-10 print:gap-6 print:mb-6">
-              <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-12 mb-10 print:gap-4 print:mb-2">
+              <div className="space-y-4 print:space-y-2">
                 <div className="flex justify-between items-end border-b border-black pb-1">
                   <h3 className="text-xs font-black uppercase">Member Identity</h3>
                   <h3 className="text-xs font-black uppercase font-arabic" dir="rtl">هوية العضو</h3>
@@ -178,7 +178,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 print:space-y-2">
                 <div className="flex justify-between items-end border-b border-black pb-1">
                   <h3 className="text-xs font-black uppercase">Enrollment Logic</h3>
                   <h3 className="text-xs font-black uppercase font-arabic" dir="rtl">تفاصيل التسجيل</h3>
@@ -217,12 +217,12 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
 
             {/* Checkbox Section */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 grid grid-cols-2 gap-8 print:mb-4 print:gap-4 print:p-3">
-                <div className="space-y-3">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 grid grid-cols-2 gap-8 print:mb-3 print:gap-2 print:p-2">
+                <div className="space-y-3 print:space-y-1.5">
                   <Checkbox checked={member.membership_type === 'New'} labelEn="New Enrollment" labelAr="طلب جديد" />
                   <Checkbox checked={member.membership_type === 'Renew'} labelEn="Renewal" labelAr="تجديد" />
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-3 print:space-y-1.5">
                   <Checkbox checked={member.access_type === 'Pool' || member.access_type === 'Both'} labelEn="Pool Access" labelAr="حمام السباحة" />
                   <Checkbox checked={member.access_type === 'Spa' || member.access_type === 'Both'} labelEn="Spa Facilities" labelAr="نادي السبا" />
                 </div>
@@ -230,7 +230,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
 
             {/* Family Details if applicable */}
             {(member.package_type === 'Couple' || member.package_type === 'Family') && (
-              <div className="mb-6 space-y-4">
+              <div className="mb-6 space-y-4 print:mb-3 print:space-y-2">
                 <div className="flex justify-between items-end border-b-2 border-black pb-1">
                   <h3 className="text-xs font-black uppercase">
                     {member.package_type === 'Couple' ? 'Couple Details' : 'Family Manifest'}
@@ -239,7 +239,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                     {member.package_type === 'Couple' ? 'بيانات الزوجين' : 'بيانات العائلة'}
                   </h3>
                 </div>
-                <div className="grid grid-cols-2 gap-4 p-3 border border-slate-100 rounded-xl">
+                <div className="grid grid-cols-2 gap-4 p-3 border border-slate-100 rounded-xl print:gap-2 print:p-2">
                    <div>
                       <div className="flex justify-between items-end">
                         <p className="text-[10px] font-bold text-slate-400 uppercase">Spouse Name</p>
@@ -258,7 +258,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                 {member.kids && member.kids.length > 0 && (
                   <div className="grid grid-cols-1 gap-1">
                     {member.kids.map((kid, i) => (
-                      <div key={i} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg border border-slate-100">
+                      <div key={i} className="flex justify-between items-center py-1 px-2 bg-slate-50 rounded-lg border border-slate-100">
                         <div className="flex flex-col">
                           <span className="text-[10px] font-black uppercase tracking-tight">Dependent {i+1}: {kid.name}</span>
                           <span className="text-[10px] font-black uppercase tracking-tight font-arabic" dir="rtl">التابع {i+1}</span>
@@ -275,15 +275,15 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             )}
 
             {/* Terms & Conditions */}
-            <div className="mt-6 pt-6 border-t-4 border-black">
-               <div className="grid grid-cols-2 gap-12">
-                  <div className="space-y-3">
+            <div className="mt-6 pt-6 border-t-4 border-black print:mt-3 print:pt-3">
+               <div className="grid grid-cols-2 gap-12 print:gap-6">
+                  <div className="space-y-3 print:space-y-1.5">
                     <h4 className="text-[11px] font-black uppercase underline">Conditions of Enrollment</h4>
                     <p className="text-[9px] leading-relaxed text-justify">
                       Membership is non-transferable and non-refundable. All facility rules must be strictly adhered to. The management reserves the right to suspend or terminate membership for breach of protocols. Members must present their ID upon entry.
                     </p>
                   </div>
-                  <div className="space-y-3" dir="rtl">
+                  <div className="space-y-3 print:space-y-1.5" dir="rtl">
                     <h4 className="text-[11px] font-black uppercase underline font-arabic">شروط العضوية</h4>
                     <p className="text-[9px] leading-relaxed text-justify font-arabic">
                       العضوية غير قابلة للتحويل وغير قابلة للاسترداد. يجب الالتزام الصارم بجميع قواعد المنشأة. تحتفظ الإدارة بالحق في تعليق أو إنهاء العضوية بسبب خرق البروتوكولات. يجب على الأعضاء تقديم هويتهم عند الدخول.
@@ -293,19 +293,19 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
 
             {/* Signatures */}
-            <div className="mt-12 grid grid-cols-2 gap-16 break-inside-avoid print:mt-6 print:gap-8">
-               <div className="flex flex-col justify-end h-24 break-inside-avoid">
+            <div className="mt-12 grid grid-cols-2 gap-16 break-inside-avoid print:mt-2 print:gap-8">
+               <div className="flex flex-col justify-end h-24 print:h-12 break-inside-avoid">
                   {member.member_signature && (
-                    <img src={member.member_signature} alt="Member Signature" className="h-16 object-contain mb-2 self-start" />
+                    <img src={member.member_signature} alt="Member Signature" className="h-16 print:h-8 object-contain mb-2 self-start" />
                   )}
                   <div className="border-t border-black pt-2 flex justify-between items-center w-full">
                     <span className="text-[11px] font-black uppercase">Member Signature</span>
                     <span className="text-[11px] font-black uppercase font-arabic">توقيع العضو</span>
                   </div>
                </div>
-               <div className="flex flex-col justify-end h-24 break-inside-avoid">
+               <div className="flex flex-col justify-end h-24 print:h-12 break-inside-avoid">
                   {member.staff_signature && (
-                    <img src={member.staff_signature} alt="Staff Signature" className="h-16 object-contain mb-2 self-start" />
+                    <img src={member.staff_signature} alt="Staff Signature" className="h-16 print:h-8 object-contain mb-2 self-start" />
                   )}
                   <div className="border-t border-black pt-2 flex justify-between items-center w-full">
                     <span className="text-[11px] font-black uppercase">Authorized Officer</span>
@@ -314,7 +314,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                </div>
             </div>
 
-            <div className="mt-8 text-center">
+            <div className="mt-8 text-center print:mt-2">
               <p className="text-[9px] font-bold text-slate-300 uppercase tracking-[0.5em]">This is a digitally generated legal instrument &bull; System ID: {member.id.substring(0,8)}</p>
             </div>
           </div>
