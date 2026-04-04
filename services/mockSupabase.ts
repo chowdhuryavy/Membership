@@ -1982,6 +1982,9 @@ class DatabaseService {
         await this.logAction('CREATE_BOOKING', `Created booking on ${booking.date} at ${booking.start_time} (Therapist ID: ${booking.therapist_id})`, booking.outlet_id);
       }, null);
     }
+    
+    // Trigger local event for real-time updates
+    window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: booking.outlet_id } }));
   }
 
   async updateMassageBooking(id: string, updates: Partial<MassageBooking>) {
@@ -1990,6 +1993,14 @@ class DatabaseService {
         const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
         if (error) throw error;
       }, null);
+    }
+    
+    // Trigger local event
+    if (updates.outlet_id) {
+      window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: updates.outlet_id } }));
+    } else {
+      // If outlet_id not in updates, we might need to fetch it or just trigger globally
+      window.dispatchEvent(new CustomEvent('booking_updated', { detail: {} }));
     }
   }
 
@@ -2059,6 +2070,48 @@ class DatabaseService {
         await this.addSale(sale);
       }
     }
+    // Trigger local event
+    window.dispatchEvent(new CustomEvent('booking_updated', { detail: {} }));
+  }
+
+  subscribeToBookings(outletId: string, callback: (payload: { eventType: string, new: any, old?: any }) => void) {
+    let supabaseUnsubscribe = () => {};
+
+    if (this.isSupabase()) {
+      const channel = supabase
+        .channel(`public:massage_bookings:outlet_id=eq.${outletId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'massage_bookings',
+            filter: `outlet_id=eq.${outletId}`
+          },
+          (payload) => {
+            callback(payload);
+          }
+        )
+        .subscribe();
+
+      supabaseUnsubscribe = () => {
+        supabase.removeChannel(channel);
+      };
+    }
+
+    // Local mode listener
+    const handleLocalUpdate = (event: any) => {
+      const detail = event.detail;
+      if (!detail.outlet_id || detail.outlet_id === outletId) {
+        callback({ eventType: 'UPDATE', new: {} });
+      }
+    };
+    window.addEventListener('booking_updated', handleLocalUpdate);
+
+    return () => {
+      supabaseUnsubscribe();
+      window.removeEventListener('booking_updated', handleLocalUpdate);
+    };
   }
 
   async deleteMassageBooking(id: string) {
@@ -2069,6 +2122,9 @@ class DatabaseService {
       if (error) throw error;
       await this.logAction('DELETE_BOOKING', `Deleted booking ID: ${id}`);
     }
+    
+    // Trigger local event
+    window.dispatchEvent(new CustomEvent('booking_updated', { detail: {} }));
   }
 
   async getIncentiveRules(propertyId?: string, outletId?: string): Promise<IncentiveRule[]> {

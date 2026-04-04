@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
-import { LogIn, ShieldAlert, UserCircle2, ArrowRight } from 'lucide-react';
+import { LogIn, ShieldAlert, UserCircle2, ArrowRight, Sparkles } from 'lucide-react';
 import { Button, Input } from '../components/ui';
 
 const StaffLogin = () => {
@@ -74,8 +74,8 @@ const StaffLogin = () => {
           </div>
         </div>
 
-        <div className="p-8 sm:p-12 lg:p-16 flex flex-col justify-center relative bg-white">
-          <div className="mb-10 flex flex-col items-center text-center">
+        <div className="p-8 sm:p-12 lg:p-16 flex flex-col justify-start pt-10 md:pt-16 bg-white relative">
+          <div className="mb-6 flex flex-col items-center text-center">
             {settings?.logo_url ? (
               <img 
                 src={settings.logo_url} 
@@ -83,8 +83,8 @@ const StaffLogin = () => {
                 className="w-32 h-auto object-contain mb-4 filter drop-shadow-[0_10px_20px_rgba(0,0,0,0.05)]" 
               />
             ) : (
-              <div className="w-24 h-24 bg-slate-900 rounded-[1.8rem] flex items-center justify-center text-white shadow-2xl shadow-slate-100 mb-4">
-                <UserCircle2 className="w-12 h-12" />
+              <div className="w-24 h-24 bg-indigo-600 rounded-[1.8rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-100 mb-4">
+                <Sparkles className="w-12 h-12" />
               </div>
             )}
             <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter mb-1 leading-tight">

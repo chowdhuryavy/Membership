@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { Staff, MassageBooking, MassageType, Guest, MassageRoom } from '../types';
 import { format, parseISO, addDays, subDays } from 'date-fns';
-import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, KeyRound, X, ShieldCheck, Building2 } from 'lucide-react';
+import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, KeyRound, X, ShieldCheck, Building2, Menu } from 'lucide-react';
 import { Button, Input } from '../components/ui';
 
 const StaffSchedule = () => {
@@ -16,6 +16,7 @@ const StaffSchedule = () => {
   const [guests, setGuests] = useState<Guest[]>([]);
   const [rooms, setRooms] = useState<MassageRoom[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Password Change State
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -45,6 +46,16 @@ const StaffSchedule = () => {
     if (staff) {
       loadSchedule();
       loadPropertyDetails();
+
+      // Real-time updates
+      const unsubscribe = db.subscribeToBookings(staff.outlet_id, (payload) => {
+        console.log('Real-time booking update received:', payload.eventType);
+        loadSchedule();
+      });
+
+      return () => {
+        unsubscribe();
+      };
     }
   }, [staff, currentDate]);
 
@@ -149,44 +160,107 @@ const StaffSchedule = () => {
 
   if (!staff) return null;
 
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-indigo-100">
-      {/* Header */}
-      <header className="bg-slate-900 text-white sticky top-0 z-20 shadow-xl shadow-slate-900/10">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-[-50%] right-[-10%] w-64 h-64 bg-indigo-500/20 rounded-full blur-[80px]"></div>
-        </div>
-        <div className="relative z-10 flex justify-between items-center max-w-3xl mx-auto p-3 sm:p-6">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-indigo-600 flex items-center justify-center text-lg sm:text-xl font-black uppercase shadow-inner border border-white/10">
-              {staff.name.charAt(0)}
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-base sm:text-xl font-black uppercase tracking-widest truncate">{staff.name}</h1>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 sm:mt-1">
-                <span className="text-[8px] sm:text-[10px] font-bold text-indigo-300 uppercase tracking-widest bg-indigo-900/50 px-1.5 py-0.5 rounded-md border border-indigo-500/30 whitespace-nowrap">
-                  {staff.role}
-                </span>
-                {propertyName && (
-                  <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1 truncate max-w-[120px] sm:max-w-none">
-                    <Building2 className="w-2.5 h-2.5" /> {propertyName}
-                  </span>
-                )}
-              </div>
-            </div>
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full bg-slate-900 text-white p-6">
+      <div className="mb-10">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-xl font-black uppercase shadow-inner border border-white/10">
+            {staff.name.charAt(0)}
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <button onClick={() => setShowPasswordModal(true)} className="p-2 sm:p-2.5 bg-white/5 rounded-lg sm:rounded-xl hover:bg-white/10 transition-colors text-slate-300 hover:text-white" title="Change Password">
-              <KeyRound className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-            <button onClick={handleLogout} className="p-2 sm:p-2.5 bg-red-500/10 rounded-lg sm:rounded-xl hover:bg-red-500/20 transition-colors text-red-400 hover:text-red-300" title="Logout">
-              <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
+          <div className="min-w-0">
+            <h1 className="text-lg font-black uppercase tracking-widest truncate">{staff.name}</h1>
+            <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">{staff.role}</p>
           </div>
         </div>
-      </header>
+        {propertyName && (
+          <div className="flex items-center gap-2 text-slate-400 text-[10px] font-bold uppercase tracking-widest bg-white/5 p-3 rounded-xl border border-white/5">
+            <Building2 className="w-4 h-4 text-indigo-400" />
+            <span className="truncate">{propertyName}</span>
+          </div>
+        )}
+      </div>
 
-      <main className="flex-1 p-4 sm:p-6 max-w-3xl mx-auto w-full space-y-6 pb-24">
+      <nav className="flex-1 space-y-2">
+        <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 px-2">Main Menu</div>
+        <button 
+          onClick={() => {
+            setCurrentDate(new Date());
+            setIsSidebarOpen(false);
+          }}
+          className="w-full flex items-center gap-3 p-3 rounded-xl bg-indigo-600 text-white font-bold text-xs uppercase tracking-widest transition-all"
+        >
+          <CalendarIcon className="w-4 h-4" /> Today's Schedule
+        </button>
+      </nav>
+
+      <div className="pt-6 border-t border-white/10 space-y-2">
+        <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 px-2">Account Settings</div>
+        <button 
+          onClick={() => {
+            setShowPasswordModal(true);
+            setIsSidebarOpen(false);
+          }}
+          className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white font-bold text-xs uppercase tracking-widest transition-all"
+        >
+          <KeyRound className="w-4 h-4" /> Change Password
+        </button>
+        <button 
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-red-500/10 text-red-400 hover:text-red-300 font-bold text-xs uppercase tracking-widest transition-all"
+        >
+          <LogOut className="w-4 h-4" /> Sign Out
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100">
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:block w-72 h-screen sticky top-0 border-r border-slate-200">
+        <SidebarContent />
+      </aside>
+
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Mobile Sidebar Drawer */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-300 ease-in-out lg:hidden ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <SidebarContent />
+      </aside>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <header className="bg-slate-900 text-white sticky top-0 z-20 shadow-xl shadow-slate-900/10 lg:hidden">
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute top-[-50%] right-[-10%] w-64 h-64 bg-indigo-500/20 rounded-full blur-[80px]"></div>
+          </div>
+          <div className="relative z-10 flex justify-between items-center p-3">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <div className="flex flex-col items-center">
+              <h1 className="text-sm font-black uppercase tracking-widest truncate max-w-[150px]">{staff.name}</h1>
+              <p className="text-[8px] font-bold text-indigo-300 uppercase tracking-widest">{staff.role}</p>
+            </div>
+            <div className="w-10" /> {/* Spacer for centering */}
+          </div>
+        </header>
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto w-full space-y-6 pb-24">
+          {/* Desktop Welcome Header */}
+          <div className="hidden lg:block mb-8">
+            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight mb-2">Welcome Back, {staff.name.split(' ')[0]}</h1>
+            <p className="text-slate-500 font-medium">Here is your schedule for today.</p>
+          </div>
         
         {/* Date Navigation */}
         <div className="flex items-center justify-between bg-white p-2 rounded-2xl shadow-sm border border-slate-200/60">
@@ -376,6 +450,7 @@ const StaffSchedule = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };
