@@ -34,6 +34,8 @@ const StaffLogin = () => {
     }
   };
 
+  const companyName = settings?.name || 'Health Club Management';
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#fcfdfe] selection:bg-indigo-100">
       
@@ -73,19 +75,31 @@ const StaffLogin = () => {
         </div>
 
         <div className="p-8 sm:p-12 lg:p-16 flex flex-col justify-center relative bg-white">
-          <div className="mb-10 text-center lg:text-left">
+          <div className="mb-10 flex flex-col items-center text-center">
             {settings?.logo_url ? (
-              <img src={settings.logo_url} alt="Logo" className="h-12 mb-6 object-contain mx-auto lg:mx-0" />
+              <img 
+                src={settings.logo_url} 
+                alt="Logo" 
+                className="w-32 h-auto object-contain mb-4 filter drop-shadow-[0_10px_20px_rgba(0,0,0,0.05)]" 
+              />
             ) : (
-              <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center mb-6 mx-auto lg:mx-0 shadow-lg">
-                <UserCircle2 className="w-6 h-6 text-white" />
+              <div className="w-24 h-24 bg-slate-900 rounded-[1.8rem] flex items-center justify-center text-white shadow-2xl shadow-slate-100 mb-4">
+                <UserCircle2 className="w-12 h-12" />
               </div>
             )}
-            <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Welcome Back</h2>
-            <p className="text-slate-500 text-sm font-medium mt-2">Enter your employee credentials to continue.</p>
+            <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter mb-1 leading-tight">
+              {companyName}
+            </h2>
+            <div className="flex items-center justify-center gap-3">
+              <div className="h-px w-8 bg-slate-200"></div>
+              <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.3em] whitespace-nowrap">
+                Staff Authentication Portal
+              </p>
+              <div className="h-px w-8 bg-slate-200"></div>
+            </div>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5 max-w-sm mx-auto lg:mx-0 w-full">
+          <form onSubmit={handleLogin} className="space-y-5 max-w-sm mx-auto w-full">
             {error && (
               <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in shake duration-300">
                 <ShieldAlert className="w-5 h-5 shrink-0" />
