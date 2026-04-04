@@ -21,6 +21,7 @@ import {
   Building2, 
   Mail, 
   Phone,
+  CalendarX,
   LayoutGrid,
   UserPlus,
   RefreshCcw,
@@ -31,7 +32,6 @@ import {
   ClipboardCheck,
   AlertCircle,
   Coins,
-  CalendarX,
   Shield
 } from 'lucide-react';
 
@@ -260,6 +260,23 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
             <h3 className="font-black text-slate-900 tracking-tight uppercase truncate">{s.name}</h3>
             <div className="flex flex-wrap gap-2 mt-1">
               <div className="inline-flex items-center px-2 py-0.5 bg-indigo-50 rounded text-[9px] font-black text-indigo-600 uppercase tracking-widest">{s.role}</div>
+              {(() => {
+                const leaves = (s as any).leaves || [];
+                const today = startOfDay(new Date());
+                const onLeave = leaves.some((l: any) => {
+                  const start = startOfDay(new Date(l.start_date));
+                  const end = startOfDay(new Date(l.end_date));
+                  return isWithinInterval(today, { start, end });
+                });
+                if (onLeave) {
+                  return (
+                    <div className="inline-flex items-center px-2 py-0.5 bg-red-50 rounded text-[9px] font-black text-red-600 uppercase tracking-widest animate-pulse">
+                      <CalendarX className="w-2.5 h-2.5 mr-1" /> On Leave
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               {viewScope === 'property' && (
                 <div className="inline-flex items-center px-2 py-0.5 bg-slate-100 rounded text-[9px] font-black text-slate-500 uppercase tracking-widest">
                   <Store className="w-2.5 h-2.5 mr-1" />

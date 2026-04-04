@@ -562,6 +562,10 @@ ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS inventory
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS room_id TEXT;
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS discount_reason TEXT;
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS discount_id_url TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS check_no TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS payment_method TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS additional_service_ids JSONB DEFAULT '[]'::jsonb;
 
 -- sales
 ALTER TABLE IF EXISTS public.sales ADD COLUMN IF NOT EXISTS discount_reason TEXT;
@@ -627,6 +631,8 @@ CREATE TABLE IF NOT EXISTS public.massage_bookings (
     status TEXT DEFAULT 'confirmed',
     additional_service_ids JSONB DEFAULT '[]'::jsonb,
     payment_method TEXT,
+    check_no TEXT,
+    category TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

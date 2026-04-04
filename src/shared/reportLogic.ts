@@ -508,8 +508,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       supabase.from('sales').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59`),
       supabase.from('massage_bookings').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('date', startStr).lte('date', endStr),
       supabase.from('members').select('*').in('outlet_id', outletIds).neq('status', 'tentative').gte('start_date', startStr).lte('start_date', endStr),
-      supabase.from('incentive_rules').select('*').eq('property_id', propertyId).eq('is_active', true),
-      supabase.from('staff').select('*, leaves:staff_leaves(*)').eq('property_id', propertyId),
+      supabase.from('incentive_rules').select('*').eq('is_active', true),
+      supabase.from('staff').select('*, leaves:staff_leaves(*)').in('outlet_id', outletIds),
       supabase.from('inventory_items').select('*').eq('property_id', propertyId),
       supabase.from('massage_types').select('*').eq('property_id', propertyId),
       supabase.from('membership_categories').select('*'),
@@ -518,8 +518,23 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     const bookings = bookingsRes.data || [];
     const members = membersRes.data || [];
-    const rules = rulesRes.data || [];
-    const staffList = staffRes.data || [];
+    let rules = rulesRes.data || [];
+
+    // Filter rules by scope manually to avoid column errors
+    rules = rules.filter((r: any) => {
+      if (r.scope === 'Global') return true;
+      if (r.scope === 'Property' && r.scope_id === propertyId) return true;
+      if (r.scope === 'Outlet' && outletIds.includes(r.scope_id)) return true;
+      return false;
+    });
+    const rawStaffList = staffRes.data || [];
+    const staffList = rawStaffList.filter((s: any) => {
+      if (!s.is_active || s.is_eligible_for_incentives === false) return false;
+      const role = (s.role || '').toLowerCase();
+      if (dept === 'Massage') return role.includes('therapist');
+      if (dept === 'Personal Training') return role.includes('trainer');
+      return true; // Membership shows all eligible staff
+    });
     const inventory = inventoryRes.data || [];
     const mTypes = mTypesRes.data || [];
     const mCats = categoriesRes.data || [];
@@ -531,10 +546,10 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     if (dept === 'Massage' || dept === 'Personal Training') {
       bookings.filter(b => {
-        const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
+        const type = mTypes.find(m => m.id === b.massage_type_id) || inventory.find(i => i.id === b.inventory_item_id);
         return type?.category === dept;
       }).forEach(b => {
-        const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id));
+        const type = mTypes.find(m => m.id === b.massage_type_id) || inventory.find(i => i.id === b.inventory_item_id);
         if (!type) return;
         const rule = findBestRule(rules, dept, (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes);
         
@@ -552,10 +567,16 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
           incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
           incNet = baseInc - incDiscVal;
-
-          if (b.therapist_id) {
+          
+          if (rule.distribution_type === 'Shared') {
+            const available = staffList.filter(s => !isStaffOnLeaveOnDate(s, b.date) && !isStaffOnProbationOnDate(s, b.date));
+            if (available.length > 0) {
+              const share = incNet / available.length;
+              available.forEach(s => staffSplits[s.id] = share);
+            }
+          } else if (b.therapist_id) {
             const therapist = staffList.find(s => s.id === b.therapist_id);
-            if (therapist && therapist.is_eligible_for_incentives !== false && !isStaffOnLeaveOnDate(therapist, b.date) && !isStaffOnProbationOnDate(therapist, b.date)) {
+            if (therapist && !isStaffOnLeaveOnDate(therapist, b.date) && !isStaffOnProbationOnDate(therapist, b.date)) {
               staffSplits[b.therapist_id] = incNet;
             }
           }
@@ -577,14 +598,17 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           inc_discount_val: incDiscVal,
           inc_net: incNet,
           remarks: !rule ? 'No Rule' : '',
+          check_no: (b as any).check_no || '',
+          duration: type.duration_minutes ? `${type.duration_minutes}m` : '',
           staff_splits: staffSplits
         });
       });
     } else if (dept === 'Membership') {
       members.forEach(m => {
         const cat = mCats.find(c => c.id === m.category_id);
-        if (!cat) return;
-        const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0);
+        
+        // Try Category ID first, then Type ID
+        const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
         if (!rule) return;
 
         const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
@@ -598,14 +622,14 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
         const staffSplits: Record<string, number> = {};
         if (rule.distribution_type === 'Shared') {
-          let available = staffList.filter(s => s.is_active && (s.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date));
+          let available = staffList.filter(s => !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date));
           if (available.length > 0) {
             const share = incNet / available.length;
             available.forEach(s => staffSplits[s.id] = share);
           }
         } else if (m.sales_rep_id) {
           const staff = staffList.find(s => s.id === m.sales_rep_id);
-          if (staff && staff.is_eligible_for_incentives !== false) {
+          if (staff && !isStaffOnLeaveOnDate(staff, m.start_date) && !isStaffOnProbationOnDate(staff, m.start_date)) {
             staffSplits[m.sales_rep_id] = incNet;
           }
         }
@@ -615,7 +639,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           sl_no: sl++,
           date: format(new Date(m.start_date), 'dd-MMM-yy'),
           guest_name: m.guest_name,
-          item_name: cat.name,
+          item_name: cat?.name || m.category_id || 'Unknown Tier',
           therapist_name: rule.distribution_type === 'Shared' ? 'Shared' : (staffList.find(s => s.id === m.sales_rep_id)?.name || 'N/A'),
           actual_price: actualPrice,
           discount_percent: discPercent,
@@ -626,6 +650,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           inc_discount_val: incDiscVal,
           inc_net: incNet,
           remarks: m.remarks || '',
+          check_no: m.check_no || '',
+          duration: cat?.name || '',
           staff_splits: staffSplits
         });
       });
@@ -638,7 +664,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       summary: {
         totalIncentive,
         count: rows.length,
-        staffList: staffList.filter((s: any) => s.is_active && s.is_eligible_for_incentives !== false)
+        staffList: staffList
       }
     };
   }
@@ -1595,30 +1621,52 @@ export const generateReportPDF = (options: PDFOptions) => {
 
 // --- INCENTIVE HELPERS ---
 
-export function findBestRule(rules: any[], department: string, itemId: string, price: number, duration: number) {
-  // 1. Exact item match
-  const exact = rules.find(r => r.department === department && r.item_id === itemId);
+export function findBestRule(rules: any[], department: string, itemId: string, price: number, duration: number, secondaryId?: string) {
+  // 1. Exact item match (Primary ID - e.g. Category ID)
+  const exact = rules.find(r => r.applies_to === department && r.target_id === itemId);
   if (exact) return exact;
 
-  // 2. Department match with price/duration criteria (if applicable)
+  // 2. Exact item match (Secondary ID - e.g. Membership Type ID)
+  if (secondaryId) {
+    const secondary = rules.find(r => r.applies_to === department && r.target_id === secondaryId);
+    if (secondary) return secondary;
+  }
+
+  // 3. Department match with price/duration criteria (if applicable)
   // For now, just return the first rule for that department if no exact match
-  const deptRule = rules.find(r => r.department === department && !r.item_id);
+  const deptRule = rules.find(r => r.applies_to === department && (r.target_id === 'all' || !r.target_id));
   return deptRule;
 }
 
 export function isStaffOnLeaveOnDate(staff: any, dateStr: string) {
-  if (!staff.leaves || !Array.isArray(staff.leaves)) return false;
-  const date = new Date(dateStr);
+  if (!staff.leaves || !Array.isArray(staff.leaves) || !dateStr) return false;
+  
+  // Normalize comparison date to YYYY-MM-DD
+  const compareDate = dateStr.split('T')[0];
+  const date = new Date(compareDate);
+  
   return staff.leaves.some((l: any) => {
-    const start = new Date(l.start_date);
-    const end = new Date(l.end_date);
-    return date >= start && date <= end && l.status === 'approved';
+    if (!l.start_date || !l.end_date) return false;
+    
+    // Normalize leave dates to YYYY-MM-DD
+    const startStr = l.start_date.split('T')[0];
+    const endStr = l.end_date.split('T')[0];
+    
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    
+    return date >= start && date <= end && (!l.status || l.status === 'approved');
   });
 }
 
 export function isStaffOnProbationOnDate(staff: any, dateStr: string) {
-  if (!staff.probation_end_date) return false;
-  const date = new Date(dateStr);
-  const probationEnd = new Date(staff.probation_end_date);
+  if (!staff.probation_end_date || !dateStr) return false;
+  
+  const compareDate = dateStr.split('T')[0];
+  const date = new Date(compareDate);
+  
+  const probationEndStr = staff.probation_end_date.split('T')[0];
+  const probationEnd = new Date(probationEndStr);
+  
   return date < probationEnd;
 }

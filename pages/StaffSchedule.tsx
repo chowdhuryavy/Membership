@@ -50,7 +50,7 @@ const StaffSchedule = () => {
   const loadPropertyDetails = async () => {
     if (!staff) return;
     try {
-      const outlets = await db.getOutlets('all');
+      const outlets = await db.getOutlets();
       const properties = await db.getProperties();
       
       const myOutlet = outlets.find(o => o.id === staff.outlet_id);

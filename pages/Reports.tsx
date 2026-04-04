@@ -191,7 +191,7 @@ const Reports = () => {
       date: true,
       guest_name: true,
       membership_no: true,
-      reference: true,
+      reference: false,
       check_no: true,
       payment_mode: true,
       item_name: true,
@@ -214,25 +214,26 @@ const Reports = () => {
   });
 
   const isStaffOnLeaveOnDate = (s: Staff, targetDateStr: string) => {
-      // Check legacy fields
-      if (s.probation_start_date && s.probation_end_date) {
+      if (!targetDateStr) return false;
+      const target = startOfDay(new Date(targetDateStr));
+
+      // Check probation
+      if (s.probation_end_date) {
           try {
-              const target = startOfDay(new Date(targetDateStr));
-              const start = startOfDay(new Date(s.probation_start_date));
               const end = startOfDay(new Date(s.probation_end_date));
-              if (isWithinInterval(target, { start, end })) return true;
+              if (target < end) return true;
           } catch (e) {}
       }
       
-      // Check new staff_leaves table
-      const leaves = staffLeaves.filter(l => l.staff_id === s.id);
+      // Check leaves from the staff object itself
+      const leaves = (s as any).leaves || [];
       if (leaves.length > 0) {
           try {
-              const target = startOfDay(new Date(targetDateStr));
-              return leaves.some(l => {
+              return leaves.some((l: any) => {
                   const start = startOfDay(new Date(l.start_date));
                   const end = startOfDay(new Date(l.end_date));
-                  return isWithinInterval(target, { start, end });
+                  const isApproved = !l.status || l.status === 'approved';
+                  return isWithinInterval(target, { start, end }) && isApproved;
               });
           } catch (e) {}
       }
@@ -863,6 +864,44 @@ const Reports = () => {
                     </tr>
                 </tbody>
             </table>
+            {isIncentiveReport && (
+                <div className="mt-12 flex justify-start">
+                    <div className="w-full max-w-sm">
+                        <table className="w-full border-collapse text-[10px] border-2 border-black shadow-sm">
+                            <thead>
+                                <tr className="bg-amber-100 font-black uppercase tracking-widest border-b-2 border-black">
+                                    <th className="border border-black px-4 py-3 text-left">Staff Name</th>
+                                    <th className="border border-black px-4 py-3 text-right">Incentives</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {activeStaffList.map((s, idx) => {
+                                    const colors = ['bg-emerald-50/50', 'bg-orange-50/50', 'bg-amber-50/50', 'bg-yellow-50/50', 'bg-green-50/50', 'bg-slate-50/50', 'bg-blue-50/50'];
+                                    const color = colors[idx % colors.length];
+                                    return (
+                                        <tr key={s.id} className={`${color} font-bold border-b border-black hover:bg-white transition-colors`}>
+                                            <td className="border border-black px-4 py-2 text-slate-700">{s.name}</td>
+                                            <td className="border border-black px-4 py-2 text-right">{formatMoney(totals.staffTotals[s.id] || 0)}</td>
+                                        </tr>
+                                    );
+                                })}
+                                <tr className="bg-white font-black border-t-2 border-black">
+                                    <td className="border border-black px-4 py-3 text-center uppercase tracking-widest bg-slate-50">TOTAL</td>
+                                    <td className="border border-black px-4 py-3 text-right bg-slate-50">{formatMoney(totals.totalIncNet)}</td>
+                                </tr>
+                                <tr className="bg-indigo-50/30 font-black border-t-2 border-black">
+                                    <td className="border border-black px-4 py-3 uppercase tracking-widest">DISCOUNTED AMOUNT</td>
+                                    <td className="border border-black px-4 py-3 text-right">{formatMoney(totals.totalDiscount)}</td>
+                                </tr>
+                                <tr className="bg-blue-100/30 font-black border-t-2 border-black">
+                                    <td className="border border-black px-4 py-3 uppercase tracking-widest">NET REVENUE</td>
+                                    <td className="border border-black px-4 py-3 text-right">{formatMoney(totals.totalNetRev)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </div>
     );
   };

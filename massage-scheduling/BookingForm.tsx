@@ -87,7 +87,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
     discount_mode: 'amount' as 'amount' | 'percent',
     discount_reason: '',
     discount_id_url: '',
-    payment_method: 'cash'
+    payment_method: 'cash',
+    check_no: ''
   });
 
   const [showSuggestions, setShowSuggestions] = useState<'name' | 'phone' | null>(null);
@@ -110,7 +111,9 @@ const BookingForm: React.FC<BookingFormProps> = ({
         discount_mode: 'amount', // Defaults to amount for editing existing
         discount_reason: initialBooking.discount_reason || '',
         discount_id_url: initialBooking.discount_id_url || '',
-        payment_method: initialBooking.payment_method || 'cash'
+        payment_method: initialBooking.payment_method || 'cash',
+        check_no: initialBooking.check_no || '',
+        category: initialBooking.category || 'Massage'
       });
     }
   }, [initialBooking, guests]);
@@ -285,6 +288,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
         }
       }
 
+      const isPT = bookingData.category === 'Personal Training';
       const payload: any = {
         guest_id: guest.id,
         therapist_id: bookingData.therapist_id,
@@ -292,13 +296,16 @@ const BookingForm: React.FC<BookingFormProps> = ({
         date: bookingData.date,
         start_time: bookingData.start_time,
         end_time: bookingData.end_time,
-        massage_type_id: bookingData.massage_type_id || null,
+        massage_type_id: isPT ? null : (bookingData.massage_type_id || null),
+        inventory_item_id: isPT ? (bookingData.massage_type_id || null) : null,
         additional_service_ids: bookingData.additional_service_ids.filter(Boolean),
         price: netPrice,
         discount: calculatedDiscountValue,
         discount_reason: bookingData.discount > 0 ? bookingData.discount_reason : null,
         discount_id_url: bookingData.discount > 0 ? bookingData.discount_id_url : null,
-        payment_method: bookingData.payment_method
+        payment_method: bookingData.payment_method,
+        check_no: bookingData.check_no || null,
+        category: bookingData.category
       };
 
       if (initialBooking) { 
@@ -318,7 +325,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
       // onSuccess(); 
       // onClose();
     } catch (err: any) { 
-        if (err.message?.includes('schema cache') || err.message?.includes('inventory_item_id') || err.message?.includes('room_id')) {
+        const msg = err.message || "";
+        if (msg.includes('schema cache') || msg.includes('inventory_item_id') || msg.includes('room_id') || msg.includes('check_no') || msg.includes('category') || msg.includes('payment_method')) {
             setError("Database schema needs updating. Please close this form and refresh the page to see the required SQL script.");
         } else {
             setError(err.message || "Operation failed."); 
@@ -578,6 +586,27 @@ const BookingForm: React.FC<BookingFormProps> = ({
                         </div>
                     </div>
                 )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Select 
+                        label="Payment Method" 
+                        options={[
+                            { value: 'cash', label: 'Cash' },
+                            { value: 'card', label: 'Card' },
+                            { value: 'transfer', label: 'Transfer' }
+                        ]} 
+                        value={bookingData.payment_method} 
+                        onChange={e => setBookingData({...bookingData, payment_method: e.target.value as any})} 
+                        className="h-11 rounded-xl text-xs" 
+                    />
+                    <Input 
+                        label="Check / Reference No." 
+                        value={bookingData.check_no || ''} 
+                        onChange={e => setBookingData({...bookingData, check_no: e.target.value})} 
+                        className="h-11 rounded-xl text-xs font-bold" 
+                        placeholder="e.g. TXN123456"
+                    />
+                </div>
 
                 {error && <div className="bg-red-50 text-red-600 text-[10px] font-bold p-4 rounded-2xl flex items-center gap-3 animate-in shake duration-300"><AlertTriangle className="w-4 h-4 shrink-0" /><span>{error}</span></div>}
 

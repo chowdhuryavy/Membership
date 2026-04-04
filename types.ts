@@ -279,6 +279,7 @@ export interface MassageBooking {
   discount_reason?: string;
   discount_id_url?: string;
   room_id?: string;
+  check_no?: string;
   payment_method?: 'cash' | 'card' | 'transfer';
 }
 
