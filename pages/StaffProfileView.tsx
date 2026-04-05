@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, ConfirmationModal } from '../components/ui';
 import { Staff, StaffLeave } from '../types';
 import { db } from '../services/mockSupabase';
-import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X, Database, RefreshCcw, ShieldAlert } from 'lucide-react';
+import { supabase } from '../services/supabase';
+import { getReportData } from '../src/shared/reportLogic';
+import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X, Database, RefreshCcw, ShieldAlert, Award, TrendingUp, Sparkles, User, Clock } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { motion, AnimatePresence } from 'motion/react';
+import { useSettings } from '../contexts/SettingsContext';
 
 interface StaffProfileViewProps {
   staff: Staff;
@@ -15,12 +19,19 @@ interface StaffProfileViewProps {
 }
 
 const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canManage, canManageLeaves, onEdit, loadStaff }) => {
+  const { settings, formatMoney } = useSettings();
   const [leaves, setLeaves] = useState<StaffLeave[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [editingLeaveId, setEditingLeaveId] = useState<string | null>(null);
   const [leaveForm, setLeaveForm] = useState({ start_date: '', end_date: '' });
   const [displayDates, setDisplayDates] = useState({ start: '', end: '' });
+  
+  const [activeTab, setActiveTab] = useState<'leaves' | 'incentives'>('leaves');
+  const [incentiveData, setIncentiveData] = useState<any[]>([]);
+  const [incentiveSummary, setIncentiveSummary] = useState<any>({});
+  const [incentiveLoading, setIncentiveLoading] = useState(false);
+  const [incentiveDate, setIncentiveDate] = useState(new Date());
 
   const toISODate = (displayDate: string) => {
     const parts = displayDate.split('/');
@@ -125,6 +136,59 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
   useEffect(() => {
     loadLeaves();
   }, [staff.id]);
+
+  useEffect(() => {
+    if (activeTab === 'incentives') {
+      loadIncentives();
+    }
+  }, [staff.id, activeTab, incentiveDate]);
+
+  const loadIncentives = async () => {
+    if (!staff) return;
+    setIncentiveLoading(true);
+    try {
+      const propertyId = staff.property_id;
+      
+      // We need to fetch incentives for each department and combine them
+      const depts: ('Massage' | 'Membership' | 'Personal Training')[] = ['Massage', 'Membership', 'Personal Training'];
+      let allRows: any[] = [];
+      let totalInc = 0;
+
+      for (const dept of depts) {
+        const result = await getReportData({
+          supabase,
+          propertyId,
+          outletId: 'all',
+          reportType: 'incentives',
+          date: incentiveDate,
+          incentiveDept: dept
+        });
+
+        // Filter rows for this specific staff member
+        const staffRows = result.rows.filter(r => r.staff_splits && r.staff_splits[staff.id]);
+        
+        // Add department info to each row
+        const rowsWithDept = staffRows.map(r => ({
+          ...r,
+          department: dept,
+          my_incentive: r.staff_splits[staff.id]
+        }));
+
+        allRows = [...allRows, ...rowsWithDept];
+        totalInc += rowsWithDept.reduce((sum, r) => sum + r.my_incentive, 0);
+      }
+
+      // Sort by date
+      allRows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      setIncentiveData(allRows);
+      setIncentiveSummary({ total: totalInc, count: allRows.length });
+    } catch (error) {
+      console.error("Failed to load incentives:", error);
+    } finally {
+      setIncentiveLoading(false);
+    }
+  };
 
   const [error, setError] = useState<string | null>(null);
 
@@ -314,60 +378,196 @@ NOTIFY pgrst, 'reload schema';`}
         </div>
 
         <div className="lg:col-span-8 space-y-8">
-          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white flex flex-col min-h-[460px]">
-              <CardHeader className="bg-slate-50 p-8 flex justify-between items-center border-b shrink-0">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center border border-amber-100 shadow-sm"><CalendarX className="w-5 h-5 text-amber-600" /></div>
-                    <div>
-                        <CardTitle className="text-[11px] font-black uppercase tracking-widest leading-none text-slate-900">Leave History</CardTitle>
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Absence & Incentive Exemption Periods</p>
-                    </div>
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white flex flex-col min-h-[550px]">
+              <CardHeader className="bg-slate-50 p-0 flex flex-col border-b shrink-0">
+                  <div className="flex border-b border-slate-200">
+                    <button 
+                      onClick={() => setActiveTab('leaves')}
+                      className={`flex-1 py-6 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-b-4 ${activeTab === 'leaves' ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-100/50'}`}
+                    >
+                      Leave History
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('incentives')}
+                      className={`flex-1 py-6 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-b-4 ${activeTab === 'incentives' ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-100/50'}`}
+                    >
+                      Incentive Earnings
+                    </button>
                   </div>
-                  {canManageLeaves && (
-                    <Button onClick={() => { setEditingLeaveId(null); setLeaveForm({ start_date: '', end_date: '' }); setShowLeaveForm(true); }} size="sm" variant="secondary" className="rounded-xl font-black uppercase text-[9px] tracking-widest h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white border-none transition-all active:scale-95 shadow-lg shadow-indigo-900/40">
-                        <Plus className="w-3.5 h-3.5 mr-1.5" /> Record Leave
-                    </Button>
-                  )}
+
+                  <div className="p-6 flex justify-between items-center">
+                    {activeTab === 'leaves' ? (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center border border-amber-100 shadow-sm"><CalendarX className="w-5 h-5 text-amber-600" /></div>
+                          <div>
+                              <CardTitle className="text-[11px] font-black uppercase tracking-widest leading-none text-slate-900">Leave History</CardTitle>
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Absence & Incentive Exemption Periods</p>
+                          </div>
+                        </div>
+                        {canManageLeaves && (
+                          <Button onClick={() => { setEditingLeaveId(null); setLeaveForm({ start_date: '', end_date: '' }); setShowLeaveForm(true); }} size="sm" variant="secondary" className="rounded-xl font-black uppercase text-[9px] tracking-widest h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white border-none transition-all active:scale-95 shadow-lg shadow-indigo-900/40">
+                              <Plus className="w-3.5 h-3.5 mr-1.5" /> Record Leave
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center border border-indigo-100 shadow-sm"><Award className="w-5 h-5 text-indigo-600" /></div>
+                          <div>
+                              <CardTitle className="text-[11px] font-black uppercase tracking-widest leading-none text-slate-900">Incentive Earnings</CardTitle>
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Performance Based Payouts for {format(incentiveDate, 'MMMM yyyy')}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => setIncentiveDate(new Date(incentiveDate.getFullYear(), incentiveDate.getMonth() - 1, 1))}
+                            className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-400"
+                          >
+                            <RefreshCcw className="w-3.5 h-3.5 rotate-[-90deg]" />
+                          </button>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 min-w-[100px] text-center">
+                            {format(incentiveDate, 'MMM yyyy')}
+                          </span>
+                          <button 
+                            onClick={() => setIncentiveDate(new Date(incentiveDate.getFullYear(), incentiveDate.getMonth() + 1, 1))}
+                            className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-400"
+                          >
+                            <RefreshCcw className="w-3.5 h-3.5 rotate-[90deg]" />
+                          </button>
+                          <Button 
+                            onClick={loadIncentives} 
+                            disabled={incentiveLoading} 
+                            size="sm" 
+                            variant="secondary" 
+                            className="rounded-xl font-black uppercase text-[9px] tracking-widest h-9 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 border-none ml-2"
+                          >
+                            <RefreshCcw className={`w-3.5 h-3.5 mr-1.5 ${incentiveLoading ? 'animate-spin' : ''}`} /> Sync
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
               </CardHeader>
               <CardContent className="p-0 flex-1 overflow-y-auto custom-scrollbar">
-                  <table className="w-full text-left table-fixed">
-                      <thead className="bg-slate-50/30 text-[8px] font-black uppercase text-slate-400 tracking-[0.2em] border-b sticky top-0 z-10">
-                          <tr>
-                              <th className="px-6 py-4 w-[35%]">Commence</th>
-                              <th className="px-6 py-4 w-[35%]">Terminate</th>
-                              <th className="px-6 py-4 w-[30%] text-right">Ops</th>
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                          {(!Array.isArray(leaves) || leaves.length === 0) ? (
-                              <tr><td colSpan={3} className="px-8 py-28 text-center">
-                                  <div className="flex flex-col items-center gap-4 opacity-30">
-                                      <CalendarX className="w-12 h-12 text-slate-300" />
-                                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No historical leaves</p>
+                  {activeTab === 'leaves' ? (
+                    <table className="w-full text-left table-fixed">
+                        <thead className="bg-slate-50/30 text-[8px] font-black uppercase text-slate-400 tracking-[0.2em] border-b sticky top-0 z-10">
+                            <tr>
+                                <th className="px-6 py-4 w-[35%]">Commence</th>
+                                <th className="px-6 py-4 w-[35%]">Terminate</th>
+                                <th className="px-6 py-4 w-[30%] text-right">Ops</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {(!Array.isArray(leaves) || leaves.length === 0) ? (
+                                <tr><td colSpan={3} className="px-8 py-28 text-center">
+                                    <div className="flex flex-col items-center gap-4 opacity-30">
+                                        <CalendarX className="w-12 h-12 text-slate-300" />
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No historical leaves</p>
+                                    </div>
+                                </td></tr>
+                            ) : (
+                                Array.isArray(leaves) && leaves.map(l => (
+                                    <tr key={l.id} className="hover:bg-indigo-50/20 transition-colors group">
+                                        <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(l.start_date), 'dd MMM yyyy')}</td>
+                                        <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(l.end_date), 'dd MMM yyyy')}</td>
+                                        <td className="px-6 py-5 text-right">
+                                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {canManageLeaves && (
+                                                  <>
+                                                    <button onClick={() => { setEditingLeaveId(l.id); setLeaveForm({ start_date: l.start_date, end_date: l.end_date }); setShowLeaveForm(true); }} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors" title="Modify"><Edit2 className="w-3.5 h-3.5"/></button>
+                                                    <button onClick={() => handleDeleteLeave(l.id)} disabled={isDeleting === l.id} className={`p-2 transition-colors ${isDeleting === l.id ? 'text-slate-200 cursor-wait' : 'text-slate-300 hover:text-red-500'}`} title="Delete">
+                                                        {isDeleting === l.id ? <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-transparent rounded-full animate-spin"></div> : <Trash2 className="w-3.5 h-3.5"/>}
+                                                    </button>
+                                                  </>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                  ) : (
+                    <div className="p-6 space-y-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
+                          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl"></div>
+                          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Total Earnings</div>
+                          <div className="text-3xl font-black text-white relative z-10">{formatMoney(incentiveSummary.total)}</div>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Services</div>
+                          <div className="text-3xl font-black text-slate-900">{incentiveSummary.count || 0}</div>
+                        </div>
+                      </div>
+
+                      {incentiveLoading ? (
+                        <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                          <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Calculating Incentives...</p>
+                        </div>
+                      ) : incentiveData.length === 0 ? (
+                        <div className="bg-slate-50 p-12 rounded-[2rem] border border-slate-200/60 text-center">
+                          <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100 shadow-sm">
+                            <Award className="w-8 h-8 text-slate-300" />
+                          </div>
+                          <h3 className="text-base font-black uppercase tracking-widest text-slate-900">No Earnings Found</h3>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xs mx-auto leading-relaxed">No incentives recorded for this staff member in {format(incentiveDate, 'MMMM yyyy')}.</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-4">
+                          <AnimatePresence mode="popLayout">
+                            {incentiveData.map((item, index) => (
+                              <motion.div 
+                                key={item.id}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                transition={{ delay: index * 0.02 }}
+                                className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300"
+                              >
+                                <div className="flex justify-between items-start mb-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-xl ${
+                                      item.department === 'Massage' ? 'bg-indigo-50 text-indigo-600' :
+                                      item.department === 'Membership' ? 'bg-emerald-50 text-emerald-600' :
+                                      'bg-amber-50 text-amber-600'
+                                    }`}>
+                                      {item.department === 'Massage' ? <Sparkles className="w-5 h-5" /> :
+                                       item.department === 'Membership' ? <TrendingUp className="w-5 h-5" /> :
+                                       <Award className="w-5 h-5" />}
+                                    </div>
+                                    <div>
+                                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{item.department}</p>
+                                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{item.item_name}</h4>
+                                    </div>
                                   </div>
-                              </td></tr>
-                          ) : (
-                              Array.isArray(leaves) && leaves.map(l => (
-                                  <tr key={l.id} className="hover:bg-indigo-50/20 transition-colors group">
-                                      <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(l.start_date), 'dd MMM yyyy')}</td>
-                                      <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(l.end_date), 'dd MMM yyyy')}</td>
-                                      <td className="px-6 py-5 text-right">
-                                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                              {canManageLeaves && (
-                                                <>
-                                                  <button onClick={() => { setEditingLeaveId(l.id); setLeaveForm({ start_date: l.start_date, end_date: l.end_date }); setShowLeaveForm(true); }} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors" title="Modify"><Edit2 className="w-3.5 h-3.5"/></button>
-                                                  <button onClick={() => handleDeleteLeave(l.id)} disabled={isDeleting === l.id} className={`p-2 transition-colors ${isDeleting === l.id ? 'text-slate-200 cursor-wait' : 'text-slate-300 hover:text-red-500'}`} title="Delete">
-                                                      {isDeleting === l.id ? <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-transparent rounded-full animate-spin"></div> : <Trash2 className="w-3.5 h-3.5"/>}
-                                                  </button>
-                                                </>
-                                              )}
-                                          </div>
-                                      </td>
-                                  </tr>
-                              ))
-                          )}
-                      </tbody>
-                  </table>
+                                    <div className="text-right">
+                                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Staff Share</p>
+                                      <p className="text-lg font-black text-indigo-600">{formatMoney(item.my_incentive)}</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+                                  <div className="flex items-center gap-2">
+                                    <Calendar className="w-3.5 h-3.5 text-slate-300" />
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.date}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 justify-end">
+                                    <User className="w-3.5 h-3.5 text-slate-300" />
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[100px]">{item.guest_name}</span>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            ))}
+                          </AnimatePresence>
+                        </div>
+                      )}
+                    </div>
+                  )}
               </CardContent>
           </Card>
         </div>

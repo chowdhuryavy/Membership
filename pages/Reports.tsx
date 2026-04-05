@@ -283,6 +283,7 @@ const Reports = () => {
       setSummary(result.summary);
       
       if (reportType === 'incentives') {
+        console.log('DEBUG: Setting activeStaffList:', result.summary.staffList);
         setActiveStaffList(result.summary.staffList || []);
       }
 

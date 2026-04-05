@@ -28,7 +28,7 @@ const StaffSchedule = () => {
   const [incentiveSummary, setIncentiveSummary] = useState<any>({});
   const [incentiveLoading, setIncentiveLoading] = useState(false);
   
-  const { settings } = useSettings();
+  const { settings, formatMoney } = useSettings();
 
   // Password Change State
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -192,9 +192,24 @@ const StaffSchedule = () => {
       // Sort by date
       allRows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-      setIncentiveData(allRows);
-      setIncentiveSummary({ total: totalInc, count: allRows.length });
-    } catch (error) {
+    setIncentiveData(allRows);
+    
+    // Calculate department breakdown
+    const breakdown = depts.reduce((acc, dept) => {
+      const deptRows = allRows.filter(r => r.department === dept);
+      acc[dept] = {
+        total: deptRows.reduce((sum, r) => sum + r.my_incentive, 0),
+        count: deptRows.length
+      };
+      return acc;
+    }, {} as Record<string, { total: number, count: number }>);
+
+    setIncentiveSummary({ 
+      total: totalInc, 
+      count: allRows.length,
+      breakdown 
+    });
+  } catch (error) {
       console.error("Failed to load incentives:", error);
     } finally {
       setIncentiveLoading(false);
@@ -481,17 +496,49 @@ const StaffSchedule = () => {
           </div>
         ) : viewMode === 'incentives' ? (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl"></div>
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Total Earnings</div>
-                <div className="text-3xl font-black text-white relative z-10">{settings?.currency_id || '$'}{incentiveSummary.total?.toFixed(2) || '0.00'}</div>
+                <div className="text-3xl font-black text-white relative z-10">{formatMoney(incentiveSummary.total)}</div>
               </div>
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Services</div>
-                <div className="text-3xl font-black text-slate-900">{incentiveSummary.count || 0}</div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Services</div>
+                  <div className="text-3xl font-black text-slate-900">{incentiveSummary.count || 0}</div>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Avg / Service</div>
+                  <div className="text-3xl font-black text-indigo-600">
+                    {formatMoney(incentiveSummary.count > 0 ? incentiveSummary.total / incentiveSummary.count : 0)}
+                  </div>
+                </div>
               </div>
             </div>
+
+            {/* Department Breakdown */}
+            {incentiveSummary.breakdown && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {Object.entries(incentiveSummary.breakdown).map(([dept, data]: [string, any]) => (
+                  <div key={dept} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={`p-1.5 rounded-lg ${
+                        dept === 'Massage' ? 'bg-indigo-50 text-indigo-600' :
+                        dept === 'Membership' ? 'bg-emerald-50 text-emerald-600' :
+                        'bg-amber-50 text-amber-600'
+                      }`}>
+                        {dept === 'Massage' ? <Sparkles className="w-3.5 h-3.5" /> :
+                         dept === 'Membership' ? <TrendingUp className="w-3.5 h-3.5" /> :
+                         <Award className="w-3.5 h-3.5" />}
+                      </div>
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{dept}</span>
+                    </div>
+                    <div className="text-lg font-black text-slate-900">{formatMoney(data.total)}</div>
+                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{data.count} Services</div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {incentiveData.length === 0 ? (
               <motion.div 
@@ -535,18 +582,37 @@ const StaffSchedule = () => {
                         </div>
                         <div className="text-right">
                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Your Share</p>
-                          <p className="text-lg font-black text-indigo-600">{settings?.currency_id || '$'}{item.my_incentive.toFixed(2)}</p>
+                          <p className="text-lg font-black text-indigo-600">{formatMoney(item.my_incentive)}</p>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-50">
+                        <div>
+                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Price</p>
+                          <p className="text-[10px] font-bold text-slate-700">{formatMoney(item.actual_price)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Net Revenue</p>
+                          <p className="text-[10px] font-bold text-slate-700">{formatMoney(item.net_revenue)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Incentive</p>
+                          <p className="text-[10px] font-bold text-slate-700">{formatMoney(item.inc_net)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Guest</p>
+                          <p className="text-[10px] font-bold text-slate-700 truncate">{item.guest_name}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 pt-4 mt-4 border-t border-slate-50 opacity-60">
                         <div className="flex items-center gap-2">
                           <CalendarIcon className="w-3.5 h-3.5 text-slate-300" />
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.date}</span>
                         </div>
                         <div className="flex items-center gap-2 justify-end">
-                          <User className="w-3.5 h-3.5 text-slate-300" />
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[100px]">{item.guest_name}</span>
+                          <Clock className="w-3.5 h-3.5 text-slate-300" />
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.duration || 'N/A'}</span>
                         </div>
                       </div>
                     </motion.div>
@@ -557,7 +623,7 @@ const StaffSchedule = () => {
           </div>
         ) : viewMode === 'monthly' ? (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Bookings</div>
                 <div className="text-3xl font-black text-slate-900">{monthlyBookings.length}</div>
@@ -566,6 +632,46 @@ const StaffSchedule = () => {
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Completed</div>
                 <div className="text-3xl font-black text-emerald-600">{monthlyBookings.filter(b => b.status === 'completed').length}</div>
               </div>
+              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden group cursor-pointer" onClick={() => setViewMode('incentives')}>
+                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"></div>
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Est. Incentives</div>
+                <div className="text-3xl font-black text-white relative z-10 flex items-center justify-between">
+                  {formatMoney(incentiveSummary.total || 0)}
+                  <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-white transition-colors" />
+                </div>
+              </div>
+            </div>
+
+            {/* Monthly Incentive Breakdown */}
+            {incentiveSummary.breakdown && (
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center border border-indigo-100 shadow-sm"><Award className="w-5 h-5 text-indigo-600" /></div>
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-900">Incentive Breakdown</h3>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Monthly Earnings by Department</p>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setViewMode('incentives')} className="text-[9px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">
+                    Full Audit <ChevronRight className="w-3 h-3 ml-1" />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {Object.entries(incentiveSummary.breakdown).map(([dept, data]: [string, any]) => (
+                    <div key={dept} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{dept}</p>
+                      <p className="text-lg font-black text-slate-900">{formatMoney(data.total)}</p>
+                      <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">{data.count} Services</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Booking Details</h3>
+              <div className="h-px flex-1 bg-slate-100 mx-4"></div>
             </div>
             
             {monthlyBookings.length === 0 ? (

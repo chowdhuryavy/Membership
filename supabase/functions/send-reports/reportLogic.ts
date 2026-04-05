@@ -523,18 +523,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       if (!s.is_active || s.is_eligible_for_incentives === false) return false;
       
       // Filter by outlet
-      let sOutlets: string[] = [];
-      if (Array.isArray(s.outlet_ids)) {
-        sOutlets = s.outlet_ids;
-      } else if (typeof s.outlet_ids === 'string') {
-        try {
-          sOutlets = JSON.parse(s.outlet_ids);
-        } catch (e) {
-          sOutlets = [s.outlet_ids];
-        }
-      } else if (s.outlet_id) {
-        sOutlets = [s.outlet_id];
-      }
+      const sOutlets = getStaffOutlets(s);
       
       const belongsToOutlet = outletIds.some(id => sOutlets.includes(id));
       if (!belongsToOutlet) return false;
@@ -579,7 +568,10 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           incNet = baseInc - incDiscVal;
 
           if (rule.distribution_type === 'Shared') {
-            const available = staffList.filter(s => !isStaffOnLeaveOnDate(s, b.date) && !isStaffOnProbationOnDate(s, b.date));
+            const available = staffList.filter(s => {
+              const sOutlets = getStaffOutlets(s);
+              return sOutlets.includes(b.outlet_id) && !isStaffOnLeaveOnDate(s, b.date) && !isStaffOnProbationOnDate(s, b.date);
+            });
             if (available.length > 0) {
               const share = incNet / available.length;
               available.forEach(s => staffSplits[s.id] = share);
@@ -629,7 +621,10 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
         const staffSplits: Record<string, number> = {};
         if (rule.distribution_type === 'Shared') {
-          let available = staffList.filter(s => s.is_active && (s.is_eligible_for_incentives !== false) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date));
+          const available = staffList.filter(s => {
+            const sOutlets = getStaffOutlets(s);
+            return sOutlets.includes(m.outlet_id) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date);
+          });
           if (available.length > 0) {
             const share = incNet / available.length;
             available.forEach(s => staffSplits[s.id] = share);
@@ -1635,6 +1630,19 @@ export function findBestRule(rules: any[], department: string, itemId: string, p
   // For now, just return the first rule for that department if no exact match
   const deptRule = rules.find(r => r.department === department && !r.item_id);
   return deptRule;
+}
+
+export function getStaffOutlets(s: any): string[] {
+  if (Array.isArray(s.outlet_ids)) return s.outlet_ids;
+  if (typeof s.outlet_ids === 'string') {
+    try {
+      return JSON.parse(s.outlet_ids);
+    } catch (e) {
+      return [s.outlet_ids];
+    }
+  }
+  if (s.outlet_id) return [s.outlet_id];
+  return [];
 }
 
 export function isStaffOnLeaveOnDate(staff: any, dateStr: string) {

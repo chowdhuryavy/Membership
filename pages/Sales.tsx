@@ -190,7 +190,7 @@ const POSForm = ({
 
         if (category === 'personal training') {
             const trainers = activeStaff.filter(s => 
-                /trainer|coach|instructor|pt|gym|fitness/i.test(s.role)
+                /trainer|coach|instructor|pt|gym|fitness|sport|yoga|pool|lifeguard|personal/i.test(s.role)
             );
             if (trainers.length > 0) {
                 filtered = trainers;

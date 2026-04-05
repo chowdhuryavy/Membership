@@ -493,9 +493,13 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const endStr = format(endOfMonth(date), 'yyyy-MM-dd');
     
     let outletIds: string[] = [];
+    let allPropertyOutletIds: string[] = [];
+
+    const { data: allOutlets } = await supabase.from('outlets').select('id').eq('property_id', propertyId);
+    allPropertyOutletIds = (allOutlets || []).map((o: any) => o.id);
+
     if (outletId === 'all') {
-      const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', propertyId);
-      outletIds = (outlets || []).map((o: any) => o.id);
+      outletIds = allPropertyOutletIds;
     } else {
       outletIds = [outletId];
     }
@@ -504,17 +508,23 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     const dept = incentiveDept || 'Massage';
 
+    // For Personal Training and Massage, we often need staff from all outlets in the property
+    const staffQueryOutletIds = (dept === 'Personal Training' || dept === 'Massage') ? allPropertyOutletIds : outletIds;
+
     const [salesRes, bookingsRes, membersRes, rulesRes, staffRes, inventoryRes, mTypesRes, categoriesRes, guestsRes] = await Promise.all([
       supabase.from('sales').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59`),
       supabase.from('massage_bookings').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('date', startStr).lte('date', endStr),
       supabase.from('members').select('*').in('outlet_id', outletIds).neq('status', 'tentative').gte('start_date', startStr).lte('start_date', endStr),
       supabase.from('incentive_rules').select('*').eq('is_active', true),
-      supabase.from('staff').select('*, leaves:staff_leaves!fk_staff_leaves_staff(*)').eq('property_id', propertyId),
+      supabase.from('staff').select('*, leaves:staff_leaves!fk_staff_leaves_staff(*)').in('outlet_id', staffQueryOutletIds),
       supabase.from('inventory_items').select('*').eq('property_id', propertyId),
       supabase.from('massage_types').select('*').eq('property_id', propertyId),
       supabase.from('membership_categories').select('*'),
       supabase.from('guests').select('id, name')
     ]);
+
+    console.log(`DEBUG: Loaded ${staffRes.data?.length || 0} staff members for query outlets:`, staffQueryOutletIds);
+    console.log('DEBUG: outletIds:', outletIds);
 
     const bookings = bookingsRes.data || [];
     const members = membersRes.data || [];
@@ -531,29 +541,15 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const staffList = rawStaffList.filter((s: any) => {
       if (!s.is_active || s.is_eligible_for_incentives === false) return false;
       
-      // Filter by outlet
-      let sOutlets: string[] = [];
-      if (Array.isArray(s.outlet_ids)) {
-        sOutlets = s.outlet_ids;
-      } else if (typeof s.outlet_ids === 'string') {
-        try {
-          sOutlets = JSON.parse(s.outlet_ids);
-        } catch (e) {
-          sOutlets = [s.outlet_ids];
-        }
-      } else if (s.outlet_id) {
-        sOutlets = [s.outlet_id];
-      }
+      const sOutlets = getStaffOutlets(s);
+      const belongsToOutlet = outletIds.some(id => sOutlets.includes(id)) || outletIds.includes('all');
       
-      const belongsToOutlet = outletIds.some(id => sOutlets.includes(id));
-      if (!belongsToOutlet) return false;
-
-      const role = (s.role || '').toLowerCase();
-      const isMultiOutlet = sOutlets.length > 1;
-      if (dept === 'Massage') return role.includes('therapist');
-      if (dept === 'Personal Training') return role.includes('trainer') || isMultiOutlet;
-      return true; // Membership shows all eligible staff
+      // For Personal Training, we might want to be more inclusive with staff assigned to the property
+      if (!belongsToOutlet && dept !== 'Personal Training') return false;
+      
+      return true; 
     });
+    console.log(`DEBUG: staffList after filtering (${dept}):`, staffList.length);
     const inventory = inventoryRes.data || [];
     const mTypes = mTypesRes.data || [];
     const mCats = categoriesRes.data || [];
@@ -564,9 +560,10 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     let sl = 1;
 
     if (dept === 'Massage' || dept === 'Personal Training') {
+      // Process Bookings
       bookings.filter(b => {
         const type = mTypes.find(m => m.id === b.massage_type_id) || inventory.find(i => i.id === b.inventory_item_id);
-        return type?.category === dept;
+        return type?.category?.trim() === dept;
       }).forEach(b => {
         const type = mTypes.find(m => m.id === b.massage_type_id) || inventory.find(i => i.id === b.inventory_item_id);
         if (!type) return;
@@ -582,21 +579,38 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         let incNet = 0;
         const staffSplits: Record<string, number> = {};
 
+        let remarks = !rule ? 'No Rule' : '';
         if (rule) {
           baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
           incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
           incNet = baseInc - incDiscVal;
           
           if (rule.distribution_type === 'Shared') {
-            const available = staffList.filter(s => !isStaffOnLeaveOnDate(s, b.date) && !isStaffOnProbationOnDate(s, b.date));
+            const available = staffList.filter(s => {
+              const isEligible = s.is_eligible_for_incentives !== false;
+              const sOutlets = getStaffOutlets(s);
+              return isEligible && sOutlets.includes(b.outlet_id) && !isStaffOnLeaveOnDate(s, b.date) && !isStaffOnProbationOnDate(s, b.date);
+            });
             if (available.length > 0) {
               const share = incNet / available.length;
               available.forEach(s => staffSplits[s.id] = share);
+            } else {
+              remarks = 'Shared: No eligible staff available';
             }
           } else if (b.therapist_id) {
-            const therapist = staffList.find(s => s.id === b.therapist_id);
-            if (therapist && !isStaffOnLeaveOnDate(therapist, b.date) && !isStaffOnProbationOnDate(therapist, b.date)) {
-              staffSplits[b.therapist_id] = incNet;
+            const trainerId = b.therapist_id;
+            const therapist = rawStaffList.find(s => s.id === trainerId);
+            if (therapist) {
+              const isEligible = therapist.is_eligible_for_incentives !== false;
+              if (!isEligible) {
+                remarks = 'Staff not eligible for incentives';
+              } else if (isStaffOnLeaveOnDate(therapist, b.date) || isStaffOnProbationOnDate(therapist, b.date)) {
+                remarks = 'Staff on Leave/Probation';
+              } else {
+                staffSplits[trainerId] = incNet;
+              }
+            } else {
+              remarks = 'Staff not found';
             }
           }
         }
@@ -607,7 +621,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           date: format(new Date(`${b.date}T${b.start_time}`), 'dd-MMM-yy'),
           guest_name: guestMap[b.guest_id] || 'Guest',
           item_name: type.name,
-          therapist_name: staffList.find(s => s.id === b.therapist_id)?.name || 'N/A',
+          therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (rawStaffList.find(s => s.id === b.therapist_id)?.name || 'N/A'),
           actual_price: actualPrice,
           discount_percent: discPercent,
           discount_amount: discountAmt,
@@ -616,12 +630,95 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           inc_discount_percent: discPercent,
           inc_discount_val: incDiscVal,
           inc_net: incNet,
-          remarks: !rule ? 'No Rule' : '',
+          remarks: remarks,
           check_no: (b as any).check_no || '',
           duration: type.duration_minutes ? `${type.duration_minutes}m` : '',
           staff_splits: staffSplits
         });
       });
+
+      // Process Sales for Personal Training
+      if (dept === 'Personal Training') {
+        const sales = (salesRes.data || []).filter(s => s.category === 'Personal Training');
+        sales.forEach(s => {
+          const item = inventory.find(i => i.id === s.item_id);
+          const rule = findBestRule(rules, dept, s.item_id || '', s.unit_price, 0);
+          
+          const actualPrice = s.gross_amount;
+          const discountAmt = s.discount_amount || 0;
+          const netRev = s.net_amount;
+          const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+          let baseInc = 0;
+          let incDiscVal = 0;
+          let incNet = 0;
+          const staffSplits: Record<string, number> = {};
+
+          let remarks = !rule ? 'No Rule' : '';
+          if (rule) {
+            baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+            incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
+            incNet = baseInc - incDiscVal;
+            
+            if (rule.distribution_type === 'Shared') {
+              const available = staffList.filter(st => {
+                const isEligible = st.is_eligible_for_incentives !== false;
+                const sOutlets = getStaffOutlets(st);
+                return isEligible && sOutlets.includes(s.outlet_id) && !isStaffOnLeaveOnDate(st, s.created_at) && !isStaffOnProbationOnDate(st, s.created_at);
+              });
+              if (available.length > 0) {
+                const share = incNet / available.length;
+                available.forEach(st => staffSplits[st.id] = share);
+              } else {
+                remarks = 'Shared: No eligible staff available';
+              }
+            } else {
+              const trainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+              if (trainerId) {
+                const staff = rawStaffList.find(st => st.id === trainerId);
+                if (staff) {
+                  const isEligible = staff.is_eligible_for_incentives !== false;
+                  if (!isEligible) {
+                    remarks = 'Staff not eligible for incentives';
+                  } else if (isStaffOnLeaveOnDate(staff, s.created_at) || isStaffOnProbationOnDate(staff, s.created_at)) {
+                    remarks = 'Staff on Leave/Probation';
+                  } else {
+                    staffSplits[trainerId] = incNet;
+                  }
+                } else {
+                  console.log(`DEBUG: Staff not found. Searching for ID: ${trainerId}. Available staff IDs:`, rawStaffList.map(s => s.id));
+                  remarks = `Staff not found (ID: ${trainerId})`;
+                }
+              } else {
+                remarks = 'No trainer/seller assigned';
+              }
+            }
+          }
+
+          const displayTrainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+          const trainerName = rawStaffList.find(st => st.id === displayTrainerId)?.name || (displayTrainerId ? `N/A (ID: ${displayTrainerId})` : 'N/A');
+          rows.push({
+            id: s.id,
+            sl_no: sl++,
+            date: format(new Date(s.created_at), 'dd-MMM-yy'),
+            guest_name: s.guest_name || 'Guest',
+            item_name: s.item_name || item?.name || 'PT Service',
+            therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : trainerName,
+            actual_price: actualPrice,
+            discount_percent: discPercent,
+            discount_amount: discountAmt,
+            net_revenue: netRev,
+            inc_total: baseInc,
+            inc_discount_percent: discPercent,
+            inc_discount_val: incDiscVal,
+            inc_net: incNet,
+            remarks: remarks,
+            check_no: s.check_no || '',
+            duration: 'Sale',
+            staff_splits: staffSplits
+          });
+        });
+      }
     } else if (dept === 'Membership') {
       members.forEach(m => {
         const cat = mCats.find(c => c.id === m.category_id);
@@ -640,26 +737,43 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const incNet = baseInc - incDiscVal;
 
         const staffSplits: Record<string, number> = {};
+        let remarks = m.remarks || '';
         if (rule.distribution_type === 'Shared') {
-          let available = staffList.filter(s => !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date));
+          const available = staffList.filter(s => {
+            const isEligible = s.is_eligible_for_incentives !== false;
+            const sOutlets = getStaffOutlets(s);
+            return isEligible && sOutlets.includes(m.outlet_id) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date);
+          });
           if (available.length > 0) {
             const share = incNet / available.length;
             available.forEach(s => staffSplits[s.id] = share);
+          } else {
+            remarks = 'Shared: No eligible staff available';
           }
         } else if (m.sales_rep_id) {
-          const staff = staffList.find(s => s.id === m.sales_rep_id);
-          if (staff && !isStaffOnLeaveOnDate(staff, m.start_date) && !isStaffOnProbationOnDate(staff, m.start_date)) {
-            staffSplits[m.sales_rep_id] = incNet;
+          const staff = rawStaffList.find(s => s.id === m.sales_rep_id);
+          if (staff) {
+            const isEligible = staff.is_eligible_for_incentives !== false;
+            if (!isEligible) {
+              remarks = 'Staff not eligible for incentives';
+            } else if (isStaffOnLeaveOnDate(staff, m.start_date) || isStaffOnProbationOnDate(staff, m.start_date)) {
+              remarks = 'Staff on Leave/Probation';
+            } else {
+              staffSplits[m.sales_rep_id] = incNet;
+            }
+          } else {
+            remarks = 'Staff not found';
           }
         }
 
-        rows.push({
-          id: m.id,
-          sl_no: sl++,
-          date: format(new Date(m.start_date), 'dd-MMM-yy'),
-          guest_name: m.guest_name,
-          item_name: cat?.name || m.category_id || 'Unknown Tier',
-          therapist_name: rule.distribution_type === 'Shared' ? 'Shared' : (staffList.find(s => s.id === m.sales_rep_id)?.name || 'N/A'),
+          const displaySalesRepId = [m.sales_rep_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+          rows.push({
+            id: m.id,
+            sl_no: sl++,
+            date: format(new Date(m.start_date), 'dd-MMM-yy'),
+            guest_name: m.guest_name,
+            item_name: cat?.name || m.category_id || 'Unknown Tier',
+            therapist_name: rule.distribution_type === 'Shared' ? 'Shared' : (rawStaffList.find(s => s.id === displaySalesRepId)?.name || 'N/A'),
           actual_price: actualPrice,
           discount_percent: discPercent,
           discount_amount: discountAmt,
@@ -668,7 +782,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           inc_discount_percent: discPercent,
           inc_discount_val: incDiscVal,
           inc_net: incNet,
-          remarks: m.remarks || '',
+          remarks: remarks,
           check_no: m.check_no || '',
           duration: cat?.name || '',
           staff_splits: staffSplits
@@ -678,12 +792,36 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     const totalIncentive = rows.reduce((sum, r) => sum + r.inc_net, 0);
 
+    // Filter staffList to only include relevant staff for this report
+    let finalStaffList = staffList.filter(s => {
+      const hasEarned = rows.some(r => r.staff_splits && r.staff_splits[s.id] > 0);
+      if (hasEarned) return true;
+      
+      // If no incentives earned, show all active staff in the department/role
+      const role = (s.role || '').toLowerCase();
+      console.log(`DEBUG: Staff ${s.name} (ID: ${s.id}) role: ${role}, dept: ${dept}`);
+      
+      if (dept === 'Massage') return role.includes('therapist') || role.includes('massage') || role.includes('spa');
+      if (dept === 'Personal Training') {
+        return role.includes('trainer') || role.includes('pt') || role.includes('coach') || 
+               role.includes('instructor') || role.includes('gym') || role.includes('fitness') ||
+               role.includes('sport') || role.includes('yoga') || role.includes('pool') || role.includes('lifeguard') ||
+               role.includes('personal');
+      }
+      return true; // Membership shows all
+    });
+
+    // If no staff found by role, show all active staff in the outlet as fallback
+    if (finalStaffList.length === 0) {
+      finalStaffList = staffList;
+    }
+
     return {
       rows,
       summary: {
         totalIncentive,
         count: rows.length,
-        staffList: staffList
+        staffList: finalStaffList
       }
     };
   }
@@ -1346,9 +1484,8 @@ export const generateReportPDF = (options: PDFOptions) => {
         head: head,
         body: body,
         foot: [[
-          { content: 'AGGREGATE INCENTIVE TOTALS', colSpan: 12, styles: { halign: 'right' } },
+          { content: 'AGGREGATE INCENTIVE TOTALS', colSpan: 13, styles: { halign: 'right' } },
           { content: formatCurrency(data.summary.totalIncentive), styles: { halign: 'right' } },
-          { content: '', styles: {} },
           ...staffTotals.map((t: string) => ({ content: t, styles: { halign: 'right' } }))
         ]],
         footStyles: { 
@@ -1383,7 +1520,11 @@ export const generateReportPDF = (options: PDFOptions) => {
           10: { halign: 'center', cellWidth: 8 },
           11: { halign: 'right', cellWidth: 14 },
           12: { halign: 'right', fontStyle: 'bold', cellWidth: 14 },
-          13: { fontSize: 4, cellWidth: 15 }
+          13: { fontSize: 4, cellWidth: 15 },
+          ...staffList.reduce((acc: any, _, idx: number) => {
+            acc[14 + idx] = { halign: 'right', cellWidth: 12 };
+            return acc;
+          }, {})
         },
         margin: { left: margin, right: margin }
       });
@@ -1655,6 +1796,19 @@ export function findBestRule(rules: any[], department: string, itemId: string, p
   // For now, just return the first rule for that department if no exact match
   const deptRule = rules.find(r => r.applies_to === department && (r.target_id === 'all' || !r.target_id));
   return deptRule;
+}
+
+export function getStaffOutlets(s: any): string[] {
+  if (Array.isArray(s.outlet_ids)) return s.outlet_ids;
+  if (typeof s.outlet_ids === 'string') {
+    try {
+      return JSON.parse(s.outlet_ids);
+    } catch (e) {
+      return [s.outlet_ids];
+    }
+  }
+  if (s.outlet_id) return [s.outlet_id];
+  return [];
 }
 
 export function isStaffOnLeaveOnDate(staff: any, dateStr: string) {

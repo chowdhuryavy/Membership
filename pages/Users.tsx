@@ -3,10 +3,13 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabase';
-import { UserProfile, Role, Outlet, Permission, UserPermissionOverride } from '../types';
+import { UserProfile, Role, Outlet, Permission, UserPermissionOverride, Staff } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command, Search, Filter, ShieldAlert, Check, ChevronRight } from 'lucide-react';
+import { getReportData } from '../src/shared/reportLogic';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command, Search, Filter, ShieldAlert, Check, ChevronRight, Award, TrendingUp, Sparkles, User as UserIcon, Calendar } from 'lucide-react';
+import { format } from 'date-fns';
+import { motion, AnimatePresence } from 'motion/react';
 
 const UserDetail = ({ 
   user, 
@@ -25,8 +28,77 @@ const UserDetail = ({
   onDelete: (id: string) => void,
   onRefresh: () => void
 }) => {
-    const { hasPermission, permissionRegistry } = useSettings();
+    const { hasPermission, permissionRegistry, settings, formatMoney } = useSettings();
     const { user: currentUser, isSuperAdmin } = useAuth();
+    
+    const [linkedStaff, setLinkedStaff] = useState<Staff | null>(null);
+    const [incentiveData, setIncentiveData] = useState<any[]>([]);
+    const [incentiveSummary, setIncentiveSummary] = useState<any>({});
+    const [incentiveLoading, setIncentiveLoading] = useState(false);
+    const [incentiveDate, setIncentiveDate] = useState(new Date());
+
+    useEffect(() => {
+      findLinkedStaff();
+    }, [user.email]);
+
+    useEffect(() => {
+      if (linkedStaff) {
+        loadIncentives();
+      }
+    }, [linkedStaff, incentiveDate]);
+
+    const findLinkedStaff = async () => {
+      try {
+        // Use currentProperty.id from settings if available, otherwise fetch all staff
+        const propId = user.allowed_outlets?.[0] ? outlets.find(o => o.id === user.allowed_outlets[0])?.property_id : '';
+        const staffList = await db.getStaff(propId || '', !propId);
+        const match = staffList.find(s => s.email?.toLowerCase() === user.email.toLowerCase());
+        setLinkedStaff(match || null);
+      } catch (error) {
+        console.error("Error finding linked staff:", error);
+      }
+    };
+
+    const loadIncentives = async () => {
+      if (!linkedStaff) return;
+      setIncentiveLoading(true);
+      try {
+        const propertyId = linkedStaff.property_id;
+        const depts: ('Massage' | 'Membership' | 'Personal Training')[] = ['Massage', 'Membership', 'Personal Training'];
+        let allRows: any[] = [];
+        let totalInc = 0;
+
+        for (const dept of depts) {
+          const result = await getReportData({
+            supabase,
+            propertyId,
+            outletId: 'all',
+            reportType: 'incentives',
+            date: incentiveDate,
+            incentiveDept: dept
+          });
+
+          const staffRows = result.rows.filter(r => r.staff_splits && r.staff_splits[linkedStaff.id]);
+          const rowsWithDept = staffRows.map(r => ({
+            ...r,
+            department: dept,
+            my_incentive: r.staff_splits[linkedStaff.id]
+          }));
+
+          allRows = [...allRows, ...rowsWithDept];
+          totalInc += rowsWithDept.reduce((sum, r) => sum + r.my_incentive, 0);
+        }
+
+        allRows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setIncentiveData(allRows);
+        setIncentiveSummary({ total: totalInc, count: allRows.length });
+      } catch (error) {
+        console.error("Failed to load incentives:", error);
+      } finally {
+        setIncentiveLoading(false);
+      }
+    };
+
     const getRoleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || 'Unknown';
     const isUnlinked = !user.auth_id;
 
@@ -205,6 +277,101 @@ const UserDetail = ({
                             )}
                         </CardContent>
                     </Card>
+
+                    {linkedStaff && (
+                      <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
+                        <CardHeader className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center border border-indigo-100 shadow-sm"><Award className="w-5 h-5 text-indigo-600" /></div>
+                            <div>
+                                <CardTitle className="text-lg font-black tracking-tight">Incentive Earnings</CardTitle>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Linked Staff Performance Data</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => setIncentiveDate(new Date(incentiveDate.getFullYear(), incentiveDate.getMonth() - 1, 1))}
+                              className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-400"
+                            >
+                              <RefreshCcw className="w-3.5 h-3.5 rotate-[-90deg]" />
+                            </button>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 min-w-[80px] text-center">
+                              {format(incentiveDate, 'MMM yyyy')}
+                            </span>
+                            <button 
+                              onClick={() => setIncentiveDate(new Date(incentiveDate.getFullYear(), incentiveDate.getMonth() + 1, 1))}
+                              className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-400"
+                            >
+                              <RefreshCcw className="w-3.5 h-3.5 rotate-[90deg]" />
+                            </button>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-8 space-y-6">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Earnings</div>
+                              <div className="text-2xl font-black text-white">{formatMoney(incentiveSummary.total)}</div>
+                            </div>
+                            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Services</div>
+                              <div className="text-2xl font-black text-slate-900">{incentiveSummary.count || 0}</div>
+                            </div>
+                          </div>
+
+                          {incentiveLoading ? (
+                            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                              <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Calculating...</p>
+                            </div>
+                          ) : incentiveData.length === 0 ? (
+                            <div className="bg-slate-50 p-8 rounded-2xl border border-slate-200/60 text-center">
+                              <Award className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No incentives for this period</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                              <AnimatePresence mode="popLayout">
+                                {incentiveData.map((item, index) => (
+                                  <motion.div 
+                                    key={item.id}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: index * 0.02 }}
+                                    className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center group hover:border-indigo-200 transition-all"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className={`p-2 rounded-lg ${
+                                        item.department === 'Massage' ? 'bg-indigo-50 text-indigo-600' :
+                                        item.department === 'Membership' ? 'bg-emerald-50 text-emerald-600' :
+                                        'bg-amber-50 text-amber-600'
+                                      }`}>
+                                        {item.department === 'Massage' ? <Sparkles className="w-4 h-4" /> :
+                                         item.department === 'Membership' ? <TrendingUp className="w-4 h-4" /> :
+                                         <Award className="w-4 h-4" />}
+                                      </div>
+                                      <div>
+                                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">{item.item_name}</h4>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                          <Calendar className="w-2.5 h-2.5 text-slate-300" />
+                                          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{item.date}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-col items-end">
+                                      <p className="text-sm font-black text-indigo-600">{formatMoney(item.my_incentive)}</p>
+                                      <div className="flex items-center gap-2 mt-1 opacity-60">
+                                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Price: {formatMoney(item.actual_price)}</span>
+                                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Net: {formatMoney(item.net_revenue)}</span>
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                ))}
+                              </AnimatePresence>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
                 </div>
             </div>
         </div>
