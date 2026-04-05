@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { Staff, MassageBooking, MassageType, Guest, MassageRoom } from '../types';
 import { format, parseISO, addDays, subDays } from 'date-fns';
-import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, KeyRound, X, ShieldCheck, Building2, Menu, Eye, EyeOff, Check, AlertCircle, Sparkles } from 'lucide-react';
+import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, KeyRound, X, ShieldCheck, Building2, Menu, Eye, EyeOff, Check, AlertCircle, Sparkles, Award, TrendingUp } from 'lucide-react';
 import { Button, Input } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
 import { motion, AnimatePresence } from 'motion/react';
+import { getReportData } from '../src/shared/reportLogic';
+import { supabase } from '../services/supabase';
 
 const StaffSchedule = () => {
   const [staff, setStaff] = useState<Staff | null>(null);
@@ -17,8 +19,14 @@ const StaffSchedule = () => {
   const [inventory, setInventory] = useState<any[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [rooms, setRooms] = useState<MassageRoom[]>([]);
+  const [outlets, setOutlets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'incentives'>('daily');
+  const [monthlyBookings, setMonthlyBookings] = useState<MassageBooking[]>([]);
+  const [incentiveData, setIncentiveData] = useState<any[]>([]);
+  const [incentiveSummary, setIncentiveSummary] = useState<any>({});
+  const [incentiveLoading, setIncentiveLoading] = useState(false);
   
   const { settings } = useSettings();
 
@@ -62,20 +70,32 @@ const StaffSchedule = () => {
 
   useEffect(() => {
     if (staff) {
-      loadSchedule();
+      if (viewMode === 'daily') {
+        loadSchedule();
+      } else if (viewMode === 'monthly') {
+        loadMonthlySchedule();
+      } else if (viewMode === 'incentives') {
+        loadIncentives();
+      }
       loadPropertyDetails();
 
       // Real-time updates
       const unsubscribe = db.subscribeToBookings(staff.outlet_id, (payload) => {
         console.log('Real-time booking update received:', payload.eventType);
-        loadSchedule();
+        if (viewMode === 'daily') {
+          loadSchedule();
+        } else if (viewMode === 'monthly') {
+          loadMonthlySchedule();
+        } else if (viewMode === 'incentives') {
+          loadIncentives();
+        }
       });
 
       return () => {
         unsubscribe();
       };
     }
-  }, [staff, currentDate]);
+  }, [staff, currentDate, viewMode]);
 
   const loadPropertyDetails = async () => {
     if (!staff) return;
@@ -100,17 +120,16 @@ const StaffSchedule = () => {
     try {
       const dateStr = format(currentDate, 'yyyy-MM-dd');
       
-      // First get the outlet to find the property_id for guests
-      const outlets = await db.getOutlets();
-      const myOutlet = outlets.find(o => o.id === staff.outlet_id);
-      const propertyId = myOutlet?.property_id || staff.outlet_id;
+      const propertyId = staff.property_id;
+      const sOutlets = Array.isArray(staff.outlet_ids) ? staff.outlet_ids : ((staff as any).outlet_id ? [(staff as any).outlet_id] : []);
 
-      const [allBookings, allTreatments, allInventory, allGuests, allRooms] = await Promise.all([
-        db.getMassageBookingsByDate(staff.outlet_id, false, dateStr),
-        db.getMassageTypes(staff.outlet_id),
-        db.getInventory(staff.outlet_id),
+      const [allBookings, allTreatments, allInventory, allGuests, allRooms, allOutlets] = await Promise.all([
+        db.getMassageBookingsByDate(propertyId, true, dateStr),
+        db.getMassageTypes(propertyId, true, sOutlets),
+        db.getInventory(propertyId, true),
         db.getGuests(propertyId),
-        db.getMassageRooms(staff.outlet_id)
+        db.getMassageRooms(undefined, propertyId),
+        db.getOutlets()
       ]);
 
       // Filter bookings for this specific therapist
@@ -124,8 +143,100 @@ const StaffSchedule = () => {
       setInventory(allInventory);
       setGuests(allGuests);
       setRooms(allRooms);
+      setOutlets(allOutlets);
     } catch (error) {
       console.error("Failed to load schedule:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadIncentives = async () => {
+    if (!staff) return;
+    setIncentiveLoading(true);
+    try {
+      const propertyId = staff.property_id;
+      const sOutlets = Array.isArray(staff.outlet_ids) ? staff.outlet_ids : ((staff as any).outlet_id ? [(staff as any).outlet_id] : []);
+      
+      // We need to fetch incentives for each department and combine them
+      const depts: ('Massage' | 'Membership' | 'Personal Training')[] = ['Massage', 'Membership', 'Personal Training'];
+      let allRows: any[] = [];
+      let totalInc = 0;
+
+      for (const dept of depts) {
+        // We'll just pass 'all' for outletId to get all outlets for this property, 
+        // then filter by staff id. The reportLogic handles 'all' outlets.
+        const result = await getReportData({
+          supabase,
+          propertyId,
+          outletId: 'all',
+          reportType: 'incentives',
+          date: currentDate,
+          incentiveDept: dept
+        });
+
+        // Filter rows for this specific staff member
+        const staffRows = result.rows.filter(r => r.staff_splits && r.staff_splits[staff.id]);
+        
+        // Add department info to each row
+        const rowsWithDept = staffRows.map(r => ({
+          ...r,
+          department: dept,
+          my_incentive: r.staff_splits[staff.id]
+        }));
+
+        allRows = [...allRows, ...rowsWithDept];
+        totalInc += rowsWithDept.reduce((sum, r) => sum + r.my_incentive, 0);
+      }
+
+      // Sort by date
+      allRows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      setIncentiveData(allRows);
+      setIncentiveSummary({ total: totalInc, count: allRows.length });
+    } catch (error) {
+      console.error("Failed to load incentives:", error);
+    } finally {
+      setIncentiveLoading(false);
+    }
+  };
+
+  const loadMonthlySchedule = async () => {
+    if (!staff) return;
+    setLoading(true);
+    try {
+      const startOfMonth = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), 'yyyy-MM-dd');
+      const endOfMonth = format(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), 'yyyy-MM-dd');
+      
+      const propertyId = staff.property_id;
+      const sOutlets = Array.isArray(staff.outlet_ids) ? staff.outlet_ids : ((staff as any).outlet_id ? [(staff as any).outlet_id] : []);
+
+      const [allBookings, allTreatments, allInventory, allGuests, allRooms, allOutlets] = await Promise.all([
+        db.getMassageBookingsByDateRange(propertyId, true, startOfMonth, endOfMonth),
+        db.getMassageTypes(propertyId, true, sOutlets),
+        db.getInventory(propertyId, true),
+        db.getGuests(propertyId),
+        db.getMassageRooms(undefined, propertyId),
+        db.getOutlets()
+      ]);
+
+      // Filter bookings for this specific therapist
+      const myBookings = allBookings.filter(b => b.therapist_id === staff.id && b.status !== 'cancelled');
+      
+      // Sort by date and time
+      myBookings.sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return a.start_time.localeCompare(b.start_time);
+      });
+
+      setMonthlyBookings(myBookings);
+      setTreatments(allTreatments);
+      setInventory(allInventory);
+      setGuests(allGuests);
+      setRooms(allRooms);
+      setOutlets(allOutlets);
+    } catch (error) {
+      console.error("Failed to load monthly schedule:", error);
     } finally {
       setLoading(false);
     }
@@ -210,13 +321,34 @@ const StaffSchedule = () => {
         <div className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 px-2">Main Menu</div>
         <button 
           onClick={() => {
+            setViewMode('daily');
             setCurrentDate(new Date());
             setIsSidebarOpen(false);
           }}
-          className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-indigo-600 text-white font-bold text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20"
+          className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'daily' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
         >
           <CalendarIcon className="w-3.5 h-3.5" /> Today's Schedule
         </button>
+        <button 
+          onClick={() => {
+            setViewMode('monthly');
+            setIsSidebarOpen(false);
+          }}
+          className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'monthly' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
+        >
+          <CalendarIcon className="w-3.5 h-3.5" /> Monthly Summary
+        </button>
+        {(settings?.staff_portal_settings?.show_incentives ?? true) && (
+          <button 
+            onClick={() => {
+              setViewMode('incentives');
+              setIsSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'incentives' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
+          >
+            <Award className="w-3.5 h-3.5" /> Incentive Earnings
+          </button>
+        )}
       </nav>
 
       <div className="pt-4 mt-4 border-t border-white/10 space-y-1">
@@ -306,7 +438,7 @@ const StaffSchedule = () => {
             className="hidden lg:block mb-8"
           >
             <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight mb-2">Welcome Back, {staff.name.split(' ')[0]}</h1>
-            <p className="text-slate-500 font-medium">Here is your schedule for today.</p>
+            <p className="text-slate-500 font-medium">Here is your {viewMode === 'daily' ? 'schedule for today' : viewMode === 'monthly' ? 'monthly summary' : 'incentive earnings'}.</p>
           </motion.div>
         
         {/* Date Navigation */}
@@ -315,37 +447,220 @@ const StaffSchedule = () => {
           animate={{ opacity: 1, scale: 1 }}
           className="flex items-center justify-between bg-white p-2 rounded-2xl shadow-sm border border-slate-200/60"
         >
-          <button onClick={() => setCurrentDate(subDays(currentDate, 1))} className="p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-500 hover:text-indigo-600">
+          <button onClick={() => setCurrentDate(viewMode === 'daily' ? subDays(currentDate, 1) : new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-500 hover:text-indigo-600">
             <ChevronLeft className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-2 font-black uppercase tracking-widest text-sm text-slate-800">
             <CalendarIcon className="w-4 h-4 text-indigo-600" />
-            {format(currentDate, 'EEE, dd MMM yyyy')}
+            {viewMode === 'daily' ? format(currentDate, 'EEE, dd MMM yyyy') : format(currentDate, 'MMMM yyyy')}
           </div>
-          <button onClick={() => setCurrentDate(addDays(currentDate, 1))} className="p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-500 hover:text-indigo-600">
+          <button onClick={() => setCurrentDate(viewMode === 'daily' ? addDays(currentDate, 1) : new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-500 hover:text-indigo-600">
             <ChevronRight className="w-5 h-5" />
           </button>
         </motion.div>
 
         <div className="flex justify-between items-end px-1 mb-2">
           <div>
-            <h2 className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Daily Appointments</h2>
+            <h2 className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{viewMode === 'daily' ? 'Daily Appointments' : viewMode === 'monthly' ? 'Monthly Performance' : 'Incentive Earnings'}</h2>
             <div className="h-1 w-8 bg-indigo-500 rounded-full"></div>
           </div>
           <button 
-            onClick={loadSchedule} 
-            disabled={loading} 
+            onClick={viewMode === 'daily' ? loadSchedule : viewMode === 'monthly' ? loadMonthlySchedule : loadIncentives} 
+            disabled={loading || incentiveLoading} 
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:bg-indigo-100 rounded-lg transition-all active:scale-95 disabled:opacity-50"
           >
-            <RefreshCcw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            <RefreshCcw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${loading || incentiveLoading ? 'animate-spin' : ''}`} /> Refresh
           </button>
         </div>
 
         {/* Schedule List */}
-        {loading ? (
+        {loading || incentiveLoading ? (
           <div className="flex flex-col items-center justify-center p-12 space-y-4">
             <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Syncing Schedule...</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Syncing Data...</p>
+          </div>
+        ) : viewMode === 'incentives' ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl"></div>
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Total Earnings</div>
+                <div className="text-3xl font-black text-white relative z-10">{settings?.currency_id || '$'}{incentiveSummary.total?.toFixed(2) || '0.00'}</div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Services</div>
+                <div className="text-3xl font-black text-slate-900">{incentiveSummary.count || 0}</div>
+              </div>
+            </div>
+
+            {incentiveData.length === 0 ? (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white p-12 rounded-[2rem] border border-slate-200/60 text-center shadow-sm"
+              >
+                <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100">
+                  <Award className="w-8 h-8 text-slate-300" />
+                </div>
+                <h3 className="text-base font-black uppercase tracking-widest text-slate-900">No Earnings Found</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xs mx-auto leading-relaxed">You haven't earned any incentives for this month yet.</p>
+              </motion.div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                <AnimatePresence mode="popLayout">
+                  {incentiveData.map((item, index) => (
+                    <motion.div 
+                      key={item.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ delay: index * 0.02 }}
+                      className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300"
+                    >
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-xl ${
+                            item.department === 'Massage' ? 'bg-indigo-50 text-indigo-600' :
+                            item.department === 'Membership' ? 'bg-emerald-50 text-emerald-600' :
+                            'bg-amber-50 text-amber-600'
+                          }`}>
+                            {item.department === 'Massage' ? <Sparkles className="w-5 h-5" /> :
+                             item.department === 'Membership' ? <TrendingUp className="w-5 h-5" /> :
+                             <Award className="w-5 h-5" />}
+                          </div>
+                          <div>
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{item.department}</p>
+                            <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{item.item_name}</h4>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Your Share</p>
+                          <p className="text-lg font-black text-indigo-600">{settings?.currency_id || '$'}{item.my_incentive.toFixed(2)}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+                        <div className="flex items-center gap-2">
+                          <CalendarIcon className="w-3.5 h-3.5 text-slate-300" />
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.date}</span>
+                        </div>
+                        <div className="flex items-center gap-2 justify-end">
+                          <User className="w-3.5 h-3.5 text-slate-300" />
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[100px]">{item.guest_name}</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
+          </div>
+        ) : viewMode === 'monthly' ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Bookings</div>
+                <div className="text-3xl font-black text-slate-900">{monthlyBookings.length}</div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Completed</div>
+                <div className="text-3xl font-black text-emerald-600">{monthlyBookings.filter(b => b.status === 'completed').length}</div>
+              </div>
+            </div>
+            
+            {monthlyBookings.length === 0 ? (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white p-12 rounded-[2rem] border border-slate-200/60 text-center shadow-sm"
+              >
+                <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100">
+                  <CalendarIcon className="w-8 h-8 text-slate-300" />
+                </div>
+                <h3 className="text-base font-black uppercase tracking-widest text-slate-900">No Appointments</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xs mx-auto leading-relaxed">You have no scheduled treatments for this month.</p>
+              </motion.div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                <AnimatePresence mode="popLayout">
+                  {monthlyBookings.map((booking, index) => {
+                    const treatment = treatments.find(t => t.id === booking.massage_type_id) || 
+                                     inventory.find(i => i.id === booking.inventory_item_id);
+                    const guest = guests.find(g => g.id === booking.guest_id);
+                    const room = rooms.find(r => r.id === booking.room_id);
+                    const outlet = outlets.find(o => o.id === booking.outlet_id);
+
+                    return (
+                      <motion.div 
+                        key={booking.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ delay: index * 0.02 }}
+                        className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300"
+                      >
+                      <div className={`absolute left-0 top-0 bottom-0 w-1 sm:w-2 ${
+                        booking.status === 'completed' ? 'bg-emerald-500' : 
+                        booking.status === 'no-show' ? 'bg-red-500' : 
+                        'bg-indigo-500 animate-pulse'
+                      }`}></div>
+                      
+                      <div className="flex justify-between items-start mb-3 sm:mb-5 pl-1 sm:pl-2">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <div className="p-1.5 sm:p-2 bg-indigo-50 rounded-lg sm:rounded-xl text-indigo-600 group-hover:scale-110 transition-transform">
+                            <CalendarIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                          </div>
+                          <div>
+                            <span className="font-black text-sm sm:text-lg tracking-tight text-slate-900 block leading-none mb-1">
+                              {format(parseISO(booking.date), 'MMM dd')}
+                            </span>
+                            <span className="font-bold text-xs sm:text-sm tracking-tight text-slate-500 block leading-none">
+                              {booking.start_time.substring(0, 5)} <span className="text-slate-300 mx-0.5">-</span> {booking.end_time.substring(0, 5)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <div className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest ${
+                            booking.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 
+                            booking.status === 'no-show' ? 'bg-red-50 text-red-600 border border-red-100' : 
+                            'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                          }`}>
+                            {booking.status}
+                          </div>
+                          {outlet && (
+                            <span className="text-[6px] sm:text-[8px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-50/50 px-2 py-0.5 rounded-full border border-indigo-100/50">
+                              {outlet.name}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="pl-1 sm:pl-2 space-y-2 sm:space-y-3">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
+                          <span className="text-xs sm:text-sm font-bold text-slate-700">{treatment?.name || 'Unknown Treatment'}</span>
+                        </div>
+                        
+                        {guest && (
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
+                            <span className="text-xs sm:text-sm font-bold text-slate-600">{guest.first_name} {guest.last_name}</span>
+                          </div>
+                        )}
+
+                        {room && (
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
+                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-500">{room.name}</span>
+                          </div>
+                        )}
+                      </div>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
         ) : bookings.length === 0 ? (
           <motion.div 
@@ -367,6 +682,7 @@ const StaffSchedule = () => {
                                  inventory.find(i => i.id === booking.inventory_item_id);
                 const guest = guests.find(g => g.id === booking.guest_id);
                 const room = rooms.find(r => r.id === booking.room_id);
+                const outlet = outlets.find(o => o.id === booking.outlet_id);
 
                 return (
                   <motion.div 
@@ -395,13 +711,20 @@ const StaffSchedule = () => {
                         <p className="text-[6px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Scheduled Time</p>
                       </div>
                     </div>
-                    <span className={`text-[7px] sm:text-[10px] font-black uppercase tracking-widest px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border shadow-sm ${
-                      booking.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
-                      booking.status === 'no-show' ? 'bg-red-50 text-red-700 border-red-100' : 
-                      'bg-indigo-50 text-indigo-700 border-indigo-100'
-                    }`}>
-                      {booking.status}
-                    </span>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span className={`text-[7px] sm:text-[10px] font-black uppercase tracking-widest px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border shadow-sm ${
+                        booking.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
+                        booking.status === 'no-show' ? 'bg-red-50 text-red-700 border-red-100' : 
+                        'bg-indigo-50 text-indigo-700 border-indigo-100'
+                      }`}>
+                        {booking.status}
+                      </span>
+                      {outlet && (
+                        <span className="text-[6px] sm:text-[8px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-50/50 px-2 py-0.5 rounded-full border border-indigo-100/50">
+                          {outlet.name}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="pl-1 sm:pl-2">

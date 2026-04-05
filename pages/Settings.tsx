@@ -273,6 +273,7 @@ const SettingsPage = () => {
       { id: 'currency', label: 'Monetary Standards', visible: hasPermission(user?.role_id || '', 'settings:view_currency'), icon: Globe },
       { id: 'navigation', label: 'UI Architecture', visible: hasPermission(user?.role_id || '', 'settings:view_navigation'), icon: ListOrdered },
       { id: 'functions', label: 'Feature Visibility', visible: isSuper || hasPermission(user?.role_id || '', 'settings:manage_visibility'), icon: ShieldAlert },
+      { id: 'staff_portal', label: 'Staff Portal', visible: hasPermission(user?.role_id || '', 'settings:view_global'), icon: Users },
       { id: 'maintenance', label: 'Maintenance', visible: hasPermission(user?.role_id || '', 'settings:view_maintenance'), icon: Zap },
       
       // Accessible to others with permission
@@ -1130,6 +1131,52 @@ const SettingsPage = () => {
                                   }
                               }} 
                           />
+                      </CardContent>
+                  </Card>
+              )}
+
+              {activeTab === 'staff_portal' && (
+                  <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
+                          <div className="flex items-center gap-5">
+                              <Users className="w-8 h-8 text-indigo-600" />
+                              <div>
+                                  <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Staff Portal Configuration</CardTitle>
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Control what staff members can see and do in their portal</p>
+                              </div>
+                          </div>
+                      </CardHeader>
+                      <CardContent className="p-8 space-y-6">
+                          <div className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                              <div>
+                                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Show Incentives</h3>
+                                  <p className="text-xs text-slate-500 mt-1">Allow staff to view their earned incentives for the month</p>
+                              </div>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                  <input 
+                                      type="checkbox" 
+                                      className="sr-only peer"
+                                      checked={settings?.staff_portal_settings?.show_incentives ?? true}
+                                      onChange={async (e) => {
+                                          try {
+                                              const updatedSettings = { 
+                                                  ...settings!, 
+                                                  staff_portal_settings: {
+                                                      ...(settings?.staff_portal_settings || {}),
+                                                      show_incentives: e.target.checked
+                                                  }
+                                              };
+                                              await db.updateSettings(updatedSettings);
+                                              await refreshSettings();
+                                              showStatus('Staff portal settings updated successfully.', 'success');
+                                          } catch (err: any) {
+                                              showStatus('Failed to update settings: ' + err.message, 'error');
+                                          }
+                                      }}
+                                  />
+                                  <div className="w-14 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-indigo-600"></div>
+                              </label>
+                          </div>
                       </CardContent>
                   </Card>
               )}

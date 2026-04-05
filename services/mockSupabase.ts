@@ -486,14 +486,14 @@ class DatabaseService {
             if (isProperty) {
                 if (limitToOutletIds && limitToOutletIds.length > 0) {
                     staffList = staffList.filter(s => {
-                        const sOutlets = Array.isArray(s.outlet_ids) ? s.outlet_ids : (s.outlet_id ? [s.outlet_id] : []);
+                        const sOutlets = Array.isArray(s.outlet_ids) ? s.outlet_ids : ((s as any).outlet_id ? [(s as any).outlet_id] : []);
                         return limitToOutletIds.some(id => sOutlets.includes(id));
                     });
                 }
             } else {
                 // scopeId is an outlet ID
                 staffList = staffList.filter(s => {
-                    const sOutlets = Array.isArray(s.outlet_ids) ? s.outlet_ids : (s.outlet_id ? [s.outlet_id] : []);
+                    const sOutlets = Array.isArray(s.outlet_ids) ? s.outlet_ids : ((s as any).outlet_id ? [(s as any).outlet_id] : []);
                     return sOutlets.includes(scopeId);
                 });
             }

@@ -168,6 +168,7 @@ export interface CompanySettings {
   navigation_order?: string[];
   restricted_permissions?: string[];
   conditions?: string;
+  staff_portal_settings?: Record<string, boolean>;
 }
 
 export enum MemberStatus {
