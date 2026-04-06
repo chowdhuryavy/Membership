@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Button } from '../components/ui';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Sparkles, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Sparkles, ShieldAlert, CheckCircle2, UserCircle2 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 
 const Login = () => {
@@ -104,6 +104,15 @@ const Login = () => {
         </div>
 
         <div className="flex flex-col justify-start p-8 md:p-12 lg:p-16 pt-10 md:pt-16 bg-white relative">
+          {/* Staff Portal Link Icon */}
+          <button 
+            type="button"
+            onClick={() => navigate('/staff-login')}
+            className="absolute top-8 right-8 p-3 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all group"
+            title="Staff Portal"
+          >
+            <UserCircle2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+          </button>
           
           <div className="mb-6 flex flex-col items-center text-center">
              {settings?.logo_url ? (
@@ -191,16 +200,6 @@ const Login = () => {
                     Authenticate <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </span>
                 </Button>
-              </div>
-              
-              <div className="pt-6 text-center">
-                <button 
-                  type="button" 
-                  onClick={() => navigate('/staff-login')}
-                  className="text-[10px] font-black text-slate-400 hover:text-indigo-600 uppercase tracking-widest transition-colors"
-                >
-                  Staff Portal Access
-                </button>
               </div>
             </form>
           ) : (

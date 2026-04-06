@@ -11,69 +11,112 @@ import { getReportData } from '../src/shared/reportLogic';
 import { supabase } from '../services/supabase';
 
 const LoadingScreen = () => (
-  <div className="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center overflow-hidden">
+  <div className="fixed inset-0 z-[100] bg-slate-950 flex items-center justify-center overflow-hidden">
+    {/* Dynamic Background Nebula */}
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-500/20 rounded-full blur-[120px] animate-pulse"></div>
-      <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-500/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }}></div>
+      <motion.div 
+        animate={{ 
+          scale: [1, 1.2, 1],
+          opacity: [0.1, 0.2, 0.1]
+        }}
+        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] bg-indigo-500/20 rounded-full blur-[120px]"
+      />
+      <motion.div 
+        animate={{ 
+          scale: [1.2, 1, 1.2],
+          opacity: [0.1, 0.2, 0.1]
+        }}
+        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute bottom-[-10%] left-[-10%] w-[60%] h-[60%] bg-emerald-500/20 rounded-full blur-[120px]"
+      />
     </div>
     
     <div className="relative flex flex-col items-center">
       <motion.div 
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="relative"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
+        className="flex flex-col items-center"
       >
-        <div className="text-8xl font-black text-white tracking-tighter flex items-baseline">
-          <motion.span
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.2, duration: 0.5 }}
+        {/* Professional Logo Mark */}
+        <div className="relative mb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1.2 }}
+            className="relative"
           >
-            H
-          </motion.span>
-          <motion.span
-            initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.4, duration: 0.5 }}
-            className="text-indigo-500"
-          >
-            C
-          </motion.span>
-        </div>
-        
-        <motion.div 
-          initial={{ width: 0 }}
-          animate={{ width: '100%' }}
-          transition={{ delay: 0.6, duration: 1, ease: "easeInOut" }}
-          className="h-1 bg-gradient-to-r from-indigo-500 to-emerald-500 mt-2 rounded-full"
-        />
-      </motion.div>
-      
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1, duration: 0.5 }}
-        className="mt-8 flex flex-col items-center gap-2"
-      >
-        <div className="flex gap-1.5">
-          {[0, 1, 2].map((i) => (
-            <motion.div
-              key={i}
-              animate={{
-                scale: [1, 1.5, 1],
-                opacity: [0.3, 1, 0.3],
-              }}
-              transition={{
-                duration: 1,
-                repeat: Infinity,
-                delay: i * 0.2,
-              }}
-              className="w-2 h-2 bg-indigo-500 rounded-full"
+            {/* The Monogram */}
+            <div className="flex items-center justify-center">
+              <div className="relative flex items-baseline">
+                <span className="text-8xl font-light text-white tracking-[-0.05em] drop-shadow-2xl">H</span>
+                <span className="text-8xl font-black text-indigo-500 tracking-[-0.05em] -ml-1 drop-shadow-[0_0_15px_rgba(99,102,241,0.3)]">C</span>
+                <span className="text-8xl font-thin text-emerald-500 tracking-[-0.05em] -ml-1 drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]">M</span>
+              </div>
+              
+              {/* Minimalist Accents */}
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: '40px' }}
+                transition={{ delay: 1, duration: 0.8 }}
+                className="absolute -top-4 left-0 h-[2px] bg-indigo-500/50"
+              />
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: '40px' }}
+                transition={{ delay: 1.2, duration: 0.8 }}
+                className="absolute -bottom-4 right-0 h-[2px] bg-emerald-500/50"
+              />
+            </div>
+            
+            {/* Elegant Rotating Frame */}
+            <div className="absolute inset-[-60px] border border-white/[0.03] rounded-full" />
+            <motion.div 
+              animate={{ rotate: 360 }}
+              transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+              className="absolute inset-[-60px] border-t border-white/10 rounded-full"
             />
-          ))}
+            <motion.div 
+              animate={{ rotate: -360 }}
+              transition={{ duration: 35, repeat: Infinity, ease: "linear" }}
+              className="absolute inset-[-80px] border-b border-white/[0.05] rounded-full"
+            />
+          </motion.div>
         </div>
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-4">Health Club</span>
+
+        <div className="flex flex-col items-center gap-6">
+          <div className="flex flex-col items-center">
+            <motion.h2 
+              initial={{ opacity: 0, letterSpacing: '0.4em' }}
+              animate={{ opacity: 1, letterSpacing: '1.2em' }}
+              transition={{ duration: 2, delay: 0.5 }}
+              className="text-[9px] font-medium text-white/30 uppercase ml-[1.2em] tracking-[1.2em]"
+            >
+              Health Club Management
+            </motion.h2>
+            <div className="flex items-center gap-3 mt-4">
+              <div className="h-[1px] w-8 bg-gradient-to-r from-transparent to-white/10" />
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.5 }}
+                className="text-[7px] font-bold text-indigo-400/40 uppercase tracking-[0.5em]"
+              >
+                Premium Staff Portal
+              </motion.p>
+              <div className="h-[1px] w-8 bg-gradient-to-l from-transparent to-white/10" />
+            </div>
+          </div>
+          
+          <div className="w-32 h-[1px] bg-white/5 relative overflow-hidden rounded-full mt-4">
+            <motion.div 
+              animate={{ left: ['-100%', '100%'] }}
+              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+            />
+          </div>
+        </div>
       </motion.div>
     </div>
   </div>
@@ -97,8 +140,41 @@ const StaffSchedule = () => {
   const [incentiveData, setIncentiveData] = useState<any[]>([]);
   const [incentiveSummary, setIncentiveSummary] = useState<any>({ total: 0, count: 0, breakdown: {} });
   const [incentiveLoading, setIncentiveLoading] = useState(false);
+  const [selectedIncentiveDept, setSelectedIncentiveDept] = useState<string | null>(null);
+  const [selectedMonthlyCategory, setSelectedMonthlyCategory] = useState<string | null>(null);
   
   const { settings, formatMoney } = useSettings();
+
+  const monthlyCategories = useMemo(() => {
+    const categories = new Set<string>();
+    monthlyBookings.forEach(() => categories.add('Massage'));
+    sales.forEach(s => {
+      if (s.category) categories.add(s.category);
+      else categories.add('Sale');
+    });
+    return Array.from(categories);
+  }, [monthlyBookings, sales]);
+
+  const filteredMonthlyItems = useMemo(() => {
+    const items = [
+      ...monthlyBookings.map(b => ({ ...b, _type: 'booking' as const, _category: 'Massage' })),
+      ...sales.map(s => ({ ...s, _type: 'sale' as const, _category: s.category || 'Sale' }))
+    ];
+
+    const filtered = selectedMonthlyCategory 
+      ? items.filter(item => item._category === selectedMonthlyCategory)
+      : items;
+
+    return filtered.sort((a, b) => {
+      const dateA = a._type === 'booking' ? a.date : format(new Date(a.created_at), 'yyyy-MM-dd');
+      const dateB = b._type === 'booking' ? b.date : format(new Date(b.created_at), 'yyyy-MM-dd');
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+      
+      const timeA = a._type === 'booking' ? a.start_time : format(new Date(a.created_at), 'HH:mm');
+      const timeB = b._type === 'booking' ? b.start_time : format(new Date(b.created_at), 'HH:mm');
+      return timeA.localeCompare(timeB);
+    });
+  }, [monthlyBookings, sales, selectedMonthlyCategory]);
 
   // Password Change State
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -642,134 +718,162 @@ const StaffSchedule = () => {
           </div>
         ) : viewMode === 'incentives' ? (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl"></div>
-                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Total Earnings</div>
-                <div className="text-3xl font-black text-white relative z-10 truncate">{formatMoney(incentiveSummary.total)}</div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Services</div>
-                  <div className="text-3xl font-black text-slate-900 truncate">{incentiveSummary.count || 0}</div>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Avg / Service</div>
-                  <div className="text-3xl font-black text-indigo-600 truncate">
-                    {formatMoney(incentiveSummary.count > 0 ? incentiveSummary.total / incentiveSummary.count : 0)}
+            {!selectedIncentiveDept ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl"></div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Total Earnings</div>
+                    <div className="text-3xl font-black text-white relative z-10 truncate">{formatMoney(incentiveSummary.total)}</div>
                   </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Department Breakdown */}
-            {incentiveSummary.breakdown && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {Object.entries(incentiveSummary.breakdown).map(([dept, data]: [string, any]) => (
-                  <div key={dept} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className={`p-1.5 rounded-lg ${
-                        dept === 'Massage' ? 'bg-indigo-50 text-indigo-600' :
-                        dept === 'Membership' ? 'bg-emerald-50 text-emerald-600' :
-                        'bg-amber-50 text-amber-600'
-                      }`}>
-                        {dept === 'Massage' ? <Sparkles className="w-3.5 h-3.5" /> :
-                         dept === 'Membership' ? <TrendingUp className="w-3.5 h-3.5" /> :
-                         <Award className="w-3.5 h-3.5" />}
-                      </div>
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{dept}</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Services</div>
+                      <div className="text-3xl font-black text-slate-900 truncate">{incentiveSummary.count || 0}</div>
                     </div>
-                    <div className="text-lg font-black text-slate-900 truncate">{formatMoney(data.total)}</div>
-                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{data.count} Services</div>
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Avg / Service</div>
+                      <div className="text-3xl font-black text-indigo-600 truncate">
+                        {formatMoney(incentiveSummary.count > 0 ? incentiveSummary.total / incentiveSummary.count : 0)}
+                      </div>
+                    </div>
                   </div>
-                ))}
-              </div>
-            )}
-
-            {incentiveData.length === 0 ? (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white p-12 rounded-[2rem] border border-slate-200/60 text-center shadow-sm"
-              >
-                <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100">
-                  <Award className="w-8 h-8 text-slate-300" />
                 </div>
-                <h3 className="text-base font-black uppercase tracking-widest text-slate-900">No Earnings Found</h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xs mx-auto leading-relaxed">You haven't earned any incentives for this month yet.</p>
-              </motion.div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4">
-                <AnimatePresence mode="popLayout">
-                  {incentiveData.map((item, index) => (
-                    <motion.div 
-                      key={item.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ delay: index * 0.02 }}
-                      className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300"
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-xl ${
-                            item.department === 'Massage' ? 'bg-indigo-50 text-indigo-600' :
-                            item.department === 'Membership' ? 'bg-emerald-50 text-emerald-600' :
+
+                {/* Department Breakdown */}
+                {incentiveSummary.breakdown && (
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    {Object.entries(incentiveSummary.breakdown).map(([dept, data]: [string, any]) => (
+                      <button 
+                        key={dept} 
+                        onClick={() => setSelectedIncentiveDept(dept)}
+                        className="p-4 rounded-2xl border bg-white border-slate-100 shadow-sm hover:border-indigo-200 hover:shadow-md transition-all duration-300 flex flex-col text-left group relative overflow-hidden"
+                      >
+                        <div className="flex items-center gap-2 mb-2 relative z-10">
+                          <div className={`p-1.5 rounded-lg transition-colors ${
+                            dept === 'Massage' ? 'bg-indigo-50 text-indigo-600' :
+                            dept === 'Membership' ? 'bg-emerald-50 text-emerald-600' :
                             'bg-amber-50 text-amber-600'
                           }`}>
-                            {item.department === 'Massage' ? <Sparkles className="w-5 h-5" /> :
-                             item.department === 'Membership' ? <TrendingUp className="w-5 h-5" /> :
-                             <Award className="w-5 h-5" />}
+                            {dept === 'Massage' ? <Sparkles className="w-3.5 h-3.5" /> :
+                             dept === 'Membership' ? <TrendingUp className="w-3.5 h-3.5" /> :
+                             <Award className="w-3.5 h-3.5" />}
                           </div>
-                          <div>
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{item.department}</p>
-                            <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{item.item_name}</h4>
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{dept}</span>
+                        </div>
+                        <div className="text-lg font-black truncate relative z-10 text-slate-900">{formatMoney(data.total)}</div>
+                        <div className="text-[8px] font-bold uppercase tracking-widest mt-0.5 relative z-10 text-slate-400">{data.count} Services</div>
+                        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <ChevronRight className="w-3 h-3 text-indigo-500" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="animate-in slide-in-from-right-10 duration-500">
+                <div className="flex items-center gap-4 mb-6">
+                  <button 
+                    onClick={() => setSelectedIncentiveDept(null)}
+                    className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm group"
+                  >
+                    <ChevronLeft className="w-5 h-5 text-slate-600 group-hover:-translate-x-0.5 transition-transform" />
+                  </button>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">{selectedIncentiveDept} Earnings</h3>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detail Audit Report • {incentiveSummary.breakdown[selectedIncentiveDept]?.count || 0} Items</p>
+                  </div>
+                </div>
+
+                {incentiveData.filter(item => item.department === selectedIncentiveDept).length === 0 ? (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white p-12 rounded-[2rem] border border-slate-200/60 text-center shadow-sm"
+                  >
+                    <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100">
+                      <Award className="w-8 h-8 text-slate-300" />
+                    </div>
+                    <h3 className="text-base font-black uppercase tracking-widest text-slate-900">No Earnings Found</h3>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xs mx-auto leading-relaxed">You haven't earned any incentives for this department yet.</p>
+                  </motion.div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    <AnimatePresence mode="popLayout">
+                      {incentiveData
+                        .filter(item => item.department === selectedIncentiveDept)
+                        .map((item, index) => (
+                        <motion.div 
+                          key={item.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ delay: index * 0.02 }}
+                          className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300"
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-xl ${
+                                item.department === 'Massage' ? 'bg-indigo-50 text-indigo-600' :
+                                item.department === 'Membership' ? 'bg-emerald-50 text-emerald-600' :
+                                'bg-amber-50 text-amber-600'
+                              }`}>
+                                {item.department === 'Massage' ? <Sparkles className="w-5 h-5" /> :
+                                 item.department === 'Membership' ? <TrendingUp className="w-5 h-5" /> :
+                                 <Award className="w-5 h-5" />}
+                              </div>
+                              <div>
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{item.department}</p>
+                                <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{item.item_name}</h4>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Your Share</p>
+                              <p className="text-lg font-black text-indigo-600">{formatMoney(item.my_incentive)}</p>
+                            </div>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Your Share</p>
-                          <p className="text-lg font-black text-indigo-600">{formatMoney(item.my_incentive)}</p>
-                        </div>
-                      </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-50">
-                        <div>
-                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Price</p>
-                          <p className="text-[10px] font-bold text-slate-700">{formatMoney(item.actual_price)}</p>
-                        </div>
-                        <div>
-                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Net Revenue</p>
-                          <p className="text-[10px] font-bold text-slate-700">{formatMoney(item.net_revenue)}</p>
-                        </div>
-                        <div>
-                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Incentive</p>
-                          <p className="text-[10px] font-bold text-slate-700">{formatMoney(item.inc_net)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Guest</p>
-                          <p className="text-[10px] font-bold text-slate-700 truncate">{item.guest_name}</p>
-                        </div>
-                      </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-50">
+                            <div>
+                              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Price</p>
+                              <p className="text-[10px] font-bold text-slate-700">{formatMoney(item.actual_price)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Net Revenue</p>
+                              <p className="text-[10px] font-bold text-slate-700">{formatMoney(item.net_revenue)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Incentive</p>
+                              <p className="text-[10px] font-bold text-slate-700">{formatMoney(item.inc_net)}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Guest</p>
+                              <p className="text-[10px] font-bold text-slate-700 truncate">{item.guest_name}</p>
+                            </div>
+                          </div>
 
-                      <div className="grid grid-cols-2 gap-4 pt-4 mt-4 border-t border-slate-50 opacity-60">
-                        <div className="flex items-center gap-2">
-                          <CalendarIcon className="w-3.5 h-3.5 text-slate-300" />
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.date}</span>
-                        </div>
-                        <div className="flex items-center gap-2 justify-end">
-                          <Clock className="w-3.5 h-3.5 text-slate-300" />
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.duration || 'N/A'}</span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+                          <div className="grid grid-cols-2 gap-4 pt-4 mt-4 border-t border-slate-50 opacity-60">
+                            <div className="flex items-center gap-2">
+                              <CalendarIcon className="w-3.5 h-3.5 text-slate-300" />
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.date}</span>
+                            </div>
+                            <div className="flex items-center gap-2 justify-end">
+                              <Clock className="w-3.5 h-3.5 text-slate-300" />
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.duration || 'N/A'}</span>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                )}
               </div>
             )}
           </div>
         ) : viewMode === 'monthly' ? (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Bookings</div>
                 <div className="text-3xl font-black text-slate-900">{monthlyBookings.length + sales.length}</div>
@@ -778,46 +882,34 @@ const StaffSchedule = () => {
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Completed</div>
                 <div className="text-3xl font-black text-emerald-600">{monthlyBookings.filter(b => b.status === 'completed').length + sales.length}</div>
               </div>
-              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden group cursor-pointer" onClick={() => setViewMode('incentives')}>
-                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"></div>
-                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Est. Incentives</div>
-                <div className="text-3xl font-black text-white relative z-10 flex items-center justify-between">
-                  {formatMoney(incentiveSummary.total || 0)}
-                  <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-white transition-colors" />
-                </div>
-              </div>
             </div>
-
-            {/* Monthly Incentive Breakdown */}
-            {incentiveSummary.breakdown && (
-              <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center border border-indigo-100 shadow-sm"><Award className="w-5 h-5 text-indigo-600" /></div>
-                    <div>
-                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-900">Incentive Breakdown</h3>
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Monthly Earnings by Department</p>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => setViewMode('incentives')} className="text-[9px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">
-                    Full Audit <ChevronRight className="w-3 h-3 ml-1" />
-                  </Button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {Object.entries(incentiveSummary.breakdown).map(([dept, data]: [string, any]) => (
-                    <div key={dept} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{dept}</p>
-                      <p className="text-lg font-black text-slate-900">{formatMoney(data.total)}</p>
-                      <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">{data.count} Services</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
             
             <div className="flex items-center justify-between px-1">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Booking Details</h3>
-              <div className="h-px flex-1 bg-slate-100 mx-4"></div>
+              <div className="flex items-center gap-4 overflow-x-auto pb-2 no-scrollbar">
+                <button
+                  onClick={() => setSelectedMonthlyCategory(null)}
+                  className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+                    !selectedMonthlyCategory 
+                      ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' 
+                      : 'bg-white text-slate-400 border border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  All Categories
+                </button>
+                {monthlyCategories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedMonthlyCategory(cat)}
+                    className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+                      selectedMonthlyCategory === cat
+                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
+                        : 'bg-white text-slate-400 border border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
             </div>
             
             {(monthlyBookings.length === 0 && sales.length === 0) ? (
@@ -835,15 +927,7 @@ const StaffSchedule = () => {
             ) : (
               <div className="grid grid-cols-1 gap-4">
                 <AnimatePresence mode="popLayout">
-                  {[...monthlyBookings.map(b => ({...b, _type: 'booking' as const})), ...sales.map(s => ({...s, _type: 'sale' as const}))].sort((a, b) => {
-                    const dateA = a._type === 'booking' ? a.date : format(new Date(a.created_at), 'yyyy-MM-dd');
-                    const dateB = b._type === 'booking' ? b.date : format(new Date(b.created_at), 'yyyy-MM-dd');
-                    if (dateA !== dateB) return dateA.localeCompare(dateB);
-                    
-                    const timeA = a._type === 'booking' ? a.start_time : format(new Date(a.created_at), 'HH:mm');
-                    const timeB = b._type === 'booking' ? b.start_time : format(new Date(b.created_at), 'HH:mm');
-                    return timeA.localeCompare(timeB);
-                  }).map((item, index) => {
+                  {filteredMonthlyItems.map((item, index) => {
                     if (item._type === 'booking') {
                       const booking = item as MassageBooking;
                       const treatment = treatments.find(t => t.id === booking.massage_type_id) || 
