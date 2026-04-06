@@ -9,7 +9,4 @@ export default defineConfig({
   optimizeDeps: {
     include: ['zod', 'react-hook-form', '@hookform/resolvers/zod', 'date-fns', 'lucide-react', 'jspdf', 'jspdf-autotable'],
   },
-  build: {
-    outDir: 'build',
-  },
 });

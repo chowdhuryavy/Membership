@@ -283,6 +283,7 @@ export interface MassageBooking {
   room_id?: string;
   check_no?: string;
   payment_method?: 'cash' | 'card' | 'transfer';
+  session_notes?: string;
 }
 
 export type SaleCategory = 'Retail' | 'Personal Training' | 'Entrance Fee' | 'Massage' | 'Other';

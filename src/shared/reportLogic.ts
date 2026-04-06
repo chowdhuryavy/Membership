@@ -1151,11 +1151,11 @@ export const generateReportPDF = (options: PDFOptions) => {
 
   // 2. Report Title & Period (Right)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
+  doc.setFontSize(18);
   doc.setTextColor(15, 23, 42);
   doc.text(reportTitle.toUpperCase(), titleX, currentY + 8, { align: 'right', maxWidth: availableWidth });
 
-  if (membershipTypeName && reportType !== 'monthly_revenue') {
+  if (membershipTypeName && reportType !== 'monthly_revenue' && reportType !== 'incentives') {
     // Membership Type Tag (Top Right)
     const tagWidth = 45;
     const tagHeight = 6;
@@ -1447,24 +1447,6 @@ export const generateReportPDF = (options: PDFOptions) => {
       });
 
       currentY = (doc as any).lastAutoTable?.finalY || currentY + 15;
-
-      // Render Signatories
-      if (signatoryConfig) {
-        const sigY = currentY + 10;
-        doc.setFontSize(7);
-        doc.setTextColor(15, 23, 42);
-        
-        const sigWidth = contentWidth / 3;
-        
-        doc.text("PREPARED BY", margin + (sigWidth * 0), sigY);
-        doc.text(signatoryConfig.prepared, margin + (sigWidth * 0), sigY + 5);
-        
-        doc.text("REVIEWED BY", margin + (sigWidth * 1), sigY);
-        doc.text(signatoryConfig.reviewed, margin + (sigWidth * 1), sigY + 5);
-        
-        doc.text("APPROVED BY", margin + (sigWidth * 2), sigY);
-        doc.text(signatoryConfig.approved, margin + (sigWidth * 2), sigY + 5);
-      }
     }
   } else if (reportType === 'members_joined') {
     // Members Joined Audit Style
@@ -1606,8 +1588,33 @@ export const generateReportPDF = (options: PDFOptions) => {
       const staffList = data.summary.staffList || [];
       const staffHeaders = staffList.map((s: any) => s.name.toUpperCase());
       
+      let specialistLabel = 'STAFF';
+      if (reportTitle.includes('Massage')) specialistLabel = 'THERAPIST';
+      if (reportTitle.includes('Personal Training')) specialistLabel = 'PERSONAL TRAINER';
+      if (reportTitle.includes('Membership')) specialistLabel = 'SALES REP';
+
       const head = [
-        ['SL.NO.', 'DATE', 'GUEST / MEMBER', 'ITEM / SERVICE', 'STAFF', 'GROSS AMOUNT', 'DISC %', 'DISCOUNT AMT', 'NET REVENUE', 'INC TOTAL', 'INC DISC %', 'INC DISC VAL', 'INC NET', 'REMARKS', ...staffHeaders]
+        [
+          { content: 'SL.NO.', rowSpan: 2 },
+          { content: 'DATE', rowSpan: 2 },
+          { content: 'GUEST / MEMBER', rowSpan: 2 },
+          { content: 'CHECK NO.', rowSpan: 2 },
+          { content: 'ITEM / SERVICE', rowSpan: 2 },
+          { content: specialistLabel, rowSpan: 2 },
+          { content: 'GROSS AMOUNT', rowSpan: 2 },
+          { content: 'DISC %', rowSpan: 2 },
+          { content: 'DISCOUNT AMT', rowSpan: 2 },
+          { content: 'NET REVENUE', rowSpan: 2 },
+          { content: 'INCENTIVE BREAKDOWN', colSpan: 4, styles: { halign: 'center', fillColor: [254, 243, 199], textColor: [15, 23, 42] } },
+          { content: 'REMARKS', rowSpan: 2 },
+          ...staffHeaders.map((h: string) => ({ content: h, rowSpan: 2 }))
+        ],
+        [
+          { content: 'Total', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } },
+          { content: 'Disc %', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } },
+          { content: 'Disc. Inc', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } },
+          { content: 'Net', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } }
+        ]
       ];
 
       const body = data.rows.map((r: any) => {
@@ -1615,6 +1622,7 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.sl_no,
           r.date,
           r.guest_name,
+          r.check_no || '',
           r.item_name,
           r.therapist_name,
           formatCurrency(r.actual_price),
@@ -1649,16 +1657,12 @@ export const generateReportPDF = (options: PDFOptions) => {
       const totalIncDiscountVal = data.rows.reduce((sum: number, r: any) => sum + Number(r.inc_discount_val || 0), 0);
       const totalIncNet = data.rows.reduce((sum: number, r: any) => sum + Number(r.inc_net || 0), 0);
 
-      doc.setFontSize(8);
-      doc.text(`Rows: ${data.rows.length}`, margin, currentY - 5);
-      doc.text(`Totals: ${totalActual}, ${totalDiscount}, ${totalNetRev}, ${totalIncTotal}, ${totalIncDiscountVal}, ${totalIncNet}`, margin, currentY - 10);
-
       callAutoTable(doc, {
         startY: currentY,
         head: head,
         body: body,
         foot: [[
-          { content: 'AGGREGATE INCENTIVE TOTALS', colSpan: 5, styles: { halign: 'right' } },
+          { content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: 6, styles: { halign: 'right' } },
           { content: formatCurrency(totalActual), styles: { halign: 'right' } },
           { content: '', styles: {} },
           { content: formatCurrency(totalDiscount), styles: { halign: 'right' } },
@@ -1666,7 +1670,7 @@ export const generateReportPDF = (options: PDFOptions) => {
           { content: formatCurrency(totalIncTotal), styles: { halign: 'right' } },
           { content: '', styles: {} },
           { content: formatCurrency(totalIncDiscountVal), styles: { halign: 'right' } },
-          { content: formatCurrency(totalIncNet), styles: { halign: 'right' } },
+          { content: formatCurrency(totalIncNet), styles: { halign: 'right', fillColor: [79, 70, 229] } },
           { content: '', styles: {} },
           ...staffTotals.map((t: string) => ({ content: t, styles: { halign: 'right' } }))
         ]],
@@ -1692,23 +1696,67 @@ export const generateReportPDF = (options: PDFOptions) => {
           0: { halign: 'center', cellWidth: 8 },
           1: { halign: 'center', cellWidth: 15 },
           2: { fontStyle: 'bold', cellWidth: 25 },
-          3: { cellWidth: 25 },
-          4: { fontStyle: 'bold', cellWidth: 15 },
-          5: { halign: 'right', cellWidth: 15 },
-          6: { halign: 'center', cellWidth: 10 },
-          7: { halign: 'right', cellWidth: 15 },
+          3: { halign: 'center', cellWidth: 15 },
+          4: { cellWidth: 25 },
+          5: { fontStyle: 'bold', cellWidth: 15 },
+          6: { halign: 'right', cellWidth: 15 },
+          7: { halign: 'center', cellWidth: 10 },
           8: { halign: 'right', cellWidth: 15 },
           9: { halign: 'right', cellWidth: 15 },
-          10: { halign: 'center', cellWidth: 10 },
-          11: { halign: 'right', cellWidth: 15 },
-          12: { halign: 'right', fontStyle: 'bold', cellWidth: 15 },
-          13: { fontSize: 4, cellWidth: 15 },
+          10: { halign: 'right', cellWidth: 15 },
+          11: { halign: 'center', cellWidth: 10 },
+          12: { halign: 'right', cellWidth: 15 },
+          13: { halign: 'right', fontStyle: 'bold', cellWidth: 15 },
+          14: { fontSize: 4, cellWidth: 15 },
           ...staffList.reduce((acc: any, _, idx: number) => {
-            acc[14 + idx] = { halign: 'right', cellWidth: 12 };
+            acc[15 + idx] = { halign: 'right', cellWidth: 12 };
             return acc;
           }, {})
         },
         margin: { left: margin, right: margin }
+      });
+
+      // Add Summary Table
+      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      
+      const summaryHead = [['STAFF NAME', 'INCENTIVES']];
+      const summaryBody = staffList.map((s: any) => {
+        const total = data.rows.reduce((sum: number, r: any) => sum + (r.staff_splits[s.id] || 0), 0);
+        return [s.name, formatCurrency(total)];
+      });
+      
+      summaryBody.push([
+        { content: 'TOTAL', styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 250, 252] } },
+        { content: formatCurrency(totalIncNet), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 250, 252] } }
+      ]);
+      summaryBody.push([
+        { content: 'DISCOUNTED AMOUNT', styles: { fontStyle: 'bold', halign: 'left', fillColor: [238, 242, 255] } },
+        { content: formatCurrency(totalDiscount), styles: { fontStyle: 'bold', halign: 'right', fillColor: [238, 242, 255] } }
+      ]);
+      summaryBody.push([
+        { content: 'NET REVENUE', styles: { fontStyle: 'bold', halign: 'left', fillColor: [219, 234, 254] } },
+        { content: formatCurrency(totalNetRev), styles: { fontStyle: 'bold', halign: 'right', fillColor: [219, 234, 254] } }
+      ]);
+
+      callAutoTable(doc, {
+        startY: finalY,
+        head: summaryHead,
+        body: summaryBody,
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [254, 243, 199], 
+          textColor: [15, 23, 42], 
+          fontStyle: 'bold', 
+          fontSize: 6, 
+          halign: 'left',
+          font: 'helvetica'
+        },
+        styles: { fontSize: 6, cellPadding: 2, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { halign: 'right', cellWidth: 30 }
+        },
+        margin: { left: margin }
       });
     }
   } else if (reportType === 'monthly_revenue') {
@@ -1943,6 +1991,25 @@ export const generateReportPDF = (options: PDFOptions) => {
       },
       margin: { left: margin, right: margin }
     });
+  }
+
+  // Render Signatories
+  const finalTableY = (doc as any).lastAutoTable?.finalY || currentY + 15;
+  if (signatoryConfig) {
+    const sigY = finalTableY + 15;
+    doc.setFontSize(7);
+    doc.setTextColor(15, 23, 42);
+    
+    const sigWidth = contentWidth / 3;
+    
+    doc.text("PREPARED BY", margin + (sigWidth * 0), sigY);
+    doc.text(signatoryConfig.prepared, margin + (sigWidth * 0), sigY + 5);
+    
+    doc.text("REVIEWED BY", margin + (sigWidth * 1), sigY);
+    doc.text(signatoryConfig.reviewed, margin + (sigWidth * 1), sigY + 5);
+    
+    doc.text("APPROVED BY", margin + (sigWidth * 2), sigY);
+    doc.text(signatoryConfig.approved, margin + (sigWidth * 2), sigY + 5);
   }
 
   // --- FOOTER SECTION ---

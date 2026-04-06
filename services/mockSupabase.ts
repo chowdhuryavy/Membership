@@ -1979,6 +1979,18 @@ class DatabaseService {
     }
   }
 
+  private mergeLocalNotes(bookings: MassageBooking[]): MassageBooking[] {
+    try {
+      const localNotes = JSON.parse(localStorage.getItem('local_session_notes') || '{}');
+      return bookings.map(b => ({
+        ...b,
+        session_notes: b.session_notes || localNotes[b.id]
+      }));
+    } catch (e) {
+      return bookings;
+    }
+  }
+
   async getMassageBookings(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<MassageBooking[]> {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
@@ -1994,7 +2006,7 @@ class DatabaseService {
 
         const { data, error } = await query.order('date', { ascending: false });
         if (error) throw error;
-        return (data || []) as MassageBooking[];
+        return this.mergeLocalNotes((data || []) as MassageBooking[]);
       }, []);
     }
     return [];
@@ -2010,7 +2022,7 @@ class DatabaseService {
 
       const { data, error } = await query.order('start_time', { ascending: true });
       if (error) throw error;
-      return (data || []) as MassageBooking[];
+      return this.mergeLocalNotes((data || []) as MassageBooking[]);
     }
     return [];
   }
@@ -2025,7 +2037,7 @@ class DatabaseService {
 
       const { data, error } = await query.order('date', { ascending: false }).order('start_time', { ascending: true });
       if (error) throw error;
-      return (data || []) as MassageBooking[];
+      return this.mergeLocalNotes((data || []) as MassageBooking[]);
     }
     return [];
   }
@@ -2056,8 +2068,33 @@ class DatabaseService {
     if (this.isSupabase()) {
       await this.safeCall(async () => {
         const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
-        if (error) throw error;
+        if (error) {
+          // If the error is about a missing column (like session_notes), we can fallback to local storage for that specific field
+          if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('session_notes')) {
+            console.warn("Column might be missing in Supabase, falling back to local storage for notes", error);
+            if (updates.session_notes !== undefined) {
+              const localNotes = JSON.parse(localStorage.getItem('local_session_notes') || '{}');
+              localNotes[id] = updates.session_notes;
+              localStorage.setItem('local_session_notes', JSON.stringify(localNotes));
+              
+              // Remove session_notes from updates and try again
+              const { session_notes, ...otherUpdates } = updates;
+              if (Object.keys(otherUpdates).length > 0) {
+                const { error: retryError } = await supabase.from('massage_bookings').update(otherUpdates).eq('id', id);
+                if (retryError) throw retryError;
+              }
+              return;
+            }
+          }
+          throw error;
+        }
       }, null);
+    } else {
+      if (updates.session_notes !== undefined) {
+        const localNotes = JSON.parse(localStorage.getItem('local_session_notes') || '{}');
+        localNotes[id] = updates.session_notes;
+        localStorage.setItem('local_session_notes', JSON.stringify(localNotes));
+      }
     }
     
     // Trigger local event
