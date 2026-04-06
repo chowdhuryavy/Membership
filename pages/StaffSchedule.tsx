@@ -36,32 +36,30 @@ const LoadingScreen = () => (
         <div className="absolute inset-4 bg-indigo-500/5 rounded-full blur-2xl animate-pulse"></div>
 
         {/* Monogram */}
-        <div className="relative flex items-baseline gap-1">
-          <motion.span 
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.2, duration: 0.5 }}
-            className="text-7xl font-black text-white tracking-tighter"
-          >
-            H
-          </motion.span>
-          <motion.span 
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.4, duration: 0.5 }}
-            className="text-7xl font-black text-indigo-500 tracking-tighter"
-          >
-            C
-          </motion.span>
-          <motion.span 
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.6, duration: 0.5 }}
-            className="text-7xl font-black text-white tracking-tighter"
-          >
-            M
-          </motion.span>
-        </div>
+        <svg width="200" height="100" viewBox="0 0 200 100" className="stroke-white stroke-[4] fill-none stroke-linecap-round stroke-linejoin-round">
+          {/* H */}
+          <motion.path 
+            d="M 10 10 L 10 90 M 50 10 L 50 90 M 10 50 L 50 50"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 1, ease: "easeInOut" }}
+          />
+          {/* C */}
+          <motion.path 
+            d="M 100 20 A 35 35 0 1 0 100 80"
+            stroke="#6366f1"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ delay: 0.5, duration: 1, ease: "easeInOut" }}
+          />
+          {/* M */}
+          <motion.path 
+            d="M 130 90 L 130 10 L 150 50 L 170 10 L 170 90"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ delay: 1, duration: 1, ease: "easeInOut" }}
+          />
+        </svg>
       </motion.div>
 
       {/* Text Label */}

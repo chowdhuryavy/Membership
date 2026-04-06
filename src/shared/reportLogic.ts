@@ -209,9 +209,13 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     // Group by category for the frontend/email
     const grouped = rows.reduce((acc: any, row: any) => {
-      const groupKey = `${row.category_name}|${row.category_duration}`;
-      if (!acc[groupKey]) acc[groupKey] = [];
-      acc[groupKey].push(row);
+      const typeKey = selectedMembershipTypeId === 'all' ? (row.membership_type_name || 'Membership') : 'All';
+      const catKey = row.category_name || 'Other';
+      
+      if (!acc[typeKey]) acc[typeKey] = {};
+      if (!acc[typeKey][catKey]) acc[typeKey][catKey] = [];
+      
+      acc[typeKey][catKey].push(row);
       return acc;
     }, {});
 
@@ -754,7 +758,12 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         });
       }
     } else if (dept === 'Membership') {
-      members.forEach(m => {
+      members
+        .filter(m => {
+            const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
+            return !!rule;
+        })
+        .forEach(m => {
         const cat = mCats.find(c => c.id === m.category_id);
         
         // Try Category ID first, then Type ID
@@ -1258,25 +1267,8 @@ export const generateReportPDF = (options: PDFOptions) => {
 
   // --- TABLE SECTION ---
   if (isRevenueReport) {
-    // Use grouped data from reportData if available, otherwise group on the fly
-    const grouped = data.groupedRows || data.rows.reduce((acc: any, row: any) => {
-      const groupKey = `${row.category_name}|${row.category_duration || 0}`;
-      if (!acc[groupKey]) acc[groupKey] = [];
-      acc[groupKey].push(row);
-      return acc;
-    }, {} as Record<string, any[]>);
-
-    // Sort categories (tiers) by duration and then by name
-    const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
-      const [nameA, durA] = a.split('|');
-      const [nameB, durB] = b.split('|');
-      
-      const d1 = parseInt(durA);
-      const d2 = parseInt(durB);
-      
-      if (d1 !== d2) return d1 - d2;
-      return nameA.localeCompare(nameB);
-    });
+    // Use grouped data from reportData if available
+    const grouped = data.groupedRows;
 
     if (data.rows.length === 0) {
       doc.setFontSize(10);
@@ -1293,122 +1285,122 @@ export const generateReportPDF = (options: PDFOptions) => {
         deferred: 0
       };
       
-      sortedGroupKeys.forEach((groupKey: string) => {
-        const [categoryName] = groupKey.split('|');
-        const groupRows = grouped[groupKey];
-        const groupRowsArray = [...groupRows].sort((a: any, b: any) => {
-          const dateA = parse(a.start_date, 'dd-MM-yyyy', new Date());
-          const dateB = parse(b.start_date, 'dd-MM-yyyy', new Date());
-          return dateA.getTime() - dateB.getTime();
-        });
-        
-        // Calculate subtotals for this category
-        const subtotals = {
-          daily_rate: groupRowsArray.reduce((s: number, r: any) => s + (r.daily_rate || 0), 0),
-          actual_rate: groupRowsArray.reduce((s: number, r: any) => s + (r.actual_rate || 0), 0),
-          discount: groupRowsArray.reduce((s: number, r: any) => s + (r.discount || 0), 0),
-          net_fees: groupRowsArray.reduce((s: number, r: any) => s + (r.net_fees || 0), 0),
-          prev_accrual: groupRowsArray.reduce((s: number, r: any) => s + (r.prev_accrual || 0), 0),
-          period_rev: groupRowsArray.reduce((s: number, r: any) => s + (r.period_rev || 0), 0),
-          deferred: groupRowsArray.reduce((s: number, r: any) => s + (r.deferred || 0), 0)
-        };
-        
-        // Update grand totals
-        grandTotals.daily_rate += subtotals.daily_rate;
-        grandTotals.actual_rate += subtotals.actual_rate;
-        grandTotals.discount += subtotals.discount;
-        grandTotals.net_fees += subtotals.net_fees;
-        grandTotals.prev_accrual += subtotals.prev_accrual;
-        grandTotals.period_rev += subtotals.period_rev;
-        grandTotals.deferred += subtotals.deferred;
-        
-        // Category Header Row
-        callAutoTable(doc, {
-          startY: currentY,
-          body: [[{ content: `TIER: ${categoryName.toUpperCase()}`, colSpan: 13 }]],
-          theme: 'plain',
-          styles: { 
-            fillColor: [238, 242, 255], 
-            textColor: [49, 46, 129], 
-            fontStyle: 'bold', 
-            fontSize: 8, 
-            cellPadding: 2,
-            font: 'helvetica'
-          },
-          margin: { left: margin, right: margin },
-          tableWidth: contentWidth
-        });
-        
-        currentY = (doc as any).lastAutoTable?.finalY || currentY + 10;
+      Object.entries(grouped).forEach(([type, categories]) => {
+        Object.entries(categories as Record<string, any[]>).forEach(([categoryName, groupRows]) => {
+          const groupRowsArray = [...groupRows].sort((a: any, b: any) => {
+            const dateA = parse(a.start_date, 'dd-MM-yyyy', new Date());
+            const dateB = parse(b.start_date, 'dd-MM-yyyy', new Date());
+            return dateA.getTime() - dateB.getTime();
+          });
+          
+          // Calculate subtotals for this category
+          const subtotals = {
+            daily_rate: groupRowsArray.reduce((s: number, r: any) => s + (r.daily_rate || 0), 0),
+            actual_rate: groupRowsArray.reduce((s: number, r: any) => s + (r.actual_rate || 0), 0),
+            discount: groupRowsArray.reduce((s: number, r: any) => s + (r.discount || 0), 0),
+            net_fees: groupRowsArray.reduce((s: number, r: any) => s + (r.net_fees || 0), 0),
+            prev_accrual: groupRowsArray.reduce((s: number, r: any) => s + (r.prev_accrual || 0), 0),
+            period_rev: groupRowsArray.reduce((s: number, r: any) => s + (r.period_rev || 0), 0),
+            deferred: groupRowsArray.reduce((s: number, r: any) => s + (r.deferred || 0), 0)
+          };
+          
+          // Update grand totals
+          grandTotals.daily_rate += subtotals.daily_rate;
+          grandTotals.actual_rate += subtotals.actual_rate;
+          grandTotals.discount += subtotals.discount;
+          grandTotals.net_fees += subtotals.net_fees;
+          grandTotals.prev_accrual += subtotals.prev_accrual;
+          grandTotals.period_rev += subtotals.period_rev;
+          grandTotals.deferred += subtotals.deferred;
+          
+          // Category Header Row
+          callAutoTable(doc, {
+            startY: currentY,
+            body: [[{ content: `TIER: ${categoryName.toUpperCase()} (${type.toUpperCase()})`, colSpan: 13 }]],
+            theme: 'plain',
+            styles: { 
+              fillColor: [238, 242, 255], 
+              textColor: [49, 46, 129], 
+              fontStyle: 'bold', 
+              fontSize: 8, 
+              cellPadding: 2,
+              font: 'helvetica'
+            },
+            margin: { left: margin, right: margin },
+            tableWidth: contentWidth
+          });
+          
+          currentY = (doc as any).lastAutoTable?.finalY || currentY + 10;
 
-        callAutoTable(doc, {
-          startY: currentY,
-          head: [['SL.', 'GUEST NAME / PROFILE', 'MEM. NO', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
-          body: [
-            ...groupRowsArray.map((r: any, idx: number) => [
-              idx + 1,
-              r.guest_name,
-              r.membership_no || 'N/A',
-              r.start_date,
-              r.end_date,
-              r.total_days,
-              formatCurrency(r.daily_rate),
-              formatCurrency(r.actual_rate),
-              formatCurrency(r.discount),
-              formatCurrency(r.net_fees),
-              formatCurrency(r.prev_accrual),
-              formatCurrency(r.period_rev),
-              formatCurrency(r.deferred)
-            ]),
-            // Subtotal Row integrated into the same table for perfect alignment
-            [
-              { content: `TIER SUBTOTAL: ${categoryName.toUpperCase()}`, colSpan: 6, styles: { halign: 'left', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.daily_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.actual_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.discount), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.net_fees), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.prev_accrual), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.period_rev), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.deferred), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } }
-            ]
-          ],
-          theme: 'grid',
-          headStyles: { 
-            fillColor: [15, 23, 42], 
-            textColor: [255, 255, 255], 
-            fontStyle: 'bold', 
-            fontSize: 7, 
-            halign: 'center',
-            font: 'helvetica'
-          },
-          styles: { 
-            fontSize: 7, 
-            cellPadding: 2, 
-            font: 'helvetica',
-            lineColor: [0, 0, 0], 
-            lineWidth: 0.1,
-            overflow: 'linebreak'
-          },
-          columnStyles: {
-            0: { halign: 'center', cellWidth: 10 },
-            1: { fontStyle: 'bold', cellWidth: 77 },
-            2: { halign: 'center', cellWidth: 20 },
-            3: { halign: 'center', cellWidth: 20 },
-            4: { halign: 'center', cellWidth: 20 },
-            5: { halign: 'center', cellWidth: 10 },
-            6: { halign: 'right', cellWidth: 15 },
-            7: { halign: 'right', cellWidth: 15 },
-            8: { halign: 'right', cellWidth: 15 },
-            9: { halign: 'right', cellWidth: 15 },
-            10: { halign: 'right', cellWidth: 15, textColor: [100, 116, 139] },
-            11: { halign: 'right', fontStyle: 'bold', cellWidth: 15, textColor: [79, 70, 229] },
-            12: { halign: 'right', fontStyle: 'bold', cellWidth: 20, textColor: [239, 68, 68] }
-          },
-          margin: { left: margin, right: margin },
-          tableWidth: contentWidth
-        });
+          callAutoTable(doc, {
+            startY: currentY,
+            head: [['SL.', 'GUEST NAME / PROFILE', 'MEM. NO', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
+            body: [
+              ...groupRowsArray.map((r: any, idx: number) => [
+                idx + 1,
+                r.guest_name,
+                r.membership_no || 'N/A',
+                r.start_date,
+                r.end_date,
+                r.total_days,
+                formatCurrency(r.daily_rate),
+                formatCurrency(r.actual_rate),
+                formatCurrency(r.discount),
+                formatCurrency(r.net_fees),
+                formatCurrency(r.prev_accrual),
+                formatCurrency(r.period_rev),
+                formatCurrency(r.deferred)
+              ]),
+              // Subtotal Row integrated into the same table for perfect alignment
+              [
+                { content: `TIER SUBTOTAL: ${categoryName.toUpperCase()}`, colSpan: 6, styles: { halign: 'left', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+                { content: formatCurrency(subtotals.daily_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+                { content: formatCurrency(subtotals.actual_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+                { content: formatCurrency(subtotals.discount), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+                { content: formatCurrency(subtotals.net_fees), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+                { content: formatCurrency(subtotals.prev_accrual), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+                { content: formatCurrency(subtotals.period_rev), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
+                { content: formatCurrency(subtotals.deferred), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } }
+              ]
+            ],
+            theme: 'grid',
+            headStyles: { 
+              fillColor: [15, 23, 42], 
+              textColor: [255, 255, 255], 
+              fontStyle: 'bold', 
+              fontSize: 7, 
+              halign: 'center',
+              font: 'helvetica'
+            },
+            styles: { 
+              fontSize: 7, 
+              cellPadding: 2, 
+              font: 'helvetica',
+              lineColor: [0, 0, 0], 
+              lineWidth: 0.1,
+              overflow: 'linebreak'
+            },
+            columnStyles: {
+              0: { halign: 'center', cellWidth: 10 },
+              1: { fontStyle: 'bold', cellWidth: 77 },
+              2: { halign: 'center', cellWidth: 20 },
+              3: { halign: 'center', cellWidth: 20 },
+              4: { halign: 'center', cellWidth: 20 },
+              5: { halign: 'center', cellWidth: 10 },
+              6: { halign: 'right', cellWidth: 15 },
+              7: { halign: 'right', cellWidth: 15 },
+              8: { halign: 'right', cellWidth: 15 },
+              9: { halign: 'right', cellWidth: 15 },
+              10: { halign: 'right', cellWidth: 15, textColor: [100, 116, 139] },
+              11: { halign: 'right', fontStyle: 'bold', cellWidth: 15, textColor: [79, 70, 229] },
+              12: { halign: 'right', fontStyle: 'bold', cellWidth: 20, textColor: [239, 68, 68] }
+            },
+            margin: { left: margin, right: margin },
+            tableWidth: contentWidth
+          });
 
-        currentY = (doc as any).lastAutoTable?.finalY || currentY + 15;
+          currentY = (doc as any).lastAutoTable?.finalY || currentY + 15;
+        });
       });
       
       // Grand Total Row
@@ -1593,7 +1585,7 @@ export const generateReportPDF = (options: PDFOptions) => {
       const staffHeaders = staffList.map((s: any) => s.name.toUpperCase());
       
       const head = [
-        ['SL.NO.', 'DATE', 'GUEST / MEMBER', 'ITEM / SERVICE', 'STAFF', 'ACTUAL PRICE', 'DISC %', 'DISCOUNT AMT', 'NET REVENUE', 'INC TOTAL', 'INC DISC %', 'INC DISC VAL', 'INC NET', 'REMARKS', ...staffHeaders]
+        ['SL.NO.', 'DATE', 'GUEST / MEMBER', 'ITEM / SERVICE', 'STAFF', 'GROSS AMOUNT', 'DISC %', 'DISCOUNT AMT', 'NET REVENUE', 'INC TOTAL', 'INC DISC %', 'INC DISC VAL', 'INC NET', 'REMARKS', ...staffHeaders]
       ];
 
       const body = data.rows.map((r: any) => {
@@ -1617,7 +1609,7 @@ export const generateReportPDF = (options: PDFOptions) => {
         // Add staff splits
         staffList.forEach((s: any) => {
           const split = r.staff_splits[s.id];
-          row.push(split && split > 0 ? formatCurrency(split) : '');
+          row.push(split && split > 0 ? formatCurrency(split) : formatCurrency(0));
         });
         
         return row;
@@ -1635,6 +1627,7 @@ export const generateReportPDF = (options: PDFOptions) => {
         foot: [[
           { content: 'AGGREGATE INCENTIVE TOTALS', colSpan: 13, styles: { halign: 'right' } },
           { content: formatCurrency(data.summary.totalIncentive), styles: { halign: 'right' } },
+          { content: '', styles: {} },
           ...staffTotals.map((t: string) => ({ content: t, styles: { halign: 'right' } }))
         ]],
         footStyles: { 
@@ -1656,19 +1649,19 @@ export const generateReportPDF = (options: PDFOptions) => {
         },
         styles: { fontSize: 4.5, cellPadding: 1, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
         columnStyles: {
-          0: { halign: 'center', cellWidth: 6 },
-          1: { halign: 'center', cellWidth: 12 },
-          2: { fontStyle: 'bold', cellWidth: 20 },
-          3: { cellWidth: 20 },
+          0: { halign: 'center', cellWidth: 8 },
+          1: { halign: 'center', cellWidth: 15 },
+          2: { fontStyle: 'bold', cellWidth: 25 },
+          3: { cellWidth: 25 },
           4: { fontStyle: 'bold', cellWidth: 15 },
-          5: { halign: 'right', cellWidth: 14 },
-          6: { halign: 'center', cellWidth: 8 },
-          7: { halign: 'right', cellWidth: 14 },
-          8: { halign: 'right', cellWidth: 14 },
-          9: { halign: 'right', cellWidth: 14 },
-          10: { halign: 'center', cellWidth: 8 },
-          11: { halign: 'right', cellWidth: 14 },
-          12: { halign: 'right', fontStyle: 'bold', cellWidth: 14 },
+          5: { halign: 'right', cellWidth: 15 },
+          6: { halign: 'center', cellWidth: 10 },
+          7: { halign: 'right', cellWidth: 15 },
+          8: { halign: 'right', cellWidth: 15 },
+          9: { halign: 'right', cellWidth: 15 },
+          10: { halign: 'center', cellWidth: 10 },
+          11: { halign: 'right', cellWidth: 15 },
+          12: { halign: 'right', fontStyle: 'bold', cellWidth: 15 },
           13: { fontSize: 4, cellWidth: 15 },
           ...staffList.reduce((acc: any, _, idx: number) => {
             acc[14 + idx] = { halign: 'right', cellWidth: 12 };
