@@ -1059,10 +1059,12 @@ export interface PDFOptions {
   reportType: string;
   membershipTypeName?: string;
   userName?: string;
+  summary?: any;
+  signatoryConfig?: any;
 }
 
 export const generateReportPDF = (options: PDFOptions) => {
-  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, currencyCode, reportTitle, date, logoUrl, reportType, membershipTypeName, userName } = options;
+  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, currencyCode, reportTitle, date, logoUrl, reportType, membershipTypeName, userName, summary, signatoryConfig } = options;
   
   const isRevenueReport = reportType === 'revenue_recognition';
   const isDailySalesReport = reportType === 'daily_sales';
@@ -1443,6 +1445,26 @@ export const generateReportPDF = (options: PDFOptions) => {
         margin: { left: margin, right: margin },
         tableWidth: contentWidth
       });
+
+      currentY = (doc as any).lastAutoTable?.finalY || currentY + 15;
+
+      // Render Signatories
+      if (signatoryConfig) {
+        const sigY = currentY + 10;
+        doc.setFontSize(7);
+        doc.setTextColor(15, 23, 42);
+        
+        const sigWidth = contentWidth / 3;
+        
+        doc.text("PREPARED BY", margin + (sigWidth * 0), sigY);
+        doc.text(signatoryConfig.prepared, margin + (sigWidth * 0), sigY + 5);
+        
+        doc.text("REVIEWED BY", margin + (sigWidth * 1), sigY);
+        doc.text(signatoryConfig.reviewed, margin + (sigWidth * 1), sigY + 5);
+        
+        doc.text("APPROVED BY", margin + (sigWidth * 2), sigY);
+        doc.text(signatoryConfig.approved, margin + (sigWidth * 2), sigY + 5);
+      }
     }
   } else if (reportType === 'members_joined') {
     // Members Joined Audit Style
@@ -1620,13 +1642,31 @@ export const generateReportPDF = (options: PDFOptions) => {
         return total > 0 ? formatCurrency(total) : formatCurrency(0);
       });
 
+      const totalActual = data.rows.reduce((sum: number, r: any) => sum + Number(r.actual_price || 0), 0);
+      const totalDiscount = data.rows.reduce((sum: number, r: any) => sum + Number(r.discount_amount || 0), 0);
+      const totalNetRev = data.rows.reduce((sum: number, r: any) => sum + Number(r.net_revenue || 0), 0);
+      const totalIncTotal = data.rows.reduce((sum: number, r: any) => sum + Number(r.inc_total || 0), 0);
+      const totalIncDiscountVal = data.rows.reduce((sum: number, r: any) => sum + Number(r.inc_discount_val || 0), 0);
+      const totalIncNet = data.rows.reduce((sum: number, r: any) => sum + Number(r.inc_net || 0), 0);
+
+      doc.setFontSize(8);
+      doc.text(`Rows: ${data.rows.length}`, margin, currentY - 5);
+      doc.text(`Totals: ${totalActual}, ${totalDiscount}, ${totalNetRev}, ${totalIncTotal}, ${totalIncDiscountVal}, ${totalIncNet}`, margin, currentY - 10);
+
       callAutoTable(doc, {
         startY: currentY,
         head: head,
         body: body,
         foot: [[
-          { content: 'AGGREGATE INCENTIVE TOTALS', colSpan: 13, styles: { halign: 'right' } },
-          { content: formatCurrency(data.summary.totalIncentive), styles: { halign: 'right' } },
+          { content: 'AGGREGATE INCENTIVE TOTALS', colSpan: 5, styles: { halign: 'right' } },
+          { content: formatCurrency(totalActual), styles: { halign: 'right' } },
+          { content: '', styles: {} },
+          { content: formatCurrency(totalDiscount), styles: { halign: 'right' } },
+          { content: formatCurrency(totalNetRev), styles: { halign: 'right' } },
+          { content: formatCurrency(totalIncTotal), styles: { halign: 'right' } },
+          { content: '', styles: {} },
+          { content: formatCurrency(totalIncDiscountVal), styles: { halign: 'right' } },
+          { content: formatCurrency(totalIncNet), styles: { halign: 'right' } },
           { content: '', styles: {} },
           ...staffTotals.map((t: string) => ({ content: t, styles: { halign: 'right' } }))
         ]],

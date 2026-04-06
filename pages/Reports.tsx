@@ -339,7 +339,9 @@ const Reports = () => {
         logoUrl: currentProperty.logo_url,
         reportType: reportType,
         membershipTypeName: selectedTypeName,
-        userName: user?.name
+        userName: user?.name,
+        summary: reportData.summary,
+        signatoryConfig
       });
 
       const typeSuffix = selectedMembershipTypeId !== 'all' ? `_${selectedTypeName.replace(/\s+/g, '_').toLowerCase()}` : '';
@@ -654,6 +656,9 @@ const Reports = () => {
                 });
             }
         });
+
+        console.log('DEBUG: UI Totals:', { totalActual, totalDiscount, totalNetRev, totalIncNet });
+        console.log('DEBUG: UI Rows count:', rows.length);
 
         return { totalActual, totalDiscount, totalNetRev, totalIncNet, staffTotals };
     }, [rows]);

@@ -36,30 +36,44 @@ const LoadingScreen = () => (
         <div className="absolute inset-4 bg-indigo-500/5 rounded-full blur-2xl animate-pulse"></div>
 
         {/* Monogram */}
-        <svg width="200" height="100" viewBox="0 0 200 100" className="stroke-white stroke-[4] fill-none stroke-linecap-round stroke-linejoin-round">
+        <motion.svg 
+          width="200" height="100" viewBox="0 0 160 100" 
+          className="stroke-[4] fill-none stroke-linecap-round stroke-linejoin-round"
+          initial="hidden"
+          animate="visible"
+          variants={{
+            hidden: { opacity: 0 },
+            visible: { opacity: 1, transition: { staggerChildren: 0.3 } }
+          }}
+        >
           {/* H */}
           <motion.path 
-            d="M 10 10 L 10 90 M 50 10 L 50 90 M 10 50 L 50 50"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 1, ease: "easeInOut" }}
+            d="M 10 20 L 10 80 M 40 20 L 40 80 M 10 50 L 40 50"
+            stroke="white"
+            variants={{
+              hidden: { pathLength: 0, opacity: 0 },
+              visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
+            }}
           />
           {/* C */}
           <motion.path 
-            d="M 100 20 A 35 35 0 1 0 100 80"
+            d="M 80 30 A 25 25 0 1 0 80 70"
             stroke="#6366f1"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ delay: 0.5, duration: 1, ease: "easeInOut" }}
+            variants={{
+              hidden: { pathLength: 0, opacity: 0 },
+              visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
+            }}
           />
           {/* M */}
           <motion.path 
-            d="M 130 90 L 130 10 L 150 50 L 170 10 L 170 90"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ delay: 1, duration: 1, ease: "easeInOut" }}
+            d="M 110 80 L 110 20 L 125 50 L 140 20 L 140 80"
+            stroke="white"
+            variants={{
+              hidden: { pathLength: 0, opacity: 0 },
+              visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
+            }}
           />
-        </svg>
+        </motion.svg>
       </motion.div>
 
       {/* Text Label */}
@@ -490,7 +504,11 @@ const StaffSchedule = () => {
         <div className="flex flex-col items-center text-center mb-8">
           <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center text-slate-900 shadow-2xl shadow-indigo-500/20 mb-4 relative group overflow-hidden border border-white/10">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            <span className="text-2xl font-black tracking-tighter relative z-10">HCM</span>
+            {settings?.logo_url ? (
+              <img src={settings.logo_url} alt="Logo" referrerPolicy="no-referrer" className="w-full h-full object-contain p-2" />
+            ) : (
+              <span className="text-2xl font-black tracking-tighter relative z-10">{settings?.name?.charAt(0) || 'H'}</span>
+            )}
           </div>
           <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400 leading-none mb-1">{settings?.name || 'Health Club'}</h2>
           <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Staff Terminal</p>
