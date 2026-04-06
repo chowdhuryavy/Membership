@@ -404,6 +404,8 @@ const SettingsPage = () => {
   }, [incentiveRules, properties, outlets]);
 
   const [activeProperty, setActiveProperty] = useState<string>('');
+  const [activeOutlet, setActiveOutlet] = useState<string>('');
+  const [activeType, setActiveType] = useState<string>('');
 
   useEffect(() => {
       const propertiesList = Object.keys(groupedIncentives);
@@ -411,6 +413,24 @@ const SettingsPage = () => {
           setActiveProperty(propertiesList[0]);
       }
   }, [groupedIncentives, activeProperty]);
+
+  useEffect(() => {
+      if (activeProperty && groupedIncentives[activeProperty]) {
+          const outletsList = Object.keys(groupedIncentives[activeProperty]);
+          if (outletsList.length > 0 && (!activeOutlet || !outletsList.includes(activeOutlet))) {
+              setActiveOutlet(outletsList[0]);
+          }
+      }
+  }, [groupedIncentives, activeProperty, activeOutlet]);
+
+  useEffect(() => {
+      if (activeProperty && activeOutlet && groupedIncentives[activeProperty] && groupedIncentives[activeProperty][activeOutlet]) {
+          const typesList = Object.keys(groupedIncentives[activeProperty][activeOutlet]);
+          if (typesList.length > 0 && (!activeType || !typesList.includes(activeType))) {
+              setActiveType(typesList[0]);
+          }
+      }
+  }, [groupedIncentives, activeProperty, activeOutlet, activeType]);
 
   const [allMassageTypes, setAllMassageTypes] = useState<MassageType[]>([]);
   const [allCategories, setAllCategories] = useState<MembershipCategory[]>([]); 
@@ -1258,49 +1278,59 @@ const SettingsPage = () => {
                               <>
                                   <div className="flex border-b border-slate-200">
                                       {Object.keys(groupedIncentives).map(prop => (
-                                          <button key={prop} onClick={() => setActiveProperty(prop)} className={`px-8 py-4 font-black text-[10px] uppercase tracking-widest transition-colors ${activeProperty === prop ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
+                                          <button key={prop} onClick={() => { setActiveProperty(prop); setActiveOutlet(''); setActiveType(''); }} className={`px-8 py-4 font-black text-[10px] uppercase tracking-widest transition-colors ${activeProperty === prop ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
                                               {prop}
                                           </button>
                                       ))}
                                   </div>
+                                  {activeProperty && groupedIncentives[activeProperty] && (
+                                      <div className="flex border-b border-slate-200 bg-slate-50">
+                                          {Object.keys(groupedIncentives[activeProperty]).map(outlet => (
+                                              <button key={outlet} onClick={() => { setActiveOutlet(outlet); setActiveType(''); }} className={`px-8 py-3 font-black text-[9px] uppercase tracking-widest transition-colors ${activeOutlet === outlet ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
+                                                  {outlet}
+                                              </button>
+                                          ))}
+                                      </div>
+                                  )}
+                                  {activeProperty && activeOutlet && groupedIncentives[activeProperty][activeOutlet] && (
+                                      <div className="flex border-b border-slate-200 bg-slate-100">
+                                          {Object.keys(groupedIncentives[activeProperty][activeOutlet]).map(type => (
+                                              <button key={type} onClick={() => setActiveType(type)} className={`px-8 py-2 font-black text-[8px] uppercase tracking-widest transition-colors ${activeType === type ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
+                                                  {type}
+                                              </button>
+                                          ))}
+                                      </div>
+                                  )}
                                   <div className="p-6">
-                                      {activeProperty && groupedIncentives[activeProperty] && Object.entries(groupedIncentives[activeProperty]).map(([outlet, typesMap]) => (
-                                          <div key={outlet} className="mb-6">
-                                              <div className="font-black text-slate-600 uppercase text-[10px] tracking-widest mb-2">{outlet}</div>
-                                              {Object.entries(typesMap).map(([type, rules]) => (
-                                                  <div key={type} className="mb-4">
-                                                      <div className="font-black text-slate-400 uppercase text-[9px] tracking-widest mb-1 pl-4">{type}</div>
-                                                      <table className="w-full text-left">
-                                                          <tbody className="divide-y divide-slate-100">
-                                                              {rules.map(rule => (
-                                                                  <tr key={rule.id} className="hover:bg-indigo-50/20 transition-all group">
-                                                                      <td className="px-4 py-3 pl-8"><div className="font-black text-slate-900 uppercase text-sm">{rule.name}</div><p className="text-[10px] font-bold text-slate-400 uppercase">{rule.target_id === 'all' ? 'Catch-all' : (rule.applies_to === 'Membership' ? (rule.target_id.startsWith('type:') ? (membershipTypes.find(t => t.id === rule.target_id.replace('type:', ''))?.name + ' (Type)') : (allCategories.find(c => c.id === rule.target_id)?.name || 'Specific Tier')) : (rule.applies_to === 'Massage' ? (allMassageTypes.find(m => m.id === rule.target_id)?.name || 'Specific Treatment') : (rule.applies_to === 'Personal Training' ? (allInventory.find(i => i.id === rule.target_id)?.name || 'Specific PT Package') : 'Specific Asset')))} <span className="ml-2 text-indigo-600 font-black">[{(rule.distribution_type || 'Individual').toUpperCase()}]</span></p></td>
-                                                                      <td className="px-4 py-3 text-center">
-                                                                          <div className="flex flex-col gap-1 items-center">
-                                                                              <span className="text-[10px] font-black text-slate-700 uppercase flex items-center gap-1"><DollarSign className="w-3 h-3 text-indigo-600"/> {formatMoney(rule.min_price || 0)} - {formatMoney(rule.max_price || 99999)}</span>
-                                                                              {rule.applies_to === 'Massage' && <span className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1"><Timer className="w-2.5 h-2.5"/> {rule.min_duration_minutes || 0}m - {rule.max_duration_minutes || 999}m</span>}
-                                                                          </div>
-                                                                      </td>
-                                                                      <td className="px-4 py-3 text-right font-black text-indigo-600 text-base">{rule.calculation_type === 'Percentage' ? `${rule.value}%` : formatMoney(rule.value)}</td>
-                                                                      <td className="px-4 py-3 text-right"><div className="flex justify-end gap-2 opacity-100 transition-opacity"><button onClick={() => { 
-                                                                           setEditingId(rule.id); 
-                                                                           setIncentiveForm({
-                                                                             ...rule,
-                                                                             min_price: rule.min_price || 0,
-                                                                             max_price: rule.max_price || 99999,
-                                                                             min_duration_minutes: rule.min_duration_minutes || 0,
-                                                                             max_duration_minutes: rule.max_duration_minutes || 999
-                                                                           }); 
-                                                                           setShowForm(true); 
-                                                                         }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={() => setItemToDelete({type:'incentive', id:rule.id, name:rule.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
-                                                                  </tr>
-                                                              ))}
-                                                          </tbody>
-                                                      </table>
-                                                  </div>
-                                              ))}
-                                          </div>
-                                      ))}
+                                      {activeProperty && activeOutlet && activeType && groupedIncentives[activeProperty][activeOutlet][activeType] && (
+                                          <table className="w-full text-left">
+                                              <tbody className="divide-y divide-slate-100">
+                                                  {groupedIncentives[activeProperty][activeOutlet][activeType].map(rule => (
+                                                      <tr key={rule.id} className="hover:bg-indigo-50/20 transition-all group">
+                                                          <td className="px-4 py-3 pl-8"><div className="font-black text-slate-900 uppercase text-sm">{rule.name}</div><p className="text-[10px] font-bold text-slate-400 uppercase">{rule.target_id === 'all' ? 'Catch-all' : (rule.applies_to === 'Membership' ? (rule.target_id.startsWith('type:') ? (membershipTypes.find(t => t.id === rule.target_id.replace('type:', ''))?.name + ' (Type)') : (allCategories.find(c => c.id === rule.target_id)?.name || 'Specific Tier')) : (rule.applies_to === 'Massage' ? (allMassageTypes.find(m => m.id === rule.target_id)?.name || 'Specific Treatment') : (rule.applies_to === 'Personal Training' ? (allInventory.find(i => i.id === rule.target_id)?.name || 'Specific PT Package') : 'Specific Asset')))} <span className="ml-2 text-indigo-600 font-black">[{(rule.distribution_type || 'Individual').toUpperCase()}]</span></p></td>
+                                                          <td className="px-4 py-3 text-center">
+                                                              <div className="flex flex-col gap-1 items-center">
+                                                                  <span className="text-[10px] font-black text-slate-700 uppercase flex items-center gap-1"><DollarSign className="w-3 h-3 text-indigo-600"/> {formatMoney(rule.min_price || 0)} - {formatMoney(rule.max_price || 99999)}</span>
+                                                                  {rule.applies_to === 'Massage' && <span className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1"><Timer className="w-2.5 h-2.5"/> {rule.min_duration_minutes || 0}m - {rule.max_duration_minutes || 999}m</span>}
+                                                              </div>
+                                                          </td>
+                                                          <td className="px-4 py-3 text-right font-black text-indigo-600 text-base">{rule.calculation_type === 'Percentage' ? `${rule.value}%` : formatMoney(rule.value)}</td>
+                                                          <td className="px-4 py-3 text-right"><div className="flex justify-end gap-2 opacity-100 transition-opacity"><button onClick={() => { 
+                                                               setEditingId(rule.id); 
+                                                               setIncentiveForm({
+                                                                 ...rule,
+                                                                 min_price: rule.min_price || 0,
+                                                                 max_price: rule.max_price || 99999,
+                                                                 min_duration_minutes: rule.min_duration_minutes || 0,
+                                                                 max_duration_minutes: rule.max_duration_minutes || 999
+                                                               }); 
+                                                               setShowForm(true); 
+                                                             }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={() => setItemToDelete({type:'incentive', id:rule.id, name:rule.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
+                                                      </tr>
+                                                  ))}
+                                              </tbody>
+                                          </table>
+                                      )}
                                   </div>
                               </>
                           ) : (
