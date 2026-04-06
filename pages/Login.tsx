@@ -108,9 +108,10 @@ const Login = () => {
           <button 
             type="button"
             onClick={() => navigate('/staff-login')}
-            className="absolute top-8 right-8 p-3 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all group"
+            className="absolute top-8 right-8 px-4 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all group flex items-center gap-2 shadow-sm"
             title="Staff Portal"
           >
+            <span className="text-[10px] font-black uppercase tracking-widest hidden sm:block">Staff Portal</span>
             <UserCircle2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
           </button>
           

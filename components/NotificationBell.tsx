@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Bell, Check, X, Loader2 } from 'lucide-react';
 import { useNotificationContext } from '../contexts/NotificationContext';
+import { db } from '../services/mockSupabase';
 import { formatDistanceToNow } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 

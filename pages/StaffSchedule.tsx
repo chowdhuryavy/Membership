@@ -11,115 +11,87 @@ import { getReportData } from '../src/shared/reportLogic';
 import { supabase } from '../services/supabase';
 
 const LoadingScreen = () => (
-  <div className="fixed inset-0 z-[100] bg-slate-950 flex items-center justify-center overflow-hidden">
-    {/* Dynamic Background Nebula */}
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <motion.div 
-        animate={{ 
-          scale: [1, 1.2, 1],
-          opacity: [0.1, 0.2, 0.1]
-        }}
-        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] bg-indigo-500/20 rounded-full blur-[120px]"
-      />
-      <motion.div 
-        animate={{ 
-          scale: [1.2, 1, 1.2],
-          opacity: [0.1, 0.2, 0.1]
-        }}
-        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute bottom-[-10%] left-[-10%] w-[60%] h-[60%] bg-emerald-500/20 rounded-full blur-[120px]"
-      />
-    </div>
-    
+  <motion.div 
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900"
+  >
     <div className="relative flex flex-col items-center">
+      {/* Logo Container */}
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
-        className="flex flex-col items-center"
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="relative w-48 h-48 flex items-center justify-center"
       >
-        {/* Professional Logo Mark */}
-        <div className="relative mb-16">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1.2 }}
-            className="relative"
-          >
-            {/* The Monogram */}
-            <div className="flex items-center justify-center">
-              <div className="relative flex items-baseline">
-                <span className="text-8xl font-light text-white tracking-[-0.05em] drop-shadow-2xl">H</span>
-                <span className="text-8xl font-black text-indigo-500 tracking-[-0.05em] -ml-1 drop-shadow-[0_0_15px_rgba(99,102,241,0.3)]">C</span>
-                <span className="text-8xl font-thin text-emerald-500 tracking-[-0.05em] -ml-1 drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]">M</span>
-              </div>
-              
-              {/* Minimalist Accents */}
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: '40px' }}
-                transition={{ delay: 1, duration: 0.8 }}
-                className="absolute -top-4 left-0 h-[2px] bg-indigo-500/50"
-              />
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: '40px' }}
-                transition={{ delay: 1.2, duration: 0.8 }}
-                className="absolute -bottom-4 right-0 h-[2px] bg-emerald-500/50"
-              />
-            </div>
-            
-            {/* Elegant Rotating Frame */}
-            <div className="absolute inset-[-60px] border border-white/[0.03] rounded-full" />
-            <motion.div 
-              animate={{ rotate: 360 }}
-              transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-              className="absolute inset-[-60px] border-t border-white/10 rounded-full"
-            />
-            <motion.div 
-              animate={{ rotate: -360 }}
-              transition={{ duration: 35, repeat: Infinity, ease: "linear" }}
-              className="absolute inset-[-80px] border-b border-white/[0.05] rounded-full"
-            />
-          </motion.div>
-        </div>
+        {/* Outer Ring */}
+        <motion.div 
+          animate={{ rotate: 360 }}
+          transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+          className="absolute inset-0 border-2 border-dashed border-indigo-500/20 rounded-full"
+        />
+        
+        {/* Inner Glow */}
+        <div className="absolute inset-4 bg-indigo-500/5 rounded-full blur-2xl animate-pulse"></div>
 
-        <div className="flex flex-col items-center gap-6">
-          <div className="flex flex-col items-center">
-            <motion.h2 
-              initial={{ opacity: 0, letterSpacing: '0.4em' }}
-              animate={{ opacity: 1, letterSpacing: '1.2em' }}
-              transition={{ duration: 2, delay: 0.5 }}
-              className="text-[9px] font-medium text-white/30 uppercase ml-[1.2em] tracking-[1.2em]"
-            >
-              Health Club Management
-            </motion.h2>
-            <div className="flex items-center gap-3 mt-4">
-              <div className="h-[1px] w-8 bg-gradient-to-r from-transparent to-white/10" />
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1.5 }}
-                className="text-[7px] font-bold text-indigo-400/40 uppercase tracking-[0.5em]"
-              >
-                Premium Staff Portal
-              </motion.p>
-              <div className="h-[1px] w-8 bg-gradient-to-l from-transparent to-white/10" />
-            </div>
-          </div>
-          
-          <div className="w-32 h-[1px] bg-white/5 relative overflow-hidden rounded-full mt-4">
-            <motion.div 
-              animate={{ left: ['-100%', '100%'] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+        {/* Monogram */}
+        <div className="relative flex items-baseline gap-1">
+          <motion.span 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+            className="text-7xl font-black text-white tracking-tighter"
+          >
+            H
+          </motion.span>
+          <motion.span 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.4, duration: 0.5 }}
+            className="text-7xl font-black text-indigo-500 tracking-tighter"
+          >
+            C
+          </motion.span>
+          <motion.span 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.6, duration: 0.5 }}
+            className="text-7xl font-black text-white tracking-tighter"
+          >
+            M
+          </motion.span>
+        </div>
+      </motion.div>
+
+      {/* Text Label */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1, duration: 0.5 }}
+        className="mt-8 text-center"
+      >
+        <h2 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] mb-2">Health Club Management</h2>
+        <div className="flex items-center justify-center gap-1">
+          {[0, 1, 2].map((i) => (
+            <motion.div
+              key={i}
+              animate={{ 
+                scale: [1, 1.5, 1],
+                opacity: [0.3, 1, 0.3]
+              }}
+              transition={{ 
+                duration: 1, 
+                repeat: Infinity, 
+                delay: i * 0.2 
+              }}
+              className="w-1 h-1 bg-indigo-500 rounded-full"
             />
-          </div>
+          ))}
         </div>
       </motion.div>
     </div>
-  </div>
+  </motion.div>
 );
 
 const StaffSchedule = () => {
@@ -517,20 +489,13 @@ const StaffSchedule = () => {
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-slate-900 text-white p-6 overflow-y-auto custom-scrollbar">
       <div className="mb-6">
-        <div className="flex flex-col items-center text-center mb-6">
-          {settings?.logo_url ? (
-            <img 
-              src={settings.logo_url} 
-              alt="Logo" 
-              referrerPolicy="no-referrer"
-              className="w-20 h-auto object-contain mb-3 filter drop-shadow-[0_10px_20px_rgba(255,255,255,0.1)]" 
-            />
-          ) : (
-            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-indigo-500/20 mb-3">
-              <Sparkles className="w-7 h-7" />
-            </div>
-          )}
-          <h2 className="text-xs font-black uppercase tracking-[0.2em] text-indigo-400">{settings?.name || 'Health Club'}</h2>
+        <div className="flex flex-col items-center text-center mb-8">
+          <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center text-slate-900 shadow-2xl shadow-indigo-500/20 mb-4 relative group overflow-hidden border border-white/10">
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <span className="text-2xl font-black tracking-tighter relative z-10">HCM</span>
+          </div>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400 leading-none mb-1">{settings?.name || 'Health Club'}</h2>
+          <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Staff Terminal</p>
         </div>
 
         <div className="flex items-center gap-3 mb-3 p-3 bg-white/5 rounded-2xl border border-white/5">
@@ -721,69 +686,83 @@ const StaffSchedule = () => {
             {!selectedIncentiveDept ? (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl"></div>
+                  <div className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-xl relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-colors"></div>
                     <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Total Earnings</div>
-                    <div className="text-3xl font-black text-white relative z-10 truncate">{formatMoney(incentiveSummary.total)}</div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Services</div>
-                      <div className="text-3xl font-black text-slate-900 truncate">{incentiveSummary.count || 0}</div>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Avg / Service</div>
-                      <div className="text-3xl font-black text-indigo-600 truncate">
-                        {formatMoney(incentiveSummary.count > 0 ? incentiveSummary.total / incentiveSummary.count : 0)}
+                    <div className="text-4xl font-black text-white relative z-10 truncate">{formatMoney(incentiveSummary.total)}</div>
+                    <div className="mt-4 flex items-center gap-2 relative z-10">
+                      <div className="px-2 py-1 bg-white/10 rounded-lg text-[8px] font-black text-white uppercase tracking-widest">
+                        {incentiveSummary.count || 0} Items
                       </div>
+                    </div>
+                  </div>
+                  <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full -mr-8 -mt-8 blur-2xl group-hover:bg-emerald-500/10 transition-colors"></div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Avg / Service</div>
+                    <div className="text-4xl font-black text-emerald-600 truncate">
+                      {formatMoney(incentiveSummary.count > 0 ? incentiveSummary.total / incentiveSummary.count : 0)}
                     </div>
                   </div>
                 </div>
 
                 {/* Department Breakdown */}
                 {incentiveSummary.breakdown && (
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {Object.entries(incentiveSummary.breakdown).map(([dept, data]: [string, any]) => (
-                      <button 
+                      <motion.button 
                         key={dept} 
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
                         onClick={() => setSelectedIncentiveDept(dept)}
-                        className="p-4 rounded-2xl border bg-white border-slate-100 shadow-sm hover:border-indigo-200 hover:shadow-md transition-all duration-300 flex flex-col text-left group relative overflow-hidden"
+                        className="p-6 rounded-[2rem] border bg-white border-slate-100 shadow-sm hover:border-indigo-200 hover:shadow-md transition-all duration-300 flex items-center justify-between group relative overflow-hidden"
                       >
-                        <div className="flex items-center gap-2 mb-2 relative z-10">
-                          <div className={`p-1.5 rounded-lg transition-colors ${
+                        <div className="flex items-center gap-4 relative z-10">
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
                             dept === 'Massage' ? 'bg-indigo-50 text-indigo-600' :
                             dept === 'Membership' ? 'bg-emerald-50 text-emerald-600' :
                             'bg-amber-50 text-amber-600'
                           }`}>
-                            {dept === 'Massage' ? <Sparkles className="w-3.5 h-3.5" /> :
-                             dept === 'Membership' ? <TrendingUp className="w-3.5 h-3.5" /> :
-                             <Award className="w-3.5 h-3.5" />}
+                            {dept === 'Massage' ? <Sparkles className="w-6 h-6" /> :
+                             dept === 'Membership' ? <TrendingUp className="w-6 h-6" /> :
+                             <Award className="w-6 h-6" />}
                           </div>
-                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{dept}</span>
+                          <div>
+                            <h4 className="text-base font-black text-slate-900 uppercase tracking-tight">{dept}</h4>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{data.count} items processed</p>
+                          </div>
                         </div>
-                        <div className="text-lg font-black truncate relative z-10 text-slate-900">{formatMoney(data.total)}</div>
-                        <div className="text-[8px] font-bold uppercase tracking-widest mt-0.5 relative z-10 text-slate-400">{data.count} Services</div>
-                        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <ChevronRight className="w-3 h-3 text-indigo-500" />
+                        <div className="text-right flex items-center gap-4 relative z-10">
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Subtotal</p>
+                            <p className="text-xl font-black text-slate-900">{formatMoney(data.total)}</p>
+                          </div>
+                          <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+                            <ChevronRight className="w-5 h-5" />
+                          </div>
                         </div>
-                      </button>
+                      </motion.button>
                     ))}
                   </div>
                 )}
               </>
             ) : (
               <div className="animate-in slide-in-from-right-10 duration-500">
-                <div className="flex items-center gap-4 mb-6">
+                <div className="flex items-center justify-between mb-8">
                   <button 
                     onClick={() => setSelectedIncentiveDept(null)}
-                    className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm group"
+                    className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors shadow-sm group"
                   >
-                    <ChevronLeft className="w-5 h-5 text-slate-600 group-hover:-translate-x-0.5 transition-transform" />
+                    <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Back to Summary</span>
                   </button>
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">{selectedIncentiveDept} Earnings</h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detail Audit Report • {incentiveSummary.breakdown[selectedIncentiveDept]?.count || 0} Items</p>
+                  <div className="text-right">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Department</p>
+                    <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">{selectedIncentiveDept}</p>
                   </div>
+                </div>
+                <div className="mb-8">
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">{selectedIncentiveDept} Earnings</h3>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detail Audit Report • {incentiveSummary.breakdown[selectedIncentiveDept]?.count || 0} Items</p>
                 </div>
 
                 {incentiveData.filter(item => item.department === selectedIncentiveDept).length === 0 ? (

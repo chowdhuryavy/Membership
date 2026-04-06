@@ -24,16 +24,21 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchNotifications = useCallback(async () => {
-    if (!user) {
+    // Try to get user from AuthContext or staff session from localStorage
+    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
+    const effectiveUserId = user?.id || staffUser?.id;
+
+    if (!effectiveUserId) {
       setNotifications([]);
       setIsLoading(false);
       return;
     }
     try {
       setIsLoading(true);
-      console.log('Fetching notifications for user:', user.id, 'outlet:', outletId);
-      const data = await db.getNotifications(user.id, outletId);
-      console.log('Fetched notifications:', data);
+      console.log('Fetching notifications for user:', effectiveUserId, 'outlet:', outletId);
+      const data = await db.getNotifications(effectiveUserId, outletId);
+      console.log('Fetched notifications count:', data.length);
       setNotifications(data);
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
@@ -47,12 +52,25 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     
     // Set up real-time subscription
     let unsubscribe: (() => void) | undefined;
-    if (user) {
-      console.log('Subscribing to notifications for user:', user.id, 'outlet:', outletId);
-      unsubscribe = db.subscribeToNotifications(user.id, outletId, (payload) => {
-        console.log('Received real-time notification payload:', payload);
+    
+    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
+    const effectiveUserId = user?.id || staffUser?.id;
+
+    if (effectiveUserId) {
+      console.log('Subscribing to notifications for user:', effectiveUserId, 'outlet:', outletId);
+      unsubscribe = db.subscribeToNotifications(effectiveUserId, outletId, (payload) => {
+        console.log('Received real-time notification payload:', payload.eventType, payload.new?.id);
+        
+        // Always refresh to ensure we have the latest state from the DB
+        fetchNotifications();
+
         if (payload.eventType === 'INSERT') {
-          setNotifications(prev => [payload.new as Notification, ...prev]);
+          setNotifications(prev => {
+            const exists = prev.some(n => n.id === payload.new.id);
+            if (exists) return prev;
+            return [payload.new as Notification, ...prev];
+          });
         } else if (payload.eventType === 'UPDATE') {
           setNotifications(prev => prev.map(n => n.id === payload.new.id ? payload.new as Notification : n));
         } else if (payload.eventType === 'DELETE') {
@@ -64,10 +82,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       });
     }
     
-    // Set up a polling interval as a fallback (every 60 seconds instead of 30)
+    // Set up a polling interval as a fallback (every 10 seconds for more immediate updates)
     const interval = setInterval(() => {
       fetchNotifications();
-    }, 60000);
+    }, 10000);
     
     return () => {
       if (unsubscribe) unsubscribe();
@@ -85,9 +103,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const markAllAsRead = async () => {
-    if (!user) return;
+    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
+    const effectiveUserId = user?.id || staffUser?.id;
+
+    if (!effectiveUserId) return;
     try {
-      await db.markAllNotificationsAsRead(user.id, outletId);
+      await db.markAllNotificationsAsRead(effectiveUserId, outletId);
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);

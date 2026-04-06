@@ -750,9 +750,34 @@ class DatabaseService {
 
   async deleteMember(id: string) {
     if (this.isSupabase()) {
+      const { data: memberData } = await supabase.from('members').select('guest_name, membership_number, outlet_id').eq('id', id).single();
       const { error } = await supabase.from('members').delete().eq('id', id);
       if (error) throw error;
       await this.logAction('DELETE_MEMBER', `Deleted member record ID: ${id}`);
+      
+      if (memberData) {
+        await this.addNotification({
+          title: 'Member Deleted',
+          message: `Member ${memberData.guest_name} (${memberData.membership_number}) has been deleted.`,
+          type: 'error',
+          outlet_id: memberData.outlet_id
+        });
+      }
+    } else {
+      const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+      const member = members.find((m: any) => m.id === id);
+      const newMembers = members.filter((m: any) => m.id !== id);
+      localStorage.setItem('membership_members', JSON.stringify(newMembers));
+      await this.logAction('DELETE_MEMBER', `Deleted member record locally ID: ${id}`);
+      
+      if (member) {
+        await this.addNotification({
+          title: 'Member Deleted',
+          message: `Member ${member.guest_name} (${member.membership_number}) has been deleted.`,
+          type: 'error',
+          outlet_id: member.outlet_id
+        });
+      }
     }
   }
 
@@ -1706,6 +1731,14 @@ class DatabaseService {
         const { error } = await supabase.from('sales').insert([{ ...sale, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
         if (error) throw error;
         await this.logAction('POS_SALE', `Processed sale: ${sale.quantity}x ${sale.item_name} for ${sale.guest_name || 'Walk-in'} (Total: ${sale.net_amount})`, sale.outlet_id);
+        
+        // Add notification
+        await this.addNotification({
+          title: 'New POS Sale',
+          message: `${sale.quantity}x ${sale.item_name} sold for ${sale.guest_name || 'Walk-in'}.`,
+          type: 'success',
+          outlet_id: sale.outlet_id
+        });
     }
   }
 
@@ -1719,15 +1752,24 @@ class DatabaseService {
 
   async deleteSale(id: string) {
     if (this.isSupabase()) {
-        const { data: sale } = await supabase.from('sales').select('booking_id').eq('id', id).single();
+        const { data: saleData } = await supabase.from('sales').select('*').eq('id', id).single();
         
         await supabase.from('sales').delete().eq('id', id);
         await this.logAction('POS_VOID', `Voided sale ID: ${id}`);
 
+        if (saleData) {
+          await this.addNotification({
+            title: 'Sale Voided',
+            message: `Sale for ${saleData.item_name} (${saleData.id}) has been voided.`,
+            type: 'error',
+            outlet_id: saleData.outlet_id
+          });
+        }
+
         // If this sale was linked to a booking, restore the booking to 'confirmed'
-        if (sale?.booking_id) {
-            await supabase.from('massage_bookings').update({ status: 'confirmed' }).eq('id', sale.booking_id);
-            await this.logAction('BOOKING_RESTORED', `Booking ${sale.booking_id} restored after sale void.`);
+        if (saleData?.booking_id) {
+            await supabase.from('massage_bookings').update({ status: 'confirmed' }).eq('id', saleData.booking_id);
+            await this.logAction('BOOKING_RESTORED', `Booking ${saleData.booking_id} restored after sale void.`);
         }
     }
   }
@@ -1994,6 +2036,15 @@ class DatabaseService {
         const { error } = await supabase.from('massage_bookings').insert([{ ...booking, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
         if (error) throw error;
         await this.logAction('CREATE_BOOKING', `Created booking on ${booking.date} at ${booking.start_time} (Therapist ID: ${booking.therapist_id})`, booking.outlet_id);
+        
+        // Add notification for the therapist
+        await this.addNotification({
+          title: 'New Booking Assigned',
+          message: `You have a new booking on ${booking.date} at ${booking.start_time}.`,
+          type: 'info',
+          user_id: booking.therapist_id,
+          outlet_id: booking.outlet_id
+        });
       }, null);
     }
     
@@ -2082,6 +2133,15 @@ class DatabaseService {
         };
 
         await this.addSale(sale);
+
+        // Add notification for completed booking
+        await this.addNotification({
+          title: 'Booking Completed',
+          message: `Booking for ${guest?.name || 'Guest'} has been marked as completed.`,
+          type: 'success',
+          user_id: booking.therapist_id,
+          outlet_id: booking.outlet_id
+        });
       }
     }
     // Trigger local event
@@ -2273,6 +2333,7 @@ class DatabaseService {
   }
   // --- NOTIFICATIONS ---
   async getNotifications(userId?: string, outletId?: string): Promise<Notification[]> {
+    console.log('Fetching notifications for:', { userId, outletId });
     if (this.isSupabase()) {
       let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
       if (userId) {
@@ -2294,6 +2355,7 @@ class DatabaseService {
       if (outletId) {
         notifications = notifications.filter(n => !n.outlet_id || n.outlet_id === outletId);
       }
+      console.log(`Fetched ${notifications.length} notifications from Supabase`);
       return notifications;
     }
     return this.getLocalNotifications(userId, outletId);
@@ -2317,27 +2379,48 @@ class DatabaseService {
   }
 
   async addNotification(notification: Omit<Notification, 'id' | 'created_at' | 'read'>) {
+    console.log('Adding notification:', notification.title, notification.outlet_id);
     const newNotification: Notification = {
       ...notification,
       id: this.generateUUID(),
       created_at: new Date().toISOString(),
-      read: false
+      read: false,
+      user_id: notification.user_id || null
     };
 
     if (this.isSupabase()) {
-      const { error } = await supabase.from('notifications').insert([newNotification]);
-      if (error) {
-        if (error.code !== 'PGRST205') {
-          console.warn("Failed to insert notification to Supabase, saving locally", error);
+      try {
+        const { error } = await supabase.from('notifications').insert([newNotification]);
+        if (error) {
+          // If error is missing column, try without outlet_id
+          if (error.code === 'PGRST204') {
+             const { outlet_id, ...notificationWithoutOutlet } = newNotification;
+             const { error: retryError } = await supabase.from('notifications').insert([notificationWithoutOutlet]);
+             if (!retryError) {
+                console.log('Notification successfully saved to Supabase (without outlet_id)');
+             } else {
+                console.warn("Failed to insert notification to Supabase (even without outlet_id), saving locally", retryError);
+                this.saveLocalNotification(newNotification);
+             }
+          } else if (error.code !== 'PGRST205') {
+            console.warn("Failed to insert notification to Supabase, saving locally", error);
+            this.saveLocalNotification(newNotification);
+          } else {
+            this.saveLocalNotification(newNotification);
+          }
+        } else {
+          console.log('Notification successfully saved to Supabase');
         }
+      } catch (e) {
+        console.error('Error adding notification to Supabase:', e);
         this.saveLocalNotification(newNotification);
-        // Broadcast for local fallback
-        this.broadcastNotificationLocally(newNotification);
       }
     } else {
       this.saveLocalNotification(newNotification);
-      this.broadcastNotificationLocally(newNotification);
     }
+    
+    // Always broadcast locally for immediate feedback in the same browser/tabs
+    this.broadcastNotificationLocally(newNotification);
     return newNotification;
   }
 
@@ -2434,6 +2517,32 @@ class DatabaseService {
   }
 
   subscribeToNotifications(userId: string, outletId: string | undefined, callback: (payload: { eventType: string, new: any, old?: any }) => void) {
+    // Local mode listeners (always active to catch local fallbacks or local mode)
+    let bc: BroadcastChannel | null = null;
+    const handleCustomEvent = (event: any) => {
+      const notification = event.detail as Notification;
+      const userMatch = !notification.user_id || notification.user_id === userId;
+      const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
+      
+      if (userMatch && outletMatch) {
+        callback({ eventType: 'INSERT', new: notification });
+      }
+    };
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      bc = new BroadcastChannel('notifications_channel');
+      bc.onmessage = (event) => {
+        const notification = event.data as Notification;
+        const userMatch = !notification.user_id || notification.user_id === userId;
+        const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
+        
+        if (userMatch && outletMatch) {
+          callback({ eventType: 'INSERT', new: notification });
+        }
+      };
+    }
+    window.addEventListener('notification_received', handleCustomEvent);
+
     if (this.isSupabase()) {
       const channel = supabase
         .channel('notifications-realtime')
@@ -2468,39 +2577,14 @@ class DatabaseService {
       
       return () => {
         supabase.removeChannel(channel);
+        if (bc) bc.close();
+        window.removeEventListener('notification_received', handleCustomEvent);
       };
     } else {
-      // Local mode: use BroadcastChannel for cross-tab sync
-      if (typeof BroadcastChannel !== 'undefined') {
-        const bc = new BroadcastChannel('notifications_channel');
-        bc.onmessage = (event) => {
-          const notification = event.data as Notification;
-          const userMatch = !notification.user_id || notification.user_id === userId;
-          const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
-          
-          if (userMatch && outletMatch) {
-            callback({ eventType: 'INSERT', new: notification });
-          }
-        };
-        
-        // Same-tab listener for local mode
-        const handleCustomEvent = (event: any) => {
-          const notification = event.detail as Notification;
-          const userMatch = !notification.user_id || notification.user_id === userId;
-          const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
-          
-          if (userMatch && outletMatch) {
-            callback({ eventType: 'INSERT', new: notification });
-          }
-        };
-        window.addEventListener('notification_received', handleCustomEvent);
-        
-        return () => {
-          bc.close();
-          window.removeEventListener('notification_received', handleCustomEvent);
-        };
-      }
-      return () => {};
+      return () => {
+        if (bc) bc.close();
+        window.removeEventListener('notification_received', handleCustomEvent);
+      };
     }
   }
 
