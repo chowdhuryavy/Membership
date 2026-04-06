@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
-import { Staff, MassageBooking, MassageType, Guest, MassageRoom } from '../types';
+import { Staff, MassageBooking, MassageType, Guest, MassageRoom, Sale } from '../types';
 import { format, parseISO, addDays, subDays } from 'date-fns';
 import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, KeyRound, X, ShieldCheck, Building2, Menu, Eye, EyeOff, Check, AlertCircle, Sparkles, Award, TrendingUp } from 'lucide-react';
 import { Button, Input } from '../components/ui';
@@ -15,6 +15,7 @@ const StaffSchedule = () => {
   const [propertyName, setPropertyName] = useState<string>('');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [bookings, setBookings] = useState<MassageBooking[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [treatments, setTreatments] = useState<MassageType[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
@@ -120,25 +121,49 @@ const StaffSchedule = () => {
     try {
       const dateStr = format(currentDate, 'yyyy-MM-dd');
       
-      const propertyId = staff.property_id;
+      let propertyId = staff.property_id;
       const sOutlets = Array.isArray(staff.outlet_ids) ? staff.outlet_ids : ((staff as any).outlet_id ? [(staff as any).outlet_id] : []);
 
-      const [allBookings, allTreatments, allInventory, allGuests, allRooms, allOutlets] = await Promise.all([
+      // If propertyId is missing, try to find it from outlets
+      if (!propertyId) {
+        const outlets = await db.getOutlets();
+        const myOutlet = outlets.find(o => sOutlets.includes(o.id));
+        if (myOutlet) {
+          propertyId = myOutlet.property_id;
+        }
+      }
+
+      if (!propertyId) {
+        console.error("No property ID found for staff");
+        setLoading(false);
+        return;
+      }
+
+      const [allBookings, allTreatments, allInventory, allGuests, allRooms, allOutlets, allSales] = await Promise.all([
         db.getMassageBookingsByDate(propertyId, true, dateStr),
         db.getMassageTypes(propertyId, true, sOutlets),
         db.getInventory(propertyId, true),
         db.getGuests(propertyId),
         db.getMassageRooms(undefined, propertyId),
-        db.getOutlets()
+        db.getOutlets(),
+        db.getSalesByDate(propertyId, true, dateStr)
       ]);
 
       // Filter bookings for this specific therapist
       const myBookings = allBookings.filter(b => b.therapist_id === staff.id && b.status !== 'cancelled');
       
+      // Filter sales for this specific staff (sold_by_id or secondary_sold_by_id)
+      // and only those that are NOT linked to a booking (to avoid duplicates)
+      const mySales = allSales.filter(s => 
+        (s.sold_by_id === staff.id || s.secondary_sold_by_id === staff.id) && 
+        !s.booking_id && s.status !== 'void'
+      );
+
       // Sort by time
       myBookings.sort((a, b) => a.start_time.localeCompare(b.start_time));
 
       setBookings(myBookings);
+      setSales(mySales);
       setTreatments(allTreatments);
       setInventory(allInventory);
       setGuests(allGuests);
@@ -159,7 +184,7 @@ const StaffSchedule = () => {
       const sOutlets = Array.isArray(staff.outlet_ids) ? staff.outlet_ids : ((staff as any).outlet_id ? [(staff as any).outlet_id] : []);
       
       // We need to fetch incentives for each department and combine them
-      const depts: ('Massage' | 'Membership' | 'Personal Training')[] = ['Massage', 'Membership', 'Personal Training'];
+      const depts: ('Massage' | 'Membership' | 'Personal Training' | 'Sale')[] = ['Massage', 'Membership', 'Personal Training', 'Sale'];
       let allRows: any[] = [];
       let totalInc = 0;
 
@@ -176,8 +201,13 @@ const StaffSchedule = () => {
         });
 
         // Filter rows for this specific staff member
-        const staffRows = result.rows.filter(r => r.staff_splits && r.staff_splits[staff.id]);
+        const staffRows = result.rows.filter(r => r.staff_splits && r.staff_splits[staff.id] !== undefined);
         
+        console.log(`DEBUG loadIncentives [${dept}]: total rows=${result.rows.length}, staffRows=${staffRows.length}, staffId=${staff.id}`);
+        if (result.rows.length > 0) {
+          console.log(`DEBUG loadIncentives [${dept}]: sample row staff_splits=`, result.rows[0].staff_splits);
+        }
+
         // Add department info to each row
         const rowsWithDept = staffRows.map(r => ({
           ...r,
@@ -220,24 +250,46 @@ const StaffSchedule = () => {
     if (!staff) return;
     setLoading(true);
     try {
-      const startOfMonth = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), 'yyyy-MM-dd');
-      const endOfMonth = format(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), 'yyyy-MM-dd');
+      const startOfMonthStr = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), 'yyyy-MM-dd');
+      const endOfMonthStr = format(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), 'yyyy-MM-dd');
       
-      const propertyId = staff.property_id;
+      let propertyId = staff.property_id;
       const sOutlets = Array.isArray(staff.outlet_ids) ? staff.outlet_ids : ((staff as any).outlet_id ? [(staff as any).outlet_id] : []);
 
-      const [allBookings, allTreatments, allInventory, allGuests, allRooms, allOutlets] = await Promise.all([
-        db.getMassageBookingsByDateRange(propertyId, true, startOfMonth, endOfMonth),
+      // If propertyId is missing, try to find it from outlets
+      if (!propertyId) {
+        const outlets = await db.getOutlets();
+        const myOutlet = outlets.find(o => sOutlets.includes(o.id));
+        if (myOutlet) {
+          propertyId = myOutlet.property_id;
+        }
+      }
+
+      if (!propertyId) {
+        console.error("No property ID found for staff");
+        setLoading(false);
+        return;
+      }
+
+      const [allBookings, allTreatments, allInventory, allGuests, allRooms, allOutlets, allSales] = await Promise.all([
+        db.getMassageBookingsByDateRange(propertyId, true, startOfMonthStr, endOfMonthStr),
         db.getMassageTypes(propertyId, true, sOutlets),
         db.getInventory(propertyId, true),
         db.getGuests(propertyId),
         db.getMassageRooms(undefined, propertyId),
-        db.getOutlets()
+        db.getOutlets(),
+        db.getSalesByDateRange(propertyId, true, startOfMonthStr, endOfMonthStr)
       ]);
 
       // Filter bookings for this specific therapist
       const myBookings = allBookings.filter(b => b.therapist_id === staff.id && b.status !== 'cancelled');
       
+      // Filter sales for this specific staff
+      const mySales = allSales.filter(s => 
+        (s.sold_by_id === staff.id || s.secondary_sold_by_id === staff.id) && 
+        !s.booking_id && s.status !== 'void'
+      );
+
       // Sort by date and time
       myBookings.sort((a, b) => {
         if (a.date !== b.date) return a.date.localeCompare(b.date);
@@ -245,6 +297,7 @@ const StaffSchedule = () => {
       });
 
       setMonthlyBookings(myBookings);
+      setSales(mySales);
       setTreatments(allTreatments);
       setInventory(allInventory);
       setGuests(allGuests);
@@ -500,16 +553,16 @@ const StaffSchedule = () => {
               <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl"></div>
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Total Earnings</div>
-                <div className="text-3xl font-black text-white relative z-10">{formatMoney(incentiveSummary.total)}</div>
+                <div className="text-3xl font-black text-white relative z-10 truncate">{formatMoney(incentiveSummary.total)}</div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Services</div>
-                  <div className="text-3xl font-black text-slate-900">{incentiveSummary.count || 0}</div>
+                  <div className="text-3xl font-black text-slate-900 truncate">{incentiveSummary.count || 0}</div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Avg / Service</div>
-                  <div className="text-3xl font-black text-indigo-600">
+                  <div className="text-3xl font-black text-indigo-600 truncate">
                     {formatMoney(incentiveSummary.count > 0 ? incentiveSummary.total / incentiveSummary.count : 0)}
                   </div>
                 </div>
@@ -533,7 +586,7 @@ const StaffSchedule = () => {
                       </div>
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{dept}</span>
                     </div>
-                    <div className="text-lg font-black text-slate-900">{formatMoney(data.total)}</div>
+                    <div className="text-lg font-black text-slate-900 truncate">{formatMoney(data.total)}</div>
                     <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{data.count} Services</div>
                   </div>
                 ))}
@@ -626,11 +679,11 @@ const StaffSchedule = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Bookings</div>
-                <div className="text-3xl font-black text-slate-900">{monthlyBookings.length}</div>
+                <div className="text-3xl font-black text-slate-900">{monthlyBookings.length + sales.length}</div>
               </div>
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Completed</div>
-                <div className="text-3xl font-black text-emerald-600">{monthlyBookings.filter(b => b.status === 'completed').length}</div>
+                <div className="text-3xl font-black text-emerald-600">{monthlyBookings.filter(b => b.status === 'completed').length + sales.length}</div>
               </div>
               <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden group cursor-pointer" onClick={() => setViewMode('incentives')}>
                 <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"></div>
@@ -674,7 +727,7 @@ const StaffSchedule = () => {
               <div className="h-px flex-1 bg-slate-100 mx-4"></div>
             </div>
             
-            {monthlyBookings.length === 0 ? (
+            {(monthlyBookings.length === 0 && sales.length === 0) ? (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -689,14 +742,24 @@ const StaffSchedule = () => {
             ) : (
               <div className="grid grid-cols-1 gap-4">
                 <AnimatePresence mode="popLayout">
-                  {monthlyBookings.map((booking, index) => {
-                    const treatment = treatments.find(t => t.id === booking.massage_type_id) || 
-                                     inventory.find(i => i.id === booking.inventory_item_id);
-                    const guest = guests.find(g => g.id === booking.guest_id);
-                    const room = rooms.find(r => r.id === booking.room_id);
-                    const outlet = outlets.find(o => o.id === booking.outlet_id);
+                  {[...monthlyBookings.map(b => ({...b, _type: 'booking' as const})), ...sales.map(s => ({...s, _type: 'sale' as const}))].sort((a, b) => {
+                    const dateA = a._type === 'booking' ? a.date : format(new Date(a.created_at), 'yyyy-MM-dd');
+                    const dateB = b._type === 'booking' ? b.date : format(new Date(b.created_at), 'yyyy-MM-dd');
+                    if (dateA !== dateB) return dateA.localeCompare(dateB);
+                    
+                    const timeA = a._type === 'booking' ? a.start_time : format(new Date(a.created_at), 'HH:mm');
+                    const timeB = b._type === 'booking' ? b.start_time : format(new Date(b.created_at), 'HH:mm');
+                    return timeA.localeCompare(timeB);
+                  }).map((item, index) => {
+                    if (item._type === 'booking') {
+                      const booking = item as MassageBooking;
+                      const treatment = treatments.find(t => t.id === booking.massage_type_id) || 
+                                       inventory.find(i => i.id === booking.inventory_item_id);
+                      const guest = guests.find(g => g.id === booking.guest_id);
+                      const room = rooms.find(r => r.id === booking.room_id);
+                      const outlet = outlets.find(o => o.id === booking.outlet_id);
 
-                    return (
+                      return (
                       <motion.div 
                         key={booking.id}
                         initial={{ opacity: 0, y: 20 }}
@@ -762,13 +825,74 @@ const StaffSchedule = () => {
                         )}
                       </div>
                       </motion.div>
-                    );
+                      );
+                    } else {
+                      const sale = item as Sale;
+                      const outlet = outlets.find(o => o.id === sale.outlet_id);
+                      const guest = guests.find(g => g.id === sale.guest_id);
+                      
+                      return (
+                        <motion.div 
+                          key={sale.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ delay: index * 0.02 }}
+                          className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-amber-200 transition-all duration-300"
+                        >
+                        <div className="absolute left-0 top-0 bottom-0 w-1 sm:w-2 bg-amber-500"></div>
+                        
+                        <div className="flex justify-between items-start mb-3 sm:mb-5 pl-1 sm:pl-2">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="p-1.5 sm:p-2 bg-amber-50 rounded-lg sm:rounded-xl text-amber-600 group-hover:scale-110 transition-transform">
+                              <TrendingUp className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                            </div>
+                            <div>
+                              <span className="font-black text-sm sm:text-lg tracking-tight text-slate-900 block leading-none mb-1">
+                                {format(new Date(sale.created_at), 'MMM dd')}
+                              </span>
+                              <span className="font-bold text-xs sm:text-sm tracking-tight text-slate-500 block leading-none">
+                                {format(new Date(sale.created_at), 'HH:mm')}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5">
+                            <div className="px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-amber-50 text-amber-700 border border-amber-100">
+                              POS SALE
+                            </div>
+                            {outlet && (
+                              <span className="text-[6px] sm:text-[8px] font-black text-amber-400 uppercase tracking-widest bg-amber-50/50 px-2 py-0.5 rounded-full border border-amber-100/50">
+                                {outlet.name}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="pl-1 sm:pl-2 space-y-2 sm:space-y-3">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400 shrink-0" />
+                            <span className="text-xs sm:text-sm font-bold text-slate-700">{sale.item_name}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
+                            <span className="text-xs sm:text-sm font-bold text-slate-600">{sale.guest_name || (guest ? `${guest.first_name} ${guest.last_name}` : 'Walk-in Guest')}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
+                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-500">{sale.category}</span>
+                          </div>
+                        </div>
+                        </motion.div>
+                      );
+                    }
                   })}
                 </AnimatePresence>
               </div>
             )}
           </div>
-        ) : bookings.length === 0 ? (
+        ) : (bookings.length === 0 && sales.length === 0) ? (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -783,100 +907,170 @@ const StaffSchedule = () => {
         ) : (
           <div className="grid grid-cols-1 gap-4">
             <AnimatePresence mode="popLayout">
-              {bookings.map((booking, index) => {
-                const treatment = treatments.find(t => t.id === booking.massage_type_id) || 
-                                 inventory.find(i => i.id === booking.inventory_item_id);
-                const guest = guests.find(g => g.id === booking.guest_id);
-                const room = rooms.find(r => r.id === booking.room_id);
-                const outlet = outlets.find(o => o.id === booking.outlet_id);
+              {[...bookings.map(b => ({...b, _type: 'booking' as const})), ...sales.map(s => ({...s, _type: 'sale' as const}))].sort((a, b) => {
+                const timeA = a._type === 'booking' ? a.start_time : format(new Date(a.created_at), 'HH:mm');
+                const timeB = b._type === 'booking' ? b.start_time : format(new Date(b.created_at), 'HH:mm');
+                return timeA.localeCompare(timeB);
+              }).map((item, index) => {
+                if (item._type === 'booking') {
+                  const booking = item as MassageBooking;
+                  const treatment = treatments.find(t => t.id === booking.massage_type_id) || 
+                                   inventory.find(i => i.id === booking.inventory_item_id);
+                  const guest = guests.find(g => g.id === booking.guest_id);
+                  const room = rooms.find(r => r.id === booking.room_id);
+                  const outlet = outlets.find(o => o.id === booking.outlet_id);
 
-                return (
-                  <motion.div 
-                    key={booking.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300"
-                  >
-                  <div className={`absolute left-0 top-0 bottom-0 w-1 sm:w-2 ${
-                    booking.status === 'completed' ? 'bg-emerald-500' : 
-                    booking.status === 'no-show' ? 'bg-red-500' : 
-                    'bg-indigo-500 animate-pulse'
-                  }`}></div>
-                  
-                  <div className="flex justify-between items-start mb-3 sm:mb-5 pl-1 sm:pl-2">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className="p-1.5 sm:p-2 bg-indigo-50 rounded-lg sm:rounded-xl text-indigo-600 group-hover:scale-110 transition-transform">
-                        <Clock className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-                      </div>
-                      <div>
-                        <span className="font-black text-sm sm:text-xl tracking-tight text-slate-900 block leading-none">
-                          {booking.start_time.substring(0, 5)} <span className="text-slate-300 mx-0.5">-</span> {booking.end_time.substring(0, 5)}
-                        </span>
-                        <p className="text-[6px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Scheduled Time</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1.5">
-                      <span className={`text-[7px] sm:text-[10px] font-black uppercase tracking-widest px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border shadow-sm ${
-                        booking.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
-                        booking.status === 'no-show' ? 'bg-red-50 text-red-700 border-red-100' : 
-                        'bg-indigo-50 text-indigo-700 border-indigo-100'
-                      }`}>
-                        {booking.status}
-                      </span>
-                      {outlet && (
-                        <span className="text-[6px] sm:text-[8px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-50/50 px-2 py-0.5 rounded-full border border-indigo-100/50">
-                          {outlet.name}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="pl-1 sm:pl-2">
-                    <div className="mb-3 sm:mb-6">
-                      <p className="text-[6px] sm:text-[9px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-0.5 sm:mb-1">Treatment Type</p>
-                      <h3 className="font-black text-slate-900 uppercase tracking-tight text-xs sm:text-lg leading-tight">
-                        {treatment?.name || 'Unknown Treatment'}
-                      </h3>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 mb-1 sm:mb-2">
-                      <div className="flex items-center gap-2.5 sm:gap-4 p-2 sm:p-3 rounded-lg sm:rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-indigo-100 transition-colors">
-                        <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm border border-slate-100">
-                          <User className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-indigo-400" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[7px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Guest Name</p>
-                          <p className="text-[10px] sm:text-sm font-black text-slate-800 uppercase truncate">{guest?.name || 'Unknown'}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2.5 sm:gap-4 p-2 sm:p-3 rounded-lg sm:rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-emerald-100 transition-colors">
-                        <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm border border-slate-100">
-                          <MapPin className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-emerald-400" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[7px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Assigned Location</p>
-                          <p className="text-[10px] sm:text-sm font-black text-slate-800 uppercase truncate">{room?.name || 'Any Room'}</p>
-                        </div>
-                      </div>
-                    </div>
+                  return (
+                    <motion.div 
+                      key={booking.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300"
+                    >
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 sm:w-2 ${
+                      booking.status === 'completed' ? 'bg-emerald-500' : 
+                      booking.status === 'no-show' ? 'bg-red-500' : 
+                      'bg-indigo-500 animate-pulse'
+                    }`}></div>
                     
-                    {booking.notes && (
-                      <div className="mt-4 p-4 bg-amber-50 rounded-2xl border border-amber-100/50 flex gap-3">
-                        <div className="w-1.5 h-full bg-amber-400 rounded-full shrink-0"></div>
+                    <div className="flex justify-between items-start mb-3 sm:mb-5 pl-1 sm:pl-2">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="p-1.5 sm:p-2 bg-indigo-50 rounded-lg sm:rounded-xl text-indigo-600 group-hover:scale-110 transition-transform">
+                          <Clock className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                        </div>
                         <div>
-                          <p className="text-[9px] font-black text-amber-800 uppercase tracking-widest mb-1">Special Notes</p>
-                          <p className="text-xs font-bold text-amber-900 leading-relaxed">{booking.notes}</p>
+                          <span className="font-black text-sm sm:text-xl tracking-tight text-slate-900 block leading-none">
+                            {booking.start_time.substring(0, 5)} <span className="text-slate-300 mx-0.5">-</span> {booking.end_time.substring(0, 5)}
+                          </span>
+                          <p className="text-[6px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Scheduled Time</p>
                         </div>
                       </div>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span className={`text-[7px] sm:text-[10px] font-black uppercase tracking-widest px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border shadow-sm ${
+                          booking.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
+                          booking.status === 'no-show' ? 'bg-red-50 text-red-700 border-red-100' : 
+                          'bg-indigo-50 text-indigo-700 border-indigo-100'
+                        }`}>
+                          {booking.status}
+                        </span>
+                        {outlet && (
+                          <span className="text-[6px] sm:text-[8px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-50/50 px-2 py-0.5 rounded-full border border-indigo-100/50">
+                            {outlet.name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pl-1 sm:pl-2">
+                      <div className="mb-3 sm:mb-6">
+                        <p className="text-[6px] sm:text-[9px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-0.5 sm:mb-1">Treatment Type</p>
+                        <h3 className="font-black text-slate-900 uppercase tracking-tight text-xs sm:text-lg leading-tight">
+                          {treatment?.name || 'Unknown Treatment'}
+                        </h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 mb-1 sm:mb-2">
+                        <div className="flex items-center gap-2.5 sm:gap-4 p-2 sm:p-3 rounded-lg sm:rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-indigo-100 transition-colors">
+                          <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm border border-slate-100">
+                            <User className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-indigo-400" />
+                          </div>
+                          <div>
+                            <p className="text-[6px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Guest Name</p>
+                            <p className="text-[10px] sm:text-sm font-black text-slate-700 uppercase tracking-tight">{guest?.first_name} {guest?.last_name}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 sm:gap-4 p-2 sm:p-3 rounded-lg sm:rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-indigo-100 transition-colors">
+                          <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm border border-slate-100">
+                            <MapPin className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-indigo-400" />
+                          </div>
+                          <div>
+                            <p className="text-[6px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Room Location</p>
+                            <p className="text-[10px] sm:text-sm font-black text-slate-700 uppercase tracking-tight">{room?.name || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    </motion.div>
+                  );
+                } else {
+                  const sale = item as Sale;
+                  const outlet = outlets.find(o => o.id === sale.outlet_id);
+                  const guest = guests.find(g => g.id === sale.guest_id);
+                  
+                  return (
+                    <motion.div 
+                      key={sale.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-amber-200 transition-all duration-300"
+                    >
+                    <div className="absolute left-0 top-0 bottom-0 w-1 sm:w-2 bg-amber-500"></div>
+                    
+                    <div className="flex justify-between items-start mb-3 sm:mb-5 pl-1 sm:pl-2">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="p-1.5 sm:p-2 bg-amber-50 rounded-lg sm:rounded-xl text-amber-600 group-hover:scale-110 transition-transform">
+                          <TrendingUp className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                        </div>
+                        <div>
+                          <span className="font-black text-sm sm:text-xl tracking-tight text-slate-900 block leading-none">
+                            {format(new Date(sale.created_at), 'HH:mm')}
+                          </span>
+                          <p className="text-[6px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">POS Sale Time</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span className="text-[7px] sm:text-[10px] font-black uppercase tracking-widest px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border shadow-sm bg-amber-50 text-amber-700 border-amber-100">
+                          POS SALE
+                        </span>
+                        {outlet && (
+                          <span className="text-[6px] sm:text-[8px] font-black text-amber-400 uppercase tracking-widest bg-amber-50/50 px-2 py-0.5 rounded-full border border-amber-100/50">
+                            {outlet.name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pl-1 sm:pl-2">
+                      <div className="mb-3 sm:mb-6">
+                        <p className="text-[6px] sm:text-[9px] font-black text-amber-500 uppercase tracking-[0.2em] mb-0.5 sm:mb-1">Service / Item</p>
+                        <h3 className="font-black text-slate-900 uppercase tracking-tight text-xs sm:text-lg leading-tight">
+                          {sale.item_name}
+                        </h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 mb-1 sm:mb-2">
+                        <div className="flex items-center gap-2.5 sm:gap-4 p-2 sm:p-3 rounded-lg sm:rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-amber-100 transition-colors">
+                          <div className="w-7 h-7 sm:w-10 sm:h-10 bg-white rounded-lg sm:rounded-xl flex items-center justify-center shadow-sm border border-slate-100">
+                            <User className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-amber-500" />
+                          </div>
+                          <div>
+                            <p className="text-[6px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Guest Name</p>
+                            <p className="text-[10px] sm:text-sm font-black text-slate-700 uppercase tracking-tight">{sale.guest_name || (guest ? `${guest.first_name} ${guest.last_name}` : 'Walk-in Guest')}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 sm:gap-4 p-2 sm:p-3 rounded-lg sm:rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-amber-100 transition-colors">
+                          <div className="w-7 h-7 sm:w-10 sm:h-10 bg-white rounded-lg sm:rounded-xl flex items-center justify-center shadow-sm border border-slate-100">
+                            <Award className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-amber-500" />
+                          </div>
+                          <div>
+                            <p className="text-[6px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Category</p>
+                            <p className="text-[10px] sm:text-sm font-black text-slate-700 uppercase tracking-tight">{sale.category}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    </motion.div>
+                  );
+                }
+              })}
+            </AnimatePresence>
+          </div>
       )}
     </main>
 

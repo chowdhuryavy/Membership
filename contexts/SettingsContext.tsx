@@ -113,7 +113,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     
     const value = safeAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (!currency) return value;
-    return `${currency.symbol} ${value}`;
+    return `${currency.symbol}\u00A0${value}`;
   };
 
   /**

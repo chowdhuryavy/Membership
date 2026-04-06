@@ -296,8 +296,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
         date: bookingData.date,
         start_time: bookingData.start_time,
         end_time: bookingData.end_time,
-        massage_type_id: isPT ? null : (bookingData.massage_type_id || null),
-        inventory_item_id: isPT ? (bookingData.massage_type_id || null) : null,
+        massage_type_id: bookingData.massage_type_id || null,
+        inventory_item_id: null,
         additional_service_ids: bookingData.additional_service_ids.filter(Boolean),
         price: netPrice,
         discount: calculatedDiscountValue,
@@ -410,8 +410,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div className="md:col-span-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                    <div className="sm:col-span-2 lg:col-span-1">
                         <Select 
                             label="Category *" 
                             options={[
@@ -423,7 +423,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
                             className="h-11 rounded-xl text-xs" 
                         />
                     </div>
-                    <div className="md:col-span-1">
+                    <div className="sm:col-span-2 lg:col-span-1">
                         <Select 
                             label="Primary Service *" 
                             options={[
@@ -443,7 +443,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
                             </div>
                         )}
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 sm:col-span-1 lg:col-span-1">
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Reduction Logic</label>
                         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 h-11">
                             <button 
@@ -462,7 +462,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
                             </button>
                         </div>
                     </div>
-                    <div>
+                    <div className="sm:col-span-1 lg:col-span-1">
                          <Input 
                             label={bookingData.discount_mode === 'amount' ? "Discount Amount" : "Reduction (%)"} 
                             type="number" 
@@ -472,7 +472,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
                             placeholder={bookingData.discount_mode === 'amount' ? "e.g. 50" : "e.g. 10"}
                         />
                     </div>
-                    <div className="bg-slate-950 text-white px-4 py-2 rounded-xl flex items-center justify-between h-11 shadow-lg shadow-slate-200">
+                    <div className="sm:col-span-2 lg:col-span-4 bg-slate-950 text-white px-4 py-2 rounded-xl flex items-center justify-between h-11 shadow-lg shadow-slate-200 mt-2">
                         <span className="text-[7px] font-black opacity-60 uppercase tracking-widest">Total Fee</span>
                         <span className="text-xs font-black text-indigo-400 tracking-tighter">{formatMoney(netPrice)}</span>
                     </div>
@@ -548,7 +548,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
                     </Button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <Input label="Date" type="date" value={bookingData.date} onChange={e => setBookingData({...bookingData, date: e.target.value})} className="h-11 rounded-xl text-xs" />
                     <Input label="Start" type="time" value={bookingData.start_time} onChange={e => setBookingData({...bookingData, start_time: e.target.value})} className="h-11 rounded-xl text-xs" />
                     <Input label="End (Auto)" value={bookingData.end_time} disabled className="h-11 rounded-xl bg-slate-50 text-slate-400 text-xs border-slate-200" />
@@ -556,7 +556,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
 
                 <div className="space-y-2">
                     <label className="text-[9px] font-black text-slate-900 uppercase tracking-widest ml-1 flex items-center gap-2"><Users className="w-3 h-3 text-indigo-600"/> Assigned Property Specialist Type *</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                       {therapists.map(t => {
                         const isAvailable = availableTherapists.some(at => at.id === t.id);
                         return (
@@ -572,7 +572,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
                 {bookingData.category !== 'Personal Training' && (
                     <div className="space-y-2">
                         <label className="text-[9px] font-black text-slate-900 uppercase tracking-widest ml-1 flex items-center gap-2"><MapPin className="w-3 h-3 text-indigo-600"/> Assigned Room *</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                           {massageRooms.filter(r => r.is_active || r.id === bookingData.room_id).map(r => {
                             const isAvailable = availableRooms.some(ar => ar.id === r.id);
                             return (
