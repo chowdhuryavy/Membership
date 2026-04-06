@@ -10,6 +10,75 @@ import { motion, AnimatePresence } from 'motion/react';
 import { getReportData } from '../src/shared/reportLogic';
 import { supabase } from '../services/supabase';
 
+const LoadingScreen = () => (
+  <div className="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center overflow-hidden">
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-500/20 rounded-full blur-[120px] animate-pulse"></div>
+      <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-500/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }}></div>
+    </div>
+    
+    <div className="relative flex flex-col items-center">
+      <motion.div 
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="relative"
+      >
+        <div className="text-8xl font-black text-white tracking-tighter flex items-baseline">
+          <motion.span
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+          >
+            H
+          </motion.span>
+          <motion.span
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.4, duration: 0.5 }}
+            className="text-indigo-500"
+          >
+            C
+          </motion.span>
+        </div>
+        
+        <motion.div 
+          initial={{ width: 0 }}
+          animate={{ width: '100%' }}
+          transition={{ delay: 0.6, duration: 1, ease: "easeInOut" }}
+          className="h-1 bg-gradient-to-r from-indigo-500 to-emerald-500 mt-2 rounded-full"
+        />
+      </motion.div>
+      
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1, duration: 0.5 }}
+        className="mt-8 flex flex-col items-center gap-2"
+      >
+        <div className="flex gap-1.5">
+          {[0, 1, 2].map((i) => (
+            <motion.div
+              key={i}
+              animate={{
+                scale: [1, 1.5, 1],
+                opacity: [0.3, 1, 0.3],
+              }}
+              transition={{
+                duration: 1,
+                repeat: Infinity,
+                delay: i * 0.2,
+              }}
+              className="w-2 h-2 bg-indigo-500 rounded-full"
+            />
+          ))}
+        </div>
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-4">Health Club</span>
+      </motion.div>
+    </div>
+  </div>
+);
+
 const StaffSchedule = () => {
   const [staff, setStaff] = useState<Staff | null>(null);
   const [propertyName, setPropertyName] = useState<string>('');
@@ -26,7 +95,7 @@ const StaffSchedule = () => {
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'incentives'>('daily');
   const [monthlyBookings, setMonthlyBookings] = useState<MassageBooking[]>([]);
   const [incentiveData, setIncentiveData] = useState<any[]>([]);
-  const [incentiveSummary, setIncentiveSummary] = useState<any>({});
+  const [incentiveSummary, setIncentiveSummary] = useState<any>({ total: 0, count: 0, breakdown: {} });
   const [incentiveLoading, setIncentiveLoading] = useState(false);
   
   const { settings, formatMoney } = useSettings();
@@ -75,6 +144,7 @@ const StaffSchedule = () => {
         loadSchedule();
       } else if (viewMode === 'monthly') {
         loadMonthlySchedule();
+        loadIncentives();
       } else if (viewMode === 'incentives') {
         loadIncentives();
       }
@@ -180,9 +250,24 @@ const StaffSchedule = () => {
     if (!staff) return;
     setIncentiveLoading(true);
     try {
-      const propertyId = staff.property_id;
+      let propertyId = staff.property_id;
       const sOutlets = Array.isArray(staff.outlet_ids) ? staff.outlet_ids : ((staff as any).outlet_id ? [(staff as any).outlet_id] : []);
       
+      // If propertyId is missing, try to find it from outlets
+      if (!propertyId) {
+        const outlets = await db.getOutlets();
+        const myOutlet = outlets.find(o => sOutlets.includes(o.id));
+        if (myOutlet) {
+          propertyId = myOutlet.property_id;
+        }
+      }
+
+      if (!propertyId) {
+        console.error("No property ID found for staff");
+        setIncentiveLoading(false);
+        return;
+      }
+
       // We need to fetch incentives for each department and combine them
       const depts: ('Massage' | 'Membership' | 'Personal Training' | 'Sale')[] = ['Massage', 'Membership', 'Personal Training', 'Sale'];
       let allRows: any[] = [];
@@ -201,19 +286,23 @@ const StaffSchedule = () => {
         });
 
         // Filter rows for this specific staff member
-        const staffRows = result.rows.filter(r => r.staff_splits && r.staff_splits[staff.id] !== undefined);
+        const staffRows = result.rows.filter(r => {
+          if (!r.staff_splits) return false;
+          const matchingKey = Object.keys(r.staff_splits).find(id => String(id) === String(staff.id));
+          return matchingKey !== undefined;
+        });
         
         console.log(`DEBUG loadIncentives [${dept}]: total rows=${result.rows.length}, staffRows=${staffRows.length}, staffId=${staff.id}`);
-        if (result.rows.length > 0) {
-          console.log(`DEBUG loadIncentives [${dept}]: sample row staff_splits=`, result.rows[0].staff_splits);
-        }
 
         // Add department info to each row
-        const rowsWithDept = staffRows.map(r => ({
-          ...r,
-          department: dept,
-          my_incentive: r.staff_splits[staff.id]
-        }));
+        const rowsWithDept = staffRows.map(r => {
+          const matchingKey = Object.keys(r.staff_splits).find(id => String(id) === String(staff.id));
+          return {
+            ...r,
+            department: dept,
+            my_incentive: matchingKey ? r.staff_splits[matchingKey] : 0
+          };
+        });
 
         allRows = [...allRows, ...rowsWithDept];
         totalInc += rowsWithDept.reduce((sum, r) => sum + r.my_incentive, 0);
@@ -442,6 +531,10 @@ const StaffSchedule = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100">
+      <AnimatePresence>
+        {(loading || incentiveLoading) && <LoadingScreen />}
+      </AnimatePresence>
+
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block w-72 h-screen sticky top-0 border-r border-slate-200">
         <SidebarContent />
