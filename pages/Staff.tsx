@@ -60,6 +60,9 @@ const StaffPage = () => {
     probation_end_date: '',
     property_id: '',
     outlet_ids: [],
+    can_login: false,
+    employee_number: '',
+    password: '',
     staff_portal_settings: {
       show_daily_schedule: true,
       show_monthly_summary: true,
@@ -172,8 +175,8 @@ const StaffPage = () => {
         probation_end_date: formData.probation_end_date,
         property_id: formData.property_id,
         outlet_ids: formData.outlet_ids,
-        can_login: formData.can_login,
-        employee_number: formData.employee_number,
+        can_login: !!formData.can_login,
+        employee_number: formData.employee_number || '',
         staff_portal_settings: formData.staff_portal_settings
       };
       
@@ -276,6 +279,9 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                             probation_end_date: s.probation_end_date || '',
                             property_id: s.property_id,
                             outlet_ids: s.outlet_ids || [],
+                            can_login: !!s.can_login,
+                            employee_number: s.employee_number || '',
+                            password: '', // Don't pre-fill password for security
                             staff_portal_settings: {
                               show_daily_schedule: s.staff_portal_settings?.show_daily_schedule ?? true,
                               show_monthly_summary: s.staff_portal_settings?.show_monthly_summary ?? true,
@@ -577,6 +583,9 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
               probation_end_date: s.probation_end_date || '',
               property_id: s.property_id,
               outlet_ids: s.outlet_ids || [],
+              can_login: !!s.can_login,
+              employee_number: s.employee_number || '',
+              password: '', // Don't pre-fill password for security
               staff_portal_settings: {
                 show_daily_schedule: s.staff_portal_settings?.show_daily_schedule ?? true,
                 show_monthly_summary: s.staff_portal_settings?.show_monthly_summary ?? true,
@@ -621,7 +630,31 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                 <input placeholder="Search personnel..." className="w-full h-11 pl-11 pr-4 rounded-xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
               {canManage && (
-                  <Button onClick={() => { setEditingId(null); setFormData({ name:'', role:'', email:'', phone:'', is_active:true, is_eligible_for_incentives: true, probation_start_date: '', probation_end_date: '', property_id: currentProperty?.id || '', outlet_ids:[] }); setShowForm(true); }} className="h-11 px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100">
+                  <Button onClick={() => { 
+                    setEditingId(null); 
+                    setFormData({ 
+                      name:'', 
+                      role:'', 
+                      email:'', 
+                      phone:'', 
+                      is_active:true, 
+                      is_eligible_for_incentives: true, 
+                      probation_start_date: '', 
+                      probation_end_date: '', 
+                      property_id: currentProperty?.id || '', 
+                      outlet_ids:[],
+                      can_login: false,
+                      employee_number: '',
+                      password: '',
+                      staff_portal_settings: {
+                        show_daily_schedule: true,
+                        show_monthly_summary: true,
+                        show_incentives: true,
+                        show_session_notes: true
+                      }
+                    }); 
+                    setShowForm(true); 
+                  }} className="h-11 px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100">
                     <Plus className="w-4 h-4 mr-2" /> Enroll Staff
                   </Button>
               )}
