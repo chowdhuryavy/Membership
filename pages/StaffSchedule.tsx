@@ -186,22 +186,25 @@ const StaffSchedule = () => {
   }, [monthlyBookings, sales, selectedMonthlyCategory, outlets, treatments, inventory]);
 
   // Session Notes State
-  const [selectedBookingForNotes, setSelectedBookingForNotes] = useState<MassageBooking | null>(null);
+  const [selectedItemForNotes, setSelectedItemForNotes] = useState<(MassageBooking & { _type: 'booking' }) | (Sale & { _type: 'sale' }) | null>(null);
   const [sessionNotes, setSessionNotes] = useState('');
   const [isSavingNotes, setIsSavingNotes] = useState(false);
 
   const handleSaveNotes = async () => {
-    if (!selectedBookingForNotes) return;
+    if (!selectedItemForNotes) return;
     setIsSavingNotes(true);
     try {
-      await db.updateMassageBooking(selectedBookingForNotes.id, { session_notes: sessionNotes });
-      
-      // Update local state
-      setBookings(bookings.map(b => b.id === selectedBookingForNotes.id ? { ...b, session_notes: sessionNotes } : b));
-      setMonthlyBookings(monthlyBookings.map(b => b.id === selectedBookingForNotes.id ? { ...b, session_notes: sessionNotes } : b));
+      if (selectedItemForNotes._type === 'booking') {
+        await db.updateMassageBooking(selectedItemForNotes.id, { session_notes: sessionNotes });
+        setBookings(bookings.map(b => b.id === selectedItemForNotes.id ? { ...b, session_notes: sessionNotes } : b));
+        setMonthlyBookings(monthlyBookings.map(b => b.id === selectedItemForNotes.id ? { ...b, session_notes: sessionNotes } : b));
+      } else {
+        await db.updateSale(selectedItemForNotes.id, { session_notes: sessionNotes });
+        setSales(sales.map(s => s.id === selectedItemForNotes.id ? { ...s, session_notes: sessionNotes } : s));
+      }
       
       toast.success('Session notes saved successfully');
-      setSelectedBookingForNotes(null);
+      setSelectedItemForNotes(null);
     } catch (error) {
       console.error("Failed to save notes:", error);
       toast.error('Failed to save notes. Please try again.');
@@ -242,11 +245,38 @@ const StaffSchedule = () => {
     }
     try {
       const session = JSON.parse(sessionStr);
-      setStaff(session);
+      // Fetch latest staff profile to get up-to-date permissions
+      db.getStaffById(session.id).then(updatedStaff => {
+        if (updatedStaff) {
+          setStaff(updatedStaff);
+          // Update session in localStorage
+          localStorage.setItem('staff_session', JSON.stringify(updatedStaff));
+        } else {
+          setStaff(session);
+        }
+      }).catch(() => {
+        setStaff(session);
+      });
     } catch (e) {
       navigate('/staff-login');
     }
   }, [navigate]);
+
+  useEffect(() => {
+    if (staff && staff.staff_portal_settings) {
+      const s = staff.staff_portal_settings;
+      if (viewMode === 'daily' && !s.show_daily_schedule) {
+        if (s.show_monthly_summary) setViewMode('monthly');
+        else if (s.show_incentives) setViewMode('incentives');
+      } else if (viewMode === 'monthly' && !s.show_monthly_summary) {
+        if (s.show_daily_schedule) setViewMode('daily');
+        else if (s.show_incentives) setViewMode('incentives');
+      } else if (viewMode === 'incentives' && !s.show_incentives) {
+        if (s.show_daily_schedule) setViewMode('daily');
+        else if (s.show_monthly_summary) setViewMode('monthly');
+      }
+    }
+  }, [staff, viewMode]);
 
   useEffect(() => {
     if (staff) {
@@ -583,26 +613,30 @@ const StaffSchedule = () => {
 
       <nav className="flex-1 space-y-1">
         <div className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 px-2">Main Menu</div>
-        <button 
-          onClick={() => {
-            setViewMode('daily');
-            setCurrentDate(new Date());
-            setIsSidebarOpen(false);
-          }}
-          className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'daily' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
-        >
-          <CalendarIcon className="w-3.5 h-3.5" /> Today's Schedule
-        </button>
-        <button 
-          onClick={() => {
-            setViewMode('monthly');
-            setIsSidebarOpen(false);
-          }}
-          className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'monthly' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
-        >
-          <CalendarIcon className="w-3.5 h-3.5" /> Monthly Summary
-        </button>
-        {(settings?.staff_portal_settings?.show_incentives ?? true) && (
+        {(staff.staff_portal_settings?.show_daily_schedule ?? true) && (
+          <button 
+            onClick={() => {
+              setViewMode('daily');
+              setCurrentDate(new Date());
+              setIsSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'daily' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
+          >
+            <CalendarIcon className="w-3.5 h-3.5" /> Today's Schedule
+          </button>
+        )}
+        {(staff.staff_portal_settings?.show_monthly_summary ?? true) && (
+          <button 
+            onClick={() => {
+              setViewMode('monthly');
+              setIsSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'monthly' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
+          >
+            <CalendarIcon className="w-3.5 h-3.5" /> Monthly Summary
+          </button>
+        )}
+        {(staff.staff_portal_settings?.show_incentives ?? true) && (
           <button 
             onClick={() => {
               setViewMode('incentives');
@@ -1047,20 +1081,22 @@ const StaffSchedule = () => {
                         )}
                       </div>
                       
-                      <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-100 flex justify-end pl-1 sm:pl-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => {
-                            setSelectedBookingForNotes(booking);
-                            setSessionNotes(booking.session_notes || '');
-                          }}
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest gap-1.5 sm:gap-2 h-7 sm:h-8 px-2 sm:px-3 ${booking.session_notes ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
-                        >
-                          <FileText className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                          {booking.session_notes ? 'View/Edit Notes' : 'Add Notes'}
-                        </Button>
-                      </div>
+                      {(staff.staff_portal_settings?.show_session_notes ?? true) && (
+                        <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-100 flex justify-end pl-1 sm:pl-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => {
+                              setSelectedItemForNotes({ ...booking, _type: 'booking' });
+                              setSessionNotes(booking.session_notes || '');
+                            }}
+                            className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest gap-1.5 sm:gap-2 h-7 sm:h-8 px-2 sm:px-3 ${booking.session_notes ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                          >
+                            <FileText className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                            {booking.session_notes ? 'View/Edit Notes' : 'Add Notes'}
+                          </Button>
+                        </div>
+                      )}
                       </motion.div>
                       );
                     } else {
@@ -1121,6 +1157,23 @@ const StaffSchedule = () => {
                             <span className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-500">{sale.category}</span>
                           </div>
                         </div>
+
+                        {(staff.staff_portal_settings?.show_session_notes ?? true) && (
+                          <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-100 flex justify-end pl-1 sm:pl-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => {
+                                setSelectedItemForNotes({ ...sale, _type: 'sale' });
+                                setSessionNotes(sale.session_notes || '');
+                              }}
+                              className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest gap-1.5 sm:gap-2 h-7 sm:h-8 px-2 sm:px-3 ${sale.session_notes ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'}`}
+                            >
+                              <FileText className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                              {sale.session_notes ? 'View/Edit Notes' : 'Add Notes'}
+                            </Button>
+                          </div>
+                        )}
                         </motion.div>
                       );
                     }
@@ -1230,20 +1283,22 @@ const StaffSchedule = () => {
                         </div>
                       </div>
                       
-                      <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-100 flex justify-end">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => {
-                            setSelectedBookingForNotes(booking);
-                            setSessionNotes(booking.session_notes || '');
-                          }}
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-xl ${booking.session_notes ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
-                        >
-                          <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                          {booking.session_notes ? 'View/Edit Notes' : 'Add Notes'}
-                        </Button>
-                      </div>
+                      {(staff.staff_portal_settings?.show_session_notes ?? true) && (
+                        <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-100 flex justify-end">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => {
+                              setSelectedItemForNotes({ ...booking, _type: 'booking' });
+                              setSessionNotes(booking.session_notes || '');
+                            }}
+                            className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-xl ${booking.session_notes ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                          >
+                            <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            {booking.session_notes ? 'View/Edit Notes' : 'Add Notes'}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     </motion.div>
                   );
@@ -1316,6 +1371,23 @@ const StaffSchedule = () => {
                           </div>
                         </div>
                       </div>
+
+                      {(staff.staff_portal_settings?.show_session_notes ?? true) && (
+                        <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-100 flex justify-end">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => {
+                              setSelectedItemForNotes({ ...sale, _type: 'sale' });
+                              setSessionNotes(sale.session_notes || '');
+                            }}
+                            className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-xl ${sale.session_notes ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'}`}
+                          >
+                            <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            {sale.session_notes ? 'View/Edit Notes' : 'Add Notes'}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     </motion.div>
                   );
@@ -1329,7 +1401,7 @@ const StaffSchedule = () => {
       {/* Password Change Modal */}
       <AnimatePresence>
         {/* Session Notes Modal */}
-        {selectedBookingForNotes && (
+        {selectedItemForNotes && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -1343,13 +1415,15 @@ const StaffSchedule = () => {
                   <div>
                     <h2 className="text-xl sm:text-2xl font-black tracking-tight mb-2">Session Notes</h2>
                     <p className="text-indigo-100 text-xs sm:text-sm font-bold tracking-wide">
-                      {guests.find(g => g.id === selectedBookingForNotes.guest_id)?.first_name} {guests.find(g => g.id === selectedBookingForNotes.guest_id)?.last_name}
+                      {selectedItemForNotes._type === 'booking' 
+                        ? `${guests.find(g => g.id === selectedItemForNotes.guest_id)?.first_name || ''} ${guests.find(g => g.id === selectedItemForNotes.guest_id)?.last_name || ''}`
+                        : selectedItemForNotes.guest_name || 'Walk-in Guest'}
                       <span className="mx-2 opacity-50">•</span>
-                      {format(parseISO(selectedBookingForNotes.date), 'MMM dd, yyyy')}
+                      {format(parseISO(selectedItemForNotes._type === 'booking' ? selectedItemForNotes.date : selectedItemForNotes.created_at), 'MMM dd, yyyy')}
                     </p>
                   </div>
                   <button 
-                    onClick={() => setSelectedBookingForNotes(null)}
+                    onClick={() => setSelectedItemForNotes(null)}
                     className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors"
                   >
                     <X className="w-5 h-5" />
@@ -1378,7 +1452,7 @@ const StaffSchedule = () => {
                   <Button 
                     variant="outline" 
                     className="flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest"
-                    onClick={() => setSelectedBookingForNotes(null)}
+                    onClick={() => setSelectedItemForNotes(null)}
                   >
                     Cancel
                   </Button>

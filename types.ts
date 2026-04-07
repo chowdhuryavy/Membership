@@ -90,6 +90,13 @@ export interface MassageRoom {
   is_active: boolean;
 }
 
+export interface StaffPortalSettings {
+  show_daily_schedule: boolean;
+  show_monthly_summary: boolean;
+  show_incentives: boolean;
+  show_session_notes: boolean;
+}
+
 export interface Staff {
   id: string;
   property_id: string;
@@ -106,6 +113,7 @@ export interface Staff {
   probation_start_date?: string; 
   probation_end_date?: string;   
   created_at: string;
+  staff_portal_settings?: StaffPortalSettings;
 }
 
 export interface MembershipType {
@@ -311,6 +319,7 @@ export interface Sale {
   discount_id_url?: string;
   created_at: string;
   remarks?: string;
+  session_notes?: string;
 }
 
 export interface InventoryItem {
