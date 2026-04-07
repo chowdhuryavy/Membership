@@ -132,17 +132,19 @@ const StaffSchedule = () => {
 
   const getBookingCategory = (booking: MassageBooking) => {
     const outlet = outlets.find(o => o.id === booking.outlet_id);
-    if (outlet?.name?.toLowerCase().includes('pt') || outlet?.name?.toLowerCase().includes('personal training')) {
+    const outletName = outlet?.name?.toLowerCase() || '';
+    if (outletName.includes('pt') || outletName.includes('personal training') || outletName.includes('gym') || outletName.includes('fitness')) {
       return 'Personal Training';
     }
     const treatment = treatments.find(t => t.id === booking.massage_type_id) || inventory.find(i => i.id === booking.inventory_item_id);
+    const treatmentName = treatment?.name?.toLowerCase() || '';
     
     let cat = treatment?.category || 'Massage';
-    if (cat === 'PT' || cat.toLowerCase() === 'personal training') {
+    if (cat === 'PT' || cat.toLowerCase() === 'personal training' || cat.toLowerCase() === 'pt session') {
       return 'Personal Training';
     }
     
-    if (treatment?.name?.toLowerCase().includes('personal training') || treatment?.name?.toLowerCase() === 'pt' || treatment?.name?.toLowerCase().includes('pt session')) {
+    if (treatmentName.includes('personal training') || treatmentName === 'pt' || treatmentName.includes('pt session') || treatmentName.includes('training session')) {
       return 'Personal Training';
     }
     
@@ -578,9 +580,32 @@ const StaffSchedule = () => {
 
   if (!staff) return null;
 
+  const refreshStaffData = async () => {
+    if (!staff) return;
+    try {
+      const updatedStaff = await db.getStaffById(staff.id);
+      if (updatedStaff) {
+        setStaff(updatedStaff);
+        localStorage.setItem('staff_session', JSON.stringify(updatedStaff));
+        toast.success('Permissions synced');
+      }
+    } catch (e) {
+      console.error('Failed to sync permissions', e);
+    }
+  };
+
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-slate-900 text-white p-6 overflow-y-auto custom-scrollbar">
       <div className="mb-6">
+        <div className="flex justify-end mb-2">
+          <button 
+            onClick={refreshStaffData}
+            className="p-1.5 hover:bg-white/10 rounded-lg text-slate-500 hover:text-white transition-colors"
+            title="Sync Permissions"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
         <div className="flex flex-col items-center text-center mb-8">
           <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center text-slate-900 shadow-2xl shadow-indigo-500/20 mb-4 relative group overflow-hidden border border-white/10">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />

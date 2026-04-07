@@ -275,11 +275,11 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                             probation_end_date: s.probation_end_date || '',
                             property_id: s.property_id,
                             outlet_ids: s.outlet_ids || [],
-                            staff_portal_settings: s.staff_portal_settings || {
-                              show_daily_schedule: true,
-                              show_monthly_summary: true,
-                              show_incentives: true,
-                              show_session_notes: true
+                            staff_portal_settings: {
+                              show_daily_schedule: s.staff_portal_settings?.show_daily_schedule ?? true,
+                              show_monthly_summary: s.staff_portal_settings?.show_monthly_summary ?? true,
+                              show_incentives: s.staff_portal_settings?.show_incentives ?? true,
+                              show_session_notes: s.staff_portal_settings?.show_session_notes ?? true
                             }
                           }); 
                           setShowForm(true); 
@@ -404,11 +404,15 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                     <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
                       <input 
                         type="checkbox" 
-                        checked={formData.staff_portal_settings?.show_daily_schedule}
+                        checked={formData.staff_portal_settings?.show_daily_schedule ?? true}
                         onChange={e => setFormData({ 
                           ...formData, 
                           staff_portal_settings: { 
-                            ...formData.staff_portal_settings!, 
+                            show_daily_schedule: true,
+                            show_monthly_summary: true,
+                            show_incentives: true,
+                            show_session_notes: true,
+                            ...formData.staff_portal_settings, 
                             show_daily_schedule: e.target.checked 
                           } 
                         })}
@@ -422,11 +426,15 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                     <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
                       <input 
                         type="checkbox" 
-                        checked={formData.staff_portal_settings?.show_monthly_summary}
+                        checked={formData.staff_portal_settings?.show_monthly_summary ?? true}
                         onChange={e => setFormData({ 
                           ...formData, 
                           staff_portal_settings: { 
-                            ...formData.staff_portal_settings!, 
+                            show_daily_schedule: true,
+                            show_monthly_summary: true,
+                            show_incentives: true,
+                            show_session_notes: true,
+                            ...formData.staff_portal_settings, 
                             show_monthly_summary: e.target.checked 
                           } 
                         })}
@@ -440,11 +448,15 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                     <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
                       <input 
                         type="checkbox" 
-                        checked={formData.staff_portal_settings?.show_incentives}
+                        checked={formData.staff_portal_settings?.show_incentives ?? true}
                         onChange={e => setFormData({ 
                           ...formData, 
                           staff_portal_settings: { 
-                            ...formData.staff_portal_settings!, 
+                            show_daily_schedule: true,
+                            show_monthly_summary: true,
+                            show_incentives: true,
+                            show_session_notes: true,
+                            ...formData.staff_portal_settings, 
                             show_incentives: e.target.checked 
                           } 
                         })}
@@ -458,11 +470,15 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                     <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
                       <input 
                         type="checkbox" 
-                        checked={formData.staff_portal_settings?.show_session_notes}
+                        checked={formData.staff_portal_settings?.show_session_notes ?? true}
                         onChange={e => setFormData({ 
                           ...formData, 
                           staff_portal_settings: { 
-                            ...formData.staff_portal_settings!, 
+                            show_daily_schedule: true,
+                            show_monthly_summary: true,
+                            show_incentives: true,
+                            show_session_notes: true,
+                            ...formData.staff_portal_settings, 
                             show_session_notes: e.target.checked 
                           } 
                         })}
@@ -553,7 +569,13 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
               probation_start_date: s.probation_start_date || '',
               probation_end_date: s.probation_end_date || '',
               property_id: s.property_id,
-              outlet_ids: s.outlet_ids || []
+              outlet_ids: s.outlet_ids || [],
+              staff_portal_settings: {
+                show_daily_schedule: s.staff_portal_settings?.show_daily_schedule ?? true,
+                show_monthly_summary: s.staff_portal_settings?.show_monthly_summary ?? true,
+                show_incentives: s.staff_portal_settings?.show_incentives ?? true,
+                show_session_notes: s.staff_portal_settings?.show_session_notes ?? true
+              }
             }); 
             setShowForm(true);
           }}
