@@ -458,10 +458,12 @@ const StaffSchedule = () => {
     // Calculate department breakdown
     const breakdown = depts.reduce((acc, dept) => {
       const deptRows = allRows.filter(r => r.department === dept);
-      acc[dept] = {
-        total: deptRows.reduce((sum, r) => sum + r.my_incentive, 0),
-        count: deptRows.length
-      };
+      if (deptRows.length > 0) {
+        acc[dept] = {
+          total: deptRows.reduce((sum, r) => sum + r.my_incentive, 0),
+          count: deptRows.length
+        };
+      }
       return acc;
     }, {} as Record<string, { total: number, count: number }>);
 
@@ -832,7 +834,7 @@ const StaffSchedule = () => {
                 </div>
 
                 {/* Department Breakdown */}
-                {incentiveSummary.breakdown && (
+                {incentiveSummary.breakdown && Object.keys(incentiveSummary.breakdown).length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {Object.entries(incentiveSummary.breakdown).map(([dept, data]: [string, any]) => (
                       <motion.button 
@@ -869,6 +871,18 @@ const StaffSchedule = () => {
                       </motion.button>
                     ))}
                   </div>
+                ) : (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white p-12 rounded-[2rem] border border-slate-200/60 text-center shadow-sm"
+                  >
+                    <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100">
+                      <Award className="w-8 h-8 text-slate-300" />
+                    </div>
+                    <h3 className="text-base font-black uppercase tracking-widest text-slate-900">No Earnings Found</h3>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xs mx-auto leading-relaxed">You haven't earned any incentives for this month yet.</p>
+                  </motion.div>
                 )}
               </>
             ) : (
