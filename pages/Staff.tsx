@@ -87,6 +87,7 @@ const StaffPage = () => {
   const canView = user && hasPermission(user.role_id, 'staff:view');
   const canManage = user && hasPermission(user.role_id, 'staff:manage');
   const canManageLeaves = user && hasPermission(user.role_id, 'staff:manage_leaves');
+  const canManagePortalSettings = user && hasPermission(user.role_id, 'staff:manage_portal_settings');
   const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
 
   useEffect(() => {
@@ -398,103 +399,105 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                   </div>
                 </div>
 
-                <div className="space-y-6">
-                  <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Staff Portal Permissions</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
-                      <input 
-                        type="checkbox" 
-                        checked={formData.staff_portal_settings?.show_daily_schedule ?? true}
-                        onChange={e => setFormData({ 
-                          ...formData, 
-                          staff_portal_settings: { 
-                            ...(formData.staff_portal_settings || {
-                              show_daily_schedule: true,
-                              show_monthly_summary: true,
-                              show_incentives: true,
-                              show_session_notes: true
-                            }), 
-                            show_daily_schedule: e.target.checked 
-                          } 
-                        })}
-                        className="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <div>
-                        <p className="text-xs font-black text-slate-700 uppercase tracking-tight">Daily Schedule</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Show daily appointments</p>
-                      </div>
-                    </label>
-                    <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
-                      <input 
-                        type="checkbox" 
-                        checked={formData.staff_portal_settings?.show_monthly_summary ?? true}
-                        onChange={e => setFormData({ 
-                          ...formData, 
-                          staff_portal_settings: { 
-                            ...(formData.staff_portal_settings || {
-                              show_daily_schedule: true,
-                              show_monthly_summary: true,
-                              show_incentives: true,
-                              show_session_notes: true
-                            }), 
-                            show_monthly_summary: e.target.checked 
-                          } 
-                        })}
-                        className="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <div>
-                        <p className="text-xs font-black text-slate-700 uppercase tracking-tight">Monthly Summary</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Show monthly performance</p>
-                      </div>
-                    </label>
-                    <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
-                      <input 
-                        type="checkbox" 
-                        checked={formData.staff_portal_settings?.show_incentives ?? true}
-                        onChange={e => setFormData({ 
-                          ...formData, 
-                          staff_portal_settings: { 
-                            ...(formData.staff_portal_settings || {
-                              show_daily_schedule: true,
-                              show_monthly_summary: true,
-                              show_incentives: true,
-                              show_session_notes: true
-                            }), 
-                            show_incentives: e.target.checked 
-                          } 
-                        })}
-                        className="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <div>
-                        <p className="text-xs font-black text-slate-700 uppercase tracking-tight">Incentives</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Show incentive calculations</p>
-                      </div>
-                    </label>
-                    <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
-                      <input 
-                        type="checkbox" 
-                        checked={formData.staff_portal_settings?.show_session_notes ?? true}
-                        onChange={e => setFormData({ 
-                          ...formData, 
-                          staff_portal_settings: { 
-                            ...(formData.staff_portal_settings || {
-                              show_daily_schedule: true,
-                              show_monthly_summary: true,
-                              show_incentives: true,
-                              show_session_notes: true
-                            }), 
-                            show_session_notes: e.target.checked 
-                          } 
-                        })}
-                        className="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <div>
-                        <p className="text-xs font-black text-slate-700 uppercase tracking-tight">Session Notes</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Allow writing private notes</p>
-                      </div>
-                    </label>
+                {canManagePortalSettings && (
+                  <div className="space-y-6">
+                    <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Staff Portal Permissions</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
+                        <input 
+                          type="checkbox" 
+                          checked={formData.staff_portal_settings?.show_daily_schedule ?? true}
+                          onChange={e => setFormData({ 
+                            ...formData, 
+                            staff_portal_settings: { 
+                              ...(formData.staff_portal_settings || {
+                                show_daily_schedule: true,
+                                show_monthly_summary: true,
+                                show_incentives: true,
+                                show_session_notes: true
+                              }), 
+                              show_daily_schedule: e.target.checked 
+                            } 
+                          })}
+                          className="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div>
+                          <p className="text-xs font-black text-slate-700 uppercase tracking-tight">Daily Schedule</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Show daily appointments</p>
+                        </div>
+                      </label>
+                      <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
+                        <input 
+                          type="checkbox" 
+                          checked={formData.staff_portal_settings?.show_monthly_summary ?? true}
+                          onChange={e => setFormData({ 
+                            ...formData, 
+                            staff_portal_settings: { 
+                              ...(formData.staff_portal_settings || {
+                                show_daily_schedule: true,
+                                show_monthly_summary: true,
+                                show_incentives: true,
+                                show_session_notes: true
+                              }), 
+                              show_monthly_summary: e.target.checked 
+                            } 
+                          })}
+                          className="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div>
+                          <p className="text-xs font-black text-slate-700 uppercase tracking-tight">Monthly Summary</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Show monthly performance</p>
+                        </div>
+                      </label>
+                      <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
+                        <input 
+                          type="checkbox" 
+                          checked={formData.staff_portal_settings?.show_incentives ?? true}
+                          onChange={e => setFormData({ 
+                            ...formData, 
+                            staff_portal_settings: { 
+                              ...(formData.staff_portal_settings || {
+                                show_daily_schedule: true,
+                                show_monthly_summary: true,
+                                show_incentives: true,
+                                show_session_notes: true
+                              }), 
+                              show_incentives: e.target.checked 
+                            } 
+                          })}
+                          className="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div>
+                          <p className="text-xs font-black text-slate-700 uppercase tracking-tight">Incentives</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Show incentive calculations</p>
+                        </div>
+                      </label>
+                      <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
+                        <input 
+                          type="checkbox" 
+                          checked={formData.staff_portal_settings?.show_session_notes ?? true}
+                          onChange={e => setFormData({ 
+                            ...formData, 
+                            staff_portal_settings: { 
+                              ...(formData.staff_portal_settings || {
+                                show_daily_schedule: true,
+                                show_monthly_summary: true,
+                                show_incentives: true,
+                                show_session_notes: true
+                              }), 
+                              show_session_notes: e.target.checked 
+                            } 
+                          })}
+                          className="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div>
+                          <p className="text-xs font-black text-slate-700 uppercase tracking-tight">Session Notes</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Allow writing private notes</p>
+                        </div>
+                      </label>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">

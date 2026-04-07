@@ -98,6 +98,7 @@ class DatabaseService {
           { key: 'staff:view', label: 'View Personnel', description: 'Access the facility staff list and profiles.' },
           { key: 'staff:manage', label: 'Control Registry', description: 'Add, edit, or archive staff members.' },
           { key: 'staff:manage_leaves', label: 'Leave Administration', description: 'Manage staff leave records and schedules.' },
+          { key: 'staff:manage_portal_settings', label: 'Portal Configuration', description: 'Manage visibility and features for the staff portal.' },
         ]
       },
       {
