@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { Staff, MassageBooking, MassageType, Guest, MassageRoom, Sale } from '../types';
 import { format, parseISO, addDays, subDays } from 'date-fns';
-import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, KeyRound, X, ShieldCheck, Building2, Menu, Eye, EyeOff, Check, AlertCircle, Sparkles, Award, TrendingUp, FileText } from 'lucide-react';
+import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, RefreshCw, KeyRound, X, ShieldCheck, Building2, Menu, Eye, EyeOff, Check, AlertCircle, Sparkles, Award, TrendingUp, FileText } from 'lucide-react';
 import { Button, Input } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -578,6 +578,7 @@ const StaffSchedule = () => {
     }
   };
 
+  if (loading && !staff) return <LoadingScreen />;
   if (!staff) return null;
 
   const refreshStaffData = async () => {

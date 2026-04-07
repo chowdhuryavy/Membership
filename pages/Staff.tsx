@@ -408,11 +408,12 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                         onChange={e => setFormData({ 
                           ...formData, 
                           staff_portal_settings: { 
-                            show_daily_schedule: true,
-                            show_monthly_summary: true,
-                            show_incentives: true,
-                            show_session_notes: true,
-                            ...formData.staff_portal_settings, 
+                            ...(formData.staff_portal_settings || {
+                              show_daily_schedule: true,
+                              show_monthly_summary: true,
+                              show_incentives: true,
+                              show_session_notes: true
+                            }), 
                             show_daily_schedule: e.target.checked 
                           } 
                         })}
@@ -430,11 +431,12 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                         onChange={e => setFormData({ 
                           ...formData, 
                           staff_portal_settings: { 
-                            show_daily_schedule: true,
-                            show_monthly_summary: true,
-                            show_incentives: true,
-                            show_session_notes: true,
-                            ...formData.staff_portal_settings, 
+                            ...(formData.staff_portal_settings || {
+                              show_daily_schedule: true,
+                              show_monthly_summary: true,
+                              show_incentives: true,
+                              show_session_notes: true
+                            }), 
                             show_monthly_summary: e.target.checked 
                           } 
                         })}
@@ -452,11 +454,12 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                         onChange={e => setFormData({ 
                           ...formData, 
                           staff_portal_settings: { 
-                            show_daily_schedule: true,
-                            show_monthly_summary: true,
-                            show_incentives: true,
-                            show_session_notes: true,
-                            ...formData.staff_portal_settings, 
+                            ...(formData.staff_portal_settings || {
+                              show_daily_schedule: true,
+                              show_monthly_summary: true,
+                              show_incentives: true,
+                              show_session_notes: true
+                            }), 
                             show_incentives: e.target.checked 
                           } 
                         })}
@@ -474,11 +477,12 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                         onChange={e => setFormData({ 
                           ...formData, 
                           staff_portal_settings: { 
-                            show_daily_schedule: true,
-                            show_monthly_summary: true,
-                            show_incentives: true,
-                            show_session_notes: true,
-                            ...formData.staff_portal_settings, 
+                            ...(formData.staff_portal_settings || {
+                              show_daily_schedule: true,
+                              show_monthly_summary: true,
+                              show_incentives: true,
+                              show_session_notes: true
+                            }), 
                             show_session_notes: e.target.checked 
                           } 
                         })}
