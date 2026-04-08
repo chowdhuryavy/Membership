@@ -83,7 +83,7 @@ serve(async (req) => {
 
     // Fetch company settings
     const { data: settings } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle()
-    const appName = settings?.report_title || 'Health Club Management'
+    const appName = settings?.name || settings?.report_title || 'Health Club Management'
     const fromEmail = Deno.env.get('EMAIL_FROM') || 'noreply@saavargroup.com'
 
     // Fetch recipients
@@ -571,7 +571,7 @@ serve(async (req) => {
                     <tr>
                       <td align="left" valign="top">
                         <h1 style="color: #0f172a; margin: 0; font-size: 24px; letter-spacing: -0.025em;">${reportTitle}</h1>
-                        <p style="color: #64748b; margin: 5px 0 0 0; font-size: 14px;">${propertyName} • ${outletName}</p>
+                        <p style="color: #64748b; margin: 5px 0 0 0; font-size: 14px;">${appName} • ${outletName}</p>
                       </td>
                       <td align="right" valign="top">
                         <p style="color: #64748b; margin: 0; font-size: 12px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Report Date</p>
@@ -618,7 +618,7 @@ serve(async (req) => {
                   ` : ''}
                   
                   <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #f1f5f9; text-align: center;">
-                    <p style="color: #94a3b8; font-size: 12px; margin: 0;">&copy; ${new Date().getFullYear()} ${propertyName}. All rights reserved.</p>
+                    <p style="color: #94a3b8; font-size: 12px; margin: 0;">&copy; ${new Date().getFullYear()} ${appName}. All rights reserved.</p>
                     <p style="color: #94a3b8; font-size: 10px; margin: 5px 0 0 0;">Powered by ${appName} • Automated Audit System</p>
                   </div>
                 </div>
@@ -630,7 +630,7 @@ serve(async (req) => {
             const { data: emailRes, error: emailError } = await resend.emails.send({
               from: `${appName} <${fromEmail}>`,
               to: emails,
-              subject: `${reportTitle} - ${propertyName} - ${params.date.toLocaleDateString()}`,
+              subject: `${reportTitle} - ${appName} - ${params.date.toLocaleDateString()}`,
               html: emailHtml,
               attachments: [
                 {

@@ -84,10 +84,10 @@ const StaffLogin = () => {
           {/* Admin Portal Link Icon */}
           <button 
             onClick={() => navigate('/login')}
-            className="absolute top-8 right-8 px-4 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all group flex items-center gap-2 shadow-sm"
+            className="hidden md:flex absolute top-8 right-8 px-4 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all group items-center gap-2 shadow-sm"
             title="Admin Portal"
           >
-            <span className="text-[10px] font-black uppercase tracking-widest hidden sm:block">Admin Portal</span>
+            <span className="text-[10px] font-black uppercase tracking-widest">Admin Portal</span>
             <ShieldCheck className="w-5 h-5 group-hover:scale-110 transition-transform" />
           </button>
 
