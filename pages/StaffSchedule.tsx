@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { Staff, MassageBooking, MassageType, Guest, MassageRoom, Sale } from '../types';
 import { format, parseISO, addDays, subDays } from 'date-fns';
-import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, RefreshCw, KeyRound, X, ShieldCheck, Building2, Menu, Eye, EyeOff, Check, AlertCircle, Sparkles, Award, TrendingUp, FileText } from 'lucide-react';
+import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, RefreshCw, KeyRound, X, ShieldCheck, Building2, Menu, Eye, EyeOff, Check, AlertCircle, Sparkles, Award, TrendingUp, FileText, ChevronDown } from 'lucide-react';
 import { Button, Input } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -127,6 +127,7 @@ const StaffSchedule = () => {
   const [incentiveLoading, setIncentiveLoading] = useState(false);
   const [selectedIncentiveDept, setSelectedIncentiveDept] = useState<string | null>(null);
   const [selectedMonthlyCategory, setSelectedMonthlyCategory] = useState<string | null>(null);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
   
   const { settings, formatMoney } = useSettings();
 
@@ -411,7 +412,7 @@ const StaffSchedule = () => {
       }
 
       // We need to fetch incentives for each department and combine them
-      const depts: ('Massage' | 'Membership' | 'Personal Training' | 'Sale')[] = ['Massage', 'Membership', 'Personal Training', 'Sale'];
+      const depts: ('Massage' | 'Membership' | 'Personal Training')[] = ['Massage', 'Membership', 'Personal Training'];
       let allRows: any[] = [];
       let totalInc = 0;
 
@@ -622,15 +623,6 @@ const StaffSchedule = () => {
           <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Staff Terminal</p>
         </div>
 
-        <div className="flex items-center gap-3 mb-3 p-3 bg-white/5 rounded-2xl border border-white/5">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-lg font-black uppercase shadow-inner border border-white/10 shrink-0">
-            {staff.name.charAt(0)}
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-xs font-black uppercase tracking-widest truncate">{staff.name}</h1>
-            <p className="text-[9px] font-bold text-indigo-300 uppercase tracking-widest">{staff.role}</p>
-          </div>
-        </div>
         {propertyName && (
           <div className="flex items-center gap-2 text-slate-400 text-[9px] font-bold uppercase tracking-widest bg-white/5 p-2.5 rounded-xl border border-white/5">
             <Building2 className="w-3.5 h-3.5 text-indigo-400" />
@@ -677,23 +669,48 @@ const StaffSchedule = () => {
         )}
       </nav>
 
-      <div className="pt-4 mt-4 border-t border-white/10 space-y-1">
-        <div className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 px-2">Account Settings</div>
+      <div className="mt-auto pt-4 border-t border-white/10">
         <button 
-          onClick={() => {
-            setShowPasswordModal(true);
-            setIsSidebarOpen(false);
-          }}
-          className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white font-bold text-[10px] uppercase tracking-widest transition-all"
+          onClick={() => setShowAccountMenu(!showAccountMenu)}
+          className="w-full flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all group"
         >
-          <KeyRound className="w-3.5 h-3.5" /> Change Password
+          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-lg font-black uppercase shadow-inner border border-white/10 shrink-0 group-hover:scale-110 transition-transform">
+            {staff.name.charAt(0)}
+          </div>
+          <div className="min-w-0 flex-1 text-left">
+            <h1 className="text-xs font-black uppercase tracking-widest truncate">{staff.name}</h1>
+            <p className="text-[9px] font-bold text-indigo-300 uppercase tracking-widest">{staff.role}</p>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${showAccountMenu ? 'rotate-180' : ''}`} />
         </button>
-        <button 
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-red-500/10 text-red-400 hover:text-red-300 font-bold text-[10px] uppercase tracking-widest transition-all"
-        >
-          <LogOut className="w-3.5 h-3.5" /> Sign Out
-        </button>
+
+        <AnimatePresence>
+          {showAccountMenu && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden space-y-1 mt-2"
+            >
+              <button 
+                onClick={() => {
+                  setShowPasswordModal(true);
+                  setIsSidebarOpen(false);
+                  setShowAccountMenu(false);
+                }}
+                className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white font-bold text-[10px] uppercase tracking-widest transition-all"
+              >
+                <KeyRound className="w-3.5 h-3.5" /> Change Password
+              </button>
+              <button 
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-red-500/10 text-red-400 hover:text-red-300 font-bold text-[10px] uppercase tracking-widest transition-all"
+              >
+                <LogOut className="w-3.5 h-3.5" /> Sign Out
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

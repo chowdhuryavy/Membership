@@ -1,13 +1,15 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal } from '../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal, Modal } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/mockSupabase';
 import { reportService } from '../services/reportService';
-import { Role, Permission, Currency, CompanySettings, Outlet, Property, IncentiveRule, MassageType, MembershipCategory, PermissionGroup, InventoryItem, MassageRoom, MembershipType, ReportRecipient } from '../types';
+import { Role, Permission, Currency, CompanySettings, Outlet, Property, IncentiveRule, MassageType, MembershipCategory, PermissionGroup, InventoryItem, MassageRoom, MembershipType, ReportRecipient, CustomReportConfig } from '../types';
 import { BookingSettings } from '../components/BookingSettings';
+import { CustomReportBuilder } from '../components/CustomReportBuilder';
+import { CustomReportViewer } from '../components/CustomReportViewer';
 import { 
   Trash2, 
   Edit2, 
@@ -152,7 +154,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports';
 
 const SignatoryConfig = ({
   config = {},
@@ -273,7 +275,7 @@ const SettingsPage = () => {
       { id: 'currency', label: 'Monetary Standards', visible: hasPermission(user?.role_id || '', 'settings:view_currency'), icon: Globe },
       { id: 'navigation', label: 'UI Architecture', visible: hasPermission(user?.role_id || '', 'settings:view_navigation'), icon: ListOrdered },
       { id: 'functions', label: 'Feature Visibility', visible: isSuper || hasPermission(user?.role_id || '', 'settings:manage_visibility'), icon: ShieldAlert },
-      { id: 'staff_portal', label: 'Staff Portal', visible: hasPermission(user?.role_id || '', 'settings:view_global'), icon: Users },
+      { id: 'staff_portal', label: 'Staff Portal', visible: hasPermission(user?.role_id || '', 'settings:view_staff_portal'), icon: Users },
       { id: 'maintenance', label: 'Maintenance', visible: hasPermission(user?.role_id || '', 'settings:view_maintenance'), icon: Zap },
       
       // Accessible to others with permission
@@ -281,10 +283,11 @@ const SettingsPage = () => {
       { id: 'incentives', label: 'Contract Logic', visible: hasPermission(user?.role_id || '', 'settings:view_incentives') && !!currentOutlet, icon: Award },
       { id: 'shortcuts', label: 'Executive Hotkeys', visible: hasPermission(user?.role_id || '', 'settings:view_shortcuts'), icon: Keyboard },
       { id: 'documents', label: 'Audit Templates', visible: hasPermission(user?.role_id || '', 'settings:view_documents'), icon: FileCode },
-      { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_outlets') && !!currentProperty, icon: Timer },
-      { id: 'membership_types', label: 'Membership Types', visible: hasPermission(user?.role_id || '', 'settings:view_global') && !!currentOutlet, icon: Target },
-      { id: 'massage_rooms', label: 'Massage Rooms', visible: isSuper && !!currentProperty, icon: Store },
-      { id: 'reports_config', label: 'Report Distribution', visible: hasPermission(user?.role_id || '', 'settings:view_global'), icon: Mail },
+      { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_booking_engine') && !!currentProperty, icon: Timer },
+      { id: 'membership_types', label: 'Membership Types', visible: hasPermission(user?.role_id || '', 'settings:view_membership_types') && !!currentOutlet, icon: Target },
+      { id: 'massage_rooms', label: 'Massage Rooms', visible: hasPermission(user?.role_id || '', 'settings:view_massage_rooms') && !!currentProperty, icon: Store },
+      { id: 'reports_config', label: 'Report Distribution', visible: hasPermission(user?.role_id || '', 'settings:view_reports_config'), icon: Mail },
+      { id: 'custom_reports', label: 'Custom Intelligence', visible: hasPermission(user?.role_id || '', 'settings:view_custom_reports'), icon: FileText },
     ].filter(t => t.visible);
   }, [user, roles, hasPermission, currentProperty, currentOutlet]);
 
@@ -300,10 +303,13 @@ const SettingsPage = () => {
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const [itemToDelete, setItemToDelete] = useState<{ type: string, id: string, name: string } | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [isCustomReportModalOpen, setIsCustomReportModalOpen] = useState(false);
   const [massageRooms, setMassageRooms] = useState<MassageRoom[]>([]);
   const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
   const [membershipTypeForm, setMembershipTypeForm] = useState<Omit<MembershipType, 'id' | 'created_at'>>({ name: '', outlet_id: '' });
   const [reportRecipients, setReportRecipients] = useState<ReportRecipient[]>([]);
+  const [customReports, setCustomReports] = useState<CustomReportConfig[]>([]);
+  const [viewingReport, setViewingReport] = useState<CustomReportConfig | null>(null);
   const [reportRecipientForm, setReportRecipientForm] = useState<Omit<ReportRecipient, 'id' | 'created_at'>>({ 
     email: '', 
     property_id: '', 
@@ -382,7 +388,7 @@ const SettingsPage = () => {
     conditions: '' 
   });
   const [roleForm, setRoleForm] = useState<Omit<Role, 'id'>>({ name: '', permissions: [] });
-  const [currencyForm, setCurrencyForm] = useState<Omit<Currency, 'id'>>({ code: '', symbol: '', rate: 1, is_default: false });
+  const [currencyForm, setCurrencyForm] = useState<Omit<Currency, 'id'>>({ code: '', symbol: '', rate: 1, is_default: false, property_id: currentProperty?.id });
   const [incentiveForm, setIncentiveForm] = useState<Omit<IncentiveRule, 'id'>>({
       name: '', scope: 'Global', scope_id: 'global', applies_to: 'Massage', target_id: 'all', distribution_type: 'Individual', calculation_type: 'Percentage', value: 0, min_price: 0, max_price: 99999, min_duration_minutes: 0, max_duration_minutes: 999, apply_discount_percentage: true, is_active: true
   });
@@ -482,6 +488,10 @@ const SettingsPage = () => {
       if (activeTab === 'reports_config') {
           const recipients = await db.getReportRecipients();
           setReportRecipients(recipients);
+      }
+      if (activeTab === 'custom_reports') {
+          const reports = await db.getCustomReports();
+          setCustomReports(reports);
       }
   };
 
@@ -593,8 +603,8 @@ const SettingsPage = () => {
   };
 
   const handleCurrencySubmit = async () => {
-    if (!isSuperAdmin) {
-        showStatus('Unauthorized: Super Admin access required.', 'error');
+    if (!isSuperAdmin && !hasPermission(user?.role_id || '', 'settings:manage_currency')) {
+        showStatus('Unauthorized: Permission required.', 'error');
         return;
     }
     setIsSaving(true);
@@ -769,6 +779,7 @@ const SettingsPage = () => {
       else if (itemToDelete.type === 'role') await db.deleteRole(itemToDelete.id);
       else if (itemToDelete.type === 'currency') await db.deleteCurrency(itemToDelete.id);
       else if (itemToDelete.type === 'report_recipient') await db.deleteReportRecipient(itemToDelete.id);
+      else if (itemToDelete.type === 'custom_report') await db.deleteCustomReport(itemToDelete.id);
       else if (itemToDelete.type === 'massage_room') {
           await db.deleteMassageRoom(itemToDelete.id);
           setMassageRooms(prev => prev.filter(r => r.id !== itemToDelete.id));
@@ -1014,12 +1025,12 @@ const SettingsPage = () => {
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-5"><Globe className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Monetary Standards</CardTitle></div>
-                          <Button onClick={() => { setEditingId(null); setCurrencyForm({code:'', symbol:'', rate:1, is_default:false}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Define Unit</Button>
+                          <Button onClick={() => { setEditingId(null); setCurrencyForm({code:'', symbol:'', rate:1, is_default:false, property_id: currentProperty?.id}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Define Unit</Button>
                       </CardHeader>
                       <CardContent className="p-0">
                           <table className="w-full text-left">
                               <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">ISO Code</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Base Rate Link</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
-                              <tbody className="divide-y divide-slate-100">{currencies.map(c => (
+                              <tbody className="divide-y divide-slate-100">{currencies.filter(c => c.property_id === currentProperty?.id).map(c => (
                                   <tr key={c.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase flex items-center gap-3">{c.code} <span className="text-indigo-600">[{c.symbol}]</span> {c.is_default && <Check className="w-4 h-4 text-emerald-500"/>}</div></td>
                                       <td className="px-10 py-8 font-bold text-slate-500 text-xs">1.00 USD = {c.rate} {c.code}</td>
@@ -1161,7 +1172,7 @@ const SettingsPage = () => {
                               </div>
                           </div>
                           <PermissionMatrix 
-                              registry={permissionRegistry.filter(g => g.id === 'settings' || g.id === 'security')} 
+                              registry={permissionRegistry.filter(g => g.id === 'settings')} 
                               selectedPermissions={(settings?.restricted_permissions || []) as Permission[]} 
                               onChange={async (perms) => {
                                   try {
@@ -1465,6 +1476,114 @@ const SettingsPage = () => {
                       </CardContent>
                   </Card>
               )}
+              {activeTab === 'custom_reports' && (
+                <div className="space-y-6">
+                  {viewingReport ? (
+                    <CustomReportViewer 
+                      config={viewingReport} 
+                      onBack={() => setViewingReport(null)}
+                    />
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100 flex-1 mr-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <FileText className="w-5 h-5 text-indigo-600" />
+                            <h3 className="text-sm font-black text-indigo-900 uppercase tracking-widest">Custom Intelligence Builder</h3>
+                          </div>
+                          <p className="text-xs text-indigo-700 font-medium leading-relaxed">
+                            Design bespoke reports by selecting specific data sources, defining column visibility, and configuring sorting logic. Reports are scoped to properties and outlets for granular operational insights.
+                          </p>
+                        </div>
+                        <Button 
+                          onClick={() => { setEditingId(null); setIsCustomReportModalOpen(true); }}
+                          className="h-16 px-8 rounded-2xl font-black uppercase shadow-xl bg-indigo-600 text-white hover:bg-indigo-700 shrink-0"
+                        >
+                          <Plus className="w-4 h-4 mr-2" /> Design New Report
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {customReports
+                          .filter(report => !report.property_id || report.property_id === currentProperty?.id)
+                          .map(report => (
+                          <Card key={report.id} className="rounded-[2.5rem] border-slate-200 shadow-sm hover:shadow-md transition-all group overflow-hidden">
+                            <div className="h-2 bg-indigo-600" />
+                            <CardHeader className="pb-2">
+                              <div className="flex items-start justify-between">
+                                <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 mb-4 group-hover:scale-110 transition-transform">
+                                  <LayoutTemplate className="w-6 h-6" />
+                                </div>
+                                <div className="flex gap-1">
+                                  <button 
+                                    onClick={() => {
+                                      setEditingId(report.id);
+                                      setIsCustomReportModalOpen(true);
+                                    }}
+                                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button 
+                                    onClick={() => setItemToDelete({ type: 'custom_report', id: report.id, name: report.name })}
+                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                              <CardTitle className="text-lg font-black text-slate-900 uppercase tracking-tight leading-tight">{report.name}</CardTitle>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                Source: {report.data_source} • {report.columns.filter(c => c.visible).length} Columns
+                              </p>
+                            </CardHeader>
+                            <CardContent className="pt-4">
+                              <div className="flex items-center gap-2 mb-6">
+                                {report.property_id && (
+                                  <div className="px-2 py-1 bg-slate-100 rounded-lg text-[8px] font-black uppercase tracking-widest text-slate-500">
+                                    {properties.find(p => p.id === report.property_id)?.name || 'Unknown Property'}
+                                  </div>
+                                )}
+                                {report.outlet_id && (
+                                  <div className="px-2 py-1 bg-slate-100 rounded-lg text-[8px] font-black uppercase tracking-widest text-slate-500">
+                                    {report.outlet_id === 'all' ? 'All Outlets' : outlets.find(o => o.id === report.outlet_id)?.name || 'Unknown Outlet'}
+                                  </div>
+                                )}
+                                {!report.property_id && !report.outlet_id && (
+                                  <div className="px-2 py-1 bg-indigo-50 rounded-lg text-[8px] font-black uppercase tracking-widest text-indigo-600">
+                                    Global Intelligence
+                                  </div>
+                                )}
+                              </div>
+                              <Button 
+                                onClick={() => {
+                                  setViewingReport(report);
+                                  setShowForm(false);
+                                }}
+                                className="w-full h-12 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-slate-900 text-white hover:bg-indigo-600 transition-all shadow-lg shadow-slate-200"
+                              >
+                                Launch Intelligence Audit
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+
+                      {customReports.length === 0 && (
+                        <div className="py-20 text-center bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
+                          <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm">
+                            <FileText className="w-10 h-10 text-slate-200" />
+                          </div>
+                          <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-2">No Custom Intelligence Defined</h3>
+                          <p className="text-xs text-slate-400 font-medium max-w-xs mx-auto">
+                            Start by designing your first custom report to extract specific operational insights.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
           </div>
 
           <div className={`${showForm ? 'lg:col-span-6' : 'hidden'} animate-in slide-in-from-right-10 duration-500`}>
@@ -1552,7 +1671,19 @@ const SettingsPage = () => {
                                   <ShieldAlert className="w-5 h-5 text-indigo-600"/>
                                   <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Policy Ruleset</h4>
                                 </div>
-                                <PermissionMatrix registry={permissionRegistry} selectedPermissions={roleForm.permissions} onChange={(perms) => setRoleForm({ ...roleForm, permissions: perms })} />
+                                <PermissionMatrix 
+                                  registry={permissionRegistry.map(group => {
+                                    if (group.id === 'settings' && settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
+                                      return {
+                                        ...group,
+                                        permissions: group.permissions.filter(p => settings.restricted_permissions.includes(p.key))
+                                      };
+                                    }
+                                    return group;
+                                  }).filter(group => group.permissions.length > 0)} 
+                                  selectedPermissions={roleForm.permissions} 
+                                  onChange={(perms) => setRoleForm({ ...roleForm, permissions: perms })} 
+                                />
                               </div>
                               <Button onClick={handleRoleSubmit} className="w-full h-16 rounded-2xl font-black uppercase tracking-widest bg-indigo-600 shadow-xl shadow-indigo-100">Deploy Security Tier</Button>
                           </div>
@@ -1564,7 +1695,7 @@ const SettingsPage = () => {
                             <Input label="Exchange Rate (Rel. to USD)" type="number" value={currencyForm.rate} onChange={e => setCurrencyForm({...currencyForm, rate: parseFloat(e.target.value) || 1})} className="h-14 rounded-xl" />
                             <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
                                 <input type="checkbox" checked={currencyForm.is_default} onChange={e => setCurrencyForm({...currencyForm, is_default: e.target.checked})} className="w-5 h-5 rounded border-slate-300" />
-                                <span className="text-xs font-black text-slate-700 uppercase">Set as System Base Currency</span>
+                                <span className="text-xs font-black text-slate-700 uppercase">Set as Property Base Currency</span>
                             </div>
                             <Button onClick={handleCurrencySubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Sync Standard</Button>
                         </div>
@@ -1870,6 +2001,35 @@ const SettingsPage = () => {
       </div>
       
       <ConfirmationModal isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} onConfirm={handleDeleteConfirmed} title={`Terminal Reset`} description={`Permanently purge '${itemToDelete?.name}' from the registry?`} confirmText="Authorize Terminal Purge" isDestructive={true} />
+      <Modal isOpen={isCustomReportModalOpen} onClose={() => setIsCustomReportModalOpen(false)} title="Design New Report">
+          <CustomReportBuilder 
+            config={editingId ? customReports.find(r => r.id === editingId) : undefined}
+            properties={properties}
+            outlets={outlets}
+            onSave={async (config) => {
+              setIsSaving(true);
+              try {
+                if (editingId) await db.updateCustomReport(editingId, config);
+                else await db.addCustomReport(config);
+                const reports = await db.getCustomReports();
+                setCustomReports(reports);
+                setIsCustomReportModalOpen(false);
+                setEditingId(null);
+                showStatus('Custom Intelligence Configuration Authorized.');
+              } catch (e: any) {
+                showStatus(e.message, 'error');
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            onCancel={() => {
+              setIsCustomReportModalOpen(false);
+              setEditingId(null);
+            }}
+            properties={properties}
+            outlets={outlets}
+          />
+      </Modal>
     </div>
   );
 };

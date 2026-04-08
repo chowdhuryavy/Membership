@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '../components/ui';
+import { db } from '../services/mockSupabase';
 import { supabase as supabaseClient } from '../services/supabase';
 import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory, StaffLeave, MembershipType, InventoryItem } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
@@ -27,7 +28,8 @@ import {
   TrendingUp,
   CreditCard,
   Building2,
-  CalendarX
+  CalendarX,
+  LayoutTemplate
 } from 'lucide-react';
 import { getReportData, generateReportPDF, getReportTitle, ReportContext } from '../src/shared/reportLogic';
 import { jsPDF } from 'jspdf';
@@ -36,11 +38,12 @@ import html2canvas from 'html2canvas';
 import ExpiringMembershipsReport from './ExpiringMembershipsReport';
 import MassageRoomRevenueReport from './MassageRoomRevenueReport';
 import MonthlyRevenueReport from './MonthlyRevenueReport';
+import { CustomReportViewer } from '../components/CustomReportViewer';
 
 const startOfMonthLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
 // Report Types
-type ReportType = 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'expiring_memberships' | 'massage_room_revenue' | 'monthly_revenue';
+type ReportType = 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'expiring_memberships' | 'massage_room_revenue' | 'monthly_revenue' | 'custom_report';
 
 interface ReportRow {
   sl_no: number;
@@ -97,6 +100,16 @@ const Reports = () => {
   const [incentiveDept, setIncentiveDept] = useState<'Massage' | 'Membership' | 'Personal Training'>('Massage');
   const [reportMonth, setReportMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [dailySalesDate, setDailySalesDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedCustomReportId, setSelectedCustomReportId] = useState<string | null>(null);
+  const [customReports, setCustomReports] = useState<CustomReportConfig[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const reports = await db.getCustomReports();
+      setCustomReports(reports);
+    };
+    fetchData();
+  }, []);
   
   // Data States
   const [rows, setRows] = useState<ReportRow[]>([]); // For Incentives & Sales
@@ -332,6 +345,7 @@ const Reports = () => {
         data: reportData,
         propertyName: currentProperty.name,
         outletName,
+        outletId: currentOutlet.id,
         currencySymbol,
         currencyCode,
         reportTitle,
@@ -1015,6 +1029,32 @@ const Reports = () => {
                                </div>
                           )}
 
+                          {/* 3. CUSTOM REPORTS */}
+                          <div className="space-y-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
+                              <div className="flex items-center gap-2 mb-1">
+                                  <LayoutTemplate className="w-3.5 h-3.5 text-indigo-600"/>
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Custom Intelligence</label>
+                              </div>
+                              <div className="grid grid-cols-1 gap-2">
+                                  {customReports.map(report => (
+                                      <button 
+                                        key={report.id} 
+                                        onClick={() => {
+                                            setReportType('custom_report');
+                                            setSelectedCustomReportId(report.id);
+                                        }} 
+                                        className={`w-full px-5 py-4 rounded-2xl text-left text-[10px] font-black uppercase tracking-widest transition-all border-2 flex items-center gap-3 ${
+                                          reportType === 'custom_report' && selectedCustomReportId === report.id
+                                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-xl shadow-indigo-100 scale-[1.02]' 
+                                          : 'bg-slate-50 border-slate-100 text-slate-400 hover:bg-white hover:border-slate-200 hover:text-slate-600'
+                                        }`}
+                                      >
+                                          <FileText className="w-4 h-4 opacity-70" /> {report.name}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+
                           {/* 2. REWARD DEPARTMENT (Only for Incentives) */}
                           {reportType === 'incentives' && (
                               <div className="space-y-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
@@ -1187,6 +1227,12 @@ const Reports = () => {
                            reportType === 'expiring_memberships' ? <ExpiringMembershipsReport isEmbedded={true} embeddedMonth={reportMonth} selectedMembershipTypeId={selectedMembershipTypeId} /> : 
                            reportType === 'massage_room_revenue' ? <MassageRoomRevenueReport isEmbedded={true} embeddedMonth={reportMonth} /> :
                            reportType === 'monthly_revenue' ? <MonthlyRevenueReport isEmbedded={true} embeddedMonth={reportMonth} revenueMode={revenueMode} /> :
+                           reportType === 'custom_report' ? (
+                             <CustomReportViewer 
+                               config={customReports.find(r => r.id === selectedCustomReportId) || customReports[0]}
+                               onBack={() => setReportType('revenue_recognition')}
+                             />
+                           ) :
                            <RenderStandardTable />}
                       </div>
 

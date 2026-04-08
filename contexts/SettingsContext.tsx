@@ -56,12 +56,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setOutlets([...o]);
         setProperties([...p]);
         
-        const activeCurr = (s && c.find(curr => curr.id === s.currency_id)) || 
-                          c.find(curr => curr.is_default) || 
-                          c[0];
-                          
-        setCurrency(activeCurr || null);
-        
         if (user) await refreshUser();
     } catch (e) {
         console.error("Critical Settings Load Failure:", e);
@@ -74,6 +68,22 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (!currentOutlet || properties.length === 0) return null;
       return properties.find(p => p.id === currentOutlet.property_id) || null;
   }, [currentOutlet, properties]);
+
+  useEffect(() => {
+      if (currencies.length > 0) {
+          let activeCurr = null;
+          if (currentProperty) {
+              activeCurr = currencies.find(c => c.property_id === currentProperty.id && c.is_default) || 
+                           currencies.find(c => c.property_id === currentProperty.id);
+          }
+          if (!activeCurr) {
+              activeCurr = (settings && currencies.find(curr => curr.id === settings.currency_id)) || 
+                           currencies.find(curr => curr.is_default && !curr.property_id) || 
+                           currencies[0];
+          }
+          setCurrency(activeCurr || null);
+      }
+  }, [currentProperty, currencies, settings]);
 
   const setCurrentOutlet = (outlet: Outlet) => {
       setCurrentOutletState(outlet);
@@ -132,13 +142,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // If the admin has defined a set of "Enabled Features", only those are visible to non-admins.
     // If the list is empty, all features are enabled by default (following role permissions).
     if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
-        // We only apply the whitelist to permissions that are managed in the "Global Feature Control" UI
-        // (Settings and Security groups). Other features (Members, Sales, etc.) follow normal role logic.
-        const isManagedInUI = permission.startsWith('settings:') || 
-                             permission.startsWith('users:') || 
-                             permission.startsWith('logs:');
-                             
-        if (isManagedInUI && !settings.restricted_permissions.includes(permission)) {
+        if (!settings.restricted_permissions.includes(permission)) {
             return false;
         }
     }

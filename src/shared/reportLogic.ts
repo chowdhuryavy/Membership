@@ -499,7 +499,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     let outletIds: string[] = [];
     let allPropertyOutletIds: string[] = [];
 
-    const { data: allOutlets } = await supabase.from('outlets').select('id').eq('property_id', propertyId);
+    const { data: allOutlets } = await supabase.from('outlets').select('id, name').eq('property_id', propertyId);
+    const outletMap = Object.fromEntries((allOutlets || []).map((o: any) => [o.id, o.name]));
     allPropertyOutletIds = (allOutlets || []).map((o: any) => o.id);
 
     if (outletId === 'all') {
@@ -580,7 +581,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         if (!type) return;
         const rule = findBestRule(rules, dept, (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes);
         
-        const actualPrice = type.price;
+        const actualPrice = b.price || type.price;
         const discountAmt = b.discount || 0;
         const netRev = actualPrice - discountAmt;
         const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
@@ -639,6 +640,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           guest_name: guestMap[b.guest_id] || 'Guest',
           item_name: type.name,
           therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (rawStaffList.find(s => s.id === b.therapist_id)?.name || 'N/A'),
+          outlet_name: outletMap[b.outlet_id] || 'Unknown',
           actual_price: actualPrice,
           discount_percent: discPercent,
           discount_amount: discountAmt,
@@ -690,58 +692,45 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
                 remarks = 'Shared: No eligible staff available';
               }
             } else {
-              const primaryId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
-              const secondaryId = s.secondary_sold_by_id;
+              const trainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
               
-              const trainers = [primaryId, secondaryId].filter(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
-              
-              if (trainers.length > 0) {
-                const share = incNet / trainers.length;
-                trainers.forEach(trainerId => {
-                  const staff = rawStaffList.find(st => st.id === trainerId);
-                  if (staff) {
-                    const isEligible = staff.is_eligible_for_incentives !== false;
-                    if (!isEligible) {
-                      remarks = remarks ? `${remarks}, Staff not eligible` : 'Staff not eligible for incentives';
-                      staffSplits[trainerId] = 0;
-                    } else if (isStaffOnLeaveOnDate(staff, s.created_at) || isStaffOnProbationOnDate(staff, s.created_at)) {
-                      remarks = remarks ? `${remarks}, Staff on Leave/Probation` : 'Staff on Leave/Probation';
-                      staffSplits[trainerId] = 0;
-                    } else {
-                      staffSplits[trainerId] = share;
-                    }
+              if (trainerId) {
+                const staff = rawStaffList.find(st => st.id === trainerId);
+                if (staff) {
+                  const isEligible = staff.is_eligible_for_incentives !== false;
+                  if (!isEligible) {
+                    remarks = 'Staff not eligible for incentives';
+                    staffSplits[trainerId] = 0;
+                  } else if (isStaffOnLeaveOnDate(staff, s.created_at) || isStaffOnProbationOnDate(staff, s.created_at)) {
+                    remarks = 'Staff on Leave/Probation';
+                    staffSplits[trainerId] = 0;
                   } else {
-                    remarks = remarks ? `${remarks}, Staff not found` : `Staff not found (ID: ${trainerId})`;
+                    staffSplits[trainerId] = incNet;
                   }
-                });
+                } else {
+                  remarks = `Staff not found (ID: ${trainerId})`;
+                }
               } else {
                 remarks = 'No trainer/seller assigned';
               }
             }
           } else {
-            const primaryId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
-            const secondaryId = s.secondary_sold_by_id;
-            const trainers = [primaryId, secondaryId].filter(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
-            trainers.forEach(trainerId => {
+            const trainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+            if (trainerId) {
               staffSplits[trainerId] = 0;
-            });
+            }
           }
 
           const displayTrainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
-          const secondaryDisplayId = s.secondary_sold_by_id;
           
-          let trainerName = rawStaffList.find(st => st.id === displayTrainerId)?.name || (displayTrainerId ? `N/A (ID: ${displayTrainerId})` : 'N/A');
-          if (secondaryDisplayId) {
-             const secName = rawStaffList.find(st => st.id === secondaryDisplayId)?.name || `N/A (ID: ${secondaryDisplayId})`;
-             trainerName += ` & ${secName}`;
-          }
           rows.push({
             id: s.id,
             sl_no: sl++,
             date: format(new Date(s.created_at), 'dd-MMM-yy'),
             guest_name: s.guest_name || 'Guest',
             item_name: s.item_name || item?.name || 'PT Service',
-            therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : trainerName,
+            therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (rawStaffList.find(st => st.id === displayTrainerId)?.name || 'N/A'),
+            outlet_name: outletMap[s.outlet_id] || 'Unknown',
             actual_price: actualPrice,
             discount_percent: discPercent,
             discount_amount: discountAmt,
@@ -830,6 +819,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             guest_name: m.guest_name,
             item_name: cat?.name || m.category_id || 'Unknown Tier',
             therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (rawStaffList.find(s => s.id === displaySalesRepId)?.name || 'N/A'),
+            outlet_name: outletMap[m.outlet_id] || 'Unknown',
           actual_price: actualPrice,
           discount_percent: discPercent,
           discount_amount: discountAmt,
@@ -879,59 +869,44 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
               remarks = 'Shared: No eligible staff available';
             }
           } else {
-            const primaryId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
-            const secondaryId = s.secondary_sold_by_id;
-            
-            const trainers = [primaryId, secondaryId].filter(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
-            
-            if (trainers.length > 0) {
-              const share = incNet / trainers.length;
-              trainers.forEach(trainerId => {
-                const staff = rawStaffList.find(st => st.id === trainerId);
-                if (staff) {
-                  const isEligible = staff.is_eligible_for_incentives !== false;
-                  if (!isEligible) {
-                    remarks = remarks ? `${remarks}, Staff not eligible` : 'Staff not eligible for incentives';
-                    staffSplits[trainerId] = 0;
-                  } else if (isStaffOnLeaveOnDate(staff, s.created_at) || isStaffOnProbationOnDate(staff, s.created_at)) {
-                    remarks = remarks ? `${remarks}, Staff on Leave/Probation` : 'Staff on Leave/Probation';
-                    staffSplits[trainerId] = 0;
-                  } else {
-                    staffSplits[trainerId] = share;
-                  }
+            const sellerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+            if (sellerId) {
+              const staff = rawStaffList.find(st => st.id === sellerId);
+              if (staff) {
+                const isEligible = staff.is_eligible_for_incentives !== false;
+                if (!isEligible) {
+                  remarks = 'Staff not eligible for incentives';
+                  staffSplits[sellerId] = 0;
+                } else if (isStaffOnLeaveOnDate(staff, s.created_at) || isStaffOnProbationOnDate(staff, s.created_at)) {
+                  remarks = 'Staff on Leave/Probation';
+                  staffSplits[sellerId] = 0;
                 } else {
-                  remarks = remarks ? `${remarks}, Staff not found` : `Staff not found (ID: ${trainerId})`;
+                  staffSplits[sellerId] = incNet;
                 }
-              });
+              } else {
+                remarks = 'Staff not found';
+              }
             } else {
               remarks = 'No seller assigned';
             }
           }
         } else {
-          const primaryId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
-          const secondaryId = s.secondary_sold_by_id;
-          const trainers = [primaryId, secondaryId].filter(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
-          trainers.forEach(trainerId => {
-            staffSplits[trainerId] = 0;
-          });
+          const sellerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+          if (sellerId) {
+            staffSplits[sellerId] = 0;
+          }
         }
 
         const displayTrainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
-        const secondaryDisplayId = s.secondary_sold_by_id;
         
-        let trainerName = rawStaffList.find(st => st.id === displayTrainerId)?.name || (displayTrainerId ? `N/A (ID: ${displayTrainerId})` : 'N/A');
-        if (secondaryDisplayId) {
-           const secName = rawStaffList.find(st => st.id === secondaryDisplayId)?.name || `N/A (ID: ${secondaryDisplayId})`;
-           trainerName += ` & ${secName}`;
-        }
-
         rows.push({
           id: s.id,
           sl_no: sl++,
           date: format(new Date(s.created_at), 'dd-MMM-yy'),
           guest_name: s.guest_name || 'Guest',
           item_name: s.item_name || item?.name || s.category,
-          therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : trainerName,
+          therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (rawStaffList.find(st => st.id === displayTrainerId)?.name || 'N/A'),
+          outlet_name: outletMap[s.outlet_id] || 'Unknown',
           actual_price: actualPrice,
           discount_percent: discPercent,
           discount_amount: discountAmt,
@@ -1054,6 +1029,7 @@ export interface PDFOptions {
   currencySymbol: string;
   currencyCode?: string;
   reportTitle: string;
+  outletId?: string;
   date: Date;
   logoUrl?: string;
   reportType: string;
@@ -1063,8 +1039,89 @@ export interface PDFOptions {
   signatoryConfig?: any;
 }
 
+export const generateCustomReportPDF = (options: {
+  jsPDF: any;
+  autoTable: any;
+  title: string;
+  subtitle: string;
+  headers: string[];
+  body: any[][];
+  propertyName: string;
+  logoUrl?: string;
+  userName?: string;
+  filename: string;
+}) => {
+  const { jsPDF, autoTable, title, subtitle, headers, body, propertyName, logoUrl, userName, filename } = options;
+  
+  const JsPDFConstructor = typeof jsPDF === 'function' ? jsPDF : (jsPDF.jsPDF || jsPDF.default || jsPDF);
+  const doc = new JsPDFConstructor({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 15;
+  let currentY = margin;
+
+  // Header
+  if (logoUrl) {
+    try { doc.addImage(logoUrl, 'PNG', margin, currentY, 20, 20); } catch (e) {}
+  }
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.setTextColor(15, 23, 42);
+  doc.text(propertyName.toUpperCase(), margin + (logoUrl ? 25 : 0), currentY + 7);
+  
+  doc.setFontSize(10);
+  doc.setTextColor(100, 116, 139);
+  doc.text(subtitle.toUpperCase(), margin + (logoUrl ? 25 : 0), currentY + 13);
+
+  doc.setFontSize(22);
+  doc.setTextColor(79, 70, 229); // indigo-600
+  doc.text(title.toUpperCase(), pageWidth - margin, currentY + 10, { align: 'right' });
+
+  currentY += 25;
+
+  // Table
+  autoTable(doc, {
+    startY: currentY,
+    head: [headers],
+    body: body,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [15, 23, 42],
+      textColor: [255, 255, 255],
+      fontSize: 8,
+      fontStyle: 'bold',
+      halign: 'left',
+      cellPadding: 4
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: [51, 65, 85],
+      cellPadding: 4
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252]
+    },
+    margin: { left: margin, right: margin }
+  });
+
+  // Footer
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    const footerY = doc.internal.pageSize.getHeight() - 10;
+    doc.text(`Page ${i} of ${pageCount}`, margin, footerY);
+    doc.text(`Exported by ${userName || 'Admin'} on ${format(new Date(), 'dd MMM yyyy HH:mm')}`, pageWidth / 2, footerY, { align: 'center' });
+    doc.text(`© ${new Date().getFullYear()} ${propertyName}`, pageWidth - margin, footerY, { align: 'right' });
+  }
+
+  doc.save(filename);
+};
+
 export const generateReportPDF = (options: PDFOptions) => {
-  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, currencyCode, reportTitle, date, logoUrl, reportType, membershipTypeName, userName, summary, signatoryConfig } = options;
+  const { jsPDF, autoTable, data, propertyName, outletName, outletId, currencySymbol, currencyCode, reportTitle, date, logoUrl, reportType, membershipTypeName, userName, summary, signatoryConfig } = options;
   
   const isRevenueReport = reportType === 'revenue_recognition';
   const isDailySalesReport = reportType === 'daily_sales';
@@ -1599,7 +1656,9 @@ export const generateReportPDF = (options: PDFOptions) => {
           { content: 'DATE', rowSpan: 2 },
           { content: 'GUEST / MEMBER', rowSpan: 2 },
           { content: 'CHECK NO.', rowSpan: 2 },
+          ...(outletId === 'all' ? [{ content: 'OUTLET', rowSpan: 2 }] : []),
           { content: 'ITEM / SERVICE', rowSpan: 2 },
+          { content: 'DUR.', rowSpan: 2 },
           { content: specialistLabel, rowSpan: 2 },
           { content: 'GROSS AMOUNT', rowSpan: 2 },
           { content: 'DISC %', rowSpan: 2 },
@@ -1623,7 +1682,9 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.date,
           r.guest_name,
           r.check_no || '',
+          ...(outletId === 'all' ? [r.outlet_name || ''] : []),
           r.item_name,
+          r.duration || '',
           r.therapist_name,
           formatCurrency(r.actual_price),
           r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
@@ -1662,7 +1723,7 @@ export const generateReportPDF = (options: PDFOptions) => {
         head: head,
         body: body,
         foot: [[
-          { content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: 6, styles: { halign: 'right' } },
+          { content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: outletId === 'all' ? 8 : 7, styles: { halign: 'right' } },
           { content: formatCurrency(totalActual), styles: { halign: 'right' } },
           { content: '', styles: {} },
           { content: formatCurrency(totalDiscount), styles: { halign: 'right' } },
@@ -1678,7 +1739,7 @@ export const generateReportPDF = (options: PDFOptions) => {
           fillColor: [15, 23, 42], 
           textColor: [255, 255, 255], 
           fontStyle: 'bold', 
-          fontSize: 5, 
+          fontSize: 5.5, 
           cellPadding: 1,
           font: 'helvetica'
         },
@@ -1687,29 +1748,31 @@ export const generateReportPDF = (options: PDFOptions) => {
           fillColor: [15, 23, 42], 
           textColor: [255, 255, 255], 
           fontStyle: 'bold', 
-          fontSize: 5, 
+          fontSize: 5.5, 
           halign: 'center',
           font: 'helvetica'
         },
-        styles: { fontSize: 4.5, cellPadding: 1, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+        styles: { fontSize: 5, cellPadding: 1, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
         columnStyles: {
-          0: { halign: 'center', cellWidth: 8 },
-          1: { halign: 'center', cellWidth: 15 },
-          2: { fontStyle: 'bold', cellWidth: 25 },
-          3: { halign: 'center', cellWidth: 15 },
-          4: { cellWidth: 25 },
-          5: { fontStyle: 'bold', cellWidth: 15 },
-          6: { halign: 'right', cellWidth: 15 },
-          7: { halign: 'center', cellWidth: 10 },
-          8: { halign: 'right', cellWidth: 15 },
-          9: { halign: 'right', cellWidth: 15 },
-          10: { halign: 'right', cellWidth: 15 },
-          11: { halign: 'center', cellWidth: 10 },
-          12: { halign: 'right', cellWidth: 15 },
-          13: { halign: 'right', fontStyle: 'bold', cellWidth: 15 },
-          14: { fontSize: 4, cellWidth: 15 },
+          0: { halign: 'center', cellWidth: 6 },
+          1: { halign: 'center', cellWidth: 12 },
+          2: { fontStyle: 'bold', cellWidth: 18 },
+          3: { halign: 'center', cellWidth: 12 },
+          ...(outletId === 'all' ? { 4: { cellWidth: 12 } } : {}),
+          [outletId === 'all' ? 5 : 4]: { cellWidth: 18 },
+          [outletId === 'all' ? 6 : 5]: { halign: 'center', cellWidth: 8 },
+          [outletId === 'all' ? 7 : 6]: { fontStyle: 'bold', cellWidth: 15 },
+          [outletId === 'all' ? 8 : 7]: { halign: 'right', cellWidth: 12 },
+          [outletId === 'all' ? 9 : 8]: { halign: 'center', cellWidth: 7 },
+          [outletId === 'all' ? 10 : 9]: { halign: 'right', cellWidth: 12 },
+          [outletId === 'all' ? 11 : 10]: { halign: 'right', cellWidth: 12 },
+          [outletId === 'all' ? 12 : 11]: { halign: 'right', cellWidth: 12 },
+          [outletId === 'all' ? 13 : 12]: { halign: 'center', cellWidth: 7 },
+          [outletId === 'all' ? 14 : 13]: { halign: 'right', cellWidth: 12 },
+          [outletId === 'all' ? 15 : 14]: { halign: 'right', fontStyle: 'bold', cellWidth: 12 },
+          [outletId === 'all' ? 16 : 15]: { fontSize: 4, cellWidth: 15 },
           ...staffList.reduce((acc: any, _, idx: number) => {
-            acc[15 + idx] = { halign: 'right', cellWidth: 12 };
+            acc[(outletId === 'all' ? 17 : 16) + idx] = { halign: 'right', cellWidth: 10 };
             return acc;
           }, {})
         },

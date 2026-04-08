@@ -5,8 +5,8 @@ export type Permission =
   | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email' | 'users:manage_overrides' | 'users:edit_self'
   | 'staff:view' | 'staff:manage' | 'staff:manage_leaves' | 'staff:manage_portal_settings'
   | 'settings:view' | 'settings:edit' 
-  | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives' | 'settings:manage_visibility'
-  | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives'
+  | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives' | 'settings:manage_visibility' | 'settings:view_staff_portal' | 'settings:view_booking_engine' | 'settings:view_membership_types' | 'settings:view_massage_rooms' | 'settings:view_reports_config' | 'settings:view_custom_reports'
+  | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives' | 'settings:manage_staff_portal' | 'settings:manage_booking_engine' | 'settings:manage_membership_types' | 'settings:manage_massage_rooms' | 'settings:manage_reports_config' | 'settings:manage_custom_reports'
   | 'reports:view' | 'reports:export' | 'reports:view_financial' | 'reports:view_operational' | 'reports:view_inventory' | 'reports:view_staff'
   | 'logs:view' | 'logs:search' | 'logs:filter' | 'logs:clear'
   | 'bookings:view' | 'bookings:create' | 'bookings:edit' | 'bookings:delete' | 'bookings:manage_resources' | 'bookings:view_therapist_schedule'
@@ -161,6 +161,7 @@ export interface Currency {
   symbol: string;
   rate: number;
   is_default: boolean;
+  property_id?: string;
 }
 
 export interface CompanySettings {
@@ -357,6 +358,42 @@ export interface Notification {
   user_id?: string;
   outlet_id?: string;
   type?: 'info' | 'warning' | 'success' | 'error';
+}
+
+export interface CustomReportColumn {
+  key: string;
+  label: string;
+  visible: boolean;
+  width?: number;
+}
+
+export interface CustomReportFilter {
+  column: string;
+  operator: 'eq' | 'neq' | 'gt' | 'lt' | 'contains';
+  value: any;
+}
+
+export interface CustomReportAggregation {
+  column: string;
+  function: 'sum' | 'avg' | 'count';
+}
+
+export interface CustomReportConfig {
+  id: string;
+  name: string;
+  data_source: 'members' | 'bookings' | 'sales' | 'inventory';
+  columns: CustomReportColumn[];
+  group_by?: string;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+  filters: CustomReportFilter[];
+  aggregations: CustomReportAggregation[];
+  date_range: 'today' | 'last_7_days' | 'last_30_days' | 'this_month' | 'custom';
+  visualization_type: 'table' | 'bar' | 'line' | 'pie';
+  property_id?: string;
+  outlet_id?: string;
+  created_at: string;
+  created_by: string;
 }
 
 export interface IncentiveRule {

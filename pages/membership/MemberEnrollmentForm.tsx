@@ -24,7 +24,6 @@ const memberSchema = z.object({
   start_date: z.string().min(1, "Start date required"),
   discount: z.coerce.number().min(0),
   check_no: z.string().optional().nullable(),
-  sales_rep_id: z.string().optional().nullable(),
   email: z.string().email().or(z.literal("")).optional().nullable(),
   phone: z.string().optional().nullable(),
   nationality: z.string().optional().nullable(),

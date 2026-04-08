@@ -1,4 +1,4 @@
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, Notification } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, Notification, CustomReportConfig } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format, parse, differenceInCalendarDays } from 'date-fns';
@@ -182,6 +182,12 @@ class DatabaseService {
           { key: 'settings:view_navigation', label: 'UI Architecture', description: 'Rearrange sidebar navigation order.' },
           { key: 'settings:view_incentives', label: 'Yield Logic', description: 'Manage complex incentive distribution rules.' },
           { key: 'settings:view_maintenance', label: 'Terminal Ops', description: 'Access database maintenance and wipe tools.' },
+          { key: 'settings:view_staff_portal', label: 'Staff Portal', description: 'Access staff portal configuration.' },
+          { key: 'settings:view_booking_engine', label: 'Booking Engine', description: 'Access booking engine settings.' },
+          { key: 'settings:view_membership_types', label: 'Membership Types', description: 'Access membership types configuration.' },
+          { key: 'settings:view_massage_rooms', label: 'Massage Rooms', description: 'Access massage rooms configuration.' },
+          { key: 'settings:view_reports_config', label: 'Report Distribution', description: 'Access report distribution settings.' },
+          { key: 'settings:view_custom_reports', label: 'Custom Intelligence', description: 'Access custom report builder.' },
           { key: 'settings:manage_visibility', label: 'Feature Visibility', description: 'Control which settings tabs are visible to other admins.' },
           { key: 'settings:manage_global', label: 'Manage Enterprise', description: 'Edit brand and address configuration.' },
           { key: 'settings:manage_properties', label: 'Manage Properties', description: 'Add/Edit/Delete luxury collection properties.' },
@@ -193,6 +199,12 @@ class DatabaseService {
           { key: 'settings:manage_navigation', label: 'Manage UI', description: 'Authorize changes to sidebar navigation order.' },
           { key: 'settings:manage_incentives', label: 'Manage Yield', description: 'Authorize changes to complex incentive distribution rules.' },
           { key: 'settings:manage_maintenance', label: 'Manage Maintenance', description: 'Authorize database maintenance and wipe tools.' },
+          { key: 'settings:manage_staff_portal', label: 'Manage Staff Portal', description: 'Edit staff portal configuration.' },
+          { key: 'settings:manage_booking_engine', label: 'Manage Booking Engine', description: 'Edit booking engine settings.' },
+          { key: 'settings:manage_membership_types', label: 'Manage Membership Types', description: 'Edit membership types configuration.' },
+          { key: 'settings:manage_massage_rooms', label: 'Manage Massage Rooms', description: 'Edit massage rooms configuration.' },
+          { key: 'settings:manage_reports_config', label: 'Manage Report Distribution', description: 'Edit report distribution settings.' },
+          { key: 'settings:manage_custom_reports', label: 'Manage Custom Intelligence', description: 'Edit custom report builder.' },
         ]
       }
     ];
@@ -1397,7 +1409,17 @@ class DatabaseService {
 
   async addCurrency(curr: Omit<Currency, 'id'>) {
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('currencies').insert([{ ...curr, id: curr.code.toLowerCase() }]).select();
+        if (curr.is_default) {
+            let query = supabase.from('currencies').update({ is_default: false });
+            if (curr.property_id) {
+                query = query.eq('property_id', curr.property_id);
+            } else {
+                query = query.is('property_id', null);
+            }
+            await query;
+        }
+        const id = curr.property_id ? `${curr.code.toLowerCase()}_${curr.property_id}` : curr.code.toLowerCase();
+        const { data, error } = await supabase.from('currencies').insert([{ ...curr, id }]).select();
         if (error) throw error;
         await this.logAction('CREATE_CURRENCY', `Monetary standard defined: ${curr.code}`);
         return data;
@@ -1406,6 +1428,16 @@ class DatabaseService {
 
   async updateCurrency(id: string, updates: Partial<Currency>) {
     if (this.isSupabase()) {
+        if (updates.is_default) {
+            const { data: curr } = await supabase.from('currencies').select('property_id').eq('id', id).single();
+            let query = supabase.from('currencies').update({ is_default: false });
+            if (curr?.property_id) {
+                query = query.eq('property_id', curr.property_id);
+            } else {
+                query = query.is('property_id', null);
+            }
+            await query;
+        }
         await supabase.from('currencies').update(updates).eq('id', id);
         await this.logAction('UPDATE_CURRENCY', `Currency modified: ${id}`);
     }
@@ -2322,6 +2354,69 @@ class DatabaseService {
       }
     }
     await this.logAction('UPDATE_RECIPIENT', `Report recipient updated: ${id}`);
+  }
+
+  // --- CUSTOM REPORT CONFIGS ---
+  async getCustomReports(propertyId?: string, outletId?: string) {
+    if (this.isSupabase()) {
+      let query = supabase.from('custom_reports').select('*');
+      if (propertyId) query = query.eq('property_id', propertyId);
+      if (outletId && outletId !== 'all') query = query.eq('outlet_id', outletId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as CustomReportConfig[];
+    }
+    const reports = JSON.parse(localStorage.getItem('membership_custom_reports') || '[]') as CustomReportConfig[];
+    let filtered = reports;
+    if (propertyId) filtered = filtered.filter(r => r.property_id === propertyId);
+    if (outletId && outletId !== 'all') filtered = filtered.filter(r => r.outlet_id === outletId);
+    return filtered;
+  }
+
+  async addCustomReport(config: Omit<CustomReportConfig, 'id' | 'created_at'>) {
+    const newReport = {
+      ...config,
+      id: this.generateUUID(),
+      created_at: new Date().toISOString()
+    };
+
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('custom_reports').insert([newReport]);
+      if (error) throw error;
+    } else {
+      const reports = await this.getCustomReports();
+      reports.push(newReport);
+      localStorage.setItem('membership_custom_reports', JSON.stringify(reports));
+    }
+    await this.logAction('ADD_CUSTOM_REPORT', `Custom report defined: ${config.name}`);
+    return newReport;
+  }
+
+  async updateCustomReport(id: string, updates: Partial<CustomReportConfig>) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('custom_reports').update(updates).eq('id', id);
+      if (error) throw error;
+    } else {
+      const reports = await this.getCustomReports();
+      const index = reports.findIndex(r => r.id === id);
+      if (index !== -1) {
+        reports[index] = { ...reports[index], ...updates };
+        localStorage.setItem('membership_custom_reports', JSON.stringify(reports));
+      }
+    }
+    await this.logAction('UPDATE_CUSTOM_REPORT', `Custom report modified: ${id}`);
+  }
+
+  async deleteCustomReport(id: string) {
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('custom_reports').delete().eq('id', id);
+      if (error) throw error;
+    } else {
+      const reports = await this.getCustomReports();
+      const filtered = reports.filter(r => r.id !== id);
+      localStorage.setItem('membership_custom_reports', JSON.stringify(filtered));
+    }
+    await this.logAction('DELETE_CUSTOM_REPORT', `Custom report removed: ${id}`);
   }
 
   async sendTestReport(recipientId: string) {

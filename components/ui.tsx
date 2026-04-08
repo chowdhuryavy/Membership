@@ -2,6 +2,7 @@
 import React from 'react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { X } from 'lucide-react';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -146,6 +147,33 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   }
 );
 Button.displayName = "Button";
+
+// --- Modal ---
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}
+
+export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+          <h3 className="font-black text-slate-900 uppercase tracking-widest text-sm">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-6 overflow-y-auto custom-scrollbar max-h-[calc(90vh-60px)]">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // --- Confirmation Dialog ---
 interface ConfirmationModalProps {

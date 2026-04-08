@@ -87,13 +87,13 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
 
   const handleNewEnrollment = () => {
-    // If we have no membership types or categories yet, we shouldn't open the form as it will be incomplete
-    if (membershipTypes.length === 0 || categories.length === 0) {
+    // If we have no categories yet, we shouldn't open the form as it will be incomplete
+    if (categories.length === 0) {
       onRefresh(true); // Silently refresh to try and get data
       return;
     }
 
-    if (selectedTypeId === 'all') {
+    if (membershipTypes.length > 0 && selectedTypeId === 'all') {
       setShowTypeSelector(true);
     } else {
       onAdd();

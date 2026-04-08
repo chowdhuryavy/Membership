@@ -139,7 +139,7 @@ const Members = () => {
           viewScope={viewScope}
           setViewScope={setViewScope}
           onAdd={() => { 
-            if (!loading && membershipTypes.length > 0) { 
+            if (!loading) { 
               setIsEditing(false); 
               setIsRenewal(false); 
               setSelectedMember(null); 
