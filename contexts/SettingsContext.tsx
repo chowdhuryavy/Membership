@@ -94,6 +94,24 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     refreshSettings();
   }, []);
 
+  // Dynamically update favicon based on global settings logo
+  useEffect(() => {
+    if (settings?.logo_url) {
+      const updateFavicon = (selector: string, rel: string) => {
+        let link = document.querySelector(selector) as HTMLLinkElement;
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = rel;
+          document.head.appendChild(link);
+        }
+        link.href = settings.logo_url;
+      };
+
+      updateFavicon('link[rel="icon"]', 'icon');
+      updateFavicon('link[rel="apple-touch-icon"]', 'apple-touch-icon');
+    }
+  }, [settings?.logo_url]);
+
   useEffect(() => {
     if (user && outlets.length > 0) {
       const allowed = isSuperAdmin
