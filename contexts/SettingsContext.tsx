@@ -94,25 +94,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     refreshSettings();
   }, []);
 
-  // Dynamically update favicon based on global settings logo
-  useEffect(() => {
-    if (settings?.logo_url) {
-      // Mobile browsers (especially Safari) often ignore simple href updates.
-      // We must completely remove the old tags and inject new ones to force a refresh.
-      document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"], link[rel="shortcut icon"]').forEach(el => el.remove());
-
-      const icon = document.createElement('link');
-      icon.rel = 'icon';
-      icon.href = settings.logo_url;
-      document.head.appendChild(icon);
-
-      const appleIcon = document.createElement('link');
-      appleIcon.rel = 'apple-touch-icon';
-      appleIcon.href = settings.logo_url;
-      document.head.appendChild(appleIcon);
-    }
-  }, [settings?.logo_url]);
-
   useEffect(() => {
     if (user && outlets.length > 0) {
       const allowed = isSuperAdmin
