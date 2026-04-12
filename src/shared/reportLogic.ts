@@ -22,7 +22,7 @@ export interface ReportContext {
   reportType: string;
   date: Date;
   dateType?: 'today' | 'yesterday';
-  incentiveDept?: 'Massage' | 'Membership' | 'Personal Training' | 'Sale';
+  incentiveDept?: 'Massage' | 'Membership' | 'Personal Training' | 'Sale' | 'Referral';
   selectedMembershipTypeId?: string | 'all';
   revenueMode?: 'cash' | 'accrual';
   endMonthIndex?: number;
@@ -921,12 +921,70 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           staff_splits: staffSplits
         });
       });
+    } else if (dept === 'Referral') {
+      members
+        .filter(m => m.referrer_name && m.referrer_name.trim() !== '')
+        .forEach(m => {
+        const cat = mCats.find(c => c.id === m.category_id);
+        
+        // Find rule for Referral
+        const rule = findBestRule(rules, 'Referral', 'all', m.net_amount, 0);
+
+        const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
+        const discountAmt = m.discount || 0;
+        const netRev = m.net_amount;
+        const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+        let baseInc = 0;
+        let incDiscVal = 0;
+        let incNet = 0;
+
+        const staffSplits: Record<string, number> = {};
+        let remarks = m.remarks || '';
+
+        if (!rule) {
+          remarks = remarks ? `${remarks} (No Rule)` : 'No Rule';
+        } else {
+          baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+          incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
+          incNet = baseInc - incDiscVal;
+          
+          remarks = `Referrer: ${m.referrer_name}`;
+          
+          const matchedStaff = rawStaffList.find(s => s.name.toLowerCase() === m.referrer_name?.toLowerCase());
+          if (matchedStaff) {
+             staffSplits[matchedStaff.id] = incNet;
+          }
+        }
+
+        rows.push({
+          id: m.id,
+          sl_no: sl++,
+          date: format(new Date(m.start_date), 'dd-MMM-yy'),
+          guest_name: m.guest_name,
+          item_name: cat?.name || m.category_id || 'Unknown Tier',
+          therapist_name: m.referrer_name || 'N/A',
+          outlet_name: outletMap[m.outlet_id] || 'Unknown',
+          actual_price: actualPrice,
+          discount_percent: discPercent,
+          discount_amount: discountAmt,
+          net_revenue: netRev,
+          inc_total: baseInc,
+          inc_discount_percent: discPercent,
+          inc_discount_val: incDiscVal,
+          inc_net: incNet,
+          remarks: remarks,
+          check_no: m.check_no || '',
+          duration: 'Referral',
+          staff_splits: staffSplits
+        });
+      });
     }
 
     const totalIncentive = rows.reduce((sum, r) => sum + r.inc_net, 0);
 
     // Filter staffList to only include relevant staff for this report
-    let finalStaffList = staffList.filter(s => {
+    let finalStaffList = dept === 'Referral' ? [] : staffList.filter(s => {
       const hasEarned = rows.some(r => r.staff_splits && r.staff_splits[s.id] > 0);
       if (hasEarned) return true;
       
@@ -945,7 +1003,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     });
 
     // If no staff found by role, show all active staff in the outlet as fallback
-    if (finalStaffList.length === 0) {
+    if (finalStaffList.length === 0 && dept !== 'Referral') {
       finalStaffList = staffList;
     }
 

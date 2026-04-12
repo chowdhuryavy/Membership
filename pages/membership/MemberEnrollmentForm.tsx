@@ -34,6 +34,7 @@ const memberSchema = z.object({
   spouse_name: z.string().optional().nullable(),
   spouse_dob: z.string().optional().nullable(),
   spouse_id_card_url: z.string().optional().nullable(),
+  referrer_name: z.string().optional().nullable(),
   kids: z.array(z.object({
     name: z.string().min(1, "Name required"),
     dob: z.string().min(1, "DOB required"),
@@ -115,6 +116,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         remarks: existingMember.remarks ?? '',
         package_type: existingMember.package_type || 'Single',
         access_type: existingMember.access_type || 'Both',
+        referrer_name: existingMember.referrer_name ?? '',
     } : {
       membership_number: '',
       guest_name: '',
@@ -133,7 +135,8 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       dob: '',
       phone: '',
       email: '',
-      nationality: ''
+      nationality: '',
+      referrer_name: ''
     }
   });
 
@@ -166,6 +169,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('remarks', '');
     setValue('check_no', '');
     setValue('discount', 0);
+    setValue('referrer_name', '');
   }, [setValue]);
 
   const setMemberDefaults = (found: Member) => {
@@ -182,6 +186,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('membership_type_id', found.membership_type_id || '');
     setValue('category_id', found.category_id);
     setValue('membership_number', found.membership_number);
+    setValue('referrer_name', found.referrer_name || '');
     
     const newStart = calculateDefaultStartDate(found.current_end_date);
     setValue('start_date', newStart);
@@ -300,7 +305,8 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         dob: '',
         phone: '',
         email: '',
-        nationality: ''
+        nationality: '',
+        referrer_name: ''
     });
   };
 
@@ -446,6 +452,15 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                             <Calendar className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
                         </div>
                         <input type="date" {...register('dob')} disabled={isRenewal || matchedMembers.length > 0} className="w-full h-14 pl-14 pr-12 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm uppercase disabled:opacity-50 disabled:bg-slate-50" />
+                    </div>
+                </div>
+                <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Referral Name</label>
+                    <div className="relative group">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
+                            <User className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
+                        </div>
+                        <input {...register('referrer_name')} disabled={isRenewal || matchedMembers.length > 0} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:bg-slate-50" placeholder="Referrer Name" />
                     </div>
                 </div>
             </div>

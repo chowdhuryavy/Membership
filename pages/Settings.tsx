@@ -1905,7 +1905,7 @@ const SettingsPage = () => {
                                 <Select label="Target Facility Context *" options={[{value:'', label:'Select Outlet...'}, ...outlets.map(o=>({value:o.id, label:`${o.name} - ${properties.find(p => p.id === o.property_id)?.name || 'Unknown'}`}))]} value={incentiveForm.scope_id} onChange={e => setIncentiveForm({...incentiveForm, scope_id: e.target.value})} className="h-14 rounded-xl border-2 animate-in slide-in-from-top-2" />
                               )}
 
-                              <Select label="Recognition Department" options={[{value:'Massage', label:'Treatment Services'}, {value:'Membership', label:'Membership Enrollments'}, {value:'Personal Training', label:'Personal Training'}, {value:'Sale', label:'POS & Retail'}]} value={incentiveForm.applies_to} onChange={e => setIncentiveForm({...incentiveForm, applies_to: e.target.value as any, target_id: 'all'})} className="h-14 rounded-xl border-2" />
+                              <Select label="Recognition Department" options={[{value:'Massage', label:'Treatment Services'}, {value:'Membership', label:'Membership Enrollments'}, {value:'Personal Training', label:'Personal Training'}, {value:'Sale', label:'POS & Retail'}, {value:'Referral', label:'Referral Program'}]} value={incentiveForm.applies_to} onChange={e => setIncentiveForm({...incentiveForm, applies_to: e.target.value as any, target_id: 'all'})} className="h-14 rounded-xl border-2" />
                               
                               <div className="space-y-2">
                                   <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Strategic Target (Tier/Type/Treatment)</label>
@@ -1940,6 +1940,9 @@ const SettingsPage = () => {
                                           {incentiveForm.applies_to === 'Sale' && (['Retail', 'Entrance Fee', 'Other']).map(c => (
                                               <option key={c} value={c}>{c} (Category)</option>
                                           ))}
+                                         {incentiveForm.applies_to === 'Referral' && (
+                                              <option value="all">All Referrals</option>
+                                          )}
                                       </select>
                                   </div>
                               </div>

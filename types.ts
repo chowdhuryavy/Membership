@@ -226,6 +226,7 @@ export interface Member {
   id_card_url?: string;
   spouse_id_card_url?: string;
   notes?: string;
+  referrer_name?: string;
 }
 
 export interface Freeze {
@@ -401,7 +402,7 @@ export interface IncentiveRule {
   name: string;
   scope: 'Global' | 'Property' | 'Outlet';
   scope_id: string | 'global'; 
-  applies_to: 'Membership' | 'Massage' | 'Sale' | 'Personal Training';
+  applies_to: 'Membership' | 'Massage' | 'Sale' | 'Personal Training' | 'Referral';
   target_id: string | 'all'; 
   distribution_type: 'Individual' | 'Shared'; 
   calculation_type: 'Percentage' | 'Fixed';

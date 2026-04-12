@@ -97,7 +97,7 @@ const Reports = () => {
   const { user } = useAuth();
   const { settings, currency, currentOutlet, currentProperty, formatMoney, hasPermission, setPageLoading } = useSettings();
   const [reportType, setReportType] = useState<ReportType>('revenue_recognition');
-  const [incentiveDept, setIncentiveDept] = useState<'Massage' | 'Membership' | 'Personal Training'>('Massage');
+  const [incentiveDept, setIncentiveDept] = useState<'Massage' | 'Membership' | 'Personal Training' | 'Sale' | 'Referral'>('Massage');
   const [reportMonth, setReportMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [dailySalesDate, setDailySalesDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [selectedCustomReportId, setSelectedCustomReportId] = useState<string | null>(null);
@@ -682,6 +682,7 @@ const Reports = () => {
             if (incentiveDept === 'Massage') return 'Therapist';
             if (incentiveDept === 'Personal Training') return 'Personal Trainer';
             if (incentiveDept === 'Membership') return 'Sales Rep';
+            if (incentiveDept === 'Referral') return 'Referrer';
         }
         return 'Staff';
     }, [reportType, incentiveDept]);
@@ -1063,7 +1064,7 @@ const Reports = () => {
                                       <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Reward Department</label>
                                   </div>
                                   <div className="grid grid-cols-1 gap-2">
-                                      {(['Massage', 'Membership', 'Personal Training'] as const).map(dept => (
+                                      {(['Massage', 'Membership', 'Personal Training', 'Sale', 'Referral'] as const).map(dept => (
                                           <button 
                                             key={dept} 
                                             onClick={() => setIncentiveDept(dept)} 
@@ -1248,17 +1249,36 @@ const Reports = () => {
                                                         <td className="border border-black px-5 py-3 uppercase text-slate-600">Total Incentive Yield</td>
                                                         <td className="border border-black px-5 py-3 text-right text-indigo-600 text-sm font-black">{formatMoney(rows.reduce((sum, row) => sum + row.inc_net, 0))}</td>
                                                     </tr>
-                                                    {activeStaffList.filter(s => (rows.reduce((sum, r) => sum + (r.staff_splits[s.id] || 0), 0)) > 0).map(s => (
-                                                        <tr key={s.id} className="bg-white">
-                                                            <td className="border border-black px-8 py-2 uppercase text-slate-400 text-[9px] italic flex items-center gap-2">
-                                                                <div className="w-1 h-1 bg-indigo-400 rounded-full"></div>
-                                                                {s.name} ({s.role})
-                                                            </td>
-                                                            <td className="border border-black px-5 py-2 text-right text-slate-500 font-bold">
-                                                                {formatMoney(rows.reduce((sum, r) => sum + (r.staff_splits[s.id] || 0), 0))}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
+                                                    {incentiveDept === 'Referral' ? (
+                                                        // Group by referrer name for Referral report
+                                                        Object.entries(rows.reduce((acc, row) => {
+                                                            const name = row.therapist_name || 'Unknown';
+                                                            acc[name] = (acc[name] || 0) + row.inc_net;
+                                                            return acc;
+                                                        }, {} as Record<string, number>)).filter(([_, amount]) => amount > 0).map(([name, amount]) => (
+                                                            <tr key={name} className="bg-white">
+                                                                <td className="border border-black px-8 py-2 uppercase text-slate-400 text-[9px] italic flex items-center gap-2">
+                                                                    <div className="w-1 h-1 bg-indigo-400 rounded-full"></div>
+                                                                    {name}
+                                                                </td>
+                                                                <td className="border border-black px-5 py-2 text-right text-slate-500 font-bold">
+                                                                    {formatMoney(amount)}
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    ) : (
+                                                        activeStaffList.filter(s => (rows.reduce((sum, r) => sum + (r.staff_splits[s.id] || 0), 0)) > 0).map(s => (
+                                                            <tr key={s.id} className="bg-white">
+                                                                <td className="border border-black px-8 py-2 uppercase text-slate-400 text-[9px] italic flex items-center gap-2">
+                                                                    <div className="w-1 h-1 bg-indigo-400 rounded-full"></div>
+                                                                    {s.name} ({s.role})
+                                                                </td>
+                                                                <td className="border border-black px-5 py-2 text-right text-slate-500 font-bold">
+                                                                    {formatMoney(rows.reduce((sum, r) => sum + (r.staff_splits[s.id] || 0), 0))}
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
                                                 </>
                                             )}
                                             <tr className="bg-white">
