@@ -112,7 +112,7 @@ const Categories = () => {
   
   const handleAddNew = () => {
       if (!canCreate) return;
-      if (selectedTypeId === 'all' && membershipTypes.length > 0) {
+      if (membershipTypes.length > 0) {
           setShowTypeSelector(true);
       } else {
           resetForm();

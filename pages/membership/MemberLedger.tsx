@@ -93,7 +93,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
       return;
     }
 
-    if (membershipTypes.length > 0 && selectedTypeId === 'all') {
+    if (membershipTypes.length > 0) {
       setShowTypeSelector(true);
     } else {
       onAdd();
