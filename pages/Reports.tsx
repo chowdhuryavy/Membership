@@ -891,21 +891,38 @@ const Reports = () => {
                         <table className="w-full border-collapse text-[10px] border-2 border-black shadow-sm">
                             <thead>
                                 <tr className="bg-amber-100 font-black uppercase tracking-widest border-b-2 border-black">
-                                    <th className="border border-black px-4 py-3 text-left">Staff Name</th>
+                                    <th className="border border-black px-4 py-3 text-left">{incentiveDept === 'Referral' ? 'Referrer Name' : 'Staff Name'}</th>
                                     <th className="border border-black px-4 py-3 text-right">Incentives</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {activeStaffList.map((s, idx) => {
-                                    const colors = ['bg-emerald-50/50', 'bg-orange-50/50', 'bg-amber-50/50', 'bg-yellow-50/50', 'bg-green-50/50', 'bg-slate-50/50', 'bg-blue-50/50'];
-                                    const color = colors[idx % colors.length];
-                                    return (
-                                        <tr key={s.id} className={`${color} font-bold border-b border-black hover:bg-white transition-colors`}>
-                                            <td className="border border-black px-4 py-2 text-slate-700">{s.name}</td>
-                                            <td className="border border-black px-4 py-2 text-right">{formatMoney(totals.staffTotals[s.id] || 0)}</td>
-                                        </tr>
-                                    );
-                                })}
+                                {incentiveDept === 'Referral' ? (
+                                    Object.entries(rows.reduce((acc, row) => {
+                                        const name = row.therapist_name || 'Unknown';
+                                        acc[name] = (acc[name] || 0) + row.inc_net;
+                                        return acc;
+                                    }, {} as Record<string, number>)).filter(([_, amount]) => amount > 0).map(([name, amount], idx) => {
+                                        const colors = ['bg-emerald-50/50', 'bg-orange-50/50', 'bg-amber-50/50', 'bg-yellow-50/50', 'bg-green-50/50', 'bg-slate-50/50', 'bg-blue-50/50'];
+                                        const color = colors[idx % colors.length];
+                                        return (
+                                            <tr key={name} className={`${color} font-bold border-b border-black hover:bg-white transition-colors`}>
+                                                <td className="border border-black px-4 py-2 text-slate-700">{name}</td>
+                                                <td className="border border-black px-4 py-2 text-right">{formatMoney(amount)}</td>
+                                            </tr>
+                                        );
+                                    })
+                                ) : (
+                                    activeStaffList.map((s, idx) => {
+                                        const colors = ['bg-emerald-50/50', 'bg-orange-50/50', 'bg-amber-50/50', 'bg-yellow-50/50', 'bg-green-50/50', 'bg-slate-50/50', 'bg-blue-50/50'];
+                                        const color = colors[idx % colors.length];
+                                        return (
+                                            <tr key={s.id} className={`${color} font-bold border-b border-black hover:bg-white transition-colors`}>
+                                                <td className="border border-black px-4 py-2 text-slate-700">{s.name}</td>
+                                                <td className="border border-black px-4 py-2 text-right">{formatMoney(totals.staffTotals[s.id] || 0)}</td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
                                 <tr className="bg-white font-black border-t-2 border-black">
                                     <td className="border border-black px-4 py-3 text-center uppercase tracking-widest bg-slate-50">TOTAL</td>
                                     <td className="border border-black px-4 py-3 text-right bg-slate-50">{formatMoney(totals.totalIncNet)}</td>
