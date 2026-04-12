@@ -279,7 +279,7 @@ const SettingsPage = () => {
       { id: 'maintenance', label: 'Maintenance', visible: hasPermission(user?.role_id || '', 'settings:view_maintenance'), icon: Zap },
       
       // Accessible to others with permission
-      { id: 'roles', label: 'Security Tiers', visible: hasPermission(user?.role_id || '', 'settings:view_roles'), icon: Shield },
+      { id: 'roles', label: 'Role & Permissions', visible: hasPermission(user?.role_id || '', 'settings:view_roles'), icon: Shield },
       { id: 'incentives', label: 'Contract Logic', visible: hasPermission(user?.role_id || '', 'settings:view_incentives') && !!currentOutlet, icon: Award },
       { id: 'shortcuts', label: 'Executive Hotkeys', visible: hasPermission(user?.role_id || '', 'settings:view_shortcuts'), icon: Keyboard },
       { id: 'documents', label: 'Audit Templates', visible: hasPermission(user?.role_id || '', 'settings:view_documents'), icon: FileCode },
@@ -580,7 +580,7 @@ const SettingsPage = () => {
 
   const handleRoleSubmit = async () => {
     if (!hasPermission(user?.role_id || '', 'settings:manage_roles')) {
-        showStatus('Unauthorized: Role Management clearance required.', 'error');
+        showStatus('Unauthorized: Role Management permission required.', 'error');
         return;
     }
     
@@ -597,7 +597,7 @@ const SettingsPage = () => {
       else await db.addRole(roleForm);
       await refreshSettings();
       setShowForm(false);
-      showStatus('Security Protocol Tier Committed.');
+      showStatus('Role Saved.');
     } catch (e: any) { showStatus(e.message, 'error'); }
     finally { setIsSaving(false); }
   };
@@ -759,7 +759,7 @@ const SettingsPage = () => {
 
     if (itemToDelete.type === 'role') {
         if (!hasPermission(user?.role_id || '', 'settings:manage_roles')) {
-            showStatus('Unauthorized: Role Management clearance required for this deletion.', 'error');
+            showStatus('Unauthorized: Role Management permission required for this deletion.', 'error');
             setItemToDelete(null);
             return;
         }
@@ -996,12 +996,12 @@ const SettingsPage = () => {
               {activeTab === 'roles' && (
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
-                          <div className="flex items-center gap-5"><Shield className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Security Tiers</CardTitle></div>
-                          <Button onClick={() => { setEditingId(null); setRoleForm({name:'', permissions:[]}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Define Protocol</Button>
+                          <div className="flex items-center gap-5"><Shield className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Role & Permissions</CardTitle></div>
+                          <Button onClick={() => { setEditingId(null); setRoleForm({name:'', permissions:[]}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Define Role</Button>
                       </CardHeader>
                       <CardContent className="p-0">
                           <table className="w-full text-left">
-                              <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Protocol Tier</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Clearance Vol.</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
+                              <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Role Name</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Permissions Count</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
                               <tbody className="divide-y divide-slate-100">{roles.filter(r => {
                                   const isSuperUser = isSuperAdmin;
                                   // Hide System Administrator role (usually id='admin' or name='System Administrator') from non-super users
@@ -1591,7 +1591,7 @@ const SettingsPage = () => {
                   <CardHeader className="bg-indigo-600 text-white p-10 flex flex-col gap-1">
                       <CardTitle className="text-xl font-black uppercase tracking-widest flex items-center gap-3">
                         {editingId ? <Edit2 className="w-6 h-6"/> : <Plus className="w-6 h-6" />}
-                        {activeTab === 'properties' ? 'Property Asset Config' : activeTab === 'outlets' ? 'Outlet Context Commission' : activeTab === 'roles' ? 'Security Policy Protocol' : activeTab === 'currency' ? 'Monetary Standard' : activeTab === 'reports_config' ? 'Distribution Protocol' : 'Management Logic'}
+                        {activeTab === 'properties' ? 'Property Asset Config' : activeTab === 'outlets' ? 'Outlet Context Commission' : activeTab === 'roles' ? 'Role Configuration' : activeTab === 'currency' ? 'Monetary Standard' : activeTab === 'reports_config' ? 'Distribution Protocol' : 'Management Logic'}
                       </CardTitle>
                       <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Authorized Synchronization</p>
                   </CardHeader>
@@ -1665,7 +1665,7 @@ const SettingsPage = () => {
                       )}
                       {activeTab === 'roles' && (
                           <div className="space-y-8">
-                              <Input label="Protocol Designation *" value={roleForm.name} onChange={e => setRoleForm({...roleForm, name: e.target.value})} className="h-14 rounded-xl font-black" />
+                              <Input label="Role Name *" value={roleForm.name} onChange={e => setRoleForm({...roleForm, name: e.target.value})} className="h-14 rounded-xl font-black" />
                               <div className="space-y-4">
                                 <div className="flex items-center gap-3 mb-2">
                                   <ShieldAlert className="w-5 h-5 text-indigo-600"/>
@@ -1685,7 +1685,7 @@ const SettingsPage = () => {
                                   onChange={(perms) => setRoleForm({ ...roleForm, permissions: perms })} 
                                 />
                               </div>
-                              <Button onClick={handleRoleSubmit} className="w-full h-16 rounded-2xl font-black uppercase tracking-widest bg-indigo-600 shadow-xl shadow-indigo-100">Deploy Security Tier</Button>
+                              <Button onClick={handleRoleSubmit} className="w-full h-16 rounded-2xl font-black uppercase tracking-widest bg-indigo-600 shadow-xl shadow-indigo-100">Deploy Role</Button>
                           </div>
                       )}
                       {activeTab === 'currency' && (

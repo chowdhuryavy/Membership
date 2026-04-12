@@ -184,7 +184,7 @@ const UserDetail = ({
                                 )}
                             </div>
                             <div className="flex justify-between items-center text-sm p-4 bg-slate-50 rounded-xl">
-                                <span className="font-bold text-slate-500">Security Tier</span>
+                                <span className="font-bold text-slate-500">Role</span>
                                 <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">
                                     {getRoleName(user.role_id)}
                                 </span>
@@ -532,8 +532,8 @@ const Users = () => {
         <div className="flex items-center justify-center h-96">
             <Card className="max-w-md text-center p-6 border-red-100 bg-red-50/30">
                 <Shield className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-red-600">Access Protocol Rejected</h3>
-                <p className="text-slate-600 mt-2 text-sm">Security clearance insufficient to access the user directory.</p>
+                <h3 className="text-lg font-bold text-red-600">Access Denied</h3>
+                <p className="text-slate-600 mt-2 text-sm">Permission insufficient to access the user directory.</p>
             </Card>
         </div>
     );
@@ -546,7 +546,7 @@ const Users = () => {
 
     setError('');
     if (!formData.name || !formData.email || !formData.role_id) {
-        setError("Name, Email, and Security Tier are required.");
+        setError("Name, Email, and Role are required.");
         return;
     }
     
@@ -627,7 +627,7 @@ const Users = () => {
                     <Shield className="w-6 h-6" />
                 </div>
                 <div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Identity Management</h1>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tighter">User & Security</h1>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Authorized User Directory</p>
                 </div>
             </div>
@@ -682,7 +682,7 @@ const Users = () => {
                               <th className="px-8 py-6">Profile</th>
                               <th className="px-8 py-6 text-center">Status</th>
                               <th className="px-8 py-6 text-center">Sync</th>
-                              <th className="px-8 py-6">Security Tier</th>
+                              <th className="px-8 py-6">Role</th>
                               <th className="px-8 py-6">Access Scopes</th>
                               {canModifyTable && <th className="px-8 py-6 text-right">Operations</th>}
                           </tr>
@@ -817,7 +817,7 @@ const Users = () => {
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Security Tier</label>
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Role</label>
                                 <Select 
                                     options={[{ value: '', label: 'Select Tier...' }, ...roles.filter(r => {
                                         const isSuperUser = isSuperAdmin;
@@ -892,7 +892,7 @@ const Users = () => {
         </div>
       )}
 
-      <ConfirmationModal isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={confirmDelete} title="Revoke Identity Protocol" description="This profile and all associated facility access scopes will be permanently purged. Access is terminated immediately upon revocation." confirmText="Confirm Revocation" isDestructive={true} />
+      <ConfirmationModal isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={confirmDelete} title="Delete User" description="This profile and all associated facility access scopes will be permanently purged. Access is terminated immediately upon revocation." confirmText="Confirm Deletion" isDestructive={true} />
     </div>
   );
 };
