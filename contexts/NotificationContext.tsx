@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { db } from '../services/mockSupabase';
 import { Notification } from '../types';
 import { useAuth } from './AuthContext';
@@ -23,8 +23,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const lastActionTime = useRef<number | null>(null);
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (isAutoRefresh = false) => {
     // Try to get user from AuthContext or staff session from localStorage
     const staffSessionStr = localStorage.getItem('staff_session');
     const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
@@ -35,8 +36,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setIsLoading(false);
       return;
     }
+
+    // Skip auto-refresh if we just did a bulk action (within last 5 seconds)
+    if (isAutoRefresh && lastActionTime.current && Date.now() - lastActionTime.current < 5000) {
+      console.log('Skipping auto-refresh to preserve optimistic state');
+      return;
+    }
+
     try {
-      setIsLoading(true);
+      if (!isAutoRefresh) setIsLoading(true);
       console.log('Fetching notifications for user:', effectiveUserId, 'outlet:', outletId);
       const data = await db.getNotifications(effectiveUserId, outletId);
       console.log('Fetched notifications count:', data.length);
@@ -80,10 +88,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       });
     }
     
-    // Set up a polling interval as a fallback (every 10 seconds for more immediate updates)
+    // Set up a polling interval as a fallback (every 30 seconds)
     const interval = setInterval(() => {
-      fetchNotifications();
-    }, 10000);
+      fetchNotifications(true);
+    }, 30000);
     
     return () => {
       if (unsubscribe) unsubscribe();
@@ -92,11 +100,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [fetchNotifications, user, outletId]);
 
   const markAsRead = async (id: string) => {
+    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
+    const effectiveUserId = user?.id || staffUser?.id;
+
     // Optimistic update
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
     
     try {
-      await db.markNotificationAsRead(id);
+      await db.markNotificationAsRead(id, effectiveUserId);
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
       // Revert on error
@@ -111,11 +123,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     if (!effectiveUserId) return;
 
+    lastActionTime.current = Date.now();
     // Optimistic update
+    const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
 
     try {
-      await db.markAllNotificationsAsRead(effectiveUserId, outletId);
+      await db.markAllNotificationsAsRead(effectiveUserId, outletId, unreadIds);
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
       // Revert on error
@@ -124,11 +138,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const removeNotification = async (id: string) => {
+    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
+    const effectiveUserId = user?.id || staffUser?.id;
+
     // Optimistic update
     setNotifications(prev => prev.filter(n => n.id !== id));
     
     try {
-      await db.deleteNotification(id);
+      await db.deleteNotification(id, effectiveUserId);
     } catch (error) {
       console.error('Failed to delete notification:', error);
       // Revert on error
@@ -141,11 +159,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
     const effectiveUserId = user?.id || staffUser?.id;
 
+    lastActionTime.current = Date.now();
     // Optimistic update
+    const allIds = notifications.map(n => n.id);
     setNotifications([]);
 
     try {
-      await db.deleteAllNotifications(effectiveUserId, outletId);
+      await db.deleteAllNotifications(effectiveUserId, outletId, allIds);
     } catch (error) {
       console.error('Failed to clear all notifications:', error);
       // Revert on error

@@ -2466,15 +2466,20 @@ class DatabaseService {
     console.log('Fetching notifications for:', { userId, outletId });
     if (this.isSupabase()) {
       let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
+      
+      // Fetch all relevant notifications (targeted to user or system-wide)
       if (userId) {
         query = query.or(`user_id.eq.${userId},user_id.is.null`);
       } else {
         query = query.is('user_id', null);
       }
       
+      if (outletId) {
+        query = query.or(`outlet_id.eq.${outletId},outlet_id.is.null`);
+      }
+      
       const { data, error } = await query;
       if (error) {
-        // PGRST205 is "Could not find the table in the schema cache"
         if (error.code !== 'PGRST205') {
           console.warn("Failed to fetch notifications from Supabase, falling back to local storage", error);
         }
@@ -2482,9 +2487,22 @@ class DatabaseService {
       }
       
       let notifications = (data || []) as Notification[];
+      
+      // Filter out dismissed notifications for this user
+      if (userId) {
+        notifications = notifications.filter(n => !n.dismissed_by || !n.dismissed_by.includes(userId));
+        
+        // Map the 'read' status based on the read_by array for this user
+        notifications = notifications.map(n => ({
+          ...n,
+          read: n.user_id === userId ? n.read : (n.read_by?.includes(userId) || false)
+        }));
+      }
+      
       if (outletId) {
         notifications = notifications.filter(n => !n.outlet_id || n.outlet_id === outletId);
       }
+      
       console.log(`Fetched ${notifications.length} notifications from Supabase`);
       return notifications;
     }
@@ -2515,7 +2533,9 @@ class DatabaseService {
       id: this.generateUUID(),
       created_at: new Date().toISOString(),
       read: false,
-      user_id: notification.user_id || null
+      user_id: notification.user_id || null,
+      read_by: [],
+      dismissed_by: []
     };
 
     if (this.isSupabase()) {
@@ -2571,90 +2591,129 @@ class DatabaseService {
     localStorage.setItem('membership_notifications', JSON.stringify(notifications));
   }
 
-  async markNotificationAsRead(id: string) {
+  async markNotificationAsRead(id: string, userId?: string) {
     if (this.isSupabase()) {
-      const { error } = await supabase.from('notifications').update({ read: true }).eq('id', id);
-      if (error && error.code !== 'PGRST205') {
-        console.warn("Failed to update notification in Supabase", error);
+      // Fetch current state to update arrays
+      const { data: n } = await supabase.from('notifications').select('user_id, read_by').eq('id', id).single();
+      if (n) {
+        if (n.user_id === userId) {
+          // Direct targeted notification
+          await supabase.from('notifications').update({ read: true }).eq('id', id);
+        } else if (userId) {
+          // Shared notification - update read_by array
+          const readBy = n.read_by || [];
+          if (!readBy.includes(userId)) {
+            await supabase.from('notifications').update({ read_by: [...readBy, userId] }).eq('id', id);
+          }
+        }
       }
     }
-    this.updateLocalNotification(id, { read: true });
+    this.updateLocalNotification(id, { read: true }, userId);
   }
 
-  async markAllNotificationsAsRead(userId?: string, outletId?: string) {
-    if (this.isSupabase()) {
-      // 1. Fetch IDs of unread notifications that match the filter
-      let fetchQuery = supabase.from('notifications').select('id').eq('read', false);
-      if (userId) fetchQuery = fetchQuery.or(`user_id.eq.${userId},user_id.is.null`);
-      else fetchQuery = fetchQuery.is('user_id', null);
+  async markAllNotificationsAsRead(userId?: string, outletId?: string, ids?: string[]) {
+    console.log('Marking all notifications as read user-wise:', { userId, outletId, idsCount: ids?.length });
+    if (this.isSupabase() && userId) {
+      // For bulk updates, we fetch and then update each to ensure user-wise isolation
+      const { data: unreadDocs } = await supabase.from('notifications')
+        .select('id, user_id, read_by')
+        .in('id', ids || []);
       
-      if (outletId) fetchQuery = fetchQuery.or(`outlet_id.eq.${outletId},outlet_id.is.null`);
-      else fetchQuery = fetchQuery.is('outlet_id', null);
-
-      const { data: unreadDocs } = await fetchQuery;
-      
-      if (unreadDocs && unreadDocs.length > 0) {
-        const ids = unreadDocs.map(d => d.id);
-        // 2. Update them by ID
-        const { error } = await supabase.from('notifications').update({ read: true }).in('id', ids);
-        if (error) console.warn("Failed to update notifications in Supabase", error);
+      if (unreadDocs) {
+        for (const doc of unreadDocs) {
+          if (doc.user_id === userId) {
+            await supabase.from('notifications').update({ read: true }).eq('id', doc.id);
+          } else {
+            const readBy = doc.read_by || [];
+            if (!readBy.includes(userId)) {
+              await supabase.from('notifications').update({ read_by: [...readBy, userId] }).eq('id', doc.id);
+            }
+          }
+        }
       }
     }
-    this.markAllLocalNotificationsAsRead(userId, outletId);
+    this.markAllLocalNotificationsAsRead(userId, outletId, ids);
   }
 
-  private updateLocalNotification(id: string, updates: Partial<Notification>) {
+  private updateLocalNotification(id: string, updates: Partial<Notification>, userId?: string) {
     const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
     const index = notifications.findIndex(n => n.id === id);
     if (index !== -1) {
-      notifications[index] = { ...notifications[index], ...updates };
+      const n = notifications[index];
+      if (userId && updates.read) {
+        if (n.user_id === userId) {
+          notifications[index] = { ...n, read: true };
+        } else {
+          const readBy = n.read_by || [];
+          if (!readBy.includes(userId)) {
+            notifications[index] = { ...n, read_by: [...readBy, userId] };
+          }
+        }
+      } else {
+        notifications[index] = { ...n, ...updates };
+      }
       localStorage.setItem('membership_notifications', JSON.stringify(notifications));
     }
   }
 
-  private markAllLocalNotificationsAsRead(userId?: string, outletId?: string) {
+  private markAllLocalNotificationsAsRead(userId?: string, outletId?: string, ids?: string[]) {
     const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
     const updated = notifications.map(n => {
-      const userMatch = !userId || !n.user_id || n.user_id === userId;
-      const outletMatch = !outletId || !n.outlet_id || n.outlet_id === outletId;
-      if (!n.read && userMatch && outletMatch) {
-        return { ...n, read: true };
+      // Check if already read by this user
+      const isRead = n.user_id === userId ? n.read : (n.read_by?.includes(userId || '') || false);
+      if (isRead) return n;
+      
+      let shouldMark = false;
+      if (ids && ids.length > 0) {
+        if (ids.includes(n.id)) shouldMark = true;
+      } else {
+        const userMatch = !userId || !n.user_id || n.user_id === userId;
+        const outletMatch = !outletId || !n.outlet_id || n.outlet_id === outletId;
+        if (userMatch && outletMatch) shouldMark = true;
+      }
+
+      if (shouldMark && userId) {
+        if (n.user_id === userId) return { ...n, read: true };
+        const readBy = n.read_by || [];
+        return { ...n, read_by: [...readBy, userId] };
       }
       return n;
     });
     localStorage.setItem('membership_notifications', JSON.stringify(updated));
   }
 
-  async deleteNotification(id: string) {
-    if (this.isSupabase()) {
-      const { error } = await supabase.from('notifications').delete().eq('id', id);
-      if (error && error.code !== 'PGRST205') {
-        console.warn("Failed to delete notification from Supabase", error);
+  async deleteNotification(id: string, userId?: string) {
+    if (this.isSupabase() && userId) {
+      // Soft delete: add to dismissed_by instead of actual delete
+      const { data: n } = await supabase.from('notifications').select('dismissed_by').eq('id', id).single();
+      if (n) {
+        const dismissedBy = n.dismissed_by || [];
+        if (!dismissedBy.includes(userId)) {
+          await supabase.from('notifications').update({ dismissed_by: [...dismissedBy, userId] }).eq('id', id);
+        }
       }
     }
-    this.deleteLocalNotification(id);
+    this.deleteLocalNotification(id, userId);
   }
 
-  async deleteAllNotifications(userId?: string, outletId?: string) {
-    if (this.isSupabase()) {
-      // 1. Fetch IDs of notifications that match the filter
-      let fetchQuery = supabase.from('notifications').select('id');
-      if (userId) fetchQuery = fetchQuery.or(`user_id.eq.${userId},user_id.is.null`);
-      else fetchQuery = fetchQuery.is('user_id', null);
+  async deleteAllNotifications(userId?: string, outletId?: string, ids?: string[]) {
+    console.log('Dismissing all notifications user-wise:', { userId, outletId, idsCount: ids?.length });
+    if (this.isSupabase() && userId) {
+      // Soft delete for all
+      const { data: docs } = await supabase.from('notifications')
+        .select('id, dismissed_by')
+        .in('id', ids || []);
       
-      if (outletId) fetchQuery = fetchQuery.or(`outlet_id.eq.${outletId},outlet_id.is.null`);
-      else fetchQuery = fetchQuery.is('outlet_id', null);
-
-      const { data: docs } = await fetchQuery;
-      
-      if (docs && docs.length > 0) {
-        const ids = docs.map(d => d.id);
-        // 2. Delete them by ID
-        const { error } = await supabase.from('notifications').delete().in('id', ids);
-        if (error) console.warn("Failed to delete all notifications from Supabase", error);
+      if (docs) {
+        for (const doc of docs) {
+          const dismissedBy = doc.dismissed_by || [];
+          if (!dismissedBy.includes(userId)) {
+            await supabase.from('notifications').update({ dismissed_by: [...dismissedBy, userId] }).eq('id', doc.id);
+          }
+        }
       }
     }
-    this.deleteAllLocalNotifications(userId, outletId);
+    this.deleteAllLocalNotifications(userId, outletId, ids);
   }
 
   subscribeToNotifications(userId: string, outletId: string | undefined, callback: (payload: { eventType: string, new: any, old?: any }) => void) {
@@ -2729,20 +2788,58 @@ class DatabaseService {
     }
   }
 
-  private deleteLocalNotification(id: string) {
+  private deleteLocalNotification(id: string, userId?: string) {
     const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
-    const filtered = notifications.filter(n => n.id !== id);
-    localStorage.setItem('membership_notifications', JSON.stringify(filtered));
+    if (userId) {
+      const index = notifications.findIndex(n => n.id === id);
+      if (index !== -1) {
+        const dismissedBy = notifications[index].dismissed_by || [];
+        if (!dismissedBy.includes(userId)) {
+          notifications[index].dismissed_by = [...dismissedBy, userId];
+          localStorage.setItem('membership_notifications', JSON.stringify(notifications));
+        }
+      }
+    } else {
+      // Fallback to actual delete if no userId (should not happen in this new flow)
+      const filtered = notifications.filter(n => n.id !== id);
+      localStorage.setItem('membership_notifications', JSON.stringify(filtered));
+    }
   }
 
-  private deleteAllLocalNotifications(userId?: string, outletId?: string) {
+  private deleteAllLocalNotifications(userId?: string, outletId?: string, ids?: string[]) {
     const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
-    const filtered = notifications.filter(n => {
-      const userMatch = !userId || !n.user_id || n.user_id === userId;
-      const outletMatch = !outletId || !n.outlet_id || n.outlet_id === outletId;
-      return !(userMatch && outletMatch);
-    });
-    localStorage.setItem('membership_notifications', JSON.stringify(filtered));
+    if (userId) {
+      const updated = notifications.map(n => {
+        let shouldDismiss = false;
+        if (ids && ids.length > 0) {
+          if (ids.includes(n.id)) shouldDismiss = true;
+        } else {
+          const userMatch = !userId || !n.user_id || n.user_id === userId;
+          const outletMatch = !outletId || !n.outlet_id || n.outlet_id === outletId;
+          if (userMatch && outletMatch) shouldDismiss = true;
+        }
+
+        if (shouldDismiss) {
+          const dismissedBy = n.dismissed_by || [];
+          if (!dismissedBy.includes(userId)) {
+            return { ...n, dismissed_by: [...dismissedBy, userId] };
+          }
+        }
+        return n;
+      });
+      localStorage.setItem('membership_notifications', JSON.stringify(updated));
+    } else {
+      // Fallback to actual delete
+      const filtered = notifications.filter(n => {
+        if (ids && ids.length > 0) {
+          return !ids.includes(n.id);
+        }
+        const userMatch = !userId || !n.user_id || n.user_id === userId;
+        const outletMatch = !outletId || !n.outlet_id || n.outlet_id === outletId;
+        return !(userMatch && outletMatch);
+      });
+      localStorage.setItem('membership_notifications', JSON.stringify(filtered));
+    }
   }
 }
 

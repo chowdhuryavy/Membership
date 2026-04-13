@@ -355,10 +355,12 @@ export interface Notification {
   title: string;
   message: string;
   created_at: string;
-  read: boolean;
+  read: boolean; // Keep for backward compatibility
   user_id?: string;
   outlet_id?: string;
   type?: 'info' | 'warning' | 'success' | 'error';
+  read_by?: string[]; // Array of user IDs who have read this
+  dismissed_by?: string[]; // Array of user IDs who have dismissed this
 }
 
 export interface CustomReportColumn {
