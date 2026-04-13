@@ -144,6 +144,7 @@ const Dashboard = () => {
     guestRevenue: 0,
     memberRevenue: 0,
     dailyBreakdown: {
+      membership: 0,
       massage: 0,
       personalTraining: 0,
       retail: 0,
@@ -151,6 +152,7 @@ const Dashboard = () => {
       other: 0
     },
     mtdBreakdown: {
+      membership: 0,
       massage: 0,
       personalTraining: 0,
       retail: 0,
@@ -383,7 +385,7 @@ const Dashboard = () => {
             bookings.filter(b => {
                 const d = parseISO(b.date);
                 return b.status === 'completed' && d >= monthStart && d <= monthEnd;
-            }).forEach(b => totalRevInMonth += Number(b.price));
+            }).forEach(b => totalRevInMonth += (Number(b.price) - Number(b.discount || 0)));
 
             performanceTrend.push({ month: format(targetMonthDate, 'MMM'), revenue: totalRevInMonth, intake: intakeInMonth });
         }
@@ -425,7 +427,7 @@ const Dashboard = () => {
         
         bookings.filter(b => b.status === 'completed').forEach(b => {
             const bDate = parseISO(b.date);
-            const amount = Number(b.price);
+            const amount = Number(b.price) - Number(b.discount || 0);
             if (isSameMonth(bDate, viewDate)) {
                 mtdServiceRevenue += amount;
             }
@@ -441,20 +443,20 @@ const Dashboard = () => {
         sales.filter(s => s.status === 'completed').forEach(s => {
             const sDate = new Date(s.created_at);
             const amount = Number(s.net_amount);
-            const cat = s.category;
+            const cat = s.category as string;
 
             if (isSameMonth(sDate, viewDate)) {
                 mtdSalesRevenue += amount;
                 if (cat === 'Personal Training') mtdSalesBreakdown.personalTraining += amount;
-                else if (cat === 'Retail') mtdSalesBreakdown.retail += amount;
-                else if (cat === 'Entrance Fee') mtdSalesBreakdown.entranceFee += amount;
+                else if (cat === 'Retail' || cat === 'Retail Items') mtdSalesBreakdown.retail += amount;
+                else if (cat === 'Entrance Fee' || cat === 'Day Use') mtdSalesBreakdown.entranceFee += amount;
                 else mtdSalesBreakdown.other += amount;
             }
 
             if (isSameDay(sDate, now)) {
                 if (cat === 'Personal Training') dailySalesBreakdown.personalTraining += amount;
-                else if (cat === 'Retail') dailySalesBreakdown.retail += amount;
-                else if (cat === 'Entrance Fee') dailySalesBreakdown.entranceFee += amount;
+                else if (cat === 'Retail' || cat === 'Retail Items') dailySalesBreakdown.retail += amount;
+                else if (cat === 'Entrance Fee' || cat === 'Day Use') dailySalesBreakdown.entranceFee += amount;
                 else dailySalesBreakdown.other += amount;
             }
         });
@@ -597,6 +599,7 @@ const Dashboard = () => {
           guestRevenue,
           memberRevenue,
           dailyBreakdown: {
+            membership: totalDailyAccrual,
             massage: dailyServiceRevenue,
             personalTraining: dailySalesBreakdown.personalTraining,
             retail: dailySalesBreakdown.retail,
@@ -604,6 +607,7 @@ const Dashboard = () => {
             other: dailySalesBreakdown.other
           },
           mtdBreakdown: {
+            membership: mtdMembershipRevenue,
             massage: mtdServiceRevenue,
             personalTraining: mtdSalesBreakdown.personalTraining,
             retail: mtdSalesBreakdown.retail,
@@ -756,6 +760,7 @@ const Dashboard = () => {
                         </thead>
                         <tbody className="divide-y divide-slate-50">
                             {[
+                                { label: 'Membership Revenue', key: 'membership', icon: ShieldCheck, color: 'text-indigo-500' },
                                 { label: 'Massage Services', key: 'massage', icon: Sparkles, color: 'text-purple-500' },
                                 { label: 'Personal Training', key: 'personalTraining', icon: Activity, color: 'text-blue-500' },
                                 { label: 'Retail Products', key: 'retail', icon: ShoppingBag, color: 'text-emerald-500' },

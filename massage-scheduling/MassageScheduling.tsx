@@ -1099,9 +1099,27 @@ NOTIFY pgrst, 'reload schema';`}
           <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-[1.5rem] border border-slate-200 shadow-sm gap-4">
             <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
               <button onClick={() => setViewDate(addDays(viewDate, -1))} className="p-2 hover:bg-slate-50 rounded-xl border border-slate-100 transition-colors"><ChevronLeft className="w-5 h-5 text-slate-400"/></button>
-              <div className="flex flex-col items-center min-w-[180px]">
-                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{format(viewDate, 'EEEE')}</span>
-                <span className="text-base font-black text-slate-900 tracking-tight">{format(viewDate, 'MMMM dd, yyyy')}</span>
+              <div className="relative group">
+                <input 
+                  type="date" 
+                  value={format(viewDate, 'yyyy-MM-dd')} 
+                  onChange={(e) => {
+                    const [y, m, d] = e.target.value.split('-').map(Number);
+                    setViewDate(new Date(y, m - 1, d));
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer z-20"
+                />
+                <div className="flex flex-col items-center min-w-[180px] group-hover:bg-slate-50 p-2 rounded-xl transition-colors relative">
+                  {loading && (
+                    <div className="absolute -right-8 top-1/2 -translate-y-1/2">
+                      <RefreshCcw className="w-4 h-4 text-indigo-600 animate-spin" />
+                    </div>
+                  )}
+                  <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                    {format(viewDate, 'EEEE')} <CalendarDays className="w-3 h-3" />
+                  </span>
+                  <span className="text-base font-black text-slate-900 tracking-tight">{format(viewDate, 'MMMM dd, yyyy')}</span>
+                </div>
               </div>
               <button onClick={() => setViewDate(addDays(viewDate, 1))} className="p-2 hover:bg-slate-50 rounded-xl border border-slate-100 transition-colors"><ChevronRight className="w-5 h-5 text-slate-400"/></button>
             </div>
@@ -1300,7 +1318,7 @@ NOTIFY pgrst, 'reload schema';`}
                             </div>
                           );
                         })}
-                        {therapists.length === 0 && (
+                        {!loading && therapists.length === 0 && (
                             <div className="flex-1 p-12 text-center text-slate-400 uppercase text-[10px] font-black tracking-widest bg-white">
                                 No active specialist types registered for this scope.
                             </div>
@@ -1440,7 +1458,7 @@ NOTIFY pgrst, 'reload schema';`}
                             </div>
                           );
                         })}
-                        {massageRooms.length === 0 && (
+                        {!loading && massageRooms.length === 0 && (
                             <div className="flex-1 p-12 text-center text-slate-400 uppercase text-[10px] font-black tracking-widest bg-white">
                                 No active rooms registered for this scope.
                             </div>
@@ -1685,7 +1703,7 @@ NOTIFY pgrst, 'reload schema';`}
                                             </td>
                                         </tr>
                                     ))}
-                                    {therapists.length === 0 && (
+                                    {!loading && therapists.length === 0 && (
                                         <tr>
                                             <td colSpan={5} className="px-8 py-10 text-center text-slate-400 uppercase text-[9px] font-bold">No specialist types enrolled.</td>
                                         </tr>
