@@ -133,7 +133,7 @@ export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClos
             <Snowflake className="w-6 h-6 text-indigo-400" />
           </div>
           <CardTitle className="text-xl font-black uppercase tracking-tight leading-none mb-1">Bulk Maintenance Freeze</CardTitle>
-          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Global Portfolio Suspension Protocol</p>
+          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Global Suspension Settings</p>
           <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90 shadow-lg border border-white/5">
             <X className="w-4 h-4 text-slate-400"/>
           </button>
@@ -279,7 +279,7 @@ export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClos
                   disabled={totalDays <= 0 || !freezeForm.reason || isLoading}
                   className="flex-[2] h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
-                  Commit Bulk Protocol
+                  Confirm Bulk Freeze
                 </Button>
               </div>
             )}

@@ -528,7 +528,7 @@ const MassageScheduling = () => {
                     <Terminal className="w-5 h-5 text-amber-600" />
                 </div>
                 <div className="space-y-2">
-                    <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Safe Repair Protocol v2 (Comprehensive)</h3>
+                    <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Maintenance Mode v2 (Comprehensive)</h3>
                     <p className="text-slate-600 text-sm leading-relaxed font-medium">Please execute this script in your <span className="font-bold text-indigo-600">Supabase SQL Editor</span>. This will safely upgrade your tables without deleting existing data.</p>
                 </div>
             </div>
@@ -1005,7 +1005,7 @@ NOTIFY pgrst, 'reload schema';`}
         <Card className="max-w-md text-center p-8 rounded-[2rem] border-red-100 bg-red-50/30">
             <CalendarClock className="w-12 h-12 text-red-500 mx-auto mb-4" />
             <h3 className="text-xl font-black text-slate-900 tracking-tight uppercase">Access Restricted</h3>
-            <p className="text-slate-500 mt-2 text-sm">Security clearance insufficient to view resource scheduling grid.</p>
+            <p className="text-slate-500 mt-2 text-sm">Permission insufficient to view resource scheduling grid.</p>
         </Card>
     </div>
   );
@@ -1079,7 +1079,7 @@ NOTIFY pgrst, 'reload schema';`}
           </div>
           {canCreate && currentOutlet?.booking_enabled !== false && (
               <Button onClick={() => { setEditingBooking(null); setShowBookingForm(true); }} className="h-12 px-8 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-indigo-100 ml-auto md:ml-0">
-                <Plus className="w-5 h-5 mr-2" /> Authorized Booking
+                <Plus className="w-5 h-5 mr-2" /> Add Booking
               </Button>
           )}
         </div>

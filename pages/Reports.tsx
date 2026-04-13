@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '../components/ui';
 import { db } from '../services/mockSupabase';
 import { supabase as supabaseClient } from '../services/supabase';
-import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory, StaffLeave, MembershipType, InventoryItem } from '../types';
+import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory, StaffLeave, MembershipType, InventoryItem, CustomReportConfig } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
 import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO, endOfDay, startOfMonth, addMonths, parse } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
@@ -682,7 +682,7 @@ const Reports = () => {
             if (incentiveDept === 'Massage') return 'Therapist';
             if (incentiveDept === 'Personal Training') return 'Personal Trainer';
             if (incentiveDept === 'Membership') return 'Sales Rep';
-            if (incentiveDept === 'Referral') return 'Referrer';
+            if (incentiveDept === 'Referral') return 'Referral Name';
         }
         return 'Staff';
     }, [reportType, incentiveDept]);
@@ -891,7 +891,7 @@ const Reports = () => {
                         <table className="w-full border-collapse text-[10px] border-2 border-black shadow-sm">
                             <thead>
                                 <tr className="bg-amber-100 font-black uppercase tracking-widest border-b-2 border-black">
-                                    <th className="border border-black px-4 py-3 text-left">{incentiveDept === 'Referral' ? 'Referrer Name' : 'Staff Name'}</th>
+                                    <th className="border border-black px-4 py-3 text-left">{incentiveDept === 'Referral' ? 'Referral Name' : 'Staff Name'}</th>
                                     <th className="border border-black px-4 py-3 text-right">Incentives</th>
                                 </tr>
                             </thead>
@@ -901,7 +901,7 @@ const Reports = () => {
                                         const name = row.therapist_name || 'Unknown';
                                         acc[name] = (acc[name] || 0) + row.inc_net;
                                         return acc;
-                                    }, {} as Record<string, number>)).filter(([_, amount]) => amount > 0).map(([name, amount], idx) => {
+                                    }, {} as Record<string, number>)).filter(([_, amount]: [string, number]) => amount > 0).map(([name, amount], idx) => {
                                         const colors = ['bg-emerald-50/50', 'bg-orange-50/50', 'bg-amber-50/50', 'bg-yellow-50/50', 'bg-green-50/50', 'bg-slate-50/50', 'bg-blue-50/50'];
                                         const color = colors[idx % colors.length];
                                         return (
@@ -1207,7 +1207,7 @@ const Reports = () => {
                                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.5em] leading-none">{currentOutlet?.name} &bull; ISO-9001 CERTIFIED</p>
                                   <div className="flex items-center gap-2 mt-4 text-indigo-600">
                                       <ShieldCheck className="w-4 h-4" />
-                                      <span className="text-[9px] font-black uppercase tracking-widest">Internal Verification Protocol</span>
+                                      <span className="text-[9px] font-black uppercase tracking-widest">Internal Verification</span>
                                   </div>
                               </div>
                           </div>
@@ -1272,7 +1272,7 @@ const Reports = () => {
                                                             const name = row.therapist_name || 'Unknown';
                                                             acc[name] = (acc[name] || 0) + row.inc_net;
                                                             return acc;
-                                                        }, {} as Record<string, number>)).filter(([_, amount]) => amount > 0).map(([name, amount]) => (
+                                                        }, {} as Record<string, number>)).filter(([_, amount]: [string, number]) => amount > 0).map(([name, amount]) => (
                                                             <tr key={name} className="bg-white">
                                                                 <td className="border border-black px-8 py-2 uppercase text-slate-400 text-[9px] italic flex items-center gap-2">
                                                                     <div className="w-1 h-1 bg-indigo-400 rounded-full"></div>

@@ -726,10 +726,9 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                           <table className="w-full text-left table-fixed">
                               <thead className="bg-slate-50/30 text-[8px] font-black uppercase text-slate-400 tracking-[0.2em] border-b sticky top-0 z-10">
                                   <tr>
-                                      <th className="px-6 py-4 w-[35%]">Commence</th>
-                                      <th className="px-6 py-4 w-[35%]">Terminate</th>
+                                      <th className="px-6 py-4 w-[40%]">Commence</th>
+                                      <th className="px-6 py-4 w-[40%]">Terminate</th>
                                       <th className="px-6 py-4 w-[20%] text-center">Span</th>
-                                      <th className="px-6 py-4 w-[10%] text-right">Ops</th>
                                   </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-50">
@@ -755,12 +754,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                                           {f.total_days}
                                                       </div>
                                                       <span className="text-[7px] font-black text-amber-600 uppercase mt-1 tracking-tighter">Days</span>
-                                                  </div>
-                                              </td>
-                                              <td className="px-6 py-5 text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                                                  <div className="flex justify-end gap-1">
-                                                      <button onClick={() => handleEditFreeze(f)} className="p-2 text-slate-300 hover:text-indigo-500 transition-colors" title="Edit"><Edit2 className="w-3.5 h-3.5"/></button>
-                                                      <button onClick={() => handleDeleteFreeze(f)} className="p-2 text-slate-300 hover:text-red-500 transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5"/></button>
                                                   </div>
                                               </td>
                                           </tr>
@@ -1122,7 +1115,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                 <AlertCircle className="w-5 h-5 text-red-600" />
                             </div>
                             <div className="space-y-1">
-                                <p className="text-[11px] font-black text-red-700 uppercase tracking-tight">Suspension Protocol Breach</p>
+                                <p className="text-[11px] font-black text-red-700 uppercase tracking-tight">Suspension Breach</p>
                                 <p className="text-[10px] font-bold text-red-500 uppercase leading-relaxed">
                                     {maxAllowed === 0 ? "This tier does not support portfolio suspensions." : validation.msg}
                                 </p>
@@ -1190,7 +1183,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                             disabled={!!validation.error || !validation.impact || isLoading || maxAllowed === 0}
                             className={`w-full h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl mt-4 active:scale-95 transition-all ${validation.error || maxAllowed === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-[#a5b4fc] hover:bg-[#93a5f7] text-white'}`}
                         >
-                            {editingFreezeId ? 'Commit Modification' : 'Commit Protocol'}
+                            {editingFreezeId ? 'Save Changes' : 'Freeze Member'}
                         </Button>
                     </form>
                 </CardContent>

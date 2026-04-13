@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { CustomReportConfig, CustomReportColumn, Property, Outlet } from '../types';
+import { CustomReportConfig, CustomReportColumn, CustomReportFilter, CustomReportAggregation, Property, Outlet } from '../types';
 import { db } from '../services/mockSupabase';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select } from './ui';
 import { 

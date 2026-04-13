@@ -13,11 +13,17 @@ import { Staff } from '../types';
 
 const Profile = () => {
     const { user, changePassword, updateProfile } = useAuth();
-    const { settings, formatMoney } = useSettings();
+    const { settings, formatMoney, roles } = useSettings();
     const [profileData, setProfileData] = useState({ name: '', email: '' });
     const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
     const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
     const [loading, setLoading] = useState(false);
+
+    const roleName = React.useMemo(() => {
+        if (!user?.role_id) return 'No Role';
+        const role = roles.find(r => r.id === user.role_id);
+        return role ? role.name : user.role_id;
+    }, [user?.role_id, roles]);
 
     const [linkedStaff, setLinkedStaff] = useState<Staff | null>(null);
     const [incentiveData, setIncentiveData] = useState<any[]>([]);
@@ -149,7 +155,7 @@ const Profile = () => {
                             <h3 className="text-xl font-black text-slate-900 tracking-tight">{user?.name}</h3>
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{user?.email}</p>
                             <div className="mt-6 inline-block px-4 py-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-widest rounded-full border border-indigo-100">
-                                {user?.role_id} Clearance
+                                {roleName}
                             </div>
                         </CardContent>
                     </Card>
@@ -202,7 +208,7 @@ const Profile = () => {
                     <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg overflow-hidden">
                         <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
                             <CardTitle className="text-lg font-black tracking-tight flex items-center gap-3">
-                                <Lock className="w-5 h-5 text-indigo-600" /> Security Protocol
+                                <Lock className="w-5 h-5 text-indigo-600" /> Security Settings
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-8">

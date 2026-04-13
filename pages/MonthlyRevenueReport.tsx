@@ -184,7 +184,7 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode }: Monthl
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.5em] leading-none">{currentOutlet?.name} &bull; ISO-9001 CERTIFIED</p>
               <div className="flex items-center gap-2 mt-4 text-indigo-600">
                 <ShieldCheck className="w-4 h-4" />
-                <span className="text-[9px] font-black uppercase tracking-widest">Internal Verification Protocol</span>
+                <span className="text-[9px] font-black uppercase tracking-widest">Internal Verification</span>
               </div>
             </div>
           </div>

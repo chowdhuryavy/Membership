@@ -218,7 +218,7 @@ const SignatoryConfig = ({
                   </div>
                   <span className={`text-[11px] font-black uppercase tracking-tight ${isActive ? 'text-slate-900' : 'text-slate-400'}`}>{report.label}</span>
                 </div>
-                {isActive && <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-1 rounded-lg">Active Protocol</span>}
+                {isActive && <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-1 rounded-lg">Active</span>}
               </div>
 
               {isActive && (
@@ -270,18 +270,18 @@ const SettingsPage = () => {
     return [
       // Super Admin Only
       { id: 'company', label: 'Global Scope', visible: hasPermission(user?.role_id || '', 'settings:view_global'), icon: Building2 },
-      { id: 'properties', label: 'Facility Portfolios', visible: hasPermission(user?.role_id || '', 'settings:view_properties'), icon: MapPin },
-      { id: 'outlets', label: 'Asset Contexts', visible: hasPermission(user?.role_id || '', 'settings:view_outlets'), icon: Store },
-      { id: 'currency', label: 'Monetary Standards', visible: hasPermission(user?.role_id || '', 'settings:view_currency'), icon: Globe },
-      { id: 'navigation', label: 'UI Architecture', visible: hasPermission(user?.role_id || '', 'settings:view_navigation'), icon: ListOrdered },
+      { id: 'properties', label: 'Properties', visible: hasPermission(user?.role_id || '', 'settings:view_properties'), icon: MapPin },
+      { id: 'outlets', label: 'Outlets', visible: hasPermission(user?.role_id || '', 'settings:view_outlets'), icon: Store },
+      { id: 'currency', label: 'Currency', visible: hasPermission(user?.role_id || '', 'settings:view_currency'), icon: Globe },
+      { id: 'navigation', label: 'Navigation', visible: hasPermission(user?.role_id || '', 'settings:view_navigation'), icon: ListOrdered },
       { id: 'functions', label: 'Feature Visibility', visible: isSuper || hasPermission(user?.role_id || '', 'settings:manage_visibility'), icon: ShieldAlert },
       { id: 'staff_portal', label: 'Staff Portal', visible: hasPermission(user?.role_id || '', 'settings:view_staff_portal'), icon: Users },
       { id: 'maintenance', label: 'Maintenance', visible: hasPermission(user?.role_id || '', 'settings:view_maintenance'), icon: Zap },
       
       // Accessible to others with permission
-      { id: 'roles', label: 'Role & Permissions', visible: hasPermission(user?.role_id || '', 'settings:view_roles'), icon: Shield },
-      { id: 'incentives', label: 'Contract Logic', visible: hasPermission(user?.role_id || '', 'settings:view_incentives') && !!currentOutlet, icon: Award },
-      { id: 'shortcuts', label: 'Executive Hotkeys', visible: hasPermission(user?.role_id || '', 'settings:view_shortcuts'), icon: Keyboard },
+      { id: 'roles', label: 'Roles & Permissions', visible: hasPermission(user?.role_id || '', 'settings:view_roles'), icon: Shield },
+      { id: 'incentives', label: 'Incentives', visible: hasPermission(user?.role_id || '', 'settings:view_incentives') && !!currentOutlet, icon: Award },
+      { id: 'shortcuts', label: 'Shortcuts', visible: hasPermission(user?.role_id || '', 'settings:view_shortcuts'), icon: Keyboard },
       { id: 'documents', label: 'Audit Templates', visible: hasPermission(user?.role_id || '', 'settings:view_documents'), icon: FileCode },
       { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_booking_engine') && !!currentProperty, icon: Timer },
       { id: 'membership_types', label: 'Membership Types', visible: hasPermission(user?.role_id || '', 'settings:view_membership_types') && !!currentOutlet, icon: Target },
@@ -996,7 +996,7 @@ const SettingsPage = () => {
               {activeTab === 'roles' && (
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
-                          <div className="flex items-center gap-5"><Shield className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Role & Permissions</CardTitle></div>
+                          <div className="flex items-center gap-5"><Shield className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Roles & Permissions</CardTitle></div>
                           <Button onClick={() => { setEditingId(null); setRoleForm({name:'', permissions:[]}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Define Role</Button>
                       </CardHeader>
                       <CardContent className="p-0">
@@ -1082,7 +1082,7 @@ const SettingsPage = () => {
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center gap-3">
                           <Keyboard className="w-8 h-8 text-indigo-600" />
-                          <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Executive Hotkeys</CardTitle>
+                          <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Shortcuts</CardTitle>
                       </CardHeader>
                       <CardContent className="p-12 space-y-10">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -1466,7 +1466,7 @@ const SettingsPage = () => {
                                           <td colSpan={4} className="px-10 py-20 text-center">
                                               <div className="flex flex-col items-center gap-3">
                                                   <Mail className="w-12 h-12 text-slate-200" />
-                                                  <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No distribution protocols defined</p>
+                                                  <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No report settings defined</p>
                                               </div>
                                           </td>
                                       </tr>
@@ -1591,14 +1591,14 @@ const SettingsPage = () => {
                   <CardHeader className="bg-indigo-600 text-white p-10 flex flex-col gap-1">
                       <CardTitle className="text-xl font-black uppercase tracking-widest flex items-center gap-3">
                         {editingId ? <Edit2 className="w-6 h-6"/> : <Plus className="w-6 h-6" />}
-                        {activeTab === 'properties' ? 'Property Asset Config' : activeTab === 'outlets' ? 'Outlet Context Commission' : activeTab === 'roles' ? 'Role Configuration' : activeTab === 'currency' ? 'Monetary Standard' : activeTab === 'reports_config' ? 'Distribution Protocol' : 'Management Logic'}
+                        {activeTab === 'properties' ? 'Property Configuration' : activeTab === 'outlets' ? 'Outlet Configuration' : activeTab === 'roles' ? 'Role Configuration' : activeTab === 'currency' ? 'Currency Settings' : activeTab === 'reports_config' ? 'Report Settings' : 'Settings'}
                       </CardTitle>
-                      <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Authorized Synchronization</p>
+                      <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Configuration</p>
                   </CardHeader>
                   <CardContent className="p-10 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
                       {activeTab === 'properties' && (
                         <div className="space-y-6">
-                            <Input label="Portfolio Designation *" value={propertyForm.name} onChange={e => setPropertyForm({...propertyForm, name: e.target.value})} className="h-14 rounded-xl" />
+                            <Input label="Property Name *" value={propertyForm.name} onChange={e => setPropertyForm({...propertyForm, name: e.target.value})} className="h-14 rounded-xl" />
                             <Input label="Brand Asset URL" value={propertyForm.logo_url} onChange={e => setPropertyForm({...propertyForm, logo_url: e.target.value})} className="h-14 rounded-xl" />
                             <Input label="HQ Physical Address" value={propertyForm.address} onChange={e => setPropertyForm({...propertyForm, address: e.target.value})} className="h-14 rounded-xl" />
                             <SignatoryConfig 
@@ -1606,13 +1606,13 @@ const SettingsPage = () => {
                                 config={propertyForm.signatory_config}
                                 onChange={(config) => setPropertyForm({ ...propertyForm, signatory_config: config })}
                             />
-                            <Button onClick={handlePropertySubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Commit Asset</Button>
+                            <Button onClick={handlePropertySubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Save Property</Button>
                         </div>
                       )}
                       {activeTab === 'massage_rooms' && (
                         <div className="space-y-6">
                             <Select 
-                              label="Linked Facility Outlet *" 
+                              label="Linked Outlet *" 
                               options={[
                                 {value:'', label:'Select Outlet...'}, 
                                 ...outlets
@@ -1630,13 +1630,13 @@ const SettingsPage = () => {
                                 <input type="checkbox" checked={roomForm.is_active} onChange={e => setRoomForm({...roomForm, is_active: e.target.checked})} className="w-5 h-5 rounded border-slate-300" />
                                 <span className="text-xs font-black text-slate-700 uppercase">Is Active</span>
                             </div>
-                            <Button onClick={handleRoomSubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Commit Room</Button>
+                            <Button onClick={handleRoomSubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Save Room</Button>
                         </div>
                       )}
                       {activeTab === 'outlets' && (
                         <div className="space-y-6">
-                            <Input label="Facility Name *" value={outletForm.name} onChange={e => setOutletForm({...outletForm, name: e.target.value})} className="h-14 rounded-xl font-bold" />
-                            <Select label="Linked Property Portfolio" options={[{value:'', label:'Select Property...'}, ...properties.map(p=>({value:p.id, label:p.name}))]} value={outletForm.property_id} onChange={e => setOutletForm({...outletForm, property_id: e.target.value})} className="h-14 rounded-xl" />
+                            <Input label="Outlet Name *" value={outletForm.name} onChange={e => setOutletForm({...outletForm, name: e.target.value})} className="h-14 rounded-xl font-bold" />
+                            <Select label="Linked Property" options={[{value:'', label:'Select Property...'}, ...properties.map(p=>({value:p.id, label:p.name}))]} value={outletForm.property_id} onChange={e => setOutletForm({...outletForm, property_id: e.target.value})} className="h-14 rounded-xl" />
                             <SignatoryConfig 
                                 labelPrefix="Outlet"
                                 config={outletForm.signatory_config}
@@ -1660,7 +1660,7 @@ const SettingsPage = () => {
                                     placeholder="Outlet-specific conditions..."
                                 />
                             </div>
-                            <Button onClick={handleOutletSubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Deploy Outlet</Button>
+                            <Button onClick={handleOutletSubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Save Outlet</Button>
                         </div>
                       )}
                       {activeTab === 'roles' && (
@@ -1669,7 +1669,7 @@ const SettingsPage = () => {
                               <div className="space-y-4">
                                 <div className="flex items-center gap-3 mb-2">
                                   <ShieldAlert className="w-5 h-5 text-indigo-600"/>
-                                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Policy Ruleset</h4>
+                                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Permissions</h4>
                                 </div>
                                 <PermissionMatrix 
                                   registry={permissionRegistry.map(group => {
@@ -1685,7 +1685,7 @@ const SettingsPage = () => {
                                   onChange={(perms) => setRoleForm({ ...roleForm, permissions: perms })} 
                                 />
                               </div>
-                              <Button onClick={handleRoleSubmit} className="w-full h-16 rounded-2xl font-black uppercase tracking-widest bg-indigo-600 shadow-xl shadow-indigo-100">Deploy Role</Button>
+                              <Button onClick={handleRoleSubmit} className="w-full h-16 rounded-2xl font-black uppercase tracking-widest bg-indigo-600 shadow-xl shadow-indigo-100">Save Role</Button>
                           </div>
                       )}
                       {activeTab === 'currency' && (
@@ -1697,7 +1697,7 @@ const SettingsPage = () => {
                                 <input type="checkbox" checked={currencyForm.is_default} onChange={e => setCurrencyForm({...currencyForm, is_default: e.target.checked})} className="w-5 h-5 rounded border-slate-300" />
                                 <span className="text-xs font-black text-slate-700 uppercase">Set as Property Base Currency</span>
                             </div>
-                            <Button onClick={handleCurrencySubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Sync Standard</Button>
+                            <Button onClick={handleCurrencySubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Save Currency</Button>
                         </div>
                       )}
                       {activeTab === 'reports_config' && (
@@ -2029,8 +2029,6 @@ const SettingsPage = () => {
               setIsCustomReportModalOpen(false);
               setEditingId(null);
             }}
-            properties={properties}
-            outlets={outlets}
           />
       </Modal>
     </div>

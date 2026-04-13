@@ -791,25 +791,25 @@ const Users = () => {
             <div className="w-full max-w-2xl relative my-8">
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
                     <CardHeader className="bg-indigo-600 text-white p-6 md:p-8 relative shrink-0">
-                        <CardTitle className="text-xl font-black tracking-tight">{isEditing ? 'Modify Identity' : 'Provision User'}</CardTitle>
-                        <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mt-2">Security Lifecycle</p>
+                        <CardTitle className="text-xl font-black tracking-tight">{isEditing ? 'Edit User' : 'Add User'}</CardTitle>
+                        <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mt-2">User Settings</p>
                         <button onClick={handleFormCancel} className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"><X className="w-5 h-5" /></button>
                     </CardHeader>
                     <CardContent className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
                         <form onSubmit={handleSubmit} className="space-y-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Legal Name</label>
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Full Name</label>
                                 <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="John Doe" className="h-12 rounded-xl" />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Work Email</label>
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Email Address</label>
                                 <Input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="user@enterprise.com" className={`h-12 rounded-xl ${!canEditEmail ? 'bg-slate-50 text-slate-500' : ''}`} disabled={!canEditEmail} />
                             </div>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">{isEditing ? 'Override Key' : 'Initial Access Key'}</label>
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">{isEditing ? 'New Password' : 'Password'}</label>
                                 <div className="relative group">
                                   <div className="absolute left-4 top-1/2 -translate-y-1/2"><Lock className="w-4 h-4 text-slate-400" /></div>
                                   <input type={showPassword ? "text" : "password"} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder={isEditing ? "Leave blank to preserve" : "••••••••"} className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50" />
@@ -819,7 +819,7 @@ const Users = () => {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Role</label>
                                 <Select 
-                                    options={[{ value: '', label: 'Select Tier...' }, ...roles.filter(r => {
+                                    options={[{ value: '', label: 'Select Role...' }, ...roles.filter(r => {
                                         const isSuperUser = isSuperAdmin;
                                         if ((r.id === 'admin' || r.name === 'System Administrator') && !isSuperUser) return false;
                                         return true;
@@ -880,7 +880,7 @@ const Users = () => {
                               </Button>
                               <Button type="submit" isLoading={isSubmitting} className="flex-1 h-14 rounded-2xl font-black text-base shadow-xl shadow-indigo-100">
                                 <span className="flex items-center gap-2">
-                                    {isEditing ? 'Commit Sync' : 'Provision User'}
+                                    {isEditing ? 'Save Changes' : 'Add User'}
                                     <Command className="w-3 h-3 opacity-50"/>
                                 </span>
                               </Button>

@@ -850,7 +850,22 @@ export const InventoryManager = ({
 
 const Sales = () => {
     const { user } = useAuth();
-    const { currentOutlet, currentProperty, formatMoney, hasPermission, setPageLoading } = useSettings();
+    const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [], setPageLoading } = useSettings();
+    const { isSuperAdmin } = useAuth();
+
+    const allowedOutletsInProperty = useMemo(() => {
+        if (!currentProperty || !user || !outlets) return [];
+        if (isSuperAdmin || user.role_id?.toLowerCase() === 'admin') {
+            return outlets.filter(o => o.property_id === currentProperty.id);
+        }
+        return outlets.filter(o => 
+            o.property_id === currentProperty.id && 
+            user.allowed_outlets?.includes(o.id)
+        );
+    }, [currentProperty, user, outlets, isSuperAdmin]);
+
+    const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
+
     const [activeTab, setActiveTab] = useState<'ledger' | 'inventory' | 'stock'>('ledger');
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
@@ -1049,8 +1064,8 @@ const Sales = () => {
             <div className="flex items-center justify-center h-screen">
                 <Card className="max-w-md text-center p-8 border-red-100 bg-red-50/30 rounded-[2rem]">
                     <Shield className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                    <h3 className="text-xl font-black text-slate-900 tracking-tight uppercase">Operational Protocol Lock</h3>
-                    <p className="text-slate-500 mt-2 text-sm font-bold uppercase tracking-tight">Your security clearance does not allow access to the Sales Ledger.</p>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight uppercase">Access Denied</h3>
+                    <p className="text-slate-500 mt-2 text-sm font-bold uppercase tracking-tight">Your permissions do not allow access to the Sales Ledger.</p>
                 </Card>
             </div>
         );
@@ -1170,14 +1185,16 @@ const Sales = () => {
                                 <Store className="w-3 h-3 text-indigo-400" /> {currentOutlet?.name}
                             </p>
                             <div className="h-3 w-px bg-slate-200 hidden sm:block"></div>
-                            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-                                <button onClick={() => setViewScope('outlet')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                                    <Filter className="w-2.5 h-2.5" /> Outlet
-                                </button>
-                                <button onClick={() => setViewScope('property')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                                    <Building2 className="w-2.5 h-2.5" /> Property
-                                </button>
-                            </div>
+                            {canSwitchScope && (
+                                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                                    <button onClick={() => setViewScope('outlet')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'outlet' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                                        <Filter className="w-2.5 h-2.5" /> Outlet
+                                    </button>
+                                    <button onClick={() => setViewScope('property')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 ${viewScope === 'property' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                                        <Building2 className="w-2.5 h-2.5" /> Property
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

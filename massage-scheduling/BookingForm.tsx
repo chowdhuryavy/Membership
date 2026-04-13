@@ -335,17 +335,17 @@ const BookingForm: React.FC<BookingFormProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
-      <div className="w-full max-w-2xl relative my-8">
-        <Card className="rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden animate-in zoom-in-95 duration-300">
-          <CardHeader className={`${initialBooking ? 'bg-indigo-900' : 'bg-indigo-600'} text-white p-6 relative`}>
-            <CardTitle className="text-xl font-black tracking-tight flex items-center gap-2 uppercase">
-              {initialBooking ? 'Modify Session' : 'New Property Reservation'}
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-2xl relative">
+        <Card className="rounded-[1.5rem] md:rounded-[2rem] border-slate-200/60 shadow-xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
+          <CardHeader className={`${initialBooking ? 'bg-indigo-900' : 'bg-indigo-600'} text-white p-5 md:p-6 relative shrink-0`}>
+            <CardTitle className="text-lg md:text-xl font-black tracking-tight flex items-center gap-2 uppercase">
+              {initialBooking ? 'Edit Booking' : 'Add Booking'}
             </CardTitle>
-            <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest mt-1">Resource Yield Logic</p>
+            <p className="text-[9px] font-black text-indigo-200 uppercase tracking-widest mt-1">Booking Details</p>
             <button onClick={onClose} className="absolute top-5 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"><X className="w-4 h-4" /></button>
           </CardHeader>
-          <CardContent className="p-8">
+          <CardContent className="p-5 md:p-8 overflow-y-auto custom-scrollbar">
             <form onSubmit={handleSubmit} className="space-y-6">
                 {/* ... existing form fields ... */}
                 
@@ -410,8 +410,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                    <div className="sm:col-span-2 lg:col-span-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                    <div className="sm:col-span-1 md:col-span-1">
                         <Select 
                             label="Category *" 
                             options={[
@@ -423,7 +423,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
                             className="h-11 rounded-xl text-xs" 
                         />
                     </div>
-                    <div className="sm:col-span-2 lg:col-span-1">
+                    <div className="sm:col-span-1 md:col-span-1">
                         <Select 
                             label="Primary Service *" 
                             options={[
@@ -443,8 +443,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
                             </div>
                         )}
                     </div>
-                    <div className="space-y-1.5 sm:col-span-1 lg:col-span-1">
-                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Reduction Logic</label>
+                    <div className="space-y-1.5 sm:col-span-1 md:col-span-1">
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Discount Type</label>
                         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 h-11">
                             <button 
                                 type="button"
@@ -462,9 +462,9 @@ const BookingForm: React.FC<BookingFormProps> = ({
                             </button>
                         </div>
                     </div>
-                    <div className="sm:col-span-1 lg:col-span-1">
+                    <div className="sm:col-span-1 md:col-span-1">
                          <Input 
-                            label={bookingData.discount_mode === 'amount' ? "Discount Amount" : "Reduction (%)"} 
+                            label={bookingData.discount_mode === 'amount' ? "Discount Amount" : "Discount (%)"} 
                             type="number" 
                             value={bookingData.discount} 
                             onChange={e => setBookingData({...bookingData, discount: Number(e.target.value) || 0})}
@@ -472,8 +472,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
                             placeholder={bookingData.discount_mode === 'amount' ? "e.g. 50" : "e.g. 10"}
                         />
                     </div>
-                    <div className="sm:col-span-2 lg:col-span-4 bg-slate-950 text-white px-4 py-2 rounded-xl flex items-center justify-between h-11 shadow-lg shadow-slate-200 mt-2">
-                        <span className="text-[7px] font-black opacity-60 uppercase tracking-widest">Total Fee</span>
+                    <div className="sm:col-span-2 md:col-span-4 bg-slate-950 text-white px-4 py-2 rounded-xl flex items-center justify-between h-11 shadow-lg shadow-slate-200 mt-2">
+                        <span className="text-[7px] font-black opacity-60 uppercase tracking-widest">Total Price</span>
                         <span className="text-xs font-black text-indigo-400 tracking-tighter">{formatMoney(netPrice)}</span>
                     </div>
                 </div>
@@ -555,12 +555,12 @@ const BookingForm: React.FC<BookingFormProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                    <label className="text-[9px] font-black text-slate-900 uppercase tracking-widest ml-1 flex items-center gap-2"><Users className="w-3 h-3 text-indigo-600"/> Assigned Property Specialist Type *</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                    <label className="text-[9px] font-black text-slate-900 uppercase tracking-widest ml-1 flex items-center gap-2"><Users className="w-3 h-3 text-indigo-600"/> Assigned Specialist *</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                       {therapists.map(t => {
                         const isAvailable = availableTherapists.some(at => at.id === t.id);
                         return (
-                          <button key={t.id} type="button" onClick={() => setBookingData({...bookingData, therapist_id: t.id})} className={`p-3 rounded-xl border text-[9px] font-black uppercase transition-all flex flex-col items-center gap-0.5 ${bookingData.therapist_id === t.id ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : isAvailable ? 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300' : 'bg-slate-50 text-slate-300 opacity-60 cursor-not-allowed'}`} disabled={!isAvailable && user?.role_id?.toLowerCase() !== 'admin'}>
+                          <button key={t.id} type="button" onClick={() => setBookingData({...bookingData, therapist_id: t.id})} className={`p-2.5 rounded-xl border text-[9px] font-black uppercase transition-all flex flex-col items-center gap-0.5 ${bookingData.therapist_id === t.id ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : isAvailable ? 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300' : 'bg-slate-50 text-slate-300 opacity-60 cursor-not-allowed'}`} disabled={!isAvailable && user?.role_id?.toLowerCase() !== 'admin'}>
                             <span className="truncate w-full text-center">{t.name}</span>
                             <span className="text-[7px] opacity-80">{t.country}</span>
                           </button>
@@ -572,11 +572,11 @@ const BookingForm: React.FC<BookingFormProps> = ({
                 {bookingData.category !== 'Personal Training' && (
                     <div className="space-y-2">
                         <label className="text-[9px] font-black text-slate-900 uppercase tracking-widest ml-1 flex items-center gap-2"><MapPin className="w-3 h-3 text-indigo-600"/> Assigned Room *</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                           {massageRooms.filter(r => r.is_active || r.id === bookingData.room_id).map(r => {
                             const isAvailable = availableRooms.some(ar => ar.id === r.id);
                             return (
-                              <button key={r.id} type="button" onClick={() => setBookingData({...bookingData, room_id: r.id})} className={`p-3 rounded-xl border text-[9px] font-black uppercase transition-all flex flex-col items-center gap-0.5 ${bookingData.room_id === r.id ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : isAvailable ? 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300' : 'bg-slate-50 text-slate-300 opacity-60 cursor-not-allowed'}`} disabled={!isAvailable && user?.role_id?.toLowerCase() !== 'admin'}>
+                              <button key={r.id} type="button" onClick={() => setBookingData({...bookingData, room_id: r.id})} className={`p-2.5 rounded-xl border text-[9px] font-black uppercase transition-all flex flex-col items-center gap-0.5 ${bookingData.room_id === r.id ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : isAvailable ? 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300' : 'bg-slate-50 text-slate-300 opacity-60 cursor-not-allowed'}`} disabled={!isAvailable && user?.role_id?.toLowerCase() !== 'admin'}>
                                 <span className="truncate w-full text-center">{r.name}</span>
                                 <span className="text-[7px] opacity-80">{r.number ? `Room ${r.number}` : 'No Number'}</span>
                               </button>
@@ -611,7 +611,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
 
                 <div className="flex gap-3 pt-2">
                   <Button type="button" variant="secondary" onClick={onClose} className="flex-1 h-12 rounded-xl font-bold uppercase text-[10px] tracking-widest">Discard</Button>
-                  <Button type="submit" isLoading={loading} className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100">Confirm Reservation</Button>
+                  <Button type="submit" isLoading={loading} className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100">Save Booking</Button>
                 </div>
             </form>
           </CardContent>

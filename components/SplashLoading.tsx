@@ -34,12 +34,19 @@ const SplashLoading = () => {
                   alt="Logo" 
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-contain filter drop-shadow-[0_0_20px_rgba(79,70,229,0.2)] animate-[spin_8s_linear_infinite]" 
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    const fallback = (e.target as HTMLImageElement).parentElement?.querySelector('.logo-fallback');
+                    if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                  }}
                 />
-              ) : (
-                <div className="bg-indigo-600 w-24 h-24 rounded-[2.5rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-100">
-                  <Sparkles className="w-12 h-12 animate-[spin_8s_linear_infinite]" />
-                </div>
-              )}
+              ) : null}
+              
+              <div 
+                className={`logo-fallback bg-indigo-600 w-24 h-24 rounded-[2.5rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-100 ${settings?.logo_url ? 'hidden' : 'flex'}`}
+              >
+                <Sparkles className="w-12 h-12 animate-[spin_8s_linear_infinite]" />
+              </div>
             </div>
           </div>
         </div>

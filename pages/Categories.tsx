@@ -86,8 +86,8 @@ const Categories = () => {
                 <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
                    <Target className="w-8 h-8" />
                 </div>
-                <h3 className="text-xl font-black text-slate-900 tracking-tight">Access Protocol Rejected</h3>
-                <p className="text-slate-500 mt-2 text-sm font-medium">Clearance insufficient to modify revenue tier architecture.</p>
+                <h3 className="text-xl font-black text-slate-900 tracking-tight">Access Denied</h3>
+                <p className="text-slate-500 mt-2 text-sm font-medium">Permission insufficient to modify revenue tier architecture.</p>
             </Card>
         </div>
     );
@@ -423,7 +423,7 @@ const Categories = () => {
             <div className="p-6 sm:p-8 border-b border-slate-100 shrink-0">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-1.5">Select Protocol</h2>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-1.5">Select Type</h2>
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Choose tier type</p>
                 </div>
                 <button onClick={() => setShowTypeSelector(false)} className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all">
@@ -453,7 +453,7 @@ const Categories = () => {
                     <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-0.5 group-hover:text-slate-500 transition-colors">Initialize {type.name} Architecture</p>
                     
                     <div className="mt-4 flex items-center gap-2 text-indigo-600 opacity-0 group-hover:opacity-100 translate-x-[-10px] group-hover:translate-x-0 transition-all duration-500">
-                      <span className="text-[9px] font-black uppercase tracking-widest">Select Protocol</span>
+                      <span className="text-[9px] font-black uppercase tracking-widest">Select Type</span>
                       <MousePointer className="w-3 h-3" />
                     </div>
                   </button>

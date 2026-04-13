@@ -270,7 +270,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                     <currentOption.icon className="w-4 h-4" />
                   </div>
                   <div className="flex flex-col items-start overflow-hidden">
-                     <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Status Protocol</span>
+                     <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Status</span>
                      <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight truncate w-full">{currentOption.label}</span>
                   </div>
                 </div>
@@ -465,7 +465,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
             <div className="p-6 sm:p-8 border-b border-slate-100 shrink-0">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-1.5">Select Protocol</h2>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-1.5">Select Type</h2>
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Choose enrollment type</p>
                 </div>
                 <button onClick={() => setShowTypeSelector(false)} className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all">
@@ -495,7 +495,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                     <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-0.5 group-hover:text-slate-500 transition-colors">Initialize {type.name} Manifesto</p>
                     
                     <div className="mt-4 flex items-center gap-2 text-indigo-600 opacity-0 group-hover:opacity-100 translate-x-[-10px] group-hover:translate-x-0 transition-all duration-500">
-                      <span className="text-[9px] font-black uppercase tracking-widest">Select Protocol</span>
+                      <span className="text-[9px] font-black uppercase tracking-widest">Select Type</span>
                       <MousePointer className="w-3 h-3" />
                     </div>
                   </button>

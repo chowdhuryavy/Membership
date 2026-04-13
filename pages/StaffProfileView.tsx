@@ -258,7 +258,7 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
           </div>
           <CardContent className="p-8 space-y-6">
               <div className="space-y-2">
-                  <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Safe Repair Protocol</h3>
+                  <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Maintenance Mode</h3>
                   <p className="text-slate-600 text-xs leading-relaxed font-medium">Please execute this script in your <span className="font-bold text-indigo-600">Supabase SQL Editor</span> to enable leave tracking.</p>
               </div>
 

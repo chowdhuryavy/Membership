@@ -153,7 +153,7 @@ export const reportService = {
     const finalY = (doc as any).lastAutoTable.finalY + 20;
     doc.setFontSize(8);
     doc.setTextColor(148, 163, 184); // slate-400
-    doc.text('This report is generated automatically by the TTH Management Protocol.', 105, finalY, { align: 'center' });
+    doc.text('This report is generated automatically by the TTH Management System.', 105, finalY, { align: 'center' });
     doc.text(`© ${new Date().getFullYear()} ${property.name}. All rights reserved.`, 105, finalY + 5, { align: 'center' });
 
     return doc;
@@ -231,7 +231,7 @@ export const reportService = {
             <div class="divider"></div>
             
             <div class="footer">
-              <p>This is an automated intelligence dispatch from the TTH Management Protocol.<br/>
+              <p>This is an automated intelligence dispatch from the TTH Management System.<br/>
               © ${new Date().getFullYear()} ${property.name}. All rights reserved.</p>
             </div>
           </div>

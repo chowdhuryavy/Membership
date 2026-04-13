@@ -135,7 +135,7 @@ const Login = () => {
             <div className="flex items-center justify-center gap-3">
               <div className="h-px w-8 bg-slate-200"></div>
               <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.3em] whitespace-nowrap">
-                {mustChangePassword ? 'Security Protocol' : 'Product of Perfection BD'}
+                {mustChangePassword ? 'Change Password' : 'Product of Perfection BD'}
               </p>
               <div className="h-px w-8 bg-slate-200"></div>
             </div>

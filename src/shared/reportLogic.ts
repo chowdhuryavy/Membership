@@ -949,7 +949,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
           incNet = baseInc - incDiscVal;
           
-          remarks = `Referrer: ${m.referrer_name}`;
+          remarks = `Referral: ${m.referrer_name}`;
           
           const matchedStaff = rawStaffList.find(s => s.name.toLowerCase() === m.referrer_name?.toLowerCase());
           if (matchedStaff) {
@@ -1259,10 +1259,10 @@ export const generateReportPDF = (options: PDFOptions) => {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
   doc.setTextColor(79, 70, 229); // indigo-600
-  // Add a small circle/bullet for the "Internal Verification Protocol"
+  // Add a small circle/bullet for the "Internal Verification"
   doc.setFillColor(79, 70, 229);
   doc.circle(propertyX + 1, currentY + 18.5, 0.5, 'F');
-  doc.text("INTERNAL VERIFICATION PROTOCOL", propertyX + 3, currentY + 19);
+  doc.text("INTERNAL VERIFICATION", propertyX + 3, currentY + 19);
 
   // 2. Report Title & Period (Right)
   doc.setFont("helvetica", "bold");

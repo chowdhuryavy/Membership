@@ -125,19 +125,24 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
                 onClick={() => setIsOpen(!isOpen)}
                 className={`flex items-center gap-4 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl shadow-sm transition-all hover:bg-slate-50 active:scale-[0.98] ${isOpen ? 'ring-2 ring-indigo-500/10 border-indigo-500/50' : ''}`}
             >
-                {currentOutlet?.logo_url ? (
-                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100 overflow-hidden p-1 border border-slate-100">
-                        <img src={currentOutlet.logo_url} alt="Logo" referrerPolicy="no-referrer" className="w-full h-full object-contain" />
-                    </div>
-                ) : currentProp?.logo_url ? (
-                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100 overflow-hidden p-1 border border-slate-100">
-                        <img src={currentProp.logo_url} alt="Logo" referrerPolicy="no-referrer" className="w-full h-full object-contain" />
-                    </div>
-                ) : (
-                    <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100">
+                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100 overflow-hidden p-1 border border-slate-100 relative">
+                    {(currentOutlet?.logo_url || currentProp?.logo_url) ? (
+                        <img 
+                            src={currentOutlet?.logo_url || currentProp?.logo_url || ''} 
+                            alt="Logo" 
+                            referrerPolicy="no-referrer" 
+                            className="w-full h-full object-contain" 
+                            onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                const fallback = (e.target as HTMLImageElement).parentElement?.querySelector('.logo-fallback');
+                                if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                            }}
+                        />
+                    ) : null}
+                    <div className={`logo-fallback w-full h-full bg-indigo-600 items-center justify-center rounded-lg ${!(currentOutlet?.logo_url || currentProp?.logo_url) ? 'flex' : 'hidden'}`}>
                         <Building2 className="w-4 h-4 text-white" />
                     </div>
-                )}
+                </div>
                 <div className="flex flex-col items-start overflow-hidden pr-2 text-left">
                     <span className="text-[9px] font-black tracking-widest truncate w-full uppercase text-slate-400 leading-none mb-1">
                         {currentProp?.name || 'Facility Scope'}
@@ -191,6 +196,14 @@ import { NotificationBell } from './components/NotificationBell';
 
 const TopHeader = () => {
     const { user } = useAuth();
+    const { roles } = useSettings();
+    
+    const roleName = useMemo(() => {
+        if (!user?.role_id) return 'No Role';
+        const role = roles.find(r => r.id === user.role_id);
+        return role ? role.name : user.role_id;
+    }, [user?.role_id, roles]);
+
     return (
         <header className="hidden md:flex h-20 items-center justify-between px-8 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 sticky top-0 z-[100] print:hidden shadow-sm">
             <div className="flex items-center gap-4">
@@ -208,7 +221,7 @@ const TopHeader = () => {
                 <Link to="/profile" className="flex items-center gap-3 p-1.5 pl-3 pr-1.5 hover:bg-slate-50 rounded-2xl transition-all group">
                     <div className="flex flex-col items-end">
                         <span className="text-xs font-black text-slate-900 tracking-tight leading-none mb-1">{user?.name}</span>
-                        <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest leading-none">{user?.role_id}</span>
+                        <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest leading-none">{roleName}</span>
                     </div>
                     <div className="w-9 h-9 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black group-hover:scale-105 transition-transform text-xs">
                         {user?.name?.charAt(0)}
@@ -319,7 +332,7 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
             { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
             { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
             { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
-            { id: 'users', to: '/users', icon: Shield, label: 'Users & Security', permission: 'users:view' as Permission },
+            { id: 'users', to: '/users', icon: Shield, label: 'Users & Roles', permission: 'users:view' as Permission },
             { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
             { id: 'logs', to: '/logs', icon: History, label: 'Audit Logs', permission: 'logs:view' as Permission },
             { id: 'settings', to: '/settings', icon: Settings, label: 'System Settings', permission: 'settings:view' as Permission },
@@ -367,15 +380,24 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
                     className="flex items-center gap-4 group/logo transition-all active:scale-95 outline-none"
                     title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
                 >
-                    {settings?.logo_url ? (
-                        <div className={`w-14 h-14 flex items-center justify-center shrink-0 transition-all duration-500 group-hover/logo:scale-110`}>
-                             <img src={settings.logo_url} alt="Logo" referrerPolicy="no-referrer" className="w-full h-full object-contain drop-shadow-md animate-[spin_10s_linear_infinite]" />
-                        </div>
-                    ) : (
-                        <div className={`w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100 shrink-0 transition-all duration-500 group-hover/logo:scale-110`}>
+                    <div className={`w-14 h-14 flex items-center justify-center shrink-0 transition-all duration-500 group-hover/logo:scale-110 relative`}>
+                        {settings?.logo_url ? (
+                             <img 
+                                src={settings.logo_url} 
+                                alt="Logo" 
+                                referrerPolicy="no-referrer" 
+                                className="w-full h-full object-contain drop-shadow-md animate-[spin_10s_linear_infinite]" 
+                                onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                    const fallback = (e.target as HTMLImageElement).parentElement?.querySelector('.logo-fallback');
+                                    if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                }}
+                             />
+                        ) : null}
+                        <div className={`logo-fallback w-full h-full bg-indigo-600 rounded-2xl items-center justify-center text-white shadow-xl shadow-indigo-100 ${settings?.logo_url ? 'hidden' : 'flex'}`}>
                             <Sparkles className="w-7 h-7 animate-[spin_10s_linear_infinite]" />
                         </div>
-                    )}
+                    </div>
                     {!isCollapsed && (
                         <div className="overflow-hidden text-left transition-all duration-300 group-hover/logo:translate-x-1">
                             <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-snug">
@@ -423,7 +445,7 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
             { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
             { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
             { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
-            { id: 'users', to: '/users', icon: Shield, label: 'Users & Security', permission: 'users:view' as Permission },
+            { id: 'users', to: '/users', icon: Shield, label: 'Users & Roles', permission: 'users:view' as Permission },
             { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
             { id: 'logs', to: '/logs', icon: History, label: 'Audit Logs', permission: 'logs:view' as Permission },
             { id: 'settings', to: '/settings', icon: Settings, label: 'System Settings', permission: 'settings:view' as Permission },
@@ -463,15 +485,24 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
         <div className="md:hidden bg-white/90 backdrop-blur-xl border-b border-slate-200/60 px-6 py-4 flex flex-col sticky top-0 z-[100] print:hidden shadow-sm">
             <div className="flex justify-between items-center w-full mb-3">
                 <div className="flex items-center gap-3">
-                     {settings?.logo_url ? (
-                         <div className={`w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-lg p-1 overflow-hidden border border-slate-100 transition-transform duration-500`}>
-                             <img src={settings.logo_url} alt="Logo" referrerPolicy="no-referrer" className="w-full h-full object-contain animate-[spin_15s_linear_infinite]" />
-                         </div>
-                     ) : (
-                         <div className={`w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white transition-transform duration-500`}>
+                     <div className={`w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-lg p-1 overflow-hidden border border-slate-100 transition-transform duration-500 relative`}>
+                         {settings?.logo_url ? (
+                             <img 
+                                src={settings.logo_url} 
+                                alt="Logo" 
+                                referrerPolicy="no-referrer" 
+                                className="w-full h-full object-contain animate-[spin_15s_linear_infinite]" 
+                                onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                    const fallback = (e.target as HTMLImageElement).parentElement?.querySelector('.logo-fallback');
+                                    if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                }}
+                             />
+                         ) : null}
+                         <div className={`logo-fallback w-full h-full bg-indigo-600 rounded-lg items-center justify-center text-white ${settings?.logo_url ? 'hidden' : 'flex'}`}>
                              <Sparkles className="w-5 h-5 animate-[spin_15s_linear_infinite]" />
                          </div>
-                     )}
+                     </div>
                      <div className="flex flex-col text-left">
                         <h1 className="font-black text-slate-900 tracking-tighter max-w-[150px] leading-tight">
                             {settings?.name || 'Identity Sync'}

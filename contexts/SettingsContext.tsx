@@ -28,7 +28,17 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, refreshUser, isSuperAdmin } = useAuth();
-  const [settings, setSettings] = useState<CompanySettings | null>(null);
+  const [settings, setSettings] = useState<CompanySettings | null>(() => {
+    const cached = localStorage.getItem('company_settings_cache');
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
@@ -51,6 +61,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         ]);
         
         setSettings({ ...s });
+        localStorage.setItem('company_settings_cache', JSON.stringify(s));
         setCurrencies([...c]);
         setRoles([...r]);
         setOutlets([...o]);

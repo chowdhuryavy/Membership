@@ -261,10 +261,10 @@ const Logs = () => {
                 <Card className="max-w-md text-center p-6 border-red-100 bg-red-50/30 rounded-[2rem]">
                     <Shield className="w-12 h-12 text-red-500 mx-auto mb-4" />
                     <h3 className="text-lg font-black text-red-600 uppercase tracking-tight">
-                        Access Protocol Rejected
+                        Access Denied
                     </h3>
                     <p className="text-slate-600 mt-2 text-sm font-medium">
-                        Security clearance insufficient to view system audit logs.
+                        Permission insufficient to view system audit logs.
                     </p>
                 </Card>
             </div>
