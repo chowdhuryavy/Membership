@@ -63,7 +63,7 @@ interface MemberEnrollmentFormProps {
 const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   existingMember, isEditing, isRenewal, categories, membershipTypes, selectedTypeId, onTypeChange, staff, allMembers, onCancel, onSuccess
 }) => {
-  const { currentOutlet, formatMoney, setPageLoading } = useSettings();
+  const { currentOutlet, formatMoney, setPageLoading, currency } = useSettings();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [matchedMembers, setMatchedMembers] = useState<Member[]>([]);
@@ -602,7 +602,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                     <input {...register('check_no')} className="w-full h-14 px-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm uppercase placeholder:text-slate-200" placeholder="----" />
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Discount Allocation ({formatMoney(0).split(' ')[0]})</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Discount Allocation ({currency?.symbol || '$'})</label>
                     <div className="relative">
                         <input type="number" step="0.01" {...register('discount')} className="w-full h-14 px-4 pr-12 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm" />
                         <Receipt className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-200" />

@@ -26,7 +26,8 @@ import {
   Terminal,
   RefreshCcw,
   Award,
-  AlertTriangle
+  AlertTriangle,
+  Layers
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 import { Member, MassageBooking, Sale, Staff, MemberStatus, InventoryItem, MassageRoom } from '../types';
@@ -141,7 +142,21 @@ const Dashboard = () => {
     roomUtilization: 0,
     cancellationRate: 0,
     guestRevenue: 0,
-    memberRevenue: 0
+    memberRevenue: 0,
+    dailyBreakdown: {
+      massage: 0,
+      personalTraining: 0,
+      retail: 0,
+      entranceFee: 0,
+      other: 0
+    },
+    mtdBreakdown: {
+      massage: 0,
+      personalTraining: 0,
+      retail: 0,
+      entranceFee: 0,
+      other: 0
+    }
   });
   
   const [monthlyExpiringMembers, setMonthlyExpiringMembers] = useState<Member[]>([]);
@@ -406,12 +421,43 @@ const Dashboard = () => {
 
         // 4. Revenue Mix (MTD)
         let mtdServiceRevenue = 0;
-        bookings.filter(b => b.status === 'completed' && isSameMonth(parseISO(b.date), viewDate))
-                .forEach(b => mtdServiceRevenue += Number(b.price));
+        let dailyServiceRevenue = 0;
+        
+        bookings.filter(b => b.status === 'completed').forEach(b => {
+            const bDate = parseISO(b.date);
+            const amount = Number(b.price);
+            if (isSameMonth(bDate, viewDate)) {
+                mtdServiceRevenue += amount;
+            }
+            if (isSameDay(bDate, now)) {
+                dailyServiceRevenue += amount;
+            }
+        });
         
         let mtdSalesRevenue = 0;
-        sales.filter(s => s.status === 'completed' && isSameMonth(new Date(s.created_at), viewDate))
-             .forEach(s => mtdSalesRevenue += Number(s.net_amount));
+        const dailySalesBreakdown = { personalTraining: 0, retail: 0, entranceFee: 0, other: 0 };
+        const mtdSalesBreakdown = { personalTraining: 0, retail: 0, entranceFee: 0, other: 0 };
+
+        sales.filter(s => s.status === 'completed').forEach(s => {
+            const sDate = new Date(s.created_at);
+            const amount = Number(s.net_amount);
+            const cat = s.category;
+
+            if (isSameMonth(sDate, viewDate)) {
+                mtdSalesRevenue += amount;
+                if (cat === 'Personal Training') mtdSalesBreakdown.personalTraining += amount;
+                else if (cat === 'Retail') mtdSalesBreakdown.retail += amount;
+                else if (cat === 'Entrance Fee') mtdSalesBreakdown.entranceFee += amount;
+                else mtdSalesBreakdown.other += amount;
+            }
+
+            if (isSameDay(sDate, now)) {
+                if (cat === 'Personal Training') dailySalesBreakdown.personalTraining += amount;
+                else if (cat === 'Retail') dailySalesBreakdown.retail += amount;
+                else if (cat === 'Entrance Fee') dailySalesBreakdown.entranceFee += amount;
+                else dailySalesBreakdown.other += amount;
+            }
+        });
 
         setRevenueMix([
             { name: 'Membership', value: mtdMembershipRevenue, color: '#4f46e5' },
@@ -549,7 +595,21 @@ const Dashboard = () => {
           roomUtilization,
           cancellationRate,
           guestRevenue,
-          memberRevenue
+          memberRevenue,
+          dailyBreakdown: {
+            massage: dailyServiceRevenue,
+            personalTraining: dailySalesBreakdown.personalTraining,
+            retail: dailySalesBreakdown.retail,
+            entranceFee: dailySalesBreakdown.entranceFee,
+            other: dailySalesBreakdown.other
+          },
+          mtdBreakdown: {
+            massage: mtdServiceRevenue,
+            personalTraining: mtdSalesBreakdown.personalTraining,
+            retail: mtdSalesBreakdown.retail,
+            entranceFee: mtdSalesBreakdown.entranceFee,
+            other: mtdSalesBreakdown.other
+          }
         });
 
         setMonthlyExpiringMembers(monthlyExpiring);
@@ -674,6 +734,73 @@ const Dashboard = () => {
         ))}
       </div>
 
+      {canViewFinancials && (
+        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
+            <CardHeader className="p-6 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                    <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
+                        <Database className="w-4 h-4 text-indigo-600" /> Revenue Breakdown by Category
+                    </h3>
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Daily vs Month-to-Date Performance</p>
+                </div>
+            </CardHeader>
+            <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="bg-slate-50 border-b border-slate-100">
+                            <tr>
+                                <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Revenue Stream</th>
+                                <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Daily Yield</th>
+                                <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">MTD Recognition</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {[
+                                { label: 'Massage Services', key: 'massage', icon: Sparkles, color: 'text-purple-500' },
+                                { label: 'Personal Training', key: 'personalTraining', icon: Activity, color: 'text-blue-500' },
+                                { label: 'Retail Products', key: 'retail', icon: ShoppingBag, color: 'text-emerald-500' },
+                                { label: 'Entrance Fees', key: 'entranceFee', icon: Zap, color: 'text-amber-500' },
+                                { label: 'Other Revenue', key: 'other', icon: Layers, color: 'text-slate-500' }
+                            ].map((item) => (
+                                <tr key={item.key} className="hover:bg-slate-50/50 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg bg-slate-100 ${item.color}`}>
+                                                <item.icon className="w-3.5 h-3.5" />
+                                            </div>
+                                            <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight">{item.label}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <span className="text-[11px] font-black text-slate-900 tabular-nums">{formatMoney(stats.dailyBreakdown[item.key as keyof typeof stats.dailyBreakdown])}</span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <span className="text-[11px] font-black text-indigo-600 tabular-nums">{formatMoney(stats.mtdBreakdown[item.key as keyof typeof stats.mtdBreakdown])}</span>
+                                    </td>
+                                </tr>
+                            ))}
+                            <tr className="bg-indigo-50/30">
+                                <td className="px-6 py-4">
+                                    <span className="text-[11px] font-black text-indigo-900 uppercase tracking-widest">Total Commercial Yield</span>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                    <span className="text-[12px] font-black text-indigo-900 tabular-nums">
+                                        {formatMoney(Object.values(stats.dailyBreakdown).reduce((a: number, b: number) => a + b, 0))}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                    <span className="text-[12px] font-black text-indigo-900 tabular-nums">
+                                        {formatMoney(Object.values(stats.mtdBreakdown).reduce((a: number, b: number) => a + b, 0))}
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
         <div className="lg:col-span-8 flex flex-col gap-4">
             <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
@@ -690,7 +817,7 @@ const Dashboard = () => {
                         <BarChart data={performanceTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                             <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
-                            <YAxis yAxisId="left" tickFormatter={(val) => canViewFinancials ? formatMoney(val).split(' ')[1] : '***'} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
+                            <YAxis yAxisId="left" tickFormatter={(val) => canViewFinancials ? formatMoney(val).replace(/[^\d.,]/g, '') : '***'} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
                             <YAxis yAxisId="right" orientation="right" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
                             <Tooltip
                                 contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '1rem', color: 'white' }}
@@ -1038,7 +1165,7 @@ const Dashboard = () => {
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={[{ name: 'MTD Sales', Gross: stats.grossRevenue, Discount: stats.totalDiscounts, Net: stats.netRevenue }]} layout="vertical" margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-                            <XAxis type="number" tickFormatter={(val) => formatMoney(val).split(' ')[1]} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
+                            <XAxis type="number" tickFormatter={(val) => formatMoney(val).replace(/[^\d.,]/g, '')} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
                             <YAxis type="category" dataKey="name" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} width={80} />
                             <Tooltip
                                 contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '1rem', color: 'white' }}
