@@ -744,7 +744,7 @@ class DatabaseService {
         const { data: m } = await supabase.from('members').select('guest_name, membership_number, outlet_id').eq('id', id).single();
         await this.addNotification({
           title: 'Membership Cancelled',
-          message: `${m?.guest_name || id} (${m?.membership_number || id}) has cancelled their membership.`,
+          message: `${m?.guest_name || 'A member'} has cancelled their membership.`,
           type: 'error',
           outlet_id: m?.outlet_id
         });
@@ -761,7 +761,7 @@ class DatabaseService {
             if (member.status === MemberStatus.CANCELLED) {
               await this.addNotification({
                 title: 'Membership Cancelled',
-                message: `${members[mIndex].guest_name || id} (${members[mIndex].membership_number || id}) has cancelled their membership.`,
+                message: `${members[mIndex].guest_name || 'A member'} has cancelled their membership.`,
                 type: 'error',
                 outlet_id: members[mIndex].outlet_id
               });
@@ -828,7 +828,7 @@ class DatabaseService {
       
       await this.addNotification({
         title: 'Membership Suspended',
-        message: `${memberName} (${memberId}) has been suspended for ${freeze.total_days} days.`,
+        message: `${memberName} has been suspended for ${freeze.total_days} days.`,
         type: 'warning',
         outlet_id: member?.outlet_id
       });
@@ -1705,6 +1705,16 @@ class DatabaseService {
                 notes: reason || 'Manual adjustment',
                 created_by: userId
             });
+
+            // Low stock notification
+            if (updates.stock_quantity <= 5 && currentItem.stock_quantity > 5) {
+                await this.addNotification({
+                    title: 'Low Stock Alert',
+                    message: `Item "${currentItem.name}" is running low on stock (${updates.stock_quantity} remaining).`,
+                    type: 'warning',
+                    outlet_id: currentItem.outlet_id
+                });
+            }
         }
 
         const changedFields = Object.keys(updates).filter(k => updates[k] !== undefined && updates[k] !== null).join(', ');
@@ -1800,9 +1810,13 @@ class DatabaseService {
         await this.logAction('POS_VOID', `Voided sale ID: ${id}`);
 
         if (saleData) {
+          // Get the name of the person who voided it if possible
+          const { data: { user: authUser } } = await (supabase.auth as any).getUser();
+          const voidedBy = authUser?.user_metadata?.full_name || authUser?.email || 'System';
+
           await this.addNotification({
             title: 'Sale Voided',
-            message: `Sale for ${saleData.item_name} (${saleData.id}) has been voided.`,
+            message: `Sale for "${saleData.item_name}" has been voided by ${voidedBy}.`,
             type: 'error',
             outlet_id: saleData.outlet_id
           });
@@ -2122,6 +2136,17 @@ class DatabaseService {
 
       const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
       if (error) throw error;
+
+      // Notification for status change
+      if (status && status !== booking.status) {
+          const { data: guest } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
+          await this.addNotification({
+              title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+              message: `Booking for ${guest?.name || 'Guest'} on ${booking.date} has been marked as ${status}.`,
+              type: status === 'cancelled' ? 'warning' : status === 'completed' ? 'success' : 'info',
+              outlet_id: booking.outlet_id
+          });
+      }
 
       // If status changed FROM completed TO something else, delete the associated sale
       if (booking.status === 'completed' && status !== 'completed') {
@@ -2549,40 +2574,33 @@ class DatabaseService {
   async markNotificationAsRead(id: string) {
     if (this.isSupabase()) {
       const { error } = await supabase.from('notifications').update({ read: true }).eq('id', id);
-      if (error) {
-        if (error.code !== 'PGRST205') {
-          console.warn("Failed to update notification in Supabase", error);
-        }
-        this.updateLocalNotification(id, { read: true });
+      if (error && error.code !== 'PGRST205') {
+        console.warn("Failed to update notification in Supabase", error);
       }
-    } else {
-      this.updateLocalNotification(id, { read: true });
     }
+    this.updateLocalNotification(id, { read: true });
   }
 
   async markAllNotificationsAsRead(userId?: string, outletId?: string) {
     if (this.isSupabase()) {
-      let query = supabase.from('notifications').update({ read: true }).eq('read', false);
-      if (userId) {
-        query = query.or(`user_id.eq.${userId},user_id.is.null`);
-      } else {
-        query = query.is('user_id', null);
-      }
+      // 1. Fetch IDs of unread notifications that match the filter
+      let fetchQuery = supabase.from('notifications').select('id').eq('read', false);
+      if (userId) fetchQuery = fetchQuery.or(`user_id.eq.${userId},user_id.is.null`);
+      else fetchQuery = fetchQuery.is('user_id', null);
       
-      if (outletId) {
-        query = query.or(`outlet_id.eq.${outletId},outlet_id.is.null`);
-      }
+      if (outletId) fetchQuery = fetchQuery.or(`outlet_id.eq.${outletId},outlet_id.is.null`);
+      else fetchQuery = fetchQuery.is('outlet_id', null);
 
-      const { error } = await query;
-      if (error) {
-        if (error.code !== 'PGRST205') {
-          console.warn("Failed to update notifications in Supabase", error);
-        }
-        this.markAllLocalNotificationsAsRead(userId, outletId);
+      const { data: unreadDocs } = await fetchQuery;
+      
+      if (unreadDocs && unreadDocs.length > 0) {
+        const ids = unreadDocs.map(d => d.id);
+        // 2. Update them by ID
+        const { error } = await supabase.from('notifications').update({ read: true }).in('id', ids);
+        if (error) console.warn("Failed to update notifications in Supabase", error);
       }
-    } else {
-      this.markAllLocalNotificationsAsRead(userId, outletId);
     }
+    this.markAllLocalNotificationsAsRead(userId, outletId);
   }
 
   private updateLocalNotification(id: string, updates: Partial<Notification>) {
@@ -2610,15 +2628,33 @@ class DatabaseService {
   async deleteNotification(id: string) {
     if (this.isSupabase()) {
       const { error } = await supabase.from('notifications').delete().eq('id', id);
-      if (error) {
-        if (error.code !== 'PGRST205') {
-          console.warn("Failed to delete notification from Supabase", error);
-        }
-        this.deleteLocalNotification(id);
+      if (error && error.code !== 'PGRST205') {
+        console.warn("Failed to delete notification from Supabase", error);
       }
-    } else {
-      this.deleteLocalNotification(id);
     }
+    this.deleteLocalNotification(id);
+  }
+
+  async deleteAllNotifications(userId?: string, outletId?: string) {
+    if (this.isSupabase()) {
+      // 1. Fetch IDs of notifications that match the filter
+      let fetchQuery = supabase.from('notifications').select('id');
+      if (userId) fetchQuery = fetchQuery.or(`user_id.eq.${userId},user_id.is.null`);
+      else fetchQuery = fetchQuery.is('user_id', null);
+      
+      if (outletId) fetchQuery = fetchQuery.or(`outlet_id.eq.${outletId},outlet_id.is.null`);
+      else fetchQuery = fetchQuery.is('outlet_id', null);
+
+      const { data: docs } = await fetchQuery;
+      
+      if (docs && docs.length > 0) {
+        const ids = docs.map(d => d.id);
+        // 2. Delete them by ID
+        const { error } = await supabase.from('notifications').delete().in('id', ids);
+        if (error) console.warn("Failed to delete all notifications from Supabase", error);
+      }
+    }
+    this.deleteAllLocalNotifications(userId, outletId);
   }
 
   subscribeToNotifications(userId: string, outletId: string | undefined, callback: (payload: { eventType: string, new: any, old?: any }) => void) {
@@ -2696,6 +2732,16 @@ class DatabaseService {
   private deleteLocalNotification(id: string) {
     const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
     const filtered = notifications.filter(n => n.id !== id);
+    localStorage.setItem('membership_notifications', JSON.stringify(filtered));
+  }
+
+  private deleteAllLocalNotifications(userId?: string, outletId?: string) {
+    const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    const filtered = notifications.filter(n => {
+      const userMatch = !userId || !n.user_id || n.user_id === userId;
+      const outletMatch = !outletId || !n.outlet_id || n.outlet_id === outletId;
+      return !(userMatch && outletMatch);
+    });
     localStorage.setItem('membership_notifications', JSON.stringify(filtered));
   }
 }

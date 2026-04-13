@@ -10,6 +10,7 @@ interface NotificationContextType {
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   removeNotification: (id: string) => Promise<void>;
+  clearAll: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -62,9 +63,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       unsubscribe = db.subscribeToNotifications(effectiveUserId, outletId, (payload) => {
         console.log('Received real-time notification payload:', payload.eventType, payload.new?.id);
         
-        // Always refresh to ensure we have the latest state from the DB
-        fetchNotifications();
-
         if (payload.eventType === 'INSERT') {
           setNotifications(prev => {
             const exists = prev.some(n => n.id === payload.new.id);
@@ -94,11 +92,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [fetchNotifications, user, outletId]);
 
   const markAsRead = async (id: string) => {
+    // Optimistic update
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    
     try {
       await db.markNotificationAsRead(id);
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
+      // Revert on error
+      fetchNotifications();
     }
   };
 
@@ -108,20 +110,46 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const effectiveUserId = user?.id || staffUser?.id;
 
     if (!effectiveUserId) return;
+
+    // Optimistic update
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+
     try {
       await db.markAllNotificationsAsRead(effectiveUserId, outletId);
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
+      // Revert on error
+      fetchNotifications();
     }
   };
 
   const removeNotification = async (id: string) => {
+    // Optimistic update
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    
     try {
       await db.deleteNotification(id);
-      setNotifications(prev => prev.filter(n => n.id !== id));
     } catch (error) {
       console.error('Failed to delete notification:', error);
+      // Revert on error
+      fetchNotifications();
+    }
+  };
+
+  const clearAll = async () => {
+    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
+    const effectiveUserId = user?.id || staffUser?.id;
+
+    // Optimistic update
+    setNotifications([]);
+
+    try {
+      await db.deleteAllNotifications(effectiveUserId, outletId);
+    } catch (error) {
+      console.error('Failed to clear all notifications:', error);
+      // Revert on error
+      fetchNotifications();
     }
   };
 
@@ -131,8 +159,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     markAsRead,
     markAllAsRead,
     removeNotification,
+    clearAll,
     refresh: fetchNotifications
-  }), [notifications, isLoading, markAsRead, markAllAsRead, removeNotification, fetchNotifications]);
+  }), [notifications, isLoading, markAsRead, markAllAsRead, removeNotification, clearAll, fetchNotifications]);
 
   return (
     <NotificationContext.Provider value={value}>

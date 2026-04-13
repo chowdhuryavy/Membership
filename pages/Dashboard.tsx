@@ -424,40 +424,38 @@ const Dashboard = () => {
         // 4. Revenue Mix (MTD)
         let mtdServiceRevenue = 0;
         let dailyServiceRevenue = 0;
-        
-        bookings.filter(b => b.status === 'completed').forEach(b => {
-            const bDate = parseISO(b.date);
-            const amount = Number(b.price) - Number(b.discount || 0);
-            if (isSameMonth(bDate, viewDate)) {
-                mtdServiceRevenue += amount;
-            }
-            if (isSameDay(bDate, now)) {
-                dailyServiceRevenue += amount;
-            }
-        });
-        
         let mtdSalesRevenue = 0;
         const dailySalesBreakdown = { personalTraining: 0, retail: 0, entranceFee: 0, other: 0 };
         const mtdSalesBreakdown = { personalTraining: 0, retail: 0, entranceFee: 0, other: 0 };
 
+        // We calculate all non-membership revenue from sales to avoid double counting with bookings
+        // Bookings are used for counts and utilization metrics, but Sales is the financial source of truth
         sales.filter(s => s.status === 'completed').forEach(s => {
             const sDate = new Date(s.created_at);
             const amount = Number(s.net_amount);
             const cat = s.category as string;
 
             if (isSameMonth(sDate, viewDate)) {
-                mtdSalesRevenue += amount;
-                if (cat === 'Personal Training') mtdSalesBreakdown.personalTraining += amount;
-                else if (cat === 'Retail' || cat === 'Retail Items') mtdSalesBreakdown.retail += amount;
-                else if (cat === 'Entrance Fee' || cat === 'Day Use') mtdSalesBreakdown.entranceFee += amount;
-                else mtdSalesBreakdown.other += amount;
+                if (cat === 'Massage') {
+                    mtdServiceRevenue += amount;
+                } else {
+                    mtdSalesRevenue += amount;
+                    if (cat === 'Personal Training') mtdSalesBreakdown.personalTraining += amount;
+                    else if (cat === 'Retail' || cat === 'Retail Items') mtdSalesBreakdown.retail += amount;
+                    else if (cat === 'Entrance Fee' || cat === 'Day Use') mtdSalesBreakdown.entranceFee += amount;
+                    else mtdSalesBreakdown.other += amount;
+                }
             }
 
             if (isSameDay(sDate, now)) {
-                if (cat === 'Personal Training') dailySalesBreakdown.personalTraining += amount;
-                else if (cat === 'Retail' || cat === 'Retail Items') dailySalesBreakdown.retail += amount;
-                else if (cat === 'Entrance Fee' || cat === 'Day Use') dailySalesBreakdown.entranceFee += amount;
-                else dailySalesBreakdown.other += amount;
+                if (cat === 'Massage') {
+                    dailyServiceRevenue += amount;
+                } else {
+                    if (cat === 'Personal Training') dailySalesBreakdown.personalTraining += amount;
+                    else if (cat === 'Retail' || cat === 'Retail Items') dailySalesBreakdown.retail += amount;
+                    else if (cat === 'Entrance Fee' || cat === 'Day Use') dailySalesBreakdown.entranceFee += amount;
+                    else dailySalesBreakdown.other += amount;
+                }
             }
         });
 

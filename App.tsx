@@ -25,6 +25,7 @@ import Reports from './pages/Reports';
 import Logs from './pages/Logs';
 import SettingsPage from './pages/Settings';
 import Profile from './pages/Profile';
+import NotificationsPage from './pages/Notifications';
 import MassageScheduling from './massage-scheduling/MassageScheduling'; 
 import Sales from './pages/Sales'; 
 import { 
@@ -627,6 +628,7 @@ const App = () => {
                   <Route path="logs" element={<Logs />} />
                   <Route path="settings" element={<SettingsPage />} />
                   <Route path="profile" element={<Profile />} />
+                  <Route path="notifications" element={<NotificationsPage />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
