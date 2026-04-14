@@ -2,11 +2,8 @@
   "name": "Health Club Management",
   "short_name": "Health Club",
   "description": "Professional Health Club and Spa Management System",
-  "id": "/",
   "start_url": "/",
-  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#4f46e5",
   "icons": [
@@ -33,15 +30,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
-    }
-  ],
-  "categories": ["business", "productivity"],
-  "shortcuts": [
-    {
-      "name": "Staff Portal",
-      "short_name": "Staff",
-      "url": "/staff-login",
-      "icons": [{ "src": "/icon.png", "sizes": "192x192" }]
     }
   ]
 }
