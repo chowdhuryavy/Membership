@@ -1,4 +1,4 @@
-const CACHE_NAME = 'health-club-v3';
+const CACHE_NAME = 'health-club-v4';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -38,6 +38,19 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache or network
 self.addEventListener('fetch', (event) => {
+  // For navigation requests (like opening the app or refreshing), always serve index.html
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      caches.match('/index.html').then((response) => {
+        return response || fetch(event.request);
+      }).catch(() => {
+        return caches.match('/index.html');
+      })
+    );
+    return;
+  }
+
+  // For other requests, try cache first, then network
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request);
