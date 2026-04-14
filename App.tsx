@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { 
-  HashRouter as Router, 
+  BrowserRouter as Router, 
   Routes, 
   Route, 
   Link, 
@@ -592,7 +592,7 @@ import { schedulerService } from './services/emailService';
 const App = () => {
   // Smart Redirect for PWA
   useEffect(() => {
-    const isRoot = window.location.hash === '#/' || window.location.hash === '';
+    const isRoot = window.location.pathname === '/' || window.location.pathname === '';
     const preferredPortal = localStorage.getItem('preferred_portal');
     
     if (isRoot && preferredPortal === 'staff') {
@@ -601,7 +601,7 @@ const App = () => {
       const adminSession = sessionStorage.getItem('membership_session');
       
       if (!adminSession && !staffSession) {
-        window.location.hash = '#/staff-login';
+        window.location.href = window.location.origin + '/staff-login';
       }
     }
   }, []);

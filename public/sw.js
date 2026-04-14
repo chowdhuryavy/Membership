@@ -1,4 +1,4 @@
-const CACHE_NAME = 'health-club-v2';
+const CACHE_NAME = 'health-club-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -33,6 +33,16 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache or network
 self.addEventListener('fetch', (event) => {
+  // Handle SPA navigation: redirect all navigation requests to index.html
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      caches.match('/index.html').then((response) => {
+        return response || fetch(event.request);
+      })
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request);
