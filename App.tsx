@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { 
-  HashRouter as Router, 
+  BrowserRouter as Router, 
   Routes, 
   Route, 
   Link, 
@@ -592,18 +592,16 @@ import { schedulerService } from './services/emailService';
 const App = () => {
   // Smart Redirect for PWA
   useEffect(() => {
-    const isRoot = window.location.hash === '#/' || window.location.hash === '';
+    const isRoot = window.location.pathname === '/' || window.location.pathname === '';
     const preferredPortal = localStorage.getItem('preferred_portal');
     
     if (isRoot && preferredPortal === 'staff') {
       // If the user prefers staff portal and is at the root, redirect to staff login
-      // But only if they aren't already logged in (handled by ProtectedLayout usually, 
-      // but we do it here for the initial PWA hit)
       const staffSession = localStorage.getItem('staff_session');
       const adminSession = sessionStorage.getItem('membership_session');
       
       if (!adminSession && !staffSession) {
-        window.location.hash = '#/staff-login';
+        window.location.href = window.location.origin + '/staff-login';
       }
     }
   }, []);
