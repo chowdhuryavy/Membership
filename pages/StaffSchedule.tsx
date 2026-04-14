@@ -411,33 +411,32 @@ const StaffSchedule = () => {
         return;
       }
 
-      // We need to fetch incentives for each department and combine them
+      // Fetch all departments in parallel for better performance
       const depts: ('Massage' | 'Membership' | 'Personal Training')[] = ['Massage', 'Membership', 'Personal Training'];
-      let allRows: any[] = [];
-      let totalInc = 0;
-
-      for (const dept of depts) {
-        // We'll just pass 'all' for outletId to get all outlets for this property, 
-        // then filter by staff id. The reportLogic handles 'all' outlets.
-        const result = await getReportData({
+      
+      const results = await Promise.all(depts.map(dept => 
+        getReportData({
           supabase,
           propertyId,
           outletId: 'all',
           reportType: 'incentives',
           date: currentDate,
           incentiveDept: dept
-        });
+        })
+      ));
 
-        // Filter rows for this specific staff member
+      let allRows: any[] = [];
+      let totalInc = 0;
+      const breakdown: Record<string, { total: number, count: number }> = {};
+
+      results.forEach((result, index) => {
+        const dept = depts[index];
         const staffRows = result.rows.filter(r => {
           if (!r.staff_splits) return false;
           const matchingKey = Object.keys(r.staff_splits).find(id => String(id) === String(staff.id));
           return matchingKey !== undefined;
         });
-        
-        console.log(`DEBUG loadIncentives [${dept}]: total rows=${result.rows.length}, staffRows=${staffRows.length}, staffId=${staff.id}`);
 
-        // Add department info to each row
         const rowsWithDept = staffRows.map(r => {
           const matchingKey = Object.keys(r.staff_splits).find(id => String(id) === String(staff.id));
           return {
@@ -448,32 +447,28 @@ const StaffSchedule = () => {
         });
 
         allRows = [...allRows, ...rowsWithDept];
-        totalInc += rowsWithDept.reduce((sum, r) => sum + r.my_incentive, 0);
-      }
+        const deptTotal = rowsWithDept.reduce((sum, r) => sum + r.my_incentive, 0);
+        totalInc += deptTotal;
+        
+        if (rowsWithDept.length > 0) {
+          breakdown[dept] = {
+            total: deptTotal,
+            count: rowsWithDept.length
+          };
+        }
+      });
 
       // Sort by date
       allRows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    setIncentiveData(allRows);
-    
-    // Calculate department breakdown
-    const breakdown = depts.reduce((acc, dept) => {
-      const deptRows = allRows.filter(r => r.department === dept);
-      if (deptRows.length > 0) {
-        acc[dept] = {
-          total: deptRows.reduce((sum, r) => sum + r.my_incentive, 0),
-          count: deptRows.length
-        };
-      }
-      return acc;
-    }, {} as Record<string, { total: number, count: number }>);
-
-    setIncentiveSummary({ 
-      total: totalInc, 
-      count: allRows.length,
-      breakdown 
-    });
-  } catch (error) {
+      // Batch state updates
+      setIncentiveData(allRows);
+      setIncentiveSummary({ 
+        total: totalInc, 
+        count: allRows.length,
+        breakdown 
+      });
+    } catch (error) {
       console.error("Failed to load incentives:", error);
     } finally {
       setIncentiveLoading(false);
@@ -821,7 +816,7 @@ const StaffSchedule = () => {
         </div>
 
         {/* Schedule List */}
-        {loading || incentiveLoading ? (
+        {loading ? (
           <div className="flex flex-col items-center justify-center p-12 space-y-4">
             <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Syncing Data...</p>
