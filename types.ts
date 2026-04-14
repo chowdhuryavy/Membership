@@ -361,6 +361,7 @@ export interface Notification {
   type?: 'info' | 'warning' | 'success' | 'error';
   read_by?: string[]; // Array of user IDs who have read this
   dismissed_by?: string[]; // Array of user IDs who have dismissed this
+  required_permission?: Permission; // Permission required to see this notification
 }
 
 export interface CustomReportColumn {

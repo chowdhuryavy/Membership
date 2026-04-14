@@ -713,7 +713,8 @@ class DatabaseService {
         title: 'New Member Enrolled',
         message: `${member.guest_name} has joined with membership ${member.membership_number}.`,
         type: 'success',
-        outlet_id: member.outlet_id
+        outlet_id: member.outlet_id,
+        required_permission: 'members:view'
       });
     } else {
       const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
@@ -724,7 +725,8 @@ class DatabaseService {
         title: 'New Member Enrolled',
         message: `${member.guest_name} has joined with membership ${member.membership_number}.`,
         type: 'success',
-        outlet_id: member.outlet_id
+        outlet_id: member.outlet_id,
+        required_permission: 'members:view'
       });
     }
   }
@@ -746,7 +748,8 @@ class DatabaseService {
           title: 'Membership Cancelled',
           message: `${m?.guest_name || 'A member'} has cancelled their membership.`,
           type: 'error',
-          outlet_id: m?.outlet_id
+          outlet_id: m?.outlet_id,
+          required_permission: 'members:view'
         });
       }
     } else {
@@ -782,7 +785,8 @@ class DatabaseService {
           title: 'Member Deleted',
           message: `Member ${memberData.guest_name} (${memberData.membership_number}) has been deleted.`,
           type: 'error',
-          outlet_id: memberData.outlet_id
+          outlet_id: memberData.outlet_id,
+          required_permission: 'members:view'
         });
       }
     } else {
@@ -830,7 +834,8 @@ class DatabaseService {
         title: 'Membership Suspended',
         message: `${memberName} has been suspended for ${freeze.total_days} days.`,
         type: 'warning',
-        outlet_id: member?.outlet_id
+        outlet_id: member?.outlet_id,
+        required_permission: 'members:view'
       });
     } else {
       const freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
@@ -1789,7 +1794,8 @@ class DatabaseService {
           title: 'New POS Sale',
           message: `${sale.quantity}x ${sale.item_name} sold for ${sale.guest_name || 'Walk-in'}.`,
           type: 'success',
-          outlet_id: sale.outlet_id
+          outlet_id: sale.outlet_id,
+          required_permission: 'sales:view'
         });
     }
   }
@@ -1818,7 +1824,8 @@ class DatabaseService {
             title: 'Sale Voided',
             message: `Sale for "${saleData.item_name}" has been voided by ${voidedBy}.`,
             type: 'error',
-            outlet_id: saleData.outlet_id
+            outlet_id: saleData.outlet_id,
+            required_permission: 'sales:view'
           });
         }
 
@@ -2144,7 +2151,8 @@ class DatabaseService {
               title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
               message: `Booking for ${guest?.name || 'Guest'} on ${booking.date} has been marked as ${status}.`,
               type: status === 'cancelled' ? 'warning' : status === 'completed' ? 'success' : 'info',
-              outlet_id: booking.outlet_id
+              outlet_id: booking.outlet_id,
+              required_permission: 'bookings:view'
           });
       }
 
@@ -2548,8 +2556,8 @@ class DatabaseService {
     if (this.isSupabase()) {
       try {
         // Prepare a safe object for Supabase based on known existing columns
-        // We exclude outlet_id, read_by, and dismissed_by as they might be missing
-        const { outlet_id, read_by, dismissed_by, ...safeNotification } = newNotification as any;
+        // We exclude outlet_id, read_by, dismissed_by, and required_permission as they might be missing
+        const { outlet_id, read_by, dismissed_by, required_permission, ...safeNotification } = newNotification as any;
         
         const { error } = await supabase.from('notifications').insert([safeNotification]);
         if (error) {

@@ -18,7 +18,7 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const { currentOutlet } = useSettings();
+  const { currentOutlet, hasPermission } = useSettings();
   const outletId = currentOutlet?.id;
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -47,8 +47,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (!isAutoRefresh) setIsLoading(true);
       console.log('Fetching notifications for user:', effectiveUserId, 'outlet:', outletId);
       const data = await db.getNotifications(effectiveUserId, outletId);
-      console.log('Fetched notifications count:', data.length);
-      setNotifications(data);
+      
+      // Filter by permission
+      const filteredData = data.filter(n => {
+        if (!n.required_permission) return true;
+        // If it's a staff user from local storage, we might not have their role_id easily here
+        // but usually notifications are for the main logged in user
+        return hasPermission(user?.role_id || '', n.required_permission, user?.id);
+      });
+
+      console.log('Fetched notifications count:', filteredData.length);
+      setNotifications(filteredData);
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
     } finally {
@@ -76,6 +85,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           // Check if dismissed by current user
           if (n.dismissed_by?.includes(effectiveUserId)) return;
           
+          // Check permission
+          if (n.required_permission && !hasPermission(user?.role_id || '', n.required_permission, user?.id)) {
+            return;
+          }
+          
           setNotifications(prev => {
             const exists = prev.some(item => item.id === n.id);
             if (exists) return prev;
@@ -91,6 +105,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           const n = payload.new as Notification;
           // If dismissed by current user, remove it
           if (n.dismissed_by?.includes(effectiveUserId)) {
+            setNotifications(prev => prev.filter(item => item.id !== n.id));
+            return;
+          }
+          
+          // Check permission - if permission changed and user no longer has it, remove it
+          if (n.required_permission && !hasPermission(user?.role_id || '', n.required_permission, user?.id)) {
             setNotifications(prev => prev.filter(item => item.id !== n.id));
             return;
           }
