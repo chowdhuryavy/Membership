@@ -37,6 +37,10 @@ const StaffLogin = () => {
 
   const companyName = settings?.name || 'Health Club Management';
 
+  useEffect(() => {
+    localStorage.setItem('preferred_portal', 'staff');
+  }, []);
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#fcfdfe] selection:bg-indigo-100">
       

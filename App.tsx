@@ -590,6 +590,24 @@ const DynamicHead = () => {
 import { schedulerService } from './services/emailService';
 
 const App = () => {
+  // Smart Redirect for PWA
+  useEffect(() => {
+    const isRoot = window.location.hash === '#/' || window.location.hash === '';
+    const preferredPortal = localStorage.getItem('preferred_portal');
+    
+    if (isRoot && preferredPortal === 'staff') {
+      // If the user prefers staff portal and is at the root, redirect to staff login
+      // But only if they aren't already logged in (handled by ProtectedLayout usually, 
+      // but we do it here for the initial PWA hit)
+      const staffSession = localStorage.getItem('staff_session');
+      const adminSession = sessionStorage.getItem('membership_session');
+      
+      if (!adminSession && !staffSession) {
+        window.location.hash = '#/staff-login';
+      }
+    }
+  }, []);
+
   // Scheduler effect
   useEffect(() => {
     // Run once on mount
