@@ -2474,10 +2474,6 @@ class DatabaseService {
         query = query.is('user_id', null);
       }
       
-      if (outletId) {
-        query = query.or(`outlet_id.eq.${outletId},outlet_id.is.null`);
-      }
-      
       const { data, error } = await query;
       if (error) {
         if (error.code !== 'PGRST205') {
@@ -2499,6 +2495,7 @@ class DatabaseService {
         }));
       }
       
+      // Client-side filter for outlet_id
       if (outletId) {
         notifications = notifications.filter(n => !n.outlet_id || n.outlet_id === outletId);
       }
@@ -2511,10 +2508,19 @@ class DatabaseService {
 
   private getLocalNotifications(userId?: string, outletId?: string): Notification[] {
     const all = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    console.log('getLocalNotifications: all count', all.length, 'userId', userId);
     let filtered = all;
     
     if (userId) {
-      filtered = filtered.filter(n => !n.user_id || n.user_id === userId);
+      // Filter out dismissed notifications for this user
+      filtered = filtered.filter(n => !n.dismissed_by || !n.dismissed_by.includes(userId));
+      console.log('getLocalNotifications: after dismiss filter', filtered.length);
+      
+      // Map the 'read' status based on the read_by array for this user
+      filtered = filtered.map(n => ({
+        ...n,
+        read: n.user_id === userId ? n.read : (n.read_by?.includes(userId) || false)
+      }));
     } else {
       filtered = filtered.filter(n => !n.user_id);
     }
@@ -2523,6 +2529,7 @@ class DatabaseService {
       filtered = filtered.filter(n => !n.outlet_id || n.outlet_id === outletId);
     }
 
+    console.log('getLocalNotifications: final count', filtered.length);
     return filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
