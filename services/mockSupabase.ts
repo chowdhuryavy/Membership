@@ -2555,11 +2555,8 @@ class DatabaseService {
 
     if (this.isSupabase()) {
       try {
-        // Prepare a safe object for Supabase based on known existing columns
-        // We exclude outlet_id, read_by, dismissed_by, and required_permission as they might be missing
-        const { outlet_id, read_by, dismissed_by, required_permission, ...safeNotification } = newNotification as any;
-        
-        const { error } = await supabase.from('notifications').insert([safeNotification]);
+        // We include all fields as the user has confirmed the columns exist in Supabase
+        const { error } = await supabase.from('notifications').insert([newNotification]);
         if (error) {
           console.warn("Failed to insert notification to Supabase, saving locally", error);
           this.saveLocalNotification(newNotification);

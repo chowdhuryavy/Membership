@@ -3,15 +3,19 @@ import { Bell, Check, X, Loader2, Info, AlertTriangle, CheckCircle2, AlertCircle
 import { useNotificationContext } from '../contexts/NotificationContext';
 import { formatDistanceToNow } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 
 export const NotificationBell = () => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const { currentOutlet } = useSettings();
+    const { currentOutlet, outlets } = useSettings();
+    const { user } = useAuth();
     const { notifications, isLoading, markAsRead, markAllAsRead, removeNotification, clearAll } = useNotificationContext();
     const navigate = useNavigate();
+
+    const hasMultipleOutlets = (user?.allowed_outlets?.length || 0) > 1;
 
     const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -120,6 +124,11 @@ export const NotificationBell = () => {
                                                         <h4 className={`text-xs font-bold truncate pr-4 ${!notification.read ? 'text-slate-900' : 'text-slate-600'}`}>
                                                             {notification.title}
                                                         </h4>
+                                                        {hasMultipleOutlets && notification.outlet_id && (
+                                                            <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-1.5 py-0.5 rounded-md mt-1 inline-block">
+                                                                {outlets.find(o => o.id === notification.outlet_id)?.name || 'Unknown Outlet'}
+                                                            </span>
+                                                        )}
                                                         <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap">
                                                             {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                                                         </span>

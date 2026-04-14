@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
 import { Bell, Check, X, Trash2, Filter, Search, Calendar, Info, AlertTriangle, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useNotificationContext } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { format, formatDistanceToNow } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 
 const NotificationsPage = () => {
+    const { user } = useAuth();
+    const { outlets } = useSettings();
     const { notifications, isLoading, markAsRead, markAllAsRead, removeNotification, clearAll } = useNotificationContext();
     const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
     const [searchQuery, setSearchQuery] = useState('');
+
+    const hasMultipleOutlets = (user?.allowed_outlets?.length || 0) > 1;
 
     const filteredNotifications = notifications.filter(n => {
         const matchesFilter = filter === 'all' || (filter === 'unread' ? !n.read : n.read);
@@ -118,6 +124,11 @@ const NotificationsPage = () => {
                                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 mb-2">
                                             <h3 className={`text-sm font-bold ${!n.read ? 'text-slate-900' : 'text-slate-600'}`}>
                                                 {n.title}
+                                                {hasMultipleOutlets && n.outlet_id && (
+                                                    <span className="ml-3 px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-widest rounded-lg">
+                                                        {outlets.find(o => o.id === n.outlet_id)?.name || 'Unknown Outlet'}
+                                                    </span>
+                                                )}
                                                 {!n.read && <span className="ml-2 inline-block w-2 h-2 bg-indigo-500 rounded-full"></span>}
                                             </h3>
                                             <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
