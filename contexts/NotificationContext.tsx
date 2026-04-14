@@ -72,13 +72,39 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.log('Received real-time notification payload:', payload.eventType, payload.new?.id);
         
         if (payload.eventType === 'INSERT') {
+          const n = payload.new as Notification;
+          // Check if dismissed by current user
+          if (n.dismissed_by?.includes(effectiveUserId)) return;
+          
           setNotifications(prev => {
-            const exists = prev.some(n => n.id === payload.new.id);
+            const exists = prev.some(item => item.id === n.id);
             if (exists) return prev;
-            return [payload.new as Notification, ...prev];
+            
+            // Map read status for current user
+            const mapped = {
+              ...n,
+              read: n.user_id === effectiveUserId ? n.read : (n.read_by?.includes(effectiveUserId) || false)
+            };
+            return [mapped, ...prev];
           });
         } else if (payload.eventType === 'UPDATE') {
-          setNotifications(prev => prev.map(n => n.id === payload.new.id ? payload.new as Notification : n));
+          const n = payload.new as Notification;
+          // If dismissed by current user, remove it
+          if (n.dismissed_by?.includes(effectiveUserId)) {
+            setNotifications(prev => prev.filter(item => item.id !== n.id));
+            return;
+          }
+          
+          setNotifications(prev => prev.map(item => {
+            if (item.id === n.id) {
+              // Map read status for current user
+              return {
+                ...n,
+                read: n.user_id === effectiveUserId ? n.read : (n.read_by?.includes(effectiveUserId) || false)
+              };
+            }
+            return item;
+          }));
         } else if (payload.eventType === 'DELETE') {
           const deletedId = payload.old?.id || payload.new?.id;
           if (deletedId) {

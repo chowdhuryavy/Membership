@@ -2608,7 +2608,7 @@ class DatabaseService {
           await supabase.from('notifications').update({ read: true }).eq('id', id);
         } else if (userId) {
           // Shared notification - update read_by array
-          const readBy = n.read_by || [];
+          const readBy = (n.read_by || []) as string[];
           if (!readBy.includes(userId)) {
             await supabase.from('notifications').update({ read_by: [...readBy, userId] }).eq('id', id);
           }
@@ -2631,7 +2631,7 @@ class DatabaseService {
           if (doc.user_id === userId) {
             await supabase.from('notifications').update({ read: true }).eq('id', doc.id);
           } else {
-            const readBy = doc.read_by || [];
+            const readBy = (doc.read_by || []) as string[];
             if (!readBy.includes(userId)) {
               await supabase.from('notifications').update({ read_by: [...readBy, userId] }).eq('id', doc.id);
             }
@@ -2692,11 +2692,20 @@ class DatabaseService {
   async deleteNotification(id: string, userId?: string) {
     if (this.isSupabase() && userId) {
       // Soft delete: add to dismissed_by instead of actual delete
-      const { data: n } = await supabase.from('notifications').select('dismissed_by').eq('id', id).single();
+      const { data: n } = await supabase.from('notifications').select('user_id, dismissed_by').eq('id', id).single();
       if (n) {
-        const dismissedBy = n.dismissed_by || [];
-        if (!dismissedBy.includes(userId)) {
-          await supabase.from('notifications').update({ dismissed_by: [...dismissedBy, userId] }).eq('id', id);
+        if (n.user_id === userId) {
+          // If it's a private notification, we can just delete it or mark as dismissed
+          // But to keep it "never permanently deleted", we use dismissed_by even for private ones
+          const dismissedBy = (n.dismissed_by || []) as string[];
+          if (!dismissedBy.includes(userId)) {
+            await supabase.from('notifications').update({ dismissed_by: [...dismissedBy, userId] }).eq('id', id);
+          }
+        } else {
+          const dismissedBy = (n.dismissed_by || []) as string[];
+          if (!dismissedBy.includes(userId)) {
+            await supabase.from('notifications').update({ dismissed_by: [...dismissedBy, userId] }).eq('id', id);
+          }
         }
       }
     }
@@ -2713,7 +2722,7 @@ class DatabaseService {
       
       if (docs) {
         for (const doc of docs) {
-          const dismissedBy = doc.dismissed_by || [];
+          const dismissedBy = (doc.dismissed_by || []) as string[];
           if (!dismissedBy.includes(userId)) {
             await supabase.from('notifications').update({ dismissed_by: [...dismissedBy, userId] }).eq('id', doc.id);
           }
@@ -2800,7 +2809,7 @@ class DatabaseService {
     if (userId) {
       const index = notifications.findIndex(n => n.id === id);
       if (index !== -1) {
-        const dismissedBy = notifications[index].dismissed_by || [];
+        const dismissedBy = (notifications[index].dismissed_by || []) as string[];
         if (!dismissedBy.includes(userId)) {
           notifications[index].dismissed_by = [...dismissedBy, userId];
           localStorage.setItem('membership_notifications', JSON.stringify(notifications));
@@ -2827,7 +2836,7 @@ class DatabaseService {
         }
 
         if (shouldDismiss) {
-          const dismissedBy = n.dismissed_by || [];
+          const dismissedBy = (n.dismissed_by || []) as string[];
           if (!dismissedBy.includes(userId)) {
             return { ...n, dismissed_by: [...dismissedBy, userId] };
           }
