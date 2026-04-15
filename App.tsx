@@ -646,6 +646,21 @@ const DynamicHead = () => {
       if (manifestLink) {
         manifestLink.setAttribute('href', manifestURL);
       }
+
+      // Update iOS-specific meta tags dynamically
+      const updateMeta = (name: string, content: string) => {
+        let meta = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.name = name;
+          document.head.appendChild(meta);
+        }
+        meta.content = content;
+      };
+
+      const portalName = isStaff ? "Staff Portal" : (settings.name || "Health Club");
+      updateMeta('apple-mobile-web-app-title', portalName);
+      updateMeta('application-name', portalName);
     };
 
     updateManifest();
