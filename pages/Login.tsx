@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Button } from '../components/ui';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Sparkles, ShieldAlert, CheckCircle2, UserCircle2 } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Sparkles, ShieldAlert, CheckCircle2, UserCircle2, Users } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 
 const Login = () => {
@@ -205,6 +205,17 @@ const Login = () => {
                     Authenticate <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </span>
                 </Button>
+              </div>
+              
+              <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Are you a staff member?</p>
+                <a 
+                  href="/staff-login" 
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-all text-[11px] font-black uppercase tracking-wider border border-slate-200 hover:border-indigo-100"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Switch to Staff Portal
+                </a>
               </div>
             </form>
           ) : (

@@ -589,62 +589,12 @@ const DynamicHead = () => {
     if (!settings) return;
 
     const updateManifest = () => {
-      const isStaff = window.location.hash.includes('staff');
-      const logoUrl = settings.logo_url || "https://i.imgur.com/oZVRrvo.png";
-      const appName = settings.name || "Health Club Management";
-      
-      const manifest = {
-        name: isStaff ? `${appName} Staff` : appName,
-        short_name: isStaff ? "Staff Portal" : (settings.name || "Health Club"),
-        description: "Professional Health Club and Spa Management System",
-        start_url: window.location.origin + (isStaff ? "/?portal=staff&source=pwa" : "/?source=pwa"),
-        display: "standalone",
-        background_color: "#ffffff",
-        theme_color: "#4f46e5",
-        icons: [
-          {
-            src: logoUrl,
-            sizes: "192x192",
-            type: "image/png",
-            purpose: "any"
-          },
-          {
-            src: logoUrl,
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "any"
-          },
-          {
-            src: logoUrl,
-            sizes: "192x192",
-            type: "image/png",
-            purpose: "maskable"
-          }
-        ],
-        shortcuts: [
-          {
-            name: "Staff Portal",
-            short_name: "Staff",
-            description: "Open Staff Login",
-            url: "/?portal=staff",
-            icons: [{ src: logoUrl, sizes: "192x192" }]
-          },
-          {
-            name: "Admin Portal",
-            short_name: "Admin",
-            description: "Open Admin Login",
-            url: "/",
-            icons: [{ src: logoUrl, sizes: "192x192" }]
-          }
-        ]
-      };
-
-      const stringManifest = JSON.stringify(manifest);
-      const blob = new Blob([stringManifest], {type: 'application/json'});
-      const manifestURL = URL.createObjectURL(blob);
+      const isStaff = window.location.hash.includes('staff') || window.location.search.includes('portal=staff');
       const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
+      
       if (manifestLink) {
-        manifestLink.setAttribute('href', manifestURL);
+        // Use static manifest files for iPhone compatibility
+        manifestLink.setAttribute('href', isStaff ? '/manifest-staff.json' : '/manifest.json');
       }
 
       // Update iOS-specific meta tags dynamically

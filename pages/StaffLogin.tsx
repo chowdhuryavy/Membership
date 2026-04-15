@@ -182,6 +182,17 @@ const StaffLogin = () => {
                 </span>
               </Button>
             </div>
+
+            <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Are you an administrator?</p>
+              <a 
+                href="/" 
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-900 hover:text-white transition-all text-[11px] font-black uppercase tracking-wider border border-slate-200 hover:border-slate-900"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Switch to Admin Portal
+              </a>
+            </div>
           </form>
         </div>
       </div>

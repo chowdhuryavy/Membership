@@ -1,8 +1,9 @@
-const CACHE_NAME = 'health-club-v9';
+const CACHE_NAME = 'health-club-v10';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/manifest-staff.json'
 ];
 
 // Install event - cache assets safely
