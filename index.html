@@ -63,6 +63,16 @@
     <meta name="apple-mobile-web-app-title" content="Health Club">
     
     <meta name="theme-color" content="#4f46e5" />
+    
+    <script>
+      // Handle chunk load errors (common in SPAs when a new version is deployed)
+      window.addEventListener('error', (e) => {
+        if (e.message && (e.message.includes('chunk') || e.message.includes('Loading chunk'))) {
+          console.warn('Chunk load error detected, reloading...', e);
+          window.location.reload();
+        }
+      }, true);
+    </script>
 </head>
   <body>
     <div id="root"></div>
