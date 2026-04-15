@@ -580,6 +580,44 @@ const DynamicHead = () => {
           document.head.appendChild(meta);
         }
         meta.content = '#4f46e5';
+
+        // Dynamic PWA Manifest to use settings logo
+        const manifest = {
+          name: settings.name || "Health Club Management",
+          short_name: settings.name || "Health Club",
+          description: "Professional Health Club and Spa Management System",
+          start_url: "/?source=pwa",
+          display: "standalone",
+          background_color: "#ffffff",
+          theme_color: "#4f46e5",
+          icons: [
+            {
+              src: settings.logo_url,
+              sizes: "192x192",
+              type: "image/png",
+              purpose: "any"
+            },
+            {
+              src: settings.logo_url,
+              sizes: "512x512",
+              type: "image/png",
+              purpose: "any"
+            },
+            {
+              src: settings.logo_url,
+              sizes: "192x192",
+              type: "image/png",
+              purpose: "maskable"
+            }
+          ]
+        };
+        const stringManifest = JSON.stringify(manifest);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
+        if (manifestLink) {
+          manifestLink.setAttribute('href', manifestURL);
+        }
       }
     }
   }, [settings]);
