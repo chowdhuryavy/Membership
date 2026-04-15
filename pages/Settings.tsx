@@ -536,13 +536,26 @@ const SettingsPage = () => {
   };
 
   const handleRoomSubmit = async () => {
-    if (!isSuperAdmin) {
-        showStatus('Unauthorized: Super Admin access required.', 'error');
+    if (!hasPermission(user?.role_id || '', 'settings:manage_massage_rooms')) {
+        showStatus('Unauthorized: Permission required to manage massage rooms.', 'error');
         return;
     }
+
+    if (!roomForm.name || !roomForm.number || (!roomForm.outlet_id && !currentOutlet)) {
+        showStatus('Please fill in all required fields (Outlet, Name, Number).', 'error');
+        return;
+    }
+
     setIsSaving(true);
     try {
-      const roomData = { ...roomForm, outlet_id: currentOutlet?.id || roomForm.outlet_id, property_id: currentOutlet?.property_id || roomForm.property_id };
+      const roomData = { 
+        ...roomForm, 
+        outlet_id: roomForm.outlet_id || currentOutlet?.id || '', 
+        property_id: roomForm.property_id || currentOutlet?.property_id || currentProperty?.id || '' 
+      };
+      
+      if (!roomData.outlet_id) throw new Error('Outlet context is required.');
+
       if (editingId) {
           await db.updateMassageRoom(editingId, roomData);
           setMassageRooms(prev => prev.map(r => r.id === editingId ? { ...r, ...roomData } as MassageRoom : r));
@@ -557,7 +570,7 @@ const SettingsPage = () => {
       }
       await refreshSettings();
       setShowForm(false);
-      showStatus('Massage Room Record Updated.');
+      showStatus(editingId ? 'Massage Room Record Updated.' : 'New Massage Room Registered.');
     } catch (e: any) { showStatus(e.message, 'error'); }
     finally { setIsSaving(false); }
   };
@@ -876,44 +889,82 @@ const SettingsPage = () => {
               
               {activeTab === 'massage_rooms' && (
             <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-black text-slate-900">Massage Rooms</h2>
-                <Button onClick={() => setShowForm(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">
-                  <Plus className="w-4 h-4 mr-2" /> Add Room
+              <div className="flex justify-between items-center bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center">
+                    <Store className="w-6 h-6 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Massage Rooms</h2>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{massageRooms.length} Active Treatment Spaces</p>
+                  </div>
+                </div>
+                <Button onClick={() => { setEditingId(null); setRoomForm({ property_id: currentProperty?.id || '', outlet_id: currentOutlet?.id || '', name: '', number: '', is_active: true }); setShowForm(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl h-12 px-6 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-100 transition-all hover:scale-105">
+                  <Plus className="w-4 h-4 mr-2" /> Register Room
                 </Button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {massageRooms.map(room => (
-                  <Card key={room.id} className="p-4 rounded-2xl border-slate-200">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-sm font-black text-slate-900">{room.name}</h3>
-                        <p className="text-xs text-slate-500">Room #{room.number}</p>
-                        <p className="text-[10px] font-bold text-indigo-600 uppercase mt-1">
-                          {outlets.find(o => o.id === room.outlet_id)?.name || 'No Outlet'}
-                        </p>
+                  <Card key={room.id} className="group overflow-hidden rounded-[2.5rem] border-slate-200/60 hover:shadow-2xl hover:shadow-indigo-100/50 transition-all duration-500 bg-white">
+                    <div className={`h-2 w-full ${room.is_active ? 'bg-green-500' : 'bg-slate-300'}`} />
+                    <CardContent className="p-8 space-y-6">
+                      <div className="flex justify-between items-start">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">{room.name}</h3>
+                            {!room.is_active && <span className="px-2 py-0.5 bg-slate-100 text-slate-400 text-[8px] font-black uppercase rounded-md">Offline</span>}
+                          </div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <ListOrdered className="w-3 h-3" /> Identifier: {room.number}
+                          </p>
+                        </div>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                          <Button variant="ghost" size="sm" onClick={() => { 
+                            setEditingId(room.id);
+                            setRoomForm({
+                              property_id: room.property_id,
+                              outlet_id: room.outlet_id,
+                              name: room.name,
+                              number: room.number,
+                              is_active: room.is_active
+                            });
+                            setShowForm(true);
+                          }} className="w-10 h-10 rounded-xl hover:bg-indigo-50 text-slate-400 hover:text-indigo-600">
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setItemToDelete({ type: 'massage_room', id: room.id, name: room.name })} className="w-10 h-10 rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-500">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => { 
-                          setEditingId(room.id);
-                          setRoomForm({
-                            property_id: room.property_id,
-                            outlet_id: room.outlet_id,
-                            name: room.name,
-                            number: room.number,
-                            is_active: room.is_active
-                          });
-                          setShowForm(true);
-                        }}>
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setItemToDelete({ type: 'massage_room', id: room.id, name: room.name })}>
-                          <Trash2 className="w-4 h-4 text-red-600" />
-                        </Button>
+
+                      <div className="pt-6 border-t border-slate-50 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">
+                            <MapPin className="w-4 h-4 text-slate-400" />
+                          </div>
+                          <span className="text-[10px] font-black text-slate-600 uppercase tracking-tight">
+                            {outlets.find(o => o.id === room.outlet_id)?.name || 'Detached'}
+                          </span>
+                        </div>
+                        <div className={`w-3 h-3 rounded-full ${room.is_active ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`} />
                       </div>
-                    </div>
+                    </CardContent>
                   </Card>
                 ))}
+
+                {massageRooms.length === 0 && (
+                  <div className="col-span-full py-20 text-center bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
+                    <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm">
+                      <Store className="w-10 h-10 text-slate-200" />
+                    </div>
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-2">No Treatment Spaces Defined</h3>
+                    <p className="text-xs text-slate-400 font-medium max-w-xs mx-auto">
+                      Register your first massage room to begin scheduling treatment sessions.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1610,27 +1661,86 @@ const SettingsPage = () => {
                         </div>
                       )}
                       {activeTab === 'massage_rooms' && (
-                        <div className="space-y-6">
-                            <Select 
-                              label="Linked Outlet *" 
-                              options={[
-                                {value:'', label:'Select Outlet...'}, 
-                                ...outlets
-                                  .filter(o => !currentProperty || o.property_id === currentProperty.id)
-                                  .map(o=>({value:o.id, label:o.name}))
-                              ]} 
-                              value={roomForm.outlet_id} 
-                              onChange={e => {
-                                const selectedOutlet = outlets.find(o => o.id === e.target.value);
-                                setRoomForm({...roomForm, outlet_id: e.target.value, property_id: selectedOutlet?.property_id || ''});
-                            }} className="h-14 rounded-xl" />
-                            <Input label="Room Name *" value={roomForm.name} onChange={e => setRoomForm({...roomForm, name: e.target.value})} className="h-14 rounded-xl" />
-                            <Input label="Room Number *" value={roomForm.number} onChange={e => setRoomForm({...roomForm, number: e.target.value})} className="h-14 rounded-xl" />
-                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                <input type="checkbox" checked={roomForm.is_active} onChange={e => setRoomForm({...roomForm, is_active: e.target.checked})} className="w-5 h-5 rounded border-slate-300" />
-                                <span className="text-xs font-black text-slate-700 uppercase">Is Active</span>
+                        <div className="space-y-8">
+                            <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4">
+                              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-100">
+                                <Store className="w-6 h-6 text-indigo-600" />
+                              </div>
+                              <div>
+                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Room Definition</h3>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Configure treatment space assets</p>
+                              </div>
                             </div>
-                            <Button onClick={handleRoomSubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Save Room</Button>
+
+                            <div className="space-y-6">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Linked Facility Context *</label>
+                                <Select 
+                                  options={[
+                                    {value:'', label:'Select Facility...'}, 
+                                    ...outlets
+                                      .filter(o => !currentProperty || o.property_id === currentProperty.id)
+                                      .map(o=>({value:o.id, label:o.name}))
+                                  ]} 
+                                  value={roomForm.outlet_id || currentOutlet?.id || ''} 
+                                  onChange={e => {
+                                    const selectedOutlet = outlets.find(o => o.id === e.target.value);
+                                    setRoomForm({...roomForm, outlet_id: e.target.value, property_id: selectedOutlet?.property_id || ''});
+                                  }} 
+                                  className="h-14 rounded-xl border-2 focus:border-indigo-600 transition-all" 
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Room Designation *</label>
+                                  <div className="relative">
+                                    <LayoutTemplate className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                    <Input 
+                                      placeholder="e.g. Zen Suite" 
+                                      value={roomForm.name} 
+                                      onChange={e => setRoomForm({...roomForm, name: e.target.value})} 
+                                      className="h-14 pl-12 rounded-xl border-2 focus:border-indigo-600 transition-all font-bold" 
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Room Identifier *</label>
+                                  <div className="relative">
+                                    <ListOrdered className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                    <Input 
+                                      placeholder="e.g. 101" 
+                                      value={roomForm.number} 
+                                      onChange={e => setRoomForm({...roomForm, number: e.target.value})} 
+                                      className="h-14 pl-12 rounded-xl border-2 focus:border-indigo-600 transition-all font-bold" 
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border-2 border-slate-100 group hover:border-indigo-100 transition-all cursor-pointer" onClick={() => setRoomForm({...roomForm, is_active: !roomForm.is_active})}>
+                                  <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${roomForm.is_active ? 'bg-green-50 text-green-600' : 'bg-slate-200 text-slate-400'}`}>
+                                      <Zap className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                      <span className="text-[11px] font-black text-slate-900 uppercase tracking-tight">Operational Status</span>
+                                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{roomForm.is_active ? 'Available for Booking' : 'Temporarily Offline'}</p>
+                                    </div>
+                                  </div>
+                                  <div className={`w-12 h-6 rounded-full relative transition-all duration-300 ${roomForm.is_active ? 'bg-green-500' : 'bg-slate-300'}`}>
+                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${roomForm.is_active ? 'left-7' : 'left-1'}`} />
+                                  </div>
+                              </div>
+                            </div>
+
+                            <Button 
+                              onClick={handleRoomSubmit} 
+                              isLoading={isSaving}
+                              className="w-full h-16 rounded-2xl font-black uppercase tracking-widest bg-indigo-600 text-white shadow-xl shadow-indigo-100 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                            >
+                              {editingId ? 'Update Room Asset' : 'Register Room Asset'}
+                            </Button>
                         </div>
                       )}
                       {activeTab === 'outlets' && (
