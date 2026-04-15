@@ -39,7 +39,21 @@ const StaffLogin = () => {
 
   useEffect(() => {
     localStorage.setItem('preferred_portal', 'staff');
-  }, []);
+    
+    // Check for existing session and redirect if valid
+    const sessionStr = localStorage.getItem('staff_session');
+    if (sessionStr) {
+      try {
+        const session = JSON.parse(sessionStr);
+        if (session && session.id) {
+          navigate('/staff-schedule');
+        }
+      } catch (e) {
+        console.error("Invalid session found, clearing...");
+        localStorage.removeItem('staff_session');
+      }
+    }
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#fcfdfe] selection:bg-indigo-100">
