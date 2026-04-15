@@ -580,47 +580,77 @@ const DynamicHead = () => {
           document.head.appendChild(meta);
         }
         meta.content = '#4f46e5';
-
-        // Dynamic PWA Manifest to use settings logo
-        const logoUrl = settings.logo_url || "https://i.imgur.com/oZVRrvo.png";
-        const manifest = {
-          name: settings.name || "Health Club Management",
-          short_name: settings.name || "Health Club",
-          description: "Professional Health Club and Spa Management System",
-          start_url: window.location.origin + "/?source=pwa",
-          display: "standalone",
-          background_color: "#ffffff",
-          theme_color: "#4f46e5",
-          icons: [
-            {
-              src: logoUrl,
-              sizes: "192x192",
-              type: "image/png",
-              purpose: "any"
-            },
-            {
-              src: logoUrl,
-              sizes: "512x512",
-              type: "image/png",
-              purpose: "any"
-            },
-            {
-              src: logoUrl,
-              sizes: "192x192",
-              type: "image/png",
-              purpose: "maskable"
-            }
-          ]
-        };
-        const stringManifest = JSON.stringify(manifest);
-        const blob = new Blob([stringManifest], {type: 'application/json'});
-        const manifestURL = URL.createObjectURL(blob);
-        const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
-        if (manifestLink) {
-          manifestLink.setAttribute('href', manifestURL);
-        }
       }
     }
+  }, [settings]);
+
+  // Dynamic PWA Manifest based on current view (Staff vs Admin)
+  useEffect(() => {
+    if (!settings) return;
+
+    const updateManifest = () => {
+      const isStaff = window.location.hash.includes('staff');
+      const logoUrl = settings.logo_url || "https://i.imgur.com/oZVRrvo.png";
+      const appName = settings.name || "Health Club Management";
+      
+      const manifest = {
+        name: isStaff ? `${appName} Staff` : appName,
+        short_name: isStaff ? "Staff Portal" : (settings.name || "Health Club"),
+        description: "Professional Health Club and Spa Management System",
+        start_url: window.location.origin + (isStaff ? "/#/staff-login?source=pwa" : "/?source=pwa"),
+        display: "standalone",
+        background_color: "#ffffff",
+        theme_color: "#4f46e5",
+        icons: [
+          {
+            src: logoUrl,
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any"
+          },
+          {
+            src: logoUrl,
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any"
+          },
+          {
+            src: logoUrl,
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable"
+          }
+        ],
+        shortcuts: [
+          {
+            name: "Staff Portal",
+            short_name: "Staff",
+            description: "Open Staff Login",
+            url: "/#/staff-login",
+            icons: [{ src: logoUrl, sizes: "192x192" }]
+          },
+          {
+            name: "Admin Portal",
+            short_name: "Admin",
+            description: "Open Admin Login",
+            url: "/#/",
+            icons: [{ src: logoUrl, sizes: "192x192" }]
+          }
+        ]
+      };
+
+      const stringManifest = JSON.stringify(manifest);
+      const blob = new Blob([stringManifest], {type: 'application/json'});
+      const manifestURL = URL.createObjectURL(blob);
+      const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
+      if (manifestLink) {
+        manifestLink.setAttribute('href', manifestURL);
+      }
+    };
+
+    updateManifest();
+    window.addEventListener('hashchange', updateManifest);
+    return () => window.removeEventListener('hashchange', updateManifest);
   }, [settings]);
 
   return null;
