@@ -582,6 +582,7 @@ const DynamicHead = () => {
         meta.content = '#4f46e5';
 
         // Dynamic PWA Manifest to use settings logo
+        const logoUrl = settings.logo_url || "https://i.imgur.com/oZVRrvo.png";
         const manifest = {
           name: settings.name || "Health Club Management",
           short_name: settings.name || "Health Club",
@@ -592,19 +593,19 @@ const DynamicHead = () => {
           theme_color: "#4f46e5",
           icons: [
             {
-              src: settings.logo_url,
+              src: logoUrl,
               sizes: "192x192",
               type: "image/png",
               purpose: "any"
             },
             {
-              src: settings.logo_url,
+              src: logoUrl,
               sizes: "512x512",
               type: "image/png",
               purpose: "any"
             },
             {
-              src: settings.logo_url,
+              src: logoUrl,
               sizes: "192x192",
               type: "image/png",
               purpose: "maskable"
