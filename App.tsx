@@ -587,7 +587,7 @@ const DynamicHead = () => {
           name: settings.name || "Health Club Management",
           short_name: settings.name || "Health Club",
           description: "Professional Health Club and Spa Management System",
-          start_url: "/?source=pwa",
+          start_url: window.location.origin + "/?source=pwa",
           display: "standalone",
           background_color: "#ffffff",
           theme_color: "#4f46e5",
