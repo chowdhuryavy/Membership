@@ -597,7 +597,7 @@ const DynamicHead = () => {
         name: isStaff ? `${appName} Staff` : appName,
         short_name: isStaff ? "Staff Portal" : (settings.name || "Health Club"),
         description: "Professional Health Club and Spa Management System",
-        start_url: window.location.origin + (isStaff ? "/#/staff-login?source=pwa" : "/?source=pwa"),
+        start_url: window.location.origin + (isStaff ? "/?portal=staff&source=pwa" : "/?source=pwa"),
         display: "standalone",
         background_color: "#ffffff",
         theme_color: "#4f46e5",
@@ -626,14 +626,14 @@ const DynamicHead = () => {
             name: "Staff Portal",
             short_name: "Staff",
             description: "Open Staff Login",
-            url: "/#/staff-login",
+            url: "/?portal=staff",
             icons: [{ src: logoUrl, sizes: "192x192" }]
           },
           {
             name: "Admin Portal",
             short_name: "Admin",
             description: "Open Admin Login",
-            url: "/#/",
+            url: "/",
             icons: [{ src: logoUrl, sizes: "192x192" }]
           }
         ]

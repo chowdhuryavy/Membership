@@ -64,8 +64,9 @@
     
     <script>
       // Handle clean URL redirect for staff-login
-      if (window.location.pathname === '/staff-login') {
-        window.location.replace(window.location.origin + '/#/staff-login');
+      const urlParams = new URLSearchParams(window.location.search);
+      if (window.location.pathname === '/staff-login' || urlParams.get('portal') === 'staff') {
+        window.location.replace(window.location.origin + '/#/staff-login' + (window.location.search || ''));
       }
 
       // Handle chunk load errors (common in SPAs when a new version is deployed)
