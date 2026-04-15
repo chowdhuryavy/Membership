@@ -10,14 +10,12 @@
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://health-club-management.vercel.app/" />
     <meta property="og:title" content="Health Club Management" />
     <meta property="og:description" content="Professional Health Club and Spa Management System" />
     <meta property="og:image" content="https://i.imgur.com/oZVRrvo.png" />
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content="https://health-club-management.vercel.app/" />
     <meta property="twitter:title" content="Health Club Management" />
     <meta property="twitter:description" content="Professional Health Club and Spa Management System" />
     <meta property="twitter:image" content="https://i.imgur.com/oZVRrvo.png" />
@@ -65,6 +63,11 @@
     <meta name="theme-color" content="#4f46e5" />
     
     <script>
+      // Handle clean URL redirect for staff-login
+      if (window.location.pathname === '/staff-login') {
+        window.location.replace(window.location.origin + '/#/staff-login');
+      }
+
       // Handle chunk load errors (common in SPAs when a new version is deployed)
       window.addEventListener('error', (e) => {
         if (e.message && (e.message.includes('chunk') || e.message.includes('Loading chunk'))) {
