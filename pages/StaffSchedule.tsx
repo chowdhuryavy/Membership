@@ -119,6 +119,8 @@ interface StaffNotification {
 const StaffSchedule = () => {
   const [staff, setStaff] = useState<Staff | null>(null);
   const [propertyName, setPropertyName] = useState<string>('');
+  const [propertyLogo, setPropertyLogo] = useState<string>('');
+  const [outletName, setOutletName] = useState<string>('');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [bookings, setBookings] = useState<MassageBooking[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -128,6 +130,7 @@ const StaffSchedule = () => {
   const [rooms, setRooms] = useState<MassageRoom[]>([]);
   const [outlets, setOutlets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [minLoadingFinished, setMinLoadingFinished] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'incentives'>('daily');
   const [monthlyBookings, setMonthlyBookings] = useState<MassageBooking[]>([]);
@@ -142,6 +145,14 @@ const StaffSchedule = () => {
   const [triggeredReminders, setTriggeredReminders] = useState<Set<string>>(new Set());
   
   const { settings, formatMoney } = useSettings();
+
+  // Ensure loading screen stays long enough for animations
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMinLoadingFinished(true);
+    }, 2500); // 2.5 seconds minimum
+    return () => clearTimeout(timer);
+  }, []);
 
   const playNotificationSound = () => {
     try {
@@ -435,6 +446,10 @@ const StaffSchedule = () => {
       
       if (myProp) {
         setPropertyName(myProp.name);
+        setPropertyLogo(myProp.logo_url || '');
+      }
+      if (myOutlet) {
+        setOutletName(myOutlet.name);
       }
     } catch (error) {
       console.error("Failed to load property details:", error);
@@ -741,17 +756,38 @@ const StaffSchedule = () => {
       </div>
 
       {/* Instance Context */}
-      {propertyName && (
+      {(propertyName || outletName) && (
         <div className="mb-10 shrink-0">
-          <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 px-1">Assignment</div>
-          <div className="flex items-center gap-3 bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group">
-            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:bg-indigo-500/20 transition-colors shrink-0">
-              <Building2 className="w-4 h-4 text-indigo-400" />
+          <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 px-1">Deployment</div>
+          <div className="bg-white/5 rounded-2xl border border-white/10 shadow-inner p-4">
+            {/* Property Header */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-white/10 shrink-0 overflow-hidden shadow-sm">
+                {propertyLogo ? (
+                  <img src={propertyLogo} alt="Prop" className="w-full h-full object-contain p-1.5" referrerPolicy="no-referrer" />
+                ) : (
+                  <Building2 className="w-4 h-4 text-slate-400" />
+                )}
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[11px] font-black text-white uppercase tracking-tight leading-tight whitespace-normal break-words">{propertyName}</span>
+                <p className="text-[7px] font-black text-indigo-400 uppercase tracking-[0.2em] mt-1">Primary Property</p>
+              </div>
             </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] font-black text-white uppercase tracking-widest truncate">{propertyName}</span>
-              <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Active Assignment</p>
-            </div>
+            
+            {/* Connected Outlet */}
+            {outletName && (
+              <div className="flex items-center gap-3 pl-2 pt-3 border-t border-white/5 relative">
+                <div className="absolute left-6 top-0 h-3 w-px bg-white/5" />
+                <div className="w-6 h-6 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 shrink-0">
+                  <MapPin className="w-3 h-3 text-indigo-400" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[10px] font-bold text-slate-200 uppercase tracking-widest truncate">{outletName}</span>
+                  <p className="text-[7px] font-black text-slate-500 uppercase tracking-widest mt-0.5">Assigned Station</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -843,7 +879,7 @@ const StaffSchedule = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100">
       <AnimatePresence>
-        {(loading || incentiveLoading) && <LoadingScreen />}
+        {(loading || incentiveLoading || !minLoadingFinished) && <LoadingScreen />}
       </AnimatePresence>
 
       {/* Desktop Sidebar */}
