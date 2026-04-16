@@ -719,12 +719,19 @@ const StaffSchedule = () => {
           </button>
         </div>
         <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center text-slate-900 shadow-2xl shadow-indigo-500/20 mb-4 relative group overflow-hidden border border-white/10">
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="w-16 h-16 bg-white rounded-[1.5rem] flex items-center justify-center text-slate-900 shadow-2xl shadow-indigo-500/20 mb-4 relative group overflow-hidden border border-white/10 active:scale-95 transition-transform">
+            <div className="absolute inset-0 bg-indigo-600 opacity-0 group-hover:opacity-5 transition-opacity" />
             {settings?.logo_url ? (
-              <img src={settings.logo_url} alt="Logo" referrerPolicy="no-referrer" className="w-full h-full object-contain p-2" />
+              <img 
+                src={settings.logo_url} 
+                alt="Logo" 
+                referrerPolicy="no-referrer" 
+                className="w-full h-full object-contain p-2 animate-[spin_15s_linear_infinite]" 
+              />
             ) : (
-              <span className="text-2xl font-black tracking-tighter relative z-10">{settings?.name?.charAt(0) || 'H'}</span>
+              <div className="w-full h-full bg-indigo-600 flex items-center justify-center text-white">
+                <Sparkles className="w-8 h-8 animate-[spin_10s_linear_infinite]" />
+              </div>
             )}
           </div>
           <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400 leading-none mb-1">{settings?.name || 'Health Club'}</h2>
@@ -865,9 +872,27 @@ const StaffSchedule = () => {
           <div className="flex items-center gap-4 relative z-10">
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="p-2.5 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors"
+              className="group relative transition-all active:scale-95 outline-none"
+              title="Open Menu"
             >
-              <Menu className="w-5 h-5" />
+              <div className="w-12 h-12 flex items-center justify-center shrink-0 transition-all duration-500 group-hover:scale-110 relative">
+                {settings?.logo_url ? (
+                  <img 
+                    src={settings.logo_url} 
+                    alt="Logo" 
+                    referrerPolicy="no-referrer" 
+                    className="w-full h-full object-contain drop-shadow-md animate-[spin_10s_linear_infinite]" 
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      const fallback = (e.target as HTMLImageElement).parentElement?.querySelector('.logo-fallback');
+                      if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                <div className={`logo-fallback w-full h-full bg-indigo-600 rounded-[1.25rem] items-center justify-center text-white shadow-xl shadow-indigo-500/20 ${settings?.logo_url ? 'hidden' : 'flex'}`}>
+                  <Sparkles className="w-6 h-6 animate-[spin_10s_linear_infinite]" />
+                </div>
+              </div>
             </button>
             <div className="flex flex-col">
               <h1 className="text-sm font-black uppercase tracking-tighter leading-none">{settings?.name || 'Staff Portal'}</h1>
