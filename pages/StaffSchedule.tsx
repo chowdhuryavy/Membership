@@ -1,3 +1,8 @@
+/**
+ * StaffSchedule.tsx
+ * Comprehensive component for staff daily/monthly views and incentive reports.
+ * Optimized with high-performance animations and responsive layouts.
+ */
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
@@ -140,6 +145,22 @@ const StaffSchedule = () => {
   const [selectedIncentiveDept, setSelectedIncentiveDept] = useState<string | null>(null);
   const [selectedMonthlyCategory, setSelectedMonthlyCategory] = useState<string | null>(null);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const accountMenuRef = React.useRef<HTMLDivElement>(null);
+
+  // Handle click outside account menu
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+        setShowAccountMenu(false);
+      }
+    };
+    if (showAccountMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAccountMenu]);
   const [notifications, setNotifications] = useState<StaffNotification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [triggeredReminders, setTriggeredReminders] = useState<Set<string>>(new Set());
@@ -725,17 +746,16 @@ const StaffSchedule = () => {
     <div className="flex flex-col h-full bg-slate-900 text-white p-6 overflow-y-auto custom-scrollbar">
       {/* Brand Section */}
       <div className="flex items-center gap-4 mb-10 pt-2 shrink-0">
-        <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-slate-900 shadow-2xl shadow-indigo-500/20 relative group overflow-hidden border border-white/10 shrink-0">
-          <div className="absolute inset-0 bg-indigo-600 opacity-0 group-hover:opacity-5 transition-opacity" />
+        <div className="w-14 h-14 flex items-center justify-center shrink-0 transition-all duration-500 hover:scale-110 relative">
           {settings?.logo_url ? (
             <img 
               src={settings.logo_url} 
               alt="Logo" 
               referrerPolicy="no-referrer" 
-              className="w-full h-full object-contain p-2 animate-[spin_20s_linear_infinite]" 
+              className="w-full h-full object-contain drop-shadow-xl animate-[spin_10s_linear_infinite]" 
             />
           ) : (
-            <div className="w-full h-full bg-indigo-600 flex items-center justify-center text-white">
+            <div className="w-full h-full bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-500/20">
               <Sparkles className="w-6 h-6 animate-[spin_10s_linear_infinite]" />
             </div>
           )}
@@ -758,36 +778,28 @@ const StaffSchedule = () => {
       {/* Instance Context */}
       {(propertyName || outletName) && (
         <div className="mb-10 shrink-0">
-          <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 px-1">Deployment</div>
-          <div className="bg-white/5 rounded-2xl border border-white/10 shadow-inner p-4">
-            {/* Property Header */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-white/10 shrink-0 overflow-hidden shadow-sm">
+          <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 px-1">Location</div>
+          <div className="bg-white/5 rounded-3xl border border-white/10 shadow-inner p-5 space-y-5">
+            {/* Unified Branding */}
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center border border-white/10 shrink-0 overflow-hidden shadow-2xl relative group">
                 {propertyLogo ? (
-                  <img src={propertyLogo} alt="Prop" className="w-full h-full object-contain p-1.5" referrerPolicy="no-referrer" />
+                  <img src={propertyLogo} alt="Prop" className="w-full h-full object-contain p-2 transition-transform duration-500 group-hover:scale-110" referrerPolicy="no-referrer" />
                 ) : (
-                  <Building2 className="w-4 h-4 text-slate-400" />
+                  <Building2 className="w-5 h-5 text-slate-400" />
+                )}
+                <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+              <div className="flex flex-col min-w-0 flex-1 pt-1">
+                <span className="text-[12px] font-black text-white uppercase tracking-tight leading-tight whitespace-normal break-words">{propertyName}</span>
+                {outletName && (
+                  <div className="flex items-center gap-1.5 mt-2 bg-indigo-500/10 w-fit px-2 py-0.5 rounded-full border border-indigo-500/20">
+                    <MapPin className="w-2.5 h-2.5 text-indigo-400" />
+                    <span className="text-[8px] font-black text-indigo-200 uppercase tracking-widest truncate max-w-[120px]">{outletName}</span>
+                  </div>
                 )}
               </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[11px] font-black text-white uppercase tracking-tight leading-tight whitespace-normal break-words">{propertyName}</span>
-                <p className="text-[7px] font-black text-indigo-400 uppercase tracking-[0.2em] mt-1">Primary Property</p>
-              </div>
             </div>
-            
-            {/* Connected Outlet */}
-            {outletName && (
-              <div className="flex items-center gap-3 pl-2 pt-3 border-t border-white/5 relative">
-                <div className="absolute left-6 top-0 h-3 w-px bg-white/5" />
-                <div className="w-6 h-6 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 shrink-0">
-                  <MapPin className="w-3 h-3 text-indigo-400" />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[10px] font-bold text-slate-200 uppercase tracking-widest truncate">{outletName}</span>
-                  <p className="text-[7px] font-black text-slate-500 uppercase tracking-widest mt-0.5">Assigned Station</p>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -830,48 +842,66 @@ const StaffSchedule = () => {
         )}
       </nav>
 
-      <div className="mt-auto pt-4 border-t border-white/10">
-        <button 
-          onClick={() => setShowAccountMenu(!showAccountMenu)}
-          className="w-full flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all group"
-        >
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-lg font-black uppercase shadow-inner border border-white/10 shrink-0 group-hover:scale-110 transition-transform">
-            {staff.name.charAt(0)}
-          </div>
-          <div className="min-w-0 flex-1 text-left">
-            <h1 className="text-xs font-black uppercase tracking-widest truncate">{staff.name}</h1>
-            <p className="text-[9px] font-bold text-indigo-300 uppercase tracking-widest">{staff.role}</p>
-          </div>
-          <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${showAccountMenu ? 'rotate-180' : ''}`} />
-        </button>
-
+      <div className="mt-auto pt-4 border-t border-white/10 relative" ref={accountMenuRef}>
         <AnimatePresence>
           {showAccountMenu && (
             <motion.div 
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden space-y-1 mt-2"
+              initial={{ opacity: 0, scale: 0.9, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: -20 }}
+              exit={{ opacity: 0, scale: 0.9, y: 10 }}
+              className="absolute bottom-full left-0 right-0 bg-slate-900/95 backdrop-blur-2xl rounded-[2.5rem] border border-white/10 shadow-[0_25px_70px_rgba(0,0,0,0.8)] z-[70] py-4 origin-bottom p-2"
             >
-              <button 
-                onClick={() => {
-                  setShowPasswordModal(true);
-                  setIsSidebarOpen(false);
-                  setShowAccountMenu(false);
-                }}
-                className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white font-bold text-[10px] uppercase tracking-widest transition-all"
-              >
-                <KeyRound className="w-3.5 h-3.5" /> Change Password
-              </button>
-              <button 
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-red-500/10 text-red-400 hover:text-red-300 font-bold text-[10px] uppercase tracking-widest transition-all"
-              >
-                <LogOut className="w-3.5 h-3.5" /> Sign Out
-              </button>
+              <div className="px-6 py-4 mb-2">
+                <p className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-1">Session Active</p>
+                <h3 className="text-[11px] font-black text-white uppercase tracking-widest truncate">{staff.name}</h3>
+              </div>
+
+              <div className="space-y-1">
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowPasswordModal(true);
+                    setIsSidebarOpen(false);
+                    setShowAccountMenu(false);
+                  }}
+                  className="w-full flex items-center gap-4 px-5 py-5 hover:bg-white/5 rounded-3xl text-slate-300 hover:text-white transition-all group outline-none"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:scale-110 transition-transform">
+                    <KeyRound className="w-4 h-4 text-indigo-400" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Update Access</span>
+                </button>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAccountMenu(false);
+                    handleLogout();
+                  }}
+                  className="w-full flex items-center gap-4 px-5 py-5 hover:bg-red-500/10 rounded-3xl text-slate-400 hover:text-red-400 transition-all group outline-none"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 group-hover:scale-110 transition-transform">
+                    <LogOut className="w-4 h-4 text-red-500" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Disconnect</span>
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
+
+        <button 
+          onClick={() => setShowAccountMenu(!showAccountMenu)}
+          className="w-full flex items-center gap-4 p-4 transition-all group hover:bg-white/5 rounded-3xl relative"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-xl font-black uppercase text-white shadow-2xl shadow-indigo-900/40 border border-white/10 shrink-0 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent" />
+            {staff.name.charAt(0)}
+          </div>
+          <div className="min-w-0 flex-1 text-left">
+            <h1 className="text-[11px] font-black uppercase tracking-widest truncate text-white">{staff.name}</h1>
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">{staff.role}</p>
+          </div>
+        </button>
       </div>
     </div>
   );
@@ -883,7 +913,7 @@ const StaffSchedule = () => {
       </AnimatePresence>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:block w-72 h-screen sticky top-0 border-r border-slate-200">
+      <aside className="hidden lg:block w-72 h-screen sticky top-0 border-r border-slate-200 z-50">
         <SidebarContent />
       </aside>
 
@@ -894,6 +924,8 @@ const StaffSchedule = () => {
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
+
+      {/* Account Menu Click-Away Handled viaRef */}
 
       {/* Mobile Sidebar Drawer */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-300 ease-in-out lg:hidden ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -921,7 +953,7 @@ const StaffSchedule = () => {
               className="group relative transition-all active:scale-95 outline-none"
               title="Open Menu"
             >
-              <div className="w-12 h-12 flex items-center justify-center shrink-0 transition-all duration-500 group-hover:scale-110 relative">
+              <div className="w-12 h-12 flex items-center justify-center transition-all duration-500 group-hover:scale-110 relative shrink-0">
                 {settings?.logo_url ? (
                   <img 
                     src={settings.logo_url} 
@@ -935,7 +967,7 @@ const StaffSchedule = () => {
                     }}
                   />
                 ) : null}
-                <div className={`logo-fallback w-full h-full bg-indigo-600 rounded-[1.25rem] items-center justify-center text-white shadow-xl shadow-indigo-500/20 ${settings?.logo_url ? 'hidden' : 'flex'}`}>
+                <div className={`logo-fallback w-full h-full bg-indigo-600 rounded-2xl items-center justify-center text-white shadow-xl shadow-indigo-500/10 ${settings?.logo_url ? 'hidden' : 'flex'}`}>
                   <Sparkles className="w-6 h-6 animate-[spin_10s_linear_infinite]" />
                 </div>
               </div>
@@ -1844,7 +1876,7 @@ const StaffSchedule = () => {
         )}
 
         {showPasswordModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
