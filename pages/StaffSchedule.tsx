@@ -709,16 +709,7 @@ const StaffSchedule = () => {
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-slate-900 text-white p-6 overflow-y-auto custom-scrollbar">
       <div className="mb-6">
-        <div className="flex justify-end mb-2">
-          <button 
-            onClick={refreshStaffData}
-            className="p-1.5 hover:bg-white/10 rounded-lg text-slate-500 hover:text-white transition-colors"
-            title="Sync Permissions"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-        </div>
-        <div className="flex flex-col items-center text-center mb-8">
+        <div className="flex flex-col items-center text-center mb-8 pt-4">
           <div className="w-16 h-16 bg-white rounded-[1.5rem] flex items-center justify-center text-slate-900 shadow-2xl shadow-indigo-500/20 mb-4 relative group overflow-hidden border border-white/10 active:scale-95 transition-transform">
             <div className="absolute inset-0 bg-indigo-600 opacity-0 group-hover:opacity-5 transition-opacity" />
             {settings?.logo_url ? (
@@ -735,7 +726,16 @@ const StaffSchedule = () => {
             )}
           </div>
           <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400 leading-none mb-1">{settings?.name || 'Health Club'}</h2>
-          <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Staff Terminal</p>
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Staff Terminal</p>
+            <button 
+              onClick={refreshStaffData}
+              className="p-1 hover:bg-white/10 rounded-md text-slate-500 hover:text-indigo-400 transition-colors"
+              title="Sync Permissions"
+            >
+              <RefreshCw className="w-2.5 h-2.5" />
+            </button>
+          </div>
         </div>
 
         {propertyName && (
@@ -854,9 +854,9 @@ const StaffSchedule = () => {
         <div className="relative h-full">
           <button 
             onClick={() => setIsSidebarOpen(false)}
-            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors z-50"
+            className="absolute top-6 right-6 p-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 hover:text-white rounded-xl transition-all z-50 group active:scale-90"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
           </button>
           <SidebarContent />
         </div>
