@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { Staff, MassageBooking, MassageType, Guest, MassageRoom, Sale } from '../types';
 import { format, parseISO, addDays, subDays } from 'date-fns';
-import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, RefreshCw, KeyRound, X, ShieldCheck, Building2, Menu, Eye, EyeOff, Check, AlertCircle, Sparkles, Award, TrendingUp, FileText, ChevronDown } from 'lucide-react';
+import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, RefreshCw, KeyRound, X, ShieldCheck, Building2, Menu, Eye, EyeOff, Check, AlertCircle, Sparkles, Award, TrendingUp, FileText, ChevronDown, Bell } from 'lucide-react';
 import { Button, Input } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -107,6 +107,15 @@ const LoadingScreen = () => (
   </motion.div>
 );
 
+interface StaffNotification {
+  id: string;
+  title: string;
+  message: string;
+  time: Date;
+  isRead: boolean;
+  type: 'booking' | 'sale' | 'system';
+}
+
 const StaffSchedule = () => {
   const [staff, setStaff] = useState<Staff | null>(null);
   const [propertyName, setPropertyName] = useState<string>('');
@@ -128,8 +137,83 @@ const StaffSchedule = () => {
   const [selectedIncentiveDept, setSelectedIncentiveDept] = useState<string | null>(null);
   const [selectedMonthlyCategory, setSelectedMonthlyCategory] = useState<string | null>(null);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [notifications, setNotifications] = useState<StaffNotification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [triggeredReminders, setTriggeredReminders] = useState<Set<string>>(new Set());
   
   const { settings, formatMoney } = useSettings();
+
+  const playNotificationSound = () => {
+    try {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.volume = 0.6;
+      audio.play().catch(e => console.log('Audio autoplay blocked or failed:', e));
+    } catch (e) {
+      console.error('Failed to play sound:', e);
+    }
+  };
+
+  // 15-Minute Reminder Logic
+  useEffect(() => {
+    const checkUpcomingBookings = () => {
+      if (!bookings || bookings.length === 0) return;
+
+      const now = new Date();
+      const todayStr = format(now, 'yyyy-MM-dd');
+
+      bookings.forEach(booking => {
+        // Only check for today's bookings
+        if (booking.date !== todayStr) return;
+        if (triggeredReminders.has(booking.id)) return;
+
+        try {
+          const [hours, minutes] = booking.start_time.split(':').map(Number);
+          const bookingTime = new Date(now);
+          bookingTime.setHours(hours, minutes, 0, 0);
+
+          const diffInMinutes = (bookingTime.getTime() - now.getTime()) / (1000 * 60);
+
+          // Trigger alert if booking is in 14-16 minutes (to catch it within a 1-min check)
+          if (diffInMinutes > 0 && diffInMinutes <= 15.5) {
+            playNotificationSound();
+            
+            const reminderNotif: StaffNotification = {
+              id: `reminder-${booking.id}`,
+              title: 'Upcoming Session!',
+              message: `Reminder: You have a booking starting in 15 minutes (${booking.start_time})`,
+              time: new Date(),
+              isRead: false,
+              type: 'system'
+            };
+            
+            setNotifications(prev => [reminderNotif, ...prev].slice(0, 20));
+            setTriggeredReminders(prev => new Set(prev).add(booking.id));
+            
+            toast('Upcoming Session in 15m!', {
+              icon: '⏰',
+              duration: 6000,
+              style: {
+                background: '#0f172a',
+                color: '#fff',
+                fontSize: '12px',
+                fontWeight: '900',
+                textTransform: 'uppercase',
+                border: '1px solid #334155'
+              }
+            });
+          }
+        } catch (e) {
+          console.error("Error calculating reminder time:", e);
+        }
+      });
+    };
+
+    // Run check every minute
+    const interval = setInterval(checkUpcomingBookings, 60000);
+    checkUpcomingBookings(); // Run immediately
+
+    return () => clearInterval(interval);
+  }, [bookings, triggeredReminders]);
 
   const getBookingCategory = (booking: MassageBooking) => {
     const outlet = outlets.find(o => o.id === booking.outlet_id);
@@ -296,6 +380,35 @@ const StaffSchedule = () => {
       // Real-time updates
       const unsubscribe = db.subscribeToBookings(staff.outlet_id, (payload) => {
         console.log('Real-time booking update received:', payload.eventType);
+        
+        // Handle new booking alert
+        if (payload.eventType === 'INSERT' && payload.new.staff_id === staff.id) {
+          playNotificationSound();
+          
+          const newNotif: StaffNotification = {
+            id: payload.new.id || Math.random().toString(),
+            title: 'New Booking Alert!',
+            message: `A new appointment has been scheduled for ${payload.new.start_time}`,
+            time: new Date(),
+            isRead: false,
+            type: 'booking'
+          };
+          
+          setNotifications(prev => [newNotif, ...prev].slice(0, 20));
+          toast.success('New Booking Received!', {
+            icon: '🔔',
+            duration: 5000,
+            style: {
+              background: '#4f46e5',
+              color: '#fff',
+              fontSize: '12px',
+              fontWeight: '900',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em'
+            }
+          });
+        }
+
         if (viewMode === 'daily') {
           loadSchedule();
         } else if (viewMode === 'monthly') {
@@ -743,34 +856,172 @@ const StaffSchedule = () => {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="bg-slate-900 text-white sticky top-0 z-20 shadow-xl shadow-slate-900/10 lg:hidden">
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Mobile Header */}
+        <header className="bg-slate-900 text-white sticky top-0 z-30 shadow-xl shadow-slate-900/10 lg:hidden px-4 h-20 flex items-center justify-between">
+          <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-b-[2rem]">
             <div className="absolute top-[-50%] right-[-10%] w-64 h-64 bg-indigo-500/20 rounded-full blur-[80px]"></div>
           </div>
-          <div className="relative z-10 flex justify-between items-center px-4 py-2">
+          
+          <div className="flex items-center gap-4 relative z-10">
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              className="p-2.5 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors"
             >
-              <Menu className="w-6 h-6" />
+              <Menu className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-3">
-              {settings?.logo_url && (
-                <img 
-                  src={settings.logo_url} 
-                  alt="Logo" 
-                  referrerPolicy="no-referrer"
-                  className="h-8 w-auto object-contain" 
-                />
-              )}
-              <div className="flex flex-col items-start">
-                <h1 className="text-[10px] font-black uppercase tracking-widest truncate max-w-[120px]">{staff.name}</h1>
-              </div>
+            <div className="flex flex-col">
+              <h1 className="text-sm font-black uppercase tracking-tighter leading-none">{settings?.name || 'Staff Portal'}</h1>
+              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mt-1">Personnel Sync</p>
             </div>
-            <div className="w-10" /> {/* Spacer for centering */}
+          </div>
+
+          <div className="flex items-center gap-2 relative z-10">
+            <div className="relative">
+              <button 
+                onClick={() => {
+                  setShowNotifications(!showNotifications);
+                  if (!showNotifications) {
+                    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+                  }
+                }}
+                className={`p-2.5 rounded-xl border transition-all ${showNotifications ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}
+              >
+                <Bell className={`w-5 h-5 ${notifications.some(n => !n.isRead) ? 'animate-bounce' : ''}`} />
+                {notifications.some(n => !n.isRead) && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-slate-900"></span>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {showNotifications && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    className="absolute right-0 mt-3 w-[280px] sm:w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-[100]"
+                  >
+                    <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                      <span className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">Live Alerts</span>
+                      <button 
+                        onClick={() => setNotifications([])}
+                        className="text-[8px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-colors"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                    <div className="max-h-[400px] overflow-y-auto custom-scrollbar p-2 space-y-1">
+                      {notifications.length === 0 ? (
+                        <div className="p-12 text-center">
+                          <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-slate-100">
+                            <Bell className="w-6 h-6 text-slate-300" />
+                          </div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No New Alerts</p>
+                        </div>
+                      ) : (
+                        notifications.map((notif) => (
+                          <div key={notif.id} className="p-3 bg-white rounded-xl border border-slate-50 hover:bg-slate-50 transition-colors">
+                            <div className="flex items-center gap-3 mb-1">
+                              <div className={`w-2 h-2 rounded-full ${notif.type === 'booking' ? 'bg-indigo-500' : 'bg-amber-500'}`} />
+                              <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{notif.title}</span>
+                            </div>
+                            <p className="text-[11px] font-bold text-slate-500 leading-relaxed mb-2">{notif.message}</p>
+                            <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">{format(notif.time, 'HH:mm')}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </header>
+
+        {/* Desktop Header Wrapper */}
+        <div className="hidden lg:flex items-center justify-between px-8 py-6 bg-white border-b border-slate-200 sticky top-0 z-30">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">
+              {viewMode === 'daily' ? 'Daily Schedule' : viewMode === 'monthly' ? 'Performance Snapshot' : 'Incentive Audit'}
+            </h1>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] mt-1">{propertyName || 'Terminal Overview'}</p>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <button 
+                onClick={() => {
+                  setShowNotifications(!showNotifications);
+                  if (!showNotifications) {
+                    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+                  }
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${showNotifications ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+              >
+                <div className="relative">
+                  <Bell className={`w-4 h-4 ${notifications.some(n => !n.isRead) ? 'animate-bounce' : ''}`} />
+                  {notifications.some(n => !n.isRead) && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                  )}
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest">Alerts</span>
+              </button>
+
+              <AnimatePresence>
+                {showNotifications && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-[100]"
+                  >
+                    <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                      <span className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">Terminal Notifications</span>
+                      <button 
+                        onClick={() => setNotifications([])}
+                        className="text-[8px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-colors"
+                      >
+                        Purge All
+                      </button>
+                    </div>
+                    <div className="max-h-[400px] overflow-y-auto custom-scrollbar p-2 space-y-1">
+                      {notifications.length === 0 ? (
+                        <div className="p-12 text-center">
+                          <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-slate-100">
+                            <Bell className="w-6 h-6 text-slate-300" />
+                          </div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No active notifications</p>
+                        </div>
+                      ) : (
+                        notifications.map((notif) => (
+                          <div key={notif.id} className="p-3 bg-white rounded-xl border border-slate-50 hover:bg-slate-50 transition-colors">
+                            <div className="flex items-center gap-3 mb-1">
+                              <div className={`w-2 h-2 rounded-full ${notif.type === 'booking' ? 'bg-indigo-500' : 'bg-amber-500'}`} />
+                              <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{notif.title}</span>
+                            </div>
+                            <p className="text-[11px] font-bold text-slate-500 leading-relaxed mb-2">{notif.message}</p>
+                            <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">{format(notif.time, 'HH:mm')}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="h-8 w-px bg-slate-200 mx-2" />
+            
+            <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black text-sm">
+                {staff?.name.charAt(0)}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{staff?.name}</span>
+                <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest">{staff?.role}</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto w-full space-y-6 pb-24">
           {/* Desktop Welcome Header */}
