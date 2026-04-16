@@ -708,46 +708,56 @@ const StaffSchedule = () => {
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-slate-900 text-white p-6 overflow-y-auto custom-scrollbar">
-      <div className="mb-6">
-        <div className="flex flex-col items-center text-center mb-8 pt-4">
-          <div className="w-16 h-16 bg-white rounded-[1.5rem] flex items-center justify-center text-slate-900 shadow-2xl shadow-indigo-500/20 mb-4 relative group overflow-hidden border border-white/10 active:scale-95 transition-transform">
-            <div className="absolute inset-0 bg-indigo-600 opacity-0 group-hover:opacity-5 transition-opacity" />
-            {settings?.logo_url ? (
-              <img 
-                src={settings.logo_url} 
-                alt="Logo" 
-                referrerPolicy="no-referrer" 
-                className="w-full h-full object-contain p-2 animate-[spin_15s_linear_infinite]" 
-              />
-            ) : (
-              <div className="w-full h-full bg-indigo-600 flex items-center justify-center text-white">
-                <Sparkles className="w-8 h-8 animate-[spin_10s_linear_infinite]" />
-              </div>
-            )}
-          </div>
-          <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400 leading-none mb-1">{settings?.name || 'Health Club'}</h2>
-          <div className="flex items-center justify-center gap-2">
-            <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Staff Terminal</p>
+      {/* Brand Section */}
+      <div className="flex items-center gap-4 mb-10 pt-2 shrink-0">
+        <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-slate-900 shadow-2xl shadow-indigo-500/20 relative group overflow-hidden border border-white/10 shrink-0">
+          <div className="absolute inset-0 bg-indigo-600 opacity-0 group-hover:opacity-5 transition-opacity" />
+          {settings?.logo_url ? (
+            <img 
+              src={settings.logo_url} 
+              alt="Logo" 
+              referrerPolicy="no-referrer" 
+              className="w-full h-full object-contain p-2 animate-[spin_20s_linear_infinite]" 
+            />
+          ) : (
+            <div className="w-full h-full bg-indigo-600 flex items-center justify-center text-white">
+              <Sparkles className="w-6 h-6 animate-[spin_10s_linear_infinite]" />
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col text-left">
+          <h2 className="text-sm font-black uppercase tracking-tight leading-tight">{settings?.name || 'Identity Sync'}</h2>
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest leading-none">Portal</span>
+            <div className="w-1 h-1 rounded-full bg-slate-700" />
             <button 
               onClick={refreshStaffData}
-              className="p-1 hover:bg-white/10 rounded-md text-slate-500 hover:text-indigo-400 transition-colors"
-              title="Sync Permissions"
+              className="text-[8px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors flex items-center gap-1 outline-none"
             >
-              <RefreshCw className="w-2.5 h-2.5" />
+              Terminal <RefreshCw className="w-2 h-2" />
             </button>
           </div>
         </div>
-
-        {propertyName && (
-          <div className="flex items-center gap-2 text-slate-400 text-[9px] font-bold uppercase tracking-widest bg-white/5 p-2.5 rounded-xl border border-white/5">
-            <Building2 className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="truncate">{propertyName}</span>
-          </div>
-        )}
       </div>
 
+      {/* Instance Context */}
+      {propertyName && (
+        <div className="mb-10 shrink-0">
+          <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 px-1">Assignment</div>
+          <div className="flex items-center gap-3 bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group">
+            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:bg-indigo-500/20 transition-colors shrink-0">
+              <Building2 className="w-4 h-4 text-indigo-400" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] font-black text-white uppercase tracking-widest truncate">{propertyName}</span>
+              <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Active Assignment</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <nav className="flex-1 space-y-1">
-        <div className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 px-2">Main Menu</div>
+        <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 px-1">Main Menu</div>
         {(staff.staff_portal_settings?.show_daily_schedule ?? true) && (
           <button 
             onClick={() => {
