@@ -417,9 +417,9 @@ const StaffSchedule = () => {
       if (payload.eventType === 'INSERT' && payload.new.therapist_id === staff.id) {
         playNotificationSound();
         
-        // Fetch extra info
-        const guest = await db.getGuestById(payload.new.guest_id);
-        const treatment = await db.getMassageTypeById(payload.new.massage_type_id);
+        // Use existing state data if available
+        const guest = guests.find(g => g.id === payload.new.guest_id);
+        const treatment = treatments.find(t => t.id === payload.new.massage_type_id);
         
         const newNotif: StaffNotification = {
           id: payload.new.id || Math.random().toString(),
@@ -1620,7 +1620,7 @@ const StaffSchedule = () => {
                         {guest && (
                           <div className="flex items-center gap-2 sm:gap-3">
                             <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
-                            <span className="text-xs sm:text-sm font-bold text-slate-600">{guest.first_name} {guest.last_name}</span>
+                            <span className="text-xs sm:text-sm font-bold text-slate-600">{guest.name}</span>
                           </div>
                         )}
 

@@ -1,0 +1,40 @@
+26:  type: 'booking' | 'sale' | 'system';
+35:  const [bookings, setBookings] = useState<MassageBooking[]>([]);
+167:      if (!bookings || bookings.length === 0) return;
+172:      bookings.forEach(booking => {
+173:        // Only check for today's bookings
+174:        if (booking.date !== todayStr) return;
+175:        if (triggeredReminders.has(booking.id)) return;
+178:          const [hours, minutes] = booking.start_time.split(':').map(Number);
+179:          const bookingTime = new Date(now);
+180:          bookingTime.setHours(hours, minutes, 0, 0);
+182:          const diffInMinutes = (bookingTime.getTime() - now.getTime()) / (1000 * 60);
+184:          // Trigger alert if booking is in 14-16 minutes (to catch it within a 1-min check)
+188:            const guest = guests.find(g => g.id === booking.guest_id);
+189:            const treatment = treatments.find(t => t.id === booking.massage_type_id);
+190:            const message = `Reminder: Booking for ${guest?.name || 'Guest'} - ${treatment?.name || 'Treatment'} at ${booking.start_time}`;
+193:            const alreadyNotified = notifications.some(n => n.id === `reminder-${booking.id}`);
+196:                id: `reminder-${booking.id}`,
+205:              setTriggeredReminders(prev => new Set(prev).add(booking.id));
+232:  }, [bookings, triggeredReminders]);
+234:  const getBookingCategory = (booking: MassageBooking) => {
+235:    const outlet = outlets.find(o => o.id === booking.outlet_id);
+240:    const treatment = treatments.find(t => t.id === booking.massage_type_id) || inventory.find(i => i.id === booking.inventory_item_id);
+268:      ...monthlyBookings.map(b => ({ ...b, _type: 'booking' as const, _category: getBookingCategory(b) })),
+281:      const dateA = a._type === 'booking' ? a.date : format(new Date(a.created_at), 'yyyy-MM-dd');
+282:      const dateB = b._type === 'booking' ? b.date : format(new Date(b.created_at), 'yyyy-MM-dd');
+285:      const timeA = a._type === 'booking' ? a.start_time : format(new Date(a.created_at), 'HH:mm');
+286:      const timeB = b._type === 'booking' ? b.start_time : format(new Date(b.created_at), 'HH:mm');
+292:  const [selectedItemForNotes, setSelectedItemForNotes] = useState<(MassageBooking & { _type: 'booking' }) | (Sale & { _type: 'sale' }) | null>(null);
+300:      if (selectedItemForNotes._type === 'booking') {
+302:        setBookings(bookings.map(b => b.id === selectedItemForNotes.id ? { ...b, session_notes: sessionNotes } : b));
+415:      console.log('Real-time booking update received:', payload.eventType);
+430:          type: 'booking'
+525:      // Filter bookings for this specific therapist
+529:      // and only those that are NOT linked to a booking (to avoid duplicates)
+532:        !s.booking_id && s.status !== 'void'
+703:      // Filter bookings for this specific therapist
+709:        !s.booking_id && s.status !== 'void'
+1123:                              <div className={`w-2 h-2 rounded-full ${notif.type === 'booking' ? 'bg-indigo-500' : 'bg-amber-500'}`} />
+1197:                              <div className={`w-2 h-2 rounded-full ${notif.type === 'booking' ? 'bg-indigo-500' : 'bg-amber-500'}`} />
+1561:                    if (item._type === 'booking') {
