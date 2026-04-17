@@ -579,17 +579,17 @@ export const StaffLoadingScreens = React.memo(({
   );
 
   switch (styleId) {
-    case 'holographic': return <HolographicStyle />;
-    case 'minimal-pulse': return <MinimalPulseStyle />;
-    case 'cyber-gradient': return <CyberGradientStyle />;
-    case 'solar-system': return <SolarSystemStyle />;
-    case 'quantum-circuit': return <QuantumCircuitStyle />;
-    case 'liquid-metal': return <LiquidMetalStyle />;
-    case 'neural-matrix': return <NeuralMatrixStyle />;
-    case 'prism-flow': return <PrismFlowStyle />;
+    case 'holographic': return HolographicStyle();
+    case 'minimal-pulse': return MinimalPulseStyle();
+    case 'cyber-gradient': return CyberGradientStyle();
+    case 'solar-system': return SolarSystemStyle();
+    case 'quantum-circuit': return QuantumCircuitStyle();
+    case 'liquid-metal': return LiquidMetalStyle();
+    case 'neural-matrix': return NeuralMatrixStyle();
+    case 'prism-flow': return PrismFlowStyle();
     case 'monogram':
     default:
-      return <MonogramStyle />;
+      return MonogramStyle();
   }
 });
 

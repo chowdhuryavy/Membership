@@ -41,7 +41,7 @@ const StaffSchedule = () => {
   const [outlets, setOutlets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [incentiveLoading, setIncentiveLoading] = useState(false);
-  const [minLoadingFinished, setMinLoadingFinished] = useState(false);
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
   const loadingInitialTimeRef = React.useRef(Date.now());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'incentives'>('daily');
@@ -115,27 +115,25 @@ const StaffSchedule = () => {
     }
   }, [selectedOutletId]);
 
-  // Splash Screen Logic: Show for AT LEAST 2000ms whenever loading occurs
+  // Splash Screen Logic: Show for AT LEAST 2000ms ON INITIAL BOOT
   useEffect(() => {
-    const isLoadingAny = loading || incentiveLoading || !staff;
+    if (hasInitiallyLoaded) return;
     
-    if (isLoadingAny) {
-      setMinLoadingFinished(false);
-      loadingInitialTimeRef.current = Date.now();
-    } else {
+    // Proceed when core data is loaded
+    if (!loading && !incentiveLoading && !!staff && selectedOutletId) {
       const elapsed = Date.now() - loadingInitialTimeRef.current;
       const remainingTime = Math.max(0, 2000 - elapsed);
       
       const timer = setTimeout(() => {
-        setMinLoadingFinished(true);
+        setHasInitiallyLoaded(true);
       }, remainingTime);
       
       return () => clearTimeout(timer);
     }
-  }, [loading, incentiveLoading, !!staff]);
+  }, [loading, incentiveLoading, !!staff, selectedOutletId, hasInitiallyLoaded]);
 
   // Derived state to determine if the portal is ready for display
-  const isAppReady = minLoadingFinished && !!staff && !loading && !incentiveLoading;
+  const isAppReady = hasInitiallyLoaded;
 
   // Clean up references
   useEffect(() => {
@@ -370,7 +368,7 @@ const StaffSchedule = () => {
 
   // Unified data loading effect
   useEffect(() => {
-    if (!staff || !selectedOutletId) return;
+    if (!staff?.id || !selectedOutletId) return;
 
     const loadPageData = async () => {
       // Use ref-based guard to prevent race conditions during state updates
@@ -435,7 +433,7 @@ const StaffSchedule = () => {
     return () => {
       unsubscribe();
     };
-  }, [staff?.id, currentDate, viewMode, selectedOutletId]);
+  }, [staff?.id, staff?.property_id, currentDate, viewMode, selectedOutletId]);
 
   const loadPropertyDetails = async () => {
     if (!staff || !selectedOutletId) return;
@@ -1027,7 +1025,9 @@ const StaffSchedule = () => {
             </button>
             <div className="flex flex-col">
               <h1 className="text-sm font-black uppercase tracking-tighter leading-none">{settings?.name || 'Staff Portal'}</h1>
-              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mt-1">Personnel Sync</p>
+              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mt-1">
+                {viewMode === 'daily' ? "Today's Schedule" : viewMode === 'monthly' ? "Monthly Summary" : "Incentive Earnings"}
+              </p>
             </div>
           </div>
 
@@ -1097,7 +1097,7 @@ const StaffSchedule = () => {
         <div className="hidden lg:flex items-center justify-between px-8 py-6 bg-white border-b border-slate-200 sticky top-0 z-30">
           <div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">
-              {viewMode === 'daily' ? 'Daily Schedule' : viewMode === 'monthly' ? 'Performance Snapshot' : 'Incentive Audit'}
+              {viewMode === 'daily' ? "Today's Schedule" : viewMode === 'monthly' ? "Monthly Summary" : "Incentive Earnings"}
             </h1>
             <p className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] mt-1">{propertyName || 'Terminal Overview'}</p>
           </div>
