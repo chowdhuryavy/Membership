@@ -73,45 +73,57 @@ const StaffSchedule = () => {
   const [selectedOutletId, setSelectedOutletId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Robust derived outlets for the selector
+  const assignedOutlets = useMemo(() => {
+    if (!staff) return [];
+    let ids: string[] = [];
+    
+    if (Array.isArray(staff.outlet_ids)) {
+      ids = staff.outlet_ids;
+    } else if (typeof staff.outlet_ids === 'string') {
+      ids = (staff.outlet_ids as string).split(',').map(s => s.trim());
+    } else if ((staff as any).outlet_id) {
+      ids = [(staff as any).outlet_id];
+    }
+    
+    return [...new Set(ids)].filter(Boolean);
+  }, [staff]);
+
   const { settings, formatMoney } = useSettings();
 
   // Initialize selectedOutletId when staff is loaded
   useEffect(() => {
     if (staff && !selectedOutletId) {
-      const sOutlets = Array.isArray(staff.outlet_ids) ? staff.outlet_ids : ((staff as any).outlet_id ? [(staff as any).outlet_id] : []);
       const stored = localStorage.getItem(`staff_selected_outlet_${staff.id}`);
-      if (stored && sOutlets.includes(stored)) {
+      if (stored && assignedOutlets.includes(stored)) {
         setSelectedOutletId(stored);
-      } else if (sOutlets.length > 0) {
-        setSelectedOutletId(sOutlets[0]);
+      } else if (assignedOutlets.length > 0) {
+        setSelectedOutletId(assignedOutlets[0]);
       }
     }
-  }, [staff]);
+  }, [staff, assignedOutlets, selectedOutletId]);
 
-  // Update localStorage when selectedOutletId changes
+  // Update localStorage when selectedOutletId changes (but don't trigger loads here, main effect handles it)
   useEffect(() => {
     if (staff && selectedOutletId) {
       localStorage.setItem(`staff_selected_outlet_${staff.id}`, selectedOutletId);
-      // Reload everything when outlet changes
-      loadSchedule();
-      loadMonthlySchedule();
-      loadIncentives();
+      // Pre-fetch basic info for property when outlet changes
       loadPropertyDetails();
     }
   }, [selectedOutletId]);
 
   const animationTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  // Ensure loading screen stays long enough for animations, even on date changes
+  // Ensure loading screen stays long enough for animations, only on major transitions
   useEffect(() => {
-    if (loading || incentiveLoading) {
+    if (loading || incentiveLoading || !staff) {
       setMinLoadingFinished(false);
       if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
       animationTimerRef.current = setTimeout(() => {
         setMinLoadingFinished(true);
-      }, 2500); // 2.5 seconds allows the full SVG path animation to complete gracefully
+      }, 2500); 
     }
-  }, [loading, incentiveLoading]);
+  }, [loading, incentiveLoading, !!staff]);
 
   // Clean up timer on unmount
   useEffect(() => {
@@ -342,64 +354,76 @@ const StaffSchedule = () => {
     }
   }, [staff, viewMode]);
 
+  const loadingRef = React.useRef(false);
+
+  // Unified data loading effect
   useEffect(() => {
-    if (staff) {
-      if (viewMode === 'daily') {
-        loadSchedule();
-      } else if (viewMode === 'monthly') {
-        loadMonthlySchedule();
-        loadIncentives();
-      } else if (viewMode === 'incentives') {
-        loadIncentives();
-      }
-      loadPropertyDetails();
+    if (!staff || !selectedOutletId) return;
 
-      // Real-time updates
-      const unsubscribe = db.subscribeToBookings(selectedOutletId || (staff as any).outlet_id, (payload) => {
-        console.log('Real-time booking update received:', payload.eventType);
-        
-        // Handle new booking alert
-        if (payload.eventType === 'INSERT' && payload.new.staff_id === staff.id) {
-          playNotificationSound();
-          
-          const newNotif: StaffNotification = {
-            id: payload.new.id || Math.random().toString(),
-            title: 'New Booking Alert!',
-            message: `A new appointment has been scheduled for ${payload.new.start_time}`,
-            time: new Date(),
-            isRead: false,
-            type: 'booking'
-          };
-          
-          setNotifications(prev => [newNotif, ...prev].slice(0, 20));
-          toast.success('New Booking Received!', {
-            icon: '🔔',
-            duration: 5000,
-            style: {
-              background: '#4f46e5',
-              color: '#fff',
-              fontSize: '12px',
-              fontWeight: '900',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em'
-            }
-          });
-        }
-
+    const loadPageData = async () => {
+      // Use ref-based guard to prevent race conditions during state updates
+      if (loadingRef.current) return;
+      loadingRef.current = true;
+      setIsSyncing(true);
+      
+      try {
         if (viewMode === 'daily') {
-          loadSchedule();
+          await loadSchedule();
         } else if (viewMode === 'monthly') {
-          loadMonthlySchedule();
+          await Promise.all([loadMonthlySchedule(), loadIncentives()]);
         } else if (viewMode === 'incentives') {
-          loadIncentives();
+          await loadIncentives();
         }
-      });
+        await loadPropertyDetails();
+      } finally {
+        setIsSyncing(false);
+        loadingRef.current = false;
+      }
+    };
 
-      return () => {
-        unsubscribe();
-      };
-    }
-  }, [staff, currentDate, viewMode, selectedOutletId]);
+    loadPageData();
+
+    // Set up real-time subscription
+    const unsubscribe = db.subscribeToBookings(selectedOutletId, (payload) => {
+      console.log('Real-time booking update received:', payload.eventType);
+      
+      if (payload.eventType === 'INSERT' && payload.new.staff_id === staff.id) {
+        playNotificationSound();
+        
+        const newNotif: StaffNotification = {
+          id: payload.new.id || Math.random().toString(),
+          title: 'New Booking Alert!',
+          message: `A new appointment has been scheduled for ${payload.new.start_time}`,
+          time: new Date(),
+          isRead: false,
+          type: 'booking'
+        };
+        
+        setNotifications(prev => [newNotif, ...prev].slice(0, 20));
+        toast.success('New Booking Received!', {
+          icon: '🔔',
+          duration: 5000,
+          style: {
+            background: '#4f46e5',
+            color: '#fff',
+            fontSize: '12px',
+            fontWeight: '900',
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em'
+          }
+        });
+      }
+
+      // Refresh data on any update
+      if (viewMode === 'daily') loadSchedule();
+      else if (viewMode === 'monthly') loadMonthlySchedule();
+      else if (viewMode === 'incentives') loadIncentives();
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [staff?.id, currentDate, viewMode, selectedOutletId]);
 
   const loadPropertyDetails = async () => {
     if (!staff || !selectedOutletId) return;
@@ -813,7 +837,7 @@ const StaffSchedule = () => {
                   <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:scale-110 transition-transform">
                     <KeyRound className="w-4 h-4 text-indigo-400" />
                   </div>
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Update Access</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Change Password</span>
                 </button>
                 <button 
                   onClick={(e) => {
@@ -826,7 +850,7 @@ const StaffSchedule = () => {
                   <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 group-hover:scale-110 transition-transform">
                     <LogOut className="w-4 h-4 text-red-500" />
                   </div>
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Disconnect</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Logout</span>
                 </button>
               </div>
             </motion.div>
@@ -856,6 +880,7 @@ const StaffSchedule = () => {
       <AnimatePresence>
         {(loading || incentiveLoading || !minLoadingFinished || !staff) && (
           <StaffLoadingScreens 
+            key="staff-portal-loader"
             styleId={settings?.staff_portal_settings?.loading_screen_style} 
             appName={settings?.name} 
             propertyName={propertyName} 
@@ -1066,7 +1091,7 @@ const StaffSchedule = () => {
               </AnimatePresence>
             </div>
 
-            {staff && (Array.isArray(staff.outlet_ids) ? staff.outlet_ids.length > 1 : false) && (
+            {staff && assignedOutlets.length >= 1 && (
               <div className="flex items-center gap-2">
                 <div className="h-8 w-px bg-slate-200 mx-2" />
                 <div className="relative group/outlet">
@@ -1077,18 +1102,21 @@ const StaffSchedule = () => {
                       if (newId !== selectedOutletId) {
                         setSelectedOutletId(newId);
                         setLoading(true);
-                        setBookings([]); // Clear existing data to avoid confusion during sync
+                        setBookings([]);
                         setSales([]);
                       }
                     }}
-                    className="appearance-none bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 pr-10 text-[10px] font-black text-slate-900 uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer hover:bg-slate-100"
+                    disabled={assignedOutlets.length <= 1}
+                    className="appearance-none bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 pr-10 text-[10px] font-black text-slate-900 uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer hover:bg-slate-100 disabled:opacity-50 disabled:cursor-default"
                   >
-                    {(Array.isArray(staff?.outlet_ids) ? staff.outlet_ids : []).map(oid => {
+                    {assignedOutlets.map(oid => {
                       const o = outlets.find(out => out.id === oid);
                       return <option key={oid} value={oid}>{o?.name || 'Assigned Outlet'}</option>;
                     })}
                   </select>
-                  <ChevronDown className="w-3 h-3 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/outlet:text-indigo-500 transition-colors" />
+                  {assignedOutlets.length > 1 && (
+                    <ChevronDown className="w-3 h-3 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/outlet:text-indigo-500 transition-colors" />
+                  )}
                 </div>
               </div>
             )}
@@ -1151,7 +1179,7 @@ const StaffSchedule = () => {
         </div>
 
         {/* Schedule List */}
-        {loading && minLoadingFinished ? (
+        {loading && minLoadingFinished && staff && selectedOutletId ? (
           <div className="flex flex-col items-center justify-center p-12 space-y-4">
             <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Syncing Data...</p>
