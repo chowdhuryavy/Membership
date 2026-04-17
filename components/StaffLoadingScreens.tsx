@@ -79,10 +79,10 @@ export const StaffLoadingScreens = React.memo(({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="mt-16 text-center z-10"
+          className="mt-16 text-center z-10 w-full px-4"
         >
-          <div className="px-6 py-2 bg-cyan-500/5 border border-cyan-500/20 rounded-full inline-block backdrop-blur-md">
-            <h2 className="text-sm font-black text-white uppercase tracking-[0.6em] whitespace-nowrap">{displayTitle}</h2>
+          <div className="px-5 py-3 sm:px-6 sm:py-2 bg-cyan-500/5 border border-cyan-500/20 rounded-2xl sm:rounded-full inline-flex max-w-full backdrop-blur-md">
+            <h2 className="text-xs sm:text-sm font-black text-white uppercase tracking-widest sm:tracking-[0.4em] leading-relaxed break-words text-center">{displayTitle}</h2>
           </div>
           <div className="mt-8 flex items-center justify-center gap-6">
             <div className="flex flex-col items-center gap-1">

@@ -41,7 +41,7 @@ const StaffSchedule = () => {
   const [outlets, setOutlets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [incentiveLoading, setIncentiveLoading] = useState(false);
-  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
+  const [minLoadingFinished, setMinLoadingFinished] = useState(false);
   const loadingInitialTimeRef = React.useRef(Date.now());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'incentives'>('daily');
@@ -115,25 +115,27 @@ const StaffSchedule = () => {
     }
   }, [selectedOutletId]);
 
-  // Splash Screen Logic: Show for AT LEAST 2000ms ON INITIAL BOOT
+  // Splash Screen Logic: Show for AT LEAST 1500ms whenever loading occurs
   useEffect(() => {
-    if (hasInitiallyLoaded) return;
+    const isLoadingAny = loading || incentiveLoading || !staff;
     
-    // Proceed when core data is loaded
-    if (!loading && !incentiveLoading && !!staff && selectedOutletId) {
+    if (isLoadingAny) {
+      setMinLoadingFinished(false);
+      loadingInitialTimeRef.current = Date.now();
+    } else {
       const elapsed = Date.now() - loadingInitialTimeRef.current;
-      const remainingTime = Math.max(0, 2000 - elapsed);
+      const remainingTime = Math.max(0, 1500 - elapsed);
       
       const timer = setTimeout(() => {
-        setHasInitiallyLoaded(true);
+        setMinLoadingFinished(true);
       }, remainingTime);
       
       return () => clearTimeout(timer);
     }
-  }, [loading, incentiveLoading, !!staff, selectedOutletId, hasInitiallyLoaded]);
+  }, [loading, incentiveLoading, !!staff]);
 
   // Derived state to determine if the portal is ready for display
-  const isAppReady = hasInitiallyLoaded;
+  const isAppReady = minLoadingFinished && !!staff && !loading && !incentiveLoading;
 
   // Clean up references
   useEffect(() => {
