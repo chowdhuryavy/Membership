@@ -339,8 +339,8 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
       {showForm && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-          <Card className="w-full max-w-2xl rounded-[3rem] border-slate-200 shadow-2xl overflow-hidden bg-white animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300 overflow-y-auto">
+          <Card className="w-full max-w-2xl rounded-[3rem] border-slate-200 shadow-2xl overflow-hidden bg-white animate-in zoom-in-95 duration-300 my-auto">
             <CardHeader className="bg-slate-900 text-white p-8 flex justify-between items-center">
               <div>
                 <CardTitle className="text-xl font-black uppercase tracking-widest">{editingId ? 'Modify Personnel' : 'Enroll New Staff'}</CardTitle>
@@ -348,7 +348,7 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
               </div>
               <button onClick={() => setShowForm(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-6 h-6" /></button>
             </CardHeader>
-            <CardContent className="p-10">
+            <CardContent className="p-10 overflow-y-auto max-h-[calc(100vh-180px)] custom-scrollbar">
               <form onSubmit={handleSubmit} className="space-y-8">
                 <div className="space-y-6">
                   <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Personal Information</h4>
