@@ -9,12 +9,12 @@ interface LoadingScreenProps {
   logoUrl?: string;
 }
 
-export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({ 
+export const StaffLoadingScreens = React.memo(({ 
   styleId = 'monogram', 
   appName = 'Global Name',
   propertyName = 'Health Club Management',
   logoUrl 
-}) => {
+}: LoadingScreenProps) => {
   const displayTitle = appName || propertyName || 'Staff Portal';
 
   const HolographicStyle = () => (
@@ -591,5 +591,5 @@ export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({
     default:
       return <MonogramStyle />;
   }
-};
+});
 

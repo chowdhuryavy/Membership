@@ -41,6 +41,7 @@ const StaffSchedule = () => {
   const [outlets, setOutlets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [minLoadingFinished, setMinLoadingFinished] = useState(false);
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'incentives'>('daily');
   const [monthlyBookings, setMonthlyBookings] = useState<MassageBooking[]>([]);
@@ -78,10 +79,12 @@ const StaffSchedule = () => {
     if (!staff) return [];
     let ids: string[] = [];
     
-    if (Array.isArray(staff.outlet_ids)) {
+    if (Array.isArray(staff.outlet_ids) && staff.outlet_ids.length > 0) {
       ids = staff.outlet_ids;
-    } else if (typeof staff.outlet_ids === 'string') {
+    } else if (typeof staff.outlet_ids === 'string' && staff.outlet_ids.trim().length > 0) {
       ids = (staff.outlet_ids as string).split(',').map(s => s.trim());
+    } else if (Array.isArray((staff as any).staff_working_outlets)) {
+      ids = (staff as any).staff_working_outlets;
     } else if ((staff as any).outlet_id) {
       ids = [(staff as any).outlet_id];
     }
@@ -114,16 +117,25 @@ const StaffSchedule = () => {
 
   const animationTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  // Ensure loading screen stays long enough for animations, only on major transitions
+  // Splash Screen Logic: Minimum timer + Staff object presence + Initial data fetch completion
   useEffect(() => {
-    if (loading || incentiveLoading || !staff) {
+    if (!staff) {
       setMinLoadingFinished(false);
-      if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
-      animationTimerRef.current = setTimeout(() => {
-        setMinLoadingFinished(true);
-      }, 2500); 
+      setInitialDataLoaded(false);
+    } else {
+      // Once staff is available, start the minimum visual timer
+      if (!minLoadingFinished && !animationTimerRef.current) {
+        animationTimerRef.current = setTimeout(() => {
+          setMinLoadingFinished(true);
+        }, 2000);
+      }
+      
+      // If we are not currently loading any data and the timer finished, we can mark initial load as done
+      if (minLoadingFinished && !loading && !incentiveLoading && !initialDataLoaded) {
+        setInitialDataLoaded(true);
+      }
     }
-  }, [loading, incentiveLoading, !!staff]);
+  }, [!!staff, minLoadingFinished, loading, incentiveLoading, initialDataLoaded]);
 
   // Clean up timer on unmount
   useEffect(() => {
@@ -743,34 +755,63 @@ const StaffSchedule = () => {
         </div>
       </div>
 
-      {/* Instance Context */}
-      {(propertyName || outletName) && (
-        <div className="mb-10 shrink-0">
-          <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 px-1">Location</div>
-          <div className="bg-white/5 rounded-3xl border border-white/10 shadow-inner p-5 space-y-5">
-            {/* Unified Branding */}
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center border border-white/10 shrink-0 overflow-hidden shadow-2xl relative group">
-                {propertyLogo ? (
-                  <img src={propertyLogo} alt="Prop" className="w-full h-full object-contain p-2 transition-transform duration-500 group-hover:scale-110" referrerPolicy="no-referrer" />
-                ) : (
-                  <Building2 className="w-5 h-5 text-slate-400" />
-                )}
-                <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-              <div className="flex flex-col min-w-0 flex-1 pt-1">
-                <span className="text-[12px] font-black text-white uppercase tracking-tight leading-tight whitespace-normal break-words">{propertyName}</span>
-                {outletName && (
-                  <div className="flex items-center gap-1.5 mt-2 bg-indigo-500/10 w-fit px-2 py-0.5 rounded-full border border-indigo-500/20">
-                    <MapPin className="w-2.5 h-2.5 text-indigo-400" />
-                    <span className="text-[8px] font-black text-indigo-200 uppercase tracking-widest truncate max-w-[120px]">{outletName}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+       {/* Instance Context */}
+       {(propertyName || outletName) && (
+         <div className="mb-10 shrink-0">
+           <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 px-1">Location</div>
+           <div className="bg-white/5 rounded-3xl border border-white/10 shadow-inner p-4 space-y-4">
+             {/* Unified Branding */}
+             <div className="flex items-center gap-3">
+               <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-white/10 shrink-0 overflow-hidden shadow-2xl relative group">
+                 {propertyLogo ? (
+                   <img src={propertyLogo} alt="Prop" className="w-full h-full object-contain p-2 transition-transform duration-500 group-hover:scale-110" referrerPolicy="no-referrer" />
+                 ) : (
+                   <Building2 className="w-4 h-4 text-slate-400" />
+                 )}
+               </div>
+               <div className="flex flex-col min-w-0 flex-1">
+                 <span className="text-[11px] font-black text-white uppercase tracking-tight leading-tight truncate">{propertyName}</span>
+                 {assignedOutlets.length <= 1 && outletName && (
+                   <div className="flex items-center gap-1 mt-1">
+                     <MapPin className="w-2 h-2 text-indigo-400" />
+                     <span className="text-[8px] font-black text-indigo-200 uppercase tracking-widest truncate">{outletName}</span>
+                   </div>
+                 )}
+               </div>
+             </div>
+
+             {/* Outlet Selector (Inline in Sidebar) */}
+             {assignedOutlets.length > 1 && (
+               <div className="relative group/outlet">
+                 <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                    <MapPin className="w-3 h-3 text-indigo-400" />
+                 </div>
+                 <select 
+                   value={selectedOutletId || ''} 
+                   onChange={(e) => {
+                     const newId = e.target.value;
+                     if (newId !== selectedOutletId) {
+                       setSelectedOutletId(newId);
+                       setLoading(true);
+                       setBookings([]);
+                       setSales([]);
+                       setIsSidebarOpen(false);
+                     }
+                   }}
+                   className="w-full appearance-none bg-white/5 border border-white/10 rounded-2xl pl-10 pr-10 py-2.5 text-[9px] font-black text-white uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer hover:bg-white/10"
+                 >
+                   {assignedOutlets.map(oid => {
+                     const o = outlets.find(out => out.id === oid);
+                     return <option key={oid} value={oid} className="bg-slate-900 text-white">{o?.name || 'Assigned Outlet'}</option>;
+                   })}
+                 </select>
+                 <ChevronDown className="w-3 h-3 text-white/40 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/outlet:text-white transition-colors" />
+               </div>
+             )}
+           </div>
+         </div>
+       )}
 
       <nav className="flex-1 space-y-1">
         <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 px-1">Main Menu</div>
@@ -817,14 +858,14 @@ const StaffSchedule = () => {
               initial={{ opacity: 0, scale: 0.9, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: -20 }}
               exit={{ opacity: 0, scale: 0.9, y: 10 }}
-              className="absolute bottom-full left-0 right-0 bg-slate-900/95 backdrop-blur-2xl rounded-[2.5rem] border border-white/10 shadow-[0_25px_70px_rgba(0,0,0,0.8)] z-[70] py-4 origin-bottom p-2"
+              className="absolute bottom-full left-0 right-0 bg-slate-900/95 backdrop-blur-2xl rounded-[2rem] border border-white/10 shadow-[0_25px_70px_rgba(0,0,0,0.8)] z-[70] py-3 origin-bottom p-2"
             >
-              <div className="px-6 py-4 mb-2">
-                <p className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-1">Session Active</p>
-                <h3 className="text-[11px] font-black text-white uppercase tracking-widest truncate">{staff?.name}</h3>
+              <div className="px-5 py-3 mb-1">
+                <p className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-0.5 text-center">Session Active</p>
+                <h3 className="text-[10px] font-black text-white uppercase tracking-widest truncate text-center">{staff?.name}</h3>
               </div>
 
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -832,12 +873,12 @@ const StaffSchedule = () => {
                     setIsSidebarOpen(false);
                     setShowAccountMenu(false);
                   }}
-                  className="w-full flex items-center gap-4 px-5 py-5 hover:bg-white/5 rounded-3xl text-slate-300 hover:text-white transition-all group outline-none"
+                  className="w-full flex items-center gap-2 p-2 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white transition-all group outline-none"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:scale-110 transition-transform">
-                    <KeyRound className="w-4 h-4 text-indigo-400" />
+                  <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:scale-110 transition-transform shrink-0">
+                    <KeyRound className="w-3 h-3 text-indigo-400" />
                   </div>
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Change Password</span>
+                  <span className="text-[8px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Change Password</span>
                 </button>
                 <button 
                   onClick={(e) => {
@@ -845,12 +886,12 @@ const StaffSchedule = () => {
                     setShowAccountMenu(false);
                     handleLogout();
                   }}
-                  className="w-full flex items-center gap-4 px-5 py-5 hover:bg-red-500/10 rounded-3xl text-slate-400 hover:text-red-400 transition-all group outline-none"
+                  className="w-full flex items-center gap-2 p-2 rounded-xl hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-all group outline-none"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 group-hover:scale-110 transition-transform">
-                    <LogOut className="w-4 h-4 text-red-500" />
+                  <div className="w-7 h-7 rounded-lg bg-red-500/10 flex items-center justify-center border border-red-500/20 group-hover:scale-110 transition-transform shrink-0">
+                    <LogOut className="w-3 h-3 text-red-500" />
                   </div>
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Logout</span>
+                  <span className="text-[8px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Logout</span>
                 </button>
               </div>
             </motion.div>
@@ -878,7 +919,7 @@ const StaffSchedule = () => {
   return (
     <>
       <AnimatePresence>
-        {(loading || incentiveLoading || !minLoadingFinished || !staff) && (
+        {(!initialDataLoaded || !staff) && (
           <StaffLoadingScreens 
             key="staff-portal-loader"
             styleId={settings?.staff_portal_settings?.loading_screen_style} 
@@ -889,7 +930,7 @@ const StaffSchedule = () => {
         )}
       </AnimatePresence>
 
-      <div className={`min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100 transition-opacity duration-300 ${(loading || incentiveLoading || !minLoadingFinished || !staff) ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100 transition-opacity duration-300 ${(!initialDataLoaded || !staff) ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
 
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block w-72 h-screen sticky top-0 border-r border-slate-200 z-50">
@@ -958,6 +999,29 @@ const StaffSchedule = () => {
           </div>
 
           <div className="flex items-center gap-2 relative z-10">
+            {assignedOutlets.length > 1 && (
+              <div className="relative group/outlet mr-1">
+                <select 
+                  value={selectedOutletId || ''} 
+                  onChange={(e) => {
+                    const newId = e.target.value;
+                    if (newId !== selectedOutletId) {
+                      setSelectedOutletId(newId);
+                      setLoading(true);
+                      setBookings([]);
+                      setSales([]);
+                    }
+                  }}
+                  className="appearance-none bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 pr-8 text-[9px] font-black text-white uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                >
+                  {assignedOutlets.map(oid => {
+                    const o = outlets.find(out => out.id === oid);
+                    return <option key={oid} value={oid}>{o?.name || 'Assigned'}</option>;
+                  })}
+                </select>
+                <ChevronDown className="w-2.5 h-2.5 text-white/40 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            )}
             <div className="relative">
               <button 
                 onClick={() => {
@@ -1178,14 +1242,9 @@ const StaffSchedule = () => {
           </button>
         </div>
 
-        {/* Schedule List */}
-        {loading && minLoadingFinished && staff && selectedOutletId ? (
-          <div className="flex flex-col items-center justify-center p-12 space-y-4">
-            <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Syncing Data...</p>
-          </div>
-        ) : loading ? (
-           <div className="h-64" /> // Spacer while big loader is active
+        {/* Content Section */}
+        {(loading && !initialDataLoaded) ? (
+          <div className="flex-1" />
         ) : viewMode === 'incentives' ? (
           <div className="space-y-6">
             {!selectedIncentiveDept ? (
@@ -1892,22 +1951,22 @@ const StaffSchedule = () => {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden"
+              className="bg-white w-full max-w-[340px] rounded-[2rem] shadow-2xl border border-slate-100 overflow-hidden"
             >
-              <div className="p-6 sm:p-8 bg-slate-900 text-white relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl"></div>
+              <div className="p-5 bg-slate-900 text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-xl"></div>
                 <div className="flex justify-between items-start relative z-10">
                   <div>
-                    <h2 className="text-xl font-black uppercase tracking-widest">Security</h2>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Update Password</p>
+                    <h2 className="text-lg font-black uppercase tracking-widest">Security</h2>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Update Password</p>
                   </div>
-                  <button onClick={() => setShowPasswordModal(false)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors">
-                    <X className="w-5 h-5" />
+                  <button onClick={() => setShowPasswordModal(false)} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-full transition-colors">
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>
               
-              <form onSubmit={handleChangePassword} className="p-6 sm:p-8 space-y-6">
+              <form onSubmit={handleChangePassword} className="p-5 space-y-5">
                 {passwordError && (
                   <motion.div 
                     initial={{ opacity: 0, x: -10 }}
@@ -1931,23 +1990,23 @@ const StaffSchedule = () => {
                   <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">New Password</label>
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <KeyRound className="w-5 h-5 text-slate-300" />
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                        <KeyRound className="w-4 h-4 text-slate-300" />
                       </div>
                       <input 
                         type={showNewPassword ? "text" : "password"}
                         value={newPassword} 
                         onChange={e => setNewPassword(e.target.value)} 
                         required 
-                        className="w-full h-14 pl-12 pr-12 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
+                        className="w-full h-11 pl-10 pr-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-xs font-bold shadow-sm"
                         placeholder="••••••••"
                       />
                       <button 
                         type="button"
                         onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
                       >
-                        {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
@@ -1955,41 +2014,41 @@ const StaffSchedule = () => {
                   <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirm New Password</label>
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <KeyRound className="w-5 h-5 text-slate-300" />
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                        <KeyRound className="w-4 h-4 text-slate-300" />
                       </div>
                       <input 
                         type={showConfirmPassword ? "text" : "password"}
                         value={confirmPassword} 
                         onChange={e => setConfirmPassword(e.target.value)} 
                         required 
-                        className="w-full h-14 pl-12 pr-12 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
+                        className="w-full h-11 pl-10 pr-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-xs font-bold shadow-sm"
                         placeholder="••••••••"
                       />
                       <button 
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
                       >
-                        {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
 
                   {/* Live Validation Indicators */}
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Security Requirements</p>
+                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5">
+                    <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Security Requirements</p>
                     <div className="flex items-center gap-2">
-                      <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.length ? 'bg-emerald-500' : 'bg-slate-200'}`}>
-                        {passwordValidation.length && <Check className="w-2.5 h-2.5 text-white" />}
+                      <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${passwordValidation.length ? 'bg-emerald-500' : 'bg-slate-200'}`}>
+                        {passwordValidation.length && <Check className="w-2 h-2 text-white" />}
                       </div>
-                      <span className={`text-[10px] font-bold ${passwordValidation.length ? 'text-emerald-600' : 'text-slate-400'}`}>At least 6 characters</span>
+                      <span className={`text-[9px] font-bold ${passwordValidation.length ? 'text-emerald-600' : 'text-slate-400'}`}>At least 6 characters</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className={`w-4 h-4 rounded-full flex items-center justify-center ${passwordValidation.match ? 'bg-emerald-500' : 'bg-slate-200'}`}>
-                        {passwordValidation.match && <Check className="w-2.5 h-2.5 text-white" />}
+                      <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${passwordValidation.match ? 'bg-emerald-500' : 'bg-slate-200'}`}>
+                        {passwordValidation.match && <Check className="w-2 h-2 text-white" />}
                       </div>
-                      <span className={`text-[10px] font-bold ${passwordValidation.match ? 'text-emerald-600' : 'text-slate-400'}`}>Passwords match</span>
+                      <span className={`text-[9px] font-bold ${passwordValidation.match ? 'text-emerald-600' : 'text-slate-400'}`}>Passwords match</span>
                     </div>
                   </div>
                 </div>
@@ -1999,9 +2058,9 @@ const StaffSchedule = () => {
                     type="submit" 
                     isLoading={isChangingPassword} 
                     disabled={!isPasswordValid}
-                    className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-200 disabled:opacity-50 disabled:shadow-none"
+                    className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-600/20 disabled:opacity-50 disabled:shadow-none"
                   >
-                    Update Credentials
+                    Change Password
                   </Button>
                 </div>
               </form>
