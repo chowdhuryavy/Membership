@@ -1252,6 +1252,39 @@ const SettingsPage = () => {
                           </div>
                       </CardHeader>
                       <CardContent className="p-8 space-y-6">
+                          <div className="flex flex-col gap-4 p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                              <div className="flex items-center justify-between">
+                                  <div>
+                                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Loading Screen Style</h3>
+                                      <p className="text-xs text-slate-500 mt-1">Choose the animation style shown when staff login or load schedules</p>
+                                  </div>
+                                  <select 
+                                      value={settings?.staff_portal_settings?.loading_screen_style || 'monogram'}
+                                      onChange={async (e) => {
+                                          try {
+                                              const updatedSettings = { 
+                                                  ...settings!, 
+                                                  staff_portal_settings: {
+                                                      ...(settings?.staff_portal_settings || {}),
+                                                      loading_screen_style: e.target.value
+                                                  }
+                                              };
+                                              await db.updateSettings(updatedSettings);
+                                              await refreshSettings();
+                                              showStatus('Loading screen style updated successfully.', 'success');
+                                          } catch (err: any) {
+                                              showStatus('Failed to update settings: ' + err.message, 'error');
+                                          }
+                                      }}
+                                      className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-900 uppercase tracking-tight focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                  >
+                                      <option value="monogram">Monogram (Classic HCM)</option>
+                                      <option value="holographic">Holographic (Futuristic Ring)</option>
+                                      <option value="minimal-pulse">Minimal Pulse (Clean & Simple)</option>
+                                  </select>
+                              </div>
+                          </div>
+
                           <div className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100">
                               <div>
                                   <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Show Incentives</h3>

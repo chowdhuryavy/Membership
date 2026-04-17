@@ -15,102 +15,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
 import { getReportData } from '../src/shared/reportLogic';
 import { supabase } from '../services/supabase';
-
-const LoadingScreen = () => (
-  <motion.div 
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900"
-  >
-    <div className="relative flex flex-col items-center">
-      {/* Logo Container */}
-      <motion.div 
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="relative w-48 h-48 flex items-center justify-center"
-      >
-        {/* Outer Ring */}
-        <motion.div 
-          animate={{ rotate: 360 }}
-          transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-          className="absolute inset-0 border-2 border-dashed border-indigo-500/20 rounded-full"
-        />
-        
-        {/* Inner Glow */}
-        <div className="absolute inset-4 bg-indigo-500/5 rounded-full blur-2xl animate-pulse"></div>
-
-        {/* Monogram */}
-        <motion.svg 
-          width="200" height="100" viewBox="0 0 160 100" 
-          className="stroke-[4] fill-none stroke-linecap-round stroke-linejoin-round"
-          initial="hidden"
-          animate="visible"
-          variants={{
-            hidden: { opacity: 0 },
-            visible: { opacity: 1, transition: { staggerChildren: 0.3 } }
-          }}
-        >
-          {/* H */}
-          <motion.path 
-            d="M 20 20 L 20 80 M 50 20 L 50 80 M 20 50 L 50 50"
-            stroke="white"
-            variants={{
-              hidden: { pathLength: 0, opacity: 0 },
-              visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
-            }}
-          />
-          {/* C */}
-          <motion.path 
-            d="M 90 30 A 25 25 0 1 0 90 70"
-            stroke="#6366f1"
-            variants={{
-              hidden: { pathLength: 0, opacity: 0 },
-              visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
-            }}
-          />
-          {/* M */}
-          <motion.path 
-            d="M 105 80 L 105 20 L 120 50 L 135 20 L 135 80"
-            stroke="white"
-            variants={{
-              hidden: { pathLength: 0, opacity: 0 },
-              visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
-            }}
-          />
-        </motion.svg>
-      </motion.div>
-
-      {/* Text Label */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1, duration: 0.5 }}
-        className="mt-8 text-center"
-      >
-        <h2 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] mb-2">Health Club Management</h2>
-        <div className="flex items-center justify-center gap-1">
-          {[0, 1, 2].map((i) => (
-            <motion.div
-              key={i}
-              animate={{ 
-                scale: [1, 1.5, 1],
-                opacity: [0.3, 1, 0.3]
-              }}
-              transition={{ 
-                duration: 1, 
-                repeat: Infinity, 
-                delay: i * 0.2 
-              }}
-              className="w-1 h-1 bg-indigo-500 rounded-full"
-            />
-          ))}
-        </div>
-      </motion.div>
-    </div>
-  </motion.div>
-);
+import { StaffLoadingScreens } from '../components/StaffLoadingScreens';
 
 interface StaffNotification {
   id: string;
@@ -737,7 +642,7 @@ const StaffSchedule = () => {
     }
   };
 
-  if (loading && !staff) return <LoadingScreen />;
+  if (loading && !staff) return <StaffLoadingScreens styleId={settings?.staff_portal_settings?.loading_screen_style} propertyName={propertyName} logoUrl={propertyLogo || settings?.logo_url} />;
   if (!staff) return null;
 
   const refreshStaffData = async () => {
@@ -921,7 +826,7 @@ const StaffSchedule = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100">
       <AnimatePresence>
-        {(loading || incentiveLoading || !minLoadingFinished) && <LoadingScreen />}
+        {(loading || incentiveLoading || !minLoadingFinished) && <StaffLoadingScreens styleId={settings?.staff_portal_settings?.loading_screen_style} propertyName={propertyName} logoUrl={propertyLogo || settings?.logo_url} />}
       </AnimatePresence>
 
       {/* Desktop Sidebar */}
