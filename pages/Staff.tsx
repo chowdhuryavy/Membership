@@ -39,7 +39,7 @@ import StaffProfileView from './StaffProfileView';
 
 const StaffPage = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, hasPermission, outlets = [], setPageLoading } = useSettings();
+  const { settings, currentOutlet, currentProperty, hasPermission, outlets = [], setPageLoading } = useSettings();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -364,14 +364,16 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
 
                 <div className="space-y-6">
                   <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Employment Details</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Incentive Eligibility</label>
-                      <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-                        <button type="button" onClick={() => setFormData({ ...formData, is_eligible_for_incentives: true })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${formData.is_eligible_for_incentives ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>Eligible</button>
-                        <button type="button" onClick={() => setFormData({ ...formData, is_eligible_for_incentives: false })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${!formData.is_eligible_for_incentives ? 'bg-white text-red-600 shadow-md' : 'text-slate-400'}`}>Exempt</button>
+                  <div className={`grid grid-cols-1 ${settings?.staff_portal_settings?.show_incentives ? 'md:grid-cols-2' : ''} gap-8`}>
+                    {settings?.staff_portal_settings?.show_incentives && (
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Incentive Eligibility</label>
+                        <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                          <button type="button" onClick={() => setFormData({ ...formData, is_eligible_for_incentives: true })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${formData.is_eligible_for_incentives ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>Eligible</button>
+                          <button type="button" onClick={() => setFormData({ ...formData, is_eligible_for_incentives: false })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${!formData.is_eligible_for_incentives ? 'bg-white text-red-600 shadow-md' : 'text-slate-400'}`}>Exempt</button>
+                        </div>
                       </div>
-                    </div>
+                    )}
                     <div className="space-y-3">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Account Status</label>
                       <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
@@ -455,29 +457,31 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Show monthly performance</p>
                         </div>
                       </label>
-                      <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
-                        <input 
-                          type="checkbox" 
-                          checked={formData.staff_portal_settings?.show_incentives ?? true}
-                          onChange={e => setFormData({ 
-                            ...formData, 
-                            staff_portal_settings: { 
-                              ...(formData.staff_portal_settings || {
-                                show_daily_schedule: true,
-                                show_monthly_summary: true,
-                                show_incentives: true,
-                                show_session_notes: true
-                              }), 
-                              show_incentives: e.target.checked 
-                            } 
-                          })}
-                          className="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <div>
-                          <p className="text-xs font-black text-slate-700 uppercase tracking-tight">Incentives</p>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Show incentive calculations</p>
-                        </div>
-                      </label>
+                      {settings?.staff_portal_settings?.show_incentives && (
+                        <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
+                          <input 
+                            type="checkbox" 
+                            checked={formData.staff_portal_settings?.show_incentives ?? true}
+                            onChange={e => setFormData({ 
+                              ...formData, 
+                              staff_portal_settings: { 
+                                ...(formData.staff_portal_settings || {
+                                  show_daily_schedule: true,
+                                  show_monthly_summary: true,
+                                  show_incentives: true,
+                                  show_session_notes: true
+                                }), 
+                                show_incentives: e.target.checked 
+                              } 
+                            })}
+                            className="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div>
+                            <p className="text-xs font-black text-slate-700 uppercase tracking-tight">Incentives</p>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Show incentive calculations</p>
+                          </div>
+                        </label>
+                      )}
                       <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
                         <input 
                           type="checkbox" 
