@@ -70,7 +70,35 @@ const StaffSchedule = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [triggeredReminders, setTriggeredReminders] = useState<Set<string>>(new Set());
   
+  const [selectedOutletId, setSelectedOutletId] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const { settings, formatMoney } = useSettings();
+
+  // Initialize selectedOutletId when staff is loaded
+  useEffect(() => {
+    if (staff && !selectedOutletId) {
+      const sOutlets = Array.isArray(staff.outlet_ids) ? staff.outlet_ids : ((staff as any).outlet_id ? [(staff as any).outlet_id] : []);
+      const stored = localStorage.getItem(`staff_selected_outlet_${staff.id}`);
+      if (stored && sOutlets.includes(stored)) {
+        setSelectedOutletId(stored);
+      } else if (sOutlets.length > 0) {
+        setSelectedOutletId(sOutlets[0]);
+      }
+    }
+  }, [staff]);
+
+  // Update localStorage when selectedOutletId changes
+  useEffect(() => {
+    if (staff && selectedOutletId) {
+      localStorage.setItem(`staff_selected_outlet_${staff.id}`, selectedOutletId);
+      // Reload everything when outlet changes
+      loadSchedule();
+      loadMonthlySchedule();
+      loadIncentives();
+      loadPropertyDetails();
+    }
+  }, [selectedOutletId]);
 
   const animationTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -327,7 +355,7 @@ const StaffSchedule = () => {
       loadPropertyDetails();
 
       // Real-time updates
-      const unsubscribe = db.subscribeToBookings(staff.outlet_id, (payload) => {
+      const unsubscribe = db.subscribeToBookings(selectedOutletId || (staff as any).outlet_id, (payload) => {
         console.log('Real-time booking update received:', payload.eventType);
         
         // Handle new booking alert
@@ -371,15 +399,15 @@ const StaffSchedule = () => {
         unsubscribe();
       };
     }
-  }, [staff, currentDate, viewMode]);
+  }, [staff, currentDate, viewMode, selectedOutletId]);
 
   const loadPropertyDetails = async () => {
-    if (!staff) return;
+    if (!staff || !selectedOutletId) return;
     try {
       const outlets = await db.getOutlets();
       const properties = await db.getProperties();
       
-      const myOutlet = outlets.find(o => o.id === staff.outlet_id);
+      const myOutlet = outlets.find(o => o.id === selectedOutletId);
       const myProp = properties.find(p => p.id === myOutlet?.property_id);
       
       if (myProp) {
@@ -395,13 +423,13 @@ const StaffSchedule = () => {
   };
 
   const loadSchedule = async () => {
-    if (!staff) return;
+    if (!staff || !selectedOutletId) return;
     setLoading(true);
     try {
       const dateStr = format(currentDate, 'yyyy-MM-dd');
       
       let propertyId = staff.property_id;
-      const sOutlets = Array.isArray(staff.outlet_ids) ? staff.outlet_ids : ((staff as any).outlet_id ? [(staff as any).outlet_id] : []);
+      const sOutlets = [selectedOutletId];
 
       // If propertyId is missing, try to find it from outlets
       if (!propertyId) {
@@ -421,7 +449,7 @@ const StaffSchedule = () => {
       const [allBookings, allTreatments, allInventory, allGuests, allRooms, allOutlets, allSales] = await Promise.all([
         db.getMassageBookingsByDate(propertyId, true, dateStr),
         db.getMassageTypes(propertyId, true, sOutlets),
-        db.getInventory(propertyId, true),
+        db.getInventory(propertyId, true, sOutlets),
         db.getGuests(propertyId),
         db.getMassageRooms(undefined, propertyId),
         db.getOutlets(),
@@ -456,11 +484,11 @@ const StaffSchedule = () => {
   };
 
   const loadIncentives = async () => {
-    if (!staff) return;
+    if (!staff || !selectedOutletId) return;
     setIncentiveLoading(true);
     try {
       let propertyId = staff.property_id;
-      const sOutlets = Array.isArray(staff.outlet_ids) ? staff.outlet_ids : ((staff as any).outlet_id ? [(staff as any).outlet_id] : []);
+      const sOutlets = [selectedOutletId];
       
       // If propertyId is missing, try to find it from outlets
       if (!propertyId) {
@@ -542,19 +570,19 @@ const StaffSchedule = () => {
   };
 
   const loadMonthlySchedule = async () => {
-    if (!staff) return;
+    if (!staff || !selectedOutletId) return;
     setLoading(true);
     try {
       const startOfMonthStr = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), 'yyyy-MM-dd');
       const endOfMonthStr = format(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), 'yyyy-MM-dd');
       
       let propertyId = staff.property_id;
-      const sOutlets = Array.isArray(staff.outlet_ids) ? staff.outlet_ids : ((staff as any).outlet_id ? [(staff as any).outlet_id] : []);
+      const sOutlets = [selectedOutletId];
 
       // If propertyId is missing, try to find it from outlets
       if (!propertyId) {
         const outlets = await db.getOutlets();
-        const myOutlet = outlets.find(o => sOutlets.includes(o.id));
+        const myOutlet = outlets.find(o => o.id === selectedOutletId);
         if (myOutlet) {
           propertyId = myOutlet.property_id;
         }
@@ -569,7 +597,7 @@ const StaffSchedule = () => {
       const [allBookings, allTreatments, allInventory, allGuests, allRooms, allOutlets, allSales] = await Promise.all([
         db.getMassageBookingsByDateRange(propertyId, true, startOfMonthStr, endOfMonthStr),
         db.getMassageTypes(propertyId, true, sOutlets),
-        db.getInventory(propertyId, true),
+        db.getInventory(propertyId, true, sOutlets),
         db.getGuests(propertyId),
         db.getMassageRooms(undefined, propertyId),
         db.getOutlets(),
@@ -1028,6 +1056,28 @@ const StaffSchedule = () => {
                 )}
               </AnimatePresence>
             </div>
+
+            {staff && (Array.isArray(staff.outlet_ids) ? staff.outlet_ids.length > 1 : false) && (
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-px bg-slate-200 mx-2" />
+                <div className="relative group/outlet">
+                  <select 
+                    value={selectedOutletId || ''} 
+                    onChange={(e) => {
+                      setSelectedOutletId(e.target.value);
+                      setLoading(true);
+                    }}
+                    className="appearance-none bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 pr-10 text-[10px] font-black text-slate-900 uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer hover:bg-slate-100"
+                  >
+                    {(Array.isArray(staff.outlet_ids) ? staff.outlet_ids : []).map(oid => {
+                      const o = outlets.find(out => out.id === oid);
+                      return <option key={oid} value={oid}>{o?.name || 'Assigned Outlet'}</option>;
+                    })}
+                  </select>
+                  <ChevronDown className="w-3 h-3 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/outlet:text-indigo-500 transition-colors" />
+                </div>
+              </div>
+            )}
 
             <div className="h-8 w-px bg-slate-200 mx-2" />
             

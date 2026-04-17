@@ -29,18 +29,27 @@ class DatabaseService {
     return !!supabase && !DatabaseService.supabaseFailed;
   }
 
-  private async safeCall<T>(call: () => Promise<T>, fallback: T): Promise<T> {
+  public async safeCall<T>(call: () => Promise<T>, fallback: T): Promise<T> {
     try {
       const result = await call();
       return result;
     } catch (e: any) {
-      if (e.message?.includes('fetch') || e.message?.includes('Load failed') || e.message?.includes('Connection Error')) {
+      if (this.isNetworkError(e)) {
         console.warn("Supabase fetch failed, disabling Supabase for this session and falling back to mock data", e);
         DatabaseService.supabaseFailed = true;
         return fallback;
       }
       throw e;
     }
+  }
+
+  private isNetworkError(e: any): boolean {
+    const msg = e.message?.toLowerCase() || '';
+    return msg.includes('fetch') || 
+           msg.includes('connection') || 
+           msg.includes('load failed') || 
+           msg.includes('network error') ||
+           e.name === 'TypeError';
   }
 
   private generateUUID() {
@@ -1365,21 +1374,33 @@ class DatabaseService {
 
   async getSettings(): Promise<CompanySettings> {
     const defaultSettings: CompanySettings = { name: 'The Torch Hospitality', logo_url: '', address: '', currency_id: 'default' };
+    
+    // Always check local storage first for immediate fallback availability
+    const local = localStorage.getItem('company_settings_cache');
+    let current = local ? JSON.parse(local) : defaultSettings;
+
     if (this.isSupabase()) {
-      try {
+      return this.safeCall(async () => {
         const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
-        return (data as CompanySettings) || defaultSettings;
-      } catch (e) { return defaultSettings; }
+        if (data) {
+          localStorage.setItem('company_settings_cache', JSON.stringify(data));
+          return data as CompanySettings;
+        }
+        return current;
+      }, current);
     }
-    return defaultSettings;
+    return current;
   }
 
   async updateSettings(settings: CompanySettings) {
+    // 1. Update localStorage immediately for cross-tab speed
+    localStorage.setItem('company_settings_cache', JSON.stringify(settings));
+
     if (this.isSupabase()) {
       const { error } = await supabase.from('company_settings').upsert({ ...settings, id: 'global' });
       if (error) {
-        console.error('Error updating settings:', error);
-        throw error;
+        console.error('Error updating settings in Supabase:', error);
+        // We don't throw here if we have local storage as a valid secondary source
       }
       await this.logAction('UPDATE_SETTINGS', 'Global system configuration mutated.');
     }
@@ -1606,7 +1627,7 @@ class DatabaseService {
 
   async getInventory(scopeId: string, isPropertyScope: boolean = false, options?: string[] | { limit?: number }): Promise<InventoryItem[]> {
     if (this.isSupabase()) {
-        try {
+        return this.safeCall(async () => {
             let query = supabase.from('inventory').select('*');
             
             let limitToOutletIds: string[] | undefined;
@@ -1634,10 +1655,7 @@ class DatabaseService {
             const { data, error } = await query.order('name');
             if (error) throw error;
             return (data || []) as InventoryItem[];
-        } catch (e: any) {
-            console.error("Inventory fetch error:", e);
-            return [];
-        }
+        }, []);
     }
     return [];
   }
