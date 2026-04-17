@@ -852,7 +852,7 @@ const StaffSchedule = () => {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100">
+    <div className={`min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100 transition-opacity duration-300 ${(loading || incentiveLoading || !minLoadingFinished) ? 'opacity-0' : 'opacity-100'}`}>
       <AnimatePresence>
         {(loading || incentiveLoading || !minLoadingFinished) && <StaffLoadingScreens styleId={settings?.staff_portal_settings?.loading_screen_style} appName={settings?.name} propertyName={propertyName} logoUrl={propertyLogo || settings?.logo_url} />}
       </AnimatePresence>
@@ -1142,11 +1142,13 @@ const StaffSchedule = () => {
         </div>
 
         {/* Schedule List */}
-        {loading ? (
+        {loading && minLoadingFinished ? (
           <div className="flex flex-col items-center justify-center p-12 space-y-4">
             <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Syncing Data...</p>
           </div>
+        ) : loading ? (
+           <div className="h-64" /> // Spacer while big loader is active
         ) : viewMode === 'incentives' ? (
           <div className="space-y-6">
             {!selectedIncentiveDept ? (

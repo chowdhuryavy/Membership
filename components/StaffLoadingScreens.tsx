@@ -300,21 +300,45 @@ export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({
           {/* Inner Glow */}
           <div className="absolute inset-4 bg-indigo-500/5 rounded-full blur-2xl animate-pulse"></div>
 
-          {/* Dynamic Initials Monogram */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.5, duration: 0.8 }}
-              className="flex items-center justify-center gap-2"
-            >
-              {displayTitle.split(' ').slice(0, 3).map((word, i) => (
-                <span key={i} className={`text-4xl font-black ${i === 1 ? 'text-indigo-500' : 'text-white'}`}>
-                  {word.charAt(0).toUpperCase()}
-                </span>
-              ))}
-            </motion.div>
-          </div>
+          {/* Monogram */}
+          <motion.svg 
+            width="200" height="100" viewBox="0 0 160 100" 
+            className="stroke-[4] fill-none stroke-linecap-round stroke-linejoin-round"
+            initial="hidden"
+            animate="visible"
+            variants={{
+              hidden: { opacity: 0 },
+              visible: { opacity: 1, transition: { staggerChildren: 0.3 } }
+            }}
+          >
+            {/* H */}
+            <motion.path 
+              d="M 20 20 L 20 80 M 50 20 L 50 80 M 20 50 L 50 50"
+              stroke="white"
+              variants={{
+                hidden: { pathLength: 0, opacity: 0 },
+                visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
+              }}
+            />
+            {/* C */}
+            <motion.path 
+              d="M 90 30 A 25 25 0 1 0 90 70"
+              stroke="#6366f1"
+              variants={{
+                hidden: { pathLength: 0, opacity: 0 },
+                visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
+              }}
+            />
+            {/* M */}
+            <motion.path 
+              d="M 105 80 L 105 20 L 120 50 L 135 20 L 135 80"
+              stroke="white"
+              variants={{
+                hidden: { pathLength: 0, opacity: 0 },
+                visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
+              }}
+            />
+          </motion.svg>
         </motion.div>
 
         {/* Text Label */}
