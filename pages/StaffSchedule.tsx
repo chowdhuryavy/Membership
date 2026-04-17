@@ -670,9 +670,6 @@ const StaffSchedule = () => {
     }
   };
 
-  if (loading && !staff) return <StaffLoadingScreens styleId={settings?.staff_portal_settings?.loading_screen_style} appName={settings?.name} propertyName={propertyName} logoUrl={propertyLogo || settings?.logo_url} />;
-  if (!staff) return null;
-
   const refreshStaffData = async () => {
     if (!staff) return;
     try {
@@ -687,8 +684,10 @@ const StaffSchedule = () => {
     }
   };
 
-  const SidebarContent = () => (
-    <div className="flex flex-col h-full bg-slate-900 text-white p-6 overflow-y-auto custom-scrollbar">
+  const SidebarContent = () => {
+    if (!staff) return null;
+    return (
+      <div className="flex flex-col h-full bg-slate-900 text-white p-6 overflow-y-auto custom-scrollbar">
       {/* Brand Section */}
       <div className="flex items-center gap-4 mb-10 pt-2 shrink-0">
         <div className="w-14 h-14 flex items-center justify-center shrink-0 transition-all duration-500 hover:scale-110 relative">
@@ -751,7 +750,7 @@ const StaffSchedule = () => {
 
       <nav className="flex-1 space-y-1">
         <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 px-1">Main Menu</div>
-        {(staff.staff_portal_settings?.show_daily_schedule ?? true) && (
+        {(staff?.staff_portal_settings?.show_daily_schedule ?? true) && (
           <button 
             onClick={() => {
               setViewMode('daily');
@@ -763,7 +762,7 @@ const StaffSchedule = () => {
             <CalendarIcon className="w-3.5 h-3.5" /> Today's Schedule
           </button>
         )}
-        {(staff.staff_portal_settings?.show_monthly_summary ?? true) && (
+        {(staff?.staff_portal_settings?.show_monthly_summary ?? true) && (
           <button 
             onClick={() => {
               setViewMode('monthly');
@@ -774,7 +773,7 @@ const StaffSchedule = () => {
             <CalendarIcon className="w-3.5 h-3.5" /> Monthly Summary
           </button>
         )}
-        {(staff.staff_portal_settings?.show_incentives ?? true) && (
+        {(staff?.staff_portal_settings?.show_incentives ?? true) && (
           <button 
             onClick={() => {
               setViewMode('incentives');
@@ -798,7 +797,7 @@ const StaffSchedule = () => {
             >
               <div className="px-6 py-4 mb-2">
                 <p className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-1">Session Active</p>
-                <h3 className="text-[11px] font-black text-white uppercase tracking-widest truncate">{staff.name}</h3>
+                <h3 className="text-[11px] font-black text-white uppercase tracking-widest truncate">{staff?.name}</h3>
               </div>
 
               <div className="space-y-1">
@@ -840,22 +839,32 @@ const StaffSchedule = () => {
         >
           <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-xl font-black uppercase text-white shadow-2xl shadow-indigo-900/40 border border-white/10 shrink-0 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent" />
-            {staff.name.charAt(0)}
+            {staff?.name?.charAt(0)}
           </div>
           <div className="min-w-0 flex-1 text-left">
-            <h1 className="text-[11px] font-black uppercase tracking-widest truncate text-white">{staff.name}</h1>
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">{staff.role}</p>
+            <h1 className="text-[11px] font-black uppercase tracking-widest truncate text-white">{staff?.name}</h1>
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">{staff?.role}</p>
           </div>
         </button>
       </div>
     </div>
   );
+};
 
   return (
-    <div className={`min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100 transition-opacity duration-300 ${(loading || incentiveLoading || !minLoadingFinished) ? 'opacity-0' : 'opacity-100'}`}>
+    <>
       <AnimatePresence>
-        {(loading || incentiveLoading || !minLoadingFinished) && <StaffLoadingScreens styleId={settings?.staff_portal_settings?.loading_screen_style} appName={settings?.name} propertyName={propertyName} logoUrl={propertyLogo || settings?.logo_url} />}
+        {(loading || incentiveLoading || !minLoadingFinished || !staff) && (
+          <StaffLoadingScreens 
+            styleId={settings?.staff_portal_settings?.loading_screen_style} 
+            appName={settings?.name} 
+            propertyName={propertyName} 
+            logoUrl={propertyLogo || settings?.logo_url} 
+          />
+        )}
       </AnimatePresence>
+
+      <div className={`min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100 transition-opacity duration-300 ${(loading || incentiveLoading || !minLoadingFinished || !staff) ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
 
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block w-72 h-screen sticky top-0 border-r border-slate-200 z-50">
@@ -1074,7 +1083,7 @@ const StaffSchedule = () => {
                     }}
                     className="appearance-none bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 pr-10 text-[10px] font-black text-slate-900 uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer hover:bg-slate-100"
                   >
-                    {(Array.isArray(staff.outlet_ids) ? staff.outlet_ids : []).map(oid => {
+                    {(Array.isArray(staff?.outlet_ids) ? staff.outlet_ids : []).map(oid => {
                       const o = outlets.find(out => out.id === oid);
                       return <option key={oid} value={oid}>{o?.name || 'Assigned Outlet'}</option>;
                     })}
@@ -1088,7 +1097,7 @@ const StaffSchedule = () => {
             
             <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
               <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black text-sm">
-                {staff?.name.charAt(0)}
+                {staff?.name?.charAt(0)}
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{staff?.name}</span>
@@ -1105,7 +1114,7 @@ const StaffSchedule = () => {
             animate={{ opacity: 1, y: 0 }}
             className="hidden lg:block mb-8"
           >
-            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight mb-2">Welcome Back, {staff.name.split(' ')[0]}</h1>
+            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight mb-2">Welcome Back, {staff?.name?.split(' ')[0] || 'Member'}</h1>
             <p className="text-slate-500 font-medium">Here is your {viewMode === 'daily' ? 'schedule for today' : viewMode === 'monthly' ? 'monthly summary' : 'incentive earnings'}.</p>
           </motion.div>
         
@@ -1974,7 +1983,8 @@ const StaffSchedule = () => {
       </AnimatePresence>
       </div>
     </div>
-  );
+  </>
+);
 };
 
 export default StaffSchedule;
