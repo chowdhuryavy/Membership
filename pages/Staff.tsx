@@ -340,7 +340,7 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
       {showForm && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300 overflow-y-auto">
-          <Card className="w-full max-w-2xl rounded-[3rem] border-slate-200 shadow-2xl overflow-hidden bg-white animate-in zoom-in-95 duration-300 my-auto">
+          <Card className="w-full max-w-2xl rounded-[3rem] border-slate-200 shadow-2xl overflow-hidden bg-white animate-in zoom-in-95 duration-300 my-8 max-h-[90vh] flex flex-col">
             <CardHeader className="bg-slate-900 text-white p-8 flex justify-between items-center">
               <div>
                 <CardTitle className="text-xl font-black uppercase tracking-widest">{editingId ? 'Modify Personnel' : 'Enroll New Staff'}</CardTitle>

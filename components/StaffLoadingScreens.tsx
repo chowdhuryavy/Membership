@@ -4,15 +4,18 @@ import { Sparkles, Activity, ShieldCheck, Database, Layout, Loader2, Cpu, Globe 
 
 interface LoadingScreenProps {
   styleId?: string;
+  appName?: string;
   propertyName?: string;
   logoUrl?: string;
 }
 
 export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({ 
   styleId = 'monogram', 
+  appName = 'Global Name',
   propertyName = 'Health Club Management',
   logoUrl 
 }) => {
+  const displayTitle = appName || propertyName || 'Staff Portal';
 
   const HolographicStyle = () => (
     <motion.div 
@@ -79,7 +82,7 @@ export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({
           className="mt-16 text-center z-10"
         >
           <div className="px-6 py-2 bg-cyan-500/5 border border-cyan-500/20 rounded-full inline-block backdrop-blur-md">
-            <h2 className="text-sm font-black text-white uppercase tracking-[0.6em] whitespace-nowrap">{propertyName}</h2>
+            <h2 className="text-sm font-black text-white uppercase tracking-[0.6em] whitespace-nowrap">{displayTitle}</h2>
           </div>
           <div className="mt-8 flex items-center justify-center gap-6">
             <div className="flex flex-col items-center gap-1">
@@ -130,7 +133,7 @@ export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({
           transition={{ duration: 2, repeat: Infinity }}
           className="text-lg font-black text-slate-900 uppercase tracking-[0.2em]"
         >
-          {propertyName}
+          {displayTitle}
         </motion.h2>
         <div className="mt-4 flex items-center justify-center gap-2">
           <div className="h-1 w-1 bg-slate-300 rounded-full animate-bounce"></div>
@@ -189,7 +192,7 @@ export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({
 
         <div className="glass-morphism p-8 rounded-[2.5rem] border border-white/10 bg-white/5 backdrop-blur-xl text-center">
           <h2 className="text-xl font-black text-white uppercase tracking-[0.3em] min-w-[300px] mb-6">
-            {propertyName.split('').map((char, index) => (
+            {displayTitle.split('').map((char, index) => (
               <motion.span
                 key={index}
                 initial={{ opacity: 0 }}
@@ -256,7 +259,7 @@ export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({
         </motion.div>
 
         <div className="absolute -bottom-20 left-1/2 -translate-x-1/2 text-center">
-            <h2 className="text-xs font-black text-white uppercase tracking-[0.8em]">{propertyName}</h2>
+            <h2 className="text-xs font-black text-white uppercase tracking-[0.8em]">{displayTitle}</h2>
             <div className="mt-4 flex gap-1 justify-center">
                 {[...Array(5)].map((_, i) => (
                     <motion.div
@@ -297,45 +300,21 @@ export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({
           {/* Inner Glow */}
           <div className="absolute inset-4 bg-indigo-500/5 rounded-full blur-2xl animate-pulse"></div>
 
-          {/* Monogram */}
-          <motion.svg 
-            width="200" height="100" viewBox="0 0 160 100" 
-            className="stroke-[4] fill-none stroke-linecap-round stroke-linejoin-round"
-            initial="hidden"
-            animate="visible"
-            variants={{
-              hidden: { opacity: 0 },
-              visible: { opacity: 1, transition: { staggerChildren: 0.3 } }
-            }}
-          >
-            {/* H */}
-            <motion.path 
-              d="M 20 20 L 20 80 M 50 20 L 50 80 M 20 50 L 50 50"
-              stroke="white"
-              variants={{
-                hidden: { pathLength: 0, opacity: 0 },
-                visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
-              }}
-            />
-            {/* C */}
-            <motion.path 
-              d="M 90 30 A 25 25 0 1 0 90 70"
-              stroke="#6366f1"
-              variants={{
-                hidden: { pathLength: 0, opacity: 0 },
-                visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
-              }}
-            />
-            {/* M */}
-            <motion.path 
-              d="M 105 80 L 105 20 L 120 50 L 135 20 L 135 80"
-              stroke="white"
-              variants={{
-                hidden: { pathLength: 0, opacity: 0 },
-                visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
-              }}
-            />
-          </motion.svg>
+          {/* Dynamic Initials Monogram */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.5, duration: 0.8 }}
+              className="flex items-center justify-center gap-2"
+            >
+              {displayTitle.split(' ').slice(0, 3).map((word, i) => (
+                <span key={i} className={`text-4xl font-black ${i === 1 ? 'text-indigo-500' : 'text-white'}`}>
+                  {word.charAt(0).toUpperCase()}
+                </span>
+              ))}
+            </motion.div>
+          </div>
         </motion.div>
 
         {/* Text Label */}
@@ -345,7 +324,7 @@ export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({
           transition={{ delay: 1, duration: 0.5 }}
           className="mt-8 text-center"
         >
-          <h2 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] mb-2">{propertyName}</h2>
+          <h2 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] mb-2">{displayTitle}</h2>
           <div className="flex items-center justify-center gap-1">
             {[0, 1, 2].map((i) => (
               <motion.div
@@ -427,7 +406,7 @@ export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({
         >
           <div className="flex items-center justify-center gap-3 mb-4">
              <div className="h-[2px] w-12 bg-gradient-to-r from-transparent to-indigo-500"></div>
-             <h2 className="text-sm font-black text-white uppercase tracking-[0.6em]">{propertyName}</h2>
+             <h2 className="text-sm font-black text-white uppercase tracking-[0.6em]">{displayTitle}</h2>
              <div className="h-[2px] w-12 bg-gradient-to-l from-transparent to-indigo-500"></div>
           </div>
           <p className="text-[8px] font-black text-indigo-400/60 uppercase tracking-widest flex items-center justify-center gap-2">
@@ -482,7 +461,7 @@ export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({
            </motion.div>
 
            <div className="text-center">
-              <h2 className="text-2xl font-black text-white uppercase tracking-[0.4em] mb-2">{propertyName}</h2>
+              <h2 className="text-2xl font-black text-white uppercase tracking-[0.4em] mb-2">{displayTitle}</h2>
               <div className="flex items-center justify-center gap-2">
                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Constructing Workspace</span>
                 <motion.span 
@@ -497,6 +476,84 @@ export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({
     </motion.div>
   );
 
+  const NeuralMatrixStyle = () => (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black overflow-hidden"
+    >
+      <div className="absolute inset-0 opacity-20">
+        {[...Array(20)].map((_, i) => (
+          <motion.div
+            key={i}
+            initial={{ y: -100, opacity: 0 }}
+            animate={{ y: 600, opacity: [0, 1, 0] }}
+            transition={{ duration: Math.random() * 3 + 2, repeat: Infinity, delay: Math.random() * 2 }}
+            className="absolute text-[8px] font-mono whitespace-nowrap text-green-500"
+            style={{ left: `${i * 5}%` }}
+          >
+            {Math.random().toString(36).substring(7).repeat(10)}
+          </motion.div>
+        ))}
+      </div>
+      <div className="relative z-10 flex flex-col items-center">
+        <div className="w-32 h-32 border-2 border-green-500/30 rounded-full flex items-center justify-center relative">
+          <motion.div 
+            animate={{ rotate: 360 }}
+            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-0 border-t-2 border-green-500"
+          />
+          <Activity className="w-12 h-12 text-green-500 animate-pulse" />
+        </div>
+        <h2 className="mt-8 text-xl font-black text-green-500 uppercase tracking-[0.5em] font-mono">{displayTitle}</h2>
+        <p className="mt-4 text-[10px] text-green-500/50 uppercase tracking-widest font-mono">Decoding Authentication Stream...</p>
+      </div>
+    </motion.div>
+  );
+
+  const PrismFlowStyle = () => (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-white overflow-hidden"
+    >
+      <div className="absolute inset-0">
+        <motion.div 
+          animate={{ 
+            background: [
+              "radial-gradient(circle at 0% 0%, #f472b6 0%, transparent 50%)",
+              "radial-gradient(circle at 100% 100%, #60a5fa 0%, transparent 50%)",
+              "radial-gradient(circle at 0% 100%, #f472b6 0%, transparent 50%)",
+              "radial-gradient(circle at 100% 0%, #60a5fa 0%, transparent 50%)",
+              "radial-gradient(circle at 0% 0%, #f472b6 0%, transparent 50%)",
+            ]
+          }}
+          transition={{ duration: 10, repeat: Infinity }}
+          className="absolute inset-0 opacity-10"
+        />
+      </div>
+      <div className="relative z-10 flex flex-col items-center">
+        <div className="w-24 h-24 bg-gradient-to-tr from-pink-500 to-blue-500 rounded-[2rem] flex items-center justify-center rotate-45 animate-pulse">
+          <div className="-rotate-45">
+            {logoUrl ? <img src={logoUrl} className="w-12 h-12 object-contain invert" /> : <Sparkles className="w-10 h-10 text-white" />}
+          </div>
+        </div>
+        <h2 className="mt-12 text-2xl font-black text-slate-900 uppercase tracking-tight">{displayTitle}</h2>
+        <div className="mt-6 flex items-center gap-4">
+          <div className="w-12 h-[2px] bg-slate-100 overflow-hidden">
+            <motion.div animate={{ x: [-48, 48] }} transition={{ duration: 1.5, repeat: Infinity }} className="w-full h-full bg-slate-900" />
+          </div>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Constructing Pulse</span>
+          <div className="w-12 h-[2px] bg-slate-100 overflow-hidden">
+            <motion.div animate={{ x: [48, -48] }} transition={{ duration: 1.5, repeat: Infinity }} className="w-full h-full bg-slate-900" />
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+
   switch (styleId) {
     case 'holographic': return <HolographicStyle />;
     case 'minimal-pulse': return <MinimalPulseStyle />;
@@ -504,6 +561,8 @@ export const StaffLoadingScreens: React.FC<LoadingScreenProps> = ({
     case 'solar-system': return <SolarSystemStyle />;
     case 'quantum-circuit': return <QuantumCircuitStyle />;
     case 'liquid-metal': return <LiquidMetalStyle />;
+    case 'neural-matrix': return <NeuralMatrixStyle />;
+    case 'prism-flow': return <PrismFlowStyle />;
     case 'monogram':
     default:
       return <MonogramStyle />;

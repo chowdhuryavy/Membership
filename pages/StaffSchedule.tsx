@@ -670,7 +670,7 @@ const StaffSchedule = () => {
     }
   };
 
-  if (loading && !staff) return <StaffLoadingScreens styleId={settings?.staff_portal_settings?.loading_screen_style} propertyName={settings?.name || propertyName} logoUrl={propertyLogo || settings?.logo_url} />;
+  if (loading && !staff) return <StaffLoadingScreens styleId={settings?.staff_portal_settings?.loading_screen_style} appName={settings?.name} propertyName={propertyName} logoUrl={propertyLogo || settings?.logo_url} />;
   if (!staff) return null;
 
   const refreshStaffData = async () => {
@@ -854,7 +854,7 @@ const StaffSchedule = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100">
       <AnimatePresence>
-        {(loading || incentiveLoading || !minLoadingFinished) && <StaffLoadingScreens styleId={settings?.staff_portal_settings?.loading_screen_style} propertyName={settings?.name || propertyName} logoUrl={propertyLogo || settings?.logo_url} />}
+        {(loading || incentiveLoading || !minLoadingFinished) && <StaffLoadingScreens styleId={settings?.staff_portal_settings?.loading_screen_style} appName={settings?.name} propertyName={propertyName} logoUrl={propertyLogo || settings?.logo_url} />}
       </AnimatePresence>
 
       {/* Desktop Sidebar */}
@@ -1064,8 +1064,13 @@ const StaffSchedule = () => {
                   <select 
                     value={selectedOutletId || ''} 
                     onChange={(e) => {
-                      setSelectedOutletId(e.target.value);
-                      setLoading(true);
+                      const newId = e.target.value;
+                      if (newId !== selectedOutletId) {
+                        setSelectedOutletId(newId);
+                        setLoading(true);
+                        setBookings([]); // Clear existing data to avoid confusion during sync
+                        setSales([]);
+                      }
                     }}
                     className="appearance-none bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 pr-10 text-[10px] font-black text-slate-900 uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer hover:bg-slate-100"
                   >
