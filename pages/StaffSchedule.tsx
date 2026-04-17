@@ -591,10 +591,18 @@ const StaffSchedule = () => {
 
         const rowsWithDept = staffRows.map(r => {
           const matchingKey = Object.keys(r.staff_splits).find(id => String(id) === String(staff.id));
+          
+          // Pre-derive grouping keys for reliable sorting
+          const itemDate = new Date(r.date || new Date());
+          const tierKey = format(itemDate, 'MMMM yyyy'); // e.g., "January 2026"
+          const typeKey = r.item_name || 'General';
+
           return {
             ...r,
             department: dept,
-            my_incentive: matchingKey ? r.staff_splits[matchingKey] : 0
+            my_incentive: matchingKey ? r.staff_splits[matchingKey] : 0,
+            tier: tierKey,
+            type: typeKey
           };
         });
 
