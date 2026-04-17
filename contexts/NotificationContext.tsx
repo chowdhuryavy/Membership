@@ -3,6 +3,25 @@ import { db } from '../services/mockSupabase';
 import { Notification } from '../types';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
+import { toast } from 'react-hot-toast';
+
+// Simple sound activator
+const playNotificationSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    oscillator.type = 'sine';
+    oscillator.frequency.value = 880; // A5
+    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.2);
+  } catch (e) {
+    console.error('Failed to play sound', e);
+  }
+};
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -90,6 +109,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             return;
           }
           
+          // Trigger notification UI & Sound
+          playNotificationSound();
+          toast.success(n.title + ': ' + n.message, {
+            duration: 5000,
+            position: 'top-right',
+          });
+
           setNotifications(prev => {
             const exists = prev.some(item => item.id === n.id);
             if (exists) return prev;
@@ -144,6 +170,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       clearInterval(interval);
     };
   }, [fetchNotifications, user, outletId]);
+
 
   const markAsRead = async (id: string) => {
     const staffSessionStr = localStorage.getItem('staff_session');
