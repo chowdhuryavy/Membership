@@ -5,19 +5,34 @@ import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { toast } from 'react-hot-toast';
 
-// Simple sound activator
+// Unique, more complex notification sound
 const playNotificationSound = () => {
   try {
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    oscillator.type = 'sine';
-    oscillator.frequency.value = 880; // A5
-    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-    oscillator.start();
-    oscillator.stop(audioContext.currentTime + 0.2);
+    
+    // Create a series of tones for a "musical" alert
+    const playTone = (freq: number, startTime: number, duration: number, type: OscillatorType = 'sine') => {
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      osc.connect(gain);
+      gain.connect(audioContext.destination);
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, startTime);
+      
+      gain.gain.setValueAtTime(0.1, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+    };
+
+    const now = audioContext.currentTime;
+    // Play a sequence: Low-High-Mid-High
+    playTone(440, now, 0.1, 'triangle');
+    playTone(880, now + 0.1, 0.1, 'sine');
+    playTone(660, now + 0.2, 0.1, 'square');
+    playTone(990, now + 0.3, 0.2, 'sine');
+    
   } catch (e) {
     console.error('Failed to play sound', e);
   }
