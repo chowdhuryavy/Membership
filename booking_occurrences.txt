@@ -1,0 +1,82 @@
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, Notification, CustomReportConfig } from '../types';
+        id: 'bookings',
+          { key: 'bookings:view', label: 'View Calendar', description: 'Access the service grid and availability.' },
+          { key: 'bookings:create', label: 'Book Sessions', description: 'Create new treatment reservations.' },
+          { key: 'bookings:edit', label: 'Adjust Sessions', description: 'Reschedule or modify existing bookings.' },
+          { key: 'bookings:delete', label: 'Void Sessions', description: 'Cancel or delete bookings.' },
+          { key: 'bookings:manage_resources', label: 'Asset Config', description: 'Add/Edit therapists and treatment types.' },
+          { key: 'bookings:view_therapist_schedule', label: 'Specialist Timelines', description: 'View detailed schedules for individual therapists.' },
+          { key: 'settings:view_booking_engine', label: 'Booking Engine', description: 'Access booking engine settings.' },
+          { key: 'settings:manage_booking_engine', label: 'Manage Booking Engine', description: 'Edit booking engine settings.' },
+        // If this sale was linked to a booking, restore the booking to 'confirmed'
+        if (saleData?.booking_id) {
+            await supabase.from('massage_bookings').update({ status: 'confirmed' }).eq('id', saleData.booking_id);
+            await this.logAction('BOOKING_RESTORED', `Booking ${saleData.booking_id} restored after sale void.`);
+  async getMassageBookings(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<MassageBooking[]> {
+        let query = supabase.from('massage_bookings').select('*');
+        return (data || []) as MassageBooking[];
+  async getMassageBookingsByDate(scopeId: string, isPropertyScope: boolean, dateStr: string): Promise<MassageBooking[]> {
+      let query = supabase.from('massage_bookings').select('*');
+      return (data || []) as MassageBooking[];
+  async getMassageBookingsByDateRange(scopeId: string, isPropertyScope: boolean, startDate: string, endDate: string): Promise<MassageBooking[]> {
+      let query = supabase.from('massage_bookings').select('*');
+      return (data || []) as MassageBooking[];
+  async addMassageBooking(booking: Omit<MassageBooking, 'id' | 'created_at'>) {
+        const { error } = await supabase.from('massage_bookings').insert([{ ...booking, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
+        await this.logAction('CREATE_BOOKING', `Created booking on ${booking.date} at ${booking.start_time} (Therapist ID: ${booking.therapist_id})`, booking.outlet_id);
+          title: 'New Booking Assigned',
+          message: `You have a new booking on ${booking.date} at ${booking.start_time}.`,
+          user_id: booking.therapist_id,
+          outlet_id: booking.outlet_id
+    window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: booking.outlet_id } }));
+  async updateMassageBooking(id: string, updates: Partial<MassageBooking>) {
+        const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
+      window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: updates.outlet_id } }));
+      window.dispatchEvent(new CustomEvent('booking_updated', { detail: {} }));
+  async updateMassageBookingStatus(id: string, status: MassageBooking['status'], roomId?: string, paymentMethod?: MassageBooking['payment_method']) {
+      const { data: booking } = await supabase.from('massage_bookings').select('*').eq('id', id).single();
+      if (!booking) return;
+      const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
+      if (status && status !== booking.status) {
+          const { data: guest } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
+              title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+              message: `Booking for ${guest?.name || 'Guest'} on ${booking.date} has been marked as ${status}.`,
+              outlet_id: booking.outlet_id,
+              required_permission: 'bookings:view'
+      if (booking.status === 'completed' && status !== 'completed') {
+          await supabase.from('sales').delete().eq('booking_id', id);
+          await this.logAction('BOOKING_UNSERVED', `Sale record removed for booking ${id} as status changed to ${status}`);
+      if (status === 'completed' && booking.status !== 'completed') {
+        const { data: guest } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
+        if (booking.inventory_item_id) {
+            const { data: inv } = await supabase.from('inventory').select('name, category').eq('id', booking.inventory_item_id).single();
+                itemId = booking.inventory_item_id;
+        } else if (booking.massage_type_id) {
+            const { data: type } = await supabase.from('massage_types').select('name, category').eq('id', booking.massage_type_id).single();
+          property_id: booking.property_id,
+          outlet_id: booking.outlet_id,
+          guest_id: booking.guest_id,
+          unit_price: booking.price + (booking.discount || 0),
+          gross_amount: booking.price + (booking.discount || 0),
+          discount_amount: booking.discount || 0,
+          net_amount: booking.price,
+          sold_by_id: booking.therapist_id,
+          booking_id: booking.id,
+          discount_reason: booking.discount_reason,
+          discount_id_url: booking.discount_id_url,
+        // Add notification for completed booking
+          title: 'Booking Completed',
+          message: `Booking for ${guest?.name || 'Guest'} has been marked as completed.`,
+          user_id: booking.therapist_id,
+          outlet_id: booking.outlet_id
+    window.dispatchEvent(new CustomEvent('booking_updated', { detail: {} }));
+  subscribeToBookings(outletId: string, callback: (payload: { eventType: string, new: any, old?: any }) => void) {
+        .channel(`public:massage_bookings:outlet_id=eq.${outletId}`)
+            table: 'massage_bookings',
+    window.addEventListener('booking_updated', handleLocalUpdate);
+      window.removeEventListener('booking_updated', handleLocalUpdate);
+  async deleteMassageBooking(id: string) {
+      await supabase.from('sales').delete().eq('booking_id', id);
+      const { error } = await supabase.from('massage_bookings').delete().eq('id', id);
+      await this.logAction('DELETE_BOOKING', `Deleted booking ID: ${id}`);
+    window.dispatchEvent(new CustomEvent('booking_updated', { detail: {} }));

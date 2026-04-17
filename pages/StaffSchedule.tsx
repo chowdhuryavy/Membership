@@ -396,23 +396,27 @@ const StaffSchedule = () => {
     loadPageData();
 
     // Set up real-time subscription
-    const unsubscribe = db.subscribeToBookings(selectedOutletId, (payload) => {
+    const unsubscribe = db.subscribeToBookings(selectedOutletId, async (payload) => {
       console.log('Real-time booking update received:', payload.eventType);
       
-      if (payload.eventType === 'INSERT' && payload.new.staff_id === staff.id) {
+      if (payload.eventType === 'INSERT' && payload.new.therapist_id === staff.id) {
         playNotificationSound();
+        
+        // Fetch extra info
+        const guest = await db.getGuestById(payload.new.guest_id);
+        const treatment = await db.getMassageTypeById(payload.new.massage_type_id);
         
         const newNotif: StaffNotification = {
           id: payload.new.id || Math.random().toString(),
           title: 'New Booking Alert!',
-          message: `A new appointment has been scheduled for ${payload.new.start_time}`,
+          message: `Booking for ${guest?.name || 'Guest'} - ${treatment?.name || 'Treatment'} at ${payload.new.start_time}`,
           time: new Date(),
           isRead: false,
           type: 'booking'
         };
         
         setNotifications(prev => [newNotif, ...prev].slice(0, 20));
-        toast.success('New Booking Received!', {
+        toast.success(`New Booking: ${guest?.name || 'Guest'}`, {
           icon: '🔔',
           duration: 5000,
           style: {
