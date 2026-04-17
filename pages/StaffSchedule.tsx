@@ -69,7 +69,14 @@ const StaffSchedule = () => {
   }, [showAccountMenu]);
   const [notifications, setNotifications] = useState<StaffNotification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [triggeredReminders, setTriggeredReminders] = useState<Set<string>>(new Set());
+  const [triggeredReminders, setTriggeredReminders] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('triggered_reminders');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+
+  useEffect(() => {
+    localStorage.setItem('triggered_reminders', JSON.stringify(Array.from(triggeredReminders)));
+  }, [triggeredReminders]);
   
   const [selectedOutletId, setSelectedOutletId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -177,31 +184,39 @@ const StaffSchedule = () => {
           // Trigger alert if booking is in 14-16 minutes (to catch it within a 1-min check)
           if (diffInMinutes > 0 && diffInMinutes <= 15.5) {
             playNotificationSound();
+
+            const guest = guests.find(g => g.id === booking.guest_id);
+            const treatment = treatments.find(t => t.id === booking.massage_type_id);
+            const message = `Reminder: Booking for ${guest?.name || 'Guest'} - ${treatment?.name || 'Treatment'} at ${booking.start_time}`;
             
-            const reminderNotif: StaffNotification = {
-              id: `reminder-${booking.id}`,
-              title: 'Upcoming Session!',
-              message: `Reminder: You have a booking starting in 15 minutes (${booking.start_time})`,
-              time: new Date(),
-              isRead: false,
-              type: 'system'
-            };
-            
-            setNotifications(prev => [reminderNotif, ...prev].slice(0, 20));
-            setTriggeredReminders(prev => new Set(prev).add(booking.id));
-            
-            toast('Upcoming Session in 15m!', {
-              icon: '⏰',
-              duration: 6000,
-              style: {
-                background: '#0f172a',
-                color: '#fff',
-                fontSize: '12px',
-                fontWeight: '900',
-                textTransform: 'uppercase',
-                border: '1px solid #334155'
-              }
-            });
+            // Check for duplicate to avoid spam
+            const alreadyNotified = notifications.some(n => n.id === `reminder-${booking.id}`);
+            if (!alreadyNotified) {
+              const reminderNotif: StaffNotification = {
+                id: `reminder-${booking.id}`,
+                title: 'Upcoming Session!',
+                message,
+                time: new Date(),
+                isRead: false,
+                type: 'system'
+              };
+              
+              setNotifications(prev => [reminderNotif, ...prev].slice(0, 20));
+              setTriggeredReminders(prev => new Set(prev).add(booking.id));
+              
+              toast(message, {
+                icon: '⏰',
+                duration: 6000,
+                style: {
+                  background: '#0f172a',
+                  color: '#fff',
+                  fontSize: '12px',
+                  fontWeight: '900',
+                  textTransform: 'uppercase',
+                  border: '1px solid #334155'
+                }
+              });
+            }
           }
         } catch (e) {
           console.error("Error calculating reminder time:", e);
@@ -439,7 +454,7 @@ const StaffSchedule = () => {
     return () => {
       unsubscribe();
     };
-  }, [staff?.id, staff?.property_id, currentDate, viewMode, selectedOutletId]);
+  }, [staff?.id, staff?.property_id, currentDate, viewMode, selectedOutletId, guests, treatments]);
 
   const loadPropertyDetails = async () => {
     if (!staff || !selectedOutletId) return;
