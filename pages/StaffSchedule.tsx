@@ -116,14 +116,14 @@ const StaffSchedule = () => {
 
   // Splash Screen Logic: Minimum timer + Staff object presence + Current loading states
   useEffect(() => {
-    if (loading || incentiveLoading || !staff) {
-      setMinLoadingFinished(false);
-      const timer = setTimeout(() => {
-        setMinLoadingFinished(true);
-      }, 2000); // Minimum 2s stay for the loading screen
-      return () => clearTimeout(timer);
-    }
-  }, [loading, incentiveLoading, !!staff]);
+    // We want the loading screen to stay for AT LEAST 2000ms from component mount.
+    // We don't want to cancel the timer if loading completes earlier.
+    const timer = setTimeout(() => {
+      setMinLoadingFinished(true);
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   // Derived state to determine if the portal is ready for display
   const isAppReady = minLoadingFinished && !!staff && !loading && !incentiveLoading;
@@ -470,6 +470,14 @@ const StaffSchedule = () => {
         }
       }
 
+      // Final fallback for mock mode: use the first available property
+      if (!propertyId) {
+        const allProps = await db.getProperties();
+        if (allProps.length > 0) {
+          propertyId = allProps[0].id;
+        }
+      }
+
       if (!propertyId) {
         console.error("No property ID found for staff");
         setLoading(false);
@@ -529,6 +537,14 @@ const StaffSchedule = () => {
         const myOutlet = outletsPreCheck.find(o => sOutlets.includes(o.id));
         if (myOutlet) {
           propertyId = myOutlet.property_id;
+        }
+      }
+
+      // Final fallback for mock mode: use the first available property
+      if (!propertyId) {
+        const allProps = await db.getProperties();
+        if (allProps.length > 0) {
+          propertyId = allProps[0].id;
         }
       }
 
@@ -621,6 +637,14 @@ const StaffSchedule = () => {
         const myOutlet = outletsPreCheck.find(o => o.id === selectedOutletId);
         if (myOutlet) {
           propertyId = myOutlet.property_id;
+        }
+      }
+
+      // Final fallback for mock mode: use the first available property
+      if (!propertyId) {
+        const allProps = await db.getProperties();
+        if (allProps.length > 0) {
+          propertyId = allProps[0].id;
         }
       }
 

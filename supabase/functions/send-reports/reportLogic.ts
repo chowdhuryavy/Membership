@@ -509,7 +509,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       supabase.from('members').select('*').in('outlet_id', outletIds).neq('status', 'tentative').gte('start_date', startStr).lte('start_date', startStr),
       supabase.from('incentive_rules').select('*').eq('property_id', propertyId).eq('is_active', true),
       supabase.from('staff').select('*, leaves:staff_leaves!fk_staff_leaves_staff(*)').eq('property_id', propertyId),
-      supabase.from('inventory_items').select('*').eq('property_id', propertyId),
+      supabase.from('inventory').select('*').in('outlet_id', outletIds),
       supabase.from('massage_types').select('*').eq('property_id', propertyId),
       supabase.from('membership_categories').select('*'),
       supabase.from('guests').select('id, name')
