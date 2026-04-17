@@ -804,44 +804,58 @@ const StaffSchedule = () => {
                </div>
                <div className="flex flex-col min-w-0 flex-1">
                  <span className="text-[11px] font-black text-white uppercase tracking-tight leading-tight truncate">{propertyName}</span>
-                 {assignedOutlets.length <= 1 && outletName && (
-                   <div className="flex items-center gap-1 mt-1">
-                     <MapPin className="w-2 h-2 text-indigo-400" />
-                     <span className="text-[8px] font-black text-indigo-200 uppercase tracking-widest truncate">{outletName}</span>
-                   </div>
-                 )}
+                 {(() => {
+                   const validAssignedOutlets = assignedOutlets.filter(oid => outlets.some(o => o.id === oid));
+                   // Render static text if less than 2 valid outlets or still loading 
+                   if (validAssignedOutlets.length <= 1 && outletName) {
+                     return (
+                       <div className="flex items-center gap-1 mt-1">
+                         <MapPin className="w-2 h-2 text-indigo-400" />
+                         <span className="text-[8px] font-black text-indigo-200 uppercase tracking-widest truncate">{outletName}</span>
+                       </div>
+                     );
+                   }
+                   return null;
+                 })()}
                </div>
              </div>
 
              {/* Outlet Selector (Inline in Sidebar) */}
-             {assignedOutlets.length > 1 && (
-               <div className="relative group/outlet">
-                 <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                    <MapPin className="w-3 h-3 text-indigo-400" />
-                 </div>
-                 <select 
-                   value={selectedOutletId || ''} 
-                   onChange={(e) => {
-                     const newId = e.target.value;
-                     if (newId !== selectedOutletId) {
-                       setSelectedOutletId(newId);
-                       setLoading(true);
-                       setBookings([]);
-                       setSales([]);
-                       setIsSidebarOpen(false);
-                     }
-                   }}
-                   className="w-full appearance-none bg-white/5 border border-white/10 rounded-2xl pl-10 pr-10 py-2.5 text-[9px] font-black text-white uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer hover:bg-white/10"
-                 >
-                   {assignedOutlets.map(oid => {
-                     const o = outlets.find(out => out.id === oid);
-                     return <option key={oid} value={oid} className="bg-slate-900 text-white">{o?.name || 'Assigned Outlet'}</option>;
-                   })}
-                 </select>
-                 <ChevronDown className="w-3 h-3 text-white/40 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/outlet:text-white transition-colors" />
-               </div>
-             )}
+             {(() => {
+               const validAssignedOutlets = assignedOutlets.filter(oid => outlets.some(o => o.id === oid));
+               // Only show dropdown if we actually have *multiple real* outlets fetched
+               if (validAssignedOutlets.length > 1) {
+                 return (
+                   <div className="relative group/outlet">
+                     <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                        <MapPin className="w-3 h-3 text-indigo-400" />
+                     </div>
+                     <select 
+                       value={selectedOutletId || ''} 
+                       onChange={(e) => {
+                         const newId = e.target.value;
+                         if (newId !== selectedOutletId) {
+                           setSelectedOutletId(newId);
+                           setLoading(true);
+                           setBookings([]);
+                           setSales([]);
+                           setIsSidebarOpen(false);
+                         }
+                       }}
+                       className="w-full appearance-none bg-white/5 border border-white/10 rounded-2xl pl-10 pr-10 py-2.5 text-[9px] font-black text-white uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer hover:bg-white/10"
+                     >
+                       {validAssignedOutlets.map(oid => {
+                         const o = outlets.find(out => out.id === oid);
+                         return <option key={oid} value={oid} className="bg-slate-900 text-white">{o?.name}</option>;
+                       })}
+                     </select>
+                     <ChevronDown className="w-3 h-3 text-white/40 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/outlet:text-white transition-colors" />
+                   </div>
+                 );
+               }
+               return null;
+             })()}
            </div>
          </div>
        )}
