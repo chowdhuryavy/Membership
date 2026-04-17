@@ -642,7 +642,7 @@ const StaffSchedule = () => {
     }
   };
 
-  if (loading && !staff) return <StaffLoadingScreens styleId={settings?.staff_portal_settings?.loading_screen_style} propertyName={propertyName} logoUrl={propertyLogo || settings?.logo_url} />;
+  if (loading && !staff) return <StaffLoadingScreens styleId={settings?.staff_portal_settings?.loading_screen_style} propertyName={settings?.name || propertyName} logoUrl={propertyLogo || settings?.logo_url} />;
   if (!staff) return null;
 
   const refreshStaffData = async () => {
@@ -826,7 +826,7 @@ const StaffSchedule = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100">
       <AnimatePresence>
-        {(loading || incentiveLoading || !minLoadingFinished) && <StaffLoadingScreens styleId={settings?.staff_portal_settings?.loading_screen_style} propertyName={propertyName} logoUrl={propertyLogo || settings?.logo_url} />}
+        {(loading || incentiveLoading || !minLoadingFinished) && <StaffLoadingScreens styleId={settings?.staff_portal_settings?.loading_screen_style} propertyName={settings?.name || propertyName} logoUrl={propertyLogo || settings?.logo_url} />}
       </AnimatePresence>
 
       {/* Desktop Sidebar */}

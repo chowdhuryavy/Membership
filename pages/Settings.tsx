@@ -1281,6 +1281,10 @@ const SettingsPage = () => {
                                       <option value="monogram">Monogram (Classic HCM)</option>
                                       <option value="holographic">Holographic (Futuristic Ring)</option>
                                       <option value="minimal-pulse">Minimal Pulse (Clean & Simple)</option>
+                                      <option value="cyber-gradient">Cyber Gradient (Modern & Vibrant)</option>
+                                      <option value="solar-system">Solar System (Cosmic & Dynamic)</option>
+                                      <option value="quantum-circuit">Quantum Circuit (Deep Tech)</option>
+                                      <option value="liquid-metal">Liquid Metal (Organic & Bold)</option>
                                   </select>
                               </div>
                           </div>
