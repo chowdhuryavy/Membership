@@ -1362,10 +1362,12 @@ const StaffSchedule = () => {
                   const filteredData = incentiveData
                     .filter(item => item.department === selectedIncentiveDept)
                     .sort((a, b) => {
-                      const tierA = a.tier || '';
-                      const tierB = b.tier || '';
+                      const tierA = String(a.tier || '');
+                      const tierB = String(b.tier || '');
                       if (tierA !== tierB) return tierA.localeCompare(tierB);
-                      return (a.type || '').localeCompare(b.type || '');
+                      const typeA = String(a.type || '');
+                      const typeB = String(b.type || '');
+                      return typeA.localeCompare(typeB);
                     });
 
                   if (filteredData.length === 0) {
@@ -1392,7 +1394,7 @@ const StaffSchedule = () => {
                           const showTypeHeader = index === 0 || item.type !== filteredData[index - 1].type || item.tier !== filteredData[index - 1].tier;
                           
                           return (
-                            <React.Fragment key={item.id}>
+                            <div key={item.id}>
                               {showTierHeader && (
                                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mt-6 mb-2 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
                                   {item.tier || 'Standard Tier'}
@@ -1462,7 +1464,7 @@ const StaffSchedule = () => {
                             </div>
                           </div>
                           </motion.div>
-                        </React.Fragment>
+                          </div>
                       );
                     })}
                   </AnimatePresence>

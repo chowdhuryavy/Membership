@@ -6,6 +6,10 @@ import tailwindcss from '@tailwindcss/vite';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+  },
   optimizeDeps: {
     include: ['zod', 'react-hook-form', '@hookform/resolvers/zod', 'date-fns', 'lucide-react', 'jspdf', 'jspdf-autotable'],
   },
