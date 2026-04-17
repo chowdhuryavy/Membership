@@ -41,7 +41,6 @@ const StaffSchedule = () => {
   const [outlets, setOutlets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [minLoadingFinished, setMinLoadingFinished] = useState(false);
-  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'incentives'>('daily');
   const [monthlyBookings, setMonthlyBookings] = useState<MassageBooking[]>([]);
@@ -115,32 +114,24 @@ const StaffSchedule = () => {
     }
   }, [selectedOutletId]);
 
-  const animationTimerRef = React.useRef<NodeJS.Timeout | null>(null);
-
-  // Splash Screen Logic: Minimum timer + Staff object presence + Initial data fetch completion
+  // Splash Screen Logic: Minimum timer + Staff object presence + Current loading states
   useEffect(() => {
-    if (!staff) {
+    if (loading || incentiveLoading || !staff) {
       setMinLoadingFinished(false);
-      setInitialDataLoaded(false);
-    } else {
-      // Once staff is available, start the minimum visual timer
-      if (!minLoadingFinished && !animationTimerRef.current) {
-        animationTimerRef.current = setTimeout(() => {
-          setMinLoadingFinished(true);
-        }, 2000);
-      }
-      
-      // If we are not currently loading any data and the timer finished, we can mark initial load as done
-      if (minLoadingFinished && !loading && !incentiveLoading && !initialDataLoaded) {
-        setInitialDataLoaded(true);
-      }
+      const timer = setTimeout(() => {
+        setMinLoadingFinished(true);
+      }, 2000); // Minimum 2s stay for the loading screen
+      return () => clearTimeout(timer);
     }
-  }, [!!staff, minLoadingFinished, loading, incentiveLoading, initialDataLoaded]);
+  }, [loading, incentiveLoading, !!staff]);
 
-  // Clean up timer on unmount
+  // Derived state to determine if the portal is ready for display
+  const isAppReady = minLoadingFinished && !!staff && !loading && !incentiveLoading;
+
+  // Clean up references
   useEffect(() => {
     return () => {
-      if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+      // Cleanup logic if needed
     };
   }, []);
 
@@ -467,10 +458,13 @@ const StaffSchedule = () => {
       let propertyId = staff.property_id;
       const sOutlets = [selectedOutletId];
 
+      // Pre-flight check: Call an endpoint wrapped in safeCall to safely determine 
+      // if Supabase is offline BEFORE executing concurrent requests which would throw.
+      const outletsPreCheck = await db.getOutlets();
+
       // If propertyId is missing, try to find it from outlets
       if (!propertyId) {
-        const outlets = await db.getOutlets();
-        const myOutlet = outlets.find(o => sOutlets.includes(o.id));
+        const myOutlet = outletsPreCheck.find(o => sOutlets.includes(o.id));
         if (myOutlet) {
           propertyId = myOutlet.property_id;
         }
@@ -526,10 +520,13 @@ const StaffSchedule = () => {
       let propertyId = staff.property_id;
       const sOutlets = [selectedOutletId];
       
+      // Pre-flight check: Call an endpoint wrapped in safeCall to safely determine 
+      // if Supabase is offline BEFORE executing concurrent requests which would throw.
+      const outletsPreCheck = await db.getOutlets();
+
       // If propertyId is missing, try to find it from outlets
       if (!propertyId) {
-        const outlets = await db.getOutlets();
-        const myOutlet = outlets.find(o => sOutlets.includes(o.id));
+        const myOutlet = outletsPreCheck.find(o => sOutlets.includes(o.id));
         if (myOutlet) {
           propertyId = myOutlet.property_id;
         }
@@ -615,10 +612,13 @@ const StaffSchedule = () => {
       let propertyId = staff.property_id;
       const sOutlets = [selectedOutletId];
 
+      // Pre-flight check: Call an endpoint wrapped in safeCall to safely determine 
+      // if Supabase is offline BEFORE executing concurrent requests which would throw.
+      const outletsPreCheck = await db.getOutlets();
+
       // If propertyId is missing, try to find it from outlets
       if (!propertyId) {
-        const outlets = await db.getOutlets();
-        const myOutlet = outlets.find(o => o.id === selectedOutletId);
+        const myOutlet = outletsPreCheck.find(o => o.id === selectedOutletId);
         if (myOutlet) {
           propertyId = myOutlet.property_id;
         }
@@ -919,7 +919,7 @@ const StaffSchedule = () => {
   return (
     <>
       <AnimatePresence>
-        {(!initialDataLoaded || !staff) && (
+        {!isAppReady && (
           <StaffLoadingScreens 
             key="staff-portal-loader"
             styleId={settings?.staff_portal_settings?.loading_screen_style} 
@@ -930,7 +930,7 @@ const StaffSchedule = () => {
         )}
       </AnimatePresence>
 
-      <div className={`min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100 transition-opacity duration-300 ${(!initialDataLoaded || !staff) ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100 transition-opacity duration-500 ${!isAppReady ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
 
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block w-72 h-screen sticky top-0 border-r border-slate-200 z-50">
@@ -1238,14 +1238,12 @@ const StaffSchedule = () => {
             disabled={loading || incentiveLoading} 
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:bg-indigo-100 rounded-lg transition-all active:scale-95 disabled:opacity-50"
           >
-            <RefreshCcw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${loading || incentiveLoading ? 'animate-spin' : ''}`} /> Refresh
+            <RefreshCcw className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Refresh
           </button>
         </div>
 
         {/* Content Section */}
-        {(loading && !initialDataLoaded) ? (
-          <div className="flex-1" />
-        ) : viewMode === 'incentives' ? (
+        {viewMode === 'incentives' ? (
           <div className="space-y-6">
             {!selectedIncentiveDept ? (
               <>
@@ -1871,8 +1869,8 @@ const StaffSchedule = () => {
               })}
             </AnimatePresence>
           </div>
-      )}
-    </main>
+        )}
+      </main>
 
       {/* Password Change Modal */}
       <AnimatePresence>
