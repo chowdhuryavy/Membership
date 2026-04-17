@@ -1212,14 +1212,37 @@ const StaffSchedule = () => {
           animate={{ opacity: 1, scale: 1 }}
           className="flex items-center justify-between bg-white p-2 rounded-2xl shadow-sm border border-slate-200/60"
         >
-          <button onClick={() => setCurrentDate(viewMode === 'daily' ? subDays(currentDate, 1) : new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-500 hover:text-indigo-600">
+          <button onClick={() => {
+            if (viewMode === 'daily') {
+              setCurrentDate(subDays(currentDate, 1));
+            } else {
+              setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+            }
+          }} className="p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-500 hover:text-indigo-600">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2 font-black uppercase tracking-widest text-sm text-slate-800">
+          <div className="relative flex items-center gap-2 font-black uppercase tracking-widest text-sm text-slate-800">
             <CalendarIcon className="w-4 h-4 text-indigo-600" />
+            <input 
+              type={viewMode === 'daily' ? 'date' : 'month'} 
+              value={viewMode === 'daily' ? format(currentDate, 'yyyy-MM-dd') : format(currentDate, 'yyyy-MM')}
+              onChange={(e) => {
+                const date = new Date(e.target.value);
+                if (!isNaN(date.getTime())) {
+                  setCurrentDate(date);
+                }
+              }}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full"
+            />
             {viewMode === 'daily' ? format(currentDate, 'EEE, dd MMM yyyy') : format(currentDate, 'MMMM yyyy')}
           </div>
-          <button onClick={() => setCurrentDate(viewMode === 'daily' ? addDays(currentDate, 1) : new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-500 hover:text-indigo-600">
+          <button onClick={() => {
+            if (viewMode === 'daily') {
+              setCurrentDate(addDays(currentDate, 1));
+            } else {
+              setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+            }
+          }} className="p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-500 hover:text-indigo-600">
             <ChevronRight className="w-5 h-5" />
           </button>
         </motion.div>
@@ -1335,32 +1358,58 @@ const StaffSchedule = () => {
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detail Audit Report • {incentiveSummary.breakdown[selectedIncentiveDept]?.count || 0} Items</p>
                 </div>
 
-                {incentiveData.filter(item => item.department === selectedIncentiveDept).length === 0 ? (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white p-12 rounded-[2rem] border border-slate-200/60 text-center shadow-sm"
-                  >
-                    <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100">
-                      <Award className="w-8 h-8 text-slate-300" />
-                    </div>
-                    <h3 className="text-base font-black uppercase tracking-widest text-slate-900">No Earnings Found</h3>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xs mx-auto leading-relaxed">You haven't earned any incentives for this department yet.</p>
-                  </motion.div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-4">
-                    <AnimatePresence mode="popLayout">
-                      {incentiveData
-                        .filter(item => item.department === selectedIncentiveDept)
-                        .map((item, index) => (
-                        <motion.div 
-                          key={item.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.95 }}
-                          transition={{ delay: index * 0.02 }}
-                          className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300"
-                        >
+                {(() => {
+                  const filteredData = incentiveData
+                    .filter(item => item.department === selectedIncentiveDept)
+                    .sort((a, b) => {
+                      const tierA = a.tier || '';
+                      const tierB = b.tier || '';
+                      if (tierA !== tierB) return tierA.localeCompare(tierB);
+                      return (a.type || '').localeCompare(b.type || '');
+                    });
+
+                  if (filteredData.length === 0) {
+                    return (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-white p-12 rounded-[2rem] border border-slate-200/60 text-center shadow-sm"
+                      >
+                        <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100">
+                          <Award className="w-8 h-8 text-slate-300" />
+                        </div>
+                        <h3 className="text-base font-black uppercase tracking-widest text-slate-900">No Earnings Found</h3>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xs mx-auto leading-relaxed">You haven't earned any incentives for this department yet.</p>
+                      </motion.div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 gap-4">
+                      <AnimatePresence mode="popLayout">
+                        {filteredData.map((item, index) => {
+                          const showTierHeader = index === 0 || item.tier !== filteredData[index - 1].tier;
+                          const showTypeHeader = index === 0 || item.type !== filteredData[index - 1].type || item.tier !== filteredData[index - 1].tier;
+                          
+                          return (
+                            <React.Fragment key={item.id}>
+                              {showTierHeader && (
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mt-6 mb-2 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
+                                  {item.tier || 'Standard Tier'}
+                                </motion.div>
+                              )}
+                              {showTypeHeader && (
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[9px] font-black text-slate-500 uppercase tracking-[0.1em] mt-3 mb-1 ml-2">
+                                  {item.type || 'General'}
+                                </motion.div>
+                              )}
+                              <motion.div 
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                transition={{ delay: index * 0.02 }}
+                                className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300"
+                              >
                           <div className="flex justify-between items-start mb-4">
                             <div className="flex items-center gap-3">
                               <div className={`p-2 rounded-xl ${
@@ -1412,11 +1461,14 @@ const StaffSchedule = () => {
                               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.duration || 'N/A'}</span>
                             </div>
                           </div>
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                  </div>
-                )}
+                          </motion.div>
+                        </React.Fragment>
+                      );
+                    })}
+                  </AnimatePresence>
+                </div>
+              );
+            })()}
               </div>
             )}
           </div>
