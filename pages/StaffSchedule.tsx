@@ -1398,12 +1398,10 @@ const StaffSchedule = () => {
                     <div className="grid grid-cols-1 gap-4">
                       <AnimatePresence mode="popLayout">
                         {filteredData.map((item, index) => {
-                          const showTierHeader = index === 0 || item.tier !== filteredData[index - 1].tier;
-                          const showTypeHeader = index === 0 || item.type !== filteredData[index - 1].type || item.tier !== filteredData[index - 1].tier;
+                          const prevItem = index > 0 ? filteredData[index - 1] : null;
+                          const showTierHeader = !prevItem || item.tier !== prevItem.tier;
+                          const showTypeHeader = !prevItem || item.tier !== prevItem.tier || item.type !== prevItem.type;
                           
-                          // Debugging:
-                          // console.log("Rendering Item:", item.id, item.tier, item.type);
-
                           return (
                             <div key={item.id}>
                               {showTierHeader && (
