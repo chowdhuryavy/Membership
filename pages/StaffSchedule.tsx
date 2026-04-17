@@ -1401,11 +1401,14 @@ const StaffSchedule = () => {
                           const showTierHeader = index === 0 || item.tier !== filteredData[index - 1].tier;
                           const showTypeHeader = index === 0 || item.type !== filteredData[index - 1].type || item.tier !== filteredData[index - 1].tier;
                           
+                          // Debugging:
+                          // console.log("Rendering Item:", item.id, item.tier, item.type);
+
                           return (
                             <div key={item.id}>
                               {showTierHeader && (
                                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mt-6 mb-2 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
-                                  {item.tier || 'Standard Tier'}
+                                  {item.tier || 'Standard'}
                                 </motion.div>
                               )}
                               {showTypeHeader && (
@@ -1420,22 +1423,21 @@ const StaffSchedule = () => {
                                 transition={{ delay: index * 0.02 }}
                                 className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300"
                               >
-                          <div className="flex justify-between items-start mb-4">
-                            <div className="flex items-center gap-3">
-                              <div className={`p-2 rounded-xl ${
-                                item.department === 'Massage' ? 'bg-indigo-50 text-indigo-600' :
-                                item.department === 'Membership' ? 'bg-emerald-50 text-emerald-600' :
-                                'bg-amber-50 text-amber-600'
-                              }`}>
-                                {item.department === 'Massage' ? <Sparkles className="w-5 h-5" /> :
-                                 item.department === 'Membership' ? <TrendingUp className="w-5 h-5" /> :
-                                 <Award className="w-5 h-5" />}
-                              </div>
-                              <div>
-                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{item.department}</p>
-                                <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{item.item_name}</h4>
-                              </div>
-                            </div>
+                                <div className="flex justify-between items-start mb-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-xl ${
+                                      item.department === 'Massage' ? 'bg-indigo-50 text-indigo-600' :
+                                      item.department === 'Membership' ? 'bg-emerald-50 text-emerald-600' :
+                                      'bg-amber-50 text-amber-600'
+                                    }`}>
+                                      {item.department === 'Massage' ? <Sparkles className="w-5 h-5" /> :
+                                       item.department === 'Membership' ? <TrendingUp className="w-5 h-5" /> :
+                                       <Award className="w-5 h-5" />}
+                                    </div>
+                                    <div>
+                                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{item.item_name}</h4>
+                                    </div>
+                                  </div>
                             <div className="text-right">
                               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Your Share</p>
                               <p className="text-lg font-black text-indigo-600">{formatMoney(item.my_incentive)}</p>
