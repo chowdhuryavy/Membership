@@ -167,12 +167,24 @@ const StaffSchedule = () => {
   
   const { settings, formatMoney } = useSettings();
 
-  // Ensure loading screen stays long enough for animations
+  const animationTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  // Ensure loading screen stays long enough for animations, even on date changes
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setMinLoadingFinished(true);
-    }, 2500); // 2.5 seconds minimum
-    return () => clearTimeout(timer);
+    if (loading || incentiveLoading) {
+      setMinLoadingFinished(false);
+      if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+      animationTimerRef.current = setTimeout(() => {
+        setMinLoadingFinished(true);
+      }, 2500); // 2.5 seconds allows the full SVG path animation to complete gracefully
+    }
+  }, [loading, incentiveLoading]);
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+    };
   }, []);
 
   const playNotificationSound = () => {
