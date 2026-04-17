@@ -50,7 +50,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const permissionRegistry = useMemo(() => db.getPermissionRegistry(), []);
 
-  const refreshSettings = async () => {
+  const refreshSettings = async (broadcast = true) => {
     try {
         const [s, c, r, o, p] = await Promise.all([
             db.getSettings(), 
@@ -68,12 +68,33 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setProperties([...p]);
         
         if (user) await refreshUser();
+
+        // Broadcast to other tabs for immediate real-time sync
+        if (broadcast && typeof BroadcastChannel !== 'undefined') {
+            const bc = new BroadcastChannel('settings_sync');
+            bc.postMessage('REFRESH_SETTINGS');
+            bc.close();
+        }
     } catch (e) {
         console.error("Critical Settings Load Failure:", e);
     } finally {
         setIsLoading(false);
     }
   };
+
+  // Listen for sync messages from other tabs
+  useEffect(() => {
+    if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('settings_sync');
+        bc.onmessage = (event) => {
+            if (event.data === 'REFRESH_SETTINGS') {
+                console.log('[SettingsSync] Synchronizing settings cross-tab...');
+                refreshSettings(false); // Don't broadcast back to avoid infinite loops
+            }
+        };
+        return () => bc.close();
+    }
+  }, []);
 
   const currentProperty = useMemo(() => {
       if (!currentOutlet || properties.length === 0) return null;
