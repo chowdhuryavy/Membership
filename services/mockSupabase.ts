@@ -1866,6 +1866,24 @@ class DatabaseService {
     return [];
   }
 
+  async getGuestById(id: string): Promise<Guest | null> {
+    if (this.isSupabase()) {
+      const { data, error } = await supabase.from('guests').select('*').eq('id', id).maybeSingle();
+      if (error) throw error;
+      return data as Guest | null;
+    }
+    return null;
+  }
+
+  async getMassageTypeById(id: string): Promise<MassageType | null> {
+    if (this.isSupabase()) {
+      const { data, error } = await supabase.from('massage_types').select('*').eq('id', id).maybeSingle();
+      if (error) throw error;
+      return data as MassageType | null;
+    }
+    return null;
+  }
+
   async saveGuest(guest: Omit<Guest, 'id' | 'created_at'>): Promise<Guest> {
     if (this.isSupabase()) {
       const { data: existing } = await supabase.from('guests').select('*').eq('phone', guest.phone).eq('property_id', guest.property_id).maybeSingle();

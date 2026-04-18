@@ -39,7 +39,7 @@ const StaffSchedule = () => {
   const [guests, setGuests] = useState<Guest[]>([]);
   const [rooms, setRooms] = useState<MassageRoom[]>([]);
   const [outlets, setOutlets] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [incentiveLoading, setIncentiveLoading] = useState(false);
   const [minLoadingFinished, setMinLoadingFinished] = useState(false);
   const loadingInitialTimeRef = React.useRef(Date.now());
@@ -143,6 +143,23 @@ const StaffSchedule = () => {
 
   // Derived state to determine if the portal is ready for display
   const isAppReady = minLoadingFinished && !!staff && !loading && !incentiveLoading;
+
+  // Safety protection: Force clear loading after a reasonable timeout
+  useEffect(() => {
+    if (loading || incentiveLoading) {
+      const timer = setTimeout(() => {
+        if (loading) {
+          console.warn("Schedule loading timed out. Clearing loading state.");
+          setLoading(false);
+        }
+        if (incentiveLoading) {
+          console.warn("Incentive loading timed out. Clearing incentive loading state.");
+          setIncentiveLoading(false);
+        }
+      }, 15000); // 15s safety timeout
+      return () => clearTimeout(timer);
+    }
+  }, [loading, incentiveLoading]);
 
   // Clean up references
   useEffect(() => {
@@ -385,6 +402,13 @@ const StaffSchedule = () => {
 
   // Unified data loading effect
   useEffect(() => {
+    // If we have staff but no outlet selections available, we can't load data
+    if (staff && assignedOutlets.length === 0) {
+      console.warn("Staff profile has no assigned outlets. Disabling loader.");
+      setLoading(false);
+      return;
+    }
+
     if (!staff?.id || !selectedOutletId) return;
 
     const loadPageData = async () => {
@@ -394,6 +418,7 @@ const StaffSchedule = () => {
       setIsSyncing(true);
       
       try {
+        console.log(`Starting data load for view: ${viewMode}, outlet: ${selectedOutletId}`);
         if (viewMode === 'daily') {
           await loadSchedule();
         } else if (viewMode === 'monthly') {
@@ -402,6 +427,9 @@ const StaffSchedule = () => {
           await loadIncentives();
         }
         await loadPropertyDetails();
+      } catch (err) {
+        console.error("Critical error in loadPageData:", err);
+        setLoading(false);
       } finally {
         setIsSyncing(false);
         loadingRef.current = false;
@@ -417,9 +445,20 @@ const StaffSchedule = () => {
       if (payload.eventType === 'INSERT' && payload.new.therapist_id === staff.id) {
         playNotificationSound();
         
-        // Use existing state data if available
-        const guest = guests.find(g => g.id === payload.new.guest_id);
-        const treatment = treatments.find(t => t.id === payload.new.massage_type_id);
+        // Use existing state data if available, or fetch from DB to be fresh
+        let guest = guests.find(g => g.id === payload.new.guest_id);
+        let treatment = treatments.find(t => t.id === payload.new.massage_type_id);
+        
+        if (!guest) {
+          console.log('Guest not in state, fetching from DB...');
+          guest = await db.getGuestById(payload.new.guest_id) || undefined;
+        }
+        if (!treatment) {
+          console.log('Treatment not in state, fetching from DB...');
+          treatment = await db.getMassageTypeById(payload.new.massage_type_id) || undefined;
+        }
+        
+        console.log('DEBUG: Found guest:', guest?.name, 'Found treatment:', treatment?.name);
         
         const newNotif: StaffNotification = {
           id: payload.new.id || Math.random().toString(),
@@ -454,7 +493,7 @@ const StaffSchedule = () => {
     return () => {
       unsubscribe();
     };
-  }, [staff?.id, staff?.property_id, currentDate, viewMode, selectedOutletId, guests, treatments]);
+  }, [staff?.id, staff?.property_id, currentDate, viewMode, selectedOutletId]);
 
   const loadPropertyDetails = async () => {
     if (!staff || !selectedOutletId) return;
@@ -1700,7 +1739,7 @@ const StaffSchedule = () => {
                           
                           <div className="flex items-center gap-2 sm:gap-3">
                             <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
-                            <span className="text-xs sm:text-sm font-bold text-slate-600">{sale.guest_name || (guest ? `${guest.first_name} ${guest.last_name}` : 'Walk-in Guest')}</span>
+                            <span className="text-xs sm:text-sm font-bold text-slate-600">{sale.guest_name || guest?.name || 'Walk-in Guest'}</span>
                           </div>
 
                           <div className="flex items-center gap-2 sm:gap-3">
@@ -1819,7 +1858,7 @@ const StaffSchedule = () => {
                           </div>
                           <div>
                             <p className="text-[6px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Guest Name</p>
-                            <p className="text-[10px] sm:text-sm font-black text-slate-700 uppercase tracking-tight">{guest?.first_name} {guest?.last_name}</p>
+                            <p className="text-[10px] sm:text-sm font-black text-slate-700 uppercase tracking-tight">{guest?.name || 'Guest'}</p>
                           </div>
                         </div>
 
@@ -1908,7 +1947,7 @@ const StaffSchedule = () => {
                           </div>
                           <div>
                             <p className="text-[6px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Guest Name</p>
-                            <p className="text-[10px] sm:text-sm font-black text-slate-700 uppercase tracking-tight">{sale.guest_name || (guest ? `${guest.first_name} ${guest.last_name}` : 'Walk-in Guest')}</p>
+                            <p className="text-[10px] sm:text-sm font-black text-slate-700 uppercase tracking-tight">{sale.guest_name || guest?.name || 'Walk-in Guest'}</p>
                           </div>
                         </div>
 
@@ -1967,7 +2006,7 @@ const StaffSchedule = () => {
                     <h2 className="text-xl sm:text-2xl font-black tracking-tight mb-2">Session Notes</h2>
                     <p className="text-indigo-100 text-xs sm:text-sm font-bold tracking-wide">
                       {selectedItemForNotes._type === 'booking' 
-                        ? `${guests.find(g => g.id === selectedItemForNotes.guest_id)?.first_name || ''} ${guests.find(g => g.id === selectedItemForNotes.guest_id)?.last_name || ''}`
+                        ? (guests.find(g => g.id === selectedItemForNotes.guest_id)?.name || 'Guest')
                         : selectedItemForNotes.guest_name || 'Walk-in Guest'}
                       <span className="mx-2 opacity-50">•</span>
                       {format(parseISO(selectedItemForNotes._type === 'booking' ? selectedItemForNotes.date : selectedItemForNotes.created_at), 'MMM dd, yyyy')}
