@@ -2141,7 +2141,6 @@ class DatabaseService {
           title: 'New Booking Assigned',
           message: `You have a new booking on ${booking.date} at ${booking.start_time}.`,
           type: 'info',
-          user_id: booking.therapist_id,
           outlet_id: booking.outlet_id
         });
       }, null);
@@ -2250,7 +2249,6 @@ class DatabaseService {
           title: 'Booking Completed',
           message: `Booking for ${guest?.name || 'Guest'} has been marked as completed.`,
           type: 'success',
-          user_id: booking.therapist_id,
           outlet_id: booking.outlet_id
         });
       }

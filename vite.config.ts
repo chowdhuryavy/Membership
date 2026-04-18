@@ -9,6 +9,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      input: './index.html',
+    },
   },
   optimizeDeps: {
     include: ['zod', 'react-hook-form', '@hookform/resolvers/zod', 'date-fns', 'lucide-react', 'jspdf', 'jspdf-autotable'],
