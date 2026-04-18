@@ -438,49 +438,57 @@ const StaffSchedule = () => {
 
     loadPageData();
 
-    // Set up real-time subscription
-    const unsubscribe = db.subscribeToBookings(selectedOutletId, async (payload) => {
-      console.log('Real-time booking update received:', payload.eventType);
+    // Set up comprehensive real-time staff portal events (Bookings, Sales, Memberships)
+    const unsubscribe = db.subscribeToStaffPortalEvents(selectedOutletId, staff.id, async (payload) => {
+      console.log('Real-time staff portal event:', payload.table, payload.eventType);
       
-      if (payload.eventType === 'INSERT' && payload.new.therapist_id === staff.id) {
+      let shouldNotify = false;
+      let title = '';
+      let message = '';
+      let type: 'booking' | 'sale' | 'system' = 'system';
+
+      if (payload.table === 'massage_bookings' && payload.new.therapist_id === staff.id) {
+        shouldNotify = true;
+        title = 'New Booking Alert!';
+        type = 'booking';
+        
+        // Use database fallback for names to ensure they are always fresh
+        const guestId = payload.new.guest_id;
+        const treatmentId = payload.new.massage_type_id;
+        
+        const [guest, treatment] = await Promise.all([
+          db.getGuestById(guestId),
+          db.getMassageTypeById(treatmentId)
+        ]);
+        
+        message = `Booking for ${guest?.name || 'Guest'} - ${treatment?.name || 'Service'} at ${payload.new.start_time}`;
+      } else if (payload.table === 'sales' && (payload.new.sold_by_id === staff.id || payload.new.secondary_sold_by_id === staff.id)) {
+        shouldNotify = true;
+        title = 'Commission Earned!';
+        type = 'sale';
+        message = `New POS Sale: ${payload.new.item_name} for ${payload.new.guest_name || 'Walk-in'}`;
+      } else if (payload.table === 'members' && payload.new.sales_rep_id === staff.id) {
+        shouldNotify = true;
+        title = 'Membership Sold!';
+        type = 'sale';
+        message = `New Enrollment: ${payload.new.name || 'Member'} - ${payload.new.membership_no || ''}`;
+      }
+
+      if (shouldNotify) {
         playNotificationSound();
-        
-        // Use existing state data if available, or fetch from DB to be fresh
-        let guest = guests.find(g => g.id === payload.new.guest_id);
-        let treatment = treatments.find(t => t.id === payload.new.massage_type_id);
-        
-        if (!guest) {
-          console.log('Guest not in state, fetching from DB...');
-          guest = await db.getGuestById(payload.new.guest_id) || undefined;
-        }
-        if (!treatment) {
-          console.log('Treatment not in state, fetching from DB...');
-          treatment = await db.getMassageTypeById(payload.new.massage_type_id) || undefined;
-        }
-        
-        console.log('DEBUG: Found guest:', guest?.name, 'Found treatment:', treatment?.name);
-        
         const newNotif: StaffNotification = {
-          id: payload.new.id || Math.random().toString(),
-          title: 'New Booking Alert!',
-          message: `Booking for ${guest?.name || 'Guest'} - ${treatment?.name || 'Treatment'} at ${payload.new.start_time}`,
+          id: `${payload.table}-${payload.new.id || Math.random()}`,
+          title,
+          message,
           time: new Date(),
           isRead: false,
-          type: 'booking'
+          type
         };
-        
         setNotifications(prev => [newNotif, ...prev].slice(0, 20));
-        toast.success(`New Booking: ${guest?.name || 'Guest'}`, {
+        toast.success(title, {
           icon: '🔔',
           duration: 5000,
-          style: {
-            background: '#4f46e5',
-            color: '#fff',
-            fontSize: '12px',
-            fontWeight: '900',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em'
-          }
+          style: { background: '#4f46e5', color: '#fff', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }
         });
       }
 
@@ -1012,7 +1020,10 @@ const StaffSchedule = () => {
         </AnimatePresence>
 
         <button 
-          onClick={() => setShowAccountMenu(!showAccountMenu)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowAccountMenu(!showAccountMenu);
+          }}
           className="w-full flex items-center gap-4 p-4 transition-all group hover:bg-white/5 rounded-3xl relative"
         >
           <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-xl font-black uppercase text-white shadow-2xl shadow-indigo-900/40 border border-white/10 shrink-0 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden">
@@ -1043,7 +1054,14 @@ const StaffSchedule = () => {
         )}
       </AnimatePresence>
 
-      <div className={`min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100 transition-opacity duration-500 ${!isAppReady ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div 
+        className={`min-h-screen bg-slate-50 flex font-sans selection:bg-indigo-100 transition-opacity duration-500 ${!isAppReady ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        onClick={() => {
+          if (showNotifications) setShowNotifications(false);
+          if (showAccountMenu) setShowAccountMenu(false);
+          if (isSidebarOpen && window.innerWidth < 1024) setIsSidebarOpen(false);
+        }}
+      >
 
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block w-72 h-screen sticky top-0 border-r border-slate-200 z-50">
@@ -1116,7 +1134,8 @@ const StaffSchedule = () => {
           <div className="flex items-center gap-2 relative z-10">
             <div className="relative">
               <button 
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   setShowNotifications(!showNotifications);
                   if (!showNotifications) {
                     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
@@ -1187,7 +1206,8 @@ const StaffSchedule = () => {
           <div className="flex items-center gap-4">
             <div className="relative">
               <button 
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   setShowNotifications(!showNotifications);
                   if (!showNotifications) {
                     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));

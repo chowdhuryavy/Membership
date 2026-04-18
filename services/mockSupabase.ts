@@ -2259,6 +2259,52 @@ class DatabaseService {
     window.dispatchEvent(new CustomEvent('booking_updated', { detail: {} }));
   }
 
+  subscribeToStaffPortalEvents(outletId: string, staffId: string, callback: (payload: { eventType: string, table: string, new: any }) => void) {
+    let supabaseUnsubscribeList: (() => void)[] = [];
+
+    if (this.isSupabase()) {
+      const tables = ['massage_bookings', 'sales', 'members'];
+      
+      tables.forEach(table => {
+        const channel = supabase
+          .channel(`public:${table}:${outletId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: table,
+              filter: `outlet_id=eq.${outletId}`
+            },
+            (payload) => {
+              callback({ eventType: payload.eventType, table, new: payload.new });
+            }
+          )
+          .subscribe();
+
+        supabaseUnsubscribeList.push(() => {
+          supabase.removeChannel(channel);
+        });
+      });
+    }
+
+    // Local mode listeners
+    const handleLocalBooking = (event: any) => callback({ eventType: 'INSERT', table: 'massage_bookings', new: event.detail });
+    const handleLocalSale = (event: any) => callback({ eventType: 'INSERT', table: 'sales', new: event.detail });
+    const handleLocalMember = (event: any) => callback({ eventType: 'INSERT', table: 'members', new: event.detail });
+
+    window.addEventListener('booking_updated', handleLocalBooking);
+    window.addEventListener('sale_created', handleLocalSale);
+    window.addEventListener('member_created', handleLocalMember);
+
+    return () => {
+      supabaseUnsubscribeList.forEach(unsub => unsub());
+      window.removeEventListener('booking_updated', handleLocalBooking);
+      window.removeEventListener('sale_created', handleLocalSale);
+      window.removeEventListener('member_created', handleLocalMember);
+    };
+  }
+
   subscribeToBookings(outletId: string, callback: (payload: { eventType: string, new: any, old?: any }) => void) {
     let supabaseUnsubscribe = () => {};
 
