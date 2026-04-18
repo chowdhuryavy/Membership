@@ -127,8 +127,14 @@ const StaffSchedule = () => {
         })
         .subscribe();
       
+      const handleBookingUpdate = () => {
+        loadSchedule();
+      };
+      window.addEventListener('booking_updated', handleBookingUpdate);
+      
       return () => {
         supabase.removeChannel(channel);
+        window.removeEventListener('booking_updated', handleBookingUpdate);
       };
     }
   }, [selectedOutletId, currentDate]);

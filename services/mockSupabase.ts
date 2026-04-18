@@ -2139,7 +2139,8 @@ class DatabaseService {
           title: 'New Booking Assigned',
           message: `You have a new booking on ${booking.date} at ${booking.start_time}.`,
           type: 'info',
-          outlet_id: booking.outlet_id
+          outlet_id: booking.outlet_id,
+          user_id: booking.therapist_id
         });
       }, null);
     }
