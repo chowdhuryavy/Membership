@@ -2150,18 +2150,34 @@ class DatabaseService {
   }
 
   async updateMassageBooking(id: string, updates: Partial<MassageBooking>) {
+    let booking: MassageBooking | null = null;
     if (this.isSupabase()) {
+      // Get current booking to notify therapist
+      const { data } = await supabase.from('massage_bookings').select('*').eq('id', id).single();
+      booking = data;
+      
       await this.safeCall(async () => {
         const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
         if (error) throw error;
+        
+        // Notify therapist if assigned
+        const therapistId = updates.therapist_id || booking?.therapist_id;
+        if (therapistId) {
+          await this.addNotification({
+            title: 'Booking Modified',
+            message: `A booking on ${booking?.date || ''} has been modified.`,
+            type: 'info',
+            outlet_id: booking?.outlet_id,
+            user_id: therapistId
+          });
+        }
       }, null);
     }
     
     // Trigger local event
-    if (updates.outlet_id) {
-      window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: updates.outlet_id } }));
+    if (updates.outlet_id || booking?.outlet_id) {
+      window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: updates.outlet_id || booking?.outlet_id } }));
     } else {
-      // If outlet_id not in updates, we might need to fetch it or just trigger globally
       window.dispatchEvent(new CustomEvent('booking_updated', { detail: {} }));
     }
   }
