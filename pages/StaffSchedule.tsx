@@ -1012,7 +1012,7 @@ const StaffSchedule = () => {
                   <div className="w-7 h-7 rounded-lg bg-red-500/10 flex items-center justify-center border border-red-500/20 group-hover:scale-110 transition-transform shrink-0">
                     <LogOut className="w-3 h-3 text-red-500" />
                   </div>
-                  <span className="text-[8px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Logout</span>
+                  <span className="text-[8px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Log Out</span>
                 </button>
               </div>
             </motion.div>
