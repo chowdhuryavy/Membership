@@ -6,9 +6,12 @@ import { useSettings } from './SettingsContext';
 import { toast } from 'react-hot-toast';
 
 // Unique, more complex notification sound
-const playNotificationSound = () => {
+const playNotificationSound = async () => {
   try {
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
     
     // Create a series of tones for a "musical" alert
     const playTone = (freq: number, startTime: number, duration: number, type: OscillatorType = 'sine') => {
@@ -111,7 +114,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     if (effectiveUserId) {
       console.log('Subscribing to notifications for user:', effectiveUserId, 'outlet:', outletId);
-      unsubscribe = db.subscribeToNotifications(effectiveUserId, outletId, (payload) => {
+      unsubscribe = db.subscribeToNotifications(effectiveUserId, outletId, async (payload) => {
         console.log('Received real-time notification payload:', payload.eventType, payload.new?.id);
         
         if (payload.eventType === 'INSERT') {
@@ -125,7 +128,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           }
           
           // Trigger notification UI & Sound
-          playNotificationSound();
+          await playNotificationSound();
           toast.success(n.title + ': ' + n.message, {
             duration: 5000,
             position: 'top-right',

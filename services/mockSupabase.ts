@@ -2832,18 +2832,9 @@ class DatabaseService {
   }
 
   subscribeToNotifications(userId: string, outletId: string | undefined, callback: (payload: { eventType: string, new: any, old?: any }) => void) {
-    // Local mode listeners (always active to catch local fallbacks or local mode)
+    // Shared BroadcastChannel handler for cross-tab updates
     let bc: BroadcastChannel | null = null;
-    const handleCustomEvent = (event: any) => {
-      const notification = event.detail as Notification;
-      const userMatch = !notification.user_id || notification.user_id === userId;
-      const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
-      
-      if (userMatch && outletMatch) {
-        callback({ eventType: 'INSERT', new: notification });
-      }
-    };
-
+    
     if (typeof BroadcastChannel !== 'undefined') {
       bc = new BroadcastChannel('notifications_channel');
       bc.onmessage = (event) => {
@@ -2852,12 +2843,13 @@ class DatabaseService {
         const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
         
         if (userMatch && outletMatch) {
+          // We assume BroadcastChannel only sends new notifications
           callback({ eventType: 'INSERT', new: notification });
         }
       };
     }
-    window.addEventListener('notification_received', handleCustomEvent);
 
+    // Only subscribe to Supabase if enabled
     if (this.isSupabase()) {
       const channel = supabase
         .channel('notifications-realtime')
@@ -2872,7 +2864,6 @@ class DatabaseService {
             const newNotification = payload.new as Notification;
             const oldNotification = payload.old as Notification;
             
-            // Check if it's for this user or global
             const targetNotification = newNotification || oldNotification;
             if (targetNotification) {
               const userMatch = !targetNotification.user_id || targetNotification.user_id === userId;
@@ -2893,12 +2884,10 @@ class DatabaseService {
       return () => {
         supabase.removeChannel(channel);
         if (bc) bc.close();
-        window.removeEventListener('notification_received', handleCustomEvent);
       };
     } else {
       return () => {
         if (bc) bc.close();
-        window.removeEventListener('notification_received', handleCustomEvent);
       };
     }
   }

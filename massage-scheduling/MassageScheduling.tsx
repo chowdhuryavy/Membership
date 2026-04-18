@@ -1212,13 +1212,6 @@ NOTIFY pgrst, 'reload schema';`}
                                             style={{ top: `${quarter * 25}%` }}
                                         >
                                             <div/>
-                                            <motion.div 
-                                                initial={{ opacity: 0, scale: 0.8 }}
-                                                whileHover={{ opacity: 1, scale: 1 }}
-                                                className="opacity-0 group-hover/slot:opacity-100 transition-opacity bg-indigo-600 text-white px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest flex items-center gap-1 shadow-lg shadow-indigo-500/20 z-20"
-                                            >
-                                                <Plus className="w-2 h-2" /> Quick Add
-                                            </motion.div>
                                         </div>
                                     ))}
                                 </div>
