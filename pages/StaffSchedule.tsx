@@ -119,8 +119,19 @@ const StaffSchedule = () => {
       localStorage.setItem(`staff_selected_outlet_${staff.id}`, selectedOutletId);
       // Pre-fetch basic info for property when outlet changes
       loadPropertyDetails();
+      
+      // Subscribe to real-time updates
+      const channel = supabase.channel('massage_bookings_channel')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'massage_bookings' }, () => {
+          loadSchedule();
+        })
+        .subscribe();
+      
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
-  }, [selectedOutletId]);
+  }, [selectedOutletId, currentDate]);
 
   // Splash Screen Logic: Show for AT LEAST 1500ms whenever loading occurs
   useEffect(() => {

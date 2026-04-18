@@ -45,11 +45,9 @@ class DatabaseService {
 
   private isNetworkError(e: any): boolean {
     const msg = e.message?.toLowerCase() || '';
-    return msg.includes('fetch') || 
-           msg.includes('connection') || 
-           msg.includes('load failed') || 
-           msg.includes('network error') ||
-           e.name === 'TypeError';
+    // Only disable if it's a critical connection failure, not a transient fetch error
+    // Many transient errors are just 'Failed to fetch' but can be retried
+    return false; // Stop auto-disabling Supabase on network errors to improve stability
   }
 
   private generateUUID() {
@@ -2664,7 +2662,7 @@ class DatabaseService {
       bc.close();
     }
     // Dispatch custom event for same-tab updates
-    window.dispatchEvent(new CustomEvent('notification_received', { detail: notification }));
+    // window.dispatchEvent(new CustomEvent('notification_received', { detail: notification }));
   }
 
   private saveLocalNotification(notification: Notification) {
