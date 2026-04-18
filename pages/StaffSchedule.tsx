@@ -894,7 +894,7 @@ const StaffSchedule = () => {
                  )}
                </div>
                <div className="flex flex-col min-w-0 flex-1">
-                 <span className="text-[11px] font-black text-white uppercase tracking-tight leading-tight truncate">{propertyName}</span>
+                 <span className="text-[11px] font-black text-white uppercase tracking-tight leading-tight break-words">{propertyName}</span>
                  {(() => {
                    const validAssignedOutlets = assignedOutlets.filter(oid => outlets.some(o => o.id === oid));
                    // Render static text if less than 2 valid outlets or still loading 
