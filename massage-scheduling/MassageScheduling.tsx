@@ -1334,37 +1334,10 @@ NOTIFY pgrst, 'reload schema';`}
                                     {[0, 1, 2, 3].map(quarter => (
                                         <div 
                                             key={quarter}
-                                            className="absolute left-0 right-0 h-1/4 group/slot cursor-pointer flex items-center justify-center"
+                                            className="absolute left-0 right-0 h-1/4 group/slot flex items-center justify-center"
                                             style={{ top: `${quarter * 25}%` }}
-                                            onMouseEnter={() => setHoveredSlot({ roomId: room.id, hour, quarter })}
-                                            onMouseLeave={() => setHoveredSlot(null)}
-                                            onClick={() => {
-                                                const startTime = `${hour.toString().padStart(2, '0')}:${(quarter * 15).toString().padStart(2, '0')}`;
-                                                const endHour = quarter === 3 ? hour + 1 : hour;
-                                                const endMin = quarter === 3 ? 0 : (quarter + 1) * 15;
-                                                const endTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`;
-                                                setEditingBooking({
-                                                    id: '',
-                                                    property_id: currentProperty?.id || '',
-                                                    outlet_id: currentOutlet?.id || '',
-                                                    room_id: room.id,
-                                                    date: format(viewDate, 'yyyy-MM-dd'),
-                                                    start_time: startTime,
-                                                    end_time: endTime,
-                                                    status: 'confirmed',
-                                                    price: 0,
-                                                    guest_id: ''
-                                                } as any);
-                                                setShowBookingForm(true);
-                                            }}
                                         >
-                                            <motion.div 
-                                                initial={{ opacity: 0, scale: 0.8 }}
-                                                whileHover={{ opacity: 1, scale: 1 }}
-                                                className="opacity-0 group-hover/slot:opacity-100 transition-opacity bg-indigo-600 text-white px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest flex items-center gap-1 shadow-lg shadow-indigo-500/20 z-20"
-                                            >
-                                                <Plus className="w-2 h-2" /> Quick Add
-                                            </motion.div>
+                                            <div/>
                                         </div>
                                     ))}
                                 </div>
