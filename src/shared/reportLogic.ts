@@ -817,6 +817,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             sl_no: sl++,
             date: format(new Date(m.start_date), 'dd-MMM-yy'),
             guest_name: m.guest_name,
+            membership_no: m.membership_number || m.membership_no || 'N/A',
             item_name: cat?.name || m.category_id || 'Unknown Tier',
             therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (rawStaffList.find(s => s.id === displaySalesRepId)?.name || 'N/A'),
             outlet_name: outletMap[m.outlet_id] || 'Unknown',

@@ -1458,7 +1458,7 @@ const StaffSchedule = () => {
                         {filteredData.map((item, index) => {
                           const prevItem = index > 0 ? filteredData[index - 1] : null;
                           const showTierHeader = !prevItem || item.tier !== prevItem.tier;
-                          const showTypeHeader = !prevItem || item.tier !== prevItem.tier || item.type !== prevItem.type;
+                          const showTypeHeader = (!prevItem || item.tier !== prevItem.tier || item.type !== prevItem.type) && item.type !== item.item_name;
                           
                           return (
                             <div key={item.id}>
@@ -1492,6 +1492,9 @@ const StaffSchedule = () => {
                                     </div>
                                     <div>
                                       <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{item.item_name}</h4>
+                                      {item.membership_no && item.membership_no !== 'N/A' && (
+                                        <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mt-0.5">#{item.membership_no}</p>
+                                      )}
                                     </div>
                                   </div>
                             <div className="text-right">
@@ -1513,9 +1516,9 @@ const StaffSchedule = () => {
                               <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Incentive</p>
                               <p className="text-[10px] font-bold text-slate-700">{formatMoney(item.inc_net)}</p>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right flex flex-col items-end min-w-0">
                               <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Guest</p>
-                              <p className="text-[10px] font-bold text-slate-700 truncate">{item.guest_name}</p>
+                              <p className="text-[10px] font-bold text-slate-700 break-words text-right leading-tight max-w-[120px] sm:max-w-none">{item.guest_name}</p>
                             </div>
                           </div>
 
@@ -1525,8 +1528,14 @@ const StaffSchedule = () => {
                               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.date}</span>
                             </div>
                             <div className="flex items-center gap-2 justify-end">
-                              <Clock className="w-3.5 h-3.5 text-slate-300" />
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.duration || 'N/A'}</span>
+                              {item.department === 'Membership' ? (
+                                <Building2 className="w-3.5 h-3.5 text-slate-300" />
+                              ) : (
+                                <Clock className="w-3.5 h-3.5 text-slate-300" />
+                              )}
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                {item.department === 'Membership' ? (item.outlet_name || 'Membership') : (item.duration || 'N/A')}
+                              </span>
                             </div>
                           </div>
                           </motion.div>
