@@ -114,21 +114,21 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
           </div>
         </div>
 
-        <div className="p-12 md:p-20 bg-white print:p-4 print-page-1">
+        <div className="p-12 md:p-20 bg-white print:p-0 print-page-1">
           <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
             {/* Header */}
-            <div className="flex justify-between items-start mb-12 border-b-4 border-black pb-6 print:mb-4 print:pb-2">
+            <div className="flex justify-between items-start mb-6 border-b-4 border-black pb-4 print:mb-2 print:pb-1">
               <div className="flex-1">
-                <h1 className="text-3xl font-black tracking-tighter text-black uppercase mb-1 print:text-2xl">{propertyName}</h1>
-                <h2 className="text-sm font-black text-slate-500 uppercase tracking-[0.3em] print:text-xs">{outletName}</h2>
-                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-black text-white rounded text-[9px] font-black uppercase tracking-widest print:mt-2">
+                <h1 className="text-3xl font-black tracking-tighter text-black uppercase mb-1 print:text-xl">{propertyName}</h1>
+                <h2 className="text-sm font-black text-slate-500 uppercase tracking-[0.3em] print:text-[10px]">{outletName}</h2>
+                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-black text-white rounded text-[9px] font-black uppercase tracking-widest print:mt-1">
                   <ShieldCheck className="w-3 h-3" /> 
                   <span>Certified Member Record</span>
                   <span className="font-arabic" dir="rtl">سجل عضو معتمد</span>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-4 print:gap-2">
-                {logoUrl && <img src={logoUrl} alt="Logo" className="h-20 w-auto object-contain print:h-14" />}
+              <div className="flex flex-col items-end gap-4 print:gap-1">
+                {logoUrl && <img src={logoUrl} alt="Logo" className="h-20 w-auto object-contain print:h-12" />}
                 <div className="text-right">
                   <div className="flex justify-end items-center gap-2">
                     <p className="text-[10px] font-black tracking-widest">Membership No..</p>
@@ -139,7 +139,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-12 mb-10 print:gap-8 print:mb-6">
+            <div className="grid grid-cols-2 gap-12 mb-8 print:gap-4 print:mb-2">
               <div className="space-y-4 print:space-y-2">
                 <div className="flex justify-between items-end border-b border-black pb-1">
                   <h3 className="text-xs font-black uppercase">Member Identity</h3>
@@ -321,17 +321,17 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
         </div>
 
             {/* Page 2: Rules and Regulations */}
-        <div className="p-12 md:p-20 bg-white mt-4 border-t border-slate-200 print:p-4 print:mt-0 print-page-2">
-          <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
-            <div className="text-center mb-8 print:mb-6">
-              <h3 className="text-xl font-black uppercase tracking-widest border-b-2 border-black inline-block pb-2 print:text-lg">Gymnasium Rules & Regulations</h3>
-              <h3 className="text-lg font-bold mt-2 font-arabic print:text-base print:mt-1" dir="rtl">القواعد و اللوائح الخاصة بصالة الألعاب الرياضية</h3>
+        <div className="p-12 md:p-20 bg-white mt-4 border-t border-slate-200 print:p-0 print:mt-0 print-page-2">
+          <div className="max-w-[750px] mx-auto text-black font-sans leading-tight print:pt-4">
+            <div className="text-center mb-6 print:mb-2">
+              <h3 className="text-xl font-black uppercase tracking-widest border-b-2 border-black inline-block pb-2 print:text-base print:pb-1">Gymnasium Rules & Regulations</h3>
+              <h3 className="text-lg font-bold mt-1 font-arabic print:text-sm print:mt-0" dir="rtl">القواعد و اللوائح الخاصة بصالة الألعاب الرياضية</h3>
             </div>
             
-            <div className="grid grid-cols-1 gap-y-2 text-[9px] font-medium leading-relaxed mb-8 print:mb-6 print:text-[10px] print:gap-y-1">
+            <div className="grid grid-cols-1 gap-y-2 text-[9px] font-medium leading-relaxed mb-6 print:mb-2 print:text-[8px] print:gap-y-0.5">
               {GYM_RULES.map((rule, idx) => (
-                <div key={idx} className="flex gap-4 items-start border-b border-slate-200 pb-1.5 print:pb-1 print-rule-item">
-                  <span className="font-black w-6">{idx + 1}.</span>
+                <div key={idx} className="flex gap-4 items-start border-b border-slate-200 pb-1 print:pb-0.5 print-rule-item">
+                  <span className="font-black w-6 print:w-4">{idx + 1}.</span>
                   <span className="flex-1">{rule.en}</span>
                   <span className="flex-1 text-right font-arabic" dir="rtl">{rule.ar}</span>
                 </div>
@@ -396,23 +396,23 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
           }
           .print-page-1 {
             display: block !important;
-            padding: 5mm !important;
+            padding: 0 !important;
             margin: 0 !important;
-            min-height: 270mm;
+            page-break-after: always !important;
+            break-after: page !important;
           }
           .print-page-2 {
             display: block !important;
-            page-break-before: always !important;
-            break-before: page !important;
-            padding: 5mm !important;
+            padding: 0 !important;
             margin: 0 !important;
             border: none !important;
-            min-height: 270mm;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
           }
           .print-rule-item {
             break-inside: avoid;
           }
-          @page { size: A4; margin: 10mm; }
+          @page { size: A4; margin: 15mm; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
         .font-arabic { font-family: 'Amiri', 'Traditional Arabic', serif; }
