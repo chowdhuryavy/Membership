@@ -1121,23 +1121,29 @@ export const generateCustomReportPDF = (options: {
 
   // Header
   if (logoUrl) {
-    try { doc.addImage(logoUrl, 'PNG', margin, currentY, 20, 20); } catch (e) {}
+    try { doc.addImage(logoUrl, 'PNG', margin, currentY, 15, 15); } catch (e) {}
   }
   
+  // Left: Property Info
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
+  doc.setFontSize(14);
   doc.setTextColor(15, 23, 42);
-  doc.text(propertyName.toUpperCase(), margin + (logoUrl ? 25 : 0), currentY + 7);
+  doc.text(propertyName.toUpperCase(), margin + (logoUrl ? 20 : 0), currentY + 6);
   
-  doc.setFontSize(10);
+  doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
-  doc.text(subtitle.toUpperCase(), margin + (logoUrl ? 25 : 0), currentY + 13);
+  doc.text(subtitle.toUpperCase(), margin + (logoUrl ? 20 : 0), currentY + 11);
 
-  doc.setFontSize(22);
+  // Right: Title & Audit Info
+  doc.setFontSize(16);
   doc.setTextColor(79, 70, 229); // indigo-600
-  doc.text(title.toUpperCase(), pageWidth - margin, currentY + 10, { align: 'right' });
+  doc.text(title.toUpperCase(), pageWidth - margin, currentY + 6, { align: 'right' });
+  
+  doc.setFontSize(8);
+  doc.setTextColor(79, 70, 229);
+  doc.text("VERIFIED AUDIT TRAIL", pageWidth - margin, currentY + 11, { align: 'right' });
 
-  currentY += 25;
+  currentY += 20;
 
   // Table
   autoTable(doc, {
@@ -1203,7 +1209,7 @@ export const generateReportPDF = (options: PDFOptions) => {
   
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 15;
+  const margin = 10; // Back to tight but safe margin
   const contentWidth = pageWidth - (margin * 2);
 
   // Helper to handle currency formatting
@@ -1224,109 +1230,101 @@ export const generateReportPDF = (options: PDFOptions) => {
   };
 
   // --- HEADER SECTION ---
-  let currentY = margin;
+  let currentY = margin - 5; // Start slightly higher
 
-  // 1. Logo & Property Info (Left)
+  // 1. Logo
   if (logoUrl) {
     try {
-      doc.addImage(logoUrl, 'PNG', margin, currentY, 22, 22);
+      doc.addImage(logoUrl, 'PNG', margin, currentY, 15, 15);
     } catch (e) {
       console.error('Logo add error:', e);
     }
   }
 
-  const propertyX = margin + (logoUrl ? 28 : 0);
-  const titleX = pageWidth - margin;
-  const availableWidth = (pageWidth / 2) - margin - 10;
-
-  // Vertical line between logo and property name
-  if (logoUrl) {
-    doc.setDrawColor(226, 232, 240); // slate-200
-    doc.setLineWidth(0.5);
-    doc.line(margin + 24, currentY, margin + 24, currentY + 22);
-  }
-
+  const propertyX = margin + (logoUrl ? 20 : 0);
+  
   // Property Name & Subtitle
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(15, 23, 42); // slate-900
-  doc.text(propertyName.toUpperCase(), propertyX, currentY + 7, { maxWidth: availableWidth });
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42); 
+  doc.text(propertyName.toUpperCase(), propertyX, currentY + 6);
   
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.setTextColor(100, 116, 139); // slate-400
-  doc.text(`${outletName.toUpperCase()} • ISO-9001 CERTIFIED`, propertyX, currentY + 14);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`${outletName.toUpperCase()} • ISO-9001 CERTIFIED`, propertyX, currentY + 10);
 
+  // Membership Type Badge (Left side now)
+  let leftY = currentY + 12;
+  if (membershipTypeName) {
+    const typeWidth = doc.getTextWidth(membershipTypeName.toUpperCase()) + 8;
+    doc.setFillColor(238, 242, 255);
+    doc.roundedRect(propertyX, leftY, typeWidth, 5, 0.8, 0.8, 'F');
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(79, 70, 229);
+    doc.text(membershipTypeName.toUpperCase(), propertyX + (typeWidth / 2), leftY + 3.5, { align: 'center' });
+    leftY += 6;
+  }
+
+  // 1. Internal Verification Badge (Left side)
+  const verifyWidth = doc.getTextWidth("INTERNAL VERIFICATION") + 6;
+  doc.setDrawColor(79, 70, 229);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(propertyX, leftY, verifyWidth, 4.5, 0.5, 0.5, 'S');
+  
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
-  doc.setTextColor(79, 70, 229); // indigo-600
-  // Add a small circle/bullet for the "Internal Verification"
-  doc.setFillColor(79, 70, 229);
-  doc.circle(propertyX + 1, currentY + 18.5, 0.5, 'F');
-  doc.text("INTERNAL VERIFICATION", propertyX + 3, currentY + 19);
+  doc.setFontSize(4.5);
+  doc.setTextColor(79, 70, 229);
+  doc.text("INTERNAL VERIFICATION", propertyX + (verifyWidth / 2), leftY + 3, { align: 'center' });
 
   // 2. Report Title & Period (Right)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
+  doc.setFontSize(16);
   doc.setTextColor(15, 23, 42);
-  doc.text(reportTitle.toUpperCase(), titleX, currentY + 8, { align: 'right', maxWidth: availableWidth });
+  doc.text(reportTitle.toUpperCase(), pageWidth - margin, currentY + 6, { align: 'right' });
 
-  if (membershipTypeName && reportType !== 'monthly_revenue' && reportType !== 'incentives') {
-    // Membership Type Tag (Top Right)
-    const tagWidth = 45;
-    const tagHeight = 6;
-    const tagX = pageWidth - margin - tagWidth;
-    const tagY = currentY + 12;
-    
-    doc.setFillColor(238, 242, 255); // indigo-50
-    doc.roundedRect(tagX, tagY, tagWidth, tagHeight, 1, 1, 'F');
-    
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(6);
-    doc.setTextColor(79, 70, 229); // indigo-600
-    doc.text(membershipTypeName.toUpperCase(), tagX + (tagWidth / 2), tagY + 4.5, { align: 'center' });
-  }
-
-  // Audit Period Box
+  // Period Box (Tucked into top right)
   const boxWidth = 30;
-  const boxHeight = 12;
+  const boxHeight = 8;
   const boxX = pageWidth - margin - boxWidth;
-  const boxY = currentY + 22;
+  const boxY = currentY + 10; // Pull up to match UI better
 
-  doc.setFillColor(15, 23, 42); // slate-950
-  doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 2, 2, 'F');
+  doc.setFillColor(15, 23, 42);
+  doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 1, 1, 'F');
   
   doc.setFont("helvetica", "bold");
   doc.setFontSize(5);
   doc.setTextColor(255, 255, 255, 0.7);
-  doc.text("AUDIT PERIOD", boxX + (boxWidth / 2), boxY + 4, { align: 'center' });
+  doc.text("AUDIT PERIOD", boxX + (boxWidth / 2), boxY + 3, { align: 'center' });
   
-  doc.setFontSize(8);
+  doc.setFontSize(7);
   doc.setTextColor(255, 255, 255);
-  // For daily sales, show the full date. For monthly revenue, show year. For others, show month/year.
   const periodStr = reportType === 'daily_sales' 
-    ? format(date, 'dd MMMM yyyy').toUpperCase()
+    ? format(date, 'dd MMM yyyy').toUpperCase()
     : reportType === 'monthly_revenue'
     ? format(date, 'yyyy').toUpperCase()
-    : format(date, 'MMMM yyyy').toUpperCase();
-  doc.text(periodStr, boxX + (boxWidth / 2), boxY + 9, { align: 'center' });
+    : format(date, 'MMM yyyy').toUpperCase();
+  doc.text(periodStr, boxX + (boxWidth / 2), boxY + 6.5, { align: 'center' });
 
-  // Verified Audit Trail Tag
-  doc.setFillColor(248, 250, 252); // slate-50
-  doc.roundedRect(pageWidth - margin - 35, boxY + boxHeight + 4, 35, 6, 1, 1, 'F');
-  doc.setFontSize(6);
+  // Audit Trail Badge (Matching UI)
+  const trailWidth = 25;
+  const trailX = pageWidth - margin - trailWidth;
+  const trailY = currentY + 20; // Drastically pulled up
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(trailX, trailY, trailWidth, 4, 0.5, 0.5, 'S');
+  doc.setFontSize(4.5);
   doc.setTextColor(100, 116, 139);
-  // Small circle for audit trail
-  doc.setDrawColor(203, 213, 225); // slate-300
-  doc.circle(pageWidth - margin - 32, boxY + boxHeight + 7, 0.6, 'D');
-  doc.text("VERIFIED AUDIT TRAIL", pageWidth - margin - 16, boxY + boxHeight + 7.8, { align: 'center' });
+  doc.text("VERIFIED AUDIT TRAIL", trailX + (trailWidth / 2), trailY + 2.8, { align: 'center' });
 
-  // Subtle Header Divider
-  doc.setDrawColor(226, 232, 240); // slate-200
+  // Divider
+  const dividerY = currentY + 28; // Header is now very compact
+  doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.5);
-  doc.line(margin, boxY + boxHeight + 15, pageWidth - margin, boxY + boxHeight + 15);
+  doc.line(margin, dividerY, pageWidth - margin, dividerY);
 
-  currentY = boxY + boxHeight + 25;
+  currentY = dividerY + 5;
 
   const callAutoTable = (doc: any, options: any) => {
     // 1. Try doc.autoTable if it exists (plugin style)
@@ -1471,14 +1469,14 @@ export const generateReportPDF = (options: PDFOptions) => {
               ]),
               // Subtotal Row integrated into the same table for perfect alignment
               [
-                { content: `TIER SUBTOTAL: ${categoryName.toUpperCase()}`, colSpan: 6, styles: { halign: 'left', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-                { content: formatCurrency(subtotals.daily_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-                { content: formatCurrency(subtotals.actual_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-                { content: formatCurrency(subtotals.discount), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-                { content: formatCurrency(subtotals.net_fees), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-                { content: formatCurrency(subtotals.prev_accrual), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-                { content: formatCurrency(subtotals.period_rev), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-                { content: formatCurrency(subtotals.deferred), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } }
+                { content: `TIER SUBTOTAL: ${categoryName.toUpperCase()}`, colSpan: 6, styles: { halign: 'left', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.daily_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.actual_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.discount), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.net_fees), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.prev_accrual), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.period_rev), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.deferred), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } }
               ]
             ],
             theme: 'grid',
@@ -1499,19 +1497,19 @@ export const generateReportPDF = (options: PDFOptions) => {
               overflow: 'linebreak'
             },
             columnStyles: {
-              0: { halign: 'center', cellWidth: 10 },
-              1: { fontStyle: 'bold', cellWidth: 77 },
-              2: { halign: 'center', cellWidth: 20 },
+              0: { halign: 'center', cellWidth: 8 },
+              1: { fontStyle: 'bold' }, // Flexible column
+              2: { halign: 'center', cellWidth: 15 },
               3: { halign: 'center', cellWidth: 20 },
               4: { halign: 'center', cellWidth: 20 },
-              5: { halign: 'center', cellWidth: 10 },
-              6: { halign: 'right', cellWidth: 15 },
-              7: { halign: 'right', cellWidth: 15 },
-              8: { halign: 'right', cellWidth: 15 },
-              9: { halign: 'right', cellWidth: 15 },
-              10: { halign: 'right', cellWidth: 15, textColor: [100, 116, 139] },
-              11: { halign: 'right', fontStyle: 'bold', cellWidth: 15, textColor: [79, 70, 229] },
-              12: { halign: 'right', fontStyle: 'bold', cellWidth: 20, textColor: [239, 68, 68] }
+              5: { halign: 'center', cellWidth: 12 },
+              6: { halign: 'right', cellWidth: 20 },
+              7: { halign: 'right', cellWidth: 20 },
+              8: { halign: 'right', cellWidth: 20 },
+              9: { halign: 'right', cellWidth: 20 },
+              10: { halign: 'right', cellWidth: 20, textColor: [100, 116, 139] },
+              11: { halign: 'right', fontStyle: 'bold', cellWidth: 20, textColor: [79, 70, 229] },
+              12: { halign: 'right', fontStyle: 'bold', cellWidth: 22, textColor: [239, 68, 68] }
             },
             margin: { left: margin, right: margin },
             tableWidth: contentWidth
@@ -1525,16 +1523,16 @@ export const generateReportPDF = (options: PDFOptions) => {
       callAutoTable(doc, {
         startY: currentY + 5,
         body: [[
-          { content: "VERIFIED PORTFOLIO TOTAL", colSpan: 6, styles: { halign: 'left', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.daily_rate), styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.actual_rate), styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.discount), styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.net_fees), styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.prev_accrual), styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.period_rev), styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.deferred), styles: { halign: 'right', fontStyle: 'bold' } }
+          { content: "VERIFIED PORTFOLIO TOTAL", colSpan: 6, styles: { halign: 'left', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.daily_rate), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.actual_rate), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.discount), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.net_fees), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.prev_accrual), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.period_rev), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.deferred), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } }
         ]],
-        theme: 'plain',
+        theme: 'grid',
         styles: { 
           fillColor: [15, 23, 42], 
           textColor: [255, 255, 255], 
@@ -1544,19 +1542,19 @@ export const generateReportPDF = (options: PDFOptions) => {
           font: 'helvetica'
         },
         columnStyles: {
-          0: { halign: 'center', cellWidth: 10 },
-          1: { fontStyle: 'bold', cellWidth: 77 },
-          2: { halign: 'center', cellWidth: 20 },
+          0: { halign: 'center', cellWidth: 8 },
+          1: { fontStyle: 'bold' },
+          2: { halign: 'center', cellWidth: 15 },
           3: { halign: 'center', cellWidth: 20 },
           4: { halign: 'center', cellWidth: 20 },
-          5: { halign: 'center', cellWidth: 10 },
-          6: { halign: 'right', cellWidth: 15 },
-          7: { halign: 'right', cellWidth: 15 },
-          8: { halign: 'right', cellWidth: 15 },
-          9: { halign: 'right', cellWidth: 15 },
-          10: { halign: 'right', cellWidth: 15 },
-          11: { halign: 'right', cellWidth: 15 },
-          12: { halign: 'right', cellWidth: 20 }
+          5: { halign: 'center', cellWidth: 12 },
+          6: { halign: 'right', cellWidth: 20 },
+          7: { halign: 'right', cellWidth: 20 },
+          8: { halign: 'right', cellWidth: 20 },
+          9: { halign: 'right', cellWidth: 20 },
+          10: { halign: 'right', cellWidth: 20 },
+          11: { halign: 'right', cellWidth: 20 },
+          12: { halign: 'right', cellWidth: 22 }
         },
         margin: { left: margin, right: margin },
         tableWidth: contentWidth
