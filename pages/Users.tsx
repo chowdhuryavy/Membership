@@ -379,7 +379,7 @@ const UserDetail = ({
 }
 
 const Users = () => {
-  const { user: currentUser, isSuperAdmin } = useAuth();
+  const { user: currentUser, isSuperAdmin, refreshUser } = useAuth();
   const { roles, outlets, properties, hasPermission, checkShortcut } = useSettings();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -600,6 +600,9 @@ const Users = () => {
         }
         handleFormCancel();
         await loadUsers();
+        if (formData.id === currentUser?.id) {
+            await refreshUser();
+        }
     } catch (err: any) {
         setError(err.message || "Database update failed.");
     } finally { setIsSubmitting(false); }

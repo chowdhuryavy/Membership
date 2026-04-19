@@ -1,8 +1,8 @@
 
-import { CompanySettings, Currency, Role, Permission, Outlet, Property, UserPermissionOverride, PermissionGroup } from '../types';
+import { CompanySettings, Currency, Role, Permission, Outlet, Property, UserPermissionOverride, PermissionGroup, UserProfile } from '../types';
 import { db } from '../services/mockSupabase';
 import { useAuth } from './AuthContext';
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 interface SettingsContextType {
   settings: CompanySettings | null;
@@ -10,6 +10,7 @@ interface SettingsContextType {
   roles: Role[];
   currencies: Currency[];
   outlets: Outlet[];
+  userAllowedOutlets: Outlet[];
   properties: Property[];
   currentOutlet: Outlet | null;
   currentProperty: Property | null;
@@ -47,6 +48,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [currentOutlet, setCurrentOutletState] = useState<Outlet | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pageLoading, setPageLoading] = useState(false);
+  const lastUserRef = useRef<UserProfile | null>(null);
+
+  const userAllowedOutlets = useMemo(() => {
+    if (!user) return [];
+    return isSuperAdmin
+        ? outlets 
+        : outlets.filter(o => user.allowed_outlets?.includes(o.id));
+  }, [user, outlets, isSuperAdmin]);
 
   const permissionRegistry = useMemo(() => db.getPermissionRegistry(), []);
 
@@ -128,31 +137,31 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     if (user && outlets.length > 0) {
-      const allowed = isSuperAdmin
-          ? outlets 
-          : outlets.filter(o => user.allowed_outlets?.includes(o.id));
-
       setCurrentOutletState(prev => {
-          if (allowed.length > 0) {
-            const isAllowed = prev && allowed.find(o => o.id === prev.id);
-            
-            if (!prev || !isAllowed) {
-                // Priority: User's Admin-assigned default outlet -> Browser's last used outlet -> First allowed outlet
-                const defaultOutlet = user.default_outlet_id ? allowed.find(o => o.id === user.default_outlet_id) : null;
-                if (defaultOutlet) return defaultOutlet;
+          const userChanged = !lastUserRef.current || lastUserRef.current.id !== user.id;
+          const defaultChanged = lastUserRef.current?.default_outlet_id !== user.default_outlet_id;
+          lastUserRef.current = user;
 
-                const storedOutletId = localStorage.getItem('membership_last_outlet');
-                const storedOutlet = allowed.find(out => out.id === storedOutletId);
-                return storedOutlet || allowed[0];
-            } else {
-                return isAllowed;
-            }
+          if (userAllowedOutlets.length === 0) return null;
+
+          const isAllowed = prev && userAllowedOutlets.find(o => o.id === prev.id);
+          
+          if (!prev || !isAllowed || userChanged || defaultChanged) {
+              // Priority: User's Admin-assigned default outlet -> Browser's last used outlet -> First allowed outlet
+              const defaultOutlet = user.default_outlet_id ? userAllowedOutlets.find(o => o.id === user.default_outlet_id) : null;
+              if (defaultOutlet) return defaultOutlet;
+
+              const storedOutletId = localStorage.getItem('membership_last_outlet');
+              const storedOutlet = userAllowedOutlets.find(out => out.id === storedOutletId);
+              if (storedOutlet) return storedOutlet;
+
+              return userAllowedOutlets[0];
           } else {
-              return null;
+              return isAllowed;
           }
       });
     }
-  }, [user, outlets]);
+  }, [user, outlets, isSuperAdmin, userAllowedOutlets]);
 
   const formatMoney = (amount: number | undefined | null) => {
     const safeAmount = (amount === null || amount === undefined || isNaN(Number(amount))) ? 0 : Number(amount);
@@ -255,6 +264,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     roles, 
     currencies, 
     outlets,
+    userAllowedOutlets,
     properties,
     currentOutlet,
     currentProperty,
@@ -267,7 +277,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     pageLoading,
     setPageLoading,
     permissionRegistry
-  }), [settings, currency, roles, currencies, outlets, properties, currentOutlet, currentProperty, setCurrentOutlet, refreshSettings, formatMoney, hasPermission, checkShortcut, isLoading, pageLoading, setPageLoading, permissionRegistry]);
+  }), [settings, currency, roles, currencies, outlets, userAllowedOutlets, properties, currentOutlet, currentProperty, setCurrentOutlet, refreshSettings, formatMoney, hasPermission, checkShortcut, isLoading, pageLoading, setPageLoading, permissionRegistry]);
 
   return (
     <SettingsContext.Provider value={settingsContextValue}>

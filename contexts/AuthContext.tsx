@@ -34,15 +34,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return stored ? JSON.parse(stored) : null;
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [isSuperAdminState, setIsSuperAdminState] = useState(false);
+  
+  const isSuperAdminState = useMemo(() => isSuperAdminRole(user?.role_id), [user]);
 
   const checkIsSuperAdmin = async (currentUser: UserProfile | null = user) => {
-      if (!currentUser) return false;
-      
-      // Check if user has the admin role (case-insensitive)
-      const isSuper = isSuperAdminRole(currentUser.role_id);
-      setIsSuperAdminState(isSuper);
-      return isSuper;
+      return isSuperAdminRole(currentUser?.role_id);
   };
 
   const refreshUser = async () => {
@@ -62,7 +58,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   const hydrated = { ...freshUser, overrides };
                   setUser(hydrated);
                   sessionStorage.setItem('membership_session', JSON.stringify(hydrated));
-                  await checkIsSuperAdmin(hydrated);
               }
           } catch (e) {
               console.warn("User state sync failed, using cached session.");
@@ -83,7 +78,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (foundUser) {
       setUser(foundUser);
       sessionStorage.setItem('membership_session', JSON.stringify(foundUser));
-      await checkIsSuperAdmin(foundUser);
       return { error: null, requiresPasswordChange };
     }
     return { error: error || 'Authentication failed.', requiresPasswordChange: false };

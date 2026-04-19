@@ -66,7 +66,7 @@ import SplashLoading from './components/SplashLoading';
 
 const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
     const { user } = useAuth();
-    const { outlets, properties, currentOutlet, setCurrentOutlet } = useSettings();
+    const { outlets, userAllowedOutlets, properties, currentOutlet, setCurrentOutlet } = useSettings();
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -80,15 +80,9 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const allowedOutlets = useMemo(() => {
-        if (!user) return [];
-        if (user.role_id?.toLowerCase() === 'admin') return outlets;
-        return outlets.filter(o => user.allowed_outlets?.includes(o.id));
-    }, [outlets, user]);
-
     const groupedData = useMemo(() => {
         const groups: { [key: string]: { property: Property; outlets: any[] } } = {};
-        allowedOutlets.forEach(o => {
+        userAllowedOutlets.forEach(o => {
             const prop = properties.find(p => p.id === o.property_id);
             if (prop) {
                 if (!groups[prop.id]) groups[prop.id] = { property: prop, outlets: [] };
@@ -103,7 +97,7 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
         });
         
         return sortedGroups;
-    }, [allowedOutlets, properties]);
+    }, [userAllowedOutlets, properties]);
 
     const currentProp = useMemo(() => 
         properties.find(p => p.id === currentOutlet?.property_id)
@@ -111,7 +105,7 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
 
     const isAdmin = user?.role_id?.toLowerCase() === 'admin';
 
-    if (allowedOutlets.length === 0) return (
+    if (userAllowedOutlets.length === 0) return (
         <div className={`px-4 py-3 rounded-xl border flex items-center gap-2 ${isAdmin ? 'bg-indigo-50 border-indigo-100 text-indigo-600' : 'bg-red-50 border-red-100 text-red-600'}`}>
             {isAdmin ? <Info className="w-3 h-3" /> : <X className="w-3 h-3" />}
             <span className="text-[9px] font-black uppercase tracking-widest">
