@@ -116,6 +116,7 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [deleteStaffId, setDeleteStaffId] = useState<string | null>(null);
   const [isSchemaMissing, setIsSchemaMissing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const loadLeaves = async () => {
     setLoading(true);
@@ -237,7 +238,7 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
       loadLeaves();
     } catch (e: any) {
       console.error("Delete failed", e);
-      alert(`Failed to delete leave: ${e.message}`);
+      setErrorMsg(`Failed to delete leave: ${e.message}`);
     } finally {
       setIsDeleting(null);
       setLeaveToDelete(null);
@@ -677,6 +678,16 @@ NOTIFY pgrst, 'reload schema';`}
         description={`Permanently remove this absence record (${leaveToDelete ? format(parseISO(leaveToDelete.start_date), 'dd MMM') : ''} - ${leaveToDelete ? format(parseISO(leaveToDelete.end_date), 'dd MMM') : ''})?`} 
         confirmText="Confirm Revocation" 
         isDestructive={true} 
+      />
+
+      <ConfirmationModal 
+        isOpen={!!errorMsg} 
+        onClose={() => setErrorMsg(null)} 
+        onConfirm={() => setErrorMsg(null)} 
+        title="Action Failed" 
+        description={errorMsg || ""} 
+        confirmText="Okay"
+        showCancel={false}
       />
     </div>
   );

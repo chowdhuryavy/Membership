@@ -1,8 +1,9 @@
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { X } from 'lucide-react';
+import { X, AlertTriangle, HelpCircle, Info } from 'lucide-react';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -158,20 +159,22 @@ interface ModalProps {
 
 export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
   if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-          <h3 className="font-black text-slate-900 uppercase tracking-widest text-sm">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+  
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+        <div className="px-6 py-5 border-b border-slate-100 bg-white flex justify-between items-center">
+          <h3 className="font-black text-slate-900 uppercase tracking-widest text-base">{title}</h3>
+          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6 overflow-y-auto custom-scrollbar max-h-[calc(90vh-60px)]">
+        <div className="p-6 overflow-y-auto custom-scrollbar max-h-[calc(90vh-80px)]">
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -184,6 +187,7 @@ interface ConfirmationModalProps {
   description: string;
   confirmText?: string;
   isDestructive?: boolean;
+  showCancel?: boolean;
 }
 
 export const ConfirmationModal = ({ 
@@ -193,30 +197,42 @@ export const ConfirmationModal = ({
   title, 
   description, 
   confirmText = "Confirm", 
-  isDestructive = false 
+  isDestructive = false,
+  showCancel = true
 }: ConfirmationModalProps) => {
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden border border-slate-200 scale-100 animate-in zoom-in-95 duration-200">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-            <h3 className="font-semibold text-slate-900">{title}</h3>
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-[400px] w-full overflow-hidden border border-slate-100 animate-in zoom-in-95 slide-in-from-bottom-8 duration-300">
+        <div className="p-8 pb-4 text-center">
+            <div className={cn(
+                "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl",
+                isDestructive ? "bg-red-50 text-red-600 shadow-red-100" : "bg-indigo-50 text-indigo-600 shadow-indigo-100"
+            )}>
+                {isDestructive ? <AlertTriangle className="w-8 h-8" /> : <HelpCircle className="w-8 h-8" />}
+            </div>
+            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-3">{title}</h3>
+            <p className="text-slate-500 text-sm font-medium leading-relaxed px-2">
+                {description}
+            </p>
         </div>
-        <div className="px-6 py-6">
-            <p className="text-slate-600 text-sm leading-relaxed">{description}</p>
-        </div>
-        <div className="px-6 py-4 bg-slate-50 flex justify-end gap-3">
-            <Button variant="secondary" onClick={onClose} size="sm">Cancel</Button>
+        <div className="p-8 pt-6 flex flex-col gap-3">
             <Button 
                 variant={isDestructive ? "danger" : "primary"} 
                 onClick={() => { onConfirm(); onClose(); }} 
-                size="sm"
+                className="h-14 rounded-2xl font-black text-base shadow-lg"
             >
                 {confirmText}
             </Button>
+            {showCancel && (
+                <Button variant="secondary" onClick={onClose} className="h-14 rounded-2xl font-bold bg-slate-50 border-transparent hover:bg-slate-100 text-slate-500">
+                    Cancel
+                </Button>
+            )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

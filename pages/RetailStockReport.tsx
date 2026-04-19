@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Card, CardContent, CardHeader, Button } from '../components/ui';
+import { Card, CardContent, CardHeader, Button, ConfirmationModal } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
 import { db } from '../services/mockSupabase';
 import { 
@@ -57,6 +57,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [outletsMap, setOutletsMap] = useState<Record<string, string>>({});
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   const viewScope = embeddedViewScope || internalViewScope;
   
@@ -435,7 +436,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
       doc.save(`Retail_Stock_Ledger_${format(selectedMonth, 'yyyy-MM')}.pdf`);
     } catch (err) {
       console.error("PDF generation failed", err);
-      alert("Failed to generate PDF. Please try the Print option instead.");
+      setErrorMsg("Failed to generate PDF automatically. Please try using the Print option directly from your browser.");
     } finally {
       setIsExporting(false);
     }
@@ -699,6 +700,16 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
 
         </Card>
       </div>
+
+      <ConfirmationModal 
+        isOpen={!!errorMsg} 
+        onClose={() => setErrorMsg(null)} 
+        onConfirm={() => setErrorMsg(null)} 
+        title="Export Issue" 
+        description={errorMsg || ""} 
+        confirmText="Acknowledged"
+        showCancel={false}
+      />
     </div>
   );
 };
