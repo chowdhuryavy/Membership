@@ -114,27 +114,27 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
           </div>
         </div>
 
-        <div className="p-12 md:p-20 bg-white print:p-4 print:pt-6 print-page-1">
+        <div className="p-12 md:p-20 bg-white print:p-1 print-page-1">
           <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
             {/* Header */}
             <div className="flex justify-between items-start mb-12 border-b-4 border-black pb-6 print:mb-2 print:pb-1">
               <div className="flex-1">
-                <h1 className="text-3xl font-black tracking-tighter text-black uppercase mb-1">{propertyName}</h1>
-                <h2 className="text-sm font-black text-slate-500 uppercase tracking-[0.3em]">{outletName}</h2>
-                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-black text-white rounded text-[9px] font-black uppercase tracking-widest">
-                  <ShieldCheck className="w-3 h-3" /> 
+                <h1 className="text-3xl font-black tracking-tighter text-black uppercase mb-1 print:text-xl">{propertyName}</h1>
+                <h2 className="text-sm font-black text-slate-500 uppercase tracking-[0.3em] print:text-[10px]">{outletName}</h2>
+                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-black text-white rounded text-[9px] font-black uppercase tracking-widest print:mt-1 print:px-2 print:py-0.5 print:text-[7px]">
+                  <ShieldCheck className="w-3 h-3 print:w-2 print:h-2" /> 
                   <span>Certified Member Record</span>
                   <span className="font-arabic" dir="rtl">سجل عضو معتمد</span>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-4">
-                {logoUrl && <img src={logoUrl} alt="Logo" className="h-20 w-auto object-contain" />}
+              <div className="flex flex-col items-end gap-4 print:gap-1">
+                {logoUrl && <img src={logoUrl} alt="Logo" className="h-20 w-auto object-contain print:h-12" />}
                 <div className="text-right">
                   <div className="flex justify-end items-center gap-2">
-                    <p className="text-[10px] font-black tracking-widest">Membership No..</p>
-                    <p className="text-[10px] font-black tracking-widest font-arabic" dir="rtl">الرقم التسلسلي</p>
+                    <p className="text-[10px] font-black tracking-widest print:text-[8px]">Membership No..</p>
+                    <p className="text-[10px] font-black tracking-widest font-arabic print:text-[8px]" dir="rtl">الرقم التسلسلي</p>
                   </div>
-                  <p className="text-xl font-black tracking-widest text-indigo-600">{member.membership_number}</p>
+                  <p className="text-xl font-black tracking-widest text-indigo-600 print:text-lg">{member.membership_number}</p>
                 </div>
               </div>
             </div>
@@ -320,18 +320,18 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
           </div>
         </div>
 
-        {/* Page 2: Rules and Regulations */}
-        <div className="p-12 md:p-20 bg-white mt-4 border-t border-slate-200 print:p-8 print-page-2">
+            {/* Page 2: Rules and Regulations */}
+        <div className="p-12 md:p-20 bg-white mt-4 border-t border-slate-200 print:p-1 print:mt-0 print-page-2">
           <div className="max-w-[750px] mx-auto text-black font-sans leading-tight">
-            <div className="text-center mb-8 print:mb-4">
-              <h3 className="text-xl font-black uppercase tracking-widest border-b-2 border-black inline-block pb-2">Gymnasium Rules & Regulations</h3>
-              <h3 className="text-lg font-bold mt-2 font-arabic" dir="rtl">القواعد و اللوائح الخاصة بصالة الألعاب الرياضية</h3>
+            <div className="text-center mb-8 print:mb-2">
+              <h3 className="text-xl font-black uppercase tracking-widest border-b-2 border-black inline-block pb-2 print:text-base print:pb-1">Gymnasium Rules & Regulations</h3>
+              <h3 className="text-lg font-bold mt-2 font-arabic print:text-sm print:mt-0.5" dir="rtl">القواعد و اللوائح الخاصة بصالة الألعاب الرياضية</h3>
             </div>
             
-            <div className="grid grid-cols-1 gap-y-2 text-[9px] font-medium leading-relaxed mb-8 print:mb-4 print:gap-y-1">
+            <div className="grid grid-cols-1 gap-y-2 text-[9px] font-medium leading-relaxed mb-8 print:mb-2 print:gap-y-0.5 print:text-[8px]">
               {GYM_RULES.map((rule, idx) => (
-                <div key={idx} className="flex gap-4 items-start border-b border-slate-200 pb-1.5 print-rule-item">
-                  <span className="font-black w-6">{idx + 1}.</span>
+                <div key={idx} className="flex gap-4 items-start border-b border-slate-200 pb-1.5 print:pb-0.5 print-rule-item">
+                  <span className="font-black w-6 print:w-4">{idx + 1}.</span>
                   <span className="flex-1">{rule.en}</span>
                   <span className="flex-1 text-right font-arabic" dir="rtl">{rule.ar}</span>
                 </div>
@@ -396,21 +396,21 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
           }
           .print-page-1 {
             display: block !important;
-            padding: 20px !important;
+            padding: 0 !important;
             margin: 0 !important;
           }
           .print-page-2 {
             display: block !important;
             page-break-before: always !important;
             break-before: page !important;
-            padding: 20px !important;
+            padding: 0 !important;
             margin: 0 !important;
             border: none !important;
           }
           .print-rule-item {
             break-inside: avoid;
           }
-          @page { size: A4; margin: 15mm; }
+          @page { size: A4; margin: 10mm; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
         .font-arabic { font-family: 'Amiri', 'Traditional Arabic', serif; }
