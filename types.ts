@@ -140,6 +140,7 @@ export interface UserProfile {
   role_id: string;
   name: string;
   allowed_outlets: string[];
+  default_outlet_id?: string;
   temp_password?: string | null;
   overrides?: UserPermissionOverride[]; // Hydrated in session
   is_active: boolean;

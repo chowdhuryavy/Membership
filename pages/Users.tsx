@@ -389,7 +389,25 @@ const Users = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
 
-  const [formData, setFormData] = useState<{ id: string; name: string; email: string; role_id: string; allowed_outlets: string[]; password?: string; is_active: boolean; }>({ id: '', name: '', email: '', role_id: '', allowed_outlets: [], password: '', is_active: true });
+  const [formData, setFormData] = useState<{ 
+    id: string; 
+    name: string; 
+    email: string; 
+    role_id: string; 
+    allowed_outlets: string[]; 
+    default_outlet_id: string;
+    password?: string; 
+    is_active: boolean; 
+  }>({ 
+    id: '', 
+    name: '', 
+    email: '', 
+    role_id: '', 
+    allowed_outlets: [], 
+    default_outlet_id: '',
+    password: '', 
+    is_active: true 
+  });
   
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState('');
@@ -422,7 +440,7 @@ const Users = () => {
   };
 
   const resetForm = () => {
-      setFormData({ id: '', name: '', email: '', role_id: '', allowed_outlets: [], password: '', is_active: true });
+      setFormData({ id: '', name: '', email: '', role_id: '', allowed_outlets: [], default_outlet_id: '', password: '', is_active: true });
       setIsEditing(false);
       setError('');
       setShowPassword(false);
@@ -447,6 +465,7 @@ const Users = () => {
           email: u.email || '', 
           role_id: u.role_id || '',
           allowed_outlets: u.allowed_outlets || [], 
+          default_outlet_id: u.default_outlet_id || '',
           password: '',
           is_active: u.is_active ?? true
       });
@@ -566,13 +585,16 @@ const Users = () => {
             await db.updateUser(formData.id, {
                 name: formData.name, email: canEditEmail ? formData.email : undefined,
                 role_id: formData.role_id, allowed_outlets: formData.allowed_outlets,
+                default_outlet_id: formData.default_outlet_id,
                 password: formData.password || undefined,
                 is_active: formData.is_active
             } as any);
         } else {
             await db.addUser({
                 name: formData.name, email: formData.email, role_id: formData.role_id,
-                allowed_outlets: formData.allowed_outlets, password: formData.password,
+                allowed_outlets: formData.allowed_outlets, 
+                default_outlet_id: formData.default_outlet_id,
+                password: formData.password,
                 is_active: formData.is_active
             } as any);
         }
@@ -742,9 +764,14 @@ const Users = () => {
                                           {(() => {
                                               const validOutlets = (u.allowed_outlets || [])
                                                   .map(id => outlets.find(o => o.id === id))
-                                                  .filter(Boolean);
+                                                  .filter(o => o !== undefined && (isSuperAdmin || currentUser?.allowed_outlets.includes(o.id)));
                                               
                                               if (validOutlets.length === 0) {
+                                                  // Show "Other Facilities" if they have access but admin can't see which ones
+                                                  const totalHidden = (u.allowed_outlets || []).length;
+                                                  if (totalHidden > 0 && !isSuperAdmin) {
+                                                    return <span className="text-slate-400 text-[9px] font-black uppercase tracking-widest flex items-center bg-slate-50 px-2.5 py-1 rounded-lg"><Shield className="w-3.5 h-3.5 mr-1.5"/> Access to {totalHidden} other scopes</span>;
+                                                  }
                                                   return <span className="text-red-500 text-[10px] font-black uppercase tracking-widest flex items-center bg-red-50 px-2.5 py-1 rounded-lg"><AlertTriangle className="w-3.5 h-3.5 mr-1.5"/> No Access</span>;
                                               }
 
@@ -850,7 +877,7 @@ const Users = () => {
                                   </button>
                               </div>
                           </div>
-                          <div className="space-y-2 pt-4 border-t border-slate-100">
+                           <div className="space-y-2 pt-4 border-t border-slate-100">
                               <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1 mb-2 block">Facility Access Scopes</label>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100 max-h-48 overflow-y-auto shadow-inner custom-scrollbar">
                                   {outlets.filter(o => isSuperAdmin || currentUser?.allowed_outlets.includes(o.id)).map(o => {
@@ -873,6 +900,33 @@ const Users = () => {
                                   })}
                               </div>
                           </div>
+
+                          {formData.allowed_outlets.length > 1 && (
+                            <div className="space-y-2 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1 mb-2 block">Primary Account Home (Default Outlet)</label>
+                                <Select 
+                                    options={[
+                                        { value: '', label: 'None (Browser Remembers Last Outlet)' }, 
+                                        ...outlets
+                                            .filter(o => 
+                                                formData.allowed_outlets.includes(o.id) && 
+                                                (isSuperAdmin || currentUser?.allowed_outlets.includes(o.id))
+                                            )
+                                            .map(o => {
+                                                const prop = properties.find(p => p.id === o.property_id);
+                                                return { 
+                                                    value: o.id, 
+                                                    label: prop ? `${prop.name} | ${o.name}` : o.name 
+                                                };
+                                            })
+                                    ]}
+                                    value={formData.default_outlet_id}
+                                    onChange={e => setFormData({ ...formData, default_outlet_id: e.target.value })}
+                                    className="h-12 rounded-xl"
+                                />
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide px-2 mt-1">This outlet will be automatically selected whenever this user logs in.</p>
+                            </div>
+                          )}
                           {error && <div className="bg-red-50 text-red-600 text-[11px] font-bold p-4 rounded-2xl border border-red-100 flex items-start gap-3"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /><span className="leading-relaxed">{error}</span></div>}
                           <div className="flex gap-3 pt-4">
                               <Button type="button" variant="secondary" onClick={handleFormCancel} className="flex-1 h-14 rounded-2xl font-bold bg-white border-slate-200">

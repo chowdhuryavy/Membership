@@ -6,9 +6,11 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { ConfirmationModal } from './ui';
 
 export const NotificationBell = () => {
     const [isOpen, setIsOpen] = useState(false);
+    const [showConfirmClear, setShowConfirmClear] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const { currentOutlet, outlets } = useSettings();
     const { user } = useAuth();
@@ -39,9 +41,8 @@ export const NotificationBell = () => {
     };
 
     const handleClearAll = async () => {
-        if (window.confirm('Are you sure you want to dismiss all notifications? They will be hidden from your view but remain in the system.')) {
-            await clearAll();
-        }
+        await clearAll();
+        setShowConfirmClear(false);
     };
 
     return (
@@ -57,6 +58,16 @@ export const NotificationBell = () => {
                     </span>
                 )}
             </button>
+
+            <ConfirmationModal 
+                isOpen={showConfirmClear}
+                onClose={() => setShowConfirmClear(false)}
+                onConfirm={handleClearAll}
+                title="Dismiss All Notifications"
+                description="Are you sure you want to dismiss all notifications? They will be hidden from your view but remain in the system for archival purposes."
+                confirmText="Dismiss All"
+                isDestructive={true}
+            />
 
             <AnimatePresence>
                 {isOpen && (
@@ -83,7 +94,7 @@ export const NotificationBell = () => {
                                 )}
                                 {notifications.length > 0 && (
                                     <button 
-                                        onClick={handleClearAll}
+                                        onClick={() => setShowConfirmClear(true)}
                                         className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                         title="Dismiss all"
                                     >

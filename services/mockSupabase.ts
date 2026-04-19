@@ -420,6 +420,7 @@ class DatabaseService {
             name: user.name, 
             role_id: user.role_id, 
             allowed_outlets: user.allowed_outlets || [], 
+            default_outlet_id: (user as any).default_outlet_id || null,
             temp_password: tempPassword, 
             auth_id: authId, 
             is_active: user.is_active ?? true,
@@ -443,6 +444,7 @@ class DatabaseService {
             email: updates.email?.trim().toLowerCase(), 
             role_id: updates.role_id, 
             allowed_outlets: updates.allowed_outlets, 
+            default_outlet_id: (updates as any).default_outlet_id,
             is_active: updates.is_active,
             updated_at: new Date().toISOString() 
         };
