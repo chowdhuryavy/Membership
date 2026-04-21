@@ -657,7 +657,7 @@ const Dashboard = () => {
     { title: "Cancellation Rate", value: `${stats.cancellationRate.toFixed(1)}%`, icon: Clock, color: "text-rose-500", sub: "MTD Bookings" }
   ];
 
-  const mtdTotalRevenue = stats.mtdMembershipRevenue + stats.mtdSalesTotal;
+  const mtdTotalRevenue = stats.revenueThisMonth;
 
   const breakdownChartData = useMemo(() => {
     return [
