@@ -9,6 +9,7 @@ import {
   BarChart4, 
   Database, 
   TrendingUp,
+  TrendingDown,
   Calendar,
   Snowflake,
   Zap,
@@ -432,7 +433,7 @@ const Dashboard = () => {
         // Bookings are used for counts and utilization metrics, but Sales is the financial source of truth
         sales.filter(s => s.status === 'completed').forEach(s => {
             const sDate = new Date(s.created_at);
-            const amount = Number(s.net_amount);
+            const amount = Number(s.net_amount || 0);
             const cat = s.category as string;
 
             if (isSameMonth(sDate, viewDate)) {
@@ -487,7 +488,7 @@ const Dashboard = () => {
         let grossRevenue = 0;
         let totalDiscounts = 0;
         mtdSales.forEach(s => {
-            grossRevenue += Number(s.gross_amount || s.net_amount);
+            grossRevenue += Number(s.gross_amount || s.net_amount || 0);
             totalDiscounts += Number(s.discount_amount || 0);
         });
         
@@ -525,10 +526,11 @@ const Dashboard = () => {
 
         // Guest vs Member Revenue
         let guestRevenue = 0;
-        let memberRevenue = mtdMembershipRevenue;
+        let memberRevenue = Number(mtdMembershipRevenue || 0);
         mtdSales.forEach(s => {
-            if (s.guest_id) memberRevenue += Number(s.net_amount);
-            else guestRevenue += Number(s.net_amount);
+            const amount = Number(s.net_amount || 0);
+            if (s.guest_id) memberRevenue += amount;
+            else guestRevenue += amount;
         });
 
         // Top Spenders
