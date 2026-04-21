@@ -511,12 +511,6 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                 const cat = sortedCategories.find(c => c.id === catId);
                                 if (cat) {
                                     setValue('membership_type_id', cat.membership_type_id || '');
-                                    // Auto-set package type if tier has specific capacity
-                                    if (cat.capacity_count === 2 && watch('package_type') === 'Single') {
-                                        setValue('package_type', 'Double');
-                                    } else if (cat.capacity_count && cat.capacity_count > 2 && watch('package_type') === 'Single') {
-                                        setValue('package_type', 'Family');
-                                    }
                                 }
                             }}
                             className="w-full h-14 px-4 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm cursor-pointer appearance-none"
@@ -568,16 +562,20 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 {(watch('package_type') === 'Couple' || watch('package_type') === 'Double' || watch('package_type') === 'Family') && (
                     <>
                         <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Spouse/Partner Name</label>
+                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                                {watch('package_type') === 'Couple' ? 'Spouse Name' : 'Partner Name'}
+                            </label>
                             <div className="relative group">
                                 <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                                     <User className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
                                 </div>
-                                <input {...register('spouse_name')} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm placeholder:text-slate-200" placeholder="Partner's Full Name" />
+                                <input {...register('spouse_name')} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm placeholder:text-slate-200" placeholder={watch('package_type') === 'Couple' ? "Spouse's Full Name" : "Partner's Full Name"} />
                             </div>
                         </div>
                         <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Spouse/Partner DOB</label>
+                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                                {watch('package_type') === 'Couple' ? 'Spouse DOB' : 'Partner DOB'}
+                            </label>
                             <div className="relative group">
                                 <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                                     <Calendar className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
@@ -586,7 +584,9 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                             </div>
                         </div>
                         <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Spouse ID Card Upload</label>
+                            <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                                {watch('package_type') === 'Couple' ? 'Spouse ID Card' : 'Partner ID Card'}
+                            </label>
                             <input type="file" onChange={(e) => handleFileUpload(e, 'spouse_id_card_url')} className="w-full h-14 p-3 rounded-2xl bg-white border border-slate-200 text-sm" />
                         </div>
                     </>

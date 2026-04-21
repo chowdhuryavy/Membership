@@ -15,7 +15,7 @@ const Categories = () => {
   const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string | 'all'>('all');
   
-  const [formData, setFormData] = useState({ id: '', name: '', duration_months: 1, base_rate: 0, max_freeze_days: 0, membership_type_id: '', privileges: [] as string[], capacity_count: 1 });
+  const [formData, setFormData] = useState({ id: '', name: '', duration_months: 1, base_rate: 0, max_freeze_days: 0, membership_type_id: '', privileges: [] as string[] });
   const [isEditing, setIsEditing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showTypeSelector, setShowTypeSelector] = useState(false);
@@ -101,8 +101,7 @@ const Categories = () => {
           base_rate: 0, 
           max_freeze_days: 0, 
           membership_type_id: selectedTypeId !== 'all' ? selectedTypeId : (membershipTypes[0]?.id || ''),
-          privileges: [],
-          capacity_count: 1
+          privileges: []
       });
       setIsEditing(false);
   };
@@ -132,8 +131,7 @@ const Categories = () => {
           base_rate: 0, 
           max_freeze_days: 0, 
           membership_type_id: typeId,
-          privileges: [],
-          capacity_count: 1
+          privileges: []
       });
       setIsEditing(false);
       setShowForm(true);
@@ -148,8 +146,7 @@ const Categories = () => {
       base_rate: cat.base_rate || 0,
       max_freeze_days: cat.max_freeze_days || 0,
       membership_type_id: cat.membership_type_id || '',
-      privileges: cat.privileges || [],
-      capacity_count: cat.capacity_count || 1
+      privileges: cat.privileges || []
     });
       setIsEditing(true);
       setShowForm(true);
@@ -177,8 +174,7 @@ const Categories = () => {
                 base_rate: formData.base_rate,
                 max_freeze_days: formData.max_freeze_days,
                 membership_type_id: formData.membership_type_id,
-                privileges: formData.privileges,
-                capacity_count: formData.capacity_count
+                privileges: formData.privileges
             });
         }
     } else {
@@ -190,8 +186,7 @@ const Categories = () => {
             base_rate: formData.base_rate,
             max_freeze_days: formData.max_freeze_days,
             membership_type_id: formData.membership_type_id,
-            privileges: formData.privileges,
-            capacity_count: formData.capacity_count
+            privileges: formData.privileges
         });
     }
     
@@ -415,21 +410,7 @@ const Categories = () => {
                                 />
                             </div>
                             
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Package Capacity</label>
-                                    <div className="relative group">
-                                        <Input 
-                                            type="number" 
-                                            value={formData.capacity_count} 
-                                            onChange={e => setFormData({...formData, capacity_count: parseInt(e.target.value) || 1})} 
-                                            className="h-12 rounded-xl pl-10"
-                                            min={1}
-                                        />
-                                        <ShieldCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
-                                    </div>
-                                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">e.g. 2 for "Double"</p>
-                                </div>
+                            <div className="grid grid-cols-1 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Privileges</label>
                                     <div className="flex gap-2">

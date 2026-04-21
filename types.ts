@@ -132,7 +132,6 @@ export interface MembershipCategory {
   base_rate: number;
   max_freeze_days: number;
   privileges?: string[];
-  capacity_count?: number;
 }
 
 export interface UserProfile {
