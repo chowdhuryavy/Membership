@@ -525,7 +525,7 @@ const Dashboard = () => {
 
         // Guest vs Member Revenue
         let guestRevenue = 0;
-        let memberRevenue = 0;
+        let memberRevenue = mtdMembershipRevenue;
         mtdSales.forEach(s => {
             if (s.guest_id) memberRevenue += Number(s.net_amount);
             else guestRevenue += Number(s.net_amount);
@@ -1137,19 +1137,26 @@ const Dashboard = () => {
                         <Users className="w-4 h-4 text-emerald-500" /> Guest vs Member Revenue
                     </h3>
                 </CardHeader>
-                <CardContent className="p-6 h-[300px] flex items-center">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie data={[
-                                { name: 'Member', value: stats.memberRevenue, color: '#10b981' },
-                                { name: 'Guest', value: stats.guestRevenue, color: '#f59e0b' }
-                            ]} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                                {[{color: '#10b981'}, {color: '#f59e0b'}].map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                            </Pie>
-                            <Tooltip formatter={(val: number) => formatMoney(val)} />
-                            <Legend wrapperStyle={{fontSize: "9px", fontWeight: "900", textTransform: "uppercase"}} />
-                        </PieChart>
-                    </ResponsiveContainer>
+                <CardContent className="p-6 h-[300px] flex items-center justify-center">
+                    {stats.memberRevenue === 0 && stats.guestRevenue === 0 ? (
+                        <div className="text-center opacity-40">
+                             <TrendingDown className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                             <p className="text-[10px] font-black uppercase">No Revenue Collected</p>
+                        </div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie data={[
+                                    { name: 'Member', value: stats.memberRevenue, color: '#10b981' },
+                                    { name: 'Guest', value: stats.guestRevenue, color: '#f59e0b' }
+                                ]} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                    {[{color: '#10b981'}, {color: '#f59e0b'}].map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                                </Pie>
+                                <Tooltip formatter={(val: number) => formatMoney(val)} />
+                                <Legend wrapperStyle={{fontSize: "9px", fontWeight: "900", textTransform: "uppercase"}} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    )}
                 </CardContent>
             </Card>
         )}
