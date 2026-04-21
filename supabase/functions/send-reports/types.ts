@@ -200,7 +200,7 @@ export interface Member {
   email?: string;
   phone?: string;
   is_married?: boolean;
-  package_type?: 'Single' | 'Couple' | 'Family';
+  package_type?: 'Single' | 'Couple' | 'Double' | 'Family';
   access_type?: 'Pool' | 'Spa' | 'Both';
   membership_type?: 'New' | 'Renew';
   spouse_name?: string;

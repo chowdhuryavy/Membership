@@ -835,7 +835,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                   </Card>
               </div>
 
-              {(viewingMember.package_type === 'Couple' || viewingMember.package_type === 'Family') && (
+              {(viewingMember.package_type === 'Couple' || viewingMember.package_type === 'Double' || viewingMember.package_type === 'Family') && (
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl p-10 bg-white overflow-hidden relative group">
                     <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform duration-1000"><Heart className="w-48 h-48 text-red-600" /></div>
                     <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 mb-8 flex items-center gap-3">

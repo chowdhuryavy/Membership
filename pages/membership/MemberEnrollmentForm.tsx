@@ -28,7 +28,7 @@ const memberSchema = z.object({
   phone: z.string().optional().nullable(),
   nationality: z.string().optional().nullable(),
   dob: z.string().optional().nullable(),
-  package_type: z.enum(['Single', 'Couple', 'Family']),
+  package_type: z.enum(['Single', 'Couple', 'Double', 'Family']),
   access_type: z.enum(['Pool', 'Spa', 'Both']),
   membership_type: z.enum(['New', 'Renew']),
   spouse_name: z.string().optional().nullable(),
@@ -93,10 +93,6 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     return format(today, 'yyyy-MM-dd');
   };
 
-  const sortedCategories = useMemo(() => {
-    return [...categories].sort((a, b) => (a.duration_months || 0) - (b.duration_months || 0));
-  }, [categories]);
-
   const { register, handleSubmit, watch, setValue, reset, control, formState: { errors } } = useForm<MemberFormValues>({
     resolver: zodResolver(memberSchema as any),
     defaultValues: (existingMember) ? {
@@ -139,6 +135,14 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       referrer_name: ''
     }
   });
+
+  const sortedCategories = useMemo(() => {
+    return [...categories].sort((a, b) => (a.duration_months || 0) - (b.duration_months || 0));
+  }, [categories]);
+
+  const selectedCategory = useMemo(() => {
+    return categories.find(c => c.id === watch('category_id'));
+  }, [categories, watch('category_id')]);
 
   const { fields: kidsFields, append: appendKid, remove: removeKid } = useFieldArray({
     control,
@@ -231,7 +235,6 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       }
   }, [isRenewal, existingMember, matchedMembers.length]);
 
-  const selectedCategory = categories.find(c => c.id === categoryId);
   const baseRate = selectedCategory?.base_rate || 0;
   const netAmount = Math.max(0, baseRate - (Number(discount) || 0));
   
@@ -316,9 +319,12 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     const expiry = parseISO(matchedMember.current_end_date);
     const today = startOfDay(new Date());
     const daysDiff = differenceInDays(expiry, today);
-    const statusText = daysDiff < 0 
-        ? `EXPIRED ${Math.abs(daysDiff)} DAYS AGO` 
-        : `ACTIVE (EXPIRES IN ${daysDiff} DAYS)`;
+    const isActive = daysDiff >= 0;
+    
+    const statusText = isActive 
+        ? `ACTIVE (EXPIRES IN ${daysDiff} DAYS)`
+        : `EXPIRED ${Math.abs(daysDiff)} DAYS AGO`;
+        
     const cat = categories.find(c => c.id === matchedMember.category_id);
 
     const themeClass = isRenewal ? "bg-[#f0fdf4] border-emerald-100" : "bg-[#f0f7ff] border-indigo-100";
@@ -334,9 +340,19 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 </div>
                 <div>
                     <h4 className={`text-[11px] font-black uppercase tracking-tight ${titleClass}`}>Lifecycle Identity Matched</h4>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">
-                        Records: {matchedMembers.length} Found &bull; Current Expiry: {format(parseISO(matchedMember.current_end_date), 'dd MMM yyyy')} ({statusText})
-                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                            Records: {matchedMembers.length} Found &bull; Current Expiry: {format(parseISO(matchedMember.current_end_date), 'dd MMM yyyy')}
+                        </p>
+                        <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border uppercase tracking-widest flex items-center gap-1.5 ${
+                            isActive 
+                            ? "bg-emerald-50 text-emerald-600 border-emerald-100" 
+                            : "bg-red-50 text-red-600 border-red-100"
+                        }`}>
+                            <span className={`w-1 h-1 rounded-full ${isActive ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`}></span>
+                            {statusText}
+                        </span>
+                    </div>
                 </div>
             </div>
             <div className="flex items-center gap-3">
@@ -396,7 +412,18 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Membership No. / ID *</label>
+                    <div className="flex items-center justify-between ml-1">
+                        <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Membership No. / ID *</label>
+                        {matchedMembers.length > 0 && (
+                            <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
+                                differenceInDays(parseISO(matchedMembers[0].current_end_date), startOfDay(new Date())) >= 0
+                                ? "text-emerald-600 bg-emerald-50 border border-emerald-100"
+                                : "text-red-600 bg-red-50 border border-red-100"
+                            }`}>
+                                {differenceInDays(parseISO(matchedMembers[0].current_end_date), startOfDay(new Date())) >= 0 ? 'Currently Active' : 'Expired Record'}
+                            </span>
+                        )}
+                    </div>
                     <div className="relative group">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <ShieldCheck className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
@@ -484,6 +511,12 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                 const cat = sortedCategories.find(c => c.id === catId);
                                 if (cat) {
                                     setValue('membership_type_id', cat.membership_type_id || '');
+                                    // Auto-set package type if tier has specific capacity
+                                    if (cat.capacity_count === 2 && watch('package_type') === 'Single') {
+                                        setValue('package_type', 'Double');
+                                    } else if (cat.capacity_count && cat.capacity_count > 2 && watch('package_type') === 'Single') {
+                                        setValue('package_type', 'Family');
+                                    }
                                 }
                             }}
                             className="w-full h-14 px-4 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm cursor-pointer appearance-none"
@@ -497,6 +530,20 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         </select>
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>
+                    {selectedCategory?.privileges && selectedCategory.privileges.length > 0 && (
+                        <div className="mt-2 p-4 rounded-xl bg-indigo-50 border border-indigo-100 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <h4 className="text-[9px] font-black text-indigo-900 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                <ShieldCheck className="w-3 h-3" /> Included Privileges
+                            </h4>
+                            <ul className="grid grid-cols-1 gap-2">
+                                {selectedCategory.privileges.map((p, i) => (
+                                    <li key={i} className="text-[10px] font-bold text-indigo-700 flex items-center gap-2">
+                                        <span className="w-1 h-1 rounded-full bg-indigo-400"></span> {p}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                 </div>
                 <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Effective Start Date *</label>
@@ -511,13 +558,14 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         <select {...register('package_type')} className="w-full h-14 px-4 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm cursor-pointer appearance-none">
                             <option value="Single">Single Enrollment</option>
                             <option value="Couple">Couple Manifest</option>
+                            <option value="Double">Double Manifest</option>
                             <option value="Family">Family Portfolio</option>
                         </select>
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>
                 </div>
                 
-                {(watch('package_type') === 'Couple' || watch('package_type') === 'Family') && (
+                {(watch('package_type') === 'Couple' || watch('package_type') === 'Double' || watch('package_type') === 'Family') && (
                     <>
                         <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
                             <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Spouse/Partner Name</label>

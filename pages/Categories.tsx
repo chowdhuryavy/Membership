@@ -15,7 +15,7 @@ const Categories = () => {
   const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string | 'all'>('all');
   
-  const [formData, setFormData] = useState({ id: '', name: '', duration_months: 1, base_rate: 0, max_freeze_days: 0, membership_type_id: '' });
+  const [formData, setFormData] = useState({ id: '', name: '', duration_months: 1, base_rate: 0, max_freeze_days: 0, membership_type_id: '', privileges: [] as string[], capacity_count: 1 });
   const [isEditing, setIsEditing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showTypeSelector, setShowTypeSelector] = useState(false);
@@ -100,7 +100,9 @@ const Categories = () => {
           duration_months: 1, 
           base_rate: 0, 
           max_freeze_days: 0, 
-          membership_type_id: selectedTypeId !== 'all' ? selectedTypeId : (membershipTypes[0]?.id || '')
+          membership_type_id: selectedTypeId !== 'all' ? selectedTypeId : (membershipTypes[0]?.id || ''),
+          privileges: [],
+          capacity_count: 1
       });
       setIsEditing(false);
   };
@@ -129,7 +131,9 @@ const Categories = () => {
           duration_months: 1, 
           base_rate: 0, 
           max_freeze_days: 0, 
-          membership_type_id: typeId
+          membership_type_id: typeId,
+          privileges: [],
+          capacity_count: 1
       });
       setIsEditing(false);
       setShowForm(true);
@@ -143,7 +147,9 @@ const Categories = () => {
       duration_months: cat.duration_months || 0,
       base_rate: cat.base_rate || 0,
       max_freeze_days: cat.max_freeze_days || 0,
-      membership_type_id: cat.membership_type_id || ''
+      membership_type_id: cat.membership_type_id || '',
+      privileges: cat.privileges || [],
+      capacity_count: cat.capacity_count || 1
     });
       setIsEditing(true);
       setShowForm(true);
@@ -170,7 +176,9 @@ const Categories = () => {
                 duration_months: formData.duration_months,
                 base_rate: formData.base_rate,
                 max_freeze_days: formData.max_freeze_days,
-                membership_type_id: formData.membership_type_id
+                membership_type_id: formData.membership_type_id,
+                privileges: formData.privileges,
+                capacity_count: formData.capacity_count
             });
         }
     } else {
@@ -181,7 +189,9 @@ const Categories = () => {
             duration_months: formData.duration_months,
             base_rate: formData.base_rate,
             max_freeze_days: formData.max_freeze_days,
-            membership_type_id: formData.membership_type_id
+            membership_type_id: formData.membership_type_id,
+            privileges: formData.privileges,
+            capacity_count: formData.capacity_count
         });
     }
     
@@ -311,6 +321,22 @@ const Categories = () => {
                                   <p className="text-lg font-black">{formatMoney(cat.base_rate)}</p>
                               </div>
                           </div>
+
+                          {cat.privileges && cat.privileges.length > 0 && (
+                            <div className="mt-6 flex flex-wrap gap-2">
+                                {cat.privileges.slice(0, 3).map((p, i) => (
+                                    <span key={i} className="text-[8px] font-black bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-100 uppercase tracking-tighter">
+                                        {p}
+                                    </span>
+                                ))}
+                                {cat.privileges.length > 3 && (
+                                    <span className="text-[8px] font-black bg-slate-50 text-slate-400 px-2 py-0.5 rounded border border-slate-100 uppercase tracking-tighter">
+                                        +{cat.privileges.length - 3} More
+                                    </span>
+                                )}
+                            </div>
+                          )}
+
                           {cat.membership_type_id && (
                               <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2">
                                   <Target className="w-3 h-3 text-indigo-600" />
@@ -388,6 +414,75 @@ const Categories = () => {
                                     className="h-12 rounded-xl"
                                 />
                             </div>
+                            
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Package Capacity</label>
+                                    <div className="relative group">
+                                        <Input 
+                                            type="number" 
+                                            value={formData.capacity_count} 
+                                            onChange={e => setFormData({...formData, capacity_count: parseInt(e.target.value) || 1})} 
+                                            className="h-12 rounded-xl pl-10"
+                                            min={1}
+                                        />
+                                        <ShieldCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+                                    </div>
+                                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">e.g. 2 for "Double"</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Privileges</label>
+                                    <div className="flex gap-2">
+                                        <Input 
+                                            id="privilege-input"
+                                            placeholder="Add perk..."
+                                            className="h-12 rounded-xl"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const val = (e.target as HTMLInputElement).value.trim();
+                                                    if (val) {
+                                                        setFormData({ ...formData, privileges: [...formData.privileges, val] });
+                                                        (e.target as HTMLInputElement).value = '';
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            className="h-12 w-12 rounded-xl p-0 shrink-0 border-slate-200"
+                                            onClick={() => {
+                                                const el = document.getElementById('privilege-input') as HTMLInputElement;
+                                                const val = el.value.trim();
+                                                if (val) {
+                                                    setFormData({ ...formData, privileges: [...formData.privileges, val] });
+                                                    el.value = '';
+                                                }
+                                            }}
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {formData.privileges.length > 0 && (
+                                <div className="flex flex-wrap gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-300">
+                                    {formData.privileges.map((p, i) => (
+                                        <span key={i} className="px-3 py-1 bg-white rounded-lg text-[9px] font-black uppercase text-indigo-600 border border-indigo-100 flex items-center gap-2 shadow-sm group/tag">
+                                            {p}
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setFormData({ ...formData, privileges: formData.privileges.filter((_, idx) => idx !== i) })}
+                                                className="hover:text-red-500 transition-colors"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                             <div className="flex gap-3 pt-4">
                                 <Button type="button" variant="secondary" onClick={handleCancel} className="flex-1 h-12 rounded-xl font-bold bg-white border-slate-200">
                                     <span className="flex items-center gap-2"><Command className="w-3 h-3 text-slate-400"/> Cancel</span>

@@ -131,6 +131,8 @@ export interface MembershipCategory {
   duration_months: number;
   base_rate: number;
   max_freeze_days: number;
+  privileges?: string[];
+  capacity_count?: number;
 }
 
 export interface UserProfile {
@@ -215,7 +217,7 @@ export interface Member {
   email?: string;
   phone?: string;
   is_married?: boolean;
-  package_type?: 'Single' | 'Couple' | 'Family';
+  package_type?: 'Single' | 'Couple' | 'Double' | 'Family';
   access_type?: 'Pool' | 'Spa' | 'Both';
   membership_type?: 'New' | 'Renew';
   spouse_name?: string;

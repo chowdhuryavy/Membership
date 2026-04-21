@@ -229,14 +229,14 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
 
             {/* Family Details if applicable */}
-            {(member.package_type === 'Couple' || member.package_type === 'Family') && (
+            {(member.package_type === 'Couple' || member.package_type === 'Double' || member.package_type === 'Family') && (
               <div className="mb-6 space-y-4 print:mb-8 print:space-y-3">
                 <div className="flex justify-between items-end border-b-2 border-black pb-1">
                   <h3 className="text-xs font-black uppercase">
-                    {member.package_type === 'Couple' ? 'Couple Details' : 'Family Manifest'}
+                    {(member.package_type === 'Couple' || member.package_type === 'Double') ? 'Partner Details' : 'Family Manifest'}
                   </h3>
                   <h3 className="text-xs font-black uppercase font-arabic" dir="rtl">
-                    {member.package_type === 'Couple' ? 'بيانات الزوجين' : 'بيانات العائلة'}
+                    {(member.package_type === 'Couple' || member.package_type === 'Double') ? 'بيانات الشريكين' : 'بيانات العائلة'}
                   </h3>
                 </div>
                 <div className="grid grid-cols-2 gap-4 p-3 border border-slate-100 rounded-xl print:gap-3 print:p-3">
