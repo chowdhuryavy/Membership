@@ -752,24 +752,23 @@ const Dashboard = () => {
       </div>
 
       {canViewFinancials && (
-        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg bg-white overflow-hidden">
-            <CardHeader className="p-6 border-b border-slate-100 flex items-center justify-between">
-                <div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 leading-none">
+            {/* Table Container */}
+            <Card className="lg:col-span-7 rounded-[2.5rem] border-slate-200/60 shadow-xl bg-white overflow-hidden flex flex-col">
+                <CardHeader className="p-8 border-b border-slate-100">
                     <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
-                        <Database className="w-4 h-4 text-indigo-600" /> Revenue Breakdown by Category
+                        <Database className="w-4 h-4 text-indigo-600" /> Revenue Breakdown
                     </h3>
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Daily Performance vs MTD Category Distribution</p>
-                </div>
-            </CardHeader>
-            <CardContent className="p-0">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-0">
-                    <div className="lg:col-span-7 border-r border-slate-50 overflow-x-auto">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1.5">Yield Recognition Registry</p>
+                </CardHeader>
+                <CardContent className="p-0 flex-1">
+                    <div className="overflow-x-auto">
                         <table className="w-full text-left">
                             <thead className="bg-slate-50 border-b border-slate-100">
                                 <tr>
-                                    <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Revenue Stream</th>
-                                    <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Daily Yield</th>
-                                    <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">MTD Recognition</th>
+                                    <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-[0.1em]">Revenue Stream</th>
+                                    <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-[0.1em] text-right">Daily Yield</th>
+                                    <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-[0.1em] text-right">MTD Recognition</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
@@ -782,33 +781,33 @@ const Dashboard = () => {
                                     { label: 'Other Revenue', key: 'other', icon: Layers, color: 'text-slate-500' }
                                 ].map((item) => (
                                     <tr key={item.key} className="hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`p-2 rounded-lg bg-slate-100/50 ${item.color}`}>
+                                        <td className="px-8 py-5 whitespace-nowrap">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`p-2.5 rounded-xl bg-slate-100/50 ${item.color}`}>
                                                     <item.icon className="w-3.5 h-3.5" />
                                                 </div>
-                                                <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight">{item.label}</span>
+                                                <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">{item.label}</span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-right">
+                                        <td className="px-8 py-5 text-right">
                                             <span className="text-[11px] font-black text-slate-900 tabular-nums">{formatMoney(stats.dailyBreakdown[item.key as keyof typeof stats.dailyBreakdown])}</span>
                                         </td>
-                                        <td className="px-6 py-4 text-right">
+                                        <td className="px-8 py-5 text-right">
                                             <span className="text-[11px] font-black text-indigo-600 tabular-nums">{formatMoney(stats.mtdBreakdown[item.key as keyof typeof stats.mtdBreakdown])}</span>
                                         </td>
                                     </tr>
                                 ))}
-                                <tr className="bg-slate-50/30">
-                                    <td className="px-6 py-4">
-                                        <span className="text-[11px] font-black text-slate-900 uppercase tracking-widest">Total Commercial Yield</span>
+                                <tr className="bg-indigo-50/20 border-t-2 border-indigo-100/50">
+                                    <td className="px-8 py-6">
+                                        <span className="text-[11px] font-black text-indigo-900 uppercase tracking-widest">Total Commercial Yield</span>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <span className="text-[12px] font-black text-slate-900 tabular-nums">
+                                    <td className="px-8 py-6 text-right">
+                                        <span className="text-[14px] font-black text-slate-900 tabular-nums">
                                             {formatMoney(Object.values(stats.dailyBreakdown).reduce((a: number, b: number) => a + b, 0))}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <span className="text-[12px] font-black text-indigo-700 tabular-nums">
+                                    <td className="px-8 py-6 text-right">
+                                        <span className="text-[14px] font-black text-indigo-700 tabular-nums">
                                             {formatMoney(Object.values(stats.mtdBreakdown).reduce((a: number, b: number) => a + b, 0))}
                                         </span>
                                     </td>
@@ -816,47 +815,57 @@ const Dashboard = () => {
                             </tbody>
                         </table>
                     </div>
-                    <div className="lg:col-span-5 p-8 flex flex-col justify-center min-h-[300px] bg-slate-50/10">
-                        {breakdownChartData.length > 0 ? (
-                            <div className="w-full h-full flex flex-col">
-                                <div className="flex-1 min-h-[200px]">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={breakdownChartData} layout="vertical" margin={{ left: -10, right: 30, top: 0, bottom: 0 }}>
-                                            <XAxis type="number" hide />
-                                            <YAxis dataKey="name" type="category" hide />
-                                            <Tooltip 
-                                                cursor={{fill: 'rgba(226, 232, 240, 0.4)'}}
-                                                contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '0.75rem', color: 'white', fontSize: '10px' }}
-                                                itemStyle={{ fontWeight: 'black' }}
-                                                formatter={(val: number) => [formatMoney(val), 'Revenue']}
-                                            />
-                                            <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
-                                                {breakdownChartData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                                ))}
-                                            </Bar>
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                                <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-3">
-                                    {breakdownChartData.map((item) => (
-                                        <div key={item.name} className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-tight truncate">{item.name}</span>
-                                        </div>
-                                    ))}
-                                </div>
+                </CardContent>
+            </Card>
+
+            {/* Chart Container */}
+            <Card className="lg:col-span-5 rounded-[2.5rem] border-slate-200/60 shadow-xl bg-white overflow-hidden flex flex-col">
+                <CardHeader className="p-8 border-b border-slate-100">
+                    <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2 uppercase">
+                        <BarChart4 className="w-4 h-4 text-purple-600" /> Revenue Visualization
+                    </h3>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1.5">Category Intensity Analysis</p>
+                </CardHeader>
+                <CardContent className="p-8 flex-1 flex flex-col justify-center">
+                    {breakdownChartData.length > 0 ? (
+                        <div className="w-full h-full flex flex-col">
+                            <div className="flex-1 min-h-[280px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={breakdownChartData} layout="vertical" margin={{ left: -10, right: 40, top: 0, bottom: 0 }}>
+                                        <XAxis type="number" hide />
+                                        <YAxis dataKey="name" type="category" hide />
+                                        <Tooltip 
+                                            cursor={{fill: 'rgba(79, 70, 229, 0.05)'}}
+                                            contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '1rem', color: 'white', fontSize: '10px', padding: '12px' }}
+                                            itemStyle={{ fontWeight: 'black', color: 'white' }}
+                                            formatter={(val: number) => [formatMoney(val), 'Revenue']}
+                                        />
+                                        <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={18}>
+                                            {breakdownChartData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
                             </div>
-                        ) : (
-                            <div className="text-center opacity-40 py-10">
-                                <TrendingDown className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                                <p className="text-[10px] font-black uppercase">No Breakdown Available</p>
+                            <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-3 bg-slate-50/50 p-6 rounded-[1.5rem] border border-slate-100">
+                                {breakdownChartData.map((item) => (
+                                    <div key={item.name} className="flex items-center gap-3">
+                                        <div className="w-2.5 h-2.5 rounded-full ring-2 ring-white shadow-sm shrink-0" style={{ backgroundColor: item.color }} />
+                                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-tight truncate">{item.name}</span>
+                                    </div>
+                                ))}
                             </div>
-                        )}
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+                        </div>
+                    ) : (
+                        <div className="text-center opacity-40 py-20 bg-slate-50/50 rounded-[2rem] border border-dashed border-slate-200">
+                            <TrendingDown className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">No Financial Data to Chart</p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
