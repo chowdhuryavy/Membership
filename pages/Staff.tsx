@@ -5,7 +5,8 @@ import { db } from '../services/mockSupabase';
 import { Staff, Outlet } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { format, isWithinInterval, startOfDay } from 'date-fns';
+import { format, isWithinInterval, startOfDay, startOfMonth, endOfMonth } from 'date-fns';
+import { isStaffAssignedToOutletOnDate } from '../src/shared/reportLogic';
 import { 
   Trash2, 
   Edit2, 
@@ -36,7 +37,9 @@ import {
   ClipboardCheck,
   AlertCircle,
   Coins,
-  Shield
+  Shield,
+  Layers,
+  CalendarDays
 } from 'lucide-react';
 
 import StaffProfileView from './StaffProfileView';
@@ -83,7 +86,29 @@ const StaffPage = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [isTransferMode, setIsTransferMode] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
+  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [newAssignment, setNewAssignment] = useState({ outlet_id: '', start_date: format(new Date(), 'yyyy-MM-dd') });
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const filterRef = React.useRef<HTMLDivElement>(null);
+
+  const statusOptions = [
+    { value: 'all', label: 'All Personnel', icon: Layers, color: 'text-slate-400' },
+    { value: 'active', label: 'Active Only', icon: UserCheck, color: 'text-emerald-500' },
+    { value: 'inactive', label: 'Inactive Only', icon: UserX, color: 'text-red-500' },
+  ];
+
+  const currentOption = statusOptions.find(o => o.value === statusFilter) || statusOptions[0];
+
+  // Close filter dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
+        setIsFilterOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const outletMap = useMemo(() => {
     return Object.fromEntries((outlets || []).map(o => [o.id, o.name]));
@@ -170,12 +195,17 @@ const StaffPage = () => {
       const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             s.role.toLowerCase().includes(searchTerm.toLowerCase());
       
+      const checkDate = `${selectedMonth}-01`;
+      const isAssigned = viewScope === 'outlet' && currentOutlet 
+        ? isStaffAssignedToOutletOnDate(s, currentOutlet.id, checkDate)
+        : s.is_active;
+
       const matchesStatus = statusFilter === 'all' ? true : 
-                            statusFilter === 'active' ? s.is_active : !s.is_active;
+                            statusFilter === 'active' ? isAssigned : !isAssigned;
 
       return matchesSearch && matchesStatus;
     });
-  }, [staff, searchTerm, statusFilter]);
+  }, [staff, searchTerm, statusFilter, selectedMonth, viewScope, currentOutlet]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -802,14 +832,79 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
             </div>
 
             <div className="flex flex-col sm:flex-row items-stretch gap-3 w-full xl:w-auto">
-              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-                  <button onClick={() => setStatusFilter('active')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${statusFilter === 'active' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Active</button>
-                  <button onClick={() => setStatusFilter('inactive')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${statusFilter === 'inactive' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Inactive</button>
-                  <button onClick={() => setStatusFilter('all')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${statusFilter === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>All</button>
+              {/* MONTH PICKER */}
+              <div className="relative group min-w-[160px]">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 pointer-events-none group-focus-within:bg-indigo-600 group-focus-within:text-white transition-all">
+                  <CalendarDays className="h-4 w-4" />
+                </div>
+                <input 
+                  type="month" 
+                  value={selectedMonth} 
+                  onChange={e => setSelectedMonth(e.target.value)}
+                  className="w-full h-14 pl-14 pr-4 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold cursor-pointer shadow-inner appearance-none"
+                />
               </div>
+
+              {/* STATUS FILTER */}
+              <div className="relative min-w-[200px]" ref={filterRef}>
+                <button 
+                  onClick={() => setIsFilterOpen(!isFilterOpen)}
+                  className={`h-14 w-full px-5 rounded-2xl border transition-all flex items-center justify-between group/btn shadow-sm ${isFilterOpen ? 'bg-white border-indigo-500 ring-4 ring-indigo-500/10' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center border border-slate-100 transition-colors ${isFilterOpen ? 'text-indigo-600' : 'text-slate-400'}`}>
+                      <currentOption.icon className="w-4 h-4" />
+                    </div>
+                    <div className="flex flex-col items-start overflow-hidden">
+                       <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Status</span>
+                       <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight truncate w-full">{currentOption.label}</span>
+                    </div>
+                  </div>
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-300 ${isFilterOpen ? 'rotate-180 text-indigo-500' : ''}`} />
+                </button>
+
+                {isFilterOpen && (
+                  <div className="absolute top-full mt-3 left-0 right-0 bg-white border border-slate-200 rounded-[1.8rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-3 duration-300">
+                    <div className="p-4 border-b border-slate-50 bg-slate-50/50">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Deployment Filter</span>
+                    </div>
+                    <div className="p-2">
+                      {statusOptions.map((opt) => {
+                        const isSelected = statusFilter === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            onClick={() => {
+                              setStatusFilter(opt.value as any);
+                              setIsFilterOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all group/item ${isSelected ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-indigo-50 text-slate-600 hover:text-indigo-600'}`}
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-colors ${isSelected ? 'bg-white/20 border-white/20' : 'bg-white border-slate-100 shadow-sm'}`}>
+                                 <opt.icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : opt.color}`} />
+                              </div>
+                              <span className="text-xs font-bold uppercase tracking-wide">{opt.label}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* SEARCH BAR */}
               <div className="relative group flex-1 sm:w-64">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input placeholder="Search personnel..." className="w-full h-11 pl-11 pr-4 rounded-xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-xs font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-focus-within:bg-indigo-600 group-focus-within:text-white transition-all">
+                  <Search className="h-4 w-4" />
+                </div>
+                <input 
+                  placeholder="Search identity..." 
+                  className="w-full h-14 pl-14 pr-4 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold placeholder:text-slate-400 shadow-inner" 
+                  value={searchTerm} 
+                  onChange={(e) => setSearchTerm(e.target.value)} 
+                />
               </div>
               {canManage && (
                   <Button onClick={() => { 

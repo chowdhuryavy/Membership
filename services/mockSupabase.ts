@@ -513,48 +513,40 @@ class DatabaseService {
         
         let staffList = (data || []) as Staff[];
 
-        const isAssignedOnDate = (s: Staff, targetId: string) => {
-            if (Array.isArray(s.outlet_assignments) && s.outlet_assignments.length > 0) {
-                const sorted = [...s.outlet_assignments].sort((a: any, b: any) => a.start_date.localeCompare(b.start_date));
-                const match = sorted.find((a: any) => {
-                  return todayStr >= a.start_date && (!a.end_date || todayStr <= a.end_date);
-                });
-                
-                if (match) return match.outlet_id === targetId;
-                
-                // Fallback for dates before records
-                if (todayStr < sorted[0].start_date) {
-                  if (s.joining_date && todayStr < s.joining_date) return false;
-                  const currentOutlets = Array.isArray(s.outlet_ids) ? s.outlet_ids : ((s as any).outlet_id ? [(s as any).outlet_id] : []);
-                  return currentOutlets.includes(targetId) && targetId !== sorted[0].outlet_id;
+        const matchesPersonnelList = (s: Staff, targetId: string) => {
+            const outlets = new Set<string>();
+            if (Array.isArray(s.outlet_ids)) {
+                s.outlet_ids.forEach(id => id && outlets.add(id));
+            } else if (typeof s.outlet_ids === 'string') {
+                try {
+                    const parsed = JSON.parse(s.outlet_ids);
+                    if (Array.isArray(parsed)) parsed.forEach(id => id && outlets.add(id));
+                } catch (e) {
+                    if (s.outlet_ids) outlets.add(s.outlet_ids);
                 }
-                return false;
             }
-            const currentOutlets = Array.isArray(s.outlet_ids) ? s.outlet_ids : ((s as any).outlet_id ? [(s as any).outlet_id] : []);
-            return currentOutlets.includes(targetId);
+            if ((s as any).outlet_id) outlets.add((s as any).outlet_id);
+            if (Array.isArray(s.outlet_assignments)) {
+                s.outlet_assignments.forEach((a: any) => {
+                    if (a.outlet_id) outlets.add(a.outlet_id);
+                });
+            }
+            return outlets.has(targetId);
         };
 
         if (scopeId) {
             if (isProperty) {
-                // For property scope (management), we show all staff belonging to the property
-                // regardless of their current outlet assignment, unless we specifically want to limit.
-                // We typically filter by property_id in the DB query already.
+                // Property view should show everyone who belongs to this property, 
+                // matching by property_id. We already filtered by eq('property_id') in the query.
+                // No additional filtering needed unless user is restricted to specific outlets.
                 if (limitToOutletIds && limitToOutletIds.length > 0) {
-                    // On the staff management page, we want to see anyone who is allowed in these outlets
-                    // but we don't want to exclude them if they aren't 'active' right this second 
-                    // if they are part of the property roster.
-                    staffList = staffList.filter(s => {
-                        const sOutlets = Array.isArray(s.outlet_ids) ? s.outlet_ids : ((s as any).outlet_id ? [(s as any).outlet_id] : []);
-                        // If they are in the list of allowed outlets, OR if their history shows they were ever in them
-                        return limitToOutletIds.some(id => sOutlets.includes(id));
-                    });
+                    staffList = staffList.filter(s => limitToOutletIds.some(id => matchesPersonnelList(s, id)));
                 }
             } else {
-                // For a specific outlet roster, we strictly only show currently assigned staff
-                staffList = staffList.filter(s => isAssignedOnDate(s, scopeId));
+                // Outlet view should show everyone who belongs or has belonged to this outlet
+                staffList = staffList.filter(s => matchesPersonnelList(s, scopeId));
             }
         }
-
         return staffList;
       }, []);
     }
