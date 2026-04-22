@@ -585,7 +585,7 @@ const Users = () => {
             await db.updateUser(formData.id, {
                 name: formData.name, email: canEditEmail ? formData.email : undefined,
                 role_id: formData.role_id, allowed_outlets: formData.allowed_outlets,
-                default_outlet_id: formData.default_outlet_id,
+                default_outlet_id: formData.default_outlet_id || null,
                 password: formData.password || undefined,
                 is_active: formData.is_active
             } as any);
@@ -593,7 +593,7 @@ const Users = () => {
             await db.addUser({
                 name: formData.name, email: formData.email, role_id: formData.role_id,
                 allowed_outlets: formData.allowed_outlets, 
-                default_outlet_id: formData.default_outlet_id,
+                default_outlet_id: formData.default_outlet_id || null,
                 password: formData.password,
                 is_active: formData.is_active
             } as any);
