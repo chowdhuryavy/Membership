@@ -202,8 +202,9 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       if (membershipNo && membershipNo.length >= 2 && currentOutlet) {
         db.getMemberHistory(membershipNo, currentOutlet.id).then(foundMembers => {
           if (foundMembers.length > 0) {
-              setMatchedMembers(foundMembers);
-              setMemberDefaults(foundMembers[0]);
+              const sorted = [...foundMembers].sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
+              setMatchedMembers(sorted);
+              setMemberDefaults(sorted[0]);
           } else {
               setMatchedMembers([]);
               clearFormExceptID();
@@ -220,8 +221,9 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     if (!isEditing && !isRenewal && guestName && guestName.length >= 3) {
       const found = (allMembers || []).filter(m => m.guest_name.toLowerCase().includes(guestName.toLowerCase()));
       if (found.length > 0) {
-        setMatchedMembers(found);
-        setMemberDefaults(found[0]);
+        const sorted = [...found].sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
+        setMatchedMembers(sorted);
+        setMemberDefaults(sorted[0]);
       } else {
         setMatchedMembers([]);
         // Don't clear form here to allow typing

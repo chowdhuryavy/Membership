@@ -649,6 +649,7 @@ class DatabaseService {
                 query = query.eq('outlet_id', scopeId);
             }
         }
+        query = query.order('start_date', { ascending: false });
         const { data, error } = await query;
         if (error) throw error;
         
