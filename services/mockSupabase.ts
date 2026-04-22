@@ -497,12 +497,13 @@ class DatabaseService {
     return null;
   }
 
-  async getStaff(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[]): Promise<Staff[]> {
+  async getStaff(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[], date?: string): Promise<Staff[]> {
+    const todayStr = date || new Date().toISOString().split('T')[0];
+    
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         let query = supabase.from('staff').select('*, leaves:staff_leaves!fk_staff_leaves_staff(*)').order('name');
         
-        // If we know it's a property, we can filter at the DB level for efficiency
         if (scopeId && isProperty) {
             query = query.eq('property_id', scopeId);
         }
@@ -512,21 +513,45 @@ class DatabaseService {
         
         let staffList = (data || []) as Staff[];
 
-        // Filter in memory to avoid Postgres Array vs JSONB issues
+        const isAssignedOnDate = (s: Staff, targetId: string) => {
+            if (Array.isArray(s.outlet_assignments) && s.outlet_assignments.length > 0) {
+                const sorted = [...s.outlet_assignments].sort((a: any, b: any) => a.start_date.localeCompare(b.start_date));
+                const match = sorted.find((a: any) => {
+                  return todayStr >= a.start_date && (!a.end_date || todayStr <= a.end_date);
+                });
+                
+                if (match) return match.outlet_id === targetId;
+                
+                // Fallback for dates before records
+                if (todayStr < sorted[0].start_date) {
+                  if (s.joining_date && todayStr < s.joining_date) return false;
+                  const currentOutlets = Array.isArray(s.outlet_ids) ? s.outlet_ids : ((s as any).outlet_id ? [(s as any).outlet_id] : []);
+                  return currentOutlets.includes(targetId) && targetId !== sorted[0].outlet_id;
+                }
+                return false;
+            }
+            const currentOutlets = Array.isArray(s.outlet_ids) ? s.outlet_ids : ((s as any).outlet_id ? [(s as any).outlet_id] : []);
+            return currentOutlets.includes(targetId);
+        };
+
         if (scopeId) {
             if (isProperty) {
+                // For property scope (management), we show all staff belonging to the property
+                // regardless of their current outlet assignment, unless we specifically want to limit.
+                // We typically filter by property_id in the DB query already.
                 if (limitToOutletIds && limitToOutletIds.length > 0) {
+                    // On the staff management page, we want to see anyone who is allowed in these outlets
+                    // but we don't want to exclude them if they aren't 'active' right this second 
+                    // if they are part of the property roster.
                     staffList = staffList.filter(s => {
                         const sOutlets = Array.isArray(s.outlet_ids) ? s.outlet_ids : ((s as any).outlet_id ? [(s as any).outlet_id] : []);
+                        // If they are in the list of allowed outlets, OR if their history shows they were ever in them
                         return limitToOutletIds.some(id => sOutlets.includes(id));
                     });
                 }
             } else {
-                // scopeId is an outlet ID
-                staffList = staffList.filter(s => {
-                    const sOutlets = Array.isArray(s.outlet_ids) ? s.outlet_ids : ((s as any).outlet_id ? [(s as any).outlet_id] : []);
-                    return sOutlets.includes(scopeId);
-                });
+                // For a specific outlet roster, we strictly only show currently assigned staff
+                staffList = staffList.filter(s => isAssignedOnDate(s, scopeId));
             }
         }
 

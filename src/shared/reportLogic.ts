@@ -559,19 +559,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       }
 
       // Check if they belonged to the outlet during the report period
-      const belongsToOutlet = outletIds.some(id => {
-        const currentOutlets = getStaffOutlets(s);
-        if (currentOutlets.includes(id)) return true;
-        
-        if (Array.isArray(s.outlet_assignments)) {
-          return s.outlet_assignments.some((a: any) => 
-            a.outlet_id === id && 
-            a.start_date <= endStr && 
-            (!a.end_date || a.end_date >= startStr)
-          );
-        }
-        return false;
-      }) || outletIds.includes('all');
+      const belongsToOutlet = outletIds.some(id => wasStaffAssignedToOutletInRange(s, id, startStr, endStr)) || outletIds.includes('all');
       
       // For Personal Training, we might want to be more inclusive with staff assigned to the property
       if (!belongsToOutlet && dept !== 'Personal Training') return false;
@@ -2188,32 +2176,110 @@ export function findBestRule(rules: any[], department: string, itemId: string, p
 }
 
 export function getStaffOutlets(s: any): string[] {
-  if (Array.isArray(s.outlet_ids)) return s.outlet_ids;
-  if (typeof s.outlet_ids === 'string') {
+  const outlets = new Set<string>();
+  
+  // Checkboxes / Current
+  if (Array.isArray(s.outlet_ids)) {
+    s.outlet_ids.forEach((id: any) => id && outlets.add(id));
+  } else if (typeof s.outlet_ids === 'string') {
     try {
-      return JSON.parse(s.outlet_ids);
-    } catch (e) {
-      return [s.outlet_ids];
-    }
+      const parsed = JSON.parse(s.outlet_ids);
+      if (Array.isArray(parsed)) parsed.forEach((id: any) => id && outlets.add(id));
+    } catch (e) {}
   }
-  if (s.outlet_id) return [s.outlet_id];
-  return [];
+  
+  if (s.outlet_id) outlets.add(s.outlet_id);
+
+  // Historical assignments (ensure they appear in old reports too)
+  if (Array.isArray(s.outlet_assignments)) {
+    s.outlet_assignments.forEach((a: any) => {
+      if (a.outlet_id) outlets.add(a.outlet_id);
+    });
+  }
+
+  return Array.from(outlets);
 }
 
 export function isStaffAssignedToOutletOnDate(staff: any, outletId: string, dateStr: string): boolean {
   if (!staff || !outletId || !dateStr) return false;
   
+  const assignments = Array.isArray(staff.outlet_assignments) ? staff.outlet_assignments : [];
+  
   // Historical check via assignments
-  if (Array.isArray(staff.outlet_assignments) && staff.outlet_assignments.length > 0) {
-    return staff.outlet_assignments.some((a: any) => {
-      if (a.outlet_id !== outletId) return false;
+  if (assignments.length > 0) {
+    // Sort assignments by start_date ascending to find gaps/ranges
+    const sorted = [...assignments].sort((a: any, b: any) => a.start_date.localeCompare(b.start_date));
+    
+    // 1. Check if date falls into a specific recorded assignment
+    const match = sorted.find((a: any) => {
       const start = a.start_date;
       const end = a.end_date;
-      return dateStr >= start && (!end || dateStr <= end);
+      // Note: We use dateStr.split('T')[0] to ensure we're comparing YYYY-MM-DD
+      const d = dateStr.split('T')[0];
+      return d >= start && (!end || d <= end);
     });
+
+    if (match) {
+      return match.outlet_id === outletId;
+    }
+
+    // 2. Check if the date is before the first recorded assignment
+    // If user hasn't recorded the entire past, we fallback to current outlet_ids
+    // but we EXCLUDE the outlet that is specifically marked as starting in the future
+    const firstStart = sorted[0].start_date;
+    const d = dateStr.split('T')[0];
+    
+    if (d < firstStart) {
+      if (staff.joining_date && d < staff.joining_date) return false;
+      
+      const currentOutlets = getStaffOutlets(staff);
+      // If the outlet we are checking is the one that STARTS in the future, 
+      // we know they weren't there yet.
+      if (outletId === sorted[0].outlet_id) return false;
+      
+      return currentOutlets.includes(outletId);
+    }
+    
+    // 3. Fallback for dates after all assignments (if no open-ended ones exist)
+    // If every assignment has an end_date, they technically "left" the company or moved to a non-tracked state
+    return false;
   }
 
-  // Fallback to current outlet_ids for legacy data (assuming they were always there)
+  // Fallback to current outlet_ids for legacy data (assuming they were always there if no history recorded)
+  const currentOutlets = getStaffOutlets(staff);
+  return currentOutlets.includes(outletId);
+}
+
+export function wasStaffAssignedToOutletInRange(staff: any, outletId: string, startStr: string, endStr: string): boolean {
+  if (!staff || !outletId || !startStr || !endStr) return false;
+  
+  const assignments = Array.isArray(staff.outlet_assignments) ? staff.outlet_assignments : [];
+  
+  if (assignments.length > 0) {
+    const sorted = [...assignments].sort((a: any, b: any) => a.start_date.localeCompare(b.start_date));
+    
+    // 1. Check if any assignment overlaps with the report range
+    const hasOverlap = sorted.some((a: any) => {
+      if (a.outlet_id !== outletId) return false;
+      const aStart = a.start_date;
+      const aEnd = a.end_date;
+      return aStart <= endStr && (!aEnd || aEnd >= startStr);
+    });
+    
+    if (hasOverlap) return true;
+
+    // 2. Logic for dates before the first recorded assignment
+    // Fallback to current outlets but exclude the one that starts in the future
+    if (endStr < sorted[0].start_date) {
+      if (staff.joining_date && endStr < staff.joining_date) return false;
+      if (outletId === sorted[0].outlet_id) return false;
+      return getStaffOutlets(staff).includes(outletId);
+    }
+    
+    return false;
+  }
+
+  // Fallback to legacy behavior if no history tracked
   const currentOutlets = getStaffOutlets(staff);
   return currentOutlets.includes(outletId);
 }

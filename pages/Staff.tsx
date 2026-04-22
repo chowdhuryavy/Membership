@@ -81,6 +81,8 @@ const StaffPage = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [isTransferMode, setIsTransferMode] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
   const [newAssignment, setNewAssignment] = useState({ outlet_id: '', start_date: format(new Date(), 'yyyy-MM-dd') });
 
   const outletMap = useMemo(() => {
@@ -164,11 +166,16 @@ const StaffPage = () => {
   };
 
   const filteredStaff = useMemo(() => {
-    return staff.filter(s => 
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      s.role.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [staff, searchTerm]);
+    return staff.filter(s => {
+      const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            s.role.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = statusFilter === 'all' ? true : 
+                            statusFilter === 'active' ? s.is_active : !s.is_active;
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [staff, searchTerm, statusFilter]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -494,21 +501,78 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                               className="h-11 rounded-xl text-[10px]"
                             />
                           </div>
+                          <div className="flex items-center gap-2 mb-4 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                            <label className="flex-1 flex items-center gap-3 cursor-pointer group">
+                              <div className="relative flex items-center">
+                                <input 
+                                  type="checkbox" 
+                                  checked={isTransferMode}
+                                  onChange={e => setIsTransferMode(e.target.checked)}
+                                  className="w-5 h-5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-[10px] font-black text-indigo-900 uppercase tracking-tight">Record as Transfer</p>
+                                <p className="text-[8px] font-bold text-indigo-400 uppercase tracking-widest leading-none mt-0.5">Closes all previous assignments</p>
+                              </div>
+                            </label>
+                          </div>
+
                           <Button 
                             type="button" 
                             variant="outline"
                             onClick={() => {
                               if (!newAssignment.outlet_id || !newAssignment.start_date) return;
-                              const history = [...(formData.outlet_assignments || [])];
+                              
+                              let history = [...(formData.outlet_assignments || [])];
+                              
+                              // INITIALIZATION: Create records for current checkboxes if starting history
+                              if (history.length === 0 && formData.outlet_ids.length > 0 && formData.joining_date) {
+                                if (formData.joining_date < newAssignment.start_date) {
+                                  const d = new Date(newAssignment.start_date);
+                                  d.setDate(d.getDate() - 1);
+                                  const prevEndDate = format(d, 'yyyy-MM-dd');
+                                  
+                                  formData.outlet_ids.forEach(oid => {
+                                    history.push({
+                                      outlet_id: oid,
+                                      start_date: formData.joining_date || '',
+                                      end_date: prevEndDate
+                                    });
+                                  });
+                                }
+                              }
+
+                              // TRANSFER LOGIC: End-date all currently active assignments
+                              if (isTransferMode) {
+                                const d = new Date(newAssignment.start_date);
+                                d.setDate(d.getDate() - 1);
+                                const prevEndDate = format(d, 'yyyy-MM-dd');
+                                
+                                history = history.map(a => {
+                                  if (!a.end_date && a.start_date < newAssignment.start_date) {
+                                    return { ...a, end_date: prevEndDate };
+                                  }
+                                  return a;
+                                });
+                              } else {
+                                // ADDITION LOGIC: Just ensure same outlet isn't double-active
+                                const sameOutletOpenIdx = history.findIndex(a => a.outlet_id === newAssignment.outlet_id && !a.end_date);
+                                if (sameOutletOpenIdx !== -1) return; // Already active there
+                              }
+                              
                               history.push({ ...newAssignment, end_date: null });
-                              // Simple sort by date descending
                               history.sort((a, b) => b.start_date.localeCompare(a.start_date));
-                              setFormData({ ...formData, outlet_assignments: history });
+                              
+                              // Sync checkboxes with active assignments
+                              const activeIds = history.filter(a => !a.end_date).map(a => a.outlet_id);
+                              
+                              setFormData({ ...formData, outlet_assignments: history, outlet_ids: activeIds });
                               setNewAssignment({ outlet_id: '', start_date: format(new Date(), 'yyyy-MM-dd') });
                             }} 
                             className="w-full h-11 text-[9px] uppercase font-black tracking-widest border-2"
                           >
-                            <Plus className="w-3.5 h-3.5 mr-2" /> Record Assignment
+                            <Plus className="w-3.5 h-3.5 mr-2" /> {isTransferMode ? 'Execute Transfer' : 'Add Assignment'}
                           </Button>
                         </div>
                       </div>
@@ -737,10 +801,15 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
-              <div className="relative group flex-1 sm:w-72">
+            <div className="flex flex-col sm:flex-row items-stretch gap-3 w-full xl:w-auto">
+              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                  <button onClick={() => setStatusFilter('active')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${statusFilter === 'active' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Active</button>
+                  <button onClick={() => setStatusFilter('inactive')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${statusFilter === 'inactive' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Inactive</button>
+                  <button onClick={() => setStatusFilter('all')} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${statusFilter === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>All</button>
+              </div>
+              <div className="relative group flex-1 sm:w-64">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input placeholder="Search personnel..." className="w-full h-11 pl-11 pr-4 rounded-xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                <input placeholder="Search personnel..." className="w-full h-11 pl-11 pr-4 rounded-xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-xs font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
               {canManage && (
                   <Button onClick={() => { 
