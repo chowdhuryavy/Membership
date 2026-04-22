@@ -884,7 +884,7 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                               <div className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-colors ${isSelected ? 'bg-white/20 border-white/20' : 'bg-white border-slate-100 shadow-sm'}`}>
                                  <opt.icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : opt.color}`} />
                               </div>
-                              <span className="text-xs font-bold uppercase tracking-wide">{opt.label}</span>
+                              <span className="text-[11px] font-black uppercase tracking-tight">{opt.label}</span>
                             </div>
                           </button>
                         );
@@ -933,8 +933,8 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                       }
                     }); 
                     setShowForm(true); 
-                  }} className="h-11 px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100">
-                    <Plus className="w-4 h-4 mr-2" /> Enroll Staff
+                  }} className="h-14 px-8 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 transition-transform active:scale-95">
+                    <UserPlus className="w-4 h-4 mr-2" /> Enroll Staff
                   </Button>
               )}
             </div>

@@ -92,8 +92,8 @@ const StaffLogin = () => {
           </div>
 
           <div className="relative z-10 pt-8 border-t border-white/10">
-              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                {settings?.name || 'Health Club Management'} © {new Date().getFullYear()}
+              <p className="text-slate-300 text-[10px] font-black uppercase tracking-widest">
+                © 2026 <span className="text-white">Perfection</span>. All Rights Reserved.
               </p>
           </div>
         </div>

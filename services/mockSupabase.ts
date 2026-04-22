@@ -513,7 +513,7 @@ class DatabaseService {
         
         let staffList = (data || []) as Staff[];
 
-        const matchesPersonnelList = (s: Staff, targetId: string) => {
+        const getStaffOutletsSet = (s: Staff) => {
             const outlets = new Set<string>();
             if (Array.isArray(s.outlet_ids)) {
                 s.outlet_ids.forEach(id => id && outlets.add(id));
@@ -531,16 +531,26 @@ class DatabaseService {
                     if (a.outlet_id) outlets.add(a.outlet_id);
                 });
             }
-            return outlets.has(targetId);
+            return outlets;
+        };
+
+        const matchesPersonnelList = (s: Staff, targetId: string) => {
+            return getStaffOutletsSet(s).has(targetId);
         };
 
         if (scopeId) {
             if (isProperty) {
-                // Property view should show everyone who belongs to this property, 
-                // matching by property_id. We already filtered by eq('property_id') in the query.
-                // No additional filtering needed unless user is restricted to specific outlets.
+                // Property view should show everyone who belongs to this property.
+                // We only apply the outlet filter if the user is restricted to specific ones 
+                // AND the staff member actually has outlet assignments.
                 if (limitToOutletIds && limitToOutletIds.length > 0) {
-                    staffList = staffList.filter(s => limitToOutletIds.some(id => matchesPersonnelList(s, id)));
+                    staffList = staffList.filter(s => {
+                        const sOutlets = getStaffOutletsSet(s);
+                        // If staff has no outlets yet, they are property-level, so show them
+                        if (sOutlets.size === 0) return true;
+                        // Otherwise, they must belong to at least one of the allowed outlets
+                        return limitToOutletIds.some(id => sOutlets.has(id));
+                    });
                 }
             } else {
                 // Outlet view should show everyone who belongs or has belonged to this outlet

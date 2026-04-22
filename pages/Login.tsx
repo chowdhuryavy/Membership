@@ -101,8 +101,8 @@ const Login = () => {
           </div>
 
           <div className="relative z-10 pt-8 border-t border-white/10">
-              <p className="text-indigo-300/50 text-[10px] font-black uppercase tracking-widest">
-                  &copy; {new Date().getFullYear()} Perfection. All Rights Reserved.
+              <p className="text-indigo-100 text-[10px] font-black uppercase tracking-widest">
+                  &copy; {new Date().getFullYear()} <span className="text-white">Perfection</span>. All Rights Reserved.
               </p>
           </div>
         </div>
