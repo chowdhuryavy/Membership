@@ -30,7 +30,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(() => {
-      const stored = sessionStorage.getItem('membership_session');
+      const stored = localStorage.getItem('membership_session');
       return stored ? JSON.parse(stored) : null;
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -42,7 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshUser = async () => {
-      const storedUser = sessionStorage.getItem('membership_session');
+      const storedUser = localStorage.getItem('membership_session');
       if (storedUser) {
           const parsed = JSON.parse(storedUser);
           try {
@@ -57,7 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   const overrides = await db.getPermissionOverrides(freshUser.id);
                   const hydrated = { ...freshUser, overrides };
                   setUser(hydrated);
-                  sessionStorage.setItem('membership_session', JSON.stringify(hydrated));
+                  localStorage.setItem('membership_session', JSON.stringify(hydrated));
               }
           } catch (e) {
               console.warn("User state sync failed, using cached session.");
@@ -77,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { user: foundUser, error, requiresPasswordChange } = await db.login(email, password);
     if (foundUser) {
       setUser(foundUser);
-      sessionStorage.setItem('membership_session', JSON.stringify(foundUser));
+      localStorage.setItem('membership_session', JSON.stringify(foundUser));
       return { error: null, requiresPasswordChange };
     }
     return { error: error || 'Authentication failed.', requiresPasswordChange: false };
@@ -108,12 +108,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await db.updateUser(user.id, updates);
       const updatedUser = { ...user, ...updates };
       setUser(updatedUser);
-      sessionStorage.setItem('membership_session', JSON.stringify(updatedUser));
+      localStorage.setItem('membership_session', JSON.stringify(updatedUser));
   };
 
   const logout = () => {
     setUser(null);
-    sessionStorage.removeItem('membership_session');
+    localStorage.removeItem('membership_session');
     localStorage.removeItem('membership_last_outlet');
   };
 
