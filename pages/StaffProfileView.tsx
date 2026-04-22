@@ -4,7 +4,7 @@ import { Staff, StaffLeave } from '../types';
 import { db } from '../services/mockSupabase';
 import { supabase } from '../services/supabase';
 import { getReportData } from '../src/shared/reportLogic';
-import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X, Database, RefreshCcw, ShieldAlert, Award, TrendingUp, Sparkles, User, Clock } from 'lucide-react';
+import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X, Database, RefreshCcw, ShieldAlert, Award, TrendingUp, Sparkles, User, Clock, Building2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSettings } from '../contexts/SettingsContext';
@@ -364,6 +364,15 @@ NOTIFY pgrst, 'reload schema';`}
                       <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600"><Mail className="w-4 h-4 shrink-0" /></div>
                       <span className="truncate flex-1 text-left lowercase">{staff.email || 'No email'}</span>
                   </div>
+                  {staff.joining_date && (
+                    <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs font-black text-slate-700">
+                        <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600"><Building2 className="w-4 h-4" /></div>
+                        <div className="flex-1 text-left">
+                          <p className="uppercase opacity-60 text-[8px]">Joining Date</p>
+                          <p>{format(parseISO(staff.joining_date), 'dd MMM yyyy')}</p>
+                        </div>
+                    </div>
+                  )}
                   {staff.probation_start_date && (
                     <div className="flex items-center gap-4 p-4 bg-amber-50/50 rounded-2xl border border-amber-100 text-[10px] font-black text-amber-700">
                         <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-amber-600"><ShieldAlert className="w-4 h-4" /></div>

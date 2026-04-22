@@ -97,10 +97,17 @@ export interface StaffPortalSettings {
   show_session_notes: boolean;
 }
 
+export interface OutletAssignment {
+  outlet_id: string;
+  start_date: string;
+  end_date?: string | null;
+}
+
 export interface Staff {
   id: string;
   property_id: string;
   outlet_ids: string[];
+  outlet_assignments?: OutletAssignment[];
   name: string;
   role: string;
   employee_number?: string;
@@ -110,6 +117,7 @@ export interface Staff {
   phone?: string;
   is_active: boolean;
   is_eligible_for_incentives: boolean; 
+  joining_date?: string; 
   probation_start_date?: string; 
   probation_end_date?: string;   
   created_at: string;

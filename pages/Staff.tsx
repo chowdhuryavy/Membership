@@ -28,6 +28,10 @@ import {
   ShieldAlert,
   Info,
   Terminal,
+  History,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
   Database,
   ClipboardCheck,
   AlertCircle,
@@ -56,10 +60,12 @@ const StaffPage = () => {
     phone: '', 
     is_active: true,
     is_eligible_for_incentives: true,
+    joining_date: format(new Date(), 'yyyy-MM-dd'),
     probation_start_date: '',
     probation_end_date: '',
     property_id: '',
     outlet_ids: [],
+    outlet_assignments: [],
     can_login: false,
     employee_number: '',
     password: '',
@@ -74,6 +80,12 @@ const StaffPage = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [newAssignment, setNewAssignment] = useState({ outlet_id: '', start_date: format(new Date(), 'yyyy-MM-dd') });
+
+  const outletMap = useMemo(() => {
+    return Object.fromEntries((outlets || []).map(o => [o.id, o.name]));
+  }, [outlets]);
 
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user || !outlets) return [];
@@ -171,10 +183,12 @@ const StaffPage = () => {
         phone: formData.phone,
         is_active: formData.is_active,
         is_eligible_for_incentives: formData.is_eligible_for_incentives,
+        joining_date: formData.joining_date,
         probation_start_date: formData.probation_start_date,
         probation_end_date: formData.probation_end_date,
         property_id: formData.property_id,
         outlet_ids: formData.outlet_ids,
+        outlet_assignments: formData.outlet_assignments || [],
         can_login: !!formData.can_login,
         employee_number: formData.employee_number || '',
         staff_portal_settings: formData.staff_portal_settings
@@ -240,7 +254,9 @@ ADD COLUMN IF NOT EXISTS probation_start_date TEXT,
 ADD COLUMN IF NOT EXISTS probation_end_date TEXT,
 ADD COLUMN IF NOT EXISTS employee_number TEXT,
 ADD COLUMN IF NOT EXISTS can_login BOOLEAN NOT NULL DEFAULT FALSE,
-ADD COLUMN IF NOT EXISTS password TEXT;
+ADD COLUMN IF NOT EXISTS password TEXT,
+ADD COLUMN IF NOT EXISTS joining_date DATE,
+ADD COLUMN IF NOT EXISTS outlet_assignments JSONB DEFAULT '[]';
 
 -- ENABLE RLS FOR INTERNAL SYSTEM OPERATIONS
 ALTER TABLE public.staff ENABLE ROW LEVEL SECURITY;
@@ -279,8 +295,10 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                             probation_end_date: s.probation_end_date || '',
                             property_id: s.property_id,
                             outlet_ids: s.outlet_ids || [],
+                            outlet_assignments: s.outlet_assignments || [],
                             can_login: !!s.can_login,
                             employee_number: s.employee_number || '',
+                            joining_date: s.joining_date || format(new Date(), 'yyyy-MM-dd'),
                             password: '', // Don't pre-fill password for security
                             staff_portal_settings: {
                               show_daily_schedule: s.staff_portal_settings?.show_daily_schedule ?? true,
@@ -374,11 +392,14 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                         </div>
                       </div>
                     )}
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Account Status</label>
-                      <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-                        <button type="button" onClick={() => setFormData({ ...formData, is_active: true })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${formData.is_active ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-400'}`}>Active</button>
-                        <button type="button" onClick={() => setFormData({ ...formData, is_active: false })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${!formData.is_active ? 'bg-white text-red-600 shadow-md' : 'text-slate-400'}`}>Inactive</button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <Input label="Joining Date *" type="date" value={formData.joining_date} onChange={e => setFormData({ ...formData, joining_date: e.target.value })} required className="h-14 rounded-2xl font-bold" />
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Account Status</label>
+                        <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                          <button type="button" onClick={() => setFormData({ ...formData, is_active: true })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${formData.is_active ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-400'}`}>Active</button>
+                          <button type="button" onClick={() => setFormData({ ...formData, is_active: false })} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${!formData.is_active ? 'bg-white text-red-600 shadow-md' : 'text-slate-400'}`}>Inactive</button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -405,6 +426,94 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                       </label>
                     ))}
                   </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <History className="w-3.5 h-3.5 text-indigo-600" />
+                      <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Assignment History & Transfers</h4>
+                    </div>
+                    <button type="button" onClick={() => setShowHistory(!showHistory)} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 flex items-center gap-1 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 transition-all">
+                      {showHistory ? <><ChevronUp className="w-3 h-3" /> Hide</> : <><ChevronDown className="w-3 h-3" /> Manage</>}
+                    </button>
+                  </div>
+                  
+                  {showHistory && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 space-y-4">
+                        {(!formData.outlet_assignments || formData.outlet_assignments.length === 0) ? (
+                          <div className="text-center py-4">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">No historical transfers recorded</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {formData.outlet_assignments.map((a, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600"><Store className="w-4 h-4" /></div>
+                                  <div>
+                                    <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{outletMap[a.outlet_id] || 'Outlet'}</p>
+                                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                                      {format(new Date(a.start_date), 'dd MMM yy')} — {a.end_date ? format(new Date(a.end_date), 'dd MMM yy') : 'Present'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button type="button" onClick={() => {
+                                  const history = [...(formData.outlet_assignments || [])];
+                                  history.splice(idx, 1);
+                                  setFormData({ ...formData, outlet_assignments: history });
+                                }} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        <div className="pt-4 border-t border-slate-200">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Add Official Record</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                            <div className="relative">
+                              <select 
+                                value={newAssignment.outlet_id} 
+                                onChange={e => setNewAssignment({ ...newAssignment, outlet_id: e.target.value })}
+                                className="w-full h-11 px-4 rounded-xl bg-white border border-slate-200 text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-indigo-500"
+                              >
+                                <option value="">Select Outlet</option>
+                                {allowedOutletsInProperty.map(o => (
+                                  <option key={o.id} value={o.id}>{o.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <Input 
+                              type="date" 
+                              label="Start Date"
+                              value={newAssignment.start_date} 
+                              onChange={e => setNewAssignment({ ...newAssignment, start_date: e.target.value })}
+                              className="h-11 rounded-xl text-[10px]"
+                            />
+                          </div>
+                          <Button 
+                            type="button" 
+                            variant="outline"
+                            onClick={() => {
+                              if (!newAssignment.outlet_id || !newAssignment.start_date) return;
+                              const history = [...(formData.outlet_assignments || [])];
+                              history.push({ ...newAssignment, end_date: null });
+                              // Simple sort by date descending
+                              history.sort((a, b) => b.start_date.localeCompare(a.start_date));
+                              setFormData({ ...formData, outlet_assignments: history });
+                              setNewAssignment({ outlet_id: '', start_date: format(new Date(), 'yyyy-MM-dd') });
+                            }} 
+                            className="w-full h-11 text-[9px] uppercase font-black tracking-widest border-2"
+                          >
+                            <Plus className="w-3.5 h-3.5 mr-2" /> Record Assignment
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {canManagePortalSettings && (
@@ -643,6 +752,8 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                       phone:'', 
                       is_active:true, 
                       is_eligible_for_incentives: true, 
+                      joining_date: format(new Date(), 'yyyy-MM-dd'),
+                      outlet_assignments: [],
                       probation_start_date: '', 
                       probation_end_date: '', 
                       property_id: currentProperty?.id || '', 

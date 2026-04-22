@@ -549,8 +549,29 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const staffList = rawStaffList.filter((s: any) => {
       if (!s.is_active || s.is_eligible_for_incentives === false) return false;
       
-      const sOutlets = getStaffOutlets(s);
-      const belongsToOutlet = outletIds.some(id => sOutlets.includes(id)) || outletIds.includes('all');
+      // Filter by joining date: staff must have joined before or during the report period
+      if (s.joining_date) {
+        const joinDate = new Date(s.joining_date);
+        joinDate.setHours(0,0,0,0);
+        const reportEndDate = new Date(endStr);
+        reportEndDate.setHours(23,59,59,999);
+        if (joinDate > reportEndDate) return false;
+      }
+
+      // Check if they belonged to the outlet during the report period
+      const belongsToOutlet = outletIds.some(id => {
+        const currentOutlets = getStaffOutlets(s);
+        if (currentOutlets.includes(id)) return true;
+        
+        if (Array.isArray(s.outlet_assignments)) {
+          return s.outlet_assignments.some((a: any) => 
+            a.outlet_id === id && 
+            a.start_date <= endStr && 
+            (!a.end_date || a.end_date >= startStr)
+          );
+        }
+        return false;
+      }) || outletIds.includes('all');
       
       // For Personal Training, we might want to be more inclusive with staff assigned to the property
       if (!belongsToOutlet && dept !== 'Personal Training') return false;
@@ -600,8 +621,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           if (rule.distribution_type === 'Shared') {
             const available = staffList.filter(s => {
               const isEligible = s.is_eligible_for_incentives !== false;
-              const sOutlets = getStaffOutlets(s);
-              return isEligible && sOutlets.includes(b.outlet_id) && !isStaffOnLeaveOnDate(s, b.date) && !isStaffOnProbationOnDate(s, b.date);
+              return isEligible && isStaffAssignedToOutletOnDate(s, b.outlet_id, b.date) && !isStaffOnLeaveOnDate(s, b.date) && !isStaffOnProbationOnDate(s, b.date);
             });
             if (available.length > 0) {
               const share = incNet / available.length;
@@ -2178,6 +2198,24 @@ export function getStaffOutlets(s: any): string[] {
   }
   if (s.outlet_id) return [s.outlet_id];
   return [];
+}
+
+export function isStaffAssignedToOutletOnDate(staff: any, outletId: string, dateStr: string): boolean {
+  if (!staff || !outletId || !dateStr) return false;
+  
+  // Historical check via assignments
+  if (Array.isArray(staff.outlet_assignments) && staff.outlet_assignments.length > 0) {
+    return staff.outlet_assignments.some((a: any) => {
+      if (a.outlet_id !== outletId) return false;
+      const start = a.start_date;
+      const end = a.end_date;
+      return dateStr >= start && (!end || dateStr <= end);
+    });
+  }
+
+  // Fallback to current outlet_ids for legacy data (assuming they were always there)
+  const currentOutlets = getStaffOutlets(staff);
+  return currentOutlets.includes(outletId);
 }
 
 export function isStaffOnLeaveOnDate(staff: any, dateStr: string) {
