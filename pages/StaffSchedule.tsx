@@ -51,12 +51,16 @@ const StaffSchedule = () => {
   const [selectedIncentiveDept, setSelectedIncentiveDept] = useState<string | null>(null);
   const [selectedMonthlyCategory, setSelectedMonthlyCategory] = useState<string | null>(null);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
-  const accountMenuRef = React.useRef<HTMLDivElement>(null);
+  const desktopAccountMenuRef = React.useRef<HTMLDivElement>(null);
+  const mobileAccountMenuRef = React.useRef<HTMLDivElement>(null);
 
   // Handle click outside account menu
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+      const isInsideDesktop = desktopAccountMenuRef.current?.contains(event.target as Node);
+      const isInsideMobile = mobileAccountMenuRef.current?.contains(event.target as Node);
+      
+      if (!isInsideDesktop && !isInsideMobile) {
         setShowAccountMenu(false);
       }
     };
@@ -844,10 +848,11 @@ const StaffSchedule = () => {
     }
   };
 
-  const SidebarContent = () => {
+  const SidebarContent = ({ menuRef }: { menuRef: React.RefObject<HTMLDivElement> }) => {
     if (!staff) return null;
     return (
       <div className="flex flex-col h-full bg-slate-900 text-white p-6 overflow-y-auto custom-scrollbar">
+
       {/* Brand Section */}
       <div className="flex items-center gap-4 mb-10 pt-2 shrink-0">
         <div className="w-14 h-14 flex items-center justify-center shrink-0 transition-all duration-500 hover:scale-110 relative">
@@ -989,7 +994,7 @@ const StaffSchedule = () => {
         )}
       </nav>
 
-      <div className="mt-auto pt-4 border-t border-white/10 relative" ref={accountMenuRef}>
+      <div className="mt-auto pt-4 border-t border-white/10 relative" ref={menuRef}>
         <AnimatePresence>
           {showAccountMenu && (
             <motion.div 
@@ -1082,7 +1087,7 @@ const StaffSchedule = () => {
 
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block w-72 h-screen sticky top-0 border-r border-slate-200 z-50">
-        <SidebarContent />
+        <SidebarContent menuRef={desktopAccountMenuRef} />
       </aside>
 
       {/* Mobile Sidebar Overlay */}
@@ -1104,7 +1109,7 @@ const StaffSchedule = () => {
           >
             <X className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
           </button>
-          <SidebarContent />
+          <SidebarContent menuRef={mobileAccountMenuRef} />
         </div>
       </aside>
 
