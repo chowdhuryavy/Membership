@@ -2759,17 +2759,32 @@ class DatabaseService {
           .in('id', ids || []);
         
         if (unreadDocs) {
-          for (const doc of unreadDocs) {
-            if (doc.user_id === userId) {
-              await supabase.from('notifications').update({ read: true }).eq('id', doc.id);
-            } else if ('read_by' in doc) {
+          // Group 1: Notifications owned by the current user - can be updated in bulk
+          const ownedIds = unreadDocs
+            .filter(doc => doc.user_id === userId)
+            .map(doc => doc.id);
+          
+          if (ownedIds.length > 0) {
+            await supabase.from('notifications')
+              .update({ read: true })
+              .in('id', ownedIds);
+          }
+
+          // Group 2: Shared notifications - need individual updates to handle read_by arrays
+          const sharedDocs = unreadDocs.filter(doc => doc.user_id !== userId);
+          for (const doc of sharedDocs) {
+            if ('read_by' in doc) {
               const readBy = (doc.read_by || []) as string[];
               if (!readBy.includes(userId)) {
-                await supabase.from('notifications').update({ read_by: [...readBy, userId] }).eq('id', doc.id);
+                await supabase.from('notifications')
+                  .update({ read_by: [...readBy, userId] })
+                  .eq('id', doc.id);
               }
             } else {
               // Fallback if read_by doesn't exist
-              await supabase.from('notifications').update({ read: true }).eq('id', doc.id);
+              await supabase.from('notifications')
+                .update({ read: true })
+                .eq('id', doc.id);
             }
           }
         }

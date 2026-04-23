@@ -159,15 +159,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             return;
           }
           
-          // Only trigger alert if it's an update to a relevant notification (e.g. read status changed not triggered by current user)
-          // For now, let's trigger it for all updates as requested
-          await playNotificationSound();
-          toast(n.title + ': ' + n.message, {
-            duration: 4000,
-            position: 'top-right',
-            icon: '🔄',
-          });
-
+          // Update state silently - no toast or sound for status updates
           setNotifications(prev => prev.map(item => {
             if (item.id === n.id) {
               // Map read status for current user
