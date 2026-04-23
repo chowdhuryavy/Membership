@@ -30,11 +30,17 @@ const playNotificationSound = async () => {
     };
 
     const now = audioContext.currentTime;
-    // Play a sequence: Low-High-Mid-High
-    playTone(440, now, 0.1, 'triangle');
-    playTone(880, now + 0.1, 0.1, 'sine');
-    playTone(660, now + 0.2, 0.1, 'square');
-    playTone(990, now + 0.3, 0.2, 'sine');
+    // Uncommon harmonic sequence: C# -> G# -> D# -> A# (Quartal progression)
+    // with a "glassy" synth feel
+    playTone(554.37, now, 0.2, 'sine'); // C#5
+    playTone(830.61, now + 0.1, 0.2, 'sine'); // G#5
+    playTone(1244.51, now + 0.2, 0.2, 'sine'); // D#6
+    playTone(1864.66, now + 0.3, 0.5, 'sine'); // A#6
+    
+    // Add unique rhythmic accents
+    playTone(110, now, 0.05, 'triangle'); // Low pulse
+    playTone(220, now + 0.15, 0.05, 'triangle'); 
+    playTone(440, now + 0.3, 0.05, 'triangle');
     
   } catch (e) {
     console.error('Failed to play sound', e);
@@ -61,6 +67,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const lastActionTime = useRef<number | null>(null);
+  const seenIds = useRef<Set<string>>(new Set());
 
   const fetchNotifications = useCallback(async (isAutoRefresh = false) => {
     // Try to get user from AuthContext or staff session from localStorage
@@ -94,6 +101,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       });
 
       console.log('Fetched notifications count:', filteredData.length);
+      // Pre-populate seenIds with existing notifications to prevent alerts on reload
+      filteredData.forEach(n => seenIds.current.add(n.id));
       setNotifications(filteredData);
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
@@ -119,6 +128,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         
         if (payload.eventType === 'INSERT') {
           const n = payload.new as Notification;
+          // Check if already seen in this session to prevent spam
+          if (seenIds.current.has(n.id)) return;
+          seenIds.current.add(n.id);
+
           // Check if dismissed by current user
           if (n.dismissed_by?.includes(effectiveUserId)) return;
           

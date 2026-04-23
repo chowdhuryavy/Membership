@@ -64,3 +64,59 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+// Push notification handling
+self.addEventListener('push', (event) => {
+  let data = { title: 'Identity Sync', body: 'New notification received' };
+  
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data = { title: 'Identity Sync', body: event.data.text() };
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: '/icon.png',
+    badge: '/favicon-16x16.png',
+    vibrate: [100, 50, 100, 50, 200, 100, 400], // Unique "Identity Sync" rhythm
+    tag: 'staff-alert',
+    renotify: true,
+    data: data,
+    // Modern browsers generally ignore the sound property in showNotification
+    // but system-level wrappers (APK) sometimes use it or the default
+    sound: '/sounds/notification-uncommon.mp3' 
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+// Handle notification interaction
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  
+  const urlToOpen = new URL('/staff-schedule', self.location.origin).href;
+
+  event.waitUntil(
+    clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true
+    }).then((windowClients) => {
+      // If a window is already open, focus it
+      for (let i = 0; i < windowClients.length; i++) {
+        const client = windowClients[i];
+        if (client.url === urlToOpen && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // Otherwise, open a new window
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});

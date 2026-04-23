@@ -3,7 +3,7 @@
  * Comprehensive component for staff daily/monthly views and incentive reports.
  * Optimized with high-performance animations and responsive layouts.
  */
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { Staff, MassageBooking, MassageType, Guest, MassageRoom, Sale } from '../types';
@@ -25,6 +25,253 @@ interface StaffNotification {
   isRead: boolean;
   type: 'booking' | 'sale' | 'system';
 }
+
+interface SidebarContentProps {
+  staff: any;
+  settings: any;
+  propertyName: string;
+  outletName: string;
+  viewMode: string;
+  setViewMode: (mode: 'daily' | 'monthly' | 'incentives') => void;
+  setCurrentDate: (date: Date) => void;
+  setIsSidebarOpen: (open: boolean) => void;
+  refreshStaffData: () => void;
+  propertyLogo: string | null;
+  assignedOutlets: string[];
+  outlets: any[];
+  selectedOutletId: string | null;
+  setSelectedOutletId: (id: string) => void;
+  setLoading: (loading: boolean) => void;
+  setBookings: (bookings: any[]) => void;
+  setSales: (sales: any[]) => void;
+  showAccountMenu: boolean;
+  setShowAccountMenu: (show: boolean) => void;
+  setShowPasswordModal: (show: boolean) => void;
+  handleLogout: () => void;
+  menuRef: React.RefObject<HTMLDivElement>;
+}
+
+const SidebarContent = ({ 
+  staff, settings, propertyName, outletName, viewMode, setViewMode, setCurrentDate, 
+  setIsSidebarOpen, refreshStaffData, propertyLogo, assignedOutlets, outlets, 
+  selectedOutletId, setSelectedOutletId, setLoading, setBookings, setSales,
+  showAccountMenu, setShowAccountMenu, setShowPasswordModal, handleLogout, menuRef
+}: SidebarContentProps) => {
+  if (!staff) return null;
+  return (
+    <div className="flex flex-col h-full bg-slate-900 text-white p-6 overflow-y-auto custom-scrollbar">
+
+    {/* Brand Section */}
+    <div className="flex items-center gap-4 mb-10 pt-2 shrink-0">
+      <div className="w-14 h-14 flex items-center justify-center shrink-0 transition-all duration-500 hover:scale-110 relative">
+        {settings?.logo_url ? (
+          <img 
+            src={settings.logo_url} 
+            alt="Logo" 
+            referrerPolicy="no-referrer" 
+            className="w-full h-full object-contain drop-shadow-xl animate-[spin_10s_linear_infinite]" 
+          />
+        ) : (
+          <div className="w-full h-full bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-500/20">
+            <Sparkles className="w-6 h-6 animate-[spin_10s_linear_infinite]" />
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col text-left">
+        <h2 className="text-sm font-black uppercase tracking-tight leading-tight">{settings?.name || 'Identity Sync'}</h2>
+        <div className="flex items-center gap-1.5 mt-1">
+          <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest leading-none">Portal</span>
+          <div className="w-1 h-1 rounded-full bg-slate-700" />
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              refreshStaffData();
+            }}
+            className="text-[8px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors flex items-center gap-1 outline-none"
+          >
+            Terminal <RefreshCw className="w-2 h-2" />
+          </button>
+        </div>
+      </div>
+    </div>
+
+     {/* Instance Context */}
+     {(propertyName || outletName) && (
+       <div className="mb-10 shrink-0">
+         <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 px-1">Location</div>
+         <div className="bg-white/5 rounded-3xl border border-white/10 shadow-inner p-4 space-y-4">
+           {/* Unified Branding */}
+           <div className="flex items-center gap-3">
+             <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-white/10 shrink-0 overflow-hidden shadow-2xl relative group">
+               {propertyLogo ? (
+                 <img src={propertyLogo} alt="Prop" className="w-full h-full object-contain p-2 transition-transform duration-500 group-hover:scale-110" referrerPolicy="no-referrer" />
+               ) : (
+                 <Building2 className="w-4 h-4 text-slate-400" />
+               )}
+             </div>
+             <div className="flex flex-col min-w-0 flex-1">
+               <span className="text-[11px] font-black text-white uppercase tracking-tight leading-tight break-words">{propertyName}</span>
+               {(() => {
+                 const validAssignedOutlets = assignedOutlets.filter(oid => outlets.some(o => o.id === oid));
+                 // Render static text if less than 2 valid outlets or still loading 
+                 if (validAssignedOutlets.length <= 1 && outletName) {
+                   return (
+                     <div className="flex items-center gap-1 mt-1">
+                       <MapPin className="w-2 h-2 text-indigo-400" />
+                       <span className="text-[8px] font-black text-indigo-200 uppercase tracking-widest truncate">{outletName}</span>
+                     </div>
+                   );
+                 }
+                 return null;
+               })()}
+             </div>
+           </div>
+
+           {/* Outlet Selector (Inline in Sidebar) */}
+           {(() => {
+             const validAssignedOutlets = assignedOutlets.filter(oid => outlets.some(o => o.id === oid));
+             // Only show dropdown if we actually have *multiple real* outlets fetched
+             if (validAssignedOutlets.length > 1) {
+               return (
+                 <div className="relative group/outlet">
+                   <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                      <MapPin className="w-3 h-3 text-indigo-400" />
+                   </div>
+                   <select 
+                     value={selectedOutletId || ''} 
+                     onChange={(e) => {
+                       const newId = e.target.value;
+                       if (newId !== selectedOutletId) {
+                         setSelectedOutletId(newId);
+                         setLoading(true);
+                         setBookings([]);
+                         setSales([]);
+                         setIsSidebarOpen(false);
+                       }
+                     }}
+                     className="w-full appearance-none bg-white/5 border border-white/10 rounded-2xl pl-10 pr-10 py-2.5 text-[9px] font-black text-white uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer hover:bg-white/10"
+                   >
+                     {validAssignedOutlets.map(oid => {
+                       const o = outlets.find(out => out.id === oid);
+                       return <option key={oid} value={oid} className="bg-slate-900 text-white">{o?.name}</option>;
+                     })}
+                   </select>
+                   <ChevronDown className="w-3 h-3 text-white/40 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/outlet:text-white transition-colors" />
+                 </div>
+               );
+             }
+             return null;
+           })()}
+         </div>
+       </div>
+     )}
+
+    <nav className="flex-1 space-y-1">
+      <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 px-1">Main Menu</div>
+      {(staff?.staff_portal_settings?.show_daily_schedule ?? true) && (
+        <button 
+          onClick={() => {
+            setViewMode('daily');
+            setCurrentDate(new Date());
+            setIsSidebarOpen(false);
+          }}
+          className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'daily' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
+        >
+          <CalendarIcon className="w-3.5 h-3.5" /> Today's Schedule
+        </button>
+      )}
+      {(staff?.staff_portal_settings?.show_monthly_summary ?? true) && (
+        <button 
+          onClick={() => {
+            setViewMode('monthly');
+            setIsSidebarOpen(false);
+          }}
+          className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'monthly' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
+        >
+          <CalendarIcon className="w-3.5 h-3.5" /> Monthly Summary
+        </button>
+      )}
+      {(staff?.staff_portal_settings?.show_incentives ?? true) && (
+        <button 
+          onClick={() => {
+            setViewMode('incentives');
+            setIsSidebarOpen(false);
+          }}
+          className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'incentives' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
+        >
+          <Award className="w-3.5 h-3.5" /> Incentive Earnings
+        </button>
+      )}
+    </nav>
+
+    <div className="mt-auto pt-4 border-t border-white/10 relative" ref={menuRef}>
+      <AnimatePresence>
+        {showAccountMenu && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: -20 }}
+            exit={{ opacity: 0, scale: 0.9, y: 10 }}
+            className="absolute bottom-full left-0 right-0 bg-slate-900/95 backdrop-blur-2xl rounded-[2rem] border border-white/10 shadow-[0_25px_70px_rgba(0,0,0,0.8)] z-[70] py-3 origin-bottom p-2"
+          >
+            <div className="px-5 py-3 mb-1">
+              <p className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-0.5 text-center">Session Active</p>
+              <h3 className="text-[10px] font-black text-white uppercase tracking-widest truncate text-center">{staff?.name}</h3>
+            </div>
+
+            <div className="space-y-0.5">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowPasswordModal(true);
+                  setIsSidebarOpen(false);
+                  setShowAccountMenu(false);
+                }}
+                className="w-full flex items-center gap-2 p-2 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white transition-all group outline-none"
+              >
+                <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:scale-110 transition-transform shrink-0">
+                  <KeyRound className="w-3 h-3 text-indigo-400" />
+                </div>
+                <span className="text-[8px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Change Password</span>
+              </button>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowAccountMenu(false);
+                  handleLogout();
+                }}
+                className="w-full flex items-center gap-2 p-2 rounded-xl hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-all group outline-none"
+              >
+                <div className="w-7 h-7 rounded-lg bg-red-500/10 flex items-center justify-center border border-red-500/20 group-hover:scale-110 transition-transform shrink-0">
+                  <LogOut className="w-3 h-3 text-red-500" />
+                </div>
+                <span className="text-[8px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Log Out</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <button 
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowAccountMenu(!showAccountMenu);
+        }}
+        className="w-full flex items-center gap-4 p-4 transition-all group hover:bg-white/5 rounded-3xl relative"
+      >
+        <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-xl font-black uppercase text-white shadow-2xl shadow-indigo-900/40 border border-white/10 shrink-0 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent" />
+          {staff?.name?.charAt(0)}
+        </div>
+        <div className="min-w-0 flex-1 text-left">
+          <h1 className="text-[11px] font-black uppercase tracking-widest truncate text-white">{staff?.name}</h1>
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">{staff?.role}</p>
+        </div>
+      </button>
+    </div>
+  </div>
+  );
+};
 
 const StaffSchedule = () => {
   const [staff, setStaff] = useState<Staff | null>(null);
@@ -73,9 +320,12 @@ const StaffSchedule = () => {
   }, [showAccountMenu]);
   const [notifications, setNotifications] = useState<StaffNotification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const triggeredRemindersRef = useRef<Set<string>>(new Set());
   const [triggeredReminders, setTriggeredReminders] = useState<Set<string>>(() => {
     const saved = localStorage.getItem('triggered_reminders');
-    return saved ? new Set(JSON.parse(saved)) : new Set();
+    const initialSet = saved ? new Set(JSON.parse(saved)) : new Set();
+    triggeredRemindersRef.current = initialSet;
+    return initialSet;
   });
 
   useEffect(() => {
@@ -189,11 +439,34 @@ const StaffSchedule = () => {
     };
   }, []);
 
-  const playNotificationSound = () => {
+  const playNotificationSound = async () => {
     try {
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.volume = 0.6;
-      audio.play().catch(e => console.log('Audio autoplay blocked or failed:', e));
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      
+      const playTone = (freq: number, startTime: number, duration: number, type: OscillatorType = 'sine') => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, startTime);
+        
+        gain.gain.setValueAtTime(0.05, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+        
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      };
+
+      const now = audioContext.currentTime;
+      // Unique "Digital Spark" sequence
+      playTone(1046.50, now, 0.1, 'sine'); // C6
+      playTone(1318.51, now + 0.05, 0.1, 'sine'); // E6
+      playTone(1567.98, now + 0.1, 0.1, 'sine'); // G6
+      playTone(2093.00, now + 0.15, 0.3, 'sine'); // C7
     } catch (e) {
       console.error('Failed to play sound:', e);
     }
@@ -210,7 +483,7 @@ const StaffSchedule = () => {
       bookings.forEach(booking => {
         // Only check for today's bookings
         if (booking.date !== todayStr) return;
-        if (triggeredReminders.has(booking.id)) return;
+        if (triggeredRemindersRef.current.has(booking.id)) return;
 
         try {
           const [hours, minutes] = booking.start_time.split(':').map(Number);
@@ -221,15 +494,15 @@ const StaffSchedule = () => {
 
           // Trigger alert if booking is in 14-16 minutes (to catch it within a 1-min check)
           if (diffInMinutes > 0 && diffInMinutes <= 15.5) {
-            playNotificationSound();
-
             const guest = guests.find(g => g.id === booking.guest_id);
             const treatment = treatments.find(t => t.id === booking.massage_type_id);
             const message = `Reminder: Booking for ${guest?.name || 'Guest'} - ${treatment?.name || 'Treatment'} at ${booking.start_time}`;
             
             // Check for duplicate to avoid spam
-            const alreadyNotified = notifications.some(n => n.id === `reminder-${booking.id}`);
-            if (!alreadyNotified) {
+            const alreadyInNotif = notifications.some(n => n.id === `reminder-${booking.id}`);
+            if (!alreadyInNotif) {
+              playNotificationSound();
+              
               const reminderNotif: StaffNotification = {
                 id: `reminder-${booking.id}`,
                 title: 'Upcoming Session!',
@@ -240,7 +513,8 @@ const StaffSchedule = () => {
               };
               
               setNotifications(prev => [reminderNotif, ...prev].slice(0, 20));
-              setTriggeredReminders(prev => new Set(prev).add(booking.id));
+              triggeredRemindersRef.current.add(booking.id);
+              setTriggeredReminders(new Set(Array.from(triggeredRemindersRef.current)));
               
               toast(message, {
                 icon: '⏰',
@@ -267,7 +541,7 @@ const StaffSchedule = () => {
     checkUpcomingBookings(); // Run immediately
 
     return () => clearInterval(interval);
-  }, [bookings, triggeredReminders]);
+  }, [bookings, guests, treatments]); // Removed triggeredReminders from dependencies to avoid re-triggering effect on update
 
   const getBookingCategory = (booking: MassageBooking) => {
     const outlet = outlets.find(o => o.id === booking.outlet_id);
@@ -848,220 +1122,6 @@ const StaffSchedule = () => {
     }
   };
 
-  const SidebarContent = ({ menuRef }: { menuRef: React.RefObject<HTMLDivElement> }) => {
-    if (!staff) return null;
-    return (
-      <div className="flex flex-col h-full bg-slate-900 text-white p-6 overflow-y-auto custom-scrollbar">
-
-      {/* Brand Section */}
-      <div className="flex items-center gap-4 mb-10 pt-2 shrink-0">
-        <div className="w-14 h-14 flex items-center justify-center shrink-0 transition-all duration-500 hover:scale-110 relative">
-          {settings?.logo_url ? (
-            <img 
-              src={settings.logo_url} 
-              alt="Logo" 
-              referrerPolicy="no-referrer" 
-              className="w-full h-full object-contain drop-shadow-xl animate-[spin_10s_linear_infinite]" 
-            />
-          ) : (
-            <div className="w-full h-full bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-500/20">
-              <Sparkles className="w-6 h-6 animate-[spin_10s_linear_infinite]" />
-            </div>
-          )}
-        </div>
-        <div className="flex flex-col text-left">
-          <h2 className="text-sm font-black uppercase tracking-tight leading-tight">{settings?.name || 'Identity Sync'}</h2>
-          <div className="flex items-center gap-1.5 mt-1">
-            <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest leading-none">Portal</span>
-            <div className="w-1 h-1 rounded-full bg-slate-700" />
-            <button 
-              onClick={refreshStaffData}
-              className="text-[8px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors flex items-center gap-1 outline-none"
-            >
-              Terminal <RefreshCw className="w-2 h-2" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-       {/* Instance Context */}
-       {(propertyName || outletName) && (
-         <div className="mb-10 shrink-0">
-           <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 px-1">Location</div>
-           <div className="bg-white/5 rounded-3xl border border-white/10 shadow-inner p-4 space-y-4">
-             {/* Unified Branding */}
-             <div className="flex items-center gap-3">
-               <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-white/10 shrink-0 overflow-hidden shadow-2xl relative group">
-                 {propertyLogo ? (
-                   <img src={propertyLogo} alt="Prop" className="w-full h-full object-contain p-2 transition-transform duration-500 group-hover:scale-110" referrerPolicy="no-referrer" />
-                 ) : (
-                   <Building2 className="w-4 h-4 text-slate-400" />
-                 )}
-               </div>
-               <div className="flex flex-col min-w-0 flex-1">
-                 <span className="text-[11px] font-black text-white uppercase tracking-tight leading-tight break-words">{propertyName}</span>
-                 {(() => {
-                   const validAssignedOutlets = assignedOutlets.filter(oid => outlets.some(o => o.id === oid));
-                   // Render static text if less than 2 valid outlets or still loading 
-                   if (validAssignedOutlets.length <= 1 && outletName) {
-                     return (
-                       <div className="flex items-center gap-1 mt-1">
-                         <MapPin className="w-2 h-2 text-indigo-400" />
-                         <span className="text-[8px] font-black text-indigo-200 uppercase tracking-widest truncate">{outletName}</span>
-                       </div>
-                     );
-                   }
-                   return null;
-                 })()}
-               </div>
-             </div>
-
-             {/* Outlet Selector (Inline in Sidebar) */}
-             {(() => {
-               const validAssignedOutlets = assignedOutlets.filter(oid => outlets.some(o => o.id === oid));
-               // Only show dropdown if we actually have *multiple real* outlets fetched
-               if (validAssignedOutlets.length > 1) {
-                 return (
-                   <div className="relative group/outlet">
-                     <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
-                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                        <MapPin className="w-3 h-3 text-indigo-400" />
-                     </div>
-                     <select 
-                       value={selectedOutletId || ''} 
-                       onChange={(e) => {
-                         const newId = e.target.value;
-                         if (newId !== selectedOutletId) {
-                           setSelectedOutletId(newId);
-                           setLoading(true);
-                           setBookings([]);
-                           setSales([]);
-                           setIsSidebarOpen(false);
-                         }
-                       }}
-                       className="w-full appearance-none bg-white/5 border border-white/10 rounded-2xl pl-10 pr-10 py-2.5 text-[9px] font-black text-white uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer hover:bg-white/10"
-                     >
-                       {validAssignedOutlets.map(oid => {
-                         const o = outlets.find(out => out.id === oid);
-                         return <option key={oid} value={oid} className="bg-slate-900 text-white">{o?.name}</option>;
-                       })}
-                     </select>
-                     <ChevronDown className="w-3 h-3 text-white/40 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none group-hover/outlet:text-white transition-colors" />
-                   </div>
-                 );
-               }
-               return null;
-             })()}
-           </div>
-         </div>
-       )}
-
-      <nav className="flex-1 space-y-1">
-        <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 px-1">Main Menu</div>
-        {(staff?.staff_portal_settings?.show_daily_schedule ?? true) && (
-          <button 
-            onClick={() => {
-              setViewMode('daily');
-              setCurrentDate(new Date());
-              setIsSidebarOpen(false);
-            }}
-            className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'daily' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
-          >
-            <CalendarIcon className="w-3.5 h-3.5" /> Today's Schedule
-          </button>
-        )}
-        {(staff?.staff_portal_settings?.show_monthly_summary ?? true) && (
-          <button 
-            onClick={() => {
-              setViewMode('monthly');
-              setIsSidebarOpen(false);
-            }}
-            className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'monthly' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
-          >
-            <CalendarIcon className="w-3.5 h-3.5" /> Monthly Summary
-          </button>
-        )}
-        {(staff?.staff_portal_settings?.show_incentives ?? true) && (
-          <button 
-            onClick={() => {
-              setViewMode('incentives');
-              setIsSidebarOpen(false);
-            }}
-            className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'incentives' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
-          >
-            <Award className="w-3.5 h-3.5" /> Incentive Earnings
-          </button>
-        )}
-      </nav>
-
-      <div className="mt-auto pt-4 border-t border-white/10 relative" ref={menuRef}>
-        <AnimatePresence>
-          {showAccountMenu && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: -20 }}
-              exit={{ opacity: 0, scale: 0.9, y: 10 }}
-              className="absolute bottom-full left-0 right-0 bg-slate-900/95 backdrop-blur-2xl rounded-[2rem] border border-white/10 shadow-[0_25px_70px_rgba(0,0,0,0.8)] z-[70] py-3 origin-bottom p-2"
-            >
-              <div className="px-5 py-3 mb-1">
-                <p className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-0.5 text-center">Session Active</p>
-                <h3 className="text-[10px] font-black text-white uppercase tracking-widest truncate text-center">{staff?.name}</h3>
-              </div>
-
-              <div className="space-y-0.5">
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowPasswordModal(true);
-                    setIsSidebarOpen(false);
-                    setShowAccountMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2 p-2 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white transition-all group outline-none"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:scale-110 transition-transform shrink-0">
-                    <KeyRound className="w-3 h-3 text-indigo-400" />
-                  </div>
-                  <span className="text-[8px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Change Password</span>
-                </button>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowAccountMenu(false);
-                    handleLogout();
-                  }}
-                  className="w-full flex items-center gap-2 p-2 rounded-xl hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-all group outline-none"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-red-500/10 flex items-center justify-center border border-red-500/20 group-hover:scale-110 transition-transform shrink-0">
-                    <LogOut className="w-3 h-3 text-red-500" />
-                  </div>
-                  <span className="text-[8px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Log Out</span>
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <button 
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowAccountMenu(!showAccountMenu);
-          }}
-          className="w-full flex items-center gap-4 p-4 transition-all group hover:bg-white/5 rounded-3xl relative"
-        >
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-xl font-black uppercase text-white shadow-2xl shadow-indigo-900/40 border border-white/10 shrink-0 group-hover:scale-105 transition-transform duration-500 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent" />
-            {staff?.name?.charAt(0)}
-          </div>
-          <div className="min-w-0 flex-1 text-left">
-            <h1 className="text-[11px] font-black uppercase tracking-widest truncate text-white">{staff?.name}</h1>
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">{staff?.role}</p>
-          </div>
-        </button>
-      </div>
-    </div>
-  );
-};
-
   return (
     <>
       <AnimatePresence mode="wait">
@@ -1087,7 +1147,30 @@ const StaffSchedule = () => {
 
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block w-72 h-screen sticky top-0 border-r border-slate-200 z-50">
-        <SidebarContent menuRef={desktopAccountMenuRef} />
+        <SidebarContent 
+          staff={staff}
+          settings={settings}
+          propertyName={propertyName}
+          outletName={outletName}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          setCurrentDate={setCurrentDate}
+          setIsSidebarOpen={setIsSidebarOpen}
+          refreshStaffData={refreshStaffData}
+          propertyLogo={propertyLogo}
+          assignedOutlets={assignedOutlets}
+          outlets={outlets}
+          selectedOutletId={selectedOutletId}
+          setSelectedOutletId={setSelectedOutletId}
+          setLoading={setLoading}
+          setBookings={setBookings}
+          setSales={setSales}
+          showAccountMenu={showAccountMenu}
+          setShowAccountMenu={setShowAccountMenu}
+          setShowPasswordModal={setShowPasswordModal}
+          handleLogout={handleLogout}
+          menuRef={desktopAccountMenuRef}
+        />
       </aside>
 
       {/* Mobile Sidebar Overlay */}
@@ -1109,7 +1192,30 @@ const StaffSchedule = () => {
           >
             <X className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
           </button>
-          <SidebarContent menuRef={mobileAccountMenuRef} />
+          <SidebarContent 
+            staff={staff}
+            settings={settings}
+            propertyName={propertyName}
+            outletName={outletName}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            setCurrentDate={setCurrentDate}
+            setIsSidebarOpen={setIsSidebarOpen}
+            refreshStaffData={refreshStaffData}
+            propertyLogo={propertyLogo}
+            assignedOutlets={assignedOutlets}
+            outlets={outlets}
+            selectedOutletId={selectedOutletId}
+            setSelectedOutletId={setSelectedOutletId}
+            setLoading={setLoading}
+            setBookings={setBookings}
+            setSales={setSales}
+            showAccountMenu={showAccountMenu}
+            setShowAccountMenu={setShowAccountMenu}
+            setShowPasswordModal={setShowPasswordModal}
+            handleLogout={handleLogout}
+            menuRef={mobileAccountMenuRef}
+          />
         </div>
       </aside>
 
