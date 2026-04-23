@@ -208,6 +208,13 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
                 </div>
                 <div className="pt-2 mt-2 border-t border-dashed border-slate-200">
                     <div className="flex justify-between items-end mb-1">
+                      <p className="text-[11px] font-bold text-slate-400 uppercase">Referral Name</p>
+                      <p className="text-[11px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">اسم المرجع</p>
+                    </div>
+                    <p className="text-xs font-black uppercase">{member.referrer_name || 'Self / Direct'}</p>
+                </div>
+                <div className="pt-2 mt-2 border-t border-dashed border-slate-200">
+                    <div className="flex justify-between items-end mb-1">
                       <p className="text-[11px] font-bold text-slate-400 uppercase">Total Contribution</p>
                       <p className="text-[11px] font-bold text-slate-400 uppercase font-arabic" dir="rtl">إجمالي المبلغ</p>
                     </div>
