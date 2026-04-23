@@ -112,7 +112,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         remarks: existingMember.remarks ?? '',
         package_type: existingMember.package_type || 'Single',
         access_type: existingMember.access_type || 'Both',
-        referrer_name: existingMember.referrer_name ?? '',
+        referrer_name: isRenewal ? '' : (existingMember.referrer_name ?? ''),
     } : {
       membership_number: '',
       guest_name: '',
@@ -190,7 +190,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('membership_type_id', found.membership_type_id || '');
     setValue('category_id', found.category_id);
     setValue('membership_number', found.membership_number);
-    setValue('referrer_name', found.referrer_name || '');
+    setValue('referrer_name', '');
     
     const newStart = calculateDefaultStartDate(found.current_end_date);
     setValue('start_date', newStart);
