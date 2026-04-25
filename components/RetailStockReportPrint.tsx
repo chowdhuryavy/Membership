@@ -107,106 +107,108 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
           --foreground: #0f172a !important;
         }
       `}</style>
-      {/* Header */}
-      <div className="flex items-start justify-between border-b border-slate-300 pb-6 mb-8 print:pb-2 print:mb-4">
-        <div className="flex items-center gap-6">
+       {/* Header */}
+      <div className="flex items-start justify-between border-b-2 border-slate-900 pb-8 mb-10 print:pb-4 print:mb-6">
+        <div className="flex items-center gap-8">
           {currentProperty?.logo_url ? (
             <img 
               src={currentProperty.logo_url} 
-              alt="Logo" 
-              className="w-24 h-24 object-contain" 
+              alt="Corporate Logo" 
+              className="w-28 h-28 object-contain rounded-2xl" 
               referrerPolicy="no-referrer" 
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
-                // If direct load fails, try proxying
-                if (!target.src.includes('allorigins') && !target.src.includes('corsproxy')) {
-                  target.src = `https://api.allorigins.win/raw?url=${encodeURIComponent(currentProperty.logo_url)}`;
-                } else if (target.src.includes('allorigins')) {
+                if (!target.src.includes('corsproxy')) {
                   target.src = `https://corsproxy.io/?${encodeURIComponent(currentProperty.logo_url)}`;
                 }
               }}
             />
           ) : (
-            <div className="w-24 h-24 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400">
-              <Building2 className="w-8 h-8" />
+            <div className="w-24 h-24 bg-slate-100 rounded-2xl border-2 border-slate-200 flex items-center justify-center text-slate-400">
+              <Building2 className="w-10 h-10" />
             </div>
           )}
           <div>
-            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight">{currentProperty?.name || 'Property Name'}</h1>
-            <h2 className="text-lg font-bold text-slate-500 mt-1 tracking-widest uppercase">Retail Stock Ledger</h2>
+            <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-2">{currentProperty?.name || 'ESTABLISHMENT NAME'}</h1>
+            <div className="flex items-center gap-3">
+               <span className="px-3 py-1 bg-slate-900 text-white text-[10px] font-black uppercase tracking-[0.3em] rounded">Official Ledger</span>
+               <h2 className="text-xl font-bold text-slate-500 tracking-tight uppercase">Retail Inventory & Stock Report</h2>
+            </div>
           </div>
         </div>
         <div className="text-right">
-          <div className="inline-block text-left bg-slate-50 p-4 rounded-xl border border-slate-200 min-w-[200px]">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-              <div className="font-bold text-slate-400 uppercase tracking-widest">Period</div>
-              <div className="font-bold text-slate-900 text-right">{format(selectedMonth, 'MMMM yyyy')}</div>
-              <div className="font-bold text-slate-400 uppercase tracking-widest">Scope</div>
-              <div className="font-bold text-slate-900 text-right">{viewScope === 'property' ? 'ALL OUTLETS' : (currentOutlet?.name || 'N/A')}</div>
-              <div className="font-bold text-slate-400 uppercase tracking-widest">Generated</div>
-              <div className="font-bold text-slate-900 text-right">{format(new Date(), 'dd MMM yyyy')}</div>
+          <div className="inline-block text-left bg-white p-6 rounded-2xl border-2 border-slate-100 min-w-[280px] shadow-sm">
+            <div className="space-y-3">
+              <div className="flex justify-between items-center border-b border-slate-50 pb-2">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reporting Period</span>
+                <span className="text-xs font-black text-slate-900 uppercase">{format(selectedMonth, 'MMMM yyyy')}</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-50 pb-2">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Scope Alignment</span>
+                <span className="text-xs font-black text-slate-900 uppercase">{viewScope === 'property' ? 'Consolidated (All Outlets)' : (currentOutlet?.name || 'Localized Outlet')}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Generation Date</span>
+                <span className="text-xs font-black text-slate-900 uppercase">{format(new Date(), 'dd MMM yyyy')}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      {/* Financial Summary KPIs */}
+      <div className="grid grid-cols-4 gap-6 mb-12 print:mb-8">
         {[
-          { label: 'Total Revenue', value: formatMoney(summary.totalRevenue) },
-          { label: 'Asset Value', value: formatMoney(summary.totalStockValue) },
-          { label: 'Units Sold', value: summary.totalItemsSold },
-          { label: 'Units Restocked', value: summary.totalRestocked }
+          { label: 'Total Revenue', value: formatMoney(summary.totalRevenue), color: 'emerald' },
+          { label: 'Asset Valuation', value: formatMoney(summary.totalStockValue), color: 'indigo' },
+          { label: 'Units Outflow', value: summary.totalItemsSold, color: 'slate' },
+          { label: 'Units Inflow', value: summary.totalRestocked, color: 'blue' }
         ].map((card, i) => (
-          <div key={i} className="p-5 print:p-2 border border-slate-200 rounded-xl bg-white shadow-sm flex flex-col">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{card.label}</span>
-            <span className="text-2xl font-black text-slate-900">{card.value}</span>
+          <div key={i} className="p-6 print:p-4 border-2 border-slate-100 rounded-3xl bg-white flex flex-col items-center text-center">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">{card.label}</span>
+            <span className="text-3xl font-black text-slate-900 tracking-tighter leading-none">{card.value}</span>
           </div>
         ))}
       </div>
 
-      {/* Table */}
-      <div className="border border-slate-200 rounded-xl overflow-hidden print-compact">
+      {/* Ledger Table */}
+      <div className="border-2 border-slate-950 rounded-2xl overflow-hidden print-compact shadow-xl mb-12">
         <table className="w-full text-sm text-left border-collapse">
-          <thead className="bg-slate-900 text-white font-bold text-lg uppercase tracking-widest border-b-2 border-slate-900">
+          <thead className="bg-[#0f172a] text-white font-black text-[10px] uppercase tracking-[0.2em] border-b-2 border-slate-950">
             <tr>
-              <th className="p-6 whitespace-nowrap">Item Description</th>
-              {viewScope === 'property' && <th className="p-6 text-left">Outlet</th>}
-              <th className="p-6 text-right">Price</th>
-              <th className="p-6 text-center">Opening</th>
-              <th className="p-6 text-center">Restocked</th>
-              <th className="p-6 text-center">Sold Qty</th>
-              <th className="p-6 text-right whitespace-nowrap">Sold Value</th>
-              <th className="p-6 text-center">Adj.</th>
-              <th className="p-6 text-center">Closing</th>
-              <th className="p-6 text-right whitespace-nowrap">Asset Value</th>
-              <th className="p-6 text-center">Status</th>
+              <th className="p-5 whitespace-nowrap">Inventory Description</th>
+              {viewScope === 'property' && <th className="p-5 text-left">Internal Outlet</th>}
+              <th className="p-5 text-right">Unit Rate</th>
+              <th className="p-5 text-center bg-slate-800/40">Opening</th>
+              <th className="p-5 text-center text-indigo-300">Inflow</th>
+              <th className="p-5 text-center text-emerald-300">Outflow</th>
+              <th className="p-5 text-right text-emerald-300 whitespace-nowrap">Revenue</th>
+              <th className="p-5 text-center text-amber-300">Adj.</th>
+              <th className="p-5 text-center bg-slate-800/40">Closing</th>
+              <th className="p-5 text-right whitespace-nowrap">Asset Value</th>
+              <th className="p-5 text-center">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-200">
             {Object.entries(displayGrouping).map(([groupName, items]: [string, ItemStockSummary[]]) => (
               <React.Fragment key={groupName}>
-                <tr className="bg-slate-50/50 break-inside-avoid border-y border-slate-200">
-                  <td colSpan={viewScope === 'property' ? 11 : 10} className="p-3 font-black text-slate-900 uppercase tracking-widest text-[11px]">{groupName}</td>
+                <tr className="bg-slate-100/80 break-inside-avoid border-y border-slate-200">
+                  <td colSpan={viewScope === 'property' ? 11 : 10} className="p-3.5 font-black text-slate-950 uppercase tracking-[0.25em] text-[10px]">{groupName}</td>
                 </tr>
                 {items.map((row) => (
-                  <tr key={row.itemId} className="hover:bg-slate-50 break-inside-avoid">
-                    <td className="p-4 font-bold text-slate-900 text-xs">{row.itemName}</td>
-                    {viewScope === 'property' && <td className="p-4 text-left text-[10px] font-bold text-slate-500 uppercase">{row.outletName}</td>}
-                    <td className="p-4 text-right font-mono text-xs text-slate-600 whitespace-nowrap">{formatMoney(row.unitPrice)}</td>
-                    <td className="p-4 text-center font-mono text-xs text-slate-600">{row.openingStock}</td>
-                    <td className="p-4 text-center font-mono text-indigo-600 font-bold text-xs">{row.restocked || '-'}</td>
-                    <td className="p-4 text-center font-mono text-emerald-600 font-bold text-xs">{row.sold || '-'}</td>
-                    <td className="p-4 text-right font-mono text-emerald-600 font-bold text-xs whitespace-nowrap">{row.salesRevenue ? formatMoney(row.salesRevenue) : '-'}</td>
-                    <td className="p-4 text-center font-mono text-amber-600 font-bold text-xs">{row.adjustments || '-'}</td>
-                    <td className="p-4 text-center font-mono font-black text-sm text-slate-900">{row.closingStock}</td>
-                    <td className="p-4 text-right font-mono font-black text-sm text-slate-900 whitespace-nowrap">{formatMoney(row.closingValue)}</td>
-                    <td className="p-4 text-center font-bold text-[10px] uppercase tracking-widest">
-                      <span className={`px-2.5 py-1 rounded-md border ${
-                        row.status === 'Low' ? 'bg-red-50 text-red-600 border-red-100' :
-                        row.status === 'Overstock' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                        'bg-emerald-50 text-emerald-600 border-emerald-100'
-                      }`}>
+                  <tr key={row.itemId} className="hover:bg-slate-50 break-inside-avoid odd:bg-white even:bg-slate-50/30">
+                    <td className="p-5 font-black text-slate-900 text-[11px] uppercase tracking-tight">{row.itemName}</td>
+                    {viewScope === 'property' && <td className="p-5 text-left text-[9px] font-black text-slate-500 uppercase tracking-widest">{row.outletName}</td>}
+                    <td className="p-5 text-right font-mono text-[10px] text-slate-600 whitespace-nowrap font-bold">{formatMoney(row.unitPrice)}</td>
+                    <td className="p-5 text-center font-mono text-[11px] text-slate-950 font-black bg-slate-50/50 border-x border-slate-100">{row.openingStock}</td>
+                    <td className="p-5 text-center font-mono text-indigo-700 font-black text-[11px]">{row.restocked || '-'}</td>
+                    <td className="p-5 text-center font-mono text-emerald-700 font-black text-[11px]">{row.sold || '-'}</td>
+                    <td className="p-5 text-right font-mono text-emerald-700 font-black text-[11px] whitespace-nowrap">{row.salesRevenue ? formatMoney(row.salesRevenue) : '-'}</td>
+                    <td className="p-5 text-center font-mono text-amber-700 font-black text-[11px]">{row.adjustments || '-'}</td>
+                    <td className="p-5 text-center font-mono font-black text-xs text-slate-950 bg-slate-50/50 border-x border-slate-100">{row.closingStock}</td>
+                    <td className="p-5 text-right font-mono font-black text-xs text-slate-950 whitespace-nowrap border-l border-slate-100">{formatMoney(row.closingValue)}</td>
+                    <td className="p-5 text-center font-black text-[9px] uppercase tracking-widest">
+                      <span className={`px-2 py-0.5 rounded-md border-2 border-slate-900 text-slate-900`}>
                         {row.status}
                       </span>
                     </td>
@@ -215,16 +217,16 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
               </React.Fragment>
             ))}
           </tbody>
-          <tfoot className="bg-slate-900 text-white font-bold text-lg uppercase tracking-widest border-t-2 border-slate-900">
+          <tfoot className="bg-[#0f172a] text-white font-black text-xs uppercase tracking-[0.2em] border-t-2 border-slate-950">
             <tr>
-              <td colSpan={viewScope === 'property' ? 3 : 2} className="p-6 text-right">Grand Total</td>
-              <td className="p-6 text-center font-mono">{reportData.reduce((sum, item) => sum + item.openingStock, 0)}</td>
-              <td className="p-6 text-center font-mono">{summary.totalRestocked}</td>
-              <td className="p-6 text-center font-mono">{summary.totalItemsSold}</td>
-              <td className="p-6 text-right font-mono whitespace-nowrap">{formatMoney(summary.totalRevenue)}</td>
-              <td className="p-6 text-center font-mono">{reportData.reduce((sum, item) => sum + item.adjustments, 0)}</td>
-              <td className="p-6 text-center font-mono">{reportData.reduce((sum, item) => sum + item.closingStock, 0)}</td>
-              <td className="p-6 text-right font-mono whitespace-nowrap">{formatMoney(summary.totalStockValue)}</td>
+              <td colSpan={viewScope === 'property' ? 3 : 2} className="p-6 text-right text-slate-400">Total Aggregation</td>
+              <td className="p-6 text-center font-mono text-indigo-300 border-x border-slate-800">{reportData.reduce((sum, item) => sum + item.openingStock, 0)}</td>
+              <td className="p-6 text-center font-mono text-indigo-300">{summary.totalRestocked}</td>
+              <td className="p-6 text-center font-mono text-emerald-300">{summary.totalItemsSold}</td>
+              <td className="p-6 text-right font-mono text-emerald-300 whitespace-nowrap">{formatMoney(summary.totalRevenue)}</td>
+              <td className="p-6 text-center font-mono text-amber-300">{reportData.reduce((sum, item) => sum + item.adjustments, 0)}</td>
+              <td className="p-6 text-center font-mono text-white text-base border-x border-slate-800 tracking-tighter">{reportData.reduce((sum, item) => sum + item.closingStock, 0)}</td>
+              <td className="p-6 text-right font-mono text-white text-base whitespace-nowrap tracking-tighter">{formatMoney(summary.totalStockValue)}</td>
               <td className="p-6"></td>
             </tr>
           </tfoot>

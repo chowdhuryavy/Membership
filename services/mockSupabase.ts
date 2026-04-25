@@ -1831,10 +1831,31 @@ class DatabaseService {
 
   async addSale(sale: Omit<Sale, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
-        const { error } = await supabase.from('sales').insert([{ ...sale, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
+        const { data: newSale, error } = await supabase.from('sales').insert([{ ...sale, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select().single();
         if (error) throw error;
         await this.logAction('POS_SALE', `Processed sale: ${sale.quantity}x ${sale.item_name} for ${sale.guest_name || 'Walk-in'} (Total: ${sale.net_amount})`, sale.outlet_id);
         
+        // Handle Inventory Tracking
+        if (sale.item_id) {
+          const { data: item } = await supabase.from('inventory').select('*').eq('id', sale.item_id).single();
+          if (item && item.track_inventory) {
+            const newStock = item.stock_quantity - sale.quantity;
+            await supabase.from('inventory').update({ stock_quantity: newStock }).eq('id', item.id);
+            
+            // Log to inventory_logs
+            await this.addInventoryLog({
+              item_id: item.id,
+              property_id: item.property_id,
+              outlet_id: item.outlet_id,
+              change_amount: -sale.quantity,
+              previous_stock: item.stock_quantity,
+              new_stock: newStock,
+              reason: 'Sale',
+              notes: `Sale ID: ${newSale.id}`,
+            });
+          }
+        }
+
         // Add notification
         await this.addNotification({
           title: 'New POS Sale',
@@ -1858,6 +1879,29 @@ class DatabaseService {
     if (this.isSupabase()) {
         const { data: saleData } = await supabase.from('sales').select('*').eq('id', id).single();
         
+        if (saleData) {
+          // Restore Inventory if needed
+          if (saleData.item_id) {
+            const { data: item } = await supabase.from('inventory').select('*').eq('id', saleData.item_id).single();
+            if (item && item.track_inventory) {
+              const newStock = item.stock_quantity + saleData.quantity;
+              await supabase.from('inventory').update({ stock_quantity: newStock }).eq('id', item.id);
+              
+              // Log to inventory_logs
+              await this.addInventoryLog({
+                item_id: item.id,
+                property_id: item.property_id,
+                outlet_id: item.outlet_id,
+                change_amount: saleData.quantity,
+                previous_stock: item.stock_quantity,
+                new_stock: newStock,
+                reason: 'Return',
+                notes: `Voided Sale Ref: ${id}`,
+              });
+            }
+          }
+        }
+
         await supabase.from('sales').delete().eq('id', id);
         await this.logAction('POS_VOID', `Voided sale ID: ${id}`);
 

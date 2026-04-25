@@ -109,7 +109,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
     const monthStart = startOfMonth(selectedMonth);
     const monthEnd = endOfMonth(selectedMonth);
 
-    // Pre-group sales and logs by item_id for O(N) lookup instead of O(N*M)
+    // Pre-group sales and logs by item_id for O(N) lookup
     const salesByItem: Record<string, Sale[]> = {};
     sales.forEach(s => {
       if (s.item_id) {
@@ -135,41 +135,71 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
         const itemSales = salesByItem[item.id] || [];
         const itemLogs = logsByItem[item.id] || [];
 
-        // Calculate changes AFTER the target month to reverse-engineer closing stock
-        const salesAfter = itemSales
-            .filter(s => isAfter(parseISO(s.created_at), monthEnd))
-            .reduce((sum, s) => sum + s.quantity, 0);
+        // Sort logs by date ascending 
+        const sortedLogs = [...itemLogs].sort((a, b) => parseISO(a.created_at).getTime() - parseISO(b.created_at).getTime());
 
-        const logsAfter = itemLogs
-            .filter(l => isAfter(parseISO(l.created_at), monthEnd))
-            .reduce((sum, l) => sum + l.change_amount, 0);
+        // Find the state at month end
+        const logsBeforeOrDuringEnd = sortedLogs.filter(l => !isAfter(parseISO(l.created_at), monthEnd));
+        const lastLogBeforeEnd = logsBeforeOrDuringEnd[logsBeforeOrDuringEnd.length - 1];
 
-        // Calculate changes DURING the target month
-        const salesDuringEvents = itemSales.filter(s => isSameMonth(parseISO(s.created_at), selectedMonth));
-        const salesDuringQty = salesDuringEvents.reduce((sum, s) => sum + s.quantity, 0);
-        const salesDuringRevenue = salesDuringEvents.reduce((sum, s) => sum + s.net_amount, 0);
+        // Find the state at month start
+        const logsBeforeStart = sortedLogs.filter(l => isBefore(parseISO(l.created_at), monthStart));
+        const lastLogBeforeStart = logsBeforeStart[logsBeforeStart.length - 1];
 
-        const logsDuring = itemLogs.filter(l => isSameMonth(parseISO(l.created_at), selectedMonth));
+        let closingStock: number;
+        if (lastLogBeforeEnd) {
+            closingStock = lastLogBeforeEnd.new_stock;
+        } else {
+            // Reverse engineer from current stock using logs and sales
+            const logsAfter = itemLogs.filter(l => isAfter(parseISO(l.created_at), monthEnd));
+            const salesAfter = itemSales.filter(s => {
+                const saleDate = parseISO(s.created_at);
+                const hasLog = logsAfter.some(l => l.notes && l.notes.includes(s.id));
+                return isAfter(saleDate, monthEnd) && !hasLog;
+            });
+
+            const netLogChangeAfter = logsAfter.reduce((sum, l) => sum + l.change_amount, 0);
+            const salesAfterQty = salesAfter.reduce((sum, s) => sum + s.quantity, 0);
+            
+            closingStock = currentStock + salesAfterQty - netLogChangeAfter;
+        }
+
+        let openingStock: number;
+        if (lastLogBeforeStart) {
+            openingStock = lastLogBeforeStart.new_stock;
+        } else {
+            // Reverse engineer from closing stock 
+            const logsDuring = itemLogs.filter(l => isSameMonth(parseISO(l.created_at), selectedMonth));
+            const salesDuring = itemSales.filter(s => {
+                const saleDate = parseISO(s.created_at);
+                const hasLog = logsDuring.some(l => l.notes && l.notes.includes(s.id));
+                return isSameMonth(saleDate, selectedMonth) && !hasLog;
+            });
+
+            const netLogChangeDuring = logsDuring.reduce((sum, l) => sum + l.change_amount, 0);
+            const salesDuringQty = salesDuring.reduce((sum, s) => sum + s.quantity, 0);
+
+            openingStock = closingStock + salesDuringQty - netLogChangeDuring;
+        }
+
+        // Calculate metrics DURING the target month
+        const salesEventsMonth = itemSales.filter(s => isSameMonth(parseISO(s.created_at), selectedMonth));
+        const soldQty = salesEventsMonth.reduce((sum, s) => sum + s.quantity, 0);
+        const revenue = salesEventsMonth.reduce((sum, s) => sum + s.net_amount, 0);
+
+        const logsDuringMonth = itemLogs.filter(l => isSameMonth(parseISO(l.created_at), selectedMonth));
         
-        const restockedDuring = logsDuring
+        const restocked = logsDuringMonth
             .filter(l => l.change_amount > 0 && l.reason === 'Restock')
             .reduce((sum, l) => sum + l.change_amount, 0);
             
-        const adjustmentsDuring = logsDuring
-            .filter(l => l.reason === 'Adjustment' || (l.change_amount < 0 && l.reason !== 'Sale'))
+        const adjustments = logsDuringMonth
+            .filter(l => l.reason === 'Adjustment' || (l.change_amount < 0 && !['Sale', 'Initial'].includes(l.reason)))
             .reduce((sum, l) => sum + l.change_amount, 0);
-
-        const netLogChangeDuring = logsDuring.reduce((sum, l) => sum + l.change_amount, 0);
-
-        // Closing Stock = Current + Sales After - Net Log Changes After
-        const closingStock = currentStock + salesAfter - logsAfter;
-        
-        // Opening Stock = Closing + Sales During - Net Log Changes During
-        const openingStock = closingStock + salesDuringQty - netLogChangeDuring;
 
         let status: 'Low' | 'Good' | 'Overstock' = 'Good';
         if (closingStock <= 5) status = 'Low';
-        if (closingStock > 50) status = 'Overstock';
+        else if (closingStock > 50) status = 'Overstock';
 
         return {
             itemId: item.id,
@@ -177,13 +207,13 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
             outletName: outletsMap[item.outlet_id] || 'Unknown',
             category: item.category,
             unitPrice: item.price,
-            openingStock,
-            sold: salesDuringQty,
-            salesRevenue: salesDuringRevenue,
-            restocked: restockedDuring,
-            adjustments: adjustmentsDuring,
-            closingStock,
-            closingValue: closingStock * item.price,
+            openingStock: Math.max(0, openingStock),
+            sold: soldQty,
+            salesRevenue: revenue,
+            restocked: restocked,
+            adjustments: adjustments,
+            closingStock: Math.max(0, closingStock),
+            closingValue: Math.max(0, closingStock * item.price),
             status
         };
     });
@@ -530,50 +560,50 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
           </div>
 
           {/* KPI Cards (Web Only) */}
-          <div className="p-8 bg-slate-50/30 border-b border-slate-100 no-print">
-             <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+          <div className="p-8 bg-slate-50/50 border-b border-slate-100 no-print">
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                 <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm hover:shadow-md transition-all group">
                      <div className="flex justify-between items-start mb-4">
-                         <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-600">
+                         <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
                              <TrendingUp className="w-6 h-6" />
                          </div>
-                         <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Revenue</span>
+                         <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Recognition</span>
                      </div>
                      <h3 className="text-2xl font-black text-slate-900 tracking-tighter">{formatMoney(summary.totalRevenue)}</h3>
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1">Total Sales</p>
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Total Sales Revenue</p>
                  </div>
 
-                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                 <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm hover:shadow-md transition-all group">
                      <div className="flex justify-between items-start mb-4">
-                         <div className="p-3 rounded-2xl bg-indigo-50 text-indigo-600">
+                         <div className="p-3 rounded-2xl bg-indigo-50 text-indigo-600 group-hover:scale-110 transition-transform">
                              <Package className="w-6 h-6" />
                          </div>
-                         <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Asset Value</span>
+                         <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Valuation</span>
                      </div>
                      <h3 className="text-2xl font-black text-slate-900 tracking-tighter">{formatMoney(summary.totalStockValue)}</h3>
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1">Current Inventory</p>
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Closing Asset Value</p>
                  </div>
 
-                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                 <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm hover:shadow-md transition-all group">
                      <div className="flex justify-between items-start mb-4">
-                         <div className="p-3 rounded-2xl bg-amber-50 text-amber-600">
+                         <div className="p-3 rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
                              <ArrowDownRight className="w-6 h-6" />
                          </div>
-                         <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Outflow</span>
+                         <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Throughput</span>
                      </div>
                      <h3 className="text-2xl font-black text-slate-900 tracking-tighter">{summary.totalItemsSold}</h3>
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1">Units Sold</p>
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Units Sold Volume</p>
                  </div>
 
-                 <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                 <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm hover:shadow-md transition-all group">
                      <div className="flex justify-between items-start mb-4">
-                         <div className="p-3 rounded-2xl bg-blue-50 text-blue-600">
+                         <div className="p-3 rounded-2xl bg-blue-50 text-blue-600 group-hover:scale-110 transition-transform">
                              <ArrowUpRight className="w-6 h-6" />
                          </div>
-                         <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Inflow</span>
+                         <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Replenish</span>
                      </div>
                      <h3 className="text-2xl font-black text-slate-900 tracking-tighter">{summary.totalRestocked}</h3>
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1">Units Restocked</p>
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Units Restocked Count</p>
                  </div>
              </div>
           </div>
@@ -622,8 +652,8 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
                                                          </span>
                                                      </td>
                                                  </tr>
-                                                 {categoryItems.map((row, idx) => (
-                                                     <tr key={row.itemId} className={`hover:bg-indigo-50/30 transition-colors group bg-white`}>
+                                                 {categoryItems.map((row) => (
+                                                     <tr key={row.itemId} className="hover:bg-slate-50 transition-colors group bg-white border-b border-slate-50 last:border-0">
                                                          <td className="px-8 py-4">
                                                              <div className="flex items-center gap-4">
                                                                  <div className="font-bold text-slate-900 text-xs">{row.itemName}</div>
