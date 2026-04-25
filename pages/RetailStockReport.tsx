@@ -146,9 +146,9 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
         const logsBeforeStart = sortedLogs.filter(l => isBefore(parseISO(l.created_at), monthStart));
         const lastLogBeforeStart = logsBeforeStart[logsBeforeStart.length - 1];
 
-        let closingStock: number;
+        let closingStockCalc: number;
         if (lastLogBeforeEnd) {
-            closingStock = lastLogBeforeEnd.new_stock;
+            closingStockCalc = lastLogBeforeEnd.new_stock;
         } else {
             // Reverse engineer from current stock using logs and sales
             const logsAfter = itemLogs.filter(l => isAfter(parseISO(l.created_at), monthEnd));
@@ -161,15 +161,16 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
             const netLogChangeAfter = logsAfter.reduce((sum, l) => sum + l.change_amount, 0);
             const salesAfterQty = salesAfter.reduce((sum, s) => sum + s.quantity, 0);
             
-            closingStock = currentStock + salesAfterQty - netLogChangeAfter;
+            closingStockCalc = currentStock + salesAfterQty - netLogChangeAfter;
         }
 
-        let openingStock: number;
+        let openingStockCalc: number;
         if (lastLogBeforeStart) {
-            openingStock = lastLogBeforeStart.new_stock;
+            openingStockCalc = lastLogBeforeStart.new_stock;
         } else {
             // Reverse engineer from closing stock 
             const logsDuring = itemLogs.filter(l => isSameMonth(parseISO(l.created_at), selectedMonth));
+            
             const salesDuring = itemSales.filter(s => {
                 const saleDate = parseISO(s.created_at);
                 const hasLog = logsDuring.some(l => l.notes && l.notes.includes(s.id));
@@ -179,7 +180,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
             const netLogChangeDuring = logsDuring.reduce((sum, l) => sum + l.change_amount, 0);
             const salesDuringQty = salesDuring.reduce((sum, s) => sum + s.quantity, 0);
 
-            openingStock = closingStock + salesDuringQty - netLogChangeDuring;
+            openingStockCalc = closingStockCalc + salesDuringQty - netLogChangeDuring;
         }
 
         // Calculate metrics DURING the target month
@@ -189,17 +190,38 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
 
         const logsDuringMonth = itemLogs.filter(l => isSameMonth(parseISO(l.created_at), selectedMonth));
         
-        const restocked = logsDuringMonth
-            .filter(l => l.change_amount > 0 && l.reason === 'Restock')
-            .reduce((sum, l) => sum + l.change_amount, 0);
+        let restocked = 0;
+        let adjustments = 0;
+        let adjustedOpeningStock = openingStockCalc;
+
+        logsDuringMonth.forEach(l => {
+            const reason = (l.reason || '').toLowerCase();
+            const isInitial = reason === 'initial';
+            const isRestock = reason === 'restock' || reason === 'initial'; // Count initial as restock by default
             
-        const adjustments = logsDuringMonth
-            .filter(l => l.reason === 'Adjustment' || (l.change_amount < 0 && !['Sale', 'Initial'].includes(l.reason)))
-            .reduce((sum, l) => sum + l.change_amount, 0);
+            if (l.change_amount > 0) {
+                // If it's the first month and we have an initial log, 
+                // treat it as opening stock if openingStock is otherwise 0
+                if (isInitial && !lastLogBeforeStart && adjustedOpeningStock === 0) {
+                    adjustedOpeningStock = l.change_amount;
+                } else if (isRestock) {
+                    restocked += l.change_amount;
+                }
+            } else if (l.change_amount < 0 && reason !== 'sale') {
+                adjustments += l.change_amount;
+            } else if (reason === 'adjustment') {
+                adjustments += l.change_amount;
+            }
+        });
+
+        // Final verification: Closing = Opening + Restocked + Adjustments - Sold
+        // If we moved things into Opening, we must ensure consistency
+        const finalOpening = Math.max(0, adjustedOpeningStock);
+        const finalClosing = Math.max(0, closingStockCalc);
 
         let status: 'Low' | 'Good' | 'Overstock' = 'Good';
-        if (closingStock <= 5) status = 'Low';
-        else if (closingStock > 50) status = 'Overstock';
+        if (finalClosing <= 5) status = 'Low';
+        else if (finalClosing > 50) status = 'Overstock';
 
         return {
             itemId: item.id,
@@ -207,13 +229,13 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
             outletName: outletsMap[item.outlet_id] || 'Unknown',
             category: item.category,
             unitPrice: item.price,
-            openingStock: Math.max(0, openingStock),
+            openingStock: finalOpening,
             sold: soldQty,
             salesRevenue: revenue,
             restocked: restocked,
             adjustments: adjustments,
-            closingStock: Math.max(0, closingStock),
-            closingValue: Math.max(0, closingStock * item.price),
+            closingStock: finalClosing,
+            closingValue: Math.max(0, finalClosing * item.price),
             status
         };
     });
