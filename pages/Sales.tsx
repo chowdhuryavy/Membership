@@ -980,7 +980,10 @@ const Sales = () => {
             toast.error('Failed to load data');
         } finally {
             setLoading(false);
-            setPageLoading(false);
+            // Give React a moment to process state updates before hiding global splash
+            setTimeout(() => {
+                setPageLoading(false);
+            }, 100);
         }
     }, [currentOutlet, currentProperty, selectedDate, viewScope]);
 

@@ -11,7 +11,7 @@ import { ConfirmationModal } from '../components/ui';
 
 const Members = () => {
   const { user } = useAuth();
-  const { currentOutlet, currentProperty, hasPermission, outlets, setPageLoading } = useSettings();
+  const { currentOutlet, currentProperty, hasPermission, outlets, setPageLoading, pageLoading } = useSettings();
   
   // View State
   const [view, setView] = useState<'list' | 'form' | 'detail'>('list');
@@ -74,7 +74,10 @@ const Members = () => {
       }
     } finally {
       setLoading(false);
-      setPageLoading(false);
+      // Give React a moment to process members/categories state updates before hiding global splash
+      setTimeout(() => {
+        setPageLoading(false);
+      }, 100);
     }
   };
 
@@ -136,6 +139,7 @@ const Members = () => {
           selectedTypeId={selectedTypeId}
           onTypeChange={setSelectedTypeId}
           loading={loading}
+          pageLoading={pageLoading}
           viewScope={viewScope}
           setViewScope={setViewScope}
           onAdd={() => { 

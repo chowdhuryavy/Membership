@@ -5,7 +5,7 @@ import {
   Milestone, Edit2, Trash2, ShieldCheck,
   Zap, UserPlus, Snowflake, ChevronDown, 
   CheckCircle, Calendar, Clock, MousePointer, X, Eraser,
-  PackagePlus, History
+  PackagePlus, History, Loader2
 } from 'lucide-react';
 import { Member, MembershipCategory, MemberStatus, MembershipType } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -40,11 +40,12 @@ interface MemberLedgerProps {
   onRenew: (m: Member) => void;
   onDelete: (id: string) => void;
   onRefresh: (isSilent?: boolean) => void;
+  pageLoading?: boolean;
 }
 
 const MemberLedger: React.FC<MemberLedgerProps> = ({ 
   members = [], categories = [], membershipTypes = [], selectedTypeId, onTypeChange, loading, viewScope, setViewScope, 
-  onAdd, onViewDetail, onEdit, onRenew, onDelete, onRefresh
+  onAdd, onViewDetail, onEdit, onRenew, onDelete, onRefresh, pageLoading
 }) => {
   const { user } = useAuth();
   const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [] } = useSettings();
@@ -353,10 +354,11 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
       </div>
 
       <div className="space-y-10">
-        {loading ? (
-            <Card className="p-32 text-center rounded-[3.5rem] border-dashed border-2 bg-white/50">
-              <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest">Loading records...</h3>
-            </Card>
+        {loading || pageLoading ? (
+            <div className="flex flex-col items-center justify-center py-32 text-center bg-white rounded-[3.5rem] border border-dashed border-slate-200">
+               <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
+               <p className="text-sm text-slate-500 font-medium uppercase tracking-widest">Initialising Ledger Interface...</p>
+            </div>
         ) : groupedMembers.length === 0 ? (
             <Card className="p-32 text-center rounded-[3.5rem] border-dashed border-2 bg-white/50">
               <div className="bg-slate-100/50 inline-flex p-8 rounded-full mb-6">

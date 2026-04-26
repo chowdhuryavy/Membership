@@ -5,12 +5,12 @@ import { db } from '../services/mockSupabase';
 import { MembershipCategory, MembershipType } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock, Plus, X, Command, Snowflake, Search, SearchCode, ChevronDown, Zap, ShieldCheck, MousePointer } from 'lucide-react';
+import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock, Plus, X, Command, Snowflake, Search, SearchCode, ChevronDown, Zap, ShieldCheck, MousePointer, ArrowRight, Clock, Loader2 } from 'lucide-react';
 
 // This component manages membership categories/tiers for a facility
 const Categories = () => {
   const { user } = useAuth();
-  const { currentOutlet, hasPermission, formatMoney, checkShortcut } = useSettings();
+  const { currentOutlet, hasPermission, formatMoney, checkShortcut, setPageLoading } = useSettings();
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
   const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string | 'all'>('all');
@@ -22,15 +22,31 @@ const Categories = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     if(currentOutlet) {
         setLoading(true);
-        loadCats();
-        db.getMembershipTypes(currentOutlet.id).then(types => {
-            setMembershipTypes(types);
-            setLoading(false);
-        }).catch(() => setLoading(false));
+        setPageLoading(true);
+        
+        const loadAllData = async () => {
+            try {
+                const [cats, types] = await Promise.all([
+                    db.getCategories(currentOutlet.id),
+                    db.getMembershipTypes(currentOutlet.id)
+                ]);
+                setCategories(cats);
+                setMembershipTypes(types);
+            } finally {
+                setLoading(false);
+                setTimeout(() => {
+                    setPageLoading(false);
+                }, 100);
+            }
+        };
+        
+        loadAllData();
     }
   }, [currentOutlet]);
 
@@ -160,6 +176,17 @@ const Categories = () => {
       }
   };
 
+  const showCategoryHistory = async (categoryId: string) => {
+        if (!currentOutlet) return;
+        const logs = await db.getLogs(currentOutlet.id);
+        const historyEntries = logs
+            .filter(l => l.action === 'CATEGORY_HISTORY_ENTRY')
+            .map(l => JSON.parse(l.details))
+            .filter(entry => entry.previous.id === categoryId);
+        setHistory(historyEntries);
+        setShowHistory(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentOutlet) return;
@@ -249,7 +276,12 @@ const Categories = () => {
         </div>
       </div>
       
-      {filteredCategories.length === 0 ? (
+      {loading ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center bg-white rounded-[2.5rem] border border-dashed border-slate-200">
+              <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
+              <p className="text-sm text-slate-500 font-medium uppercase tracking-widest">Initialising Tier Data...</p>
+          </div>
+      ) : filteredCategories.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center bg-white rounded-[2.5rem] border border-dashed border-slate-200">
               <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
                   <SearchCode className="w-8 h-8 text-slate-300" />
@@ -278,7 +310,10 @@ const Categories = () => {
                               )}
                           </div>
                       </div>
-                      <CardContent className="p-8">
+                      <CardContent 
+                          className="p-8 cursor-pointer hover:bg-slate-50/50 transition-colors"
+                          onClick={() => showCategoryHistory(cat.id)}
+                      >
                           <div className="flex items-start gap-4 mb-6">
                               <div className="p-3 bg-indigo-50 rounded-2xl">
                                   <Layers className="w-6 h-6 text-indigo-600" />
@@ -491,6 +526,66 @@ const Categories = () => {
         confirmText="Confirm Deletion"
         isDestructive={true}
       />
+
+      {showHistory && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <Card className="w-full max-w-2xl rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden animate-in zoom-in-95 duration-300">
+                <CardHeader className="bg-slate-900 text-white p-8 flex flex-row items-center justify-between">
+                    <CardTitle className="text-xl font-black tracking-tight">Tier History</CardTitle>
+                    <button onClick={() => setShowHistory(false)} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </CardHeader>
+                <CardContent className="p-8 max-h-[60vh] overflow-y-auto">
+                                    {history.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                            <Clock className="w-12 h-12 text-slate-200 mb-4" />
+                            <p className="text-slate-500 text-sm font-medium uppercase tracking-widest">No structural changes detected</p>
+                            <p className="text-[10px] text-slate-400 mt-2 italic px-8">System began tracking history on 26 APR 2026. Future rate changes will appear here.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            {history.map((entry, i) => (
+                                <div key={i} className="group relative pl-6 border-l-2 border-indigo-100 hover:border-indigo-600 transition-colors">
+                                    <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-2 border-indigo-600 group-hover:scale-125 transition-transform"></div>
+                                    <div className="flex flex-col mb-4">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Status: Update Verified</p>
+                                            <p className="text-[10px] text-slate-400 font-bold tabular-nums">{new Date(entry.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                                        </div>
+                                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">Configuration Delta</h4>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {Object.keys(entry.updates).map(key => {
+                                            const oldValue = entry.previous[key];
+                                            const newValue = entry.updates[key];
+                                            if (oldValue === newValue) return null;
+                                            
+                                            return (
+                                                <div key={key} className="bg-slate-50/80 p-3 rounded-xl border border-slate-100">
+                                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{key.replace('_', ' ')}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] font-bold text-slate-400 line-through truncate max-w-[80px]">
+                                                            {key === 'base_rate' ? formatMoney(oldValue) : String(oldValue)}
+                                                        </span>
+                                                        <ArrowRight className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
+                                                        <span className="text-[11px] font-black text-indigo-600">
+                                                            {key === 'base_rate' ? formatMoney(newValue) : String(newValue)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+      )}
 
       {showTypeSelector && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">

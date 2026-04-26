@@ -305,7 +305,9 @@ const Reports = () => {
       toast.error('Failed to load report data');
     } finally {
       setLoading(false);
-      setPageLoading(false);
+      setTimeout(() => {
+        setPageLoading(false);
+      }, 100);
     }
   };
 

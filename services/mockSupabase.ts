@@ -571,9 +571,13 @@ class DatabaseService {
     return [];
   }
 
-  async getAllStaffLeaves(): Promise<StaffLeave[]> {
+  async getAllStaffLeaves(startDate?: string): Promise<StaffLeave[]> {
     if (this.isSupabase()) {
-      const { data } = await supabase.from('staff_leaves').select('*');
+      let query = supabase.from('staff_leaves').select('*');
+      if (startDate) {
+          query = query.gte('end_date', startDate); // Only current or future leaves (or recent)
+      }
+      const { data } = await query;
       return (data || []) as StaffLeave[];
     }
     return [];
@@ -844,11 +848,14 @@ class DatabaseService {
     }
   }
 
-  async getFreezes(memberId?: string): Promise<Freeze[]> {
+  async getFreezes(memberId?: string, startDate?: string): Promise<Freeze[]> {
     if (this.isSupabase()) {
       let query = supabase.from('freezes').select('*');
       if (memberId) query = query.eq('member_id', memberId);
-      const { data } = await query;
+      if (startDate) {
+          query = query.gte('end_date', startDate);
+      }
+      const { data } = await query.limit(10000); // Sanity limit
       return (data || []) as Freeze[];
     }
     return [];
@@ -1385,10 +1392,24 @@ class DatabaseService {
 
   async updateCategory(id: string, updates: Partial<MembershipCategory>) {
     if (this.isSupabase()) {
+        const { data: previous, error: fetchError } = await supabase.from('membership_categories').select('*').eq('id', id).single();
+        if (fetchError) throw fetchError;
+        
         const { error } = await supabase.from('membership_categories').update(updates).eq('id', id);
         if (error) throw error;
+        
         const changedFields = Object.keys(updates).filter(k => updates[k] !== undefined && updates[k] !== null).join(', ');
+        
+        // Log the structural change
         await this.logAction('UPDATE_CATEGORY', `Updated membership tier: ${id}. Modified fields: [${changedFields}]`);
+        
+        // Log the historical snapshot
+        const historyEntry = {
+            previous,
+            updates,
+            timestamp: new Date().toISOString()
+        };
+        await this.logAction('CATEGORY_HISTORY_ENTRY', JSON.stringify(historyEntry));
     }
   }
 
@@ -1780,7 +1801,7 @@ class DatabaseService {
     }
   }
 
-  async getSales(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<Sale[]> {
+  async getSales(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[], startDate?: string): Promise<Sale[]> {
     if (this.isSupabase()) {
         let query = supabase.from('sales').select('*');
         if (isPropertyScope) {
@@ -1792,7 +1813,11 @@ class DatabaseService {
         }
         else query = query.eq('outlet_id', scopeId);
 
-        const { data, error } = await query.order('created_at', { ascending: false });
+        if (startDate) {
+            query = query.gte('created_at', startDate);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false }).limit(startDate ? 10000 : 2000); // Safety limit
         if (error) throw error;
         return (data || []) as Sale[] | any;
     }
@@ -2150,7 +2175,7 @@ class DatabaseService {
     }
   }
 
-  async getMassageBookings(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<MassageBooking[]> {
+  async getMassageBookings(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[], startDate?: string): Promise<MassageBooking[]> {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         let query = supabase.from('massage_bookings').select('*');
@@ -2163,7 +2188,11 @@ class DatabaseService {
         }
         else query = query.eq('outlet_id', scopeId);
 
-        const { data, error } = await query.order('date', { ascending: false });
+        if (startDate) {
+            query = query.gte('date', startDate);
+        }
+
+        const { data, error } = await query.order('date', { ascending: false }).limit(startDate ? 10000 : 2000);
         if (error) throw error;
         return (data || []) as MassageBooking[];
       }, []);

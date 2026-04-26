@@ -91,12 +91,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       membersQuery = membersQuery.eq('membership_type_id', selectedMembershipTypeId);
     }
 
-    const [membersRes, freezesRes, categoriesRes, typesRes] = await Promise.all([
-      membersQuery,
-      supabase.from('freezes').select('*'),
-      supabase.from('membership_categories').select('id, name, duration_months').in('outlet_id', outletIds),
-      supabase.from('membership_types').select('id, name').in('outlet_id', outletIds)
-    ]);
+    const membersRes = await membersQuery;
 
     if (membersRes.error) {
       console.error('Error fetching members:', membersRes.error);
@@ -104,6 +99,23 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     }
 
     const members = membersRes.data || [];
+    const memberIds = members.map((m: any) => m.id);
+    
+    // Fetch freezes ONLY for the members we are reporting on
+    let freezesQuery = supabase.from('freezes').select('*');
+    if (memberIds.length > 0) {
+        freezesQuery = freezesQuery.in('member_id', memberIds);
+    } else {
+        // No members, no freezes needed
+        freezesQuery = supabase.from('freezes').select('*').limit(0);
+    }
+
+    const [freezesRes, categoriesRes, typesRes] = await Promise.all([
+      freezesQuery,
+      supabase.from('membership_categories').select('id, name, duration_months').in('outlet_id', outletIds),
+      supabase.from('membership_types').select('id, name').in('outlet_id', outletIds)
+    ]);
+
     const freezes = freezesRes.data || [];
     const categories = categoriesRes.data || [];
     const types = typesRes.data || [];
@@ -128,7 +140,6 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const mEnd = safeParseDate(m.current_end_date);
         
         const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
-
         const prevAccrual = mStart ? RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, subDays(start, 1)) : 0;
         const periodRev = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, start, subDays(end, 1));
         

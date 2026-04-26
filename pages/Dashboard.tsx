@@ -31,7 +31,7 @@ import {
   Layers
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
-import { Member, MassageBooking, Sale, Staff, MemberStatus, InventoryItem, MassageRoom } from '../types';
+import { Member, MassageBooking, Sale, Staff, MemberStatus, InventoryItem, MassageRoom, Freeze, StaffLeave, MembershipType } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
 // Fix: Added isSameDay to date-fns imports to resolve compiler error on line 185
 import { format, endOfMonth, differenceInCalendarDays, isSameMonth, startOfMonth, subMonths, isAfter, startOfDay, isWithinInterval, parse, isSameDay } from 'date-fns';
@@ -255,17 +255,39 @@ const Dashboard = () => {
         }
 
         // Fetch data with scope awareness
-        const [members, freezes, bookings, sales, staff, leaves, inventory, rooms, mTypes] = await Promise.all([
+        const sixMonthsAgo = subMonths(viewDate, 6);
+        const dataStartDate = format(sixMonthsAgo, 'yyyy-MM-01');
+
+        const results = await Promise.allSettled([
           db.getMembers(scopeId, isProperty, limitToIds),
-          db.getFreezes(),
-          db.getMassageBookings(scopeId, isProperty, limitToIds),
-          db.getSales(scopeId, isProperty, limitToIds),
+          db.getFreezes(undefined, dataStartDate),
+          db.getMassageBookings(scopeId, isProperty, limitToIds, dataStartDate),
+          db.getSales(scopeId, isProperty, limitToIds, dataStartDate),
           db.getStaff(scopeId, isProperty, limitToIds),
-          db.getAllStaffLeaves(),
+          db.getAllStaffLeaves(dataStartDate),
           db.getInventory(scopeId, isProperty, limitToIds),
           db.getMassageRooms(currentOutlet.id, currentProperty.id),
           db.getMembershipTypes(scopeId, isProperty, limitToIds)
         ]);
+        
+        const errors = results.filter(r => r.status === 'rejected');
+        if (errors.length > 0) {
+            console.error("Dashboard Intelligence Partial Failure:", errors);
+            // If critical data failed, throw to main catch
+            if (results[0].status === 'rejected' || results[3].status === 'rejected') {
+                throw (errors[0] as PromiseRejectedResult).reason;
+            }
+        }
+
+        const members = results[0].status === 'fulfilled' ? results[0].value as Member[] : [];
+        const freezes = results[1].status === 'fulfilled' ? results[1].value as Freeze[] : [];
+        const bookings = results[2].status === 'fulfilled' ? results[2].value as MassageBooking[] : [];
+        const sales = results[3].status === 'fulfilled' ? results[3].value as Sale[] : [];
+        const staff = results[4].status === 'fulfilled' ? results[4].value as Staff[] : [];
+        const leaves = results[5].status === 'fulfilled' ? results[5].value as StaffLeave[] : [];
+        const inventory = results[6].status === 'fulfilled' ? results[6].value as InventoryItem[] : [];
+        const rooms = results[7].status === 'fulfilled' ? results[7].value as MassageRoom[] : [];
+        const mTypes = results[8].status === 'fulfilled' ? results[8].value as MembershipType[] : [];
         
         setMembershipTypes(mTypes);
 
@@ -625,7 +647,9 @@ const Dashboard = () => {
         console.error("Dashboard Intelligence Error:", e);
     } finally {
         setLoading(false);
-        setPageLoading(false);
+        setTimeout(() => {
+            setPageLoading(false);
+        }, 100);
     }
   };
 
