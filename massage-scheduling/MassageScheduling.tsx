@@ -73,7 +73,7 @@ import {
   InventoryItem,
   MassageRoom
 } from '../types';
-import { format, addDays } from 'date-fns';
+import { format, addDays, subDays } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import BookingForm from './BookingForm';
@@ -439,7 +439,7 @@ const setCachedData = (key: string, data: any) => {
 const MassageScheduling = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [] } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [], setPageLoading } = useSettings();
   const [activeTab, setActiveTab] = useState<'bookings' | 'treatments' | 'therapists' | 'guests'>('bookings');
   const [treatmentType, setTreatmentType] = useState<'Massage' | 'Personal Training'>('Massage');
   const [viewDate, setViewDate] = useState(new Date());
@@ -747,6 +747,7 @@ NOTIFY pgrst, 'reload schema';`}
   const loadData = async (retryCount = 0) => {
     if (!currentOutlet || !currentProperty) return;
     setLoading(true);
+    setPageLoading(true);
     setIsTableMissing(false);
     setSchemaError(null);
     
@@ -764,7 +765,10 @@ NOTIFY pgrst, 'reload schema';`}
         setMassageRooms(cached.rooms || []);
         setMassageTypes(cached.massageTypes || []);
         setMembers(cached.members || []);
-        setLoading(false); // We have cached data, so we can stop showing "loading" state if any
+        setTimeout(() => {
+            setLoading(false);
+            setPageLoading(false);
+        }, 100);
     }
 
     try {
@@ -774,7 +778,8 @@ NOTIFY pgrst, 'reload schema';`}
       }
       
       // Fetch data in parallel but update state as they complete for faster perceived performance
-      const fetchBookings = db.getMassageBookings(scopeId, isProperty, limitToIds).then(data => {
+      const dataStartDate = format(subDays(viewDate, 3), 'yyyy-MM-dd'); 
+      const fetchBookings = db.getMassageBookings(scopeId, isProperty, limitToIds, dataStartDate).then(data => {
           setBookings(data || []);
           return data;
       });
@@ -861,6 +866,9 @@ NOTIFY pgrst, 'reload schema';`}
 
     } finally {
       setLoading(false);
+      setTimeout(() => {
+          setPageLoading(false);
+      }, 100);
     }
   };
 
@@ -1110,11 +1118,6 @@ NOTIFY pgrst, 'reload schema';`}
                   className="absolute inset-0 opacity-0 cursor-pointer z-20"
                 />
                 <div className="flex flex-col items-center min-w-[180px] group-hover:bg-slate-50 p-2 rounded-xl transition-colors relative">
-                  {loading && (
-                    <div className="absolute -right-8 top-1/2 -translate-y-1/2">
-                      <RefreshCcw className="w-4 h-4 text-indigo-600 animate-spin" />
-                    </div>
-                  )}
                   <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
                     {format(viewDate, 'EEEE')} <CalendarDays className="w-3 h-3" />
                   </span>

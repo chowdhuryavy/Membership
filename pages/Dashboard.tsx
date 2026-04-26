@@ -258,8 +258,9 @@ const Dashboard = () => {
         const sixMonthsAgo = subMonths(viewDate, 6);
         const dataStartDate = format(sixMonthsAgo, 'yyyy-MM-01');
 
+        const memberColumns = 'id, status, start_date, current_end_date, created_at, membership_type_id, daily_rate, net_amount, outlet_id, guest_name, membership_number';
         const results = await Promise.allSettled([
-          db.getMembers(scopeId, isProperty, limitToIds),
+          db.getMembers(scopeId, isProperty, limitToIds, memberColumns),
           db.getFreezes(undefined, dataStartDate),
           db.getMassageBookings(scopeId, isProperty, limitToIds, dataStartDate),
           db.getSales(scopeId, isProperty, limitToIds, dataStartDate),

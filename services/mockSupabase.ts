@@ -663,10 +663,10 @@ class DatabaseService {
     }
   }
 
-  async getMembers(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[]): Promise<Member[]> {
+  async getMembers(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[], selectColumns: string = '*'): Promise<Member[]> {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
-        let query = supabase.from('members').select('*');
+        let query = supabase.from('members').select(selectColumns);
         if (scopeId) {
             if (isProperty) {
                 if (limitToOutletIds && limitToOutletIds.length > 0) {
@@ -684,7 +684,7 @@ class DatabaseService {
         const { data, error } = await query;
         if (error) throw error;
         
-        const membersList = (data || []) as Member[];
+        const membersList = (data || []) as any as Member[];
 
         // Lazy background update for stale statuses (fire and forget)
         setTimeout(async () => {
@@ -1670,6 +1670,34 @@ class DatabaseService {
       if (outlet_id) query = query.or(`outlet_id.eq.${outlet_id},outlet_id.is.null`);
       const { data } = await query;
       return (data || []) as SystemLog[];
+    }
+    return [];
+  }
+
+  async getCategoryHistory(categoryId: string, outletId: string): Promise<any[]> {
+    if (this.isSupabase()) {
+      const { data, error } = await supabase
+        .from('system_logs')
+        .select('*')
+        .eq('action', 'CATEGORY_HISTORY_ENTRY')
+        .or(`outlet_id.eq.${outletId},outlet_id.is.null`)
+        .order('timestamp', { ascending: false })
+        .limit(100); // 100 recent changes should be enough for a single tier
+      
+      if (error) {
+        console.error('Error fetching category history:', error);
+        return [];
+      }
+
+      return (data || [])
+        .map(l => {
+          try {
+            return JSON.parse(l.details);
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter(entry => entry && entry.previous && entry.previous.id === categoryId);
     }
     return [];
   }

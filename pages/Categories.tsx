@@ -23,6 +23,7 @@ const Categories = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
@@ -178,13 +179,14 @@ const Categories = () => {
 
   const showCategoryHistory = async (categoryId: string) => {
         if (!currentOutlet) return;
-        const logs = await db.getLogs(currentOutlet.id);
-        const historyEntries = logs
-            .filter(l => l.action === 'CATEGORY_HISTORY_ENTRY')
-            .map(l => JSON.parse(l.details))
-            .filter(entry => entry.previous.id === categoryId);
-        setHistory(historyEntries);
+        setHistoryLoading(true);
         setShowHistory(true);
+        try {
+            const historyEntries = await db.getCategoryHistory(categoryId, currentOutlet.id);
+            setHistory(historyEntries);
+        } finally {
+            setHistoryLoading(false);
+        }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -537,7 +539,12 @@ const Categories = () => {
                     </button>
                 </CardHeader>
                 <CardContent className="p-8 max-h-[60vh] overflow-y-auto">
-                                    {history.length === 0 ? (
+                    {historyLoading ? (
+                        <div className="flex flex-col items-center justify-center py-24 text-center">
+                            <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
+                            <p className="text-sm text-slate-500 font-medium uppercase tracking-widest">Retrieving Tier History...</p>
+                        </div>
+                    ) : history.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 text-center">
                             <Clock className="w-12 h-12 text-slate-200 mb-4" />
                             <p className="text-slate-500 text-sm font-medium uppercase tracking-widest">No structural changes detected</p>
