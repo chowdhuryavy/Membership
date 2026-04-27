@@ -43,32 +43,24 @@
     <link rel="stylesheet" href="/index.css" />
     
     <!-- Favicon Tags -->
-    <link rel="icon" type="image/png" sizes="32x32" href="https://i.imgur.com/oZVRrvo.png?v=3" />
-    <link rel="icon" type="image/png" sizes="16x16" href="https://i.imgur.com/oZVRrvo.png?v=3" />
-    <link rel="apple-touch-icon" sizes="180x180" href="https://i.imgur.com/oZVRrvo.png?v=3" />
-    <link rel="icon" sizes="192x192" href="https://i.imgur.com/oZVRrvo.png?v=3" />
-    <link rel="mask-icon" href="https://i.imgur.com/oZVRrvo.png?v=3" color="#4f46e5" />
+    <link rel="icon" type="image/png" sizes="32x32" href="https://i.imgur.com/oZVRrvo.png?v=4" />
+    <link rel="icon" type="image/png" sizes="16x16" href="https://i.imgur.com/oZVRrvo.png?v=4" />
+    <link rel="apple-touch-icon" href="https://i.imgur.com/oZVRrvo.png?v=4" />
+    <link rel="apple-touch-icon" sizes="152x152" href="https://i.imgur.com/oZVRrvo.png?v=4" />
+    <link rel="apple-touch-icon" sizes="180x180" href="https://i.imgur.com/oZVRrvo.png?v=4" />
+    <link rel="apple-touch-icon" sizes="167x167" href="https://i.imgur.com/oZVRrvo.png?v=4" />
+    <link rel="icon" sizes="192x192" href="https://i.imgur.com/oZVRrvo.png?v=4" />
     
-    <!-- Apple Mobile Web App Metadata -->
+    <meta name="theme-color" content="#4f46e5">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Health Club">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="format-detection" content="telephone=no">
-    
-    <!-- Web App Manifest -->
-    <link rel="manifest" href="/manifest.json" />
-    
-    <!-- Android Support -->
-    <meta name="mobile-web-app-capable" content="yes">
     <meta name="application-name" content="Health Club">
     
-    <!-- iOS Support -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Health Club">
+    <!-- Web App Manifest -->
+    <link rel="manifest" id="pwa-manifest" href="/manifest.json" crossorigin="use-credentials" />
     
-    <meta name="theme-color" content="#4f46e5" />
     
     <script>
       // Handle clean URL redirect for staff-login
@@ -78,7 +70,7 @@
       
       if (isStaffPath || isStaffPortalParam) {
         // Swap manifest for Staff Portal (Critical for iPhone)
-        const manifestLink = document.querySelector('link[rel="manifest"]');
+        const manifestLink = document.getElementById('pwa-manifest');
         if (manifestLink) {
           manifestLink.setAttribute('href', '/manifest-staff.json');
         }
