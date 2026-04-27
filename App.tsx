@@ -554,7 +554,7 @@ const DynamicHead = () => {
             link.rel = rel;
             document.head.appendChild(link);
           }
-          link.href = `${settings.logo_url}?v=pwa-v4`;
+          link.href = `${settings.logo_url}?v=pwa-v6`;
           if (extraProps) {
             Object.entries(extraProps).forEach(([key, val]) => link.setAttribute(key, val));
           }

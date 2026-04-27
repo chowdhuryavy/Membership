@@ -43,13 +43,14 @@
     <link rel="stylesheet" href="/index.css" />
     
     <!-- Favicon Tags -->
-    <link rel="icon" type="image/png" sizes="32x32" href="https://i.imgur.com/oZVRrvo.png?v=4" />
-    <link rel="icon" type="image/png" sizes="16x16" href="https://i.imgur.com/oZVRrvo.png?v=4" />
-    <link rel="apple-touch-icon" href="https://i.imgur.com/oZVRrvo.png?v=4" />
-    <link rel="apple-touch-icon" sizes="152x152" href="https://i.imgur.com/oZVRrvo.png?v=4" />
-    <link rel="apple-touch-icon" sizes="180x180" href="https://i.imgur.com/oZVRrvo.png?v=4" />
-    <link rel="apple-touch-icon" sizes="167x167" href="https://i.imgur.com/oZVRrvo.png?v=4" />
-    <link rel="icon" sizes="192x192" href="https://i.imgur.com/oZVRrvo.png?v=4" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=6" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=6" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=6" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=6" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon.png?v=6" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=6" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon.png?v=6" />
+    <link rel="icon" sizes="192x192" href="/icon.png?v=6" />
     
     <meta name="theme-color" content="#4f46e5">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -59,7 +60,7 @@
     <meta name="application-name" content="Health Club">
     
     <!-- Web App Manifest -->
-    <link rel="manifest" id="pwa-manifest" href="/manifest.json" crossorigin="use-credentials" />
+    <link rel="manifest" id="pwa-manifest" href="/manifest.json?v=6" />
     
     
     <script>
@@ -72,7 +73,7 @@
         // Swap manifest for Staff Portal (Critical for iPhone)
         const manifestLink = document.getElementById('pwa-manifest');
         if (manifestLink) {
-          manifestLink.setAttribute('href', '/manifest-staff.json');
+          manifestLink.setAttribute('href', '/manifest-staff.json?v=6');
         }
         
         // Only redirect if we are not already on the hash route
