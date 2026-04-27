@@ -546,7 +546,7 @@ const DynamicHead = () => {
       if (settings.name) {
         document.title = `${settings.name} | Console`;
       }
-      if (settings.logo_url) {
+      if (settings.logo_url && settings.logo_url.startsWith('http')) {
         const setLink = (rel: string, extraProps?: Record<string, string>) => {
           let link = document.querySelector(`link[rel~='${rel}']`) as HTMLLinkElement;
           if (!link) {
@@ -554,7 +554,7 @@ const DynamicHead = () => {
             link.rel = rel;
             document.head.appendChild(link);
           }
-          link.href = settings.logo_url;
+          link.href = `${settings.logo_url}?v=pwa`;
           if (extraProps) {
             Object.entries(extraProps).forEach(([key, val]) => link.setAttribute(key, val));
           }
