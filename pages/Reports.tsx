@@ -889,8 +889,8 @@ const Reports = () => {
             </table>
             {isIncentiveReport && (
                 <div className="mt-12 space-y-12">
-                    {/* Primary Staff Incentive Summary - Hide for Referral report as requested or if empty */}
-                    {incentiveDept !== 'Referral' && (
+                    {/* Primary Staff Incentive Summary - Show if there are staff totals or if not a referral report */}
+                    {(incentiveDept !== 'Referral' || Object.values(totals.staffTotals).some(v => Number(v) > 0)) && (
                         <div className="w-full max-w-sm">
                             <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
                                  <Award className="w-4 h-4 text-indigo-600" /> Staff Incentive Summary

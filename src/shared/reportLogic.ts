@@ -838,6 +838,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         }
 
           const displaySalesRepId = [m.sales_rep_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+          const cleanRefForMem = (m.referrer_name || '').replace(/^Referral:\s*/i, '').trim() || 'N/A';
           rows.push({
             id: m.id,
             sl_no: sl++,
@@ -847,19 +848,20 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             item_name: cat?.name || m.category_id || 'Unknown Tier',
             therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (rawStaffList.find(s => s.id === displaySalesRepId)?.name || 'N/A'),
             outlet_name: outletMap[m.outlet_id] || 'Unknown',
-          actual_price: actualPrice,
-          discount_percent: discPercent,
-          discount_amount: discountAmt,
-          net_revenue: netRev,
-          inc_total: baseInc,
-          inc_discount_percent: discPercent,
-          inc_discount_val: incDiscVal,
-          inc_net: incNet,
-          remarks: remarks,
-          check_no: m.check_no || '',
-          duration: cat?.name || '',
-          staff_splits: staffSplits
-        });
+            actual_price: actualPrice,
+            discount_percent: discPercent,
+            discount_amount: discountAmt,
+            net_revenue: netRev,
+            inc_total: baseInc,
+            inc_discount_percent: discPercent,
+            inc_discount_val: incDiscVal,
+            inc_net: incNet,
+            remarks: remarks,
+            check_no: m.check_no || '',
+            duration: cat?.name || '',
+            staff_splits: staffSplits,
+            referrer_name: cleanRefForMem
+          });
       });
     } else if (dept === 'Sale') {
       const sales = (salesRes.data || []).filter(s => s.category !== 'Personal Training');
@@ -982,10 +984,16 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           
           remarks = `Referral Payee: ${rule.referral_payee || 'Staff'}`;
 
-          if (rule.referral_payee === 'Referrer') {
+          const isBoth = rule.referral_payee === 'Both';
+          const isReferrer = rule.referral_payee === 'Referrer' || isBoth;
+          const isStaff = rule.referral_payee === 'Staff' || isBoth || !rule.referral_payee;
+
+          if (isReferrer) {
             referrerNet = incNet;
             referrerTotals[cleanReferrerName] = (referrerTotals[cleanReferrerName] || 0) + incNet;
-          } else {
+          }
+          
+          if (isStaff) {
             // Payee is 'Staff' (Sales Staff)
             const possibleStaffId = m.sales_rep_id;
             const matchedStaff = possibleStaffId ? rawStaffList.find(s => s.id === possibleStaffId) : rawStaffList.find(s => s.name.toLowerCase() === cleanReferrerName.toLowerCase());
@@ -1040,7 +1048,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           guest_name: m.guest_name,
           membership_no: m.membership_number || m.membership_no || 'N/A', 
           item_name: cat?.name || m.category_id || 'Tier Info',
-          therapist_name: rule?.referral_payee === 'Referrer' ? cleanReferrerName : displayStaffName,
+          therapist_name: cleanReferrerName,
           outlet_name: outletMap[m.outlet_id] || 'Unknown',
           actual_price: actualPrice,
           discount_percent: discPercent,
@@ -1066,9 +1074,12 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const totalIncentive = rows.reduce((sum, r) => sum + r.inc_net, 0);
 
     // Filter staffList to only include relevant staff for this report
-    let finalStaffList = dept === 'Referral' ? [] : staffList.filter(s => {
+    let finalStaffList = staffList.filter(s => {
       const hasEarned = rows.some(r => r.staff_splits && r.staff_splits[s.id] > 0);
       if (hasEarned) return true;
+      
+      // For Referral report, only show staff who earned something in this period
+      if (dept === 'Referral') return false;
       
       // If no incentives earned, show all active staff in the department/role
       const role = (s.role || '').toLowerCase();
