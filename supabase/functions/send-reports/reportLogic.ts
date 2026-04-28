@@ -727,6 +727,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         });
       });
     } else if (dept === 'Referral') {
+      const referrerTotals: Record<string, number> = {};
       members.filter(m => m.referrer_name && m.referrer_name.trim() !== '').forEach(m => {
         // Match by category/tier (Primary) or Type (Secondary)
         const rule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.membership_type_id);
@@ -742,19 +743,28 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const incNet = baseInc - incDiscVal;
 
         const staffSplits: Record<string, number> = {};
-        if (rule.distribution_type === 'Shared') {
-           const available = staffList.filter(s => {
-            const sOutlets = getStaffOutlets(s);
-            return sOutlets.includes(m.outlet_id) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date);
-          });
-          if (available.length > 0) {
-            const share = incNet / available.length;
-            available.forEach(s => staffSplits[s.id] = share);
-          }
-        } else if (m.sales_rep_id) {
-          const staff = staffList.find(s => s.id === m.sales_rep_id);
-          if (staff && staff.is_eligible_for_incentives !== false) {
-            staffSplits[m.sales_rep_id] = incNet;
+        let referrerNet = 0;
+
+        if (rule.referral_payee === 'Referrer') {
+          referrerNet = incNet;
+          const refName = m.referrer_name.trim();
+          referrerTotals[refName] = (referrerTotals[refName] || 0) + incNet;
+        } else {
+          // Default to Staff
+          if (rule.distribution_type === 'Shared') {
+            const available = staffList.filter(s => {
+              const sOutlets = getStaffOutlets(s);
+              return sOutlets.includes(m.outlet_id) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date);
+            });
+            if (available.length > 0) {
+              const share = incNet / available.length;
+              available.forEach(s => staffSplits[s.id] = share);
+            }
+          } else if (m.sales_rep_id) {
+            const staff = staffList.find(s => s.id === m.sales_rep_id);
+            if (staff && staff.is_eligible_for_incentives !== false) {
+              staffSplits[m.sales_rep_id] = incNet;
+            }
           }
         }
 
@@ -762,9 +772,9 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           id: `ref-${m.id}`,
           sl_no: sl++,
           date: format(new Date(m.start_date), 'dd-MMM-yy'),
-          guest_name: `${m.guest_name} (Ref: ${m.referrer_name})`,
-          item_name: `Referral - Tier match`,
-          therapist_name: rule.distribution_type === 'Shared' ? 'Shared' : (staffList.find(s => s.id === m.sales_rep_id)?.name || 'N/A'),
+          guest_name: `${m.guest_name}`,
+          item_name: `Referral: ${m.referrer_name}`,
+          therapist_name: rule.referral_payee === 'Referrer' ? `Referrer: ${m.referrer_name}` : (rule.distribution_type === 'Shared' ? 'Shared Pool' : (staffList.find(s => s.id === m.sales_rep_id)?.name || 'N/A')),
           actual_price: actualPrice,
           discount_percent: discPercent,
           discount_amount: discountAmt,
@@ -773,8 +783,10 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           inc_discount_percent: discPercent,
           inc_discount_val: incDiscVal,
           inc_net: incNet,
-          remarks: `Referral Incentive`,
-          staff_splits: staffSplits
+          remarks: `Referral Payee: ${rule.referral_payee || 'Staff'}`,
+          staff_splits: staffSplits,
+          referrer_name: m.referrer_name,
+          referrer_amount: referrerNet
         });
       });
     }
@@ -786,7 +798,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       summary: {
         totalIncentive,
         count: rows.length,
-        staffList: staffList.filter((s: any) => s.is_active && s.is_eligible_for_incentives !== false)
+        staffList: staffList.filter((s: any) => s.is_active && s.is_eligible_for_incentives !== false),
+        referrerSummaries: Object.entries(referrerTotals).map(([name, amount], idx) => ({ sl_no: idx + 1, name, amount }))
       }
     };
   }
@@ -1490,6 +1503,37 @@ export const generateReportPDF = (options: PDFOptions) => {
         },
         margin: { left: margin, right: margin }
       });
+
+      // Add Referrer Rewards summary table if exists
+      if (data.summary.referrerSummaries && data.summary.referrerSummaries.length > 0) {
+        const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
+        
+        callAutoTable(doc, {
+          startY: finalY + 10,
+          head: [['SL.NO.', 'REFERRAL NAME', 'INCENTIVES']],
+          body: data.summary.referrerSummaries.map((s: any) => [
+            s.sl_no,
+            s.name.toUpperCase(),
+            formatCurrency(s.amount)
+          ]),
+          theme: 'grid',
+          headStyles: { 
+            fillColor: [79, 70, 229], // indigo-600
+            textColor: [255, 255, 255], 
+            fontStyle: 'bold', 
+            fontSize: 7, 
+            halign: 'center',
+            font: 'helvetica'
+          },
+          styles: { fontSize: 7, cellPadding: 2, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+          columnStyles: {
+            0: { halign: 'center', cellWidth: 15 },
+            1: { fontStyle: 'bold', cellWidth: 100 },
+            2: { halign: 'right', cellWidth: 30 }
+          },
+          margin: { left: margin }
+        });
+      }
     }
   } else if (reportType === 'monthly_revenue') {
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -1748,9 +1792,9 @@ export function findBestRule(rules: any[], department: string, itemId: string, p
   const exact = rules.find(r => r.applies_to === department && r.target_id === itemId);
   if (exact) return exact;
 
-  // 2. Exact item match (Secondary ID - e.g. Membership Type ID)
+  // 2. Exact item match (Secondary ID - e.g. Membership Type ID with 'type:' prefix)
   if (secondaryId) {
-    const secondary = rules.find(r => r.applies_to === department && r.target_id === secondaryId);
+    const secondary = rules.find(r => r.applies_to === department && (r.target_id === secondaryId || r.target_id === `type:${secondaryId}`));
     if (secondary) return secondary;
   }
 

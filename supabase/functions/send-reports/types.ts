@@ -38,7 +38,7 @@ export interface ReportRecipient {
   report_type: 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'expiring_memberships' | 'massage_room_revenue' | 'daily_revenue' | 'monthly_summary' | 'monthly_revenue';
   send_time: string; // HH:mm format
   report_date_type?: 'today' | 'yesterday'; // For daily reports
-  incentive_dept?: 'Massage' | 'Membership' | 'Personal Training';
+  incentive_dept?: 'Massage' | 'Membership' | 'Personal Training' | 'Sale' | 'Referral';
   selected_membership_type_id?: string | 'all';
   revenue_mode?: 'cash' | 'accrual';
   is_active: boolean;
@@ -348,7 +348,7 @@ export interface IncentiveRule {
   name: string;
   scope: 'Global' | 'Property' | 'Outlet';
   scope_id: string | 'global'; 
-  applies_to: 'Membership' | 'Massage' | 'Sale' | 'Personal Training';
+  applies_to: 'Membership' | 'Massage' | 'Sale' | 'Personal Training' | 'Referral';
   target_id: string | 'all'; 
   distribution_type: 'Individual' | 'Shared'; 
   calculation_type: 'Percentage' | 'Fixed';
@@ -358,5 +358,7 @@ export interface IncentiveRule {
   min_duration_minutes?: number;
   max_duration_minutes?: number;
   apply_discount_percentage: boolean; 
+  disable_shared_incentive?: boolean;
+  referral_payee?: 'Staff' | 'Referrer';
   is_active: boolean;
 }

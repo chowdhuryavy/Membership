@@ -426,5 +426,6 @@ export interface IncentiveRule {
   max_duration_minutes?: number;
   apply_discount_percentage: boolean; 
   disable_shared_incentive?: boolean;
+  referral_payee?: 'Staff' | 'Referrer';
   is_active: boolean;
 }

@@ -1379,7 +1379,7 @@ class DatabaseService {
       if (error) throw error;
       return (data || []) as MembershipCategory[];
     }
-    return [];
+    return JSON.parse(localStorage.getItem('membership_categories') || '[]');
   }
 
   async addCategory(cat: Omit<MembershipCategory, 'id'>) {

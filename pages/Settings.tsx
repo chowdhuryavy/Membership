@@ -390,7 +390,7 @@ const SettingsPage = () => {
   const [roleForm, setRoleForm] = useState<Omit<Role, 'id'>>({ name: '', permissions: [] });
   const [currencyForm, setCurrencyForm] = useState<Omit<Currency, 'id'>>({ code: '', symbol: '', rate: 1, is_default: false, property_id: currentProperty?.id });
   const [incentiveForm, setIncentiveForm] = useState<Omit<IncentiveRule, 'id'>>({
-      name: '', scope: 'Global', scope_id: 'global', applies_to: 'Massage', target_id: 'all', distribution_type: 'Individual', calculation_type: 'Percentage', value: 0, min_price: 0, max_price: 99999, min_duration_minutes: 0, max_duration_minutes: 999, apply_discount_percentage: true, disable_shared_incentive: false, is_active: true
+      name: '', scope: 'Global', scope_id: 'global', applies_to: 'Massage', target_id: 'all', distribution_type: 'Individual', calculation_type: 'Percentage', referral_payee: 'Staff', value: 0, min_price: 0, max_price: 99999, min_duration_minutes: 0, max_duration_minutes: 999, apply_discount_percentage: true, disable_shared_incentive: false, is_active: true
   });
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1406,7 +1406,37 @@ const SettingsPage = () => {
                                               <tbody className="divide-y divide-slate-100">
                                                   {groupedIncentives[activeProperty][activeOutlet][activeType].map(rule => (
                                                       <tr key={rule.id} className="hover:bg-indigo-50/20 transition-all group">
-                                                          <td className="px-4 py-3 pl-8"><div className="font-black text-slate-900 uppercase text-sm">{rule.name}</div><p className="text-[10px] font-bold text-slate-400 uppercase">{rule.target_id === 'all' ? 'Catch-all' : (rule.applies_to === 'Membership' ? (rule.target_id.startsWith('type:') ? (membershipTypes.find(t => t.id === rule.target_id.replace('type:', ''))?.name + ' (Type)') : (allCategories.find(c => c.id === rule.target_id)?.name || 'Specific Tier')) : (rule.applies_to === 'Massage' ? (allMassageTypes.find(m => m.id === rule.target_id)?.name || 'Specific Treatment') : (rule.applies_to === 'Personal Training' ? (allInventory.find(i => i.id === rule.target_id)?.name || 'Specific PT Package') : 'Specific Asset')))} <span className="ml-2 text-indigo-600 font-black">[{(rule.distribution_type || 'Individual').toUpperCase()}]</span></p></td>
+                                                          <td className="px-10 py-5">
+                                                              <div className="font-black text-slate-900 uppercase text-sm tracking-tight">{rule.name}</div>
+                                                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 flex items-center flex-wrap gap-2">
+                                                                  {rule.applies_to === 'Referral' ? 
+                                                                      (rule.target_id === 'all' ? 'All Referrals' : 
+                                                                          (rule.target_id.startsWith('type:') ? 
+                                                                              (membershipTypes.find(t => t.id === rule.target_id.replace('type:', ''))?.name + ' (Type)') : 
+                                                                              (allCategories.find(c => c.id === rule.target_id)?.name || 'Specific Tier'))) : 
+                                                                      (rule.target_id === 'all' ? 'Catch-all' : 
+                                                                          (rule.applies_to === 'Membership' ? 
+                                                                              (rule.target_id.startsWith('type:') ? 
+                                                                                  (membershipTypes.find(t => t.id === rule.target_id.replace('type:', ''))?.name + ' (Type)') : 
+                                                                                  (allCategories.find(c => c.id === rule.target_id)?.name || 'Specific Tier')) : 
+                                                                              (rule.applies_to === 'Massage' ? 
+                                                                                  (allMassageTypes.find(m => m.id === rule.target_id)?.name || 'Specific Treatment') : 
+                                                                                  (rule.applies_to === 'Personal Training' ? 
+                                                                                      (allInventory.find(i => i.id === rule.target_id)?.name || 'Specific PT Package') : 
+                                                                                      'Specific Asset'))))}
+                                                                  <span className="text-indigo-600 font-black">[{(rule.distribution_type || 'Individual').toUpperCase()}]</span>
+                                                                  {rule.applies_to === 'Referral' && (
+                                                                      <span className="text-emerald-600 font-black px-1.5 py-0.5 bg-emerald-50 rounded border border-emerald-100">
+                                                                          PAYEE: {(rule.referral_payee || 'Staff').toUpperCase()}
+                                                                      </span>
+                                                                  )}
+                                                                  {rule.disable_shared_incentive && (
+                                                                      <span className="text-amber-600 font-black px-1.5 py-0.5 bg-amber-50 rounded border border-amber-100">
+                                                                          NO SHARED INC
+                                                                      </span>
+                                                                  )}
+                                                              </p>
+                                                          </td>
                                                           <td className="px-4 py-3 text-center">
                                                               <div className="flex flex-col gap-1 items-center">
                                                                   <span className="text-[10px] font-black text-slate-700 uppercase flex items-center gap-1"><DollarSign className="w-3 h-3 text-indigo-600"/> {formatMoney(rule.min_price || 0)} - {formatMoney(rule.max_price || 99999)}</span>
@@ -1414,17 +1444,22 @@ const SettingsPage = () => {
                                                               </div>
                                                           </td>
                                                           <td className="px-4 py-3 text-right font-black text-indigo-600 text-base">{rule.calculation_type === 'Percentage' ? `${rule.value}%` : formatMoney(rule.value)}</td>
-                                                          <td className="px-4 py-3 text-right"><div className="flex justify-end gap-2 opacity-100 transition-opacity"><button onClick={() => { 
-                                                               setEditingId(rule.id); 
-                                                               setIncentiveForm({
-                                                                 ...rule,
-                                                                 min_price: rule.min_price || 0,
-                                                                 max_price: rule.max_price || 99999,
-                                                                 min_duration_minutes: rule.min_duration_minutes || 0,
-                                                                 max_duration_minutes: rule.max_duration_minutes || 999
-                                                               }); 
-                                                               setShowForm(true); 
-                                                             }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={() => setItemToDelete({type:'incentive', id:rule.id, name:rule.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
+                                                          <td className="px-4 py-3 text-right">
+                                                              <div className="flex justify-end gap-2 opacity-100 transition-opacity">
+                                                                  <button onClick={() => { 
+                                                                      setEditingId(rule.id); 
+                                                                      setIncentiveForm({
+                                                                        ...rule,
+                                                                        min_price: rule.min_price || 0,
+                                                                        max_price: rule.max_price || 99999,
+                                                                        min_duration_minutes: rule.min_duration_minutes || 0,
+                                                                        max_duration_minutes: rule.max_duration_minutes || 999
+                                                                      }); 
+                                                                      setShowForm(true); 
+                                                                  }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>
+                                                                  <button onClick={() => setItemToDelete({type:'incentive', id:rule.id, name:rule.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                                                              </div>
+                                                          </td>
                                                       </tr>
                                                   ))}
                                               </tbody>
@@ -2090,6 +2125,11 @@ const SettingsPage = () => {
                                          {incentiveForm.applies_to === 'Referral' && (
                                               <>
                                                   <option value="all">All Referrals</option>
+                                                  <optgroup label="Membership Types">
+                                                      {filteredMembershipTypes.map(t => (
+                                                          <option key={`type-${t.id}`} value={`type:${t.id}`}>{t.name} (Type)</option>
+                                                      ))}
+                                                  </optgroup>
                                                   <optgroup label="Membership Tiers">
                                                       {filteredCategories.map(c => (
                                                           <option key={c.id} value={c.id}>{c.name} (Tier)</option>
@@ -2115,14 +2155,23 @@ const SettingsPage = () => {
                                           <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Apply Discount to Incentive</label>
                                       </div>
                                       {incentiveForm.applies_to === 'Referral' && (
-                                          <div className="flex items-center gap-2 animate-in slide-in-from-top-1">
-                                              <input 
-                                                  type="checkbox" 
-                                                  checked={incentiveForm.disable_shared_incentive} 
-                                                  onChange={e => setIncentiveForm({...incentiveForm, disable_shared_incentive: e.target.checked})}
-                                                  className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                              />
-                                              <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Disable Regular Shared Incentive for Member</label>
+                                          <div className="space-y-4 animate-in slide-in-from-top-1">
+                                              <div className="space-y-1.5">
+                                                    <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1 flex items-center gap-2">Referrer Payee</label>
+                                                    <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 h-10">
+                                                        <button type="button" onClick={() => setIncentiveForm({...incentiveForm, referral_payee: 'Staff'})} className={`flex-1 rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-2 ${incentiveForm.referral_payee === 'Staff' || !incentiveForm.referral_payee ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-400'}`}>Sales Staff</button>
+                                                        <button type="button" onClick={() => setIncentiveForm({...incentiveForm, referral_payee: 'Referrer'})} className={`flex-1 rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-2 ${incentiveForm.referral_payee === 'Referrer' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-400'}`}>Referrer Name</button>
+                                                    </div>
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                  <input 
+                                                      type="checkbox" 
+                                                      checked={incentiveForm.disable_shared_incentive} 
+                                                      onChange={e => setIncentiveForm({...incentiveForm, disable_shared_incentive: e.target.checked})}
+                                                      className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                  />
+                                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Disable Regular Shared Incentive for Member</label>
+                                              </div>
                                           </div>
                                       )}
                                   </div>
