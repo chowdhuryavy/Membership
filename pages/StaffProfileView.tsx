@@ -151,7 +151,7 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
       const propertyId = staff.property_id;
       
       // We need to fetch incentives for each department and combine them
-      const depts: ('Massage' | 'Membership' | 'Personal Training')[] = ['Massage', 'Membership', 'Personal Training'];
+      const depts: ('Massage' | 'Membership' | 'Personal Training' | 'Referral' | 'Sale')[] = ['Massage', 'Membership', 'Personal Training', 'Referral', 'Sale'];
       let allRows: any[] = [];
       let totalInc = 0;
 

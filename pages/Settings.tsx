@@ -390,7 +390,7 @@ const SettingsPage = () => {
   const [roleForm, setRoleForm] = useState<Omit<Role, 'id'>>({ name: '', permissions: [] });
   const [currencyForm, setCurrencyForm] = useState<Omit<Currency, 'id'>>({ code: '', symbol: '', rate: 1, is_default: false, property_id: currentProperty?.id });
   const [incentiveForm, setIncentiveForm] = useState<Omit<IncentiveRule, 'id'>>({
-      name: '', scope: 'Global', scope_id: 'global', applies_to: 'Massage', target_id: 'all', distribution_type: 'Individual', calculation_type: 'Percentage', value: 0, min_price: 0, max_price: 99999, min_duration_minutes: 0, max_duration_minutes: 999, apply_discount_percentage: true, is_active: true
+      name: '', scope: 'Global', scope_id: 'global', applies_to: 'Massage', target_id: 'all', distribution_type: 'Individual', calculation_type: 'Percentage', value: 0, min_price: 0, max_price: 99999, min_duration_minutes: 0, max_duration_minutes: 999, apply_discount_percentage: true, disable_shared_incentive: false, is_active: true
   });
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1370,7 +1370,7 @@ const SettingsPage = () => {
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden min-h-[600px] flex flex-col bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-5"><Award className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Contract Intelligence</CardTitle></div>
-                          <Button onClick={() => { setEditingId(null); setIncentiveForm({ name: '', scope: 'Global', scope_id: 'global', applies_to: 'Massage', target_id: 'all', distribution_type: 'Individual', calculation_type: 'Percentage', value: 0, min_price: 0, max_price: 99999, min_duration_minutes: 0, max_duration_minutes: 999, apply_discount_percentage: true, is_active: true }); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-5 h-5 mr-2" /> Authorize Logic</Button>
+                          <Button onClick={() => { setEditingId(null); setIncentiveForm({ name: '', scope: 'Global', scope_id: 'global', applies_to: 'Massage', target_id: 'all', distribution_type: 'Individual', calculation_type: 'Percentage', value: 0, min_price: 0, max_price: 99999, min_duration_minutes: 0, max_duration_minutes: 999, apply_discount_percentage: true, disable_shared_incentive: false, is_active: true }); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-5 h-5 mr-2" /> Authorize Logic</Button>
                       </CardHeader>
                       <CardContent className="p-0 flex-1 overflow-hidden">
                           {Object.keys(groupedIncentives).length > 0 ? (
@@ -2088,7 +2088,14 @@ const SettingsPage = () => {
                                               <option key={c} value={c}>{c} (Category)</option>
                                           ))}
                                          {incentiveForm.applies_to === 'Referral' && (
-                                              <option value="all">All Referrals</option>
+                                              <>
+                                                  <option value="all">All Referrals</option>
+                                                  <optgroup label="Membership Tiers">
+                                                      {filteredCategories.map(c => (
+                                                          <option key={c.id} value={c.id}>{c.name} (Tier)</option>
+                                                      ))}
+                                                  </optgroup>
+                                              </>
                                           )}
                                       </select>
                                   </div>
@@ -2097,14 +2104,27 @@ const SettingsPage = () => {
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div className="space-y-2"><label className="text-[10px] font-black text-slate-900 uppercase ml-1">Math Logic</label><div className="flex bg-slate-100 p-1 rounded-xl h-14"><button type="button" onClick={() => setIncentiveForm({...incentiveForm, calculation_type:'Percentage'})} className={`flex-1 rounded-lg text-[10px] font-black uppercase transition-all ${incentiveForm.calculation_type === 'Percentage' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>%</button><button type="button" onClick={() => setIncentiveForm({...incentiveForm, calculation_type:'Fixed'})} className={`flex-1 rounded-lg text-[10px] font-black uppercase transition-all ${incentiveForm.calculation_type === 'Fixed' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>FIXED</button></div></div>
                                   <Input label="Yield Value *" type="number" value={incentiveForm.value} onChange={e => setIncentiveForm({...incentiveForm, value: parseFloat(e.target.value) || 0})} className="h-14 rounded-xl font-black border-2" />
-                                  <div className="flex items-center gap-2 md:col-span-2">
-                                      <input 
-                                          type="checkbox" 
-                                          checked={incentiveForm.apply_discount_percentage} 
-                                          onChange={e => setIncentiveForm({...incentiveForm, apply_discount_percentage: e.target.checked})}
-                                          className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                      />
-                                      <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Apply Discount to Incentive</label>
+                                  <div className="flex flex-col gap-2 md:col-span-2">
+                                      <div className="flex items-center gap-2">
+                                          <input 
+                                              type="checkbox" 
+                                              checked={incentiveForm.apply_discount_percentage} 
+                                              onChange={e => setIncentiveForm({...incentiveForm, apply_discount_percentage: e.target.checked})}
+                                              className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                          />
+                                          <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Apply Discount to Incentive</label>
+                                      </div>
+                                      {incentiveForm.applies_to === 'Referral' && (
+                                          <div className="flex items-center gap-2 animate-in slide-in-from-top-1">
+                                              <input 
+                                                  type="checkbox" 
+                                                  checked={incentiveForm.disable_shared_incentive} 
+                                                  onChange={e => setIncentiveForm({...incentiveForm, disable_shared_incentive: e.target.checked})}
+                                                  className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                              />
+                                              <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Disable Regular Shared Incentive for Member</label>
+                                          </div>
+                                      )}
                                   </div>
                               </div>
 

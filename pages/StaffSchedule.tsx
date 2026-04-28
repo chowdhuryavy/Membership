@@ -925,7 +925,7 @@ const StaffSchedule = () => {
       }
 
       // Fetch all departments in parallel for better performance
-      const depts: ('Massage' | 'Membership' | 'Personal Training')[] = ['Massage', 'Membership', 'Personal Training'];
+      const depts: ('Massage' | 'Membership' | 'Personal Training' | 'Referral' | 'Sale')[] = ['Massage', 'Membership', 'Personal Training', 'Referral', 'Sale'];
       
       const results = await Promise.all(depts.map(dept => 
         getReportData({

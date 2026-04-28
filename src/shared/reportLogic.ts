@@ -777,6 +777,15 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         // Try Category ID first, then Type ID
         const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
 
+        // Check for referral override
+        if (m.referrer_name && m.referrer_name.trim() !== '') {
+          const referralRule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
+          if (referralRule && referralRule.disable_shared_incentive) {
+            // Skip membership incentive as referral rule takes precedence and disables it
+            return;
+          }
+        }
+
         const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
         const discountAmt = m.discount || 0;
         const netRev = m.net_amount;
@@ -947,8 +956,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         .forEach(m => {
         const cat = mCats.find(c => c.id === m.category_id);
         
-        // Find rule for Referral
-        const rule = findBestRule(rules, 'Referral', 'all', m.net_amount, 0);
+        // Find rule for Referral (Support tier/type specific rules)
+        const rule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
 
         const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
         const discountAmt = m.discount || 0;

@@ -22,7 +22,7 @@ export interface ReportContext {
   reportType: string;
   date: Date;
   dateType?: 'today' | 'yesterday';
-  incentiveDept?: 'Massage' | 'Membership' | 'Personal Training';
+  incentiveDept?: 'Massage' | 'Membership' | 'Personal Training' | 'Sale' | 'Referral';
   selectedMembershipTypeId?: string | 'all';
   revenueMode?: 'cash' | 'accrual';
   endMonthIndex?: number;
@@ -605,10 +605,20 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       });
     } else if (dept === 'Membership') {
       members.forEach(m => {
+        // Try Category ID first, then Type ID
+        const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.membership_type_id);
+
+        // Check for referral override
+        if (m.referrer_name && m.referrer_name.trim() !== '') {
+          const referralRule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.membership_type_id);
+          if (referralRule && referralRule.disable_shared_incentive) {
+            // Skip membership incentive as referral rule takes precedence and disables it
+            return;
+          }
+        }
+
         const cat = mCats.find(c => c.id === m.category_id);
-        if (!cat) return;
-        const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0);
-        if (!rule) return;
+        if (!cat || !rule) return;
 
         const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
         const discountAmt = m.discount || 0;
@@ -652,6 +662,118 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           inc_discount_val: incDiscVal,
           inc_net: incNet,
           remarks: m.remarks || '',
+          staff_splits: staffSplits
+        });
+      });
+    } else if (dept === 'Sale') {
+      sales.filter(s => s.category !== 'Personal Training').forEach(s => {
+        const item = inventory.find(i => i.id === s.item_id);
+        const rule = findBestRule(rules, dept, s.item_id || '', s.unit_price, 0, s.category);
+        
+        const actualPrice = s.gross_amount;
+        const discountAmt = s.discount_amount || 0;
+        const netRev = s.net_amount;
+        const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+        let baseInc = 0;
+        let incDiscVal = 0;
+        let incNet = 0;
+        const staffSplits: Record<string, number> = {};
+
+        if (rule) {
+          baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+          incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
+          incNet = baseInc - incDiscVal;
+          
+          if (rule.distribution_type === 'Shared') {
+            const available = staffList.filter(st => {
+              const sOutlets = getStaffOutlets(st);
+              return sOutlets.includes(s.outlet_id) && !isStaffOnLeaveOnDate(st, s.created_at) && !isStaffOnProbationOnDate(st, s.created_at);
+            });
+            if (available.length > 0) {
+              const share = incNet / available.length;
+              available.forEach(st => staffSplits[st.id] = share);
+            }
+          } else {
+            const sellerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+            if (sellerId) {
+              const staff = staffList.find(st => st.id === sellerId);
+              if (staff && !isStaffOnLeaveOnDate(staff, s.created_at) && !isStaffOnProbationOnDate(staff, s.created_at)) {
+                staffSplits[sellerId] = incNet;
+              }
+            }
+          }
+        }
+
+        const displaySellerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+
+        rows.push({
+          id: s.id,
+          sl_no: sl++,
+          date: format(new Date(s.created_at), 'dd-MMM-yy'),
+          guest_name: s.guest_name || 'Guest',
+          item_name: s.item_name || item?.name || s.category,
+          therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (staffList.find(st => st.id === displaySellerId)?.name || 'N/A'),
+          actual_price: actualPrice,
+          discount_percent: discPercent,
+          discount_amount: discountAmt,
+          net_revenue: netRev,
+          inc_total: baseInc,
+          inc_discount_percent: discPercent,
+          inc_discount_val: incDiscVal,
+          inc_net: incNet,
+          remarks: !rule ? 'No Rule' : '',
+          staff_splits: staffSplits
+        });
+      });
+    } else if (dept === 'Referral') {
+      members.filter(m => m.referrer_name && m.referrer_name.trim() !== '').forEach(m => {
+        // Match by category/tier (Primary) or Type (Secondary)
+        const rule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.membership_type_id);
+        if (!rule) return;
+
+        const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
+        const discountAmt = m.discount || 0;
+        const netRev = m.net_amount;
+        const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
+
+        const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+        const incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
+        const incNet = baseInc - incDiscVal;
+
+        const staffSplits: Record<string, number> = {};
+        if (rule.distribution_type === 'Shared') {
+           const available = staffList.filter(s => {
+            const sOutlets = getStaffOutlets(s);
+            return sOutlets.includes(m.outlet_id) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date);
+          });
+          if (available.length > 0) {
+            const share = incNet / available.length;
+            available.forEach(s => staffSplits[s.id] = share);
+          }
+        } else if (m.sales_rep_id) {
+          const staff = staffList.find(s => s.id === m.sales_rep_id);
+          if (staff && staff.is_eligible_for_incentives !== false) {
+            staffSplits[m.sales_rep_id] = incNet;
+          }
+        }
+
+        rows.push({
+          id: `ref-${m.id}`,
+          sl_no: sl++,
+          date: format(new Date(m.start_date), 'dd-MMM-yy'),
+          guest_name: `${m.guest_name} (Ref: ${m.referrer_name})`,
+          item_name: `Referral - Tier match`,
+          therapist_name: rule.distribution_type === 'Shared' ? 'Shared' : (staffList.find(s => s.id === m.sales_rep_id)?.name || 'N/A'),
+          actual_price: actualPrice,
+          discount_percent: discPercent,
+          discount_amount: discountAmt,
+          net_revenue: netRev,
+          inc_total: baseInc,
+          inc_discount_percent: discPercent,
+          inc_discount_val: incDiscVal,
+          inc_net: incNet,
+          remarks: `Referral Incentive`,
           staff_splits: staffSplits
         });
       });
@@ -1621,14 +1743,20 @@ export const generateReportPDF = (options: PDFOptions) => {
 
 // --- INCENTIVE HELPERS ---
 
-export function findBestRule(rules: any[], department: string, itemId: string, price: number, duration: number) {
-  // 1. Exact item match
-  const exact = rules.find(r => r.department === department && r.item_id === itemId);
+export function findBestRule(rules: any[], department: string, itemId: string, price: number, duration: number, secondaryId?: string) {
+  // 1. Exact item match (Primary ID - e.g. Category ID)
+  const exact = rules.find(r => r.applies_to === department && r.target_id === itemId);
   if (exact) return exact;
 
-  // 2. Department match with price/duration criteria (if applicable)
+  // 2. Exact item match (Secondary ID - e.g. Membership Type ID)
+  if (secondaryId) {
+    const secondary = rules.find(r => r.applies_to === department && r.target_id === secondaryId);
+    if (secondary) return secondary;
+  }
+
+  // 3. Department match with price/duration criteria (if applicable)
   // For now, just return the first rule for that department if no exact match
-  const deptRule = rules.find(r => r.department === department && !r.item_id);
+  const deptRule = rules.find(r => r.applies_to === department && (r.target_id === 'all' || !r.target_id));
   return deptRule;
 }
 

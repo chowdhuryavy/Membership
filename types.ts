@@ -425,5 +425,6 @@ export interface IncentiveRule {
   min_duration_minutes?: number;
   max_duration_minutes?: number;
   apply_discount_percentage: boolean; 
+  disable_shared_incentive?: boolean;
   is_active: boolean;
 }

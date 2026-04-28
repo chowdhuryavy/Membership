@@ -62,7 +62,7 @@ const Profile = () => {
       setIncentiveLoading(true);
       try {
         const propertyId = linkedStaff.property_id;
-        const depts: ('Massage' | 'Membership' | 'Personal Training')[] = ['Massage', 'Membership', 'Personal Training'];
+        const depts: ('Massage' | 'Membership' | 'Personal Training' | 'Referral' | 'Sale')[] = ['Massage', 'Membership', 'Personal Training', 'Referral', 'Sale'];
         let allRows: any[] = [];
         let totalInc = 0;
 
