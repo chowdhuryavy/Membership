@@ -33,9 +33,10 @@ const Categories = () => {
         
         const loadAllData = async () => {
             try {
+                // Fetch membership types property-wide to ensure they are available across all outlets
                 const [cats, types] = await Promise.all([
                     db.getCategories(currentOutlet.id),
-                    db.getMembershipTypes(currentOutlet.id)
+                    db.getMembershipTypes(currentOutlet.property_id, true)
                 ]);
                 setCategories(cats);
                 setMembershipTypes(types);
@@ -156,6 +157,7 @@ const Categories = () => {
 
   const handleEdit = (cat: MembershipCategory) => {
       if (!canEdit) return;
+      
       setFormData({
       ...cat,
       name: cat.name || '',
@@ -193,6 +195,18 @@ const Categories = () => {
     e.preventDefault();
     if (!currentOutlet) return;
     
+    // Ensure membership_type_id is selected if types exist, or null if empty
+    let typeIdToUse = formData.membership_type_id || null;
+    
+    // If no type is selected but types are available, we don't strictly force it anymore 
+    // based on user request "not all outlet have membership type"
+    
+    // Validate only if a type ID is actually provided
+    if (typeIdToUse && !membershipTypes.some(t => t.id === typeIdToUse)) {
+        alert("Error: The selected Membership Type is invalid. Please select a valid type or leave it empty.");
+        return;
+    }
+    
     // Strict permission check based on action type
     if (isEditing) {
         if (!canEdit) return;
@@ -202,7 +216,7 @@ const Categories = () => {
                 duration_months: formData.duration_months,
                 base_rate: formData.base_rate,
                 max_freeze_days: formData.max_freeze_days,
-                membership_type_id: formData.membership_type_id,
+                membership_type_id: typeIdToUse,
                 privileges: formData.privileges
             });
         }
@@ -214,7 +228,7 @@ const Categories = () => {
             duration_months: formData.duration_months,
             base_rate: formData.base_rate,
             max_freeze_days: formData.max_freeze_days,
-            membership_type_id: formData.membership_type_id,
+            membership_type_id: typeIdToUse,
             privileges: formData.privileges
         });
     }
@@ -408,6 +422,21 @@ const Categories = () => {
                     </CardHeader>
                     <CardContent className="p-8">
                         <form onSubmit={handleSubmit} className="space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Membership Type</label>
+                                <select 
+                                    value={formData.membership_type_id} 
+                                    onChange={e => {
+                                        setFormData({...formData, membership_type_id: e.target.value});
+                                    }} 
+                                    className="w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all"
+                                >
+                                    <option value="">Select a type...</option>
+                                    {membershipTypes.map(type => (
+                                        <option key={type.id} value={type.id}>{type.name}</option>
+                                    ))}
+                                </select>
+                            </div>
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Tier Designation</label>
                                 <Input 
