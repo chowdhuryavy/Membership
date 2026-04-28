@@ -951,12 +951,13 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         });
       });
     } else if (dept === 'Referral') {
+      const referrerTotals: Record<string, number> = {};
       members
         .filter(m => m.referrer_name && m.referrer_name.trim() !== '')
         .forEach(m => {
         const cat = mCats.find(c => c.id === m.category_id);
         
-        // Find rule for Referral (Support tier/type specific rules)
+        // Match by category/tier (Primary) or Type (Secondary)
         const rule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
 
         const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
@@ -970,6 +971,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
         const staffSplits: Record<string, number> = {};
         let remarks = m.remarks || '';
+        let referrerNet = 0;
 
         if (!rule) {
           remarks = remarks ? `${remarks} (No Rule)` : 'No Rule';
@@ -978,11 +980,17 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
           incNet = baseInc - incDiscVal;
           
-          remarks = `Referral: ${m.referrer_name}`;
-          
-          const matchedStaff = rawStaffList.find(s => s.name.toLowerCase() === m.referrer_name?.toLowerCase());
-          if (matchedStaff) {
-             staffSplits[matchedStaff.id] = incNet;
+          remarks = `Referral Payee: ${rule.referral_payee || 'Staff'}`;
+
+          if (rule.referral_payee === 'Referrer') {
+            referrerNet = incNet;
+            const refName = m.referrer_name.trim();
+            referrerTotals[refName] = (referrerTotals[refName] || 0) + incNet;
+          } else {
+            const matchedStaff = rawStaffList.find(s => s.name.toLowerCase() === m.referrer_name?.toLowerCase());
+            if (matchedStaff) {
+               staffSplits[matchedStaff.id] = incNet;
+            }
           }
         }
 
@@ -991,8 +999,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           sl_no: sl++,
           date: format(new Date(m.start_date), 'dd-MMM-yy'),
           guest_name: m.guest_name,
-          item_name: cat?.name || m.category_id || 'Unknown Tier',
-          therapist_name: m.referrer_name || 'N/A',
+          item_name: `Referral: ${m.referrer_name}`,
+          therapist_name: rule?.referral_payee === 'Referrer' ? `Referrer: ${m.referrer_name}` : (rawStaffList.find(s => s.name.toLowerCase() === m.referrer_name?.toLowerCase())?.name || m.referrer_name || 'N/A'),
           outlet_name: outletMap[m.outlet_id] || 'Unknown',
           actual_price: actualPrice,
           discount_percent: discPercent,
@@ -1005,9 +1013,14 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           remarks: remarks,
           check_no: m.check_no || '',
           duration: 'Referral',
-          staff_splits: staffSplits
+          staff_splits: staffSplits,
+          referrer_name: m.referrer_name,
+          referrer_amount: referrerNet
         });
       });
+
+      // Add referrer summaries to result in Step 2 after processing all members
+      (rows as any)._referrerTotals = referrerTotals;
     }
 
     const totalIncentive = rows.reduce((sum, r) => sum + r.inc_net, 0);
@@ -1041,7 +1054,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       summary: {
         totalIncentive,
         count: rows.length,
-        staffList: finalStaffList
+        staffList: finalStaffList,
+        referrerSummaries: (rows as any)._referrerTotals ? Object.entries((rows as any)._referrerTotals).map(([name, amount], idx) => ({ sl_no: idx + 1, name, amount })) : []
       }
     };
   }
@@ -2178,21 +2192,50 @@ export const generateReportPDF = (options: PDFOptions) => {
 
 // --- INCENTIVE HELPERS ---
 
-export function findBestRule(rules: any[], department: string, itemId: string, price: number, duration: number, secondaryId?: string) {
-  // 1. Exact item match (Primary ID - e.g. Category ID)
-  const exact = rules.find(r => r.applies_to === department && r.target_id === itemId);
-  if (exact) return exact;
+export function findBestRule(rules: any[], department: string, targetId: string, price: number, duration: number, secondaryId?: string) {
+  // 1. Filter candidates by active status and department
+  const candidates = rules.filter(r => r.is_active !== false && r.applies_to === department);
+  
+  // 2. Sort by specificity:
+  // - Exact Target ID (including type: prefix)
+  // - Scope: Outlet > Property > Global
+  const sorted = candidates.sort((a, b) => {
+    // Exact match is more specific than 'all'
+    const aIsAll = a.target_id === 'all' || !a.target_id;
+    const bIsAll = b.target_id === 'all' || !b.target_id;
+    if (aIsAll && !bIsAll) return 1;
+    if (!aIsAll && bIsAll) return -1;
+    
+    // Scope specificity
+    const scopeOrder: Record<string, number> = { 'Outlet': 0, 'Property': 1, 'Global': 2 };
+    return (scopeOrder[a.scope] || 9) - (scopeOrder[b.scope] || 9);
+  });
 
-  // 2. Exact item match (Secondary ID - e.g. Membership Type ID)
-  if (secondaryId) {
-    const secondary = rules.find(r => r.applies_to === department && r.target_id === secondaryId);
-    if (secondary) return secondary;
-  }
+  // 3. Find the first rule that matches all criteria
+  return sorted.find(r => {
+    // Target Match
+    const targetMatch = 
+      r.target_id === 'all' || 
+      !r.target_id || 
+      r.target_id === targetId || 
+      (secondaryId && (r.target_id === secondaryId || r.target_id === `type:${secondaryId}`));
+    
+    if (!targetMatch) return false;
 
-  // 3. Department match with price/duration criteria (if applicable)
-  // For now, just return the first rule for that department if no exact match
-  const deptRule = rules.find(r => r.applies_to === department && (r.target_id === 'all' || !r.target_id));
-  return deptRule;
+    // Price Match
+    const minPrice = r.min_price || 0;
+    const maxPrice = r.max_price || 999999;
+    if (price < minPrice || price > maxPrice) return false;
+
+    // Duration Match (if applicable - mostly for massage)
+    if (duration > 0) {
+      const minDur = r.min_duration_minutes || 0;
+      const maxDur = r.max_duration_minutes || 9999;
+      if (duration < minDur || duration > maxDur) return false;
+    }
+
+    return true;
+  });
 }
 
 export function getStaffOutlets(s: any): string[] {

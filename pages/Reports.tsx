@@ -888,54 +888,85 @@ const Reports = () => {
                 </tbody>
             </table>
             {isIncentiveReport && (
-                <div className="mt-12 flex justify-start">
+                <div className="mt-12 space-y-12">
+                    {/* Primary Staff Incentive Summary */}
                     <div className="w-full max-w-sm">
+                        <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
+                             <Award className="w-4 h-4 text-indigo-600" /> Staff Incentive Summary
+                        </h4>
                         <table className="w-full border-collapse text-[10px] border-2 border-black shadow-sm">
                             <thead>
-                                <tr className="bg-amber-100 font-black uppercase tracking-widest border-b-2 border-black">
-                                    <th className="border border-black px-4 py-3 text-left">{incentiveDept === 'Referral' ? 'Referral Name' : 'Staff Name'}</th>
-                                    <th className="border border-black px-4 py-3 text-right">Incentives</th>
+                                <tr className="bg-slate-950 text-white font-black uppercase tracking-widest border-b-2 border-black">
+                                    <th className="border border-black px-4 py-3 text-left">Staff Member</th>
+                                    <th className="border border-black px-4 py-3 text-right">Credit</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {incentiveDept === 'Referral' ? (
-                                    Object.entries(rows.reduce((acc, row) => {
-                                        const name = row.therapist_name || 'Unknown';
-                                        acc[name] = (acc[name] || 0) + row.inc_net;
-                                        return acc;
-                                    }, {} as Record<string, number>)).filter(([_, amount]: [string, number]) => amount > 0).map(([name, amount], idx) => {
-                                        const colors = ['bg-emerald-50/50', 'bg-orange-50/50', 'bg-amber-50/50', 'bg-yellow-50/50', 'bg-green-50/50', 'bg-slate-50/50', 'bg-blue-50/50'];
-                                        const color = colors[idx % colors.length];
-                                        return (
-                                            <tr key={name} className={`${color} font-bold border-b border-black hover:bg-white transition-colors`}>
-                                                <td className="border border-black px-4 py-2 text-slate-700">{name}</td>
-                                                <td className="border border-black px-4 py-2 text-right">{formatMoney(amount)}</td>
-                                            </tr>
-                                        );
-                                    })
-                                ) : (
-                                    activeStaffList.map((s, idx) => {
-                                        const colors = ['bg-emerald-50/50', 'bg-orange-50/50', 'bg-amber-50/50', 'bg-yellow-50/50', 'bg-green-50/50', 'bg-slate-50/50', 'bg-blue-50/50'];
-                                        const color = colors[idx % colors.length];
-                                        return (
-                                            <tr key={s.id} className={`${color} font-bold border-b border-black hover:bg-white transition-colors`}>
-                                                <td className="border border-black px-4 py-2 text-slate-700">{s.name}</td>
-                                                <td className="border border-black px-4 py-2 text-right">{formatMoney(totals.staffTotals[s.id] || 0)}</td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
+                                {activeStaffList.map((s, idx) => {
+                                    const amount = totals.staffTotals[s.id] || 0;
+                                    if (amount <= 0) return null;
+                                    const colors = ['bg-emerald-50/50', 'bg-orange-50/50', 'bg-amber-50/50', 'bg-yellow-50/50', 'bg-green-50/50', 'bg-slate-50/50', 'bg-blue-50/50'];
+                                    const color = colors[idx % colors.length];
+                                    return (
+                                        <tr key={s.id} className={`${color} font-bold border-b border-black hover:bg-white transition-colors`}>
+                                            <td className="border border-black px-4 py-2 text-slate-700">{s.name}</td>
+                                            <td className="border border-black px-4 py-2 text-right">{formatMoney(amount)}</td>
+                                        </tr>
+                                    );
+                                })}
                                 <tr className="bg-white font-black border-t-2 border-black">
-                                    <td className="border border-black px-4 py-3 text-center uppercase tracking-widest bg-slate-50">TOTAL</td>
-                                    <td className="border border-black px-4 py-3 text-right bg-slate-50">{formatMoney(totals.totalIncNet)}</td>
+                                    <td className="border border-black px-4 py-3 text-center uppercase tracking-widest bg-slate-50">Total Staff Payout</td>
+                                    <td className="border border-black px-4 py-3 text-right bg-slate-50">{formatMoney(Object.values(totals.staffTotals).reduce((a: number, b: any) => a + (Number(b) || 0), 0))}</td>
                                 </tr>
-                                <tr className="bg-indigo-50/30 font-black border-t-2 border-black">
-                                    <td className="border border-black px-4 py-3 uppercase tracking-widest">DISCOUNTED AMOUNT</td>
-                                    <td className="border border-black px-4 py-3 text-right">{formatMoney(totals.totalDiscount)}</td>
-                                </tr>
-                                <tr className="bg-blue-100/30 font-black border-t-2 border-black">
-                                    <td className="border border-black px-4 py-3 uppercase tracking-widest">NET REVENUE</td>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Referrer Rewards Summary - Only for Referral Dept */}
+                    {incentiveDept === 'Referral' && summary?.referrerSummaries?.length > 0 && (
+                        <div className="w-full max-w-sm animate-in fade-in slide-in-from-bottom-4 duration-700">
+                            <h4 className="text-[10px] font-black text-emerald-700 uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
+                                 <Globe className="w-4 h-4 text-emerald-600" /> Referrer Rewards Summary
+                            </h4>
+                            <table className="w-full border-collapse text-[10px] border-2 border-black shadow-sm overflow-hidden rounded-xl">
+                                <thead>
+                                    <tr className="bg-emerald-600 text-white font-black uppercase tracking-widest border-b-2 border-black">
+                                        <th className="border border-black px-4 py-3 text-left w-12 text-center">SL.</th>
+                                        <th className="border border-black px-4 py-3 text-left">Referrer Designation</th>
+                                        <th className="border border-black px-4 py-3 text-right">Reward Credit</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {summary.referrerSummaries.map((ref: any, idx: number) => (
+                                        <tr key={ref.name} className="bg-emerald-50/30 font-bold border-b border-black hover:bg-white transition-colors">
+                                            <td className="border border-black px-4 py-2 text-center text-emerald-700">{idx + 1}</td>
+                                            <td className="border border-black px-4 py-2 text-slate-700 uppercase tracking-tight">{ref.name}</td>
+                                            <td className="border border-black px-4 py-2 text-right text-emerald-600">{formatMoney(ref.amount)}</td>
+                                        </tr>
+                                    ))}
+                                    <tr className="bg-emerald-100 font-black border-t-2 border-black">
+                                        <td colSpan={2} className="border border-black px-4 py-3 text-center uppercase tracking-widest">Total Referrer Payout</td>
+                                        <td className="border border-black px-4 py-3 text-right">{formatMoney(summary.referrerSummaries.reduce((sum: number, r: any) => sum + r.amount, 0))}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <p className="mt-2 text-[8px] font-bold text-slate-400 uppercase tracking-widest italic">
+                                * Rewards for referrers are calculated based on specifically authorized referral incentive rules.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Overall Totals */}
+                    <div className="w-full max-w-sm">
+                        <table className="w-full border-collapse text-[10px] border-2 border-black shadow-sm">
+                            <tbody>
+                                <tr className="bg-slate-900 text-white font-black border-t-2 border-black">
+                                    <td className="border border-black px-4 py-3 uppercase tracking-widest">Aggregate Net Revenue</td>
                                     <td className="border border-black px-4 py-3 text-right">{formatMoney(totals.totalNetRev)}</td>
+                                </tr>
+                                <tr className="bg-indigo-600 text-white font-black border-t-2 border-black">
+                                    <td className="border border-black px-4 py-3 uppercase tracking-widest">Total Incentive Liability</td>
+                                    <td className="border border-black px-4 py-3 text-right">{formatMoney(totals.totalIncNet)}</td>
                                 </tr>
                             </tbody>
                         </table>
