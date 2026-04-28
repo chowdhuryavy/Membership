@@ -767,10 +767,6 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       }
     } else if (dept === 'Membership') {
       members
-        .filter(m => {
-            const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
-            return !!rule;
-        })
         .forEach(m => {
         const cat = mCats.find(c => c.id === m.category_id);
         
@@ -778,11 +774,11 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
 
         // Check for referral override
+        let isRefDisabled = false;
         if (m.referrer_name && m.referrer_name.trim() !== '') {
           const referralRule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
           if (referralRule && referralRule.disable_shared_incentive) {
-            // Skip membership incentive as referral rule takes precedence and disables it
-            return;
+            isRefDisabled = true;
           }
         }
 
@@ -798,7 +794,9 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const staffSplits: Record<string, number> = {};
         let remarks = m.remarks || '';
 
-        if (!rule) {
+        if (isRefDisabled) {
+          remarks = remarks ? `${remarks} (Incentive handled by Referral)` : 'Incentive handled by Referral';
+        } else if (!rule) {
           remarks = remarks ? `${remarks} (No Rule)` : 'No Rule';
           if (m.sales_rep_id) {
             staffSplits[m.sales_rep_id] = 0;
@@ -965,6 +963,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const netRev = m.net_amount;
         const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
+        const cleanReferrerName = (m.referrer_name || '').replace(/^Referral:\s*/i, '').trim();
+        
         let baseInc = 0;
         let incDiscVal = 0;
         let incNet = 0;
@@ -984,12 +984,11 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
           if (rule.referral_payee === 'Referrer') {
             referrerNet = incNet;
-            const refName = m.referrer_name.trim();
-            referrerTotals[refName] = (referrerTotals[refName] || 0) + incNet;
+            referrerTotals[cleanReferrerName] = (referrerTotals[cleanReferrerName] || 0) + incNet;
           } else {
             // Payee is 'Staff' (Sales Staff)
             const possibleStaffId = m.sales_rep_id;
-            const matchedStaff = possibleStaffId ? rawStaffList.find(s => s.id === possibleStaffId) : rawStaffList.find(s => s.name.toLowerCase() === m.referrer_name?.toLowerCase());
+            const matchedStaff = possibleStaffId ? rawStaffList.find(s => s.id === possibleStaffId) : rawStaffList.find(s => s.name.toLowerCase() === cleanReferrerName.toLowerCase());
             
             if (matchedStaff) {
                staffSplits[matchedStaff.id] = (staffSplits[matchedStaff.id] || 0) + incNet;
@@ -1026,20 +1025,22 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
                 }
               }
            }
+        } else {
+           remarks = remarks ? `${remarks} (Regular Inc Disabled)` : 'Regular Inc Disabled';
         }
 
         const displayStaffName = Object.keys(staffSplits).length > 0 
           ? rawStaffList.find(s => s.id === Object.keys(staffSplits)[0])?.name 
-          : (rawStaffList.find(s => s.name.toLowerCase() === m.referrer_name?.toLowerCase())?.name || m.referrer_name || 'N/A');
+          : (rawStaffList.find(s => s.name.toLowerCase() === cleanReferrerName.toLowerCase())?.name || cleanReferrerName || 'N/A');
 
         rows.push({
           id: m.id,
           sl_no: sl++,
           date: format(new Date(m.start_date), 'dd-MMM-yy'),
           guest_name: m.guest_name,
-          membership_no: m.membership_number || m.membership_no || 'N/A', // Consistency
-          item_name: `Referral: ${m.referrer_name}`,
-          therapist_name: rule?.referral_payee === 'Referrer' ? `Referrer: ${m.referrer_name}` : displayStaffName,
+          membership_no: m.membership_number || m.membership_no || 'N/A', 
+          item_name: cat?.name || m.category_id || 'Tier Info',
+          therapist_name: rule?.referral_payee === 'Referrer' ? cleanReferrerName : displayStaffName,
           outlet_name: outletMap[m.outlet_id] || 'Unknown',
           actual_price: actualPrice,
           discount_percent: discPercent,
@@ -1053,7 +1054,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           check_no: m.check_no || '',
           duration: 'Referral',
           staff_splits: staffSplits,
-          referrer_name: m.referrer_name,
+          referrer_name: cleanReferrerName,
           referrer_amount: referrerNet
         });
       });
