@@ -987,20 +987,59 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             const refName = m.referrer_name.trim();
             referrerTotals[refName] = (referrerTotals[refName] || 0) + incNet;
           } else {
-            const matchedStaff = rawStaffList.find(s => s.name.toLowerCase() === m.referrer_name?.toLowerCase());
+            // Payee is 'Staff' (Sales Staff)
+            const possibleStaffId = m.sales_rep_id;
+            const matchedStaff = possibleStaffId ? rawStaffList.find(s => s.id === possibleStaffId) : rawStaffList.find(s => s.name.toLowerCase() === m.referrer_name?.toLowerCase());
+            
             if (matchedStaff) {
-               staffSplits[matchedStaff.id] = incNet;
+               staffSplits[matchedStaff.id] = (staffSplits[matchedStaff.id] || 0) + incNet;
+            } else {
+               remarks = remarks ? `${remarks} (Staff not identified)` : 'Staff not identified';
             }
           }
         }
+
+        // --- ADD REGULAR MEMBERSHIP INCENTIVE IF NOT DISABLED ---
+        if (!rule || !rule.disable_shared_incentive) {
+           const memRule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
+           if (memRule) {
+              const memBase = memRule.calculation_type === 'Fixed' ? memRule.value : (actualPrice * memRule.value / 100);
+              const memDiscVal = (memRule.apply_discount_percentage !== false) ? (memBase * discPercent) / 100 : 0;
+              const memIncNet = memBase - memDiscVal;
+
+              incNet += memIncNet; // Add to total row liability
+              remarks = remarks ? `${remarks} + Regular Inc` : 'Regular Inc';
+
+              if (memRule.distribution_type === 'Shared') {
+                const available = staffList.filter(s => {
+                  const sOutlets = getStaffOutlets(s);
+                  return s.is_eligible_for_incentives !== false && sOutlets.includes(m.outlet_id) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date);
+                });
+                if (available.length > 0) {
+                  const share = memIncNet / available.length;
+                  available.forEach(s => staffSplits[s.id] = (staffSplits[s.id] || 0) + share);
+                }
+              } else if (m.sales_rep_id) {
+                const staff = rawStaffList.find(s => s.id === m.sales_rep_id);
+                if (staff && staff.is_eligible_for_incentives !== false && !isStaffOnLeaveOnDate(staff, m.start_date) && !isStaffOnProbationOnDate(staff, m.start_date)) {
+                  staffSplits[m.sales_rep_id] = (staffSplits[m.sales_rep_id] || 0) + memIncNet;
+                }
+              }
+           }
+        }
+
+        const displayStaffName = Object.keys(staffSplits).length > 0 
+          ? rawStaffList.find(s => s.id === Object.keys(staffSplits)[0])?.name 
+          : (rawStaffList.find(s => s.name.toLowerCase() === m.referrer_name?.toLowerCase())?.name || m.referrer_name || 'N/A');
 
         rows.push({
           id: m.id,
           sl_no: sl++,
           date: format(new Date(m.start_date), 'dd-MMM-yy'),
           guest_name: m.guest_name,
+          membership_no: m.membership_number || m.membership_no || 'N/A', // Consistency
           item_name: `Referral: ${m.referrer_name}`,
-          therapist_name: rule?.referral_payee === 'Referrer' ? `Referrer: ${m.referrer_name}` : (rawStaffList.find(s => s.name.toLowerCase() === m.referrer_name?.toLowerCase())?.name || m.referrer_name || 'N/A'),
+          therapist_name: rule?.referral_payee === 'Referrer' ? `Referrer: ${m.referrer_name}` : displayStaffName,
           outlet_name: outletMap[m.outlet_id] || 'Unknown',
           actual_price: actualPrice,
           discount_percent: discPercent,

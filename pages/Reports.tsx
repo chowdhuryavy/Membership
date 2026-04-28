@@ -889,38 +889,40 @@ const Reports = () => {
             </table>
             {isIncentiveReport && (
                 <div className="mt-12 space-y-12">
-                    {/* Primary Staff Incentive Summary */}
-                    <div className="w-full max-w-sm">
-                        <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
-                             <Award className="w-4 h-4 text-indigo-600" /> Staff Incentive Summary
-                        </h4>
-                        <table className="w-full border-collapse text-[10px] border-2 border-black shadow-sm">
-                            <thead>
-                                <tr className="bg-slate-950 text-white font-black uppercase tracking-widest border-b-2 border-black">
-                                    <th className="border border-black px-4 py-3 text-left">Staff Member</th>
-                                    <th className="border border-black px-4 py-3 text-right">Credit</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {activeStaffList.map((s, idx) => {
-                                    const amount = totals.staffTotals[s.id] || 0;
-                                    if (amount <= 0) return null;
-                                    const colors = ['bg-emerald-50/50', 'bg-orange-50/50', 'bg-amber-50/50', 'bg-yellow-50/50', 'bg-green-50/50', 'bg-slate-50/50', 'bg-blue-50/50'];
-                                    const color = colors[idx % colors.length];
-                                    return (
-                                        <tr key={s.id} className={`${color} font-bold border-b border-black hover:bg-white transition-colors`}>
-                                            <td className="border border-black px-4 py-2 text-slate-700">{s.name}</td>
-                                            <td className="border border-black px-4 py-2 text-right">{formatMoney(amount)}</td>
-                                        </tr>
-                                    );
-                                })}
-                                <tr className="bg-white font-black border-t-2 border-black">
-                                    <td className="border border-black px-4 py-3 text-center uppercase tracking-widest bg-slate-50">Total Staff Payout</td>
-                                    <td className="border border-black px-4 py-3 text-right bg-slate-50">{formatMoney(Object.values(totals.staffTotals).reduce((a: number, b: any) => a + (Number(b) || 0), 0))}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                    {/* Primary Staff Incentive Summary - Hide for Referral report as requested or if empty */}
+                    {incentiveDept !== 'Referral' && (
+                        <div className="w-full max-w-sm">
+                            <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
+                                 <Award className="w-4 h-4 text-indigo-600" /> Staff Incentive Summary
+                            </h4>
+                            <table className="w-full border-collapse text-[10px] border-2 border-black shadow-sm">
+                                <thead>
+                                    <tr className="bg-slate-950 text-white font-black uppercase tracking-widest border-b-2 border-black">
+                                        <th className="border border-black px-4 py-3 text-left">Staff Member</th>
+                                        <th className="border border-black px-4 py-3 text-right">Credit</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {activeStaffList.map((s, idx) => {
+                                        const amount = totals.staffTotals[s.id] || 0;
+                                        if (amount <= 0) return null;
+                                        const colors = ['bg-emerald-50/50', 'bg-orange-50/50', 'bg-amber-50/50', 'bg-yellow-50/50', 'bg-green-50/50', 'bg-slate-50/50', 'bg-blue-50/50'];
+                                        const color = colors[idx % colors.length];
+                                        return (
+                                            <tr key={s.id} className={`${color} font-bold border-b border-black hover:bg-white transition-colors`}>
+                                                <td className="border border-black px-4 py-2 text-slate-700">{s.name}</td>
+                                                <td className="border border-black px-4 py-2 text-right">{formatMoney(amount)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    <tr className="bg-white font-black border-t-2 border-black">
+                                        <td className="border border-black px-4 py-3 text-center uppercase tracking-widest bg-slate-50">Total Staff Payout</td>
+                                        <td className="border border-black px-4 py-3 text-right bg-slate-50">{formatMoney(Object.values(totals.staffTotals).reduce((a: number, b: any) => a + (Number(b) || 0), 0))}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
 
                     {/* Referrer Rewards Summary - Only for Referral Dept */}
                     {incentiveDept === 'Referral' && summary?.referrerSummaries?.length > 0 && (
