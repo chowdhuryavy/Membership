@@ -405,7 +405,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         discount_percent: discPercent,
         discount_amount: discountAmt,
         net_revenue: netRev,
-        remarks: m.status
+        remarks: m.status,
+        referrer_name: (m.referrer_name || '').replace(/^Referral:\s*/i, '').trim() || 'N/A'
       };
     });
 

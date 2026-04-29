@@ -147,13 +147,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           const isAllowed = prev && userAllowedOutlets.find(o => o.id === prev.id);
           
           if (!prev || !isAllowed || userChanged || defaultChanged) {
-              // Priority: User's Admin-assigned default outlet -> Browser's last used outlet -> First allowed outlet
-              const defaultOutlet = user.default_outlet_id ? userAllowedOutlets.find(o => o.id === user.default_outlet_id) : null;
-              if (defaultOutlet) return defaultOutlet;
-
+              // Priority: Browser's last used outlet -> User's Admin-assigned default outlet -> First allowed outlet
               const storedOutletId = localStorage.getItem('membership_last_outlet');
               const storedOutlet = userAllowedOutlets.find(out => out.id === storedOutletId);
               if (storedOutlet) return storedOutlet;
+
+              const defaultOutlet = user.default_outlet_id ? userAllowedOutlets.find(o => o.id === user.default_outlet_id) : null;
+              if (defaultOutlet) return defaultOutlet;
 
               return userAllowedOutlets[0];
           } else {

@@ -214,6 +214,7 @@ const Reports = () => {
       discount_amt: true,
       net_revenue: true,
       remarks: true,
+      referrer: true,
       start_date: true,
       end_date: true,
       days: true,
@@ -638,6 +639,7 @@ const Reports = () => {
                             (visibleColumns.guest_name ? 1 : 0) +
                             (isMembersJoined && visibleColumns.membership_no ? 1 : 0) +
                             (visibleColumns.reference ? 1 : 0) +
+                            (visibleColumns.referrer ? 1 : 0) +
                             (visibleColumns.check_no ? 1 : 0) +
                             (isDailySales && visibleColumns.payment_mode ? 1 : 0) +
                             (visibleColumns.item_name ? 1 : 0) +
@@ -700,6 +702,7 @@ const Reports = () => {
                         {(isMembersJoined && visibleColumns.membership_no) && <th rowSpan={2} className="border border-black px-2 py-3 w-24">Mem. No</th>}
                         
                         {visibleColumns.reference && <th rowSpan={2} className="border border-black px-2 py-3 w-24">{isMembersJoined ? 'Category' : 'Duration'}</th>}
+                        {visibleColumns.referrer && <th rowSpan={2} className="border border-black px-2 py-3 w-24">Referrer</th>}
                         {visibleColumns.check_no && <th rowSpan={2} className="border border-black px-2 py-3 w-20">Check No.</th>}
                         {(isDailySales && visibleColumns.payment_mode) && <th rowSpan={2} className="border border-black px-2 py-3 w-24">Payment Mode</th>}
                         {visibleColumns.item_name && <th rowSpan={2} className="border border-black px-2 py-3 min-w-[100px]">Item / Service</th>}
@@ -770,6 +773,7 @@ const Reports = () => {
                                                         {(isMembersJoined && visibleColumns.membership_no) && <td className="border border-black px-2 py-1 text-center font-mono text-xs">{(row as any).membership_no}</td>}
                                                         
                                                         {visibleColumns.reference && <td className="border border-black px-2 py-1 text-center">{isMembersJoined ? (row as any).category : (row.duration || '-')}</td>}
+                                                        {visibleColumns.referrer && <td className="border border-black px-2 py-1 text-center font-bold text-indigo-600">{(row as any).referrer_name || 'N/A'}</td>}
                                                         {visibleColumns.check_no && <td className="border border-black px-2 py-1 text-center text-slate-400">{row.check_no}</td>}
                                                         {(isDailySales && visibleColumns.payment_mode) && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
                                                         {visibleColumns.item_name && <td className="border border-black px-2 py-1">{row.item_name}</td>}
@@ -830,6 +834,7 @@ const Reports = () => {
                                         {(isMembersJoined && visibleColumns.membership_no) && <td className="border border-black px-2 py-1 text-center font-mono text-xs">{(row as any).membership_no}</td>}
                                         
                                         {visibleColumns.reference && <td className="border border-black px-2 py-1 text-center">{isMembersJoined ? (row as any).category : (row.duration || '-')}</td>}
+                                        {visibleColumns.referrer && <td className="border border-black px-2 py-1 text-center font-bold text-indigo-600">{(row as any).referrer_name || 'N/A'}</td>}
                                         {visibleColumns.check_no && <td className="border border-black px-2 py-1 text-center text-slate-400">{row.check_no}</td>}
                                         {(isDailySales && visibleColumns.payment_mode) && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
                                         {visibleColumns.item_name && <td className="border border-black px-2 py-1">{row.item_name}</td>}
