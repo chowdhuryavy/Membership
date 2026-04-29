@@ -603,7 +603,7 @@ const Dashboard = () => {
           activeMembers: activeAtPointCount, 
           frozenMembers: frozenAtPointCount,
           newMembersThisMonth: monthEnrollments, 
-          dailyAccrual: totalDailyAccrual, 
+          dailyAccrual: dailyYieldTotal, 
           revenueThisMonth: currentTotalRevenue,
           futureRevenue: deferredRevenueAtPoint, 
           projectedEndMonth: currentTotalRevenue + (dailyYieldTotal * Math.max(0, differenceInCalendarDays(endOfMonth(viewDate), auditPoint))),
@@ -1049,8 +1049,12 @@ const Dashboard = () => {
                             <p className="text-[9px] font-black text-indigo-300 uppercase tracking-[0.3em] mb-4">Financial Health Check</p>
                             <div className="space-y-4">
                                 <div className="flex justify-between items-end border-b border-indigo-800 pb-4">
-                                    <span className="text-white/60 text-xs font-bold">Daily Accrual Rate</span>
+                                    <span className="text-white/60 text-xs font-bold">Total Daily Yield</span>
                                     <span className="text-white font-black text-xl tracking-tighter">{formatMoney(stats.dailyAccrual)}</span>
+                                </div>
+                                <div className="flex justify-between items-end border-b border-indigo-800 pb-4">
+                                    <span className="text-white/60 text-xs font-bold">MTD Commercial Yield</span>
+                                    <span className="text-white font-black text-xl tracking-tighter">{formatMoney(stats.revenueThisMonth)}</span>
                                 </div>
                                 <div className="flex justify-between items-end">
                                     <span className="text-white/60 text-xs font-bold">Projected Month End</span>
