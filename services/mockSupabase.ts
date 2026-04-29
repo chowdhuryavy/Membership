@@ -45,9 +45,13 @@ class DatabaseService {
 
   private isNetworkError(e: any): boolean {
     const msg = e.message?.toLowerCase() || '';
-    // Only disable if it's a critical connection failure, not a transient fetch error
-    // Many transient errors are just 'Failed to fetch' but can be retried
-    return false; // Stop auto-disabling Supabase on network errors to improve stability
+    // Enable fallback for critical connection failures and transient fetch errors
+    // "Failed to fetch" is the standard browser error when a network request cannot be completed
+    return msg.includes('failed to fetch') || 
+           msg.includes('network error') || 
+           msg.includes('insufficient permissions') ||
+           msg.includes('database not found') ||
+           DatabaseService.supabaseFailed;
   }
 
   private generateUUID() {
@@ -571,12 +575,15 @@ class DatabaseService {
 
   async getAllStaffLeaves(startDate?: string): Promise<StaffLeave[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('staff_leaves').select('*');
-      if (startDate) {
-          query = query.gte('end_date', startDate); // Only current or future leaves (or recent)
-      }
-      const { data } = await query;
-      return (data || []) as StaffLeave[];
+      return this.safeCall(async () => {
+        let query = supabase.from('staff_leaves').select('*');
+        if (startDate) {
+            query = query.gte('end_date', startDate); // Only current or future leaves (or recent)
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data || []) as StaffLeave[];
+      }, []);
     }
     return [];
   }
@@ -848,13 +855,16 @@ class DatabaseService {
 
   async getFreezes(memberId?: string, startDate?: string): Promise<Freeze[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('freezes').select('*');
-      if (memberId) query = query.eq('member_id', memberId);
-      if (startDate) {
-          query = query.gte('end_date', startDate);
-      }
-      const { data } = await query.limit(10000); // Sanity limit
-      return (data || []) as Freeze[];
+      return this.safeCall(async () => {
+        let query = supabase.from('freezes').select('*');
+        if (memberId) query = query.eq('member_id', memberId);
+        if (startDate) {
+            query = query.gte('end_date', startDate);
+        }
+        const { data, error } = await query.limit(10000); // Sanity limit
+        if (error) throw error;
+        return (data || []) as Freeze[];
+      }, []);
     }
     return [];
   }
@@ -1319,23 +1329,25 @@ class DatabaseService {
 
   async getMembershipTypes(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[]): Promise<MembershipType[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('membership_types').select('*');
-      if (scopeId) {
-          if (isProperty) {
-              if (limitToOutletIds && limitToOutletIds.length > 0) {
-                  query = query.in('outlet_id', limitToOutletIds);
-              } else {
-                  const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
-                  const ids = (outlets || []).map(o => o.id);
-                  query = query.in('outlet_id', ids);
-              }
-          } else {
-              query = query.eq('outlet_id', scopeId);
-          }
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []) as MembershipType[];
+      return this.safeCall(async () => {
+        let query = supabase.from('membership_types').select('*');
+        if (scopeId) {
+            if (isProperty) {
+                if (limitToOutletIds && limitToOutletIds.length > 0) {
+                    query = query.in('outlet_id', limitToOutletIds);
+                } else {
+                    const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
+                    const ids = (outlets || []).map(o => o.id);
+                    query = query.in('outlet_id', ids);
+                }
+            } else {
+                query = query.eq('outlet_id', scopeId);
+            }
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data || []) as MembershipType[];
+      }, []);
     }
     return [];
   }
@@ -1474,8 +1486,11 @@ class DatabaseService {
 
   async getCurrencies(): Promise<Currency[]> {
     if (this.isSupabase()) {
-      const { data } = await supabase.from('currencies').select('*');
-      return (data || []) as Currency[];
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('currencies').select('*');
+        if (error) throw error;
+        return (data || []) as Currency[];
+      }, []);
     }
     return [];
   }
@@ -1594,14 +1609,17 @@ class DatabaseService {
 
   async getMassageRooms(outletId?: string, propertyId?: string): Promise<MassageRoom[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('massage_rooms').select('*');
-      if (outletId) {
+      return this.safeCall(async () => {
+        let query = supabase.from('massage_rooms').select('*');
+        if (outletId) {
           query = query.eq('outlet_id', outletId);
-      } else if (propertyId) {
+        } else if (propertyId) {
           query = query.eq('property_id', propertyId);
-      }
-      const { data } = await query;
-      return (data || []) as MassageRoom[];
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data || []) as MassageRoom[];
+      }, []);
     }
     return [];
   }
@@ -1633,8 +1651,11 @@ class DatabaseService {
 
   async getProperties(): Promise<Property[]> {
     if (this.isSupabase()) {
-      const { data } = await supabase.from('properties').select('*');
-      return (data || []) as Property[];
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('properties').select('*');
+        if (error) throw error;
+        return (data || []) as Property[];
+      }, []);
     }
     return [];
   }
@@ -1829,6 +1850,7 @@ class DatabaseService {
 
   async getSales(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[], startDate?: string): Promise<Sale[]> {
     if (this.isSupabase()) {
+      return this.safeCall(async () => {
         let query = supabase.from('sales').select('*');
         if (isPropertyScope) {
             if (limitToOutletIds && limitToOutletIds.length > 0) {
@@ -1846,6 +1868,7 @@ class DatabaseService {
         const { data, error } = await query.order('created_at', { ascending: false }).limit(startDate ? 10000 : 2000); // Safety limit
         if (error) throw error;
         return (data || []) as Sale[] | any;
+      }, []);
     }
     return [];
   }

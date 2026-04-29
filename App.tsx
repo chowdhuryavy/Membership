@@ -546,7 +546,14 @@ const DynamicHead = () => {
       if (settings.name) {
         document.title = `${settings.name} | Console`;
       }
-      if (settings.logo_url && settings.logo_url.startsWith('http')) {
+      
+      const logoUrl = settings.logo_url;
+      const isExternalLogo = logoUrl && logoUrl.startsWith('http');
+      const isVercelLegacy = isExternalLogo && logoUrl.includes('vercel.app');
+      
+      // Only apply external logos if they are not from the legacy vercel domain
+      // and appear to be valid. Otherwise fallback to local icons.
+      if (isExternalLogo && !isVercelLegacy) {
         const setLink = (rel: string, extraProps?: Record<string, string>) => {
           let link = document.querySelector(`link[rel~='${rel}']`) as HTMLLinkElement;
           if (!link) {
@@ -554,7 +561,7 @@ const DynamicHead = () => {
             link.rel = rel;
             document.head.appendChild(link);
           }
-          link.href = `${settings.logo_url}?v=pwa-v6`;
+          link.href = `${logoUrl}?v=pwa-v6`;
           if (extraProps) {
             Object.entries(extraProps).forEach(([key, val]) => link.setAttribute(key, val));
           }
@@ -565,16 +572,26 @@ const DynamicHead = () => {
         setLink('apple-touch-icon');
         setLink('apple-touch-icon-precomposed');
         setLink('mask-icon', { color: '#4f46e5' });
-
-        // Set theme color for mobile browser bars
-        let meta = document.querySelector("meta[name='theme-color']") as HTMLMetaElement;
-        if (!meta) {
-          meta = document.createElement('meta');
-          meta.name = 'theme-color';
-          document.head.appendChild(meta);
-        }
-        meta.content = '#4f46e5';
+      } else {
+        // Explicitly reset to local icons if settings logo is problematic or missing
+        const resetLink = (rel: string, href: string) => {
+          let link = document.querySelector(`link[rel~='${rel}']`) as HTMLLinkElement;
+          if (link) {
+            link.href = `${href}?v=6`;
+          }
+        };
+        resetLink('icon', '/favicon.ico');
+        resetLink('apple-touch-icon', '/apple-touch-icon.png');
       }
+
+      // Set theme color for mobile browser bars
+      let meta = document.querySelector("meta[name='theme-color']") as HTMLMetaElement;
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        document.head.appendChild(meta);
+      }
+      meta.content = '#4f46e5';
     }
   }, [settings]);
 

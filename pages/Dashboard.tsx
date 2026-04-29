@@ -391,6 +391,10 @@ const Dashboard = () => {
             const targetMonthDate = subMonths(viewDate, i);
             const monthStart = startOfMonth(targetMonthDate);
             const monthEnd = endOfMonth(targetMonthDate);
+            // If it's the viewDate month and it's the current real-time month, cap it at auditPoint
+            const isTargetCurrentRealMonth = isSameMonth(targetMonthDate, now) && isSameMonth(viewDate, now);
+            const targetAuditPoint = isTargetCurrentRealMonth ? auditPoint : monthEnd;
+            
             const intakeInMonth = members.filter(m => isSameMonth(parseISO(m.start_date), targetMonthDate)).length;
 
             let totalRevInMonth = 0;
@@ -399,17 +403,15 @@ const Dashboard = () => {
                 const mEnd = parseISO(m.current_end_date);
                 if (mEnd >= monthStart && mStart <= monthEnd) {
                     const memberFreezes = freezes.filter(f => f.member_id === m.id);
-                    totalRevInMonth += RevenueEngine.calculateRevenuePeriod(m, memberFreezes, monthStart, monthEnd);
+                    totalRevInMonth += RevenueEngine.calculateRevenuePeriod(m, memberFreezes, monthStart, targetAuditPoint);
                 }
             });
             sales.filter(s => {
                 const d = new Date(s.created_at);
-                return s.status === 'completed' && d >= monthStart && d <= monthEnd;
+                return s.status === 'completed' && isSameMonth(d, targetMonthDate);
             }).forEach(s => totalRevInMonth += Number(s.net_amount));
-            bookings.filter(b => {
-                const d = parseISO(b.date);
-                return b.status === 'completed' && d >= monthStart && d <= monthEnd;
-            }).forEach(b => totalRevInMonth += (Number(b.price) - Number(b.discount || 0)));
+
+            // Removed bookings.filter(...) to avoid double counting, matching MTD logic
 
             performanceTrend.push({ month: format(targetMonthDate, 'MMM'), revenue: totalRevInMonth, intake: intakeInMonth });
         }
@@ -520,8 +522,6 @@ const Dashboard = () => {
         let prevMonthRevenue = 0;
         sales.filter(s => s.status === 'completed' && isSameMonth(new Date(s.created_at), prevMonthDate))
              .forEach(s => prevMonthRevenue += Number(s.net_amount));
-        bookings.filter(b => b.status === 'completed' && isSameMonth(parseISO(b.date), prevMonthDate))
-                .forEach(b => prevMonthRevenue += Number(b.price));
         members.forEach(m => {
             const mStart = parseISO(m.start_date);
             const mEnd = parseISO(m.current_end_date);
@@ -597,6 +597,8 @@ const Dashboard = () => {
         setPeakHours(peakHoursList);
         setTopSpenders(topSpendersList);
 
+        const dailyYieldTotal = totalDailyAccrual + dailyServiceRevenue + dailySalesBreakdown.personalTraining + dailySalesBreakdown.retail + dailySalesBreakdown.entranceFee + dailySalesBreakdown.other;
+
         setStats({
           activeMembers: activeAtPointCount, 
           frozenMembers: frozenAtPointCount,
@@ -604,7 +606,7 @@ const Dashboard = () => {
           dailyAccrual: totalDailyAccrual, 
           revenueThisMonth: currentTotalRevenue,
           futureRevenue: deferredRevenueAtPoint, 
-          projectedEndMonth: mtdMembershipRevenue + (totalDailyAccrual * Math.max(0, differenceInCalendarDays(endOfMonth(viewDate), auditPoint))),
+          projectedEndMonth: currentTotalRevenue + (dailyYieldTotal * Math.max(0, differenceInCalendarDays(endOfMonth(viewDate), auditPoint))),
           bookingCount: todayBookings.length,
           bookingYield: todayBookings.filter(b => b.status === 'completed').length,
           todaySalesTotal: todaySales.reduce((acc, s) => acc + s.net_amount, 0),
