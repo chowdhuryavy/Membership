@@ -117,6 +117,7 @@ export interface Staff {
   phone?: string;
   is_active: boolean;
   is_eligible_for_incentives: boolean; 
+  auth_id?: string;
   joining_date?: string; 
   probation_start_date?: string; 
   probation_end_date?: string;   
@@ -218,7 +219,9 @@ export interface Member {
   check_no?: string;
   status: MemberStatus;
   sales_rep_id?: string; 
+  sales_rep_name?: string;
   created_at?: string;
+  created_by?: string;
   nationality?: string;
   dob?: string;
   email?: string;
@@ -237,6 +240,8 @@ export interface Member {
   spouse_id_card_url?: string;
   notes?: string;
   referrer_name?: string;
+  creator_name?: string;
+  creator_email?: string;
 }
 
 export interface Freeze {

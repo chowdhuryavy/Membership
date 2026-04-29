@@ -525,8 +525,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     const dept = incentiveDept || 'Massage';
 
-    // For Personal Training and Massage, we often need staff from all outlets in the property
-    const staffQueryOutletIds = (dept === 'Personal Training' || dept === 'Massage') ? allPropertyOutletIds : outletIds;
+    // For most incentive reports, we want staff from all outlets in the property to ensure we can match sales reps
+    const staffQueryOutletIds = (dept === 'Personal Training' || dept === 'Massage' || dept === 'Membership' || dept === 'Referral') ? allPropertyOutletIds : outletIds;
 
     const [salesRes, bookingsRes, membersRes, rulesRes, staffRes, inventoryRes, mTypesRes, categoriesRes, guestsRes] = await Promise.all([
       supabase.from('sales').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59`),
@@ -554,14 +554,25 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       if (r.scope === 'Outlet' && outletIds.includes(r.scope_id)) return true;
       return false;
     });
-    const rawStaffList = (staffRes.data || []).filter((s: any) => {
-      const sOutlets = getStaffOutlets(s);
-      return sOutlets.some(id => staffQueryOutletIds.includes(id));
-    });
+    // rawStaffList is used for matching specific staff IDs/names to rows.
+    // It should include all staff in the property to ensure we can match creators/reps 
+    // even if they aren't primarily assigned to the currently selected outlet.
+    const rawStaffList = (staffRes.data || []);
+    
+    // staffList defines which staff columns are shown in the report.
+    // This should be strictly filtered by the selected outlet(s) and assigned range.
     const staffList = rawStaffList.filter((s: any) => {
+      // 1. Eligibility & Lifecycle
       if (!s.is_active || s.is_eligible_for_incentives === false) return false;
       
-      // Filter by joining date: staff must have joined before or during the report period
+      // 2. Strict Outlet Assignment check for the report period
+      const belongsToOutlet = (outletIds.includes('all')) 
+        ? true 
+        : outletIds.some(id => wasStaffAssignedToOutletInRange(s, id, startStr, endStr));
+      
+      if (!belongsToOutlet) return false;
+
+      // 3. Filter by joining date
       if (s.joining_date) {
         const joinDate = new Date(s.joining_date);
         joinDate.setHours(0,0,0,0);
@@ -569,12 +580,10 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         reportEndDate.setHours(23,59,59,999);
         if (joinDate > reportEndDate) return false;
       }
-
-      // Check if they belonged to the outlet during the report period
-      const belongsToOutlet = outletIds.some(id => wasStaffAssignedToOutletInRange(s, id, startStr, endStr)) || outletIds.includes('all');
       
-      // For Personal Training, we might want to be more inclusive with staff assigned to the property
-      if (!belongsToOutlet && dept !== 'Personal Training') return false;
+      // 4. Role-based filtering for specific departments
+      if (dept === 'Personal Training' && s.role !== 'Personal Trainer') return false;
+      if (dept === 'Massage' && !['Therapist', 'Masseur', 'Masseuse'].includes(s.role || '')) return false;
       
       return true; 
     });
@@ -593,10 +602,14 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       bookings.filter(b => {
         const type = mTypes.find(m => m.id === b.massage_type_id) || mTypes.find(m => m.id === b.inventory_item_id) || inventory.find(i => i.id === b.inventory_item_id);
         const cat = type?.category?.trim();
+        const normCat = (cat || '').toLowerCase();
+        const normDept = dept.toLowerCase();
+        
         if (dept === 'Massage') {
-          return cat === 'Massage' || !cat;
+          return normCat.includes('massage') || !cat;
         }
-        return cat === dept;
+        // Personal Training check
+        return normCat.includes(normDept) || normCat === 'pt' || normCat.includes('trainer') || normCat.includes('training');
       }).forEach(b => {
         const type = mTypes.find(m => m.id === b.massage_type_id) || mTypes.find(m => m.id === b.inventory_item_id) || inventory.find(i => i.id === b.inventory_item_id);
         if (!type) return;
@@ -620,8 +633,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           
           if (rule.distribution_type === 'Shared') {
             const available = staffList.filter(s => {
-              const isEligible = s.is_eligible_for_incentives !== false;
-              return isEligible && isStaffAssignedToOutletOnDate(s, b.outlet_id, b.date) && !isStaffOnLeaveOnDate(s, b.date) && !isStaffOnProbationOnDate(s, b.date);
+              return isStaffAssignedToOutletOnDate(s, b.outlet_id, b.date);
             });
             if (available.length > 0) {
               const share = incNet / available.length;
@@ -633,9 +645,10 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             const trainerId = b.therapist_id;
             const therapist = rawStaffList.find(s => s.id === trainerId);
             if (therapist) {
-              const isEligible = therapist.is_eligible_for_incentives !== false;
+              const isPersonalTrainer = dept === 'Personal Training' ? therapist.role === 'Personal Trainer' : true;
+              const isEligible = therapist.is_eligible_for_incentives !== false && isPersonalTrainer;
               if (!isEligible) {
-                remarks = 'Staff not eligible for incentives';
+                remarks = isPersonalTrainer ? 'Staff not eligible for incentives' : 'Staff role not PT';
                 staffSplits[trainerId] = 0;
               } else if (isStaffOnLeaveOnDate(therapist, b.date) || isStaffOnProbationOnDate(therapist, b.date)) {
                 remarks = 'Staff on Leave/Probation';
@@ -701,9 +714,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             
             if (rule.distribution_type === 'Shared') {
               const available = staffList.filter(st => {
-                const isEligible = st.is_eligible_for_incentives !== false;
-                const sOutlets = getStaffOutlets(st);
-                return isEligible && sOutlets.includes(s.outlet_id) && !isStaffOnLeaveOnDate(st, s.created_at) && !isStaffOnProbationOnDate(st, s.created_at);
+                return isStaffAssignedToOutletOnDate(st, s.outlet_id, s.created_at);
               });
               if (available.length > 0) {
                 const share = incNet / available.length;
@@ -717,9 +728,10 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
               if (trainerId) {
                 const staff = rawStaffList.find(st => st.id === trainerId);
                 if (staff) {
-                  const isEligible = staff.is_eligible_for_incentives !== false;
+                  const isPersonalTrainer = dept === 'Personal Training' ? staff.role === 'Personal Trainer' : true;
+                  const isEligible = staff.is_eligible_for_incentives !== false && isPersonalTrainer;
                   if (!isEligible) {
-                    remarks = 'Staff not eligible for incentives';
+                    remarks = isPersonalTrainer ? 'Staff not eligible for incentives' : 'Staff role not PT';
                     staffSplits[trainerId] = 0;
                   } else if (isStaffOnLeaveOnDate(staff, s.created_at) || isStaffOnProbationOnDate(staff, s.created_at)) {
                     remarks = 'Staff on Leave/Probation';
@@ -772,21 +784,18 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     } else if (dept === 'Membership') {
       members
         .forEach(m => {
+        // 1. Find Rules
         const cat = mCats.find(c => c.id === m.category_id);
-        
-        // Try Category ID first, then Type ID
-        const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
-
-        // Check for referral override
-        let isRefDisabled = false;
-        if (m.referrer_name && m.referrer_name.trim() !== '') {
-          const referralRule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
-          if (referralRule && referralRule.disable_shared_incentive) {
-            isRefDisabled = true;
-          }
-        }
+        const cleanReferrerName = (m.referrer_name || '').replace(/^Referral:\s*/i, '').trim();
+        const normalize = (n: string) => n.toLowerCase().replace(/\./g, ' ').replace(/\s+/g, ' ').trim();
+        const cleanRefNorm = normalize(cleanReferrerName);
 
         const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
+        
+        const refRule = cleanReferrerName ? findBestRule(rules, 'Referral', m.category_id, actualPrice, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined) : null;
+        const rule = findBestRule(rules, 'Membership', m.category_id, actualPrice, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
+
+        // 2. Constants
         const discountAmt = m.discount || 0;
         const netRev = m.net_amount;
         const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
@@ -798,46 +807,51 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const staffSplits: Record<string, number> = {};
         let remarks = m.remarks || '';
 
-        if (isRefDisabled) {
-          remarks = remarks ? `${remarks} (Incentive handled by Referral)` : 'Incentive handled by Referral';
-        } else if (!rule) {
-          remarks = remarks ? `${remarks} (No matching Membership rule found)` : 'No matching Membership rule found';
-          if (m.sales_rep_id) {
-            staffSplits[m.sales_rep_id] = 0;
-          }
-        } else {
-          baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-          incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
-          incNet = baseInc - incDiscVal;
+        // 3. Process Referral Rule (for checking if staff portion is triggered)
+        if (refRule) {
+          const payeeMode = refRule.referral_payee || 'Referrer';
+          const isBoth = payeeMode === 'Both';
+          const isReferrer = payeeMode === 'Referrer' || isBoth;
 
-          if (rule.distribution_type === 'Shared') {
-            const available = staffList.filter(s => {
-              const isEligible = s.is_eligible_for_incentives !== false;
-              const sOutlets = getStaffOutlets(s);
-              return isEligible && sOutlets.includes(m.outlet_id) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date);
-            });
-            if (available.length > 0) {
-              const share = incNet / available.length;
-              available.forEach(s => staffSplits[s.id] = share);
-            } else {
-              remarks = 'Shared: No eligible staff available';
-            }
-          } else if (m.sales_rep_id) {
-            const staff = rawStaffList.find(s => s.id === m.sales_rep_id);
-            if (staff) {
-              const isEligible = staff.is_eligible_for_incentives !== false;
-              if (!isEligible) {
-                remarks = 'Staff not eligible for incentives';
-                staffSplits[m.sales_rep_id] = 0;
-              } else if (isStaffOnLeaveOnDate(staff, m.start_date) || isStaffOnProbationOnDate(staff, m.start_date)) {
-                remarks = 'Staff on Leave/Probation';
-                staffSplits[m.sales_rep_id] = 0;
-              } else {
-                staffSplits[m.sales_rep_id] = incNet;
-              }
-            } else {
-              remarks = 'Staff not found';
-            }
+          if (isReferrer) {
+            remarks = `Referral (${payeeMode})`;
+            // Referrer portion is NOT shown in Membership (Staff) report
+          }
+        }
+
+        // 4. Process Membership Rule (for Staff portion)
+        const isRefDisabled = refRule && refRule.disable_shared_incentive;
+        const isStaffViaReferral = refRule && (refRule.referral_payee === 'Staff' || refRule.referral_payee === 'Sales Staff' || refRule.referral_payee === 'Both');
+        
+        if (isRefDisabled && !isStaffViaReferral) {
+          remarks = remarks ? `${remarks} + (Mem Inc Disabled)` : 'Mem Inc Disabled';
+        } else if (!rule) {
+          remarks = remarks ? `${remarks} (No Mem Rule)` : 'No Mem Rule';
+        } else {
+          const mBase = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+          const mDiscVal = (rule.apply_discount_percentage !== false) ? (mBase * discPercent) / 100 : 0;
+          const mNet = mBase - mDiscVal;
+
+          baseInc += mBase;
+          incDiscVal += mDiscVal;
+          incNet += mNet;
+          remarks = remarks ? `${remarks} + Regular Membership` : 'Regular Membership';
+
+          // Shared logic for membership report as per user request
+          let available = staffList.filter(s => {
+            return isStaffAssignedToOutletOnDate(s, m.outlet_id, m.start_date);
+          });
+
+          // Fallback: If no historical assignment found, use any staff currently assigned to this outlet
+          if (available.length === 0) {
+            available = staffList.filter(s => getStaffOutlets(s).includes(m.outlet_id));
+          }
+
+          if (available.length > 0) {
+            const share = mNet / available.length;
+            available.forEach(s => staffSplits[s.id] = (staffSplits[s.id] || 0) + share);
+          } else {
+            remarks += ' (Membership: No eligible staff for share)';
           }
         }
 
@@ -850,7 +864,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             guest_name: m.guest_name,
             membership_no: m.membership_number || m.membership_no || 'N/A',
             item_name: cat?.name || m.category_id || 'Unknown Tier',
-            therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (rawStaffList.find(s => s.id === displaySalesRepId)?.name || 'N/A'),
+            therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (rawStaffList.find(s => s.id === displaySalesRepId)?.name || m._matched_sales_rep_name || 'N/A'),
             outlet_name: outletMap[m.outlet_id] || 'Unknown',
             actual_price: actualPrice,
             discount_percent: discPercent,
@@ -974,6 +988,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
         const cleanReferrerName = (m.referrer_name || '').replace(/^Referral:\s*/i, '').trim();
+        const normalize = (n: string) => n.toLowerCase().replace(/\./g, ' ').replace(/\s+/g, ' ').trim();
+        const cleanRefNorm = normalize(cleanReferrerName);
         const cleanRefForReport = cleanReferrerName || '';
         
         let baseInc = 0;
@@ -987,95 +1003,29 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         if (!rule) {
           remarks = remarks ? `${remarks} (No Referral Rule found)` : 'No Referral Rule found';
         } else {
-          baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-          incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
-          incNet = baseInc - incDiscVal;
+          const rBase = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+          const rDiscVal = (rule.apply_discount_percentage !== false) ? (rBase * discPercent) / 100 : 0;
+          const rNet = rBase - rDiscVal;
           
           const payeeMode = rule.referral_payee || 'Referrer';
           const isBoth = payeeMode === 'Both';
           const isReferrer = payeeMode === 'Referrer' || isBoth;
-          const isStaff = payeeMode === 'Staff' || payeeMode === 'Sales Staff' || isBoth;
 
           remarks = `Referral Payee: ${payeeMode}`;
 
           if (isReferrer) {
-            referrerNet = incNet;
-            referrerTotals[cleanReferrerName] = (referrerTotals[cleanReferrerName] || 0) + incNet;
-          }
-          
-          if (isStaff) {
-            // Payee is 'Staff' (Sales Staff)
-            // 1. Try to find the person who actually sold the membership (sales_rep_id)
-            const salesRepId = (m.sales_rep_id && m.sales_rep_id !== 'N/A') ? m.sales_rep_id : null;
-            
-            // 2. Fallback to matching name of referrer if they are staff
-            const matchedStaff = salesRepId 
-              ? rawStaffList.find(s => s.id === salesRepId) 
-              : rawStaffList.find(s => s.name.toLowerCase() === cleanReferrerName.toLowerCase());
-            
-            if (matchedStaff) {
-               staffSplits[matchedStaff.id] = (staffSplits[matchedStaff.id] || 0) + incNet;
-            } else {
-               // 3. Last fallback: search for ANY staff with sales rep matching name (in case ID is missing but name exists)
-               const repName = m.sales_rep_name || '';
-               const fallbackStaffByRepName = repName ? rawStaffList.find(s => s.name.toLowerCase() === repName.toLowerCase()) : null;
-               
-               if (fallbackStaffByRepName) {
-                 staffSplits[fallbackStaffByRepName.id] = (staffSplits[fallbackStaffByRepName.id] || 0) + incNet;
-               } else {
-                 remarks = remarks ? `${remarks} (Staff not found for Referral)` : 'Staff not found for Referral';
-               }
-            }
+            baseInc = rBase;
+            incDiscVal = rDiscVal;
+            incNet = rNet;
+            referrerNet = rNet;
+            referrerTotals[cleanReferrerName] = (referrerTotals[cleanReferrerName] || 0) + rNet;
           }
         }
 
-        // --- ADD REGULAR MEMBERSHIP INCENTIVE IF NOT DISABLED ---
-        const skipRegular = rule && rule.disable_shared_incentive;
-        if (!skipRegular) {
-          if (memRule) {
-            const memBase = memRule.calculation_type === 'Fixed' ? memRule.value : (actualPrice * memRule.value / 100);
-            const memDiscVal = (memRule.apply_discount_percentage !== false) ? (memBase * discPercent) / 100 : 0;
-            const memIncNet = memBase - memDiscVal;
-
-            // Add to total row displays
-            baseInc += memBase;
-            incDiscVal += memDiscVal;
-            incNet += memIncNet; 
-            
-            remarks = remarks ? `${remarks} + Regular Membership Inc` : 'Regular Membership Inc';
-
-            if (memRule.distribution_type === 'Shared') {
-              const available = staffList.filter(s => {
-                const sOutlets = getStaffOutlets(s);
-                return s.is_eligible_for_incentives !== false && sOutlets.includes(m.outlet_id) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date);
-              });
-              if (available.length > 0) {
-                const share = memIncNet / available.length;
-                available.forEach(s => staffSplits[s.id] = (staffSplits[s.id] || 0) + share);
-              } else {
-                remarks = `${remarks} (Shared: No eligible staff found)`;
-              }
-            } else {
-              const sId = (m.sales_rep_id && m.sales_rep_id !== 'N/A') ? m.sales_rep_id : null;
-              if (sId) {
-                const staff = rawStaffList.find(s => s.id === sId);
-                if (staff && staff.is_eligible_for_incentives !== false && !isStaffOnLeaveOnDate(staff, m.start_date) && !isStaffOnProbationOnDate(staff, m.start_date)) {
-                  staffSplits[sId] = (staffSplits[sId] || 0) + memIncNet;
-                } else {
-                  remarks = `${remarks} (Sales Rep not eligible or away)`;
-                }
-              }
-            }
-          } else {
-            remarks = remarks ? `${remarks} (No matching Membership rule found)` : 'No matching Membership rule found';
-          }
-        } else if (skipRegular) {
-          remarks = remarks ? `${remarks} (Regular Inc Disabled)` : 'Regular Inc Disabled';
-        }
+        // --- STAFF PORTION NOT SHOWN IN REFERRAL REPORT ---
+        // (It will be shown in Membership/Staff reports instead)
         
-        const displayStaffName = Object.keys(staffSplits).length > 0 
-          ? rawStaffList.find(s => s.id === Object.keys(staffSplits)[0])?.name 
-          : (rawStaffList.find(s => s.name.toLowerCase() === cleanReferrerName.toLowerCase())?.name || cleanReferrerName || 'N/A');
+        const displayStaffName = cleanReferrerName || 'N/A';
 
         rows.push({
           id: m.id,
@@ -1084,7 +1034,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           guest_name: m.guest_name,
           membership_no: m.membership_number || m.membership_no || 'N/A', 
           item_name: cat?.name || m.category_id || 'Tier Info',
-          therapist_name: cleanReferrerName,
+          therapist_name: m._matched_sales_rep_name || cleanReferrerName,
           outlet_name: outletMap[m.outlet_id] || 'Unknown',
           actual_price: actualPrice,
           discount_percent: discPercent,
@@ -1117,18 +1067,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       // For Referral report, only show staff who earned something in this period
       if (dept === 'Referral') return false;
       
-      // If no incentives earned, show all active staff in the department/role
-      const role = (s.role || '').toLowerCase();
-      console.log(`DEBUG: Staff ${s.name} (ID: ${s.id}) role: ${role}, dept: ${dept}`);
-      
-      if (dept === 'Massage') return role.includes('therapist') || role.includes('massage') || role.includes('spa');
-      if (dept === 'Personal Training') {
-        return role.includes('trainer') || role.includes('pt') || role.includes('coach') || 
-               role.includes('instructor') || role.includes('gym') || role.includes('fitness') ||
-               role.includes('sport') || role.includes('yoga') || role.includes('pool') || role.includes('lifeguard') ||
-               role.includes('personal');
-      }
-      return true; // Membership shows all
+      // For Membership and others, show experts/reps even if 0 earned (to show they are active)
+      return true;
     });
 
     // If no staff found by role, show all active staff in the outlet as fallback

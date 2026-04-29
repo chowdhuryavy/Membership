@@ -11,6 +11,7 @@ import {
   CheckCircle2, Command, ChevronDown, Receipt, List
 } from 'lucide-react';
 import { db } from '../../services/mockSupabase';
+import { useAuth } from '../../contexts/AuthContext';
 import { Member, MembershipCategory, MemberStatus, Staff, MembershipType } from '../../types';
 import { RevenueEngine } from '../../services/revenueEngine';
 import { format, addDays, parse, isAfter, differenceInDays, startOfDay, parseISO } from 'date-fns';
@@ -35,6 +36,7 @@ const memberSchema = z.object({
   spouse_dob: z.string().optional().nullable(),
   spouse_id_card_url: z.string().optional().nullable(),
   referrer_name: z.string().optional().nullable(),
+  sales_rep_id: z.string().optional().nullable(),
   kids: z.array(z.object({
     name: z.string().min(1, "Name required"),
     dob: z.string().min(1, "DOB required"),
@@ -63,6 +65,7 @@ interface MemberEnrollmentFormProps {
 const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   existingMember, isEditing, isRenewal, categories, membershipTypes, selectedTypeId, onTypeChange, staff, allMembers, onCancel, onSuccess
 }) => {
+  const { user } = useAuth();
   const { currentOutlet, formatMoney, setPageLoading, currency } = useSettings();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -113,6 +116,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         package_type: existingMember.package_type || 'Single',
         access_type: existingMember.access_type || 'Both',
         referrer_name: existingMember.referrer_name ?? '',
+        sales_rep_id: existingMember.sales_rep_id ?? '',
     } : {
       membership_number: '',
       guest_name: '',
@@ -132,7 +136,8 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       phone: '',
       email: '',
       nationality: '',
-      referrer_name: ''
+      referrer_name: '',
+      sales_rep_id: ''
     }
   });
 
@@ -174,6 +179,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('check_no', '');
     setValue('discount', 0);
     setValue('referrer_name', '');
+    setValue('sales_rep_id', '');
   }, [setValue]);
 
   const setMemberDefaults = (found: Member) => {
@@ -191,10 +197,25 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('category_id', found.category_id);
     setValue('membership_number', found.membership_number);
     setValue('referrer_name', found.referrer_name || '');
+    setValue('sales_rep_id', found.sales_rep_id || '');
     
     const newStart = calculateDefaultStartDate(found.current_end_date);
     setValue('start_date', newStart);
   };
+
+  // Auto-select sales rep for new enrollments if current user is a staff
+  useEffect(() => {
+    if (!isEditing && !isRenewal && staff && staff.length > 0 && user && !watch('sales_rep_id')) {
+      const currentStaffMatch = staff.find(s => 
+        (s.email && user.email && s.email.toLowerCase() === user.email.toLowerCase()) || 
+        (s.name && user.name && s.name.toLowerCase() === user.name.toLowerCase()) ||
+        (s.auth_id && user.id && s.auth_id === user.id)
+      );
+      if (currentStaffMatch) {
+        setValue('sales_rep_id', currentStaffMatch.id);
+      }
+    }
+  }, [user, staff, isEditing, isRenewal, setValue, watch]);
 
   // Handle Identity Matching & Auto-Start Date Calculation
   useEffect(() => {
@@ -264,10 +285,18 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     if (sanitizedData.membership_type_id === '') sanitizedData.membership_type_id = null;
 
     const isUpdate = !!(isEditing && !isRenewal && existingMember);
+    
+    // Add sales rep name as fallback
+    const selectedSalesRep = sanitizedData.sales_rep_id ? staff.find(s => s.id === sanitizedData.sales_rep_id) : null;
+    
     const payload: Member = {
       ...(isUpdate ? existingMember : {}),
       ...sanitizedData,
       id: isUpdate ? existingMember!.id : crypto.randomUUID(),
+      sales_rep_name: selectedSalesRep?.name || (sanitizedData as any).sales_rep_name || null,
+      created_by: isUpdate ? existingMember!.created_by : (user?.id || null),
+      creator_name: isUpdate ? (existingMember as any).creator_name : (user?.name || null),
+      creator_email: isUpdate ? (existingMember as any).creator_email : (user?.email || null),
       outlet_id: currentOutlet.id,
       original_end_date: recognition.expiry,
       current_end_date: recognition.expiry,
@@ -490,6 +519,21 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                             <User className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
                         </div>
                         <input {...register('referrer_name')} disabled={isRenewal || matchedMembers.length > 0} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:bg-slate-50" placeholder="Referral Name" />
+                    </div>
+                </div>
+                <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Sales Rep / Expert *</label>
+                    <div className="relative group">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
+                            <ShieldCheck className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
+                        </div>
+                        <select {...register('sales_rep_id')} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm appearance-none cursor-pointer">
+                            <option value="">Select Sales Consultant...</option>
+                            {staff.map(s => (
+                                <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+                            ))}
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>
                 </div>
             </div>

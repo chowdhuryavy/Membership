@@ -910,7 +910,9 @@ const Reports = () => {
                                 <tbody>
                                     {activeStaffList.map((s, idx) => {
                                         const amount = totals.staffTotals[s.id] || 0;
-                                        if (amount <= 0) return null;
+                                        // On Referral report, hide zeros. On others, show all if they were included in activeStaffList
+                                        if (incentiveDept === 'Referral' && amount <= 0) return null;
+                                        
                                         const colors = ['bg-emerald-50/50', 'bg-orange-50/50', 'bg-amber-50/50', 'bg-yellow-50/50', 'bg-green-50/50', 'bg-slate-50/50', 'bg-blue-50/50'];
                                         const color = colors[idx % colors.length];
                                         return (
