@@ -600,7 +600,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       }).forEach(b => {
         const type = mTypes.find(m => m.id === b.massage_type_id) || mTypes.find(m => m.id === b.inventory_item_id) || inventory.find(i => i.id === b.inventory_item_id);
         if (!type) return;
-        const rule = findBestRule(rules, dept, (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes);
+        const rule = findBestRule(rules, dept, (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes, b.outlet_id);
         
         const actualPrice = b.price || type.price;
         const discountAmt = b.discount || 0;
@@ -681,7 +681,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const sales = (salesRes.data || []).filter(s => s.category === 'Personal Training');
         sales.forEach(s => {
           const item = inventory.find(i => i.id === s.item_id);
-          const rule = findBestRule(rules, dept, s.item_id || '', s.unit_price, 0);
+          const rule = findBestRule(rules, dept, s.item_id || '', s.unit_price, 0, s.outlet_id);
           
           const actualPrice = s.gross_amount;
           const discountAmt = s.discount_amount || 0;
@@ -743,6 +743,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
           const displayTrainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
           
+          const cleanRefForPT = (s.referrer_name || '').replace(/^Referral:\s*/i, '').trim() || '';
+          
           rows.push({
             id: s.id,
             sl_no: sl++,
@@ -762,7 +764,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             remarks: remarks,
             check_no: s.check_no || '',
             duration: 'Sale',
-            staff_splits: staffSplits
+            staff_splits: staffSplits,
+            referrer_name: cleanRefForPT
           });
         });
       }
@@ -772,12 +775,12 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const cat = mCats.find(c => c.id === m.category_id);
         
         // Try Category ID first, then Type ID
-        const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
+        const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
 
         // Check for referral override
         let isRefDisabled = false;
         if (m.referrer_name && m.referrer_name.trim() !== '') {
-          const referralRule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
+          const referralRule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
           if (referralRule && referralRule.disable_shared_incentive) {
             isRefDisabled = true;
           }
@@ -798,7 +801,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         if (isRefDisabled) {
           remarks = remarks ? `${remarks} (Incentive handled by Referral)` : 'Incentive handled by Referral';
         } else if (!rule) {
-          remarks = remarks ? `${remarks} (No Rule)` : 'No Rule';
+          remarks = remarks ? `${remarks} (No matching Membership rule found)` : 'No matching Membership rule found';
           if (m.sales_rep_id) {
             staffSplits[m.sales_rep_id] = 0;
           }
@@ -839,7 +842,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         }
 
           const displaySalesRepId = [m.sales_rep_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
-          const cleanRefForMem = (m.referrer_name || '').replace(/^Referral:\s*/i, '').trim() || 'N/A';
+          const cleanRefForMem = (m.referrer_name || '').replace(/^Referral:\s*/i, '').trim() || '';
           rows.push({
             id: m.id,
             sl_no: sl++,
@@ -868,7 +871,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       const sales = (salesRes.data || []).filter(s => s.category !== 'Personal Training');
       sales.forEach(s => {
         const item = inventory.find(i => i.id === s.item_id);
-        const rule = findBestRule(rules, dept, s.item_id || '', s.unit_price, 0, s.category);
+        const rule = findBestRule(rules, dept, s.item_id || '', s.unit_price, 0, s.outlet_id, s.category);
         
         const actualPrice = s.gross_amount;
         const discountAmt = s.discount_amount || 0;
@@ -929,6 +932,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
         const displayTrainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
         
+        const cleanRefForSale = (s.referrer_name || '').replace(/^Referral:\s*/i, '').trim() || '';
+        
         rows.push({
           id: s.id,
           sl_no: sl++,
@@ -948,7 +953,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           remarks: remarks,
           check_no: s.check_no || '',
           duration: 'Sale',
-          staff_splits: staffSplits
+          staff_splits: staffSplits,
+          referrer_name: cleanRefForSale
         });
       });
     } else if (dept === 'Referral') {
@@ -959,7 +965,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const cat = mCats.find(c => c.id === m.category_id);
         
         // Match by category/tier (Primary) or Type (Secondary)
-        const rule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
+        const rule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
+        const memRule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
 
         const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
         const discountAmt = m.discount || 0;
@@ -967,6 +974,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
         const cleanReferrerName = (m.referrer_name || '').replace(/^Referral:\s*/i, '').trim();
+        const cleanRefForReport = cleanReferrerName || '';
         
         let baseInc = 0;
         let incDiscVal = 0;
@@ -977,17 +985,18 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         let referrerNet = 0;
 
         if (!rule) {
-          remarks = remarks ? `${remarks} (No Rule)` : 'No Rule';
+          remarks = remarks ? `${remarks} (No Referral Rule found)` : 'No Referral Rule found';
         } else {
           baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
           incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
           incNet = baseInc - incDiscVal;
           
-          remarks = `Referral Payee: ${rule.referral_payee || 'Staff'}`;
+          const payeeMode = rule.referral_payee || 'Referrer';
+          const isBoth = payeeMode === 'Both';
+          const isReferrer = payeeMode === 'Referrer' || isBoth;
+          const isStaff = payeeMode === 'Staff' || payeeMode === 'Sales Staff' || isBoth;
 
-          const isBoth = rule.referral_payee === 'Both';
-          const isReferrer = rule.referral_payee === 'Referrer' || isBoth;
-          const isStaff = rule.referral_payee === 'Staff' || isBoth || !rule.referral_payee;
+          remarks = `Referral Payee: ${payeeMode}`;
 
           if (isReferrer) {
             referrerNet = incNet;
@@ -996,48 +1005,74 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           
           if (isStaff) {
             // Payee is 'Staff' (Sales Staff)
-            const possibleStaffId = m.sales_rep_id;
-            const matchedStaff = possibleStaffId ? rawStaffList.find(s => s.id === possibleStaffId) : rawStaffList.find(s => s.name.toLowerCase() === cleanReferrerName.toLowerCase());
+            // 1. Try to find the person who actually sold the membership (sales_rep_id)
+            const salesRepId = (m.sales_rep_id && m.sales_rep_id !== 'N/A') ? m.sales_rep_id : null;
+            
+            // 2. Fallback to matching name of referrer if they are staff
+            const matchedStaff = salesRepId 
+              ? rawStaffList.find(s => s.id === salesRepId) 
+              : rawStaffList.find(s => s.name.toLowerCase() === cleanReferrerName.toLowerCase());
             
             if (matchedStaff) {
                staffSplits[matchedStaff.id] = (staffSplits[matchedStaff.id] || 0) + incNet;
             } else {
-               remarks = remarks ? `${remarks} (Staff not identified)` : 'Staff not identified';
+               // 3. Last fallback: search for ANY staff with sales rep matching name (in case ID is missing but name exists)
+               const repName = m.sales_rep_name || '';
+               const fallbackStaffByRepName = repName ? rawStaffList.find(s => s.name.toLowerCase() === repName.toLowerCase()) : null;
+               
+               if (fallbackStaffByRepName) {
+                 staffSplits[fallbackStaffByRepName.id] = (staffSplits[fallbackStaffByRepName.id] || 0) + incNet;
+               } else {
+                 remarks = remarks ? `${remarks} (Staff not found for Referral)` : 'Staff not found for Referral';
+               }
             }
           }
         }
 
         // --- ADD REGULAR MEMBERSHIP INCENTIVE IF NOT DISABLED ---
-        if (!rule || !rule.disable_shared_incentive) {
-           const memRule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
-           if (memRule) {
-              const memBase = memRule.calculation_type === 'Fixed' ? memRule.value : (actualPrice * memRule.value / 100);
-              const memDiscVal = (memRule.apply_discount_percentage !== false) ? (memBase * discPercent) / 100 : 0;
-              const memIncNet = memBase - memDiscVal;
+        const skipRegular = rule && rule.disable_shared_incentive;
+        if (!skipRegular) {
+          if (memRule) {
+            const memBase = memRule.calculation_type === 'Fixed' ? memRule.value : (actualPrice * memRule.value / 100);
+            const memDiscVal = (memRule.apply_discount_percentage !== false) ? (memBase * discPercent) / 100 : 0;
+            const memIncNet = memBase - memDiscVal;
 
-              incNet += memIncNet; // Add to total row liability
-              remarks = remarks ? `${remarks} + Regular Inc` : 'Regular Inc';
+            // Add to total row displays
+            baseInc += memBase;
+            incDiscVal += memDiscVal;
+            incNet += memIncNet; 
+            
+            remarks = remarks ? `${remarks} + Regular Membership Inc` : 'Regular Membership Inc';
 
-              if (memRule.distribution_type === 'Shared') {
-                const available = staffList.filter(s => {
-                  const sOutlets = getStaffOutlets(s);
-                  return s.is_eligible_for_incentives !== false && sOutlets.includes(m.outlet_id) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date);
-                });
-                if (available.length > 0) {
-                  const share = memIncNet / available.length;
-                  available.forEach(s => staffSplits[s.id] = (staffSplits[s.id] || 0) + share);
-                }
-              } else if (m.sales_rep_id) {
-                const staff = rawStaffList.find(s => s.id === m.sales_rep_id);
+            if (memRule.distribution_type === 'Shared') {
+              const available = staffList.filter(s => {
+                const sOutlets = getStaffOutlets(s);
+                return s.is_eligible_for_incentives !== false && sOutlets.includes(m.outlet_id) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date);
+              });
+              if (available.length > 0) {
+                const share = memIncNet / available.length;
+                available.forEach(s => staffSplits[s.id] = (staffSplits[s.id] || 0) + share);
+              } else {
+                remarks = `${remarks} (Shared: No eligible staff found)`;
+              }
+            } else {
+              const sId = (m.sales_rep_id && m.sales_rep_id !== 'N/A') ? m.sales_rep_id : null;
+              if (sId) {
+                const staff = rawStaffList.find(s => s.id === sId);
                 if (staff && staff.is_eligible_for_incentives !== false && !isStaffOnLeaveOnDate(staff, m.start_date) && !isStaffOnProbationOnDate(staff, m.start_date)) {
-                  staffSplits[m.sales_rep_id] = (staffSplits[m.sales_rep_id] || 0) + memIncNet;
+                  staffSplits[sId] = (staffSplits[sId] || 0) + memIncNet;
+                } else {
+                  remarks = `${remarks} (Sales Rep not eligible or away)`;
                 }
               }
-           }
-        } else {
-           remarks = remarks ? `${remarks} (Regular Inc Disabled)` : 'Regular Inc Disabled';
+            }
+          } else {
+            remarks = remarks ? `${remarks} (No matching Membership rule found)` : 'No matching Membership rule found';
+          }
+        } else if (skipRegular) {
+          remarks = remarks ? `${remarks} (Regular Inc Disabled)` : 'Regular Inc Disabled';
         }
-
+        
         const displayStaffName = Object.keys(staffSplits).length > 0 
           ? rawStaffList.find(s => s.id === Object.keys(staffSplits)[0])?.name 
           : (rawStaffList.find(s => s.name.toLowerCase() === cleanReferrerName.toLowerCase())?.name || cleanReferrerName || 'N/A');
@@ -1063,7 +1098,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           check_no: m.check_no || '',
           duration: 'Referral',
           staff_splits: staffSplits,
-          referrer_name: cleanReferrerName,
+          referrer_name: cleanRefForReport,
           referrer_amount: referrerNet
         });
       });
@@ -2244,50 +2279,78 @@ export const generateReportPDF = (options: PDFOptions) => {
 
 // --- INCENTIVE HELPERS ---
 
-export function findBestRule(rules: any[], department: string, targetId: string, price: number, duration: number, secondaryId?: string) {
-  // 1. Filter candidates by active status and department
-  const candidates = rules.filter(r => r.is_active !== false && r.applies_to === department);
-  
-  // 2. Sort by specificity:
-  // - Exact Target ID (including type: prefix)
-  // - Scope: Outlet > Property > Global
-  const sorted = candidates.sort((a, b) => {
-    // Exact match is more specific than 'all'
-    const aIsAll = a.target_id === 'all' || !a.target_id;
-    const bIsAll = b.target_id === 'all' || !b.target_id;
-    if (aIsAll && !bIsAll) return 1;
-    if (!aIsAll && bIsAll) return -1;
-    
-    // Scope specificity
-    const scopeOrder: Record<string, number> = { 'Outlet': 0, 'Property': 1, 'Global': 2 };
-    return (scopeOrder[a.scope] || 9) - (scopeOrder[b.scope] || 9);
+export function findBestRule(rules: any[], department: string, targetId: string, price: number, duration: number, scopeId?: string, secondaryId?: string) {
+  // 1. Filter candidates by active status and department (Case-insensitive)
+  const targetDept = String(department || '').toLowerCase().trim();
+  const candidates = rules.filter(r => {
+    const rDept = String(r.applies_to || r.department || '').toLowerCase().trim();
+    return r.is_active !== false && rDept === targetDept;
   });
+  
+  if (candidates.length === 0) return null;
 
-  // 3. Find the first rule that matches all criteria
-  return sorted.find(r => {
+  // 2. Find matches
+  const matches = candidates.filter(r => {
+    // Scope Match: If rule has an outlet scope, it must match the provided scopeId
+    if (r.scope === 'Outlet' && scopeId && String(r.scope_id) !== String(scopeId)) return false;
+
     // Target Match
+    const rtRaw = String(r.target_id || '').toLowerCase().trim();
+    const t1Raw = String(targetId || '').toLowerCase().trim();
+    const t2Raw = secondaryId ? String(secondaryId).toLowerCase().trim() : '';
+
+    const cleanTargetId = rtRaw.replace(/^type:/, '');
+    const cleanMainId = t1Raw.replace(/^type:/, '');
+    const cleanSecId = t2Raw.replace(/^type:/, '');
+
+    const isAll = rtRaw === 'all' || !rtRaw;
     const targetMatch = 
-      r.target_id === 'all' || 
-      !r.target_id || 
-      r.target_id === targetId || 
-      (secondaryId && (r.target_id === secondaryId || r.target_id === `type:${secondaryId}`));
+      isAll || 
+      rtRaw === t1Raw || 
+      rtRaw === t2Raw ||
+      cleanTargetId === cleanMainId || 
+      (cleanSecId && cleanTargetId === cleanSecId);
     
     if (!targetMatch) return false;
 
     // Price Match
-    const minPrice = r.min_price || 0;
-    const maxPrice = r.max_price || 999999;
+    const minPrice = Number(r.min_price || 0);
+    const maxPrice = Number(r.max_price || 999999);
     if (price < minPrice || price > maxPrice) return false;
 
-    // Duration Match (if applicable - mostly for massage)
-    if (duration > 0) {
-      const minDur = r.min_duration_minutes || 0;
-      const maxDur = r.max_duration_minutes || 9999;
+    // Duration Match (mostly for massage)
+    if (targetDept === 'massage' && duration > 0) {
+      const minDur = Number(r.min_duration_minutes || 0);
+      const maxDur = Number(r.max_duration_minutes || 9999);
       if (duration < minDur || duration > maxDur) return false;
     }
 
     return true;
   });
+
+  if (matches.length === 0) return null;
+
+  // 3. Sort matches by specificity:
+  // - Specific Target ID > 'all'
+  // - Scope: Outlet (0) > Property (1) > Global (2)
+  return matches.sort((a, b) => {
+    const aRt = String(a.target_id || '').toLowerCase().trim();
+    const bRt = String(b.target_id || '').toLowerCase().trim();
+    const aIsAll = aRt === 'all' || !aRt;
+    const bIsAll = bRt === 'all' || !bRt;
+
+    // Target specificity
+    if (!aIsAll && bIsAll) return -1;
+    if (aIsAll && !bIsAll) return 1;
+    
+    // Scope specificity (Outlet is most specific, then Property, then Global)
+    const scopeOrder: Record<string, number> = { 'Outlet': 0, 'Property': 1, 'Global': 2 };
+    const aScope = scopeOrder[a.scope] ?? 9;
+    const bScope = scopeOrder[b.scope] ?? 9;
+    if (aScope !== bScope) return aScope - bScope;
+
+    return 0;
+  })[0];
 }
 
 export function getStaffOutlets(s: any): string[] {
