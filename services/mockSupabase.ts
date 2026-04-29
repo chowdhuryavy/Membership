@@ -498,16 +498,15 @@ class DatabaseService {
   }
 
   async getStaff(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[], date?: string): Promise<Staff[]> {
-    const todayStr = date || new Date().toISOString().split('T')[0];
-    
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         let query = supabase.from('staff').select('*, leaves:staff_leaves!fk_staff_leaves_staff(*)').order('name');
         
-        if (scopeId && isProperty) {
-            query = query.eq('property_id', scopeId);
-        }
-
+        // If we are in property mode and have a scope ID, we should try to be inclusive
+        // but still scoped. Since JSONB filters are hard, fetching all and filtering 
+        // in memory is more robust for inconsistent data where property_id might be missing.
+        // Outlet view already does this.
+        
         const { data, error } = await query;
         if (error) throw error;
         
@@ -540,18 +539,17 @@ class DatabaseService {
 
         if (scopeId) {
             if (isProperty) {
-                // Property view should show everyone who belongs to this property.
-                // We only apply the outlet filter if the user is restricted to specific ones 
-                // AND the staff member actually has outlet assignments.
-                if (limitToOutletIds && limitToOutletIds.length > 0) {
-                    staffList = staffList.filter(s => {
-                        const sOutlets = getStaffOutletsSet(s);
-                        // If staff has no outlets yet, they are property-level, so show them
-                        if (sOutlets.size === 0) return true;
-                        // Otherwise, they must belong to at least one of the allowed outlets
+                // Property view should show everyone who belongs to this property record
+                // OR anyone assigned to one of its outlets.
+                staffList = staffList.filter(s => {
+                    if (s.property_id === scopeId) return true;
+                    // If not tagged with property, check assignments
+                    const sOutlets = getStaffOutletsSet(s);
+                    if (limitToOutletIds && limitToOutletIds.length > 0) {
                         return limitToOutletIds.some(id => sOutlets.has(id));
-                    });
-                }
+                    }
+                    return false;
+                });
             } else {
                 // Outlet view should show everyone who belongs or has belonged to this outlet
                 staffList = staffList.filter(s => matchesPersonnelList(s, scopeId));

@@ -2328,17 +2328,17 @@ export function isStaffAssignedToOutletOnDate(staff: any, outletId: string, date
     // Sort assignments by start_date ascending to find gaps/ranges
     const sorted = [...assignments].sort((a: any, b: any) => a.start_date.localeCompare(b.start_date));
     
-    // 1. Check if date falls into a specific recorded assignment
+    // 1. Check if date falls into a specific recorded assignment for THIS outlet
     const match = sorted.find((a: any) => {
       const start = a.start_date;
       const end = a.end_date;
       // Note: We use dateStr.split('T')[0] to ensure we're comparing YYYY-MM-DD
       const d = dateStr.split('T')[0];
-      return d >= start && (!end || d <= end);
+      return a.outlet_id === outletId && d >= start && (!end || d <= end);
     });
 
     if (match) {
-      return match.outlet_id === outletId;
+      return true;
     }
 
     // 2. Check if the date is before the first recorded assignment

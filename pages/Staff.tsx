@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
@@ -132,38 +132,7 @@ const StaffPage = () => {
   const canManagePortalSettings = user && hasPermission(user.role_id, 'staff:manage_portal_settings');
   const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
 
-  useEffect(() => {
-    if (currentOutlet && canView) {
-      loadStaff();
-    } else if (!currentOutlet) {
-      setLoading(false);
-    }
-  }, [currentOutlet, canView, viewScope]);
-
-  // Real-time synchronization subscription
-  useEffect(() => {
-    if (!currentOutlet || !currentProperty || !canView) return;
-
-    const channel = supabase
-      .channel('realtime-staff')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'staff' },
-        () => loadStaff()
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'staff_leaves' },
-        () => loadStaff()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentOutlet, currentProperty, canView]);
-
-  const loadStaff = async () => {
+  const loadStaff = useCallback(async () => {
     if (!currentOutlet || !currentProperty) return;
     setLoading(true);
     setPageLoading(true);
@@ -188,7 +157,38 @@ const StaffPage = () => {
       setLoading(false);
       setPageLoading(false);
     }
-  };
+  }, [currentOutlet, currentProperty, viewScope, allowedOutletsInProperty]);
+
+  useEffect(() => {
+    if (currentOutlet && canView) {
+      loadStaff();
+    } else if (!currentOutlet) {
+      setLoading(false);
+    }
+  }, [currentOutlet, canView, loadStaff]);
+
+  // Real-time synchronization subscription
+  useEffect(() => {
+    if (!currentOutlet || !currentProperty || !canView) return;
+
+    const channel = supabase
+      .channel('realtime-staff')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'staff' },
+        () => loadStaff()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'staff_leaves' },
+        () => loadStaff()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentOutlet, currentProperty, canView, loadStaff]);
 
   const filteredStaff = useMemo(() => {
     return staff.filter(s => {
@@ -196,16 +196,17 @@ const StaffPage = () => {
                             s.role.toLowerCase().includes(searchTerm.toLowerCase());
       
       const checkDate = `${selectedMonth}-01`;
-      const isAssigned = viewScope === 'outlet' && currentOutlet 
+      // Consistency fix: Use assignment logic for both modes to ensure "Active Only" matches roster deployment
+      const isCurrentlyAssigned = viewScope === 'outlet' && currentOutlet 
         ? isStaffAssignedToOutletOnDate(s, currentOutlet.id, checkDate)
-        : s.is_active;
+        : allowedOutletsInProperty.some(o => isStaffAssignedToOutletOnDate(s, o.id, checkDate));
 
       const matchesStatus = statusFilter === 'all' ? true : 
-                            statusFilter === 'active' ? isAssigned : !isAssigned;
+                            statusFilter === 'active' ? isCurrentlyAssigned : !isCurrentlyAssigned;
 
       return matchesSearch && matchesStatus;
     });
-  }, [staff, searchTerm, statusFilter, selectedMonth, viewScope, currentOutlet]);
+  }, [staff, searchTerm, statusFilter, selectedMonth, viewScope, currentOutlet, allowedOutletsInProperty]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
