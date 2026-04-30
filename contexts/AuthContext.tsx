@@ -30,8 +30,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(() => {
-      const stored = localStorage.getItem('membership_session');
-      return stored ? JSON.parse(stored) : null;
+      const storedLocal = localStorage.getItem('membership_session');
+      if (storedLocal) {
+          const parsed = JSON.parse(storedLocal);
+          if (!isSuperAdminRole(parsed.role_id)) return parsed;
+          // If it was an admin session in localStorage (shouldn't happen with new logic but for safety), clear it
+          localStorage.removeItem('membership_session');
+      }
+      
+      const storedSession = sessionStorage.getItem('membership_session');
+      return storedSession ? JSON.parse(storedSession) : null;
   });
   const [isLoading, setIsLoading] = useState(true);
   
@@ -42,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshUser = async () => {
-      const storedUser = localStorage.getItem('membership_session');
+      const storedUser = sessionStorage.getItem('membership_session') || localStorage.getItem('membership_session');
       if (storedUser) {
           const parsed = JSON.parse(storedUser);
           try {
@@ -57,7 +65,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   const overrides = await db.getPermissionOverrides(freshUser.id);
                   const hydrated = { ...freshUser, overrides };
                   setUser(hydrated);
-                  localStorage.setItem('membership_session', JSON.stringify(hydrated));
+                  
+                  if (isSuperAdminRole(hydrated.role_id)) {
+                      sessionStorage.setItem('membership_session', JSON.stringify(hydrated));
+                      localStorage.removeItem('membership_session');
+                  } else {
+                      localStorage.setItem('membership_session', JSON.stringify(hydrated));
+                      sessionStorage.removeItem('membership_session');
+                  }
               }
           } catch (e) {
               console.warn("User state sync failed, using cached session.");
@@ -77,7 +92,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { user: foundUser, error, requiresPasswordChange } = await db.login(email, password);
     if (foundUser) {
       setUser(foundUser);
-      localStorage.setItem('membership_session', JSON.stringify(foundUser));
+      if (isSuperAdminRole(foundUser.role_id)) {
+          sessionStorage.setItem('membership_session', JSON.stringify(foundUser));
+          localStorage.removeItem('membership_session');
+      } else {
+          localStorage.setItem('membership_session', JSON.stringify(foundUser));
+          sessionStorage.removeItem('membership_session');
+      }
       return { error: null, requiresPasswordChange };
     }
     return { error: error || 'Authentication failed.', requiresPasswordChange: false };
@@ -108,12 +129,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await db.updateUser(user.id, updates);
       const updatedUser = { ...user, ...updates };
       setUser(updatedUser);
-      localStorage.setItem('membership_session', JSON.stringify(updatedUser));
+      
+      if (isSuperAdminRole(updatedUser.role_id)) {
+          sessionStorage.setItem('membership_session', JSON.stringify(updatedUser));
+          localStorage.removeItem('membership_session');
+      } else {
+          localStorage.setItem('membership_session', JSON.stringify(updatedUser));
+          sessionStorage.removeItem('membership_session');
+      }
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('membership_session');
+    sessionStorage.removeItem('membership_session');
     localStorage.removeItem('membership_last_outlet');
   };
 

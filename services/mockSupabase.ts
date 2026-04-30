@@ -307,7 +307,7 @@ class DatabaseService {
   }
 
   async logAction(action: string, details: string, outlet_id?: string, explicitUser?: { id: string, name: string }) {
-    const sessionStr = localStorage.getItem('membership_session');
+    const sessionStr = sessionStorage.getItem('membership_session') || localStorage.getItem('membership_session');
     const session = sessionStr ? JSON.parse(sessionStr) : null;
     const logEntry = {
         id: crypto.randomUUID(),
