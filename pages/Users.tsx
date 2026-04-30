@@ -7,7 +7,7 @@ import { UserProfile, Role, Outlet, Permission, UserPermissionOverride, Staff } 
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { getReportData } from '../src/shared/reportLogic';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command, Search, Filter, ShieldAlert, Check, ChevronRight, Award, TrendingUp, Sparkles, User as UserIcon, Calendar } from 'lucide-react';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command, Search, Filter, ShieldAlert, Check, ChevronRight, Award, TrendingUp, Sparkles, User as UserIcon, Calendar, ChevronDown, CheckCircle, MousePointer, ShieldCheck, UserCog } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -380,7 +380,7 @@ const UserDetail = ({
 
 const Users = () => {
   const { user: currentUser, isSuperAdmin, refreshUser } = useAuth();
-  const { roles, outlets, properties, hasPermission, checkShortcut } = useSettings();
+  const { roles, outlets, properties, currentProperty, hasPermission, checkShortcut } = useSettings();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -417,6 +417,25 @@ const Users = () => {
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  // Close filter dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
+            setIsFilterOpen(false);
+        }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const currentRole = useMemo(() => {
+    if (roleFilter === 'all') return { id: 'all', name: 'All Roles', icon: ShieldCheck };
+    const role = roles.find(r => r.id === roleFilter);
+    return { id: role?.id || 'all', name: role?.name || 'All Roles', icon: ShieldCheck };
+  }, [roleFilter, roles]);
 
   useEffect(() => { loadUsers(); }, []);
 
@@ -646,53 +665,106 @@ const Users = () => {
         />
       ) : (
         <>
-          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
+          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm">
             <div className="flex items-center gap-4">
-                <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-xl shadow-indigo-100">
-                    <Shield className="w-6 h-6" />
+                <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-slate-100">
+                    <Shield className="w-7 h-7" />
                 </div>
                 <div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tighter">User & Security</h1>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Authorized User Directory</p>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none">Security Matrix</h1>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">{currentProperty?.name || 'Authorized Directives'} • {filteredUsers.length} Identities Found</p>
                 </div>
             </div>
             
-            <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
-                <div className="relative group flex-1 sm:w-64">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+            <div className="flex flex-col sm:flex-row items-stretch gap-3 w-full xl:w-auto">
+                {/* Search */}
+                <div className="relative group min-w-[240px]">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-focus-within:bg-indigo-600 group-focus-within:text-white transition-all">
+                        <Search className="h-4 w-4" />
+                    </div>
                     <input 
                         placeholder="Search name or email..." 
-                        className="w-full h-11 pl-11 pr-4 rounded-xl bg-white border border-slate-200 shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-bold placeholder:text-slate-400"
+                        className="w-full h-14 pl-14 pr-4 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold placeholder:text-slate-400 shadow-inner"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
                 
-                <div className="relative flex-1 sm:w-48">
-                    <Filter className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <select 
-                        className="w-full h-11 pl-11 pr-8 rounded-xl bg-white border border-slate-200 shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all text-sm font-bold appearance-none cursor-pointer text-slate-700"
-                        value={roleFilter}
-                        onChange={(e) => setRoleFilter(e.target.value)}
+                {/* Custom Role Filter Dropdown */}
+                <div className="relative min-w-[200px]" ref={filterRef}>
+                    <button 
+                        onClick={() => setIsFilterOpen(!isFilterOpen)}
+                        className={`h-14 w-full px-5 rounded-2xl border transition-all flex items-center justify-between group/btn shadow-sm ${isFilterOpen ? 'bg-white border-indigo-500 ring-4 ring-indigo-500/10' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}
                     >
-                        <option value="all">All Roles</option>
-                        {roles.filter(r => {
-                            const isSuperUser = isSuperAdmin;
-                            if ((r.id === 'admin' || r.name === 'System Administrator') && !isSuperUser) return false;
-                            return true;
-                        }).map(r => (
-                            <option key={r.id} value={r.id}>{r.name}</option>
-                        ))}
-                    </select>
+                        <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center border border-slate-100 transition-colors ${isFilterOpen ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                <currentRole.icon className="w-4 h-4" />
+                            </div>
+                            <div className="flex flex-col items-start overflow-hidden text-left">
+                                <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Access Level</span>
+                                <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight truncate w-full">{currentRole.name}</span>
+                            </div>
+                        </div>
+                        <ChevronDown className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-300 ${isFilterOpen ? 'rotate-180 text-indigo-500' : ''}`} />
+                    </button>
+
+                    {isFilterOpen && (
+                        <div className="absolute top-full mt-3 left-0 right-0 bg-white border border-slate-200 rounded-[1.8rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-3 duration-300">
+                            <div className="p-4 border-b border-slate-50 bg-slate-50/50">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Deployment Tier</span>
+                            </div>
+                            <div className="p-2">
+                                <button
+                                    onClick={() => { setRoleFilter('all'); setIsFilterOpen(false); }}
+                                    className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all group/item ${roleFilter === 'all' ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-indigo-50 text-slate-600 hover:text-indigo-600'}`}
+                                >
+                                    <div className="flex items-center gap-4 text-left">
+                                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-colors ${roleFilter === 'all' ? 'bg-white/20 border-white/20' : 'bg-white border-slate-100 shadow-sm'}`}>
+                                            <ShieldCheck className="w-3.5 h-3.5" />
+                                        </div>
+                                        <span className="text-[11px] font-black uppercase tracking-tight">All Access Roles</span>
+                                    </div>
+                                    {roleFilter === 'all' && <CheckCircle className="w-4 h-4 text-white" />}
+                                </button>
+
+                                {roles.filter(r => {
+                                    const isSuperUser = isSuperAdmin;
+                                    if ((r.id === 'admin' || r.name === 'System Administrator') && !isSuperUser) return false;
+                                    return true;
+                                }).map(r => {
+                                    const isSelected = roleFilter === r.id;
+                                    return (
+                                        <button
+                                            key={r.id}
+                                            onClick={() => {
+                                                setRoleFilter(r.id);
+                                                setIsFilterOpen(false);
+                                            }}
+                                            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all group/item ${isSelected ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-indigo-50 text-slate-600 hover:text-indigo-600'}`}
+                                        >
+                                            <div className="flex items-center gap-4 text-left">
+                                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-colors ${isSelected ? 'bg-white/20 border-white/20' : 'bg-white border-slate-100 shadow-sm'}`}>
+                                                    <UserCog className="w-3.5 h-3.5" />
+                                                </div>
+                                                <span className="text-[11px] font-black uppercase tracking-tight">{r.name}</span>
+                                            </div>
+                                            {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
+                                            {!isSelected && <MousePointer className="w-3 h-3 text-indigo-300 opacity-0 group-hover/item:opacity-100 transition-opacity" />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={loadUsers} className="rounded-xl h-11 px-4 font-black border-slate-200" title="Refresh">
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={loadUsers} className="rounded-2xl h-14 px-5 font-black border-slate-200 transition-all hover:bg-indigo-50 hover:text-indigo-600" title="Synchronize Directory">
                         <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                     </Button>
                     {canCreate && (
-                        <Button onClick={handleAddNew} className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 whitespace-nowrap">
-                            <Plus className="w-4 h-4 mr-2" /> Provision
+                        <Button onClick={handleAddNew} className="rounded-2xl h-14 px-8 font-black text-[10px] uppercase tracking-widest shadow-2xl shadow-indigo-100 bg-indigo-600 whitespace-nowrap transition-transform active:scale-95">
+                            <Plus className="w-4 h-4 mr-2" /> Provision Profile
                         </Button>
                     )}
                 </div>

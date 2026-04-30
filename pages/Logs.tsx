@@ -5,7 +5,11 @@ import { SystemLog } from '../types';
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-import { History, Search, RefreshCcw, Shield, Clock, Terminal, Filter, X, Calendar, User, CreditCard, Package, Settings, Activity, FileText, Key, AlertCircle } from 'lucide-react';
+import { 
+  History, Search, RefreshCcw, Shield, Clock, Terminal, Filter, X, 
+  Calendar, User, CreditCard, Package, Settings, Activity, FileText, 
+  Key, AlertCircle, ChevronDown, CheckCircle, MousePointer, Layers 
+} from 'lucide-react';
 
 const Logs = () => {
     const { user } = useAuth();
@@ -18,8 +22,32 @@ const Logs = () => {
     const [dateFrom, setDateFrom] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [dateTo, setDateTo] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [actionFilter, setActionFilter] = useState('ALL');
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const filterRef = useRef<HTMLDivElement>(null);
+
+    const categoryOptions = [
+        { value: 'ALL', label: 'All Actions', icon: Layers, color: 'text-slate-400' },
+        { value: 'AUTH', label: 'Security & Auth', icon: Shield, color: 'text-indigo-500' },
+        { value: 'MEMBER', label: 'Membership', icon: User, color: 'text-emerald-500' },
+        { value: 'POS', label: 'Sales & POS', icon: CreditCard, color: 'text-blue-500' },
+        { value: 'SECURITY', label: 'Access Control', icon: Key, color: 'text-amber-500' },
+        { value: 'INTERACTION', label: 'Interactions', icon: Activity, color: 'text-slate-400' },
+    ];
+
+    const currentOption = categoryOptions.find(o => o.value === actionFilter) || categoryOptions[0];
 
     const isMounted = useRef(true);
+
+    // Close filter dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
+                setIsFilterOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // ===============================
     // Load Logs (Safe + Stable)
@@ -278,93 +306,129 @@ const Logs = () => {
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
             
             {/* Header */}
-            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm">
+            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm">
                 <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100">
-                        <Terminal className="w-6 h-6" />
+                    <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-slate-100">
+                        <Terminal className="w-7 h-7" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-black text-slate-900 tracking-tighter uppercase leading-none">
-                            System Audit Trail
+                        <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none">
+                            Audit Protocol
                         </h1>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1.5">
-                            Scope: {currentOutlet?.name || 'Global'} • {filteredLogs.length} Records
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">
+                             {currentOutlet?.name || 'Global Interface'} • {filteredLogs.length} Records Verified
                         </p>
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+                <div className="flex flex-col sm:flex-row items-stretch gap-3 w-full xl:w-auto">
                     {/* Search */}
-                    <div className="relative group flex-1 sm:flex-none">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <div className="relative group min-w-[240px]">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-focus-within:bg-indigo-600 group-focus-within:text-white transition-all">
+                            <Search className="h-4 w-4" />
+                        </div>
                         <input 
                             placeholder="Search logs..." 
-                            className="w-full sm:w-48 h-11 pl-11 pr-4 rounded-xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-xs font-bold" 
+                            className="w-full h-14 pl-14 pr-4 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold placeholder:text-slate-400 shadow-inner" 
                             value={searchTerm} 
                             onChange={(e) => setSearchTerm(e.target.value)} 
                         />
                     </div>
 
                     {/* Date Range */}
-                    <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-100 h-11 px-3">
-                        <Calendar className="w-4 h-4 text-slate-400" />
+                    <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 h-14 px-4 shadow-inner">
+                        <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
                         <input 
                             type="date" 
-                            className="bg-transparent border-none text-[10px] font-bold text-slate-600 focus:ring-0 w-24 p-0 uppercase tracking-widest"
+                            className="bg-transparent border-none text-[10px] font-black text-slate-900 focus:ring-0 w-24 p-0 uppercase tracking-tight"
                             value={dateFrom}
                             onChange={(e) => setDateFrom(e.target.value)}
                         />
-                        <span className="text-slate-300">→</span>
+                        <span className="text-slate-300 font-black">→</span>
                         <input 
                             type="date" 
-                            className="bg-transparent border-none text-[10px] font-bold text-slate-600 focus:ring-0 w-24 p-0 uppercase tracking-widest"
+                            className="bg-transparent border-none text-[10px] font-black text-slate-900 focus:ring-0 w-24 p-0 uppercase tracking-tight"
                             value={dateTo}
                             onChange={(e) => setDateTo(e.target.value)}
                         />
                     </div>
 
-                    {/* Filter Dropdown */}
-                    <div className="relative">
-                        <select 
-                            className="h-11 pl-4 pr-8 rounded-xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 text-[10px] font-black uppercase tracking-widest text-slate-600 cursor-pointer appearance-none outline-none min-w-[140px]"
-                            value={actionFilter}
-                            onChange={(e) => setActionFilter(e.target.value)}
+                    {/* Custom Filter Dropdown */}
+                    <div className="relative min-w-[220px]" ref={filterRef}>
+                        <button 
+                            onClick={() => setIsFilterOpen(!isFilterOpen)}
+                            className={`h-14 w-full px-5 rounded-2xl border transition-all flex items-center justify-between group/btn shadow-sm ${isFilterOpen ? 'bg-white border-indigo-500 ring-4 ring-indigo-500/10' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}
                         >
-                            <option value="ALL">All Actions</option>
-                            <option value="AUTH">Authentication</option>
-                            <option value="MEMBER">Members</option>
-                            <option value="POS">Sales & POS</option>
-                            <option value="SECURITY">Security</option>
-                            <option value="INTERACTION">Interactions</option>
-                        </select>
-                        <Filter className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                            <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center border border-slate-100 transition-colors ${isFilterOpen ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                    <currentOption.icon className="w-4 h-4" />
+                                </div>
+                                <div className="flex flex-col items-start overflow-hidden text-left">
+                                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Event Type</span>
+                                    <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight truncate w-full">{currentOption.label}</span>
+                                </div>
+                            </div>
+                            <ChevronDown className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-300 ${isFilterOpen ? 'rotate-180 text-indigo-500' : ''}`} />
+                        </button>
+
+                        {isFilterOpen && (
+                            <div className="absolute top-full mt-3 left-0 right-0 bg-white border border-slate-200 rounded-[1.8rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-3 duration-300">
+                                <div className="p-4 border-b border-slate-50 bg-slate-50/50">
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Audit Protocol</span>
+                                </div>
+                                <div className="p-2">
+                                    {categoryOptions.map((opt) => {
+                                        const isSelected = actionFilter === opt.value;
+                                        return (
+                                            <button
+                                                key={opt.value}
+                                                onClick={() => {
+                                                    setActionFilter(opt.value);
+                                                    setIsFilterOpen(false);
+                                                }}
+                                                className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all group/item ${isSelected ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-indigo-50 text-slate-600 hover:text-indigo-600'}`}
+                                            >
+                                                <div className="flex items-center gap-4 text-left">
+                                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-colors ${isSelected ? 'bg-white/20 border-white/20' : 'bg-white border-slate-100 shadow-sm'}`}>
+                                                        <opt.icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : opt.color}`} />
+                                                    </div>
+                                                    <span className="text-[11px] font-black uppercase tracking-tight">{opt.label}</span>
+                                                </div>
+                                                {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
+                                                {!isSelected && <MousePointer className="w-3 h-3 text-indigo-300 opacity-0 group-hover/item:opacity-100 transition-opacity" />}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Clear Filters */}
-                    {(searchTerm || actionFilter !== 'ALL' || dateFrom !== format(new Date(), 'yyyy-MM-dd') || dateTo !== format(new Date(), 'yyyy-MM-dd')) && (
-                        <Button 
-                            variant="ghost" 
-                            onClick={() => {
-                                setSearchTerm('');
-                                setActionFilter('ALL');
-                                setDateFrom(format(new Date(), 'yyyy-MM-dd'));
-                                setDateTo(format(new Date(), 'yyyy-MM-dd'));
-                            }}
-                            className="h-11 w-11 p-0 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                            title="Clear Filters"
+                    {/* Refresh / Clear */}
+                    <div className="flex items-center gap-2">
+                        { (searchTerm || actionFilter !== 'ALL' || dateFrom !== format(new Date(), 'yyyy-MM-dd') || dateTo !== format(new Date(), 'yyyy-MM-dd')) && (
+                            <button 
+                                onClick={() => {
+                                    setSearchTerm('');
+                                    setActionFilter('ALL');
+                                    setDateFrom(format(new Date(), 'yyyy-MM-dd'));
+                                    setDateTo(format(new Date(), 'yyyy-MM-dd'));
+                                }}
+                                className="h-14 w-14 rounded-2xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition-all flex items-center justify-center"
+                                title="Clear All Filters"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        )}
+                        <Button
+                            variant="outline"
+                            className="h-14 px-6 rounded-2xl font-black text-[10px] uppercase tracking-widest border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 transition-all"
+                            onClick={loadLogs}
+                            isLoading={loading}
                         >
-                            <X className="w-5 h-5" />
+                            <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                         </Button>
-                    )}
-
-                    <Button
-                        variant="outline"
-                        className="h-11 px-4 rounded-xl font-black text-[10px] uppercase tracking-widest border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 transition-all"
-                        onClick={loadLogs}
-                        isLoading={loading}
-                    >
-                        <RefreshCcw className="w-4 h-4" />
-                    </Button>
+                    </div>
                 </div>
             </div>
 
