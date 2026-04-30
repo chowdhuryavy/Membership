@@ -59,6 +59,7 @@ import {
   ShoppingBag,
   Contact2
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Permission, Property } from './types';
 import { db } from './services/mockSupabase';
 import UserActivityTracker from './components/UserActivityTracker';
@@ -357,12 +358,31 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
                 className={`flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-5'} py-4 text-xs font-black uppercase tracking-widest rounded-2xl transition-all ${
                     isActive 
                     ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200/50' 
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 group/nav'
                 }`}
                 title={isCollapsed ? label : ""}
             >
-                <Icon className={`w-5 h-5 ${isCollapsed ? 'mr-0' : 'mr-4'} ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                {!isCollapsed && <span>{label}</span>}
+                <motion.div
+                    whileHover={{ scale: 1.2, rotate: 5 }}
+                    whileTap={{ scale: 0.95 }}
+                    animate={isActive ? { scale: [1, 1.1, 1] } : {}}
+                    transition={{ 
+                        scale: isActive ? { duration: 2, repeat: Infinity, ease: "easeInOut" } : { type: "spring", stiffness: 400, damping: 10 },
+                        rotate: { type: "spring", stiffness: 400, damping: 10 }
+                    }}
+                    className={`${isCollapsed ? 'mr-0' : 'mr-4'}`}
+                >
+                    <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400 group-hover/nav:text-indigo-600'}`} />
+                </motion.div>
+                {!isCollapsed && (
+                    <motion.span
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                    >
+                        {label}
+                    </motion.span>
+                )}
             </Link>
         );
     };
@@ -468,10 +488,17 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
                 to={to} 
                 onClick={() => setIsOpen(false)} 
                 className={`p-5 rounded-2xl font-black uppercase tracking-widest flex items-center gap-4 transition-colors ${
-                    isActive ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-900 hover:bg-slate-50'
+                    isActive ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-900 hover:bg-slate-50 group/mobile-nav'
                 }`}
             >
-                <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400'}`} /> {label}
+                <motion.div
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                >
+                    <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400 group-hover/mobile-nav:text-indigo-600'}`} />
+                </motion.div>
+                <span>{label}</span>
             </Link>
         );
     };
