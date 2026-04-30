@@ -685,7 +685,7 @@ const Reports = () => {
         if (reportType === 'incentives') {
             if (incentiveDept === 'Massage') return 'Therapist';
             if (incentiveDept === 'Personal Training') return 'Personal Trainer';
-            if (incentiveDept === 'Membership') return 'Sales Rep';
+            if (incentiveDept === 'Membership') return 'Performance';
             if (incentiveDept === 'Referral') return 'Referral Name';
         }
         return 'Staff';

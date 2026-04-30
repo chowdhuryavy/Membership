@@ -36,7 +36,6 @@ const memberSchema = z.object({
   spouse_dob: z.string().optional().nullable(),
   spouse_id_card_url: z.string().optional().nullable(),
   referrer_name: z.string().optional().nullable(),
-  sales_rep_id: z.string().optional().nullable(),
   kids: z.array(z.object({
     name: z.string().min(1, "Name required"),
     dob: z.string().min(1, "DOB required"),
@@ -655,7 +654,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                     </div>
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Reference / Check No. (Audit)</label>
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Audit Reference / Check No.</label>
                     <input {...register('check_no')} className="w-full h-14 px-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm uppercase placeholder:text-slate-200" placeholder="----" />
                 </div>
                 <div className="space-y-1.5">

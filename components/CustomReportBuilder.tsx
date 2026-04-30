@@ -43,7 +43,6 @@ const DATA_SOURCES = [
     { key: 'phone', label: 'Phone' },
     { key: 'email', label: 'Email' },
     { key: 'nationality', label: 'Nationality' },
-    { key: 'sales_rep_id', label: 'Sales Rep' },
   ]},
   { id: 'bookings', label: 'Booking Registry', columns: [
     { key: 'date', label: 'Date' },

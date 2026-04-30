@@ -28,31 +28,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const setSessionCookie = () => {
-    document.cookie = "membership_admin_active=true; path=/; SameSite=Lax";
-};
-
-const getSessionCookie = () => {
-    return document.cookie.split('; ').find(row => row.startsWith('membership_admin_active='))?.split('=')[1];
-};
-
-const removeSessionCookie = () => {
-    document.cookie = "membership_admin_active=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-};
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(() => {
-      const storedLocal = localStorage.getItem('membership_session');
-      if (storedLocal) {
-          const parsed = JSON.parse(storedLocal);
-          // For super admins, check if session cookie still exists (shared across tabs, dies on browser close)
-          if (isSuperAdminRole(parsed.role_id)) {
-              if (getSessionCookie()) {
-                  return parsed;
-              } else {
-                  localStorage.removeItem('membership_session');
-                  return null;
-              }
+      const stored = localStorage.getItem('membership_session');
+      if (stored) {
+          const parsed = JSON.parse(stored);
+          // NEW: If it's an admin and there's no session heartbeat in this tab, don't set user yet
+          // The useEffect will try to recover it from other tabs or logout if none
+          if (isSuperAdminRole(parsed?.role_id) && !sessionStorage.getItem('admin_session_active')) {
+              return null;
           }
           return parsed;
       }
@@ -66,16 +50,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return isSuperAdminRole(currentUser?.role_id);
   };
 
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem('membership_session');
+    sessionStorage.removeItem('membership_session');
+    sessionStorage.removeItem('admin_session_active');
+    localStorage.removeItem('membership_last_outlet');
+  };
+
   const refreshUser = async () => {
       const storedUser = localStorage.getItem('membership_session');
       if (storedUser) {
           const parsed = JSON.parse(storedUser);
-          // If super admin and session cookie is gone, enforce logout
-          if (isSuperAdminRole(parsed.role_id) && !getSessionCookie()) {
-              logout();
-              return;
-          }
-
+          
           try {
               const users = await db.getUsers();
               const freshUser = users.find(u => u.email.toLowerCase() === parsed.email.toLowerCase());
@@ -84,15 +71,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                       logout();
                       return;
                   }
-                  // CRITICAL: Hydrate overrides during refresh to maintain custom permissions
                   const overrides = await db.getPermissionOverrides(freshUser.id);
                   const hydrated = { ...freshUser, overrides };
                   setUser(hydrated);
                   localStorage.setItem('membership_session', JSON.stringify(hydrated));
-                  
-                  if (isSuperAdminRole(hydrated.role_id)) {
-                      setSessionCookie();
-                  }
               }
           } catch (e) {
               console.warn("User state sync failed, using cached session.");
@@ -101,11 +83,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    const channel = new BroadcastChannel('auth_session_sync');
+    
     const init = async () => {
-        await refreshUser();
+        const stored = localStorage.getItem('membership_session');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (isSuperAdminRole(parsed.role_id)) {
+                // If we don't have a local session lock, ask other tabs
+                if (!sessionStorage.getItem('admin_session_active')) {
+                    channel.postMessage({ type: 'REQUEST_SESSION_STATUS' });
+                    
+                    // Delay to wait for answers from other tabs
+                    await new Promise(resolve => setTimeout(resolve, 600));
+                    
+                    if (!sessionStorage.getItem('admin_session_active')) {
+                        // No other tab responded. Force logout for admins.
+                        console.log("No active admin session heartbeat found. Terminating session.");
+                        logout();
+                    } else {
+                        // Recovered from another tab!
+                        await refreshUser();
+                    }
+                } else {
+                    // We already have the heartbeat in this tab
+                    await refreshUser();
+                }
+            } else {
+                // Not an admin, standard persistence applies
+                await refreshUser();
+            }
+        }
+        
         setIsLoading(false);
     };
+
+    channel.onmessage = (event) => {
+        if (event.data.type === 'REQUEST_SESSION_STATUS') {
+            if (sessionStorage.getItem('admin_session_active')) {
+                channel.postMessage({ type: 'SESSION_ALIVE' });
+            }
+        } else if (event.data.type === 'SESSION_ALIVE') {
+            sessionStorage.setItem('admin_session_active', 'true');
+        }
+    };
+
     init();
+
+    return () => {
+        channel.close();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -114,7 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(foundUser);
       localStorage.setItem('membership_session', JSON.stringify(foundUser));
       if (isSuperAdminRole(foundUser.role_id)) {
-          setSessionCookie();
+          sessionStorage.setItem('admin_session_active', 'true');
       }
       return { error: null, requiresPasswordChange };
     }
@@ -149,16 +176,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('membership_session', JSON.stringify(updatedUser));
       
       if (isSuperAdminRole(updatedUser.role_id)) {
-          setSessionCookie();
+          sessionStorage.setItem('admin_session_active', 'true');
       }
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('membership_session');
-    sessionStorage.removeItem('membership_session'); // Clear old session storage too
-    localStorage.removeItem('membership_last_outlet');
-    removeSessionCookie();
   };
 
   const authContextValue = useMemo(() => ({ 

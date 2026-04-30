@@ -218,8 +218,6 @@ export interface Member {
   daily_rate: number;
   check_no?: string;
   status: MemberStatus;
-  sales_rep_id?: string; 
-  sales_rep_name?: string;
   created_at?: string;
   created_by?: string;
   nationality?: string;

@@ -198,14 +198,7 @@ const Categories = () => {
     // Ensure membership_type_id is selected if types exist, or null if empty
     let typeIdToUse = formData.membership_type_id || null;
     
-    // If no type is selected but types are available, we don't strictly force it anymore 
-    // based on user request "not all outlet have membership type"
-    
-    // Validate only if a type ID is actually provided and types exist
-    if (typeIdToUse && membershipTypes.length > 0 && !membershipTypes.some(t => t.id === typeIdToUse)) {
-        alert("Error: The selected Membership Type is invalid. Please select a valid type or leave it empty.");
-        return;
-    }
+    // ACTION: Removed restrictve validation as requested "let them create tier"
     
     // Strict permission check based on action type
     if (isEditing) {
@@ -404,17 +397,7 @@ const Categories = () => {
                     <CardHeader className="bg-slate-900 text-white p-8 relative">
                         <CardTitle className="text-xl font-black tracking-tight">{isEditing ? 'Modify Tier' : 'Create Tier'}</CardTitle>
                         <div className="flex items-center gap-2 mt-2">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Revenue Logic Configuration</p>
-                            {formData.membership_type_id && (
-                                <>
-                                    <span className="w-1 h-1 rounded-full bg-slate-600"></span>
-                                    <div className="px-2 py-0.5 bg-emerald-500/20 rounded-md border border-emerald-500/30">
-                                        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">
-                                            {membershipTypes.find(t => t.id === formData.membership_type_id)?.name}
-                                        </p>
-                                    </div>
-                                </>
-                            )}
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Revenue Logic Configuration</p>
                         </div>
                         <button onClick={handleCancel} className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
                             <X className="w-5 h-5" />
