@@ -28,18 +28,35 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const setSessionCookie = () => {
+    document.cookie = "membership_admin_active=true; path=/; SameSite=Lax";
+};
+
+const getSessionCookie = () => {
+    return document.cookie.split('; ').find(row => row.startsWith('membership_admin_active='))?.split('=')[1];
+};
+
+const removeSessionCookie = () => {
+    document.cookie = "membership_admin_active=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(() => {
       const storedLocal = localStorage.getItem('membership_session');
       if (storedLocal) {
           const parsed = JSON.parse(storedLocal);
-          if (!isSuperAdminRole(parsed.role_id)) return parsed;
-          // If it was an admin session in localStorage (shouldn't happen with new logic but for safety), clear it
-          localStorage.removeItem('membership_session');
+          // For super admins, check if session cookie still exists (shared across tabs, dies on browser close)
+          if (isSuperAdminRole(parsed.role_id)) {
+              if (getSessionCookie()) {
+                  return parsed;
+              } else {
+                  localStorage.removeItem('membership_session');
+                  return null;
+              }
+          }
+          return parsed;
       }
-      
-      const storedSession = sessionStorage.getItem('membership_session');
-      return storedSession ? JSON.parse(storedSession) : null;
+      return null;
   });
   const [isLoading, setIsLoading] = useState(true);
   
@@ -50,9 +67,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshUser = async () => {
-      const storedUser = sessionStorage.getItem('membership_session') || localStorage.getItem('membership_session');
+      const storedUser = localStorage.getItem('membership_session');
       if (storedUser) {
           const parsed = JSON.parse(storedUser);
+          // If super admin and session cookie is gone, enforce logout
+          if (isSuperAdminRole(parsed.role_id) && !getSessionCookie()) {
+              logout();
+              return;
+          }
+
           try {
               const users = await db.getUsers();
               const freshUser = users.find(u => u.email.toLowerCase() === parsed.email.toLowerCase());
@@ -65,13 +88,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   const overrides = await db.getPermissionOverrides(freshUser.id);
                   const hydrated = { ...freshUser, overrides };
                   setUser(hydrated);
+                  localStorage.setItem('membership_session', JSON.stringify(hydrated));
                   
                   if (isSuperAdminRole(hydrated.role_id)) {
-                      sessionStorage.setItem('membership_session', JSON.stringify(hydrated));
-                      localStorage.removeItem('membership_session');
-                  } else {
-                      localStorage.setItem('membership_session', JSON.stringify(hydrated));
-                      sessionStorage.removeItem('membership_session');
+                      setSessionCookie();
                   }
               }
           } catch (e) {
@@ -92,12 +112,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { user: foundUser, error, requiresPasswordChange } = await db.login(email, password);
     if (foundUser) {
       setUser(foundUser);
+      localStorage.setItem('membership_session', JSON.stringify(foundUser));
       if (isSuperAdminRole(foundUser.role_id)) {
-          sessionStorage.setItem('membership_session', JSON.stringify(foundUser));
-          localStorage.removeItem('membership_session');
-      } else {
-          localStorage.setItem('membership_session', JSON.stringify(foundUser));
-          sessionStorage.removeItem('membership_session');
+          setSessionCookie();
       }
       return { error: null, requiresPasswordChange };
     }
@@ -129,21 +146,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await db.updateUser(user.id, updates);
       const updatedUser = { ...user, ...updates };
       setUser(updatedUser);
+      localStorage.setItem('membership_session', JSON.stringify(updatedUser));
       
       if (isSuperAdminRole(updatedUser.role_id)) {
-          sessionStorage.setItem('membership_session', JSON.stringify(updatedUser));
-          localStorage.removeItem('membership_session');
-      } else {
-          localStorage.setItem('membership_session', JSON.stringify(updatedUser));
-          sessionStorage.removeItem('membership_session');
+          setSessionCookie();
       }
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('membership_session');
-    sessionStorage.removeItem('membership_session');
+    sessionStorage.removeItem('membership_session'); // Clear old session storage too
     localStorage.removeItem('membership_last_outlet');
+    removeSessionCookie();
   };
 
   const authContextValue = useMemo(() => ({ 

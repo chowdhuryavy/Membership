@@ -40,8 +40,7 @@ const Login = () => {
     } else if (requiresPasswordChange) {
       setMustChangePassword(true);
     } else {
-      const sessionStr = sessionStorage.getItem('membership_session') || localStorage.getItem('membership_session');
-      const session = JSON.parse(sessionStr || '{}');
+      const session = JSON.parse(localStorage.getItem('membership_session') || '{}');
       db.logAction('AUTH_LOGIN', `User session authenticated for: ${session.name || email} (${email.toLowerCase()}) at ${new Date().toLocaleString()}`);
       navigate('/');
     }
