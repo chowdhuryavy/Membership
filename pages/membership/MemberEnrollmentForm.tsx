@@ -492,7 +492,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <User className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
                         </div>
-                        <input {...register('referrer_name')} disabled={isRenewal || matchedMembers.length > 0} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:bg-slate-50" placeholder="Referral Name" />
+                        <input {...register('referrer_name')} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:bg-slate-50" placeholder="Referral Name" />
                     </div>
                 </div>
             </div>
