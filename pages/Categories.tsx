@@ -118,7 +118,7 @@ const Categories = () => {
           duration_months: 1, 
           base_rate: 0, 
           max_freeze_days: 0, 
-          membership_type_id: selectedTypeId !== 'all' ? selectedTypeId : (membershipTypes[0]?.id || ''),
+          membership_type_id: selectedTypeId !== 'all' ? selectedTypeId : '',
           privileges: []
       });
       setIsEditing(false);
@@ -201,8 +201,8 @@ const Categories = () => {
     // If no type is selected but types are available, we don't strictly force it anymore 
     // based on user request "not all outlet have membership type"
     
-    // Validate only if a type ID is actually provided
-    if (typeIdToUse && !membershipTypes.some(t => t.id === typeIdToUse)) {
+    // Validate only if a type ID is actually provided and types exist
+    if (typeIdToUse && membershipTypes.length > 0 && !membershipTypes.some(t => t.id === typeIdToUse)) {
         alert("Error: The selected Membership Type is invalid. Please select a valid type or leave it empty.");
         return;
     }
@@ -423,21 +423,6 @@ const Categories = () => {
                     <CardContent className="p-8">
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Membership Type</label>
-                                <select 
-                                    value={formData.membership_type_id} 
-                                    onChange={e => {
-                                        setFormData({...formData, membership_type_id: e.target.value});
-                                    }} 
-                                    className="w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all"
-                                >
-                                    <option value="">Select a type...</option>
-                                    {membershipTypes.map(type => (
-                                        <option key={type.id} value={type.id}>{type.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Tier Designation</label>
                                 <Input 
                                     value={formData.name} 
@@ -641,6 +626,23 @@ const Categories = () => {
 
             {/* Content - Scrollable */}
             <div className="p-6 sm:p-8 overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-4">
+                <button
+                    onClick={() => handleTypeSelect('')}
+                    className="group relative p-5 rounded-2xl border-2 border-dashed border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-400 transition-all text-left overflow-hidden sm:col-span-2"
+                >
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                            <Plus className="w-5 h-5 text-slate-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">General Membership Tier</h3>
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Proceed without linking to a specific membership type</p>
+                        </div>
+                    </div>
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {membershipTypes.map((type) => (
                   <button
