@@ -129,11 +129,25 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
       const num = m.membership_number || '';
       const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                            num.toLowerCase().includes(searchTerm.toLowerCase());
+      
       const effectiveStatus = getEffectiveStatus(m);
-      let matchesStatus = (statusFilter === 'All') || (effectiveStatus === statusFilter);
-      return matchesSearch && matchesStatus;
+      
+      // Basic Filters
+      const matchesStatus = (statusFilter === 'All') || (effectiveStatus === statusFilter);
+      const isCurrentOutlet = m.outlet_id === currentOutlet?.id;
+
+      // Special Behavior: Performance Search
+      // If user types enough characters, we ignore status and scope filters to find the member "even it expired on other"
+      if (searchTerm.length >= 2) {
+          return matchesSearch;
+      }
+      
+      // Default behavior (no active search or short search): Obey filters
+      const matchesScope = (viewScope === 'property') || isCurrentOutlet;
+      
+      return matchesSearch && matchesStatus && matchesScope;
     });
-  }, [members, searchTerm, statusFilter]);
+  }, [members, searchTerm, statusFilter, viewScope, currentOutlet]);
 
   const groupedMembers = useMemo(() => {
     if (!Array.isArray(categories)) return [];
@@ -411,7 +425,14 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                                   <div className="flex items-center gap-4">
                                       <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-400 text-xs group-hover/row:bg-indigo-600 group-hover/row:text-white transition-all uppercase">{(m.guest_name || '?').charAt(0)}</div>
                                       <div>
-                                          <div className="font-black text-slate-800 text-sm uppercase tracking-tight">{m.guest_name || 'Unknown'}</div>
+                                          <div className="flex items-center gap-2">
+                                            <div className="font-black text-slate-800 text-sm uppercase tracking-tight">{m.guest_name || 'Unknown'}</div>
+                                            {m.outlet_id !== currentOutlet?.id && (
+                                              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-400 text-[7px] font-black uppercase rounded border border-slate-200">
+                                                {outlets.find(o => o.id === m.outlet_id)?.name || 'Other Outlet'}
+                                              </span>
+                                            )}
+                                          </div>
                                           <div className="text-[9px] font-bold text-slate-400 tracking-widest uppercase mt-0.5">{m.package_type} Manifesto</div>
                                       </div>
                                   </div>

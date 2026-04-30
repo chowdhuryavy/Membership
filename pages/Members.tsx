@@ -48,16 +48,19 @@ const Members = () => {
     if (members.length === 0 && !isSilent) setLoading(true);
     if (!isSilent) setPageLoading(true);
     try {
-      const isPropertyScope = viewScope === 'property';
-      const scopeId = isPropertyScope ? currentProperty.id : currentOutlet.id;
+      // Force property-wide fetch if possible so that search can find members in other outlets
+      // and "Identity Matching" in the form can find cross-outlet duplicates.
+      const isPropertyAuthorized = hasPermission(user?.role_id, 'settings:view_properties') || allowedOutletsInProperty.length > 1;
+      const isPropertyScope = true; // Always try property scope for broad data
+      const scopeId = currentProperty.id;
       
       let limitToIds: string[] | undefined = undefined;
-      if (isPropertyScope && user?.role_id?.toLowerCase() !== 'admin') {
+      if (user?.role_id?.toLowerCase() !== 'admin') {
           limitToIds = allowedOutletsInProperty.map(o => o.id);
       }
       
       const [membersData, categoriesData, staffData, typesData] = await Promise.all([
-        db.getMembers(scopeId, isPropertyScope, limitToIds),
+        db.getMembers(scopeId, isPropertyAuthorized, limitToIds),
         db.getCategories(currentOutlet.id),
         db.getStaff(currentOutlet.id),
         db.getMembershipTypes(currentOutlet.id)
@@ -74,7 +77,6 @@ const Members = () => {
       }
     } finally {
       setLoading(false);
-      // Give React a moment to process members/categories state updates before hiding global splash
       setTimeout(() => {
         setPageLoading(false);
       }, 100);

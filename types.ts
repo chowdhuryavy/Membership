@@ -219,7 +219,6 @@ export interface Member {
   check_no?: string;
   status: MemberStatus;
   created_at?: string;
-  created_by?: string;
   nationality?: string;
   dob?: string;
   email?: string;
@@ -238,8 +237,6 @@ export interface Member {
   spouse_id_card_url?: string;
   notes?: string;
   referrer_name?: string;
-  creator_name?: string;
-  creator_email?: string;
 }
 
 export interface Freeze {
