@@ -8,7 +8,7 @@ import {
   X, User, ShieldCheck, RotateCcw, Plus, Layers,
   Coins, Heart, AlertTriangle, RefreshCcw,
   Calendar, Zap, Mail, Phone, Globe,
-  CheckCircle2, Command, ChevronDown, Receipt, List
+  CheckCircle2, Command, ChevronDown, Receipt, List, UserPlus
 } from 'lucide-react';
 import { db } from '../../services/mockSupabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -70,6 +70,8 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [matchedMembers, setMatchedMembers] = useState<Member[]>([]);
+  const [showIncentivePrompt, setShowIncentivePrompt] = useState(false);
+  const [pendingSubmitData, setPendingSubmitData] = useState<MemberFormValues | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
     const file = e.target.files?.[0];
@@ -258,16 +260,43 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
   const currentReferrerName = watch('referrer_name');
 
+  useEffect(() => {
+     if (!currentReferrerName?.trim()) {
+         setValue('calculate_referral_incentive', false);
+     }
+  }, [currentReferrerName, setValue]);
+
+  const handleIncentiveChoice = async (calculateIncentive: boolean) => {
+    setShowIncentivePrompt(false);
+    if (pendingSubmitData) {
+        const newData = { ...pendingSubmitData, calculate_referral_incentive: calculateIncentive };
+        setPendingSubmitData(null);
+        await processSubmit(newData);
+    }
+  };
+
   const onFormSubmit = async (data: MemberFormValues) => {
+    if (data.referrer_name && data.referrer_name.trim().length > 0 && !data.calculate_referral_incentive) {
+        setPendingSubmitData(data);
+        setShowIncentivePrompt(true);
+        return;
+    }
+    await processSubmit(data);
+  };
+
+  const processSubmit = async (data: MemberFormValues) => {
     if (data.referrer_name && data.referrer_name.trim().length > 0) {
       if (data.calculate_referral_incentive) {
         toast.custom((t) => (
-          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white shadow-lg rounded-2xl pointer-events-auto flex ring-1 ring-black/5`}>
-            <div className="flex-1 w-0 p-4 border-l-4 border-emerald-500 rounded-l-2xl">
+          <div className={`${t.visible ? 'animate-in slide-in-from-top-2 fade-in duration-300' : 'animate-out fade-out slide-out-to-top-2 duration-200'} max-w-sm w-full bg-slate-900 shadow-2xl rounded-2xl pointer-events-auto flex overflow-hidden ring-1 ring-white/10`}>
+            <div className="flex-none w-12 bg-indigo-500 flex items-center justify-center">
+              <Zap className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1 w-0 p-3.5">
               <div className="flex items-start">
-                <div className="ml-3 flex-1">
-                  <p className="text-sm font-black text-slate-900 uppercase tracking-wide">Incentives Active</p>
-                  <p className="mt-1 text-[11px] text-slate-500 font-medium">Referral incentives will be processed for this enrollment.</p>
+                <div className="ml-1 flex-1">
+                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">Incentives Active</p>
+                  <p className="text-[11px] text-slate-300 font-medium leading-relaxed">Referral incentives will be processed for this enrollment.</p>
                 </div>
               </div>
             </div>
@@ -275,12 +304,15 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         ), { duration: 4000 });
       } else {
         toast.custom((t) => (
-          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white shadow-lg rounded-2xl pointer-events-auto flex ring-1 ring-black/5`}>
-            <div className="flex-1 w-0 p-4 border-l-4 border-amber-500 rounded-l-2xl">
+          <div className={`${t.visible ? 'animate-in slide-in-from-top-2 fade-in duration-300' : 'animate-out fade-out slide-out-to-top-2 duration-200'} max-w-sm w-full bg-slate-900 shadow-2xl rounded-2xl pointer-events-auto flex overflow-hidden ring-1 ring-white/10`}>
+             <div className="flex-none w-12 bg-amber-500 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-amber-50" />
+            </div>
+            <div className="flex-1 w-0 p-3.5">
               <div className="flex items-start">
-                <div className="ml-3 flex-1">
-                  <p className="text-sm font-black text-slate-900 uppercase tracking-wide">Incentives Bypassed</p>
-                  <p className="mt-1 text-[11px] text-slate-500 font-medium">Referral incentives will NOT be calculated.</p>
+                <div className="ml-1 flex-1">
+                  <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest leading-none mb-1">Incentives Bypassed</p>
+                  <p className="text-[11px] text-slate-300 font-medium leading-relaxed">Referral incentives will NOT be calculated.</p>
                 </div>
               </div>
             </div>
@@ -774,6 +806,38 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
             </Button>
         </div>
       </form>
+
+      {showIncentivePrompt && pendingSubmitData && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-300 ring-1 ring-black/5">
+                <div className="p-8">
+                    <div className="w-14 h-14 bg-indigo-50 rounded-[1.2rem] flex items-center justify-center mb-5 text-indigo-600">
+                        <UserPlus className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-900 mb-2 tracking-tight">Process Incentive?</h3>
+                    <p className="text-[13px] text-slate-500 font-medium leading-relaxed mb-8">
+                      You entered <strong className="text-slate-900">"{pendingSubmitData.referrer_name}"</strong> as a referral, but did not enable the incentive calculation flag. Would you like to process incentives for this referral?
+                    </p>
+                    <div className="flex flex-col gap-3">
+                        <button 
+                          type="button"
+                          onClick={() => handleIncentiveChoice(true)}
+                          className="w-full h-14 rounded-[1.2rem] bg-indigo-600 text-white font-black uppercase tracking-widest text-[11px] hover:bg-indigo-700 transition-all shadow-[0_15px_30px_-10px_rgba(79,70,229,0.4)] hover:scale-[1.02] active:scale-95"
+                        >
+                          Yes, Process Incentive
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => handleIncentiveChoice(false)}
+                          className="w-full h-14 rounded-[1.2rem] bg-slate-50 border border-slate-200 text-slate-600 font-black uppercase tracking-widest text-[11px] hover:bg-slate-100 transition-all active:scale-95"
+                        >
+                          No, Skip Incentive
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
     </Card>
   );
 };
