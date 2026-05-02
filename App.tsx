@@ -576,7 +576,7 @@ const DynamicHead = () => {
       
       const logoUrl = settings.logo_url;
       const isExternalLogo = logoUrl && logoUrl.startsWith('http');
-      const isVercelLegacy = isExternalLogo && logoUrl.includes('vercel.app');
+      const isVercelLegacy = isExternalLogo && (logoUrl.includes('vercel.app') || logoUrl.includes('health-club-management'));
       
       // Only apply external logos if they are not from the legacy vercel domain
       // and appear to be valid. Otherwise fallback to local icons.
@@ -588,7 +588,7 @@ const DynamicHead = () => {
             link.rel = rel;
             document.head.appendChild(link);
           }
-          link.href = `${logoUrl}?v=pwa-v6`;
+          link.href = logoUrl.endsWith('/') ? `${logoUrl}favicon.png?v=pwa-v6` : `${logoUrl}?v=pwa-v6`;
           if (extraProps) {
             Object.entries(extraProps).forEach(([key, val]) => link.setAttribute(key, val));
           }
@@ -601,10 +601,10 @@ const DynamicHead = () => {
         setLink('mask-icon', { color: '#4f46e5' });
       } else {
         // Explicitly reset to local icons if settings logo is problematic or missing
-        const resetLink = (rel: string, href: string) => {
+        const resetLink = (rel: string, path: string) => {
           let link = document.querySelector(`link[rel~='${rel}']`) as HTMLLinkElement;
           if (link) {
-            link.href = `${href}?v=6`;
+            link.href = window.location.origin + path + '?v=6';
           }
         };
         resetLink('icon', '/favicon.ico');
@@ -632,7 +632,8 @@ const DynamicHead = () => {
       
       if (manifestLink) {
         // Use static manifest files for iPhone compatibility
-        manifestLink.setAttribute('href', isStaff ? '/manifest-staff.json' : '/manifest.json');
+        const manifestPath = isStaff ? '/manifest-staff.json' : '/manifest.json';
+        manifestLink.setAttribute('href', window.location.origin + manifestPath + '?v=6');
       }
 
       // Update iOS-specific meta tags dynamically

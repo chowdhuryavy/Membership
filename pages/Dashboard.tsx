@@ -1053,7 +1053,7 @@ const Dashboard = () => {
                                     <span className="text-white font-black text-xl tracking-tighter">{formatMoney(stats.dailyAccrual)}</span>
                                 </div>
                                 <div className="flex justify-between items-end border-b border-indigo-800 pb-4">
-                                    <span className="text-white/60 text-xs font-bold">MTD Commercial Yield</span>
+                                    <span className="text-white/60 text-xs font-bold">Month to Date Revenue</span>
                                     <span className="text-white font-black text-xl tracking-tighter">{formatMoney(stats.revenueThisMonth)}</span>
                                 </div>
                                 <div className="flex justify-between items-end">

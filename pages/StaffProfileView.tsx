@@ -4,7 +4,7 @@ import { Staff, StaffLeave } from '../types';
 import { db } from '../services/mockSupabase';
 import { supabase } from '../services/supabase';
 import { getReportData } from '../src/shared/reportLogic';
-import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X, Database, RefreshCcw, ShieldAlert, Award, TrendingUp, Sparkles, User, Clock, Building2 } from 'lucide-react';
+import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X, Database, RefreshCcw, ShieldAlert, Award, TrendingUp, Sparkles, User, Clock, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSettings } from '../contexts/SettingsContext';
@@ -146,27 +146,48 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
 
   const loadIncentives = async () => {
     if (!staff) return;
+    if (!staff.is_eligible_for_incentives) {
+      setIncentiveData([]);
+      setIncentiveSummary({ total: 0, count: 0 });
+      return;
+    }
     setIncentiveLoading(true);
     try {
-      const propertyId = staff.property_id;
-      
-      // We need to fetch incentives for each department and combine them
-      const depts: ('Massage' | 'Membership' | 'Personal Training' | 'Referral' | 'Sale')[] = ['Massage', 'Membership', 'Personal Training', 'Referral', 'Sale'];
-      let allRows: any[] = [];
-      let totalInc = 0;
+      // Robust propertyId lookup
+      let propertyId = staff.property_id;
+      if (!propertyId) {
+        // Try finding it from an active outlet
+        const outlets = await db.getOutlets();
+        const myOutlet = outlets.find(o => staff.outlet_ids?.includes(o.id));
+        if (myOutlet) propertyId = myOutlet.property_id;
+      }
 
-      for (const dept of depts) {
-        const result = await getReportData({
+      if (!propertyId) {
+        setIncentiveSummary({ total: 0, count: 0 });
+        setIncentiveLoading(false);
+        return;
+      }
+
+      const depts: ('Massage' | 'Membership' | 'Personal Training' | 'Referral' | 'Sale')[] = ['Massage', 'Membership', 'Personal Training', 'Referral', 'Sale'];
+      
+      // Fetch all departments in parallel for speed and reliability
+      const results = await Promise.all(depts.map(dept => 
+        getReportData({
           supabase,
           propertyId,
           outletId: 'all',
           reportType: 'incentives',
           date: incentiveDate,
           incentiveDept: dept
-        });
+        }).then(res => ({ dept, rows: res.rows }))
+      ));
 
+      let allRows: any[] = [];
+      let totalInc = 0;
+
+      results.forEach(({ dept, rows }) => {
         // Filter rows for this specific staff member
-        const staffRows = result.rows.filter(r => r.staff_splits && r.staff_splits[staff.id]);
+        const staffRows = rows.filter(r => r.staff_splits && r.staff_splits[staff.id]);
         
         // Add department info to each row
         const rowsWithDept = staffRows.map(r => ({
@@ -177,7 +198,7 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
 
         allRows = [...allRows, ...rowsWithDept];
         totalInc += rowsWithDept.reduce((sum, r) => sum + r.my_incentive, 0);
-      }
+      });
 
       // Sort by date
       allRows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -186,6 +207,7 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
       setIncentiveSummary({ total: totalInc, count: allRows.length });
     } catch (error) {
       console.error("Failed to load incentives:", error);
+      setIncentiveSummary({ total: 0, count: 0 });
     } finally {
       setIncentiveLoading(false);
     }
@@ -432,19 +454,19 @@ NOTIFY pgrst, 'reload schema';`}
                         </div>
                         <div className="flex items-center gap-2">
                           <button 
-                            onClick={() => setIncentiveDate(new Date(incentiveDate.getFullYear(), incentiveDate.getMonth() - 1, 1))}
-                            className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-400"
+                            onClick={(e) => { e.stopPropagation(); setIncentiveDate(new Date(incentiveDate.getFullYear(), incentiveDate.getMonth() - 1, 1)); }}
+                            className="p-1.5 hover:bg-slate-50 rounded-lg transition-colors text-slate-400 hover:text-indigo-600"
                           >
-                            <RefreshCcw className="w-3.5 h-3.5 rotate-[-90deg]" />
+                            <ChevronLeft className="w-4 h-4" />
                           </button>
-                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 min-w-[100px] text-center">
-                            {format(incentiveDate, 'MMM yyyy')}
+                          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-600 px-3 min-w-[120px] text-center border-x border-slate-100">
+                            {format(incentiveDate, 'MMMM yyyy')}
                           </span>
                           <button 
-                            onClick={() => setIncentiveDate(new Date(incentiveDate.getFullYear(), incentiveDate.getMonth() + 1, 1))}
-                            className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-400"
+                            onClick={(e) => { e.stopPropagation(); setIncentiveDate(new Date(incentiveDate.getFullYear(), incentiveDate.getMonth() + 1, 1)); }}
+                            className="p-1.5 hover:bg-slate-50 rounded-lg transition-colors text-slate-400 hover:text-indigo-600"
                           >
-                            <RefreshCcw className="w-3.5 h-3.5 rotate-[90deg]" />
+                            <ChevronRight className="w-4 h-4" />
                           </button>
                           <Button 
                             onClick={loadIncentives} 
@@ -503,10 +525,17 @@ NOTIFY pgrst, 'reload schema';`}
                   ) : (
                     <div className="p-6 space-y-6">
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
-                          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl"></div>
-                          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Total Earnings</div>
-                          <div className="text-3xl font-black text-white relative z-10">{formatMoney(incentiveSummary.total)}</div>
+                        <div className={`p-6 rounded-2xl border shadow-xl relative overflow-hidden transition-all ${staff.is_eligible_for_incentives ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200 opacity-60'}`}>
+                          {staff.is_eligible_for_incentives && <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl"></div>}
+                          <div className={`text-[10px] font-black uppercase tracking-widest mb-2 relative z-10 ${staff.is_eligible_for_incentives ? 'text-slate-400' : 'text-slate-500'}`}>
+                            {staff.is_eligible_for_incentives ? 'Total Earnings' : 'Status: Exempt'}
+                          </div>
+                          <div className={`text-3xl font-black relative z-10 ${staff.is_eligible_for_incentives ? 'text-white' : 'text-slate-400 line-through'}`}>
+                            {formatMoney(staff.is_eligible_for_incentives ? incentiveSummary.total : 0)}
+                          </div>
+                          {!staff.is_eligible_for_incentives && (
+                            <div className="absolute bottom-4 right-6 text-[8px] font-black text-rose-500 uppercase tracking-widest">Ineligible for Payouts</div>
+                          )}
                         </div>
                         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                           <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Services</div>
@@ -515,9 +544,19 @@ NOTIFY pgrst, 'reload schema';`}
                       </div>
 
                       {incentiveLoading ? (
-                        <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                          <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Calculating Incentives...</p>
+                        <div className="space-y-4 animate-pulse">
+                          {[1, 2, 3].map(i => (
+                            <div key={i} className="h-28 bg-slate-50 rounded-[2rem] border border-slate-100"></div>
+                          ))}
+                        </div>
+                      ) : !staff.is_eligible_for_incentives ? (
+                        <div className="bg-amber-50/50 p-12 rounded-[2rem] border border-amber-100 text-center">
+                          <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 border border-amber-100 shadow-sm text-amber-500">
+                            <ShieldAlert className="w-8 h-8" />
+                          </div>
+                          <h3 className="text-base font-black uppercase tracking-widest text-amber-900">Incentive Exemption</h3>
+                          <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mt-2 max-w-xs mx-auto leading-relaxed">This staff profile is currently configured as <span className="font-black">Exempt</span> from incentive calculations.</p>
+                          <Button onClick={() => onEdit(staff)} variant="outline" className="mt-6 rounded-xl h-10 border-amber-200 text-amber-700 font-black uppercase text-[9px] tracking-widest">Modify Eligibility</Button>
                         </div>
                       ) : incentiveData.length === 0 ? (
                         <div className="bg-slate-50 p-12 rounded-[2rem] border border-slate-200/60 text-center">

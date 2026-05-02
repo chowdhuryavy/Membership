@@ -167,7 +167,7 @@ const Reports = () => {
       loadData();
       loadMembershipTypes();
     }
-  }, [reportMonth, reportType, incentiveDept, selectedMembershipTypeId, currentOutlet, currentProperty, canView]);
+  }, [reportMonth, reportType, incentiveDept, selectedMembershipTypeId, currentOutlet, currentProperty, canView, revenueMode]);
 
   const loadMembershipTypes = async () => {
     if (!currentOutlet) return;
@@ -1286,7 +1286,7 @@ const Reports = () => {
                           {reportType === 'revenue_recognition' ? <RenderRevenueTable /> : 
                            reportType === 'expiring_memberships' ? <ExpiringMembershipsReport isEmbedded={true} embeddedMonth={reportMonth} selectedMembershipTypeId={selectedMembershipTypeId} /> : 
                            reportType === 'massage_room_revenue' ? <MassageRoomRevenueReport isEmbedded={true} embeddedMonth={reportMonth} /> :
-                           reportType === 'monthly_revenue' ? <MonthlyRevenueReport isEmbedded={true} embeddedMonth={reportMonth} revenueMode={revenueMode} /> :
+                           reportType === 'monthly_revenue' ? <MonthlyRevenueReport isEmbedded={true} embeddedMonth={reportMonth} revenueMode={revenueMode} data={summary} /> :
                            reportType === 'custom_report' ? (
                              <CustomReportViewer 
                                config={customReports.find(r => r.id === selectedCustomReportId) || customReports[0]}

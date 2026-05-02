@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { 
   History, Search, RefreshCcw, Shield, Clock, Terminal, Filter, X, 
   Calendar, User, CreditCard, Package, Settings, Activity, FileText, 
-  Key, AlertCircle, ChevronDown, CheckCircle, MousePointer, Layers 
+  Key, AlertCircle, ChevronDown, CheckCircle, MousePointer, Layers, Eraser 
 } from 'lucide-react';
 
 const Logs = () => {
@@ -322,35 +322,34 @@ const Logs = () => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-stretch gap-3 w-full xl:w-auto">
-                    {/* Search */}
-                    <div className="relative group min-w-[240px]">
-                        <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-focus-within:bg-indigo-600 group-focus-within:text-white transition-all">
-                            <Search className="h-4 w-4" />
-                        </div>
-                        <input 
-                            placeholder="Search logs..." 
-                            className="w-full h-14 pl-14 pr-4 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold placeholder:text-slate-400 shadow-inner" 
-                            value={searchTerm} 
-                            onChange={(e) => setSearchTerm(e.target.value)} 
-                        />
-                    </div>
-
                     {/* Date Range */}
-                    <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 h-14 px-4 shadow-inner">
-                        <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
-                        <input 
-                            type="date" 
-                            className="bg-transparent border-none text-[10px] font-black text-slate-900 focus:ring-0 w-24 p-0 uppercase tracking-tight"
-                            value={dateFrom}
-                            onChange={(e) => setDateFrom(e.target.value)}
-                        />
-                        <span className="text-slate-300 font-black">→</span>
-                        <input 
-                            type="date" 
-                            className="bg-transparent border-none text-[10px] font-black text-slate-900 focus:ring-0 w-24 p-0 uppercase tracking-tight"
-                            value={dateTo}
-                            onChange={(e) => setDateTo(e.target.value)}
-                        />
+                    <div className="flex items-center gap-2">
+                        <div className="relative group overflow-hidden">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 pointer-events-none group-focus-within:bg-indigo-600 group-focus-within:text-white transition-all">
+                                <Calendar className="h-4 w-4" />
+                            </div>
+                            <div className="flex items-center h-14 bg-slate-50 rounded-2xl border border-transparent focus-within:bg-white focus-within:border-indigo-500/50 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all shadow-inner px-4 pl-14">
+                                <div className="flex flex-col items-start mr-3">
+                                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">From</span>
+                                    <input 
+                                        type="date" 
+                                        className="bg-transparent border-none text-[10px] font-black text-slate-900 focus:ring-0 p-0 uppercase tracking-tight w-24"
+                                        value={dateFrom}
+                                        onChange={(e) => setDateFrom(e.target.value)}
+                                    />
+                                </div>
+                                <div className="h-6 w-px bg-slate-200 mx-2"></div>
+                                <div className="flex flex-col items-start ml-2">
+                                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">To</span>
+                                    <input 
+                                        type="date" 
+                                        className="bg-transparent border-none text-[10px] font-black text-slate-900 focus:ring-0 p-0 uppercase tracking-tight w-24"
+                                        value={dateTo}
+                                        onChange={(e) => setDateTo(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Custom Filter Dropdown */}
@@ -404,8 +403,30 @@ const Logs = () => {
                         )}
                     </div>
 
+                    {/* Search */}
+                    <div className="relative group flex-1 min-w-[240px]">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-focus-within:bg-indigo-600 group-focus-within:text-white transition-all">
+                            <Search className="h-4 w-4" />
+                        </div>
+                        <input 
+                            placeholder="Search logs..." 
+                            className="w-full h-14 pl-14 pr-4 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold placeholder:text-slate-400 shadow-inner" 
+                            value={searchTerm} 
+                            onChange={(e) => setSearchTerm(e.target.value)} 
+                        />
+                    </div>
+
                     {/* Refresh / Clear */}
                     <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            className="h-14 px-6 rounded-2xl font-black text-[10px] uppercase tracking-widest border-slate-200 hover:bg-white hover:border-indigo-600/20 hover:text-indigo-600 hover:shadow-xl hover:shadow-indigo-500/5 transition-all group"
+                            onClick={loadLogs}
+                            isLoading={loading}
+                        >
+                            <RefreshCcw className={`w-4 h-4 transition-transform group-hover:rotate-180 duration-700 ${loading ? 'animate-spin' : ''}`} />
+                        </Button>
+
                         { (searchTerm || actionFilter !== 'ALL' || dateFrom !== format(new Date(), 'yyyy-MM-dd') || dateTo !== format(new Date(), 'yyyy-MM-dd')) && (
                             <button 
                                 onClick={() => {
@@ -414,20 +435,12 @@ const Logs = () => {
                                     setDateFrom(format(new Date(), 'yyyy-MM-dd'));
                                     setDateTo(format(new Date(), 'yyyy-MM-dd'));
                                 }}
-                                className="h-14 w-14 rounded-2xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition-all flex items-center justify-center"
+                                className="h-14 px-4 rounded-2xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest animate-in fade-in zoom-in"
                                 title="Clear All Filters"
                             >
-                                <X className="w-5 h-5" />
+                                <Eraser className="w-4 h-4" /> Clear
                             </button>
                         )}
-                        <Button
-                            variant="outline"
-                            className="h-14 px-6 rounded-2xl font-black text-[10px] uppercase tracking-widest border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 transition-all"
-                            onClick={loadLogs}
-                            isLoading={loading}
-                        >
-                            <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                        </Button>
                     </div>
                 </div>
             </div>

@@ -36,6 +36,7 @@ const memberSchema = z.object({
   spouse_dob: z.string().optional().nullable(),
   spouse_id_card_url: z.string().optional().nullable(),
   referrer_name: z.string().optional().nullable(),
+  calculate_referral_incentive: z.boolean().optional().default(true),
   kids: z.array(z.object({
     name: z.string().min(1, "Name required"),
     dob: z.string().min(1, "DOB required"),
@@ -104,6 +105,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         email: existingMember.email ?? '',
         nationality: existingMember.nationality ?? '',
         dob: existingMember.dob ?? '',
+        calculate_referral_incentive: true,
         membership_type: isRenewal ? 'Renew' : (existingMember.membership_type || 'New'),
         start_date: isRenewal ? calculateDefaultStartDate(existingMember.current_end_date) : existingMember.start_date,
         check_no: isRenewal ? '' : (existingMember.check_no ?? ''), 
@@ -134,6 +136,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       phone: '',
       email: '',
       nationality: '',
+      calculate_referral_incentive: true,
       referrer_name: '',
     }
   });
@@ -175,6 +178,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('remarks', '');
     setValue('check_no', '');
     setValue('discount', 0);
+    setValue('calculate_referral_incentive', true);
     setValue('referrer_name', '');
   }, [setValue]);
 
@@ -192,7 +196,9 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('membership_type_id', found.membership_type_id || '');
     setValue('category_id', found.category_id);
     setValue('membership_number', found.membership_number);
+    setValue('calculate_referral_incentive', true);
     setValue('referrer_name', '');
+    setValue('check_no', '');
     
     const newStart = calculateDefaultStartDate(found.current_end_date);
     setValue('start_date', newStart);
@@ -251,6 +257,8 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   }, [startDateStr, selectedCategory, netAmount]);
 
   const onFormSubmit = async (data: MemberFormValues) => {
+    alert(`Submitting: Referral Incentive Processing is ${data.calculate_referral_incentive ? 'ACTIVE' : 'INACTIVE'}.\n(Note: The system will still evaluate incentives securely based on configured rules.)`);
+
     if (!currentOutlet) return;
     if (!recognition.expiry) {
         setSubmitError("Failed to calculate expiry date. Please check Start Date and Tier.");
@@ -260,7 +268,9 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setPageLoading(true);
     setSubmitError(null);
     
-    const sanitizedData = { ...data };
+    const sanitizedData = { ...data } as any;
+    delete sanitizedData.calculate_referral_incentive;
+
     if (sanitizedData.dob === '') sanitizedData.dob = null;
     if (sanitizedData.spouse_dob === '') sanitizedData.spouse_dob = null;
     if (sanitizedData.membership_type_id === '') sanitizedData.membership_type_id = null;
@@ -314,6 +324,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         phone: '',
         email: '',
         nationality: '',
+        calculate_referral_incentive: true,
         referrer_name: ''
     });
   };
@@ -488,12 +499,28 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 </div>
                 <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Referral Name</label>
-                    <div className="relative group">
+                    <div className="relative group mb-1">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-50 group-focus-within:bg-indigo-50 transition-colors">
                             <User className="w-3.5 h-3.5 text-slate-300 group-focus-within:text-indigo-500" />
                         </div>
                         <input {...register('referrer_name')} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:bg-slate-50" placeholder="Referral Name" />
                     </div>
+                    <label className="flex items-center gap-2 cursor-pointer mt-2 pl-1 w-max">
+                        <input 
+                            type="checkbox" 
+                            {...register('calculate_referral_incentive')}
+                            onChange={(e) => {
+                                register('calculate_referral_incentive').onChange(e);
+                                if (e.target.checked) {
+                                    alert("Referral incentive calculation active.");
+                                } else {
+                                    alert("Referral incentive calculation inactive.");
+                                }
+                            }}
+                            className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Process Incentive?</span>
+                    </label>
                 </div>
             </div>
         </section>

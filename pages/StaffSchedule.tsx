@@ -832,11 +832,15 @@ const StaffSchedule = () => {
       // if Supabase is offline BEFORE executing concurrent requests which would throw.
       const outletsPreCheck = await db.getOutlets();
 
-      // If propertyId is missing, try to find it from outlets
+      // If propertyId is missing, try to find it from outlets or assigned list
       if (!propertyId) {
         const myOutlet = outletsPreCheck.find(o => sOutlets.includes(o.id));
         if (myOutlet) {
           propertyId = myOutlet.property_id;
+        } else if (staff.outlet_ids && staff.outlet_ids.length > 0) {
+          const firstId = staff.outlet_ids[0];
+          const firstOutlet = outletsPreCheck.find(o => o.id === firstId);
+          if (firstOutlet) propertyId = firstOutlet.property_id;
         }
       }
 
@@ -902,11 +906,15 @@ const StaffSchedule = () => {
       // if Supabase is offline BEFORE executing concurrent requests which would throw.
       const outletsPreCheck = await db.getOutlets();
 
-      // If propertyId is missing, try to find it from outlets
+      // If propertyId is missing, try to find it from outlets or assigned list
       if (!propertyId) {
         const myOutlet = outletsPreCheck.find(o => sOutlets.includes(o.id));
         if (myOutlet) {
           propertyId = myOutlet.property_id;
+        } else if (staff.outlet_ids && staff.outlet_ids.length > 0) {
+          const firstId = staff.outlet_ids[0];
+          const firstOutlet = outletsPreCheck.find(o => o.id === firstId);
+          if (firstOutlet) propertyId = firstOutlet.property_id;
         }
       }
 
@@ -1010,11 +1018,15 @@ const StaffSchedule = () => {
       // if Supabase is offline BEFORE executing concurrent requests which would throw.
       const outletsPreCheck = await db.getOutlets();
 
-      // If propertyId is missing, try to find it from outlets
+      // If propertyId is missing, try to find it from outlets or assigned list
       if (!propertyId) {
         const myOutlet = outletsPreCheck.find(o => o.id === selectedOutletId);
         if (myOutlet) {
           propertyId = myOutlet.property_id;
+        } else if (staff.outlet_ids && staff.outlet_ids.length > 0) {
+          const firstId = staff.outlet_ids[0];
+          const firstOutlet = outletsPreCheck.find(o => o.id === firstId);
+          if (firstOutlet) propertyId = firstOutlet.property_id;
         }
       }
 

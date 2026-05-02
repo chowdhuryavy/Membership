@@ -11,13 +11,21 @@ interface MonthlyRevenueReportProps {
   isEmbedded?: boolean;
   embeddedMonth?: string;
   revenueMode: 'cash' | 'accrual';
+  data?: MonthlyRevenueData | null;
 }
 
-const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode }: MonthlyRevenueReportProps) => {
+const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: externalData }: MonthlyRevenueReportProps) => {
   const { currentOutlet, currentProperty, settings, formatMoney } = useSettings();
-  const [data, setData] = useState<MonthlyRevenueData | null>(null);
+  const [data, setData] = useState<MonthlyRevenueData | null>(externalData || null);
   const [reportMonth, setReportMonth] = useState(embeddedMonth || format(new Date(), 'yyyy-MM'));
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!externalData);
+
+  useEffect(() => {
+    if (externalData) {
+      setData(externalData);
+      setLoading(false);
+    }
+  }, [externalData]);
 
   useEffect(() => {
     if (embeddedMonth) {
@@ -25,13 +33,25 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode }: Monthl
     }
   }, [embeddedMonth]);
 
+  const [cachedData, setCachedData] = useState<Record<string, MonthlyRevenueData>>({});
+
   useEffect(() => {
+    if (externalData) return;
     if (!currentOutlet || !currentProperty) return;
+    
+    const cacheKey = `${currentProperty.id}-${currentOutlet.id}-${reportMonth}-${revenueMode}`;
+    if (cachedData[cacheKey]) {
+      setData(cachedData[cacheKey]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const reportYear = parseInt(reportMonth.split('-')[0]);
     const endMonthIndex = parseInt(reportMonth.split('-')[1]) - 1;
     getMonthlyRevenueData(supabase, currentProperty.id, currentOutlet.id, reportYear, revenueMode, endMonthIndex)
       .then(res => {
+        setCachedData(prev => ({ ...prev, [cacheKey]: res }));
         setData(res);
         setLoading(false);
       })
@@ -39,7 +59,7 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode }: Monthl
         console.error('Error fetching monthly revenue data:', err);
         setLoading(false);
       });
-  }, [currentOutlet, currentProperty, reportMonth, revenueMode]);
+  }, [currentOutlet, currentProperty, reportMonth, revenueMode, externalData]);
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
