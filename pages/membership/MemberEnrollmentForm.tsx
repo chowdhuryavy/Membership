@@ -257,26 +257,37 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   }, [startDateStr, selectedCategory, netAmount]);
 
   const currentReferrerName = watch('referrer_name');
-  const prevReferrerNameRef = useRef(currentReferrerName);
-
-  useEffect(() => {
-     const currentLen = currentReferrerName?.trim().length || 0;
-     const prevLen = prevReferrerNameRef.current?.trim().length || 0;
-
-     if (currentLen > 0 && prevLen === 0) {
-         setValue('calculate_referral_incentive', true, { shouldValidate: true });
-     } else if (currentLen === 0 && prevLen > 0) {
-         setValue('calculate_referral_incentive', false, { shouldValidate: true });
-     }
-     
-     prevReferrerNameRef.current = currentReferrerName;
-  }, [currentReferrerName, setValue]);
 
   const onFormSubmit = async (data: MemberFormValues) => {
-    toast(`Referral Incentive Processing is ${data.calculate_referral_incentive ? 'ACTIVE' : 'INACTIVE'}`, {
-      icon: data.calculate_referral_incentive ? '✅' : 'ℹ️',
-      duration: 5000
-    });
+    if (data.referrer_name && data.referrer_name.trim().length > 0) {
+      if (data.calculate_referral_incentive) {
+        toast.custom((t) => (
+          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white shadow-lg rounded-2xl pointer-events-auto flex ring-1 ring-black/5`}>
+            <div className="flex-1 w-0 p-4 border-l-4 border-emerald-500 rounded-l-2xl">
+              <div className="flex items-start">
+                <div className="ml-3 flex-1">
+                  <p className="text-sm font-black text-slate-900 uppercase tracking-wide">Incentives Active</p>
+                  <p className="mt-1 text-[11px] text-slate-500 font-medium">Referral incentives will be processed for this enrollment.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ), { duration: 4000 });
+      } else {
+        toast.custom((t) => (
+          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white shadow-lg rounded-2xl pointer-events-auto flex ring-1 ring-black/5`}>
+            <div className="flex-1 w-0 p-4 border-l-4 border-amber-500 rounded-l-2xl">
+              <div className="flex items-start">
+                <div className="ml-3 flex-1">
+                  <p className="text-sm font-black text-slate-900 uppercase tracking-wide">Incentives Bypassed</p>
+                  <p className="mt-1 text-[11px] text-slate-500 font-medium">Referral incentives will NOT be calculated.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ), { duration: 4000 });
+      }
+    }
 
     if (!currentOutlet) return;
     if (!recognition.expiry) {
@@ -528,22 +539,24 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         </div>
                         <input {...register('referrer_name')} className="w-full h-14 pl-14 pr-4 rounded-2xl bg-white border border-slate-200 font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm disabled:opacity-50 disabled:bg-slate-50" placeholder="Referral Name" />
                     </div>
-                    <label className="flex items-center gap-2 cursor-pointer mt-2 pl-1 w-max">
-                        <input 
-                            type="checkbox" 
-                            {...register('calculate_referral_incentive')}
-                            onChange={(e) => {
-                                register('calculate_referral_incentive').onChange(e);
-                                if (e.target.checked) {
-                                    toast.success("Referral incentive calculation enabled", { duration: 2000 });
-                                } else {
-                                    toast("Referral incentive calculation disabled", { duration: 2000, icon: 'ℹ️' });
-                                }
-                            }}
-                            className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Process Incentive?</span>
-                    </label>
+                    {currentReferrerName?.trim() && (
+                      <label className="flex items-center gap-2 cursor-pointer mt-2 pl-1 w-max">
+                          <input 
+                              type="checkbox" 
+                              {...register('calculate_referral_incentive')}
+                              onChange={(e) => {
+                                  register('calculate_referral_incentive').onChange(e);
+                                  if (e.target.checked) {
+                                      toast.success("Referral incentive calculation enabled", { duration: 2000 });
+                                  } else {
+                                      toast("Referral incentive calculation disabled", { duration: 2000, icon: 'ℹ️' });
+                                  }
+                              }}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Process Incentive?</span>
+                      </label>
+                    )}
                 </div>
             </div>
         </section>
