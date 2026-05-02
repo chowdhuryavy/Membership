@@ -608,8 +608,11 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         // Try Category ID first, then Type ID
         const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.membership_type_id);
 
+        const isNoInc = (m.referrer_name || '').startsWith('[NO-INC]');
+        const cleanRefName = (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').trim();
+
         // Check for referral override
-        if (m.referrer_name && m.referrer_name.trim() !== '') {
+        if (!isNoInc && cleanRefName !== '') {
           const referralRule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.membership_type_id);
           if (referralRule && referralRule.disable_shared_incentive) {
             // Skip membership incentive as referral rule takes precedence and disables it
@@ -728,7 +731,11 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       });
     } else if (dept === 'Referral') {
       const referrerTotals: Record<string, number> = {};
-      members.filter(m => m.referrer_name && m.referrer_name.trim() !== '').forEach(m => {
+      members.filter(m => (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').trim() !== '').forEach(m => {
+        const isNoInc = (m.referrer_name || '').startsWith('[NO-INC]');
+        if (isNoInc) return;
+
+        const cleanRefName = (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').trim();
         // Match by category/tier (Primary) or Type (Secondary)
         const rule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.membership_type_id);
         if (!rule) return;
@@ -747,8 +754,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
         if (rule.referral_payee === 'Referrer') {
           referrerNet = incNet;
-          const refName = m.referrer_name.trim();
-          referrerTotals[refName] = (referrerTotals[refName] || 0) + incNet;
+          referrerTotals[cleanRefName] = (referrerTotals[cleanRefName] || 0) + incNet;
         } else {
           // Default to Staff
           if (rule.distribution_type === 'Shared') {
@@ -773,8 +779,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           sl_no: sl++,
           date: format(new Date(m.start_date), 'dd-MMM-yy'),
           guest_name: `${m.guest_name}`,
-          item_name: `Referral: ${m.referrer_name}`,
-          therapist_name: rule.referral_payee === 'Referrer' ? `Referrer: ${m.referrer_name}` : (rule.distribution_type === 'Shared' ? 'Shared Pool' : (staffList.find(s => s.id === m.sales_rep_id)?.name || 'N/A')),
+          item_name: `Referral: ${cleanRefName}`,
+          therapist_name: rule.referral_payee === 'Referrer' ? `Referrer: ${cleanRefName}` : (rule.distribution_type === 'Shared' ? 'Shared Pool' : (staffList.find(s => s.id === m.sales_rep_id)?.name || 'N/A')),
           actual_price: actualPrice,
           discount_percent: discPercent,
           discount_amount: discountAmt,
@@ -785,7 +791,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           inc_net: incNet,
           remarks: `Referral Payee: ${rule.referral_payee || 'Staff'}`,
           staff_splits: staffSplits,
-          referrer_name: m.referrer_name,
+          referrer_name: cleanRefName,
           referrer_amount: referrerNet
         });
       });

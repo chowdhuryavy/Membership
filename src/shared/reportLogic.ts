@@ -406,7 +406,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         discount_amount: discountAmt,
         net_revenue: netRev,
         remarks: m.status,
-        referrer_name: (m.referrer_name || '').replace(/^Referral:\s*/i, '').trim() || 'N/A'
+        referrer_name: (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').replace(/^Referral:\s*/i, '').trim() || 'N/A'
       };
     });
 
@@ -755,7 +755,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
           const displayTrainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
           
-          const cleanRefForPT = (s.referrer_name || '').replace(/^Referral:\s*/i, '').trim() || '';
+          const cleanRefForPT = (s.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').replace(/^Referral:\s*/i, '').trim() || '';
           
           rows.push({
             id: s.id,
@@ -786,13 +786,14 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         .forEach(m => {
         // 1. Find Rules
         const cat = mCats.find(c => c.id === m.category_id);
-        const cleanReferrerName = (m.referrer_name || '').replace(/^Referral:\s*/i, '').trim();
+        const isNoInc = (m.referrer_name || '').startsWith('[NO-INC]');
+        const cleanReferrerName = (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').replace(/^Referral:\s*/i, '').trim();
         const normalize = (n: string) => n.toLowerCase().replace(/\./g, ' ').replace(/\s+/g, ' ').trim();
         const cleanRefNorm = normalize(cleanReferrerName);
 
         const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
         
-        const refRule = cleanReferrerName ? findBestRule(rules, 'Referral', m.category_id, actualPrice, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined) : null;
+        const refRule = (!isNoInc && cleanReferrerName) ? findBestRule(rules, 'Referral', m.category_id, actualPrice, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined) : null;
         const rule = findBestRule(rules, 'Membership', m.category_id, actualPrice, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
 
         // 2. Constants
@@ -856,7 +857,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         }
 
           const displaySalesRepId = [m.sales_rep_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
-          const cleanRefForMem = (m.referrer_name || '').replace(/^Referral:\s*/i, '').trim() || '';
+          const cleanRefForMem = (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').replace(/^Referral:\s*/i, '').trim() || '';
           rows.push({
             id: m.id,
             sl_no: sl++,
@@ -946,7 +947,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
         const displayTrainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
         
-        const cleanRefForSale = (s.referrer_name || '').replace(/^Referral:\s*/i, '').trim() || '';
+        const cleanRefForSale = (s.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').replace(/^Referral:\s*/i, '').trim() || '';
         
         rows.push({
           id: s.id,
@@ -978,8 +979,13 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         .forEach(m => {
         const cat = mCats.find(c => c.id === m.category_id);
         
-        // Match by category/tier (Primary) or Type (Secondary)
-        const rule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
+        const isNoInc = (m.referrer_name || '').startsWith('[NO-INC]');
+        const cleanReferrerName = (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').replace(/^Referral:\s*/i, '').trim();
+        const normalize = (n: string) => n.toLowerCase().replace(/\./g, ' ').replace(/\s+/g, ' ').trim();
+        const cleanRefNorm = normalize(cleanReferrerName);
+        const cleanRefForReport = cleanReferrerName || '';
+        
+        const rule = (!isNoInc && cleanReferrerName) ? findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined) : null;
         const memRule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
 
         const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
@@ -987,11 +993,6 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const netRev = m.net_amount;
         const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
-        const cleanReferrerName = (m.referrer_name || '').replace(/^Referral:\s*/i, '').trim();
-        const normalize = (n: string) => n.toLowerCase().replace(/\./g, ' ').replace(/\s+/g, ' ').trim();
-        const cleanRefNorm = normalize(cleanReferrerName);
-        const cleanRefForReport = cleanReferrerName || '';
-        
         let baseInc = 0;
         let incDiscVal = 0;
         let incNet = 0;

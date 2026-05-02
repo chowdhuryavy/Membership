@@ -36,7 +36,7 @@ const memberSchema = z.object({
   spouse_dob: z.string().optional().nullable(),
   spouse_id_card_url: z.string().optional().nullable(),
   referrer_name: z.string().optional().nullable(),
-  calculate_referral_incentive: z.boolean().optional().default(true),
+  calculate_referral_incentive: z.boolean().optional().default(false),
   kids: z.array(z.object({
     name: z.string().min(1, "Name required"),
     dob: z.string().min(1, "DOB required"),
@@ -105,7 +105,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         email: existingMember.email ?? '',
         nationality: existingMember.nationality ?? '',
         dob: existingMember.dob ?? '',
-        calculate_referral_incentive: true,
+        calculate_referral_incentive: existingMember.referrer_name ? !existingMember.referrer_name.startsWith('[NO-INC]') : false,
         membership_type: isRenewal ? 'Renew' : (existingMember.membership_type || 'New'),
         start_date: isRenewal ? calculateDefaultStartDate(existingMember.current_end_date) : existingMember.start_date,
         check_no: isRenewal ? '' : (existingMember.check_no ?? ''), 
@@ -116,7 +116,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         remarks: existingMember.remarks ?? '',
         package_type: existingMember.package_type || 'Single',
         access_type: existingMember.access_type || 'Both',
-        referrer_name: isRenewal ? '' : (existingMember.referrer_name ?? ''),
+        referrer_name: isRenewal ? '' : (existingMember.referrer_name || '').replace(/^\[NO-INC\]\s*/i, ''),
     } : {
       membership_number: '',
       guest_name: '',
@@ -136,7 +136,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       phone: '',
       email: '',
       nationality: '',
-      calculate_referral_incentive: true,
+      calculate_referral_incentive: false,
       referrer_name: '',
     }
   });
@@ -178,7 +178,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('remarks', '');
     setValue('check_no', '');
     setValue('discount', 0);
-    setValue('calculate_referral_incentive', true);
+    setValue('calculate_referral_incentive', false);
     setValue('referrer_name', '');
   }, [setValue]);
 
@@ -196,7 +196,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('membership_type_id', found.membership_type_id || '');
     setValue('category_id', found.category_id);
     setValue('membership_number', found.membership_number);
-    setValue('calculate_referral_incentive', true);
+    setValue('calculate_referral_incentive', false);
     setValue('referrer_name', '');
     setValue('check_no', '');
     
@@ -257,7 +257,10 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   }, [startDateStr, selectedCategory, netAmount]);
 
   const onFormSubmit = async (data: MemberFormValues) => {
-    alert(`Submitting: Referral Incentive Processing is ${data.calculate_referral_incentive ? 'ACTIVE' : 'INACTIVE'}.\n(Note: The system will still evaluate incentives securely based on configured rules.)`);
+    toast(`Referral Incentive Processing is ${data.calculate_referral_incentive ? 'ACTIVE' : 'INACTIVE'}`, {
+      icon: data.calculate_referral_incentive ? '✅' : 'ℹ️',
+      duration: 5000
+    });
 
     if (!currentOutlet) return;
     if (!recognition.expiry) {
@@ -270,6 +273,10 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     
     const sanitizedData = { ...data } as any;
     delete sanitizedData.calculate_referral_incentive;
+
+    if (!data.calculate_referral_incentive && sanitizedData.referrer_name) {
+       sanitizedData.referrer_name = '[NO-INC] ' + sanitizedData.referrer_name;
+    }
 
     if (sanitizedData.dob === '') sanitizedData.dob = null;
     if (sanitizedData.spouse_dob === '') sanitizedData.spouse_dob = null;
@@ -324,7 +331,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         phone: '',
         email: '',
         nationality: '',
-        calculate_referral_incentive: true,
+        calculate_referral_incentive: false,
         referrer_name: ''
     });
   };
@@ -512,9 +519,9 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                             onChange={(e) => {
                                 register('calculate_referral_incentive').onChange(e);
                                 if (e.target.checked) {
-                                    alert("Referral incentive calculation active.");
+                                    toast.success("Referral incentive calculation enabled", { duration: 2000 });
                                 } else {
-                                    alert("Referral incentive calculation inactive.");
+                                    toast("Referral incentive calculation disabled", { duration: 2000, icon: 'ℹ️' });
                                 }
                             }}
                             className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
