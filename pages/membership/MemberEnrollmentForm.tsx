@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useForm, SubmitHandler, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -255,6 +255,22 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     const daily = RevenueEngine.calculateDailyRate(netAmount, start, end);
     return { expiry: format(end, 'yyyy-MM-dd'), daily };
   }, [startDateStr, selectedCategory, netAmount]);
+
+  const currentReferrerName = watch('referrer_name');
+  const prevReferrerNameRef = useRef(currentReferrerName);
+
+  useEffect(() => {
+     const currentLen = currentReferrerName?.trim().length || 0;
+     const prevLen = prevReferrerNameRef.current?.trim().length || 0;
+
+     if (currentLen > 0 && prevLen === 0) {
+         setValue('calculate_referral_incentive', true, { shouldValidate: true });
+     } else if (currentLen === 0 && prevLen > 0) {
+         setValue('calculate_referral_incentive', false, { shouldValidate: true });
+     }
+     
+     prevReferrerNameRef.current = currentReferrerName;
+  }, [currentReferrerName, setValue]);
 
   const onFormSubmit = async (data: MemberFormValues) => {
     toast(`Referral Incentive Processing is ${data.calculate_referral_incentive ? 'ACTIVE' : 'INACTIVE'}`, {
