@@ -1,7 +1,7 @@
 {
   "name": "Staff Portal",
   "short_name": "Staff Portal",
-  "description": "Professional Health Club Staff Management System",
+  "description": "Unified Health Club Staff Management System",
   "start_url": "/?portal=staff&source=pwa",
   "display": "standalone",
   "background_color": "#ffffff",
