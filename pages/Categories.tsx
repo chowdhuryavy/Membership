@@ -609,22 +609,24 @@ const Categories = () => {
 
             {/* Content - Scrollable */}
             <div className="p-6 sm:p-8 overflow-y-auto custom-scrollbar">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-4">
-                <button
-                    onClick={() => handleTypeSelect('')}
-                    className="group relative p-5 rounded-2xl border-2 border-dashed border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-400 transition-all text-left overflow-hidden sm:col-span-2"
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-slate-200 transition-colors">
-                            <Plus className="w-5 h-5 text-slate-400" />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">General Membership Tier</h3>
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Proceed without linking to a specific membership type</p>
-                        </div>
-                    </div>
-                </button>
-              </div>
+              {membershipTypes.length === 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-4">
+                  <button
+                      onClick={() => handleTypeSelect('')}
+                      className="group relative p-5 rounded-2xl border-2 border-dashed border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-400 transition-all text-left overflow-hidden sm:col-span-2"
+                  >
+                      <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                              <Plus className="w-5 h-5 text-slate-400" />
+                          </div>
+                          <div>
+                              <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">General Membership Tier</h3>
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Proceed without linking to a specific membership type</p>
+                          </div>
+                      </div>
+                  </button>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {membershipTypes.map((type) => (
