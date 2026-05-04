@@ -50,7 +50,6 @@ const Members = () => {
     try {
       // Force property-wide fetch if possible so that search can find members in other outlets
       // and "Identity Matching" in the form can find cross-outlet duplicates.
-      const isPropertyAuthorized = hasPermission(user?.role_id, 'settings:view_properties') || allowedOutletsInProperty.length > 1;
       const isPropertyScope = true; // Always try property scope for broad data
       const scopeId = currentProperty.id;
       
@@ -60,7 +59,7 @@ const Members = () => {
       }
       
       const [membersData, categoriesData, staffData, typesData] = await Promise.all([
-        db.getMembers(scopeId, isPropertyAuthorized, limitToIds),
+        db.getMembers(scopeId, isPropertyScope, limitToIds),
         db.getCategories(currentOutlet.id),
         db.getStaff(currentOutlet.id),
         db.getMembershipTypes(currentOutlet.id)
