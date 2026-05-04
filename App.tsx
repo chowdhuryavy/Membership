@@ -588,7 +588,7 @@ const DynamicHead = () => {
             link.rel = rel;
             document.head.appendChild(link);
           }
-          link.href = logoUrl.endsWith('/') ? `${logoUrl}favicon.png?v=pwa-v7` : `${logoUrl}?v=pwa-v7`;
+          link.href = logoUrl.endsWith('/') ? `${logoUrl}favicon.png?v=pwa-v8` : `${logoUrl}?v=pwa-v8`;
           if (extraProps) {
             Object.entries(extraProps).forEach(([key, val]) => link.setAttribute(key, val));
           }
@@ -604,7 +604,7 @@ const DynamicHead = () => {
         const resetLink = (rel: string, path: string) => {
           let link = document.querySelector(`link[rel~='${rel}']`) as HTMLLinkElement;
           if (link) {
-            link.href = window.location.origin + path + '?v=7';
+            link.href = window.location.origin + path + '?v=8';
           }
         };
         resetLink('icon', '/favicon.ico');
@@ -633,7 +633,7 @@ const DynamicHead = () => {
       if (manifestLink) {
         // Use static manifest files for iPhone compatibility
         const manifestPath = isStaff ? '/manifest-staff.json' : '/manifest.json';
-        manifestLink.setAttribute('href', window.location.origin + manifestPath + '?v=7');
+        manifestLink.setAttribute('href', window.location.origin + manifestPath + '?v=8');
       }
 
       // Update iOS-specific meta tags dynamically
