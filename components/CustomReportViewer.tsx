@@ -31,7 +31,7 @@ export const CustomReportViewer: React.FC<CustomReportViewerProps> = ({
   config,
   onBack
 }) => {
-  const { currentProperty, currentOutlet } = useSettings();
+  const { currentProperty, currentOutlet, settings } = useSettings();
   const [data, setData] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +40,29 @@ export const CustomReportViewer: React.FC<CustomReportViewerProps> = ({
     start: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
     end: format(new Date(), 'yyyy-MM-dd')
   });
+
+  const signatoryConfig = React.useMemo(() => {
+    if (!currentOutlet || !currentProperty || !settings) return null;
+
+    const resolveConfig = (cfg: any, type: string) => {
+      if (!cfg) return null;
+      const specific = cfg[type];
+      if (!specific) return null;
+      return {
+        prepared: specific.prepared || 'Accountant',
+        reviewed: specific.reviewed || '',
+        approved: specific.approved || 'General Manager'
+      };
+    };
+
+    const outletRes = resolveConfig(currentOutlet.signatory_config, 'custom_report');
+    if (outletRes) return outletRes;
+
+    const propertyRes = resolveConfig(currentProperty.signatory_config, 'custom_report');
+    if (propertyRes) return propertyRes;
+
+    return resolveConfig(settings.signatory_config, 'custom_report');
+  }, [currentOutlet, currentProperty, settings]);
 
   const loadData = async () => {
     setLoading(true);
@@ -153,7 +176,8 @@ export const CustomReportViewer: React.FC<CustomReportViewerProps> = ({
       propertyName: property?.name || 'Management System',
       logoUrl: property?.logo_url,
       userName: 'Admin',
-      filename: `${config.name.toLowerCase().replace(/\s+/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`
+      filename: `${config.name.toLowerCase().replace(/\s+/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`,
+      signatoryConfig: signatoryConfig
     });
   };
 

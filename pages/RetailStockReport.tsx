@@ -48,7 +48,7 @@ interface RetailStockReportProps {
 }
 
 const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportProps = {}) => {
-  const { currentOutlet, currentProperty, formatMoney, setPageLoading, currency } = useSettings();
+  const { currentOutlet, currentProperty, formatMoney, setPageLoading, currency, settings } = useSettings();
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [inventoryLogs, setInventoryLogs] = useState<InventoryLog[]>([]);
@@ -58,6 +58,29 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
   const [isExporting, setIsExporting] = useState(false);
   const [outletsMap, setOutletsMap] = useState<Record<string, string>>({});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const signatoryConfig = React.useMemo(() => {
+    if (!currentOutlet || !currentProperty || !settings) return null;
+
+    const resolveConfig = (config: any, type: string) => {
+      if (!config) return null;
+      const specific = config[type];
+      if (!specific) return null;
+      return {
+        prepared: specific.prepared || 'Accountant',
+        reviewed: specific.reviewed || '',
+        approved: specific.approved || 'General Manager'
+      };
+    };
+
+    const outletRes = resolveConfig(currentOutlet.signatory_config, 'retail_stock');
+    if (outletRes) return outletRes;
+
+    const propertyRes = resolveConfig(currentProperty.signatory_config, 'retail_stock');
+    if (propertyRes) return propertyRes;
+
+    return resolveConfig(settings.signatory_config, 'retail_stock');
+  }, [currentOutlet, currentProperty, settings]);
   
   const viewScope = embeddedViewScope || internalViewScope;
   
@@ -484,6 +507,30 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
         throw tableErr;
       }
 
+      // Add Signatories
+      if (signatoryConfig) {
+        const finalY = (doc as any).lastAutoTable?.finalY || 55;
+        const sigY = finalY + 20;
+
+        doc.setFontSize(7);
+        doc.setTextColor(15, 23, 42); // slate-900
+
+        const margin = 14;
+        const contentWidth = pageWidth - (margin * 2);
+        const columnWidth = contentWidth / 3;
+
+        doc.text("PREPARED BY", margin + (columnWidth * 0), sigY);
+        doc.text(signatoryConfig.prepared || '', margin + (columnWidth * 0), sigY + 5);
+
+        if (signatoryConfig.reviewed) {
+          doc.text("REVIEWED BY", margin + (columnWidth * 1), sigY);
+          doc.text(signatoryConfig.reviewed, margin + (columnWidth * 1), sigY + 5);
+        }
+
+        doc.text("APPROVED BY", margin + (columnWidth * 2), sigY);
+        doc.text(signatoryConfig.approved || '', margin + (columnWidth * 2), sigY + 5);
+      }
+
       // 6. Save PDF
       doc.save(`Retail_Stock_Ledger_${format(selectedMonth, 'yyyy-MM')}.pdf`);
     } catch (err) {
@@ -532,6 +579,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
               selectedMonth={selectedMonth}
               viewScope={viewScope}
               formatMoney={formatMoney}
+              signatoryConfig={signatoryConfig}
             />
           </div>
           

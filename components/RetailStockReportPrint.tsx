@@ -32,10 +32,11 @@ interface Props {
   selectedMonth: Date;
   viewScope: 'outlet' | 'property';
   formatMoney: (amount: number) => string;
+  signatoryConfig?: { prepared?: string, reviewed?: string, approved?: string } | null;
 }
 
 const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
-  reportData, summary, groupedData, currentProperty, currentOutlet, selectedMonth, viewScope, formatMoney
+  reportData, summary, groupedData, currentProperty, currentOutlet, selectedMonth, viewScope, formatMoney, signatoryConfig
 }, ref) => {
   const displayGrouping = React.useMemo(() => {
     if (viewScope === 'property') {
@@ -234,16 +235,33 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
       </div>
 
       {/* Signatories */}
-      <div className="mt-32 print:mt-24 grid grid-cols-2 gap-24">
-        <div className="flex flex-col gap-4">
-          <div className="h-px w-full bg-slate-400"></div>
-          <span className="text-xs font-black text-slate-600 uppercase tracking-widest">Prepared By / Store Manager</span>
+      {signatoryConfig && (
+        <div className={`mt-32 print:mt-24 grid ${signatoryConfig.reviewed ? 'grid-cols-3' : 'grid-cols-2'} gap-10 items-end pb-4`}>
+            <div className="space-y-12">
+                <div className="h-px bg-black w-full"></div>
+                <div className="text-center uppercase">
+                    <p className="font-black text-xs text-slate-900">Prepared By:</p>
+                    <p className="text-[10px] font-bold text-slate-400 mt-1">{signatoryConfig.prepared}</p>
+                </div>
+            </div>
+            {signatoryConfig.reviewed && (
+              <div className="space-y-12">
+                  <div className="h-px bg-black w-full"></div>
+                  <div className="text-center uppercase">
+                      <p className="font-black text-xs text-slate-900">Reviewed By:</p>
+                      <p className="text-[10px] font-bold text-slate-400 mt-1">{signatoryConfig.reviewed}</p>
+                  </div>
+              </div>
+            )}
+            <div className="space-y-12">
+                <div className="h-px bg-black w-full"></div>
+                <div className="text-center uppercase">
+                    <p className="font-black text-xs text-slate-900">Approved By:</p>
+                    <p className="text-[10px] font-bold text-slate-400 mt-1">{signatoryConfig.approved}</p>
+                </div>
+            </div>
         </div>
-        <div className="flex flex-col gap-4">
-          <div className="h-px w-full bg-slate-400"></div>
-          <span className="text-xs font-black text-slate-600 uppercase tracking-widest">Authorized Signature / General Manager</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 });

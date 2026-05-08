@@ -167,11 +167,15 @@ const SignatoryConfig = ({
 }) => {
   const reports = [
     { id: 'daily_sales', label: 'Daily Sales Ledger' },
+    { id: 'massage_room_revenue', label: 'Massage Room Revenue' },
     { id: 'massage_yield', label: 'Massage Yield Report' },
     { id: 'members_joined', label: 'Members Joined Audit' },
     { id: 'expiring_memberships', label: 'Expiring Memberships Audit' },
     { id: 'incentives', label: 'Staff Incentives Report' },
     { id: 'revenue_recognition', label: 'Revenue Recognition Report' },
+    { id: 'monthly_revenue', label: 'Monthly Revenue Report' },
+    { id: 'retail_stock', label: 'Retail Stock Report' },
+    { id: 'custom_report', label: 'Custom Reports' },
   ];
 
   const updateReportConfig = (reportId: string, field: 'prepared' | 'reviewed' | 'approved', value: string) => {

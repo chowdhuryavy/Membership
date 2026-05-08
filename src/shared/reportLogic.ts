@@ -1179,8 +1179,9 @@ export const generateCustomReportPDF = (options: {
   logoUrl?: string;
   userName?: string;
   filename: string;
+  signatoryConfig?: { prepared?: string, reviewed?: string, approved?: string } | null;
 }) => {
-  const { jsPDF, autoTable, title, subtitle, headers, body, propertyName, logoUrl, userName, filename } = options;
+  const { jsPDF, autoTable, title, subtitle, headers, body, propertyName, logoUrl, userName, filename, signatoryConfig } = options;
   
   const JsPDFConstructor = typeof jsPDF === 'function' ? jsPDF : (jsPDF.jsPDF || jsPDF.default || jsPDF);
   const doc = new JsPDFConstructor({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -1239,6 +1240,28 @@ export const generateCustomReportPDF = (options: {
     },
     margin: { left: margin, right: margin }
   });
+
+  // Render Signatories
+  const finalTableY = (doc as any).lastAutoTable?.finalY || currentY + 15;
+  if (signatoryConfig) {
+    const sigY = finalTableY + 15;
+    doc.setFontSize(7);
+    doc.setTextColor(15, 23, 42);
+    
+    const contentWidth = pageWidth - (margin * 2);
+    const sigWidth = contentWidth / 3;
+    
+    doc.text("PREPARED BY", margin + (sigWidth * 0), sigY);
+    doc.text(signatoryConfig.prepared || '', margin + (sigWidth * 0), sigY + 5);
+    
+    if (signatoryConfig.reviewed) {
+      doc.text("REVIEWED BY", margin + (sigWidth * 1), sigY);
+      doc.text(signatoryConfig.reviewed, margin + (sigWidth * 1), sigY + 5);
+    }
+    
+    doc.text("APPROVED BY", margin + (sigWidth * 2), sigY);
+    doc.text(signatoryConfig.approved || '', margin + (sigWidth * 2), sigY + 5);
+  }
 
   // Footer
   const pageCount = (doc as any).internal.getNumberOfPages();
