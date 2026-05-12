@@ -15,6 +15,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../services/mockSupabase';
 import { format, differenceInCalendarDays, parse, isAfter, addDays, isBefore, startOfDay, parseISO } from 'date-fns';
+import { motion, AnimatePresence } from 'motion/react';
 import { MembersAgreement } from '../../components/MembersAgreement';
 import { SignatureModal } from '../../components/SignatureModal';
 
@@ -399,9 +400,14 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden group print:hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/30 rounded-full blur-3xl -mr-32 -mt-32"></div>
-        <button onClick={onBack} className="relative z-10 flex items-center gap-2 px-5 py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-all bg-slate-50 rounded-2xl border border-slate-100 shadow-inner">
-            <ArrowLeft className="w-4 h-4" /> Back to Ledger
-        </button>
+        <motion.button 
+          whileHover={{ scale: 1.02, x: -4 }} 
+          whileTap={{ scale: 0.98 }}
+          onClick={onBack} 
+          className="relative z-10 flex items-center gap-2 px-5 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-indigo-600 transition-all bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-100 group"
+        >
+            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" /> Back to Ledger
+        </motion.button>
         <div className="relative z-10 flex flex-wrap gap-2 w-full md:w-auto">
           <Button onClick={() => setShowSignatureModal(true)} variant="outline" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm transition-all">
               <PenTool className="w-4 h-4 mr-2" /> Signatures

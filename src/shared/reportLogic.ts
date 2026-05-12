@@ -22,7 +22,7 @@ export interface ReportContext {
   reportType: string;
   date: Date;
   dateType?: 'today' | 'yesterday';
-  incentiveDept?: 'Massage' | 'Membership' | 'Personal Training' | 'Sale' | 'Referral';
+  incentiveDept?: 'Massage' | 'Membership' | 'Personal Training' | 'Sale' | 'Referral' | 'All';
   selectedMembershipTypeId?: string | 'all';
   revenueMode?: 'cash' | 'accrual';
   endMonthIndex?: number;
@@ -523,10 +523,10 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     if (outletIds.length === 0) return { rows: [], summary: { totalIncentive: 0, count: 0, staffList: [] } };
 
-    const dept = incentiveDept || 'Massage';
+    const dept = incentiveDept || 'All';
 
     // For most incentive reports, we want staff from all outlets in the property to ensure we can match sales reps
-    const staffQueryOutletIds = (dept === 'Personal Training' || dept === 'Massage' || dept === 'Membership' || dept === 'Referral') ? allPropertyOutletIds : outletIds;
+    const staffQueryOutletIds = (dept === 'Personal Training' || dept === 'Massage' || dept === 'Membership' || dept === 'Referral' || dept === 'All') ? allPropertyOutletIds : outletIds;
 
     const [salesRes, bookingsRes, membersRes, rulesRes, staffRes, inventoryRes, mTypesRes, categoriesRes, guestsRes] = await Promise.all([
       supabase.from('sales').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59`),
@@ -597,15 +597,19 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const rows: any[] = [];
     let sl = 1;
 
-    if (dept === 'Massage' || dept === 'Personal Training') {
+    const allDepts = ['Massage', 'Personal Training', 'Membership', 'Retail', 'Referral'];
+    const activeDepts = (dept === 'All') ? allDepts : [dept];
+
+    activeDepts.forEach(currentDept => {
+      if (currentDept === 'Massage' || currentDept === 'Personal Training') {
       // Process Bookings
       bookings.filter(b => {
         const type = mTypes.find(m => m.id === b.massage_type_id) || mTypes.find(m => m.id === b.inventory_item_id) || inventory.find(i => i.id === b.inventory_item_id);
         const cat = type?.category?.trim();
         const normCat = (cat || '').toLowerCase();
-        const normDept = dept.toLowerCase();
+        const normDept = currentDept.toLowerCase();
         
-        if (dept === 'Massage') {
+        if (currentDept === 'Massage') {
           return normCat.includes('massage') || !cat;
         }
         // Personal Training check
@@ -613,7 +617,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       }).forEach(b => {
         const type = mTypes.find(m => m.id === b.massage_type_id) || mTypes.find(m => m.id === b.inventory_item_id) || inventory.find(i => i.id === b.inventory_item_id);
         if (!type) return;
-        const rule = findBestRule(rules, dept, (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes, b.outlet_id);
+        const rule = findBestRule(rules, currentDept, (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes, b.outlet_id);
         
         const actualPrice = b.price || type.price;
         const discountAmt = b.discount || 0;
@@ -647,7 +651,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             const trainerId = b.therapist_id;
             const therapist = rawStaffList.find(s => s.id === trainerId);
             if (therapist) {
-              const isPersonalTrainer = dept === 'Personal Training' ? therapist.role === 'Personal Trainer' : true;
+              const isPersonalTrainer = currentDept === 'Personal Training' ? therapist.role === 'Personal Trainer' : true;
               const isEligible = therapist.is_eligible_for_incentives !== false && isPersonalTrainer;
               if (!isEligible) {
                 remarks = isPersonalTrainer ? 'Staff not eligible for incentives' : 'Staff role not PT';
@@ -696,7 +700,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const sales = (salesRes.data || []).filter(s => s.category === 'Personal Training');
         sales.forEach(s => {
           const item = inventory.find(i => i.id === s.item_id);
-          const rule = findBestRule(rules, dept, s.item_id || '', s.unit_price, 0, s.outlet_id);
+          const rule = findBestRule(rules, currentDept, s.item_id || '', s.unit_price, 0, s.outlet_id);
           
           const actualPrice = s.gross_amount;
           const discountAmt = s.discount_amount || 0;
@@ -732,7 +736,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
               if (trainerId) {
                 const staff = rawStaffList.find(st => st.id === trainerId);
                 if (staff) {
-                  const isPersonalTrainer = dept === 'Personal Training' ? staff.role === 'Personal Trainer' : true;
+                  const isPersonalTrainer = currentDept === 'Personal Training' ? staff.role === 'Personal Trainer' : true;
                   const isEligible = staff.is_eligible_for_incentives !== false && isPersonalTrainer;
                   if (!isEligible) {
                     remarks = isPersonalTrainer ? 'Staff not eligible for incentives' : 'Staff role not PT';
@@ -785,7 +789,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           });
         });
       }
-    } else if (dept === 'Membership') {
+    } else if (currentDept === 'Membership') {
       members
         .forEach(m => {
         // 1. Find Rules
@@ -915,11 +919,11 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             referral_amount: (m as any)._referral_inc_net || 0
           });
       });
-    } else if (dept === 'Sale') {
+    } else if (currentDept === 'Sale') {
       const sales = (salesRes.data || []).filter(s => s.category !== 'Personal Training');
       sales.forEach(s => {
         const item = inventory.find(i => i.id === s.item_id);
-        const rule = findBestRule(rules, dept, s.item_id || '', s.unit_price, 0, s.outlet_id, s.category);
+        const rule = findBestRule(rules, 'Sale', s.item_id || '', s.unit_price, 0, s.outlet_id, s.category);
         
         const actualPrice = s.gross_amount;
         const discountAmt = s.discount_amount || 0;
@@ -1007,7 +1011,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           referrer_name: cleanRefForSale
         });
       });
-    } else if (dept === 'Referral') {
+    } else if (currentDept === 'Referral') {
       const referrerTotals: Record<string, number> = {};
       members
         .filter(m => m.referrer_name && m.referrer_name.trim() !== '')
@@ -1046,15 +1050,38 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           const payeeMode = rule.referral_payee || 'Referrer';
           const isBoth = payeeMode === 'Both';
           const isReferrer = payeeMode === 'Referrer' || isBoth;
+          const isStaff = payeeMode === 'Staff' || isBoth;
 
           remarks = `Referral Payee: ${payeeMode}`;
 
           if (isReferrer) {
+            referrerNet = rNet;
+            referrerTotals[cleanReferrerName] = (referrerTotals[cleanReferrerName] || 0) + rNet;
+          }
+
+          if (isStaff) {
             baseInc = rBase;
             incDiscVal = rDiscVal;
             incNet = rNet;
-            referrerNet = rNet;
-            referrerTotals[cleanReferrerName] = (referrerTotals[cleanReferrerName] || 0) + rNet;
+            
+            if (rule.distribution_type === 'Shared') {
+              const rAvailable = staffList.filter(s => getStaffOutlets(s).includes(m.outlet_id));
+              if (rAvailable.length > 0) {
+                const share = rNet / rAvailable.length;
+                rAvailable.forEach(s => staffSplits[s.id] = (staffSplits[s.id] || 0) + share);
+              } else {
+                remarks += ' (Staff Shared: No eligible staff)';
+              }
+            } else {
+              const repId = [m.sales_rep_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+              if (repId) staffSplits[repId] = rNet;
+            }
+          } else if (isReferrer) {
+            // If ONLY referrer is paid, we still want to show the total in inc_total for this row in the report
+            // but staff_splits remains empty.
+            baseInc = rBase;
+            incDiscVal = rDiscVal;
+            incNet = rNet;
           }
         }
 
@@ -1092,6 +1119,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       // Add referrer summaries to result in Step 2 after processing all members
       (rows as any)._referrerTotals = referrerTotals;
     }
+
+    }); // End activeDepts loop
 
     const totalIncentive = rows.reduce((sum, r) => sum + r.inc_net, 0);
 

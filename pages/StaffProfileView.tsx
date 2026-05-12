@@ -4,8 +4,8 @@ import { Staff, StaffLeave } from '../types';
 import { db } from '../services/mockSupabase';
 import { supabase } from '../services/supabase';
 import { getReportData } from '../src/shared/reportLogic';
-import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X, Database, RefreshCcw, ShieldAlert, Award, TrendingUp, Sparkles, User, Clock, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X, Database, RefreshCcw, ShieldAlert, Award, TrendingUp, Sparkles, User, Clock, Building2, ChevronLeft, ChevronRight, UserPlus } from 'lucide-react';
+import { format, parseISO, subDays } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -140,18 +140,18 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
 
   useEffect(() => {
     if (activeTab === 'incentives') {
-      loadIncentives();
+      loadIncentives(incentiveData.length > 0);
     }
   }, [staff.id, activeTab, incentiveDate]);
 
-  const loadIncentives = async () => {
-    if (!staff) return;
+  const loadIncentives = async (silent = false) => {
+    if (!staff?.id || incentiveLoading) return;
     if (!staff.is_eligible_for_incentives) {
       setIncentiveData([]);
       setIncentiveSummary({ total: 0, count: 0 });
       return;
     }
-    setIncentiveLoading(true);
+    if (!silent) setIncentiveLoading(true);
     try {
       // Robust propertyId lookup
       let propertyId = staff.property_id;
@@ -168,40 +168,53 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
         return;
       }
 
-      const depts: ('Massage' | 'Membership' | 'Personal Training' | 'Referral' | 'Sale')[] = ['Massage', 'Membership', 'Personal Training', 'Referral', 'Sale'];
-      
-      // Fetch all departments in parallel for speed and reliability
-      const results = await Promise.all(depts.map(dept => 
-        getReportData({
-          supabase,
-          propertyId,
-          outletId: 'all',
-          reportType: 'incentives',
-          date: incentiveDate,
-          incentiveDept: dept
-        }).then(res => ({ dept, rows: res.rows }))
-      ));
-
-      let allRows: any[] = [];
-      let totalInc = 0;
-
-      results.forEach(({ dept, rows }) => {
-        // Filter rows for this specific staff member
-        const staffRows = rows.filter(r => r.staff_splits && r.staff_splits[staff.id]);
-        
-        // Add department info to each row
-        const rowsWithDept = staffRows.map(r => ({
-          ...r,
-          department: dept,
-          my_incentive: r.staff_splits[staff.id]
-        }));
-
-        allRows = [...allRows, ...rowsWithDept];
-        totalInc += rowsWithDept.reduce((sum, r) => sum + r.my_incentive, 0);
+      // Fetch one comprehensive report for all departments
+      const res = await getReportData({
+        supabase,
+        propertyId,
+        outletId: 'all',
+        reportType: 'incentives',
+        date: incentiveDate,
+        incentiveDept: 'All'
       });
 
-      // Sort by date
-      allRows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const rows = res.rows || [];
+      
+      // Filter rows for this specific staff member and map them
+      const staffRows = rows.filter(r => r.staff_splits && r.staff_splits[staff.id]);
+      
+      const allRows = staffRows.map(r => ({
+        ...r,
+        id: `${r.department || 'N/A'}-${r.id}`, // Ensure uniqueness
+        my_incentive: Number(r.staff_splits[staff.id]) || 0
+      }));
+
+      const totalInc = allRows.reduce((sum, r) => sum + (Number(r.my_incentive) || 0), 0);
+
+      // Better sorting for mixed formats (native and custom dd-MMM-yy)
+      allRows.sort((a, b) => {
+        const parseDate = (d: string) => {
+          if (!d) return 0;
+          // Try dd-MMM-yy
+          const match = d.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
+          if (match) {
+            const months: Record<string, number> = {
+              'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+              'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+            };
+            const monthStr = match[2];
+            let year = parseInt(match[3]);
+            if (year < 100) year += 2000;
+            const dt = new Date(year, months[monthStr] || 0, parseInt(match[1]));
+            return dt.getTime();
+          }
+          const parsed = new Date(d);
+          return isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+        };
+        const timeA = parseDate(a.date);
+        const timeB = parseDate(b.date);
+        return timeB - timeA;
+      });
 
       setIncentiveData(allRows);
       setIncentiveSummary({ total: totalInc, count: allRows.length });
@@ -209,7 +222,7 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
       console.error("Failed to load incentives:", error);
       setIncentiveSummary({ total: 0, count: 0 });
     } finally {
-      setIncentiveLoading(false);
+      if (!silent) setIncentiveLoading(false);
     }
   };
 
@@ -217,6 +230,10 @@ const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canM
 
   const handleSaveLeave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!staff.is_active) {
+      setError("Cannot record leave for inactive or terminated staff.");
+      return;
+    }
     if (!leaveForm.start_date || !leaveForm.end_date) return;
     setError(null);
     
@@ -328,9 +345,14 @@ NOTIFY pgrst, 'reload schema';`}
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500 pb-20">
       <div className="flex justify-between items-center bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
-        <button onClick={onBack} className="relative z-10 flex items-center gap-2 px-5 py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-all bg-slate-50 rounded-2xl border border-slate-100 shadow-inner">
-            <ArrowLeft className="w-4 h-4" /> Back to Roster
-        </button>
+        <motion.button 
+          whileHover={{ scale: 1.02, x: -4 }} 
+          whileTap={{ scale: 0.98 }}
+          onClick={onBack} 
+          className="relative z-10 flex items-center gap-2 px-5 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-indigo-600 transition-all bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-100 group"
+        >
+            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" /> Back to Roster
+        </motion.button>
         {canManage && (
           <div className="flex gap-2">
             <Button onClick={() => setDeleteStaffId(staff.id)} variant="secondary" className="relative z-10 rounded-xl h-11 px-6 font-black text-xs uppercase bg-white border-2 border-red-100 hover:border-red-200 text-red-600 shadow-sm transition-all">
@@ -387,19 +409,19 @@ NOTIFY pgrst, 'reload schema';`}
                       <span className="truncate flex-1 text-left lowercase">{staff.email || 'No email'}</span>
                   </div>
                   {staff.joining_date && (
-                    <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs font-black text-slate-700">
-                        <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600"><Building2 className="w-4 h-4" /></div>
+                    <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-[10px] font-black text-slate-600">
+                        <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600"><Calendar className="w-4 h-4" /></div>
                         <div className="flex-1 text-left">
-                          <p className="uppercase opacity-60 text-[8px]">Joining Date</p>
-                          <p>{format(parseISO(staff.joining_date), 'dd MMM yyyy')}</p>
+                          <p className="uppercase opacity-60 text-[8px]">Onboarding Date</p>
+                          <p>{format(parseISO(staff.joining_date || staff.created_at || new Date().toISOString()), 'dd MMM yyyy')}</p>
                         </div>
                     </div>
                   )}
                   {staff.inactive_date && (
-                    <div className="flex items-center gap-4 p-4 bg-red-50/50 rounded-2xl border border-red-100 text-[10px] font-black text-red-700">
-                        <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-red-600"><CalendarX className="w-4 h-4" /></div>
+                    <div className={`flex items-center gap-4 p-4 rounded-2xl border text-[10px] font-black transition-all ${parseISO(staff.inactive_date) > new Date() ? 'bg-amber-50/50 border-amber-100 text-amber-700' : 'bg-red-50/50 border-red-100 text-red-700'}`}>
+                        <div className={`w-9 h-9 rounded-xl shadow-sm flex items-center justify-center bg-white ${parseISO(staff.inactive_date) > new Date() ? 'text-amber-600' : 'text-red-600'}`}><CalendarX className="w-4 h-4" /></div>
                         <div className="flex-1 text-left">
-                          <p className="uppercase opacity-60 text-[8px]">Inactivation Date</p>
+                          <p className="uppercase opacity-60 text-[8px]">{parseISO(staff.inactive_date) > new Date() ? 'Scheduled Departure' : 'Termination / Inactivation'}</p>
                           <p>{format(parseISO(staff.inactive_date), 'dd MMM yyyy')}</p>
                         </div>
                     </div>
@@ -446,10 +468,16 @@ NOTIFY pgrst, 'reload schema';`}
                               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Absence & Incentive Exemption Periods</p>
                           </div>
                         </div>
-                        {canManageLeaves && (
+                        {canManageLeaves && staff.is_active && (
                           <Button onClick={() => { setEditingLeaveId(null); setLeaveForm({ start_date: '', end_date: '' }); setShowLeaveForm(true); }} size="sm" variant="secondary" className="rounded-xl font-black uppercase text-[9px] tracking-widest h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white border-none transition-all active:scale-95 shadow-lg shadow-indigo-900/40">
                               <Plus className="w-3.5 h-3.5 mr-1.5" /> Record Leave
                           </Button>
+                        )}
+                        {canManageLeaves && !staff.is_active && (
+                          <div className="px-4 py-2 bg-red-50 rounded-xl border border-red-100 flex items-center gap-2">
+                             <ShieldAlert className="w-3 h-3 text-red-600" />
+                             <span className="text-[8px] font-black text-red-600 uppercase tracking-widest">Profile Lock: Inactive</span>
+                          </div>
                         )}
                       </>
                     ) : (
@@ -496,8 +524,8 @@ NOTIFY pgrst, 'reload schema';`}
                     <table className="w-full text-left table-fixed">
                         <thead className="bg-slate-50/30 text-[8px] font-black uppercase text-slate-400 tracking-[0.2em] border-b sticky top-0 z-10">
                             <tr>
-                                <th className="px-6 py-4 w-[35%]">Commence</th>
-                                <th className="px-6 py-4 w-[35%]">Terminate</th>
+                                <th className="px-6 py-4 w-[35%]">Leave Start</th>
+                                <th className="px-6 py-4 w-[35%] text-slate-400">Expected End</th>
                                 <th className="px-6 py-4 w-[30%] text-right">Ops</th>
                             </tr>
                         </thead>
@@ -510,13 +538,27 @@ NOTIFY pgrst, 'reload schema';`}
                                     </div>
                                 </td></tr>
                             ) : (
-                                Array.isArray(leaves) && leaves.map(l => (
+                                Array.isArray(leaves) && leaves.map(l => {
+                                  const isActive = staff.is_active;
+                                  const terminationDate = staff.inactive_date ? parseISO(staff.inactive_date) : null;
+                                  const leaveEndDate = parseISO(l.end_date);
+                                  const displayEndDate = (terminationDate && terminationDate < leaveEndDate) 
+                                    ? format(subDays(terminationDate, 1), 'yyyy-MM-dd') 
+                                    : l.end_date;
+                                  const wasCapped = terminationDate && terminationDate < leaveEndDate;
+
+                                  return (
                                     <tr key={l.id} className="hover:bg-indigo-50/20 transition-colors group">
                                         <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(l.start_date), 'dd MMM yyyy')}</td>
-                                        <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(l.end_date), 'dd MMM yyyy')}</td>
+                                        <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">
+                                          <div className="flex flex-col">
+                                            <span className={wasCapped ? 'text-red-600' : ''}>{format(parseISO(displayEndDate), 'dd MMM yyyy')}</span>
+                                            {wasCapped && <span className="text-[7px] font-black uppercase text-red-400">Capped by Termination</span>}
+                                          </div>
+                                        </td>
                                         <td className="px-6 py-5 text-right">
                                             <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {canManageLeaves && (
+                                                {canManageLeaves && staff.is_active && (
                                                   <>
                                                     <button onClick={() => { setEditingLeaveId(l.id); setLeaveForm({ start_date: l.start_date, end_date: l.end_date }); setShowLeaveForm(true); }} className="p-2 text-slate-300 hover:text-indigo-600 transition-colors" title="Modify"><Edit2 className="w-3.5 h-3.5"/></button>
                                                     <button onClick={() => handleDeleteLeave(l.id)} disabled={isDeleting === l.id} className={`p-2 transition-colors ${isDeleting === l.id ? 'text-slate-200 cursor-wait' : 'text-slate-300 hover:text-red-500'}`} title="Delete">
@@ -524,10 +566,16 @@ NOTIFY pgrst, 'reload schema';`}
                                                     </button>
                                                   </>
                                                 )}
+                                                {!staff.is_active && (
+                                                  <div className="p-2 text-slate-200 cursor-not-allowed" title="Account Inactive">
+                                                    <ShieldAlert className="w-3.5 h-3.5" />
+                                                  </div>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
-                                ))
+                                  );
+                                })
                             )}
                         </tbody>
                     </table>
@@ -552,10 +600,26 @@ NOTIFY pgrst, 'reload schema';`}
                         </div>
                       </div>
 
-                      {incentiveLoading ? (
+                      {incentiveLoading && incentiveData.length === 0 ? (
                         <div className="space-y-4 animate-pulse">
                           {[1, 2, 3].map(i => (
-                            <div key={i} className="h-28 bg-slate-50 rounded-[2rem] border border-slate-100"></div>
+                            <div key={i} className="h-40 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex flex-col p-8 gap-4">
+                              <div className="flex justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-slate-100 rounded-2xl"></div>
+                                  <div className="space-y-2">
+                                    <div className="h-2 w-12 bg-slate-100 rounded"></div>
+                                    <div className="h-3 w-24 bg-slate-100 rounded"></div>
+                                  </div>
+                                </div>
+                                <div className="h-6 w-16 bg-slate-100 rounded"></div>
+                              </div>
+                              <div className="mt-4 grid grid-cols-3 gap-4">
+                                <div className="h-4 bg-slate-100 rounded"></div>
+                                <div className="h-4 bg-slate-100 rounded"></div>
+                                <div className="h-4 bg-slate-100 rounded"></div>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       ) : !staff.is_eligible_for_incentives ? (
@@ -568,7 +632,7 @@ NOTIFY pgrst, 'reload schema';`}
                           <Button onClick={() => onEdit(staff)} variant="outline" className="mt-6 rounded-xl h-10 border-amber-200 text-amber-700 font-black uppercase text-[9px] tracking-widest">Modify Eligibility</Button>
                         </div>
                       ) : incentiveData.length === 0 ? (
-                        <div className="bg-slate-50 p-12 rounded-[2rem] border border-slate-200/60 text-center">
+                        <div className="bg-slate-50 p-12 rounded-[2rem] border border-slate-200/60 text-center animate-in fade-in duration-500">
                           <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100 shadow-sm">
                             <Award className="w-8 h-8 text-slate-300" />
                           </div>
@@ -576,49 +640,93 @@ NOTIFY pgrst, 'reload schema';`}
                           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xs mx-auto leading-relaxed">No incentives recorded for this staff member in {format(incentiveDate, 'MMMM yyyy')}.</p>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 gap-4">
-                          <AnimatePresence mode="popLayout">
+                        <div className="space-y-6">
+                          {incentiveLoading && incentiveData.length > 0 && (
+                            <div className="flex items-center justify-center gap-3 py-2 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 mb-2 animate-in fade-in slide-in-from-top-2">
+                              <RefreshCcw className="w-3.5 h-3.5 text-indigo-500 animate-spin" />
+                              <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Refreshing Data...</span>
+                            </div>
+                          )}
+                          <AnimatePresence mode="popLayout" initial={false}>
                             {incentiveData.map((item, index) => (
                               <motion.div 
                                 key={item.id}
-                                initial={{ opacity: 0, y: 20 }}
+                                layout
+                                initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
-                                transition={{ delay: index * 0.02 }}
+                                transition={{ 
+                                  duration: 0.2,
+                                  delay: index < 10 ? index * 0.05 : 0 
+                                }}
                                 className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300"
                               >
                                 <div className="flex justify-between items-start mb-4">
                                   <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-xl ${
+                                    <div className={`p-2.5 rounded-2xl ${
                                       item.department === 'Massage' ? 'bg-indigo-50 text-indigo-600' :
                                       item.department === 'Membership' ? 'bg-emerald-50 text-emerald-600' :
+                                      item.department === 'Referral' ? 'bg-rose-50 text-rose-600' :
                                       'bg-amber-50 text-amber-600'
                                     }`}>
                                       {item.department === 'Massage' ? <Sparkles className="w-5 h-5" /> :
                                        item.department === 'Membership' ? <TrendingUp className="w-5 h-5" /> :
+                                       item.department === 'Referral' ? <UserPlus className="w-5 h-5" /> :
                                        <Award className="w-5 h-5" />}
                                     </div>
                                     <div>
-                                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{item.department}</p>
-                                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{item.item_name}</h4>
+                                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{item.department} {item.payout_type ? `• ${item.payout_type}` : ''}</p>
+                                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">{item.item_name}</h4>
                                     </div>
                                   </div>
                                     <div className="text-right">
                                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Staff Share</p>
-                                      <p className="text-lg font-black text-indigo-600">{formatMoney(item.my_incentive)}</p>
+                                      <p className="text-xl font-black text-indigo-600">{formatMoney(item.my_incentive)}</p>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
-                                  <div className="flex items-center gap-2">
-                                    <Calendar className="w-3.5 h-3.5 text-slate-300" />
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.date}</span>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-5 border-t border-slate-50">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 shadow-sm"><Calendar className="w-4 h-4" /></div>
+                                    <div className="flex flex-col">
+                                      <span className="text-[7px] font-black text-slate-300 uppercase">Service Date</span>
+                                      <span className="text-[10px] font-black text-slate-600 uppercase tracking-tight">{item.date}</span>
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-2 justify-end">
-                                    <User className="w-3.5 h-3.5 text-slate-300" />
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[100px]">{item.guest_name}</span>
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 shadow-sm"><User className="w-4 h-4" /></div>
+                                    <div className="flex flex-col min-w-0">
+                                      <span className="text-[7px] font-black text-slate-300 uppercase">Guest Name</span>
+                                      <span className="text-[10px] font-black text-slate-600 uppercase tracking-tight truncate">{item.guest_name || 'Guest'}</span>
+                                    </div>
                                   </div>
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 shadow-sm"><Building2 className="w-4 h-4" /></div>
+                                    <div className="flex flex-col">
+                                      <span className="text-[7px] font-black text-slate-300 uppercase">Outlet</span>
+                                      <span className="text-[10px] font-black text-slate-600 uppercase tracking-tight truncate">{item.outlet_name || 'Primary'}</span>
+                                    </div>
+                                  </div>
+                                  {item.check_no && (
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 shadow-sm"><Database className="w-4 h-4" /></div>
+                                      <div className="flex flex-col">
+                                        <span className="text-[7px] font-black text-slate-300 uppercase">Check No</span>
+                                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-tight truncate">{item.check_no}</span>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
+                                {item.referrer_name && (
+                                  <div className="mt-3 p-3 bg-rose-50/50 rounded-xl border border-rose-100/50 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <UserPlus className="w-3.5 h-3.5 text-rose-400" />
+                                      <span className="text-[9px] font-black text-rose-600 uppercase tracking-widest">Referred By:</span>
+                                    </div>
+                                    <span className="text-[10px] font-black text-rose-700 uppercase">{item.referrer_name}</span>
+                                  </div>
+                                )}
+                                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-indigo-500/5 to-transparent blur-2xl -z-10 transition-opacity opacity-0 group-hover:opacity-100"></div>
                               </motion.div>
                             ))}
                           </AnimatePresence>
@@ -647,7 +755,7 @@ NOTIFY pgrst, 'reload schema';`}
                 <CardContent className="p-10 space-y-8">
                     <form onSubmit={handleSaveLeave} className="space-y-6">
                         <div className="space-y-2">
-                            <label className="text-[11px] font-bold text-slate-600 ml-1">Commencement Date (DD/MM/YYYY)</label>
+                            <label className="text-[11px] font-bold text-slate-600 ml-1">Leave Start Date (DD/MM/YYYY)</label>
                             <div className="relative group bg-slate-50/50 rounded-2xl border-2 border-slate-100 focus-within:border-indigo-600 transition-all">
                                 <GhostPlaceholder value={displayDates.start} />
                                 <input 
@@ -678,7 +786,7 @@ NOTIFY pgrst, 'reload schema';`}
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[11px] font-bold text-slate-600 ml-1">Termination Date (DD/MM/YYYY)</label>
+                            <label className="text-[11px] font-bold text-slate-600 ml-1">Leave End Date (DD/MM/YYYY)</label>
                             <div className="relative group bg-slate-50/50 rounded-2xl border-2 border-slate-100 focus-within:border-indigo-600 transition-all">
                                 <GhostPlaceholder value={displayDates.end} />
                                 <input 

@@ -1567,13 +1567,15 @@ const StaffSchedule = () => {
             ) : (
               <div className="animate-in slide-in-from-right-10 duration-500">
                 <div className="flex items-center justify-between mb-8">
-                  <button 
+                  <motion.button 
+                    whileHover={{ scale: 1.02, x: -4 }} 
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => setSelectedIncentiveDept(null)}
-                    className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors shadow-sm group"
+                    className="flex items-center gap-2 px-5 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-indigo-600 transition-all bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-100 group"
                   >
                     <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Back to Summary</span>
-                  </button>
+                    Back to Summary
+                  </motion.button>
                   <div className="text-right">
                     <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Department</p>
                     <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">{selectedIncentiveDept}</p>

@@ -192,7 +192,14 @@ const GuestHistoryView = ({
   // Removed inventoryFormState from here
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
-      <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors"><ArrowLeft className="w-4 h-4" /> Back to Ledger</button>
+      <motion.button 
+        whileHover={{ scale: 1.02, x: -4 }} 
+        whileTap={{ scale: 0.98 }}
+        onClick={onBack} 
+        className="flex items-center gap-2 px-5 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-indigo-600 transition-all bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-100 group"
+      >
+          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" /> Back to Ledger
+      </motion.button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 space-y-6">
