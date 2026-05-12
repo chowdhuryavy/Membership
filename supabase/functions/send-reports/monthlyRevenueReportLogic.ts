@@ -1,5 +1,5 @@
 // supabase is passed in context
-import { format, startOfYear, endOfYear, parseISO, subYears, getMonth, startOfMonth, endOfMonth } from 'npm:date-fns';
+import { format, startOfYear, endOfYear, parseISO, subYears, getMonth, startOfMonth, endOfMonth, differenceInCalendarDays } from 'npm:date-fns';
 import { RevenueEngine } from './revenueEngine.ts';
 
 export interface MonthlyRevenueData {
@@ -152,24 +152,61 @@ export const getMonthlyRevenueData = async (
   if (revenueMode === 'cash') {
     members.forEach((m: any) => {
       if (!m.start_date) return;
-      const month = getMonth(parseISO(m.start_date));
+      const mDate = parseISO(m.start_date);
+      const month = getMonth(mDate);
       const typeName = typeMap[m.membership_type_id] || 'Membership';
       if (!rowMap[typeName]) rowMap[typeName] = Array(12).fill(0);
       rowMap[typeName][month] += (m.net_amount || 0);
     });
   } else {
-    // Accrual Mode
-    members.forEach((m: any) => {
+    // Accrual Mode - Optimized
+    const parsedMembers = members.map((m: any) => ({
+      ...m,
+      _start: parseISO(m.start_date),
+      _end: parseISO(m.current_end_date),
+      _freezes: freezes.filter((f: any) => f.member_id === m.id).map((f: any) => ({
+        _start: parseISO(f.start_date),
+        _end: parseISO(f.end_date)
+      }))
+    }));
+
+    parsedMembers.forEach((m: any) => {
       const typeName = typeMap[m.membership_type_id] || 'Membership';
       if (!rowMap[typeName]) rowMap[typeName] = Array(12).fill(0);
       
-      const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
-      
+      const mStartMonth = getMonth(m._start);
+      const mEndMonth = getMonth(m._end);
+      const mYear = m._start.getFullYear();
+      const mEndYear = m._end.getFullYear();
+
       for (let month = 0; month < 12; month++) {
+        // Skip months where member definitely wasn't active
+        if (year < mYear || year > mEndYear) continue;
+        if (year === mYear && month < mStartMonth) continue;
+        if (year === mEndYear && month > mEndMonth) continue;
+
         const monthStart = startOfMonth(new Date(year, month, 1));
         const monthEnd = endOfMonth(new Date(year, month, 1));
-        const periodRev = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, monthStart, monthEnd);
-        rowMap[typeName][month] += periodRev;
+        
+        // Inline calculateRevenuePeriod logic to avoid repeated parsing
+        const activeStart = monthStart > m._start ? monthStart : m._start;
+        const activeEnd = monthEnd < m._end ? monthEnd : m._end;
+
+        if (activeStart > activeEnd) continue;
+
+        const totalPotentialDays = differenceInCalendarDays(activeEnd, activeStart) + 1;
+        let frozenDays = 0;
+
+        m._freezes.forEach((f: any) => {
+          const intersectStart = f._start > activeStart ? f._start : activeStart;
+          const intersectEnd = f._end < activeEnd ? f._end : activeEnd;
+          if (intersectStart <= intersectEnd) {
+            frozenDays += differenceInCalendarDays(intersectEnd, intersectStart) + 1;
+          }
+        });
+
+        const recognizedDays = Math.max(0, totalPotentialDays - frozenDays);
+        rowMap[typeName][month] += recognizedDays * (m.daily_rate || 0);
       }
     });
   }
@@ -223,14 +260,51 @@ export const getMonthlyRevenueData = async (
       previousYearTotals[month] += (m.net_amount || 0);
     });
   } else {
-    // Accrual Mode for previous year
-    prevMembers.forEach((m: any) => {
-      const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
+    // Accrual Mode for previous year - Optimized
+    const prevYearMembers = prevMembers.map((m: any) => ({
+      ...m,
+      _start: parseISO(m.start_date),
+      _end: parseISO(m.current_end_date),
+      _freezes: freezes.filter((f: any) => f.member_id === m.id).map((f: any) => ({
+        _start: parseISO(f.start_date),
+        _end: parseISO(f.end_date)
+      }))
+    }));
+
+    prevYearMembers.forEach((m: any) => {
+      const mStartMonth = getMonth(m._start);
+      const mEndMonth = getMonth(m._end);
+      const mYear = m._start.getFullYear();
+      const mEndYear = m._end.getFullYear();
+      const prevYear = year - 1;
+
       for (let month = 0; month < 12; month++) {
-        const monthStart = startOfMonth(new Date(year - 1, month, 1));
-        const monthEnd = endOfMonth(new Date(year - 1, month, 1));
-        const periodRev = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, monthStart, monthEnd);
-        previousYearTotals[month] += periodRev;
+        // Skip months where member definitely wasn't active in prevYear
+        if (prevYear < mYear || prevYear > mEndYear) continue;
+        if (prevYear === mYear && month < mStartMonth) continue;
+        if (prevYear === mEndYear && month > mEndMonth) continue;
+
+        const monthStart = startOfMonth(new Date(prevYear, month, 1));
+        const monthEnd = endOfMonth(new Date(prevYear, month, 1));
+        
+        const activeStart = monthStart > m._start ? monthStart : m._start;
+        const activeEnd = monthEnd < m._end ? monthEnd : m._end;
+
+        if (activeStart > activeEnd) continue;
+
+        const totalPotentialDays = differenceInCalendarDays(activeEnd, activeStart) + 1;
+        let frozenDays = 0;
+
+        m._freezes.forEach((f: any) => {
+          const intersectStart = f._start > activeStart ? f._start : activeStart;
+          const intersectEnd = f._end < activeEnd ? f._end : activeEnd;
+          if (intersectStart <= intersectEnd) {
+            frozenDays += differenceInCalendarDays(intersectEnd, intersectStart) + 1;
+          }
+        });
+
+        const recognizedDays = Math.max(0, totalPotentialDays - frozenDays);
+        previousYearTotals[month] += recognizedDays * (m.daily_rate || 0);
       }
     });
   }

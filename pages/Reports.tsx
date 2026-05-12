@@ -702,16 +702,17 @@ const Reports = () => {
                         {(isMembersJoined && visibleColumns.membership_no) && <th rowSpan={2} className="border border-black px-2 py-3 w-24">Mem. No</th>}
                         
                         {visibleColumns.reference && <th rowSpan={2} className="border border-black px-2 py-3 w-24">{isMembersJoined ? 'Category' : 'Duration'}</th>}
-                        {visibleColumns.referrer && <th rowSpan={2} className="border border-black px-2 py-3 w-24">Referrer</th>}
+                        {visibleColumns.referrer && (incentiveDept !== 'Referral') && <th rowSpan={2} className="border border-black px-2 py-3 w-24">Referrer</th>}
                         {visibleColumns.check_no && <th rowSpan={2} className="border border-black px-2 py-3 w-20">Check No.</th>}
                         {(isDailySales && visibleColumns.payment_mode) && <th rowSpan={2} className="border border-black px-2 py-3 w-24">Payment Mode</th>}
                         {visibleColumns.item_name && <th rowSpan={2} className="border border-black px-2 py-3 min-w-[100px]">Item / Service</th>}
-                        {(isIncentiveReport && visibleColumns.specialist) && <th rowSpan={2} className="border border-black px-2 py-3">{specialistLabel}</th>}
+                        {(isIncentiveReport && visibleColumns.specialist && incentiveDept !== 'Membership') && <th rowSpan={2} className="border border-black px-2 py-3">{specialistLabel}</th>}
                         
                         {visibleColumns.gross_amount && <th rowSpan={2} className="border border-black px-2 py-3 text-right w-20">Gross Amount</th>}
                         {visibleColumns.disc_percent && <th rowSpan={2} className="border border-black px-2 py-3 text-center w-12">Disc %</th>}
                         {visibleColumns.discount_amt && <th rowSpan={2} className="border border-black px-2 py-3 text-right w-20">Discount Amt</th>}
                         {visibleColumns.net_revenue && <th rowSpan={2} className="border border-black px-2 py-3 text-right w-20">Net Revenue</th>}
+                        {(isIncentiveReport && incentiveDept === 'Membership') && <th rowSpan={2} className="border border-black px-2 py-3 text-right bg-indigo-50 text-indigo-900 w-20">Referral Amt</th>}
                         
                         {/* Incentive Columns only for Incentive Report */}
                         {isIncentiveReport && <th colSpan={4} className="border border-black px-2 py-1 text-center bg-amber-100 text-slate-900">Incentive Breakdown</th>}
@@ -777,7 +778,7 @@ const Reports = () => {
                                                         {visibleColumns.check_no && <td className="border border-black px-2 py-1 text-center text-slate-400">{row.check_no}</td>}
                                                         {(isDailySales && visibleColumns.payment_mode) && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
                                                         {visibleColumns.item_name && <td className="border border-black px-2 py-1">{row.item_name}</td>}
-                                                        {(isIncentiveReport && visibleColumns.specialist) && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
+                                                        {(isIncentiveReport && visibleColumns.specialist && incentiveDept !== 'Membership') && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
                                                         
                                                         {visibleColumns.gross_amount && <td className="border border-black px-2 py-1 text-right">{formatMoney(row.actual_price)}</td>}
                                                         {visibleColumns.disc_percent && <td className="border border-black px-2 py-1 text-center text-slate-400">{row.discount_percent > 0 ? `${(Number(row.discount_percent) || 0).toFixed(0)}%` : ''}</td>}
@@ -834,16 +835,17 @@ const Reports = () => {
                                         {(isMembersJoined && visibleColumns.membership_no) && <td className="border border-black px-2 py-1 text-center font-mono text-xs">{(row as any).membership_no}</td>}
                                         
                                         {visibleColumns.reference && <td className="border border-black px-2 py-1 text-center">{isMembersJoined ? (row as any).category : (row.duration || '-')}</td>}
-                                        {visibleColumns.referrer && <td className="border border-black px-2 py-1 text-center font-bold text-indigo-600">{(row as any).referrer_name || 'N/A'}</td>}
+                                        {visibleColumns.referrer && (incentiveDept !== 'Referral') && <td className="border border-black px-2 py-1 text-center font-bold text-indigo-600">{(row as any).referrer_name || 'N/A'}</td>}
                                         {visibleColumns.check_no && <td className="border border-black px-2 py-1 text-center text-slate-400">{row.check_no}</td>}
                                         {(isDailySales && visibleColumns.payment_mode) && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
                                         {visibleColumns.item_name && <td className="border border-black px-2 py-1">{row.item_name}</td>}
-                                        {(isIncentiveReport && visibleColumns.specialist) && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
+                                        {(isIncentiveReport && visibleColumns.specialist && incentiveDept !== 'Membership') && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
                                         
                                         {visibleColumns.gross_amount && <td className="border border-black px-2 py-1 text-right">{formatMoney(row.actual_price)}</td>}
                                         {visibleColumns.disc_percent && <td className="border border-black px-2 py-1 text-center text-slate-400">{row.discount_percent > 0 ? `${(Number(row.discount_percent) || 0).toFixed(0)}%` : ''}</td>}
                                         {visibleColumns.discount_amt && <td className="border border-black px-2 py-1 text-right">{formatMoney(row.discount_amount)}</td>}
                                         {visibleColumns.net_revenue && <td className="border border-black px-2 py-1 text-right font-black bg-slate-50">{formatMoney(row.net_revenue)}</td>}
+                                        {(isIncentiveReport && incentiveDept === 'Membership') && <td className="border border-black px-2 py-1 text-right font-bold text-indigo-600 bg-indigo-50/30">{formatMoney((row as any).referral_amount)}</td>}
                                         
                                         {isIncentiveReport && (
                                             <>

@@ -119,6 +119,7 @@ export interface Staff {
   is_eligible_for_incentives: boolean; 
   auth_id?: string;
   joining_date?: string; 
+  inactive_date?: string; 
   probation_start_date?: string; 
   probation_end_date?: string;   
   created_at: string;

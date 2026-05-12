@@ -395,6 +395,15 @@ NOTIFY pgrst, 'reload schema';`}
                         </div>
                     </div>
                   )}
+                  {staff.inactive_date && (
+                    <div className="flex items-center gap-4 p-4 bg-red-50/50 rounded-2xl border border-red-100 text-[10px] font-black text-red-700">
+                        <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-red-600"><CalendarX className="w-4 h-4" /></div>
+                        <div className="flex-1 text-left">
+                          <p className="uppercase opacity-60 text-[8px]">Inactivation Date</p>
+                          <p>{format(parseISO(staff.inactive_date), 'dd MMM yyyy')}</p>
+                        </div>
+                    </div>
+                  )}
                   {staff.probation_start_date && (
                     <div className="flex items-center gap-4 p-4 bg-amber-50/50 rounded-2xl border border-amber-100 text-[10px] font-black text-amber-700">
                         <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-amber-600"><ShieldAlert className="w-4 h-4" /></div>

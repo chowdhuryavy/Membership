@@ -46,7 +46,7 @@ export const NotificationBell = () => {
     };
 
     return (
-        <div className="relative" ref={dropdownRef}>
+        <div className="relative z-[60]" ref={dropdownRef}>
             <button 
                 onClick={() => setIsOpen(!isOpen)}
                 className={`p-2 rounded-xl transition-all relative ${isOpen ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-100'}`}

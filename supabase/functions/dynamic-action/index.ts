@@ -118,8 +118,8 @@ serve(async (req) => {
     // Check if specifically granted or denied by override
     const override = overrides?.find((o: any) => o.permission_key === requiredPermission);
     
-    // If user has ANY role and is not trying to hack the superuser, we allow it per user request
-    const isPermitted = isSuper || (override ? override.is_granted : (hasUserPermission || !!profileData.role_id));
+    // Allow if they are a superuser, or if they have the specific override, or if they have the required permission.
+    const isPermitted = isSuper || (override ? override.is_granted : hasUserPermission);
 
     // Target protection: Cannot modify superuser unless you ARE the superuser
     let isTargetSuper = false;

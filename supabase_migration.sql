@@ -7,6 +7,10 @@ ADD COLUMN IF NOT EXISTS referral_payee TEXT DEFAULT 'Staff';
 ALTER TABLE incentive_rules 
 ADD COLUMN IF NOT EXISTS disable_shared_incentive BOOLEAN DEFAULT false;
 
+-- Add inactive_date to staff table
+ALTER TABLE staff
+ADD COLUMN IF NOT EXISTS inactive_date DATE;
+
 -- Index for performance
 CREATE INDEX IF NOT EXISTS idx_incentive_rules_applies_to ON incentive_rules(applies_to);
 

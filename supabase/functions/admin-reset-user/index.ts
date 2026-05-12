@@ -88,8 +88,8 @@ serve(async (req) => {
     const override = overrides?.find((o: any) => o.permission_key === 'users:edit');
 
     // Permission Logic: Superuser OR (Override exists ? is_granted : hasUserPermission)
-    // Fallback: Allow if they have any role at all (relevant access)
-    const isPermitted = isSuper || (override ? override.is_granted : (hasUserPermission || !!profile.role_id));
+    // Removed the fallback that allowed ANY user with a role to reset passwords.
+    const isPermitted = isSuper || (override ? override.is_granted : hasUserPermission);
 
     if (!isPermitted) {
       return new Response(JSON.stringify({ error: 'Forbidden: Insufficient permissions to manage users.' }), {

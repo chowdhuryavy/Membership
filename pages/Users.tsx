@@ -691,7 +691,7 @@ const Users = () => {
                 </div>
                 
                 {/* Custom Role Filter Dropdown */}
-                <div className="relative min-w-[200px]" ref={filterRef}>
+                <div className="relative min-w-[200px] z-[60]" ref={filterRef}>
                     <button 
                         onClick={() => setIsFilterOpen(!isFilterOpen)}
                         className={`h-14 w-full px-5 rounded-2xl border transition-all flex items-center justify-between group/btn shadow-sm ${isFilterOpen ? 'bg-white border-indigo-500 ring-4 ring-indigo-500/10' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}

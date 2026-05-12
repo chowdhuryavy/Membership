@@ -563,7 +563,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     // This should be strictly filtered by the selected outlet(s) and assigned range.
     const staffList = rawStaffList.filter((s: any) => {
       // 1. Eligibility & Lifecycle
-      if (!s.is_active || s.is_eligible_for_incentives === false) return false;
+      if (s.is_eligible_for_incentives === false) return false;
       
       // 2. Strict Outlet Assignment check for the report period
       const belongsToOutlet = (outletIds.includes('all')) 
@@ -624,6 +624,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         let incDiscVal = 0;
         let incNet = 0;
         const staffSplits: Record<string, number> = {};
+        
+        let available: any[] = [];
 
         let remarks = !rule ? 'No Rule' : '';
         if (rule) {
@@ -632,7 +634,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           incNet = baseInc - incDiscVal;
           
           if (rule.distribution_type === 'Shared') {
-            const available = staffList.filter(s => {
+            available = staffList.filter(s => {
               return isStaffAssignedToOutletOnDate(s, b.outlet_id, b.date);
             });
             if (available.length > 0) {
@@ -672,7 +674,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           date: format(new Date(`${b.date}T${b.start_time}`), 'dd-MMM-yy'),
           guest_name: guestMap[b.guest_id] || 'Guest',
           item_name: type.name,
-          therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (rawStaffList.find(s => s.id === b.therapist_id)?.name || 'N/A'),
+          therapist_name: rule?.distribution_type === 'Shared' ? available.map(s => s.name).join(', ') : (rawStaffList.find(s => s.id === b.therapist_id)?.name || 'N/A'),
           outlet_name: outletMap[b.outlet_id] || 'Unknown',
           actual_price: actualPrice,
           discount_percent: discPercent,
@@ -705,6 +707,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           let incDiscVal = 0;
           let incNet = 0;
           const staffSplits: Record<string, number> = {};
+          
+          let available: any[] = [];
 
           let remarks = !rule ? 'No Rule' : '';
           if (rule) {
@@ -713,7 +717,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             incNet = baseInc - incDiscVal;
             
             if (rule.distribution_type === 'Shared') {
-              const available = staffList.filter(st => {
+              available = staffList.filter(st => {
                 return isStaffAssignedToOutletOnDate(st, s.outlet_id, s.created_at);
               });
               if (available.length > 0) {
@@ -763,7 +767,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             date: format(new Date(s.created_at), 'dd-MMM-yy'),
             guest_name: s.guest_name || 'Guest',
             item_name: s.item_name || item?.name || 'PT Service',
-            therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (rawStaffList.find(st => st.id === displayTrainerId)?.name || 'N/A'),
+            therapist_name: rule?.distribution_type === 'Shared' ? available.map(s => s.name).join(', ') : (rawStaffList.find(st => st.id === displayTrainerId)?.name || 'N/A'),
             outlet_name: outletMap[s.outlet_id] || 'Unknown',
             actual_price: actualPrice,
             discount_percent: discPercent,
@@ -806,26 +810,52 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         let incNet = 0;
 
         const staffSplits: Record<string, number> = {};
+        let available: any[] = [];
         let remarks = m.remarks || '';
 
-        // 3. Process Referral Rule (for checking if staff portion is triggered)
+        // 3. Process Referral Rule (for Staff portion)
+        const skipRegularIncentive = refRule && refRule.disable_shared_incentive;
+        
         if (refRule) {
           const payeeMode = refRule.referral_payee || 'Referrer';
           const isBoth = payeeMode === 'Both';
-          const isReferrer = payeeMode === 'Referrer' || isBoth;
+          const isStaff = payeeMode === 'Staff' || isBoth;
+          
+          if (isStaff) {
+            const rBase = refRule.calculation_type === 'Fixed' ? refRule.value : (actualPrice * refRule.value / 100);
+            const rDiscVal = (refRule.apply_discount_percentage !== false) ? (rBase * discPercent) / 100 : 0;
+            const rNet = rBase - rDiscVal;
 
-          if (isReferrer) {
+            baseInc += rBase;
+            incDiscVal += rDiscVal;
+            incNet += rNet;
+            remarks = remarks ? `${remarks} + Referral (${payeeMode})` : `Referral (${payeeMode})`;
+            (m as any)._referral_inc_net = rNet; 
+
+            if (refRule.distribution_type === 'Shared') {
+              const rAvailable = staffList.filter(s => getStaffOutlets(s).includes(m.outlet_id));
+              if (rAvailable.length > 0) {
+                const share = rNet / rAvailable.length;
+                rAvailable.forEach(s => staffSplits[s.id] = (staffSplits[s.id] || 0) + share);
+              } else {
+                remarks += ' (Referral: No eligible staff for share)';
+              }
+            } else {
+              const repId = [m.sales_rep_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+              if (repId) staffSplits[repId] = (staffSplits[repId] || 0) + rNet;
+            }
+          } else {
             remarks = `Referral (${payeeMode})`;
-            // Referrer portion is NOT shown in Membership (Staff) report
+            const rBase = refRule.calculation_type === 'Fixed' ? refRule.value : (actualPrice * refRule.value / 100);
+            const rDiscVal = (refRule.apply_discount_percentage !== false) ? (rBase * discPercent) / 100 : 0;
+            const rNet = rBase - rDiscVal;
+            (m as any)._referral_inc_net = rNet;
           }
         }
 
         // 4. Process Membership Rule (for Staff portion)
-        const isRefDisabled = refRule && refRule.disable_shared_incentive;
-        const isStaffViaReferral = refRule && (refRule.referral_payee === 'Staff' || refRule.referral_payee === 'Sales Staff' || refRule.referral_payee === 'Both');
-        
-        if (isRefDisabled && !isStaffViaReferral) {
-          remarks = remarks ? `${remarks} + (Mem Inc Disabled)` : 'Mem Inc Disabled';
+        if (skipRegularIncentive) {
+          remarks = remarks ? `${remarks} (Regular Mem Inc Disabled)` : 'Regular Mem Inc Disabled';
         } else if (!rule) {
           remarks = remarks ? `${remarks} (No Mem Rule)` : 'No Mem Rule';
         } else {
@@ -838,21 +868,23 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           incNet += mNet;
           remarks = remarks ? `${remarks} + Regular Membership` : 'Regular Membership';
 
-          // Shared logic for membership report as per user request
-          let available = staffList.filter(s => {
-            return isStaffAssignedToOutletOnDate(s, m.outlet_id, m.start_date);
-          });
+          let isShared = rule.distribution_type === 'Shared';
 
-          // Fallback: If no historical assignment found, use any staff currently assigned to this outlet
-          if (available.length === 0) {
+          if (isShared) {
+            // Remove is_active check from internal shared pool to avoid "diff" in historical reports 
+            // since we use the main staffList which already filtered by eligibility and joining date.
             available = staffList.filter(s => getStaffOutlets(s).includes(m.outlet_id));
-          }
 
-          if (available.length > 0) {
-            const share = mNet / available.length;
-            available.forEach(s => staffSplits[s.id] = (staffSplits[s.id] || 0) + share);
+            if (available.length > 0) {
+              const share = mNet / available.length;
+              available.forEach(s => staffSplits[s.id] = (staffSplits[s.id] || 0) + share);
+            } else {
+              remarks += ' (Membership: No active eligible staff for share)';
+            }
           } else {
-            remarks += ' (Membership: No eligible staff for share)';
+            // Specific distribution
+            const repId = [m.sales_rep_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+            if (repId) staffSplits[repId] = (staffSplits[repId] || 0) + mNet;
           }
         }
 
@@ -879,7 +911,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             check_no: m.check_no || '',
             duration: cat?.name || '',
             staff_splits: staffSplits,
-            referrer_name: cleanRefForMem
+            referrer_name: cleanRefForMem,
+            referral_amount: (m as any)._referral_inc_net || 0
           });
       });
     } else if (dept === 'Sale') {
@@ -897,6 +930,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         let incDiscVal = 0;
         let incNet = 0;
         const staffSplits: Record<string, number> = {};
+        
+        let available: any[] = [];
 
         let remarks = !rule ? 'No Rule' : '';
         if (rule) {
@@ -905,7 +940,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           incNet = baseInc - incDiscVal;
           
           if (rule.distribution_type === 'Shared') {
-            const available = staffList.filter(st => {
+            available = staffList.filter(st => {
               const isEligible = st.is_eligible_for_incentives !== false;
               const sOutlets = getStaffOutlets(st);
               return isEligible && sOutlets.includes(s.outlet_id) && !isStaffOnLeaveOnDate(st, s.created_at) && !isStaffOnProbationOnDate(st, s.created_at);
@@ -955,7 +990,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           date: format(new Date(s.created_at), 'dd-MMM-yy'),
           guest_name: s.guest_name || 'Guest',
           item_name: s.item_name || item?.name || s.category,
-          therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (rawStaffList.find(st => st.id === displayTrainerId)?.name || 'N/A'),
+          therapist_name: rule?.distribution_type === 'Shared' ? available.map(s => s.name).join(', ') : (rawStaffList.find(st => st.id === displayTrainerId)?.name || 'N/A'),
           outlet_name: outletMap[s.outlet_id] || 'Unknown',
           actual_price: actualPrice,
           discount_percent: discPercent,
@@ -1069,12 +1104,12 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       if (dept === 'Referral') return false;
       
       // For Membership and others, show experts/reps even if 0 earned (to show they are active)
-      return true;
+      return s.is_active;
     });
 
     // If no staff found by role, show all active staff in the outlet as fallback
     if (finalStaffList.length === 0 && dept !== 'Referral') {
-      finalStaffList = staffList;
+      finalStaffList = staffList.filter(s => s.is_active);
     }
 
     return {
@@ -1798,22 +1833,28 @@ export const generateReportPDF = (options: PDFOptions) => {
       let specialistLabel = 'STAFF';
       if (reportTitle.includes('Massage')) specialistLabel = 'THERAPIST';
       if (reportTitle.includes('Personal Training')) specialistLabel = 'PERSONAL TRAINER';
-      if (reportTitle.includes('Membership')) specialistLabel = 'SALES REP';
+      if (reportTitle.includes('Referral')) specialistLabel = 'REFERRAL NAME';
+      
+      const isMembershipReport = reportTitle.includes('Membership');
+      const isReferralReport = reportTitle.includes('Referral');
+      if (isMembershipReport) specialistLabel = 'SALES REP';
 
       const head = [
         [
           { content: 'SL.NO.', rowSpan: 2 },
           { content: 'DATE', rowSpan: 2 },
           { content: 'GUEST / MEMBER', rowSpan: 2 },
+          ...(isMembershipReport && !isReferralReport ? [{ content: 'REFERRER', rowSpan: 2 }] : []),
           { content: 'CHECK NO.', rowSpan: 2 },
           ...(outletId === 'all' ? [{ content: 'OUTLET', rowSpan: 2 }] : []),
           { content: 'ITEM / SERVICE', rowSpan: 2 },
           { content: 'DUR.', rowSpan: 2 },
-          { content: specialistLabel, rowSpan: 2 },
+          ...(!isMembershipReport ? [{ content: specialistLabel, rowSpan: 2 }] : []),
           { content: 'GROSS AMOUNT', rowSpan: 2 },
           { content: 'DISC %', rowSpan: 2 },
           { content: 'DISCOUNT AMT', rowSpan: 2 },
           { content: 'NET REVENUE', rowSpan: 2 },
+          ...(isMembershipReport ? [{ content: 'NET REFERRAL', rowSpan: 2 }] : []),
           { content: 'INCENTIVE BREAKDOWN', colSpan: 4, styles: { halign: 'center', fillColor: [254, 243, 199], textColor: [15, 23, 42] } },
           { content: 'REMARKS', rowSpan: 2 },
           ...staffHeaders.map((h: string) => ({ content: h, rowSpan: 2 }))
@@ -1831,15 +1872,17 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.sl_no,
           r.date,
           r.guest_name,
+          ...(isMembershipReport && !isReferralReport ? [r.referrer_name || 'N/A'] : []),
           r.check_no || '',
           ...(outletId === 'all' ? [r.outlet_name || ''] : []),
           r.item_name,
           r.duration || '',
-          r.therapist_name,
+          ...(!isMembershipReport ? [r.therapist_name] : []),
           formatCurrency(r.actual_price),
           r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
           formatCurrency(r.discount_amount),
           formatCurrency(r.net_revenue),
+          ...(isMembershipReport ? [formatCurrency(r.referral_amount)] : []),
           formatCurrency(r.inc_total),
           r.inc_discount_percent > 0 ? `${r.inc_discount_percent.toFixed(0)}%` : '',
           formatCurrency(r.inc_discount_val),
@@ -1907,22 +1950,28 @@ export const generateReportPDF = (options: PDFOptions) => {
           0: { halign: 'center', cellWidth: 6 },
           1: { halign: 'center', cellWidth: 12 },
           2: { fontStyle: 'bold', cellWidth: 18 },
+          // Index 3 is REFERRER (Membership) or CHECK NO. (Others)
           3: { halign: 'center', cellWidth: 12 },
-          ...(outletId === 'all' ? { 4: { cellWidth: 12 } } : {}),
-          [outletId === 'all' ? 5 : 4]: { cellWidth: 18 },
-          [outletId === 'all' ? 6 : 5]: { halign: 'center', cellWidth: 8 },
-          [outletId === 'all' ? 7 : 6]: { fontStyle: 'bold', cellWidth: 15 },
-          [outletId === 'all' ? 8 : 7]: { halign: 'right', cellWidth: 12 },
-          [outletId === 'all' ? 9 : 8]: { halign: 'center', cellWidth: 7 },
-          [outletId === 'all' ? 10 : 9]: { halign: 'right', cellWidth: 12 },
-          [outletId === 'all' ? 11 : 10]: { halign: 'right', cellWidth: 12 },
-          [outletId === 'all' ? 12 : 11]: { halign: 'right', cellWidth: 12 },
-          [outletId === 'all' ? 13 : 12]: { halign: 'center', cellWidth: 7 },
-          [outletId === 'all' ? 14 : 13]: { halign: 'right', cellWidth: 12 },
-          [outletId === 'all' ? 15 : 14]: { halign: 'right', fontStyle: 'bold', cellWidth: 12 },
-          [outletId === 'all' ? 16 : 15]: { fontSize: 4, cellWidth: 15 },
+          // Index 4 is CHECK NO. (Membership) or OUTLET/ITEM (Others)
+          4: { halign: 'center', cellWidth: 12 },
+          // Index 5 is OUTLET (Membership if all) or ITEM (Others if all) or DUR (Others if single)
+          5: { cellWidth: 15 }, 
+          // Index 6 is ITEM (Membership if all) or DUR (Membership if single) or DUR/EXPERT (Others)
+          6: { cellWidth: 15 },
+          // Index 7 is DUR (Membership if all) or GROSS (Membership if single) or EXPERT/GROSS (Others)
+          7: { cellWidth: 15 },
+          // From index 8/9 onwards we usually hit currency columns
+          8: { halign: 'right', cellWidth: 11 },
+          9: { halign: 'center', cellWidth: 7 },
+          10: { halign: 'right', cellWidth: 11 },
+          11: { halign: 'right', cellWidth: 11 },
+          12: { halign: 'right', cellWidth: 11 },
+          13: { halign: 'center', cellWidth: 7 },
+          14: { halign: 'right', cellWidth: 11 },
+          15: { halign: 'right', fontStyle: 'bold', cellWidth: 12 },
+          16: { fontSize: 4, cellWidth: 15 },
           ...staffList.reduce((acc: any, _, idx: number) => {
-            acc[(outletId === 'all' ? 17 : 16) + idx] = { halign: 'right', cellWidth: 10 };
+            acc[17 + idx] = { halign: 'right', cellWidth: 10 };
             return acc;
           }, {})
         },
@@ -2345,6 +2394,10 @@ export function getStaffOutlets(s: any): string[] {
 export function isStaffAssignedToOutletOnDate(staff: any, outletId: string, dateStr: string): boolean {
   if (!staff || !outletId || !dateStr) return false;
   
+  const d = dateStr.split('T')[0];
+  // If staff is marked as inactive starting from a specific date, they are ineligible from that date onwards
+  if (staff.inactive_date && d >= staff.inactive_date) return false;
+
   const assignments = Array.isArray(staff.outlet_assignments) ? staff.outlet_assignments : [];
   
   // Historical check via assignments
@@ -2356,8 +2409,6 @@ export function isStaffAssignedToOutletOnDate(staff: any, outletId: string, date
     const match = sorted.find((a: any) => {
       const start = a.start_date;
       const end = a.end_date;
-      // Note: We use dateStr.split('T')[0] to ensure we're comparing YYYY-MM-DD
-      const d = dateStr.split('T')[0];
       return a.outlet_id === outletId && d >= start && (!end || d <= end);
     });
 
@@ -2369,7 +2420,6 @@ export function isStaffAssignedToOutletOnDate(staff: any, outletId: string, date
     // If user hasn't recorded the entire past, we fallback to current outlet_ids
     // but we EXCLUDE the outlet that is specifically marked as starting in the future
     const firstStart = sorted[0].start_date;
-    const d = dateStr.split('T')[0];
     
     if (d < firstStart) {
       if (staff.joining_date && d < staff.joining_date) return false;
@@ -2395,6 +2445,10 @@ export function isStaffAssignedToOutletOnDate(staff: any, outletId: string, date
 export function wasStaffAssignedToOutletInRange(staff: any, outletId: string, startStr: string, endStr: string): boolean {
   if (!staff || !outletId || !startStr || !endStr) return false;
   
+  const sStart = startStr.split('T')[0];
+  // If staff became inactive before the report even started, they aren't assigned for this range
+  if (staff.inactive_date && staff.inactive_date <= sStart) return false;
+
   const assignments = Array.isArray(staff.outlet_assignments) ? staff.outlet_assignments : [];
   
   if (assignments.length > 0) {

@@ -91,12 +91,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       membersQuery = membersQuery.eq('membership_type_id', selectedMembershipTypeId);
     }
 
-    const [membersRes, freezesRes, categoriesRes, typesRes] = await Promise.all([
-      membersQuery,
-      supabase.from('freezes').select('*'),
-      supabase.from('membership_categories').select('id, name, duration_months').in('outlet_id', outletIds),
-      supabase.from('membership_types').select('id, name').in('outlet_id', outletIds)
-    ]);
+    const membersRes = await membersQuery;
 
     if (membersRes.error) {
       console.error('Error fetching members:', membersRes.error);
@@ -104,6 +99,23 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     }
 
     const members = membersRes.data || [];
+    const memberIds = members.map((m: any) => m.id);
+    
+    // Fetch freezes ONLY for the members we are reporting on
+    let freezesQuery = supabase.from('freezes').select('*');
+    if (memberIds.length > 0) {
+        freezesQuery = freezesQuery.in('member_id', memberIds);
+    } else {
+        // No members, no freezes needed
+        freezesQuery = supabase.from('freezes').select('*').limit(0);
+    }
+
+    const [freezesRes, categoriesRes, typesRes] = await Promise.all([
+      freezesQuery,
+      supabase.from('membership_categories').select('id, name, duration_months').in('outlet_id', outletIds),
+      supabase.from('membership_types').select('id, name').in('outlet_id', outletIds)
+    ]);
+
     const freezes = freezesRes.data || [];
     const categories = categoriesRes.data || [];
     const types = typesRes.data || [];
@@ -128,7 +140,6 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const mEnd = safeParseDate(m.current_end_date);
         
         const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
-
         const prevAccrual = mStart ? RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, subDays(start, 1)) : 0;
         const periodRev = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, start, subDays(end, 1));
         
@@ -209,9 +220,13 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     // Group by category for the frontend/email
     const grouped = rows.reduce((acc: any, row: any) => {
-      const groupKey = `${row.category_name}|${row.category_duration}`;
-      if (!acc[groupKey]) acc[groupKey] = [];
-      acc[groupKey].push(row);
+      const typeKey = selectedMembershipTypeId === 'all' ? (row.membership_type_name || 'Membership') : 'All';
+      const catKey = row.category_name || 'Other';
+      
+      if (!acc[typeKey]) acc[typeKey] = {};
+      if (!acc[typeKey][catKey]) acc[typeKey][catKey] = [];
+      
+      acc[typeKey][catKey].push(row);
       return acc;
     }, {});
 
@@ -390,7 +405,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         discount_percent: discPercent,
         discount_amount: discountAmt,
         net_revenue: netRev,
-        remarks: m.status
+        remarks: m.status,
+        referrer_name: (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').replace(/^Referral:\s*/i, '').trim() || 'N/A'
       };
     });
 
@@ -489,12 +505,18 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
   }
 
   if (reportType === 'incentives') {
-    const startStr = format(date, 'yyyy-MM-dd');
+    const startStr = format(startOfMonth(date), 'yyyy-MM-dd');
+    const endStr = format(endOfMonth(date), 'yyyy-MM-dd');
     
     let outletIds: string[] = [];
+    let allPropertyOutletIds: string[] = [];
+
+    const { data: allOutlets } = await supabase.from('outlets').select('id, name').eq('property_id', propertyId);
+    const outletMap = Object.fromEntries((allOutlets || []).map((o: any) => [o.id, o.name]));
+    allPropertyOutletIds = (allOutlets || []).map((o: any) => o.id);
+
     if (outletId === 'all') {
-      const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', propertyId);
-      outletIds = (outlets || []).map((o: any) => o.id);
+      outletIds = allPropertyOutletIds;
     } else {
       outletIds = [outletId];
     }
@@ -503,37 +525,69 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     const dept = incentiveDept || 'Massage';
 
+    // For most incentive reports, we want staff from all outlets in the property to ensure we can match sales reps
+    const staffQueryOutletIds = (dept === 'Personal Training' || dept === 'Massage' || dept === 'Membership' || dept === 'Referral') ? allPropertyOutletIds : outletIds;
+
     const [salesRes, bookingsRes, membersRes, rulesRes, staffRes, inventoryRes, mTypesRes, categoriesRes, guestsRes] = await Promise.all([
-      supabase.from('sales').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${startStr}T23:59:59`),
-      supabase.from('massage_bookings').select('*').in('outlet_id', outletIds).eq('status', 'completed').eq('date', startStr),
-      supabase.from('members').select('*').in('outlet_id', outletIds).neq('status', 'tentative').gte('start_date', startStr).lte('start_date', startStr),
-      supabase.from('incentive_rules').select('*').eq('property_id', propertyId).eq('is_active', true),
-      supabase.from('staff').select('*, leaves:staff_leaves!fk_staff_leaves_staff(*)').eq('property_id', propertyId),
+      supabase.from('sales').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59`),
+      supabase.from('massage_bookings').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('date', startStr).lte('date', endStr),
+      supabase.from('members').select('*').in('outlet_id', outletIds).neq('status', 'tentative').gte('start_date', startStr).lte('start_date', endStr),
+      supabase.from('incentive_rules').select('*').eq('is_active', true),
+      supabase.from('staff').select('*, leaves:staff_leaves!fk_staff_leaves_staff(*)'),
       supabase.from('inventory').select('*').in('outlet_id', outletIds),
       supabase.from('massage_types').select('*').eq('property_id', propertyId),
       supabase.from('membership_categories').select('*'),
       supabase.from('guests').select('id, name')
     ]);
 
+    console.log(`DEBUG: Loaded ${staffRes.data?.length || 0} staff members from DB.`);
+    console.log('DEBUG: outletIds:', outletIds);
+
     const bookings = bookingsRes.data || [];
     const members = membersRes.data || [];
-    const rules = rulesRes.data || [];
-    const rawStaffList = staffRes.data || [];
+    let rules = rulesRes.data || [];
+
+    // Filter rules by scope manually to avoid column errors
+    rules = rules.filter((r: any) => {
+      if (r.scope === 'Global') return true;
+      if (r.scope === 'Property' && r.scope_id === propertyId) return true;
+      if (r.scope === 'Outlet' && outletIds.includes(r.scope_id)) return true;
+      return false;
+    });
+    // rawStaffList is used for matching specific staff IDs/names to rows.
+    // It should include all staff in the property to ensure we can match creators/reps 
+    // even if they aren't primarily assigned to the currently selected outlet.
+    const rawStaffList = (staffRes.data || []);
+    
+    // staffList defines which staff columns are shown in the report.
+    // This should be strictly filtered by the selected outlet(s) and assigned range.
     const staffList = rawStaffList.filter((s: any) => {
-      if (!s.is_active || s.is_eligible_for_incentives === false) return false;
+      // 1. Eligibility & Lifecycle
+      if (s.is_eligible_for_incentives === false) return false;
       
-      // Filter by outlet
-      const sOutlets = getStaffOutlets(s);
+      // 2. Strict Outlet Assignment check for the report period
+      const belongsToOutlet = (outletIds.includes('all')) 
+        ? true 
+        : outletIds.some(id => wasStaffAssignedToOutletInRange(s, id, startStr, endStr));
       
-      const belongsToOutlet = outletIds.some(id => sOutlets.includes(id));
       if (!belongsToOutlet) return false;
 
-      const role = (s.role || '').toLowerCase();
-      const isMultiOutlet = sOutlets.length > 1;
-      if (dept === 'Massage') return role.includes('therapist');
-      if (dept === 'Personal Training') return role.includes('trainer') || isMultiOutlet;
-      return true; // Membership shows all eligible staff
+      // 3. Filter by joining date
+      if (s.joining_date) {
+        const joinDate = new Date(s.joining_date);
+        joinDate.setHours(0,0,0,0);
+        const reportEndDate = new Date(endStr);
+        reportEndDate.setHours(23,59,59,999);
+        if (joinDate > reportEndDate) return false;
+      }
+      
+      // 4. Role-based filtering for specific departments
+      if (dept === 'Personal Training' && s.role !== 'Personal Trainer') return false;
+      if (dept === 'Massage' && !['Therapist', 'Masseur', 'Masseuse'].includes(s.role || '')) return false;
+      
+      return true; 
     });
+    console.log(`DEBUG: staffList after filtering (${dept}):`, staffList.length);
     const inventory = inventoryRes.data || [];
     const mTypes = mTypesRes.data || [];
     const mCats = categoriesRes.data || [];
@@ -544,15 +598,24 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     let sl = 1;
 
     if (dept === 'Massage' || dept === 'Personal Training') {
+      // Process Bookings
       bookings.filter(b => {
-        const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id)) || inventory.find(i => i.id === b.inventory_item_id);
-        return type?.category === dept;
-      }).forEach(b => {
-        const type = mTypes.find(m => m.id === (b.massage_type_id || b.inventory_item_id)) || inventory.find(i => i.id === b.inventory_item_id);
-        if (!type) return;
-        const rule = findBestRule(rules, dept, (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes);
+        const type = mTypes.find(m => m.id === b.massage_type_id) || mTypes.find(m => m.id === b.inventory_item_id) || inventory.find(i => i.id === b.inventory_item_id);
+        const cat = type?.category?.trim();
+        const normCat = (cat || '').toLowerCase();
+        const normDept = dept.toLowerCase();
         
-        const actualPrice = type.price;
+        if (dept === 'Massage') {
+          return normCat.includes('massage') || !cat;
+        }
+        // Personal Training check
+        return normCat.includes(normDept) || normCat === 'pt' || normCat.includes('trainer') || normCat.includes('training');
+      }).forEach(b => {
+        const type = mTypes.find(m => m.id === b.massage_type_id) || mTypes.find(m => m.id === b.inventory_item_id) || inventory.find(i => i.id === b.inventory_item_id);
+        if (!type) return;
+        const rule = findBestRule(rules, dept, (b.massage_type_id || b.inventory_item_id || ''), type.price, type.duration_minutes, b.outlet_id);
+        
+        const actualPrice = b.price || type.price;
         const discountAmt = b.discount || 0;
         const netRev = actualPrice - discountAmt;
         const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
@@ -561,26 +624,47 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         let incDiscVal = 0;
         let incNet = 0;
         const staffSplits: Record<string, number> = {};
+        
+        let available: any[] = [];
 
+        let remarks = !rule ? 'No Rule' : '';
         if (rule) {
           baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
           incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
           incNet = baseInc - incDiscVal;
-
+          
           if (rule.distribution_type === 'Shared') {
-            const available = staffList.filter(s => {
-              const sOutlets = getStaffOutlets(s);
-              return sOutlets.includes(b.outlet_id) && !isStaffOnLeaveOnDate(s, b.date) && !isStaffOnProbationOnDate(s, b.date);
+            available = staffList.filter(s => {
+              return isStaffAssignedToOutletOnDate(s, b.outlet_id, b.date);
             });
             if (available.length > 0) {
               const share = incNet / available.length;
               available.forEach(s => staffSplits[s.id] = share);
+            } else {
+              remarks = 'Shared: No eligible staff available';
             }
           } else if (b.therapist_id) {
-            const therapist = staffList.find(s => s.id === b.therapist_id);
-            if (therapist && !isStaffOnLeaveOnDate(therapist, b.date) && !isStaffOnProbationOnDate(therapist, b.date)) {
-              staffSplits[b.therapist_id] = incNet;
+            const trainerId = b.therapist_id;
+            const therapist = rawStaffList.find(s => s.id === trainerId);
+            if (therapist) {
+              const isPersonalTrainer = dept === 'Personal Training' ? therapist.role === 'Personal Trainer' : true;
+              const isEligible = therapist.is_eligible_for_incentives !== false && isPersonalTrainer;
+              if (!isEligible) {
+                remarks = isPersonalTrainer ? 'Staff not eligible for incentives' : 'Staff role not PT';
+                staffSplits[trainerId] = 0;
+              } else if (isStaffOnLeaveOnDate(therapist, b.date) || isStaffOnProbationOnDate(therapist, b.date)) {
+                remarks = 'Staff on Leave/Probation';
+                staffSplits[trainerId] = 0;
+              } else {
+                staffSplits[trainerId] = incNet;
+              }
+            } else {
+              remarks = 'Staff not found';
             }
+          }
+        } else {
+          if (b.therapist_id) {
+            staffSplits[b.therapist_id] = 0;
           }
         }
 
@@ -590,7 +674,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           date: format(new Date(`${b.date}T${b.start_time}`), 'dd-MMM-yy'),
           guest_name: guestMap[b.guest_id] || 'Guest',
           item_name: type.name,
-          therapist_name: staffList.find(s => s.id === b.therapist_id)?.name || 'N/A',
+          therapist_name: rule?.distribution_type === 'Shared' ? available.map(s => s.name).join(', ') : (rawStaffList.find(s => s.id === b.therapist_id)?.name || 'N/A'),
+          outlet_name: outletMap[b.outlet_id] || 'Unknown',
           actual_price: actualPrice,
           discount_percent: discPercent,
           discount_amount: discountAmt,
@@ -599,79 +684,214 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           inc_discount_percent: discPercent,
           inc_discount_val: incDiscVal,
           inc_net: incNet,
-          remarks: !rule ? 'No Rule' : '',
+          remarks: remarks,
+          check_no: (b as any).check_no || '',
+          duration: type.duration_minutes ? `${type.duration_minutes}m` : '',
           staff_splits: staffSplits
         });
       });
-    } else if (dept === 'Membership') {
-      members.forEach(m => {
-        // Try Category ID first, then Type ID
-        const rule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.membership_type_id);
 
-        const isNoInc = (m.referrer_name || '').startsWith('[NO-INC]');
-        const cleanRefName = (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').trim();
+      // Process Sales for Personal Training
+      if (dept === 'Personal Training') {
+        const sales = (salesRes.data || []).filter(s => s.category === 'Personal Training');
+        sales.forEach(s => {
+          const item = inventory.find(i => i.id === s.item_id);
+          const rule = findBestRule(rules, dept, s.item_id || '', s.unit_price, 0, s.outlet_id);
+          
+          const actualPrice = s.gross_amount;
+          const discountAmt = s.discount_amount || 0;
+          const netRev = s.net_amount;
+          const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
-        // Check for referral override
-        if (!isNoInc && cleanRefName !== '') {
-          const referralRule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.membership_type_id);
-          if (referralRule && referralRule.disable_shared_incentive) {
-            // Skip membership incentive as referral rule takes precedence and disables it
-            return;
+          let baseInc = 0;
+          let incDiscVal = 0;
+          let incNet = 0;
+          const staffSplits: Record<string, number> = {};
+          
+          let available: any[] = [];
+
+          let remarks = !rule ? 'No Rule' : '';
+          if (rule) {
+            baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+            incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
+            incNet = baseInc - incDiscVal;
+            
+            if (rule.distribution_type === 'Shared') {
+              available = staffList.filter(st => {
+                return isStaffAssignedToOutletOnDate(st, s.outlet_id, s.created_at);
+              });
+              if (available.length > 0) {
+                const share = incNet / available.length;
+                available.forEach(st => staffSplits[st.id] = share);
+              } else {
+                remarks = 'Shared: No eligible staff available';
+              }
+            } else {
+              const trainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+              
+              if (trainerId) {
+                const staff = rawStaffList.find(st => st.id === trainerId);
+                if (staff) {
+                  const isPersonalTrainer = dept === 'Personal Training' ? staff.role === 'Personal Trainer' : true;
+                  const isEligible = staff.is_eligible_for_incentives !== false && isPersonalTrainer;
+                  if (!isEligible) {
+                    remarks = isPersonalTrainer ? 'Staff not eligible for incentives' : 'Staff role not PT';
+                    staffSplits[trainerId] = 0;
+                  } else if (isStaffOnLeaveOnDate(staff, s.created_at) || isStaffOnProbationOnDate(staff, s.created_at)) {
+                    remarks = 'Staff on Leave/Probation';
+                    staffSplits[trainerId] = 0;
+                  } else {
+                    staffSplits[trainerId] = incNet;
+                  }
+                } else {
+                  remarks = `Staff not found (ID: ${trainerId})`;
+                }
+              } else {
+                remarks = 'No trainer/seller assigned';
+              }
+            }
+          } else {
+            const trainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+            if (trainerId) {
+              staffSplits[trainerId] = 0;
+            }
           }
-        }
 
+          const displayTrainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+          
+          const cleanRefForPT = (s.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').replace(/^Referral:\s*/i, '').trim() || '';
+          
+          rows.push({
+            id: s.id,
+            sl_no: sl++,
+            date: format(new Date(s.created_at), 'dd-MMM-yy'),
+            guest_name: s.guest_name || 'Guest',
+            item_name: s.item_name || item?.name || 'PT Service',
+            therapist_name: rule?.distribution_type === 'Shared' ? available.map(s => s.name).join(', ') : (rawStaffList.find(st => st.id === displayTrainerId)?.name || 'N/A'),
+            outlet_name: outletMap[s.outlet_id] || 'Unknown',
+            actual_price: actualPrice,
+            discount_percent: discPercent,
+            discount_amount: discountAmt,
+            net_revenue: netRev,
+            inc_total: baseInc,
+            inc_discount_percent: discPercent,
+            inc_discount_val: incDiscVal,
+            inc_net: incNet,
+            remarks: remarks,
+            check_no: s.check_no || '',
+            duration: 'Sale',
+            staff_splits: staffSplits,
+            referrer_name: cleanRefForPT
+          });
+        });
+      }
+    } else if (dept === 'Membership') {
+      members
+        .forEach(m => {
+        // 1. Find Rules
         const cat = mCats.find(c => c.id === m.category_id);
-        if (!cat || !rule) return;
+        const isNoInc = (m.referrer_name || '').startsWith('[NO-INC]');
+        const cleanReferrerName = (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').replace(/^Referral:\s*/i, '').trim();
+        const normalize = (n: string) => n.toLowerCase().replace(/\./g, ' ').replace(/\s+/g, ' ').trim();
+        const cleanRefNorm = normalize(cleanReferrerName);
 
         const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
+        
+        const refRule = (!isNoInc && cleanReferrerName) ? findBestRule(rules, 'Referral', m.category_id, actualPrice, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined) : null;
+        const rule = findBestRule(rules, 'Membership', m.category_id, actualPrice, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
+
+        // 2. Constants
         const discountAmt = m.discount || 0;
         const netRev = m.net_amount;
         const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
-        const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-        const incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
-        const incNet = baseInc - incDiscVal;
+        let baseInc = 0;
+        let incDiscVal = 0;
+        let incNet = 0;
 
         const staffSplits: Record<string, number> = {};
-        if (rule.distribution_type === 'Shared') {
-          const available = staffList.filter(s => {
-            const sOutlets = getStaffOutlets(s);
-            return sOutlets.includes(m.outlet_id) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date);
-          });
-          if (available.length > 0) {
-            const share = incNet / available.length;
-            available.forEach(s => staffSplits[s.id] = share);
-          }
-        } else if (m.sales_rep_id) {
-          const staff = staffList.find(s => s.id === m.sales_rep_id);
-          if (staff && staff.is_eligible_for_incentives !== false) {
-            staffSplits[m.sales_rep_id] = incNet;
+        let available: any[] = [];
+        let remarks = m.remarks || '';
+
+        // 3. Process Referral Rule (for checking if staff portion is triggered)
+        if (refRule) {
+          const payeeMode = refRule.referral_payee || 'Referrer';
+          const isBoth = payeeMode === 'Both';
+          const isReferrer = payeeMode === 'Referrer' || isBoth;
+
+          if (isReferrer) {
+            remarks = `Referral (${payeeMode})`;
+            // Referrer portion is NOT shown in Membership (Staff) report
           }
         }
 
-        rows.push({
-          id: m.id,
-          sl_no: sl++,
-          date: format(new Date(m.start_date), 'dd-MMM-yy'),
-          guest_name: m.guest_name,
-          item_name: cat.name,
-          therapist_name: rule.distribution_type === 'Shared' ? 'Shared' : (staffList.find(s => s.id === m.sales_rep_id)?.name || 'N/A'),
-          actual_price: actualPrice,
-          discount_percent: discPercent,
-          discount_amount: discountAmt,
-          net_revenue: netRev,
-          inc_total: baseInc,
-          inc_discount_percent: discPercent,
-          inc_discount_val: incDiscVal,
-          inc_net: incNet,
-          remarks: m.remarks || '',
-          staff_splits: staffSplits
-        });
+        // 4. Process Membership Rule (for Staff portion)
+        const isRefDisabled = refRule && refRule.disable_shared_incentive;
+        const isStaffViaReferral = refRule && (refRule.referral_payee === 'Staff' || refRule.referral_payee === 'Sales Staff' || refRule.referral_payee === 'Both');
+        
+        if (isRefDisabled && !isStaffViaReferral) {
+          remarks = remarks ? `${remarks} + (Mem Inc Disabled)` : 'Mem Inc Disabled';
+        } else if (!rule) {
+          remarks = remarks ? `${remarks} (No Mem Rule)` : 'No Mem Rule';
+        } else {
+          const mBase = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+          const mDiscVal = (rule.apply_discount_percentage !== false) ? (mBase * discPercent) / 100 : 0;
+          const mNet = mBase - mDiscVal;
+
+          baseInc += mBase;
+          incDiscVal += mDiscVal;
+          incNet += mNet;
+          remarks = remarks ? `${remarks} + Regular Membership` : 'Regular Membership';
+
+          let isShared = rule.distribution_type === 'Shared';
+
+          if (isShared) {
+            available = staffList.filter(s => s.is_active && getStaffOutlets(s).includes(m.outlet_id));
+
+            if (available.length > 0) {
+              const share = mNet / available.length;
+              available.forEach(s => staffSplits[s.id] = (staffSplits[s.id] || 0) + share);
+            } else {
+              remarks += ' (Membership: No active eligible staff for share)';
+            }
+          } else {
+            // Specific distribution
+            const repId = [m.sales_rep_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+            if (repId) staffSplits[repId] = (staffSplits[repId] || 0) + mNet;
+          }
+        }
+
+          const displaySalesRepId = [m.sales_rep_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+          const cleanRefForMem = (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').replace(/^Referral:\s*/i, '').trim() || '';
+          rows.push({
+            id: m.id,
+            sl_no: sl++,
+            date: format(new Date(m.start_date), 'dd-MMM-yy'),
+            guest_name: m.guest_name,
+            membership_no: m.membership_number || m.membership_no || 'N/A',
+            item_name: cat?.name || m.category_id || 'Unknown Tier',
+            therapist_name: rule?.distribution_type === 'Shared' ? available.map(s => s.name).join(', ') : (rawStaffList.find(s => s.id === displaySalesRepId)?.name || m._matched_sales_rep_name || 'N/A'),
+            outlet_name: outletMap[m.outlet_id] || 'Unknown',
+            actual_price: actualPrice,
+            discount_percent: discPercent,
+            discount_amount: discountAmt,
+            net_revenue: netRev,
+            inc_total: baseInc,
+            inc_discount_percent: discPercent,
+            inc_discount_val: incDiscVal,
+            inc_net: incNet,
+            remarks: remarks,
+            check_no: m.check_no || '',
+            duration: cat?.name || '',
+            staff_splits: staffSplits,
+            referrer_name: cleanRefForMem
+          });
       });
     } else if (dept === 'Sale') {
-      sales.filter(s => s.category !== 'Personal Training').forEach(s => {
+      const sales = (salesRes.data || []).filter(s => s.category !== 'Personal Training');
+      sales.forEach(s => {
         const item = inventory.find(i => i.id === s.item_id);
-        const rule = findBestRule(rules, dept, s.item_id || '', s.unit_price, 0, s.category);
+        const rule = findBestRule(rules, dept, s.item_id || '', s.unit_price, 0, s.outlet_id, s.category);
         
         const actualPrice = s.gross_amount;
         const discountAmt = s.discount_amount || 0;
@@ -682,41 +902,68 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         let incDiscVal = 0;
         let incNet = 0;
         const staffSplits: Record<string, number> = {};
+        
+        let available: any[] = [];
 
+        let remarks = !rule ? 'No Rule' : '';
         if (rule) {
           baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
           incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
           incNet = baseInc - incDiscVal;
           
           if (rule.distribution_type === 'Shared') {
-            const available = staffList.filter(st => {
+            available = staffList.filter(st => {
+              const isEligible = st.is_eligible_for_incentives !== false;
               const sOutlets = getStaffOutlets(st);
-              return sOutlets.includes(s.outlet_id) && !isStaffOnLeaveOnDate(st, s.created_at) && !isStaffOnProbationOnDate(st, s.created_at);
+              return isEligible && sOutlets.includes(s.outlet_id) && !isStaffOnLeaveOnDate(st, s.created_at) && !isStaffOnProbationOnDate(st, s.created_at);
             });
             if (available.length > 0) {
               const share = incNet / available.length;
               available.forEach(st => staffSplits[st.id] = share);
+            } else {
+              remarks = 'Shared: No eligible staff available';
             }
           } else {
             const sellerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
             if (sellerId) {
-              const staff = staffList.find(st => st.id === sellerId);
-              if (staff && !isStaffOnLeaveOnDate(staff, s.created_at) && !isStaffOnProbationOnDate(staff, s.created_at)) {
-                staffSplits[sellerId] = incNet;
+              const staff = rawStaffList.find(st => st.id === sellerId);
+              if (staff) {
+                const isEligible = staff.is_eligible_for_incentives !== false;
+                if (!isEligible) {
+                  remarks = 'Staff not eligible for incentives';
+                  staffSplits[sellerId] = 0;
+                } else if (isStaffOnLeaveOnDate(staff, s.created_at) || isStaffOnProbationOnDate(staff, s.created_at)) {
+                  remarks = 'Staff on Leave/Probation';
+                  staffSplits[sellerId] = 0;
+                } else {
+                  staffSplits[sellerId] = incNet;
+                }
+              } else {
+                remarks = 'Staff not found';
               }
+            } else {
+              remarks = 'No seller assigned';
             }
+          }
+        } else {
+          const sellerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+          if (sellerId) {
+            staffSplits[sellerId] = 0;
           }
         }
 
-        const displaySellerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
-
+        const displayTrainerId = [s.therapist_id, s.trainer_id, s.sold_by_id].find(id => id && id !== '' && id !== 'N/A' && id !== 'null' && id !== 'undefined');
+        
+        const cleanRefForSale = (s.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').replace(/^Referral:\s*/i, '').trim() || '';
+        
         rows.push({
           id: s.id,
           sl_no: sl++,
           date: format(new Date(s.created_at), 'dd-MMM-yy'),
           guest_name: s.guest_name || 'Guest',
           item_name: s.item_name || item?.name || s.category,
-          therapist_name: rule?.distribution_type === 'Shared' ? 'Shared' : (staffList.find(st => st.id === displaySellerId)?.name || 'N/A'),
+          therapist_name: rule?.distribution_type === 'Shared' ? available.map(s => s.name).join(', ') : (rawStaffList.find(st => st.id === displayTrainerId)?.name || 'N/A'),
+          outlet_name: outletMap[s.outlet_id] || 'Unknown',
           actual_price: actualPrice,
           discount_percent: discPercent,
           discount_amount: discountAmt,
@@ -725,62 +972,78 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           inc_discount_percent: discPercent,
           inc_discount_val: incDiscVal,
           inc_net: incNet,
-          remarks: !rule ? 'No Rule' : '',
-          staff_splits: staffSplits
+          remarks: remarks,
+          check_no: s.check_no || '',
+          duration: 'Sale',
+          staff_splits: staffSplits,
+          referrer_name: cleanRefForSale
         });
       });
     } else if (dept === 'Referral') {
       const referrerTotals: Record<string, number> = {};
-      members.filter(m => (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').trim() !== '').forEach(m => {
+      members
+        .filter(m => m.referrer_name && m.referrer_name.trim() !== '')
+        .forEach(m => {
+        const cat = mCats.find(c => c.id === m.category_id);
+        
         const isNoInc = (m.referrer_name || '').startsWith('[NO-INC]');
-        if (isNoInc) return;
-
-        const cleanRefName = (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').trim();
-        // Match by category/tier (Primary) or Type (Secondary)
-        const rule = findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.membership_type_id);
-        if (!rule) return;
+        const cleanReferrerName = (m.referrer_name || '').replace(/^\[NO-INC\]\s*/i, '').replace(/^Referral:\s*/i, '').trim();
+        const normalize = (n: string) => n.toLowerCase().replace(/\./g, ' ').replace(/\s+/g, ' ').trim();
+        const cleanRefNorm = normalize(cleanReferrerName);
+        const cleanRefForReport = cleanReferrerName || '';
+        
+        const rule = (!isNoInc && cleanReferrerName) ? findBestRule(rules, 'Referral', m.category_id, m.net_amount, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined) : null;
+        const memRule = findBestRule(rules, 'Membership', m.category_id, m.net_amount, 0, m.outlet_id, m.membership_type_id ? `type:${m.membership_type_id}` : undefined);
 
         const actualPrice = m.actual_rate || (m.net_amount + (m.discount || 0));
         const discountAmt = m.discount || 0;
         const netRev = m.net_amount;
         const discPercent = actualPrice > 0 ? (discountAmt / actualPrice) * 100 : 0;
 
-        const baseInc = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
-        const incDiscVal = (rule.apply_discount_percentage !== false) ? (baseInc * discPercent) / 100 : 0;
-        const incNet = baseInc - incDiscVal;
+        let baseInc = 0;
+        let incDiscVal = 0;
+        let incNet = 0;
 
         const staffSplits: Record<string, number> = {};
+        let remarks = m.remarks || '';
         let referrerNet = 0;
 
-        if (rule.referral_payee === 'Referrer') {
-          referrerNet = incNet;
-          referrerTotals[cleanRefName] = (referrerTotals[cleanRefName] || 0) + incNet;
+        if (!rule) {
+          remarks = remarks ? `${remarks} (No Referral Rule found)` : 'No Referral Rule found';
         } else {
-          // Default to Staff
-          if (rule.distribution_type === 'Shared') {
-            const available = staffList.filter(s => {
-              const sOutlets = getStaffOutlets(s);
-              return sOutlets.includes(m.outlet_id) && !isStaffOnLeaveOnDate(s, m.start_date) && !isStaffOnProbationOnDate(s, m.start_date);
-            });
-            if (available.length > 0) {
-              const share = incNet / available.length;
-              available.forEach(s => staffSplits[s.id] = share);
-            }
-          } else if (m.sales_rep_id) {
-            const staff = staffList.find(s => s.id === m.sales_rep_id);
-            if (staff && staff.is_eligible_for_incentives !== false) {
-              staffSplits[m.sales_rep_id] = incNet;
-            }
+          const rBase = rule.calculation_type === 'Fixed' ? rule.value : (actualPrice * rule.value / 100);
+          const rDiscVal = (rule.apply_discount_percentage !== false) ? (rBase * discPercent) / 100 : 0;
+          const rNet = rBase - rDiscVal;
+          
+          const payeeMode = rule.referral_payee || 'Referrer';
+          const isBoth = payeeMode === 'Both';
+          const isReferrer = payeeMode === 'Referrer' || isBoth;
+
+          remarks = `Referral Payee: ${payeeMode}`;
+
+          if (isReferrer) {
+            baseInc = rBase;
+            incDiscVal = rDiscVal;
+            incNet = rNet;
+            referrerNet = rNet;
+            referrerTotals[cleanReferrerName] = (referrerTotals[cleanReferrerName] || 0) + rNet;
           }
         }
 
+        // --- STAFF PORTION NOT SHOWN IN REFERRAL REPORT ---
+        // (It will be shown in Membership/Staff reports instead)
+        
+        const displayStaffName = cleanReferrerName || 'N/A';
+
         rows.push({
-          id: `ref-${m.id}`,
+          id: m.id,
           sl_no: sl++,
           date: format(new Date(m.start_date), 'dd-MMM-yy'),
-          guest_name: `${m.guest_name}`,
-          item_name: `Referral: ${cleanRefName}`,
-          therapist_name: rule.referral_payee === 'Referrer' ? `Referrer: ${cleanRefName}` : (rule.distribution_type === 'Shared' ? 'Shared Pool' : (staffList.find(s => s.id === m.sales_rep_id)?.name || 'N/A')),
+          guest_name: m.guest_name,
+          membership_no: m.membership_number || m.membership_no || 'N/A', 
+          item_name: cat?.name || m.category_id || 'Tier Info',
+          therapist_name: m._matched_sales_rep_name || cleanReferrerName,
+          outlet_name: outletMap[m.outlet_id] || 'Unknown',
           actual_price: actualPrice,
           discount_percent: discPercent,
           discount_amount: discountAmt,
@@ -789,23 +1052,45 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           inc_discount_percent: discPercent,
           inc_discount_val: incDiscVal,
           inc_net: incNet,
-          remarks: `Referral Payee: ${rule.referral_payee || 'Staff'}`,
+          remarks: remarks,
+          check_no: m.check_no || '',
+          duration: 'Referral',
           staff_splits: staffSplits,
-          referrer_name: cleanRefName,
+          referrer_name: cleanRefForReport,
           referrer_amount: referrerNet
         });
       });
+
+      // Add referrer summaries to result in Step 2 after processing all members
+      (rows as any)._referrerTotals = referrerTotals;
     }
 
     const totalIncentive = rows.reduce((sum, r) => sum + r.inc_net, 0);
+
+    // Filter staffList to only include relevant staff for this report
+    let finalStaffList = staffList.filter(s => {
+      const hasEarned = rows.some(r => r.staff_splits && r.staff_splits[s.id] > 0);
+      if (hasEarned) return true;
+      
+      // For Referral report, only show staff who earned something in this period
+      if (dept === 'Referral') return false;
+      
+      // For Membership and others, show experts/reps even if 0 earned (to show they are active)
+      return s.is_active;
+    });
+
+    // If no staff found by role, show all active staff in the outlet as fallback
+    if (finalStaffList.length === 0 && dept !== 'Referral') {
+      finalStaffList = staffList.filter(s => s.is_active);
+    }
 
     return {
       rows,
       summary: {
         totalIncentive,
         count: rows.length,
-        staffList: staffList.filter((s: any) => s.is_active && s.is_eligible_for_incentives !== false),
-        referrerSummaries: Object.entries(referrerTotals).map(([name, amount], idx) => ({ sl_no: idx + 1, name, amount }))
+        staffList: finalStaffList,
+        referrerSummaries: (rows as any)._referrerTotals ? Object.entries((rows as any)._referrerTotals).map(([name, amount], idx) => ({ sl_no: idx + 1, name, amount })) : []
       }
     };
   }
@@ -880,15 +1165,128 @@ export interface PDFOptions {
   currencySymbol: string;
   currencyCode?: string;
   reportTitle: string;
+  outletId?: string;
   date: Date;
   logoUrl?: string;
   reportType: string;
   membershipTypeName?: string;
   userName?: string;
+  summary?: any;
+  signatoryConfig?: any;
 }
 
+export const generateCustomReportPDF = (options: {
+  jsPDF: any;
+  autoTable: any;
+  title: string;
+  subtitle: string;
+  headers: string[];
+  body: any[][];
+  propertyName: string;
+  logoUrl?: string;
+  userName?: string;
+  filename: string;
+  signatoryConfig?: { prepared?: string, reviewed?: string, approved?: string } | null;
+}) => {
+  const { jsPDF, autoTable, title, subtitle, headers, body, propertyName, logoUrl, userName, filename, signatoryConfig } = options;
+  
+  const JsPDFConstructor = typeof jsPDF === 'function' ? jsPDF : (jsPDF.jsPDF || jsPDF.default || jsPDF);
+  const doc = new JsPDFConstructor({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 15;
+  let currentY = margin;
+
+  // Header
+  if (logoUrl) {
+    try { doc.addImage(logoUrl, 'PNG', margin, currentY, 15, 15); } catch (e) {}
+  }
+  
+  // Left: Property Info
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+  doc.text(propertyName.toUpperCase(), margin + (logoUrl ? 20 : 0), currentY + 6);
+  
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text(subtitle.toUpperCase(), margin + (logoUrl ? 20 : 0), currentY + 11);
+
+  // Right: Title & Audit Info
+  doc.setFontSize(16);
+  doc.setTextColor(79, 70, 229); // indigo-600
+  doc.text(title.toUpperCase(), pageWidth - margin, currentY + 6, { align: 'right' });
+  
+  doc.setFontSize(8);
+  doc.setTextColor(79, 70, 229);
+  doc.text("VERIFIED AUDIT TRAIL", pageWidth - margin, currentY + 11, { align: 'right' });
+
+  currentY += 20;
+
+  // Table
+  autoTable(doc, {
+    startY: currentY,
+    head: [headers],
+    body: body,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [15, 23, 42],
+      textColor: [255, 255, 255],
+      fontSize: 8,
+      fontStyle: 'bold',
+      halign: 'left',
+      cellPadding: 4
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: [51, 65, 85],
+      cellPadding: 4
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252]
+    },
+    margin: { left: margin, right: margin }
+  });
+
+  // Render Signatories
+  const finalTableY = (doc as any).lastAutoTable?.finalY || currentY + 15;
+  if (signatoryConfig) {
+    const sigY = finalTableY + 15;
+    doc.setFontSize(7);
+    doc.setTextColor(15, 23, 42);
+    
+    const contentWidth = pageWidth - (margin * 2);
+    const sigWidth = contentWidth / 3;
+    
+    doc.text("PREPARED BY", margin + (sigWidth * 0), sigY);
+    doc.text(signatoryConfig.prepared || '', margin + (sigWidth * 0), sigY + 5);
+    
+    if (signatoryConfig.reviewed) {
+      doc.text("REVIEWED BY", margin + (sigWidth * 1), sigY);
+      doc.text(signatoryConfig.reviewed, margin + (sigWidth * 1), sigY + 5);
+    }
+    
+    doc.text("APPROVED BY", margin + (sigWidth * 2), sigY);
+    doc.text(signatoryConfig.approved || '', margin + (sigWidth * 2), sigY + 5);
+  }
+
+  // Footer
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    const footerY = doc.internal.pageSize.getHeight() - 10;
+    doc.text(`Page ${i} of ${pageCount}`, margin, footerY);
+    doc.text(`Exported by ${userName || 'Admin'} on ${format(new Date(), 'dd MMM yyyy HH:mm')}`, pageWidth / 2, footerY, { align: 'center' });
+    doc.text(`© ${new Date().getFullYear()} ${propertyName}`, pageWidth - margin, footerY, { align: 'right' });
+  }
+
+  doc.save(filename);
+};
+
 export const generateReportPDF = (options: PDFOptions) => {
-  const { jsPDF, autoTable, data, propertyName, outletName, currencySymbol, currencyCode, reportTitle, date, logoUrl, reportType, membershipTypeName, userName } = options;
+  const { jsPDF, autoTable, data, propertyName, outletName, outletId, currencySymbol, currencyCode, reportTitle, date, logoUrl, reportType, membershipTypeName, userName, summary, signatoryConfig } = options;
   
   const isRevenueReport = reportType === 'revenue_recognition';
   const isDailySalesReport = reportType === 'daily_sales';
@@ -911,7 +1309,7 @@ export const generateReportPDF = (options: PDFOptions) => {
   
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 15;
+  const margin = 10; // Back to tight but safe margin
   const contentWidth = pageWidth - (margin * 2);
 
   // Helper to handle currency formatting
@@ -932,109 +1330,101 @@ export const generateReportPDF = (options: PDFOptions) => {
   };
 
   // --- HEADER SECTION ---
-  let currentY = margin;
+  let currentY = margin - 5; // Start slightly higher
 
-  // 1. Logo & Property Info (Left)
+  // 1. Logo
   if (logoUrl) {
     try {
-      doc.addImage(logoUrl, 'PNG', margin, currentY, 22, 22);
+      doc.addImage(logoUrl, 'PNG', margin, currentY, 15, 15);
     } catch (e) {
       console.error('Logo add error:', e);
     }
   }
 
-  const propertyX = margin + (logoUrl ? 28 : 0);
-  const titleX = pageWidth - margin;
-  const availableWidth = (pageWidth / 2) - margin - 10;
-
-  // Vertical line between logo and property name
-  if (logoUrl) {
-    doc.setDrawColor(226, 232, 240); // slate-200
-    doc.setLineWidth(0.5);
-    doc.line(margin + 24, currentY, margin + 24, currentY + 22);
-  }
-
+  const propertyX = margin + (logoUrl ? 20 : 0);
+  
   // Property Name & Subtitle
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(15, 23, 42); // slate-900
-  doc.text(propertyName.toUpperCase(), propertyX, currentY + 7, { maxWidth: availableWidth });
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42); 
+  doc.text(propertyName.toUpperCase(), propertyX, currentY + 6);
   
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.setTextColor(100, 116, 139); // slate-400
-  doc.text(`${outletName.toUpperCase()} • ISO-9001 CERTIFIED`, propertyX, currentY + 14);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`${outletName.toUpperCase()} • ISO-9001 CERTIFIED`, propertyX, currentY + 10);
 
+  // Membership Type Badge (Left side now)
+  let leftY = currentY + 12;
+  if (membershipTypeName) {
+    const typeWidth = doc.getTextWidth(membershipTypeName.toUpperCase()) + 8;
+    doc.setFillColor(238, 242, 255);
+    doc.roundedRect(propertyX, leftY, typeWidth, 5, 0.8, 0.8, 'F');
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(79, 70, 229);
+    doc.text(membershipTypeName.toUpperCase(), propertyX + (typeWidth / 2), leftY + 3.5, { align: 'center' });
+    leftY += 6;
+  }
+
+  // 1. Internal Verification Badge (Left side)
+  const verifyWidth = doc.getTextWidth("INTERNAL VERIFICATION") + 6;
+  doc.setDrawColor(79, 70, 229);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(propertyX, leftY, verifyWidth, 4.5, 0.5, 0.5, 'S');
+  
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
-  doc.setTextColor(79, 70, 229); // indigo-600
-  // Add a small circle/bullet for the "Internal Verification"
-  doc.setFillColor(79, 70, 229);
-  doc.circle(propertyX + 1, currentY + 18.5, 0.5, 'F');
-  doc.text("INTERNAL VERIFICATION", propertyX + 3, currentY + 19);
+  doc.setFontSize(4.5);
+  doc.setTextColor(79, 70, 229);
+  doc.text("INTERNAL VERIFICATION", propertyX + (verifyWidth / 2), leftY + 3, { align: 'center' });
 
   // 2. Report Title & Period (Right)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
+  doc.setFontSize(16);
   doc.setTextColor(15, 23, 42);
-  doc.text(reportTitle.toUpperCase(), titleX, currentY + 8, { align: 'right', maxWidth: availableWidth });
+  doc.text(reportTitle.toUpperCase(), pageWidth - margin, currentY + 6, { align: 'right' });
 
-  if (membershipTypeName && reportType !== 'monthly_revenue') {
-    // Membership Type Tag (Top Right)
-    const tagWidth = 45;
-    const tagHeight = 6;
-    const tagX = pageWidth - margin - tagWidth;
-    const tagY = currentY + 12;
-    
-    doc.setFillColor(238, 242, 255); // indigo-50
-    doc.roundedRect(tagX, tagY, tagWidth, tagHeight, 1, 1, 'F');
-    
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(6);
-    doc.setTextColor(79, 70, 229); // indigo-600
-    doc.text(membershipTypeName.toUpperCase(), tagX + (tagWidth / 2), tagY + 4.5, { align: 'center' });
-  }
-
-  // Audit Period Box
+  // Period Box (Tucked into top right)
   const boxWidth = 30;
-  const boxHeight = 12;
+  const boxHeight = 8;
   const boxX = pageWidth - margin - boxWidth;
-  const boxY = currentY + 22;
+  const boxY = currentY + 10; // Pull up to match UI better
 
-  doc.setFillColor(15, 23, 42); // slate-950
-  doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 2, 2, 'F');
+  doc.setFillColor(15, 23, 42);
+  doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 1, 1, 'F');
   
   doc.setFont("helvetica", "bold");
   doc.setFontSize(5);
   doc.setTextColor(255, 255, 255, 0.7);
-  doc.text("AUDIT PERIOD", boxX + (boxWidth / 2), boxY + 4, { align: 'center' });
+  doc.text("AUDIT PERIOD", boxX + (boxWidth / 2), boxY + 3, { align: 'center' });
   
-  doc.setFontSize(8);
+  doc.setFontSize(7);
   doc.setTextColor(255, 255, 255);
-  // For daily sales, show the full date. For monthly revenue, show year. For others, show month/year.
   const periodStr = reportType === 'daily_sales' 
-    ? format(date, 'dd MMMM yyyy').toUpperCase()
+    ? format(date, 'dd MMM yyyy').toUpperCase()
     : reportType === 'monthly_revenue'
     ? format(date, 'yyyy').toUpperCase()
-    : format(date, 'MMMM yyyy').toUpperCase();
-  doc.text(periodStr, boxX + (boxWidth / 2), boxY + 9, { align: 'center' });
+    : format(date, 'MMM yyyy').toUpperCase();
+  doc.text(periodStr, boxX + (boxWidth / 2), boxY + 6.5, { align: 'center' });
 
-  // Verified Audit Trail Tag
-  doc.setFillColor(248, 250, 252); // slate-50
-  doc.roundedRect(pageWidth - margin - 35, boxY + boxHeight + 4, 35, 6, 1, 1, 'F');
-  doc.setFontSize(6);
+  // Audit Trail Badge (Matching UI)
+  const trailWidth = 25;
+  const trailX = pageWidth - margin - trailWidth;
+  const trailY = currentY + 20; // Drastically pulled up
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(trailX, trailY, trailWidth, 4, 0.5, 0.5, 'S');
+  doc.setFontSize(4.5);
   doc.setTextColor(100, 116, 139);
-  // Small circle for audit trail
-  doc.setDrawColor(203, 213, 225); // slate-300
-  doc.circle(pageWidth - margin - 32, boxY + boxHeight + 7, 0.6, 'D');
-  doc.text("VERIFIED AUDIT TRAIL", pageWidth - margin - 16, boxY + boxHeight + 7.8, { align: 'center' });
+  doc.text("VERIFIED AUDIT TRAIL", trailX + (trailWidth / 2), trailY + 2.8, { align: 'center' });
 
-  // Subtle Header Divider
-  doc.setDrawColor(226, 232, 240); // slate-200
+  // Divider
+  const dividerY = currentY + 28; // Header is now very compact
+  doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.5);
-  doc.line(margin, boxY + boxHeight + 15, pageWidth - margin, boxY + boxHeight + 15);
+  doc.line(margin, dividerY, pageWidth - margin, dividerY);
 
-  currentY = boxY + boxHeight + 25;
+  currentY = dividerY + 5;
 
   const callAutoTable = (doc: any, options: any) => {
     // 1. Try doc.autoTable if it exists (plugin style)
@@ -1093,25 +1483,8 @@ export const generateReportPDF = (options: PDFOptions) => {
 
   // --- TABLE SECTION ---
   if (isRevenueReport) {
-    // Use grouped data from reportData if available, otherwise group on the fly
-    const grouped = data.groupedRows || data.rows.reduce((acc: any, row: any) => {
-      const groupKey = `${row.category_name}|${row.category_duration || 0}`;
-      if (!acc[groupKey]) acc[groupKey] = [];
-      acc[groupKey].push(row);
-      return acc;
-    }, {} as Record<string, any[]>);
-
-    // Sort categories (tiers) by duration and then by name
-    const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
-      const [nameA, durA] = a.split('|');
-      const [nameB, durB] = b.split('|');
-      
-      const d1 = parseInt(durA);
-      const d2 = parseInt(durB);
-      
-      if (d1 !== d2) return d1 - d2;
-      return nameA.localeCompare(nameB);
-    });
+    // Use grouped data from reportData if available
+    const grouped = data.groupedRows;
 
     if (data.rows.length === 0) {
       doc.setFontSize(10);
@@ -1128,138 +1501,138 @@ export const generateReportPDF = (options: PDFOptions) => {
         deferred: 0
       };
       
-      sortedGroupKeys.forEach((groupKey: string) => {
-        const [categoryName] = groupKey.split('|');
-        const groupRows = grouped[groupKey];
-        const groupRowsArray = [...groupRows].sort((a: any, b: any) => {
-          const dateA = parse(a.start_date, 'dd-MM-yyyy', new Date());
-          const dateB = parse(b.start_date, 'dd-MM-yyyy', new Date());
-          return dateA.getTime() - dateB.getTime();
-        });
-        
-        // Calculate subtotals for this category
-        const subtotals = {
-          daily_rate: groupRowsArray.reduce((s: number, r: any) => s + (r.daily_rate || 0), 0),
-          actual_rate: groupRowsArray.reduce((s: number, r: any) => s + (r.actual_rate || 0), 0),
-          discount: groupRowsArray.reduce((s: number, r: any) => s + (r.discount || 0), 0),
-          net_fees: groupRowsArray.reduce((s: number, r: any) => s + (r.net_fees || 0), 0),
-          prev_accrual: groupRowsArray.reduce((s: number, r: any) => s + (r.prev_accrual || 0), 0),
-          period_rev: groupRowsArray.reduce((s: number, r: any) => s + (r.period_rev || 0), 0),
-          deferred: groupRowsArray.reduce((s: number, r: any) => s + (r.deferred || 0), 0)
-        };
-        
-        // Update grand totals
-        grandTotals.daily_rate += subtotals.daily_rate;
-        grandTotals.actual_rate += subtotals.actual_rate;
-        grandTotals.discount += subtotals.discount;
-        grandTotals.net_fees += subtotals.net_fees;
-        grandTotals.prev_accrual += subtotals.prev_accrual;
-        grandTotals.period_rev += subtotals.period_rev;
-        grandTotals.deferred += subtotals.deferred;
-        
-        // Category Header Row
-        callAutoTable(doc, {
-          startY: currentY,
-          body: [[{ content: `TIER: ${categoryName.toUpperCase()}`, colSpan: 13 }]],
-          theme: 'plain',
-          styles: { 
-            fillColor: [238, 242, 255], 
-            textColor: [49, 46, 129], 
-            fontStyle: 'bold', 
-            fontSize: 8, 
-            cellPadding: 2,
-            font: 'helvetica'
-          },
-          margin: { left: margin, right: margin },
-          tableWidth: contentWidth
-        });
-        
-        currentY = (doc as any).lastAutoTable?.finalY || currentY + 10;
+      Object.entries(grouped).forEach(([type, categories]) => {
+        Object.entries(categories as Record<string, any[]>).forEach(([categoryName, groupRows]) => {
+          const groupRowsArray = [...groupRows].sort((a: any, b: any) => {
+            const dateA = parse(a.start_date, 'dd-MM-yyyy', new Date());
+            const dateB = parse(b.start_date, 'dd-MM-yyyy', new Date());
+            return dateA.getTime() - dateB.getTime();
+          });
+          
+          // Calculate subtotals for this category
+          const subtotals = {
+            daily_rate: groupRowsArray.reduce((s: number, r: any) => s + (r.daily_rate || 0), 0),
+            actual_rate: groupRowsArray.reduce((s: number, r: any) => s + (r.actual_rate || 0), 0),
+            discount: groupRowsArray.reduce((s: number, r: any) => s + (r.discount || 0), 0),
+            net_fees: groupRowsArray.reduce((s: number, r: any) => s + (r.net_fees || 0), 0),
+            prev_accrual: groupRowsArray.reduce((s: number, r: any) => s + (r.prev_accrual || 0), 0),
+            period_rev: groupRowsArray.reduce((s: number, r: any) => s + (r.period_rev || 0), 0),
+            deferred: groupRowsArray.reduce((s: number, r: any) => s + (r.deferred || 0), 0)
+          };
+          
+          // Update grand totals
+          grandTotals.daily_rate += subtotals.daily_rate;
+          grandTotals.actual_rate += subtotals.actual_rate;
+          grandTotals.discount += subtotals.discount;
+          grandTotals.net_fees += subtotals.net_fees;
+          grandTotals.prev_accrual += subtotals.prev_accrual;
+          grandTotals.period_rev += subtotals.period_rev;
+          grandTotals.deferred += subtotals.deferred;
+          
+          // Category Header Row
+          callAutoTable(doc, {
+            startY: currentY,
+            body: [[{ content: `TIER: ${categoryName.toUpperCase()} (${type.toUpperCase()})`, colSpan: 13 }]],
+            theme: 'plain',
+            styles: { 
+              fillColor: [238, 242, 255], 
+              textColor: [49, 46, 129], 
+              fontStyle: 'bold', 
+              fontSize: 8, 
+              cellPadding: 2,
+              font: 'helvetica'
+            },
+            margin: { left: margin, right: margin },
+            tableWidth: contentWidth
+          });
+          
+          currentY = (doc as any).lastAutoTable?.finalY || currentY + 10;
 
-        callAutoTable(doc, {
-          startY: currentY,
-          head: [['SL.', 'GUEST NAME / PROFILE', 'MEM. NO', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
-          body: [
-            ...groupRowsArray.map((r: any, idx: number) => [
-              idx + 1,
-              r.guest_name,
-              r.membership_no || 'N/A',
-              r.start_date,
-              r.end_date,
-              r.total_days,
-              formatCurrency(r.daily_rate),
-              formatCurrency(r.actual_rate),
-              formatCurrency(r.discount),
-              formatCurrency(r.net_fees),
-              formatCurrency(r.prev_accrual),
-              formatCurrency(r.period_rev),
-              formatCurrency(r.deferred)
-            ]),
-            // Subtotal Row integrated into the same table for perfect alignment
-            [
-              { content: `TIER SUBTOTAL: ${categoryName.toUpperCase()}`, colSpan: 6, styles: { halign: 'left', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.daily_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.actual_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.discount), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.net_fees), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.prev_accrual), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.period_rev), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } },
-              { content: formatCurrency(subtotals.deferred), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129] } }
-            ]
-          ],
-          theme: 'grid',
-          headStyles: { 
-            fillColor: [15, 23, 42], 
-            textColor: [255, 255, 255], 
-            fontStyle: 'bold', 
-            fontSize: 7, 
-            halign: 'center',
-            font: 'helvetica'
-          },
-          styles: { 
-            fontSize: 7, 
-            cellPadding: 2, 
-            font: 'helvetica',
-            lineColor: [0, 0, 0], 
-            lineWidth: 0.1,
-            overflow: 'linebreak'
-          },
-          columnStyles: {
-            0: { halign: 'center', cellWidth: 10 },
-            1: { fontStyle: 'bold', cellWidth: 77 },
-            2: { halign: 'center', cellWidth: 20 },
-            3: { halign: 'center', cellWidth: 20 },
-            4: { halign: 'center', cellWidth: 20 },
-            5: { halign: 'center', cellWidth: 10 },
-            6: { halign: 'right', cellWidth: 15 },
-            7: { halign: 'right', cellWidth: 15 },
-            8: { halign: 'right', cellWidth: 15 },
-            9: { halign: 'right', cellWidth: 15 },
-            10: { halign: 'right', cellWidth: 15, textColor: [100, 116, 139] },
-            11: { halign: 'right', fontStyle: 'bold', cellWidth: 15, textColor: [79, 70, 229] },
-            12: { halign: 'right', fontStyle: 'bold', cellWidth: 20, textColor: [239, 68, 68] }
-          },
-          margin: { left: margin, right: margin },
-          tableWidth: contentWidth
-        });
+          callAutoTable(doc, {
+            startY: currentY,
+            head: [['SL.', 'GUEST NAME / PROFILE', 'MEM. NO', 'START DATE', 'END DATE', 'DAYS', 'DAILY RATE', 'ACTUAL RATE', 'DISCOUNT', 'NET FEES', 'PREV. ACCRUAL', 'PERIOD REV', 'DEFERRED']],
+            body: [
+              ...groupRowsArray.map((r: any, idx: number) => [
+                idx + 1,
+                r.guest_name,
+                r.membership_no || 'N/A',
+                r.start_date,
+                r.end_date,
+                r.total_days,
+                formatCurrency(r.daily_rate),
+                formatCurrency(r.actual_rate),
+                formatCurrency(r.discount),
+                formatCurrency(r.net_fees),
+                formatCurrency(r.prev_accrual),
+                formatCurrency(r.period_rev),
+                formatCurrency(r.deferred)
+              ]),
+              // Subtotal Row integrated into the same table for perfect alignment
+              [
+                { content: `TIER SUBTOTAL: ${categoryName.toUpperCase()}`, colSpan: 6, styles: { halign: 'left', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.daily_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.actual_rate), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.discount), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.net_fees), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.prev_accrual), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.period_rev), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } },
+                { content: formatCurrency(subtotals.deferred), styles: { halign: 'right', fontStyle: 'bold', fillColor: [224, 231, 255], textColor: [49, 46, 129], lineWidth: 0.1, lineColor: [0, 0, 0] } }
+              ]
+            ],
+            theme: 'grid',
+            headStyles: { 
+              fillColor: [15, 23, 42], 
+              textColor: [255, 255, 255], 
+              fontStyle: 'bold', 
+              fontSize: 7, 
+              halign: 'center',
+              font: 'helvetica'
+            },
+            styles: { 
+              fontSize: 7, 
+              cellPadding: 2, 
+              font: 'helvetica',
+              lineColor: [0, 0, 0], 
+              lineWidth: 0.1,
+              overflow: 'linebreak'
+            },
+            columnStyles: {
+              0: { halign: 'center', cellWidth: 8 },
+              1: { fontStyle: 'bold' }, // Flexible column
+              2: { halign: 'center', cellWidth: 15 },
+              3: { halign: 'center', cellWidth: 20 },
+              4: { halign: 'center', cellWidth: 20 },
+              5: { halign: 'center', cellWidth: 12 },
+              6: { halign: 'right', cellWidth: 20 },
+              7: { halign: 'right', cellWidth: 20 },
+              8: { halign: 'right', cellWidth: 20 },
+              9: { halign: 'right', cellWidth: 20 },
+              10: { halign: 'right', cellWidth: 20, textColor: [100, 116, 139] },
+              11: { halign: 'right', fontStyle: 'bold', cellWidth: 20, textColor: [79, 70, 229] },
+              12: { halign: 'right', fontStyle: 'bold', cellWidth: 22, textColor: [239, 68, 68] }
+            },
+            margin: { left: margin, right: margin },
+            tableWidth: contentWidth
+          });
 
-        currentY = (doc as any).lastAutoTable?.finalY || currentY + 15;
+          currentY = (doc as any).lastAutoTable?.finalY || currentY + 15;
+        });
       });
       
       // Grand Total Row
       callAutoTable(doc, {
         startY: currentY + 5,
         body: [[
-          { content: "VERIFIED PORTFOLIO TOTAL", colSpan: 6, styles: { halign: 'left', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.daily_rate), styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.actual_rate), styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.discount), styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.net_fees), styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.prev_accrual), styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.period_rev), styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: formatCurrency(grandTotals.deferred), styles: { halign: 'right', fontStyle: 'bold' } }
+          { content: "VERIFIED PORTFOLIO TOTAL", colSpan: 6, styles: { halign: 'left', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.daily_rate), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.actual_rate), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.discount), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.net_fees), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.prev_accrual), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.period_rev), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } },
+          { content: formatCurrency(grandTotals.deferred), styles: { halign: 'right', fontStyle: 'bold', lineWidth: 0.1, lineColor: [255, 255, 255] } }
         ]],
-        theme: 'plain',
+        theme: 'grid',
         styles: { 
           fillColor: [15, 23, 42], 
           textColor: [255, 255, 255], 
@@ -1269,23 +1642,25 @@ export const generateReportPDF = (options: PDFOptions) => {
           font: 'helvetica'
         },
         columnStyles: {
-          0: { halign: 'center', cellWidth: 10 },
-          1: { fontStyle: 'bold', cellWidth: 77 },
-          2: { halign: 'center', cellWidth: 20 },
+          0: { halign: 'center', cellWidth: 8 },
+          1: { fontStyle: 'bold' },
+          2: { halign: 'center', cellWidth: 15 },
           3: { halign: 'center', cellWidth: 20 },
           4: { halign: 'center', cellWidth: 20 },
-          5: { halign: 'center', cellWidth: 10 },
-          6: { halign: 'right', cellWidth: 15 },
-          7: { halign: 'right', cellWidth: 15 },
-          8: { halign: 'right', cellWidth: 15 },
-          9: { halign: 'right', cellWidth: 15 },
-          10: { halign: 'right', cellWidth: 15 },
-          11: { halign: 'right', cellWidth: 15 },
-          12: { halign: 'right', cellWidth: 20 }
+          5: { halign: 'center', cellWidth: 12 },
+          6: { halign: 'right', cellWidth: 20 },
+          7: { halign: 'right', cellWidth: 20 },
+          8: { halign: 'right', cellWidth: 20 },
+          9: { halign: 'right', cellWidth: 20 },
+          10: { halign: 'right', cellWidth: 20 },
+          11: { halign: 'right', cellWidth: 20 },
+          12: { halign: 'right', cellWidth: 22 }
         },
         margin: { left: margin, right: margin },
         tableWidth: contentWidth
       });
+
+      currentY = (doc as any).lastAutoTable?.finalY || currentY + 15;
     }
   } else if (reportType === 'members_joined') {
     // Members Joined Audit Style
@@ -1427,8 +1802,35 @@ export const generateReportPDF = (options: PDFOptions) => {
       const staffList = data.summary.staffList || [];
       const staffHeaders = staffList.map((s: any) => s.name.toUpperCase());
       
+      let specialistLabel = 'STAFF';
+      if (reportTitle.includes('Massage')) specialistLabel = 'THERAPIST';
+      if (reportTitle.includes('Personal Training')) specialistLabel = 'PERSONAL TRAINER';
+      if (reportTitle.includes('Membership')) specialistLabel = 'SALES REP';
+
       const head = [
-        ['SL.NO.', 'DATE', 'GUEST / MEMBER', 'ITEM / SERVICE', 'STAFF', 'ACTUAL PRICE', 'DISC %', 'DISCOUNT AMT', 'NET REVENUE', 'INC TOTAL', 'INC DISC %', 'INC DISC VAL', 'INC NET', 'REMARKS', ...staffHeaders]
+        [
+          { content: 'SL.NO.', rowSpan: 2 },
+          { content: 'DATE', rowSpan: 2 },
+          { content: 'GUEST / MEMBER', rowSpan: 2 },
+          { content: 'CHECK NO.', rowSpan: 2 },
+          ...(outletId === 'all' ? [{ content: 'OUTLET', rowSpan: 2 }] : []),
+          { content: 'ITEM / SERVICE', rowSpan: 2 },
+          { content: 'DUR.', rowSpan: 2 },
+          { content: specialistLabel, rowSpan: 2 },
+          { content: 'GROSS AMOUNT', rowSpan: 2 },
+          { content: 'DISC %', rowSpan: 2 },
+          { content: 'DISCOUNT AMT', rowSpan: 2 },
+          { content: 'NET REVENUE', rowSpan: 2 },
+          { content: 'INCENTIVE BREAKDOWN', colSpan: 4, styles: { halign: 'center', fillColor: [254, 243, 199], textColor: [15, 23, 42] } },
+          { content: 'REMARKS', rowSpan: 2 },
+          ...staffHeaders.map((h: string) => ({ content: h, rowSpan: 2 }))
+        ],
+        [
+          { content: 'Total', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } },
+          { content: 'Disc %', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } },
+          { content: 'Disc. Inc', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } },
+          { content: 'Net', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } }
+        ]
       ];
 
       const body = data.rows.map((r: any) => {
@@ -1436,7 +1838,10 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.sl_no,
           r.date,
           r.guest_name,
+          r.check_no || '',
+          ...(outletId === 'all' ? [r.outlet_name || ''] : []),
           r.item_name,
+          r.duration || '',
           r.therapist_name,
           formatCurrency(r.actual_price),
           r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
@@ -1452,7 +1857,7 @@ export const generateReportPDF = (options: PDFOptions) => {
         // Add staff splits
         staffList.forEach((s: any) => {
           const split = r.staff_splits[s.id];
-          row.push(split && split > 0 ? formatCurrency(split) : '');
+          row.push(split && split > 0 ? formatCurrency(split) : formatCurrency(0));
         });
         
         return row;
@@ -1463,13 +1868,27 @@ export const generateReportPDF = (options: PDFOptions) => {
         return total > 0 ? formatCurrency(total) : formatCurrency(0);
       });
 
+      const totalActual = data.rows.reduce((sum: number, r: any) => sum + Number(r.actual_price || 0), 0);
+      const totalDiscount = data.rows.reduce((sum: number, r: any) => sum + Number(r.discount_amount || 0), 0);
+      const totalNetRev = data.rows.reduce((sum: number, r: any) => sum + Number(r.net_revenue || 0), 0);
+      const totalIncTotal = data.rows.reduce((sum: number, r: any) => sum + Number(r.inc_total || 0), 0);
+      const totalIncDiscountVal = data.rows.reduce((sum: number, r: any) => sum + Number(r.inc_discount_val || 0), 0);
+      const totalIncNet = data.rows.reduce((sum: number, r: any) => sum + Number(r.inc_net || 0), 0);
+
       callAutoTable(doc, {
         startY: currentY,
         head: head,
         body: body,
         foot: [[
-          { content: 'AGGREGATE INCENTIVE TOTALS', colSpan: 12, styles: { halign: 'right' } },
-          { content: formatCurrency(data.summary.totalIncentive), styles: { halign: 'right' } },
+          { content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: outletId === 'all' ? 8 : 7, styles: { halign: 'right' } },
+          { content: formatCurrency(totalActual), styles: { halign: 'right' } },
+          { content: '', styles: {} },
+          { content: formatCurrency(totalDiscount), styles: { halign: 'right' } },
+          { content: formatCurrency(totalNetRev), styles: { halign: 'right' } },
+          { content: formatCurrency(totalIncTotal), styles: { halign: 'right' } },
+          { content: '', styles: {} },
+          { content: formatCurrency(totalIncDiscountVal), styles: { halign: 'right' } },
+          { content: formatCurrency(totalIncNet), styles: { halign: 'right', fillColor: [79, 70, 229] } },
           { content: '', styles: {} },
           ...staffTotals.map((t: string) => ({ content: t, styles: { halign: 'right' } }))
         ]],
@@ -1477,7 +1896,7 @@ export const generateReportPDF = (options: PDFOptions) => {
           fillColor: [15, 23, 42], 
           textColor: [255, 255, 255], 
           fontStyle: 'bold', 
-          fontSize: 5, 
+          fontSize: 5.5, 
           cellPadding: 1,
           font: 'helvetica'
         },
@@ -1486,60 +1905,79 @@ export const generateReportPDF = (options: PDFOptions) => {
           fillColor: [15, 23, 42], 
           textColor: [255, 255, 255], 
           fontStyle: 'bold', 
-          fontSize: 5, 
+          fontSize: 5.5, 
           halign: 'center',
           font: 'helvetica'
         },
-        styles: { fontSize: 4.5, cellPadding: 1, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+        styles: { fontSize: 5, cellPadding: 1, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
         columnStyles: {
           0: { halign: 'center', cellWidth: 6 },
           1: { halign: 'center', cellWidth: 12 },
-          2: { fontStyle: 'bold', cellWidth: 20 },
-          3: { cellWidth: 20 },
-          4: { fontStyle: 'bold', cellWidth: 15 },
-          5: { halign: 'right', cellWidth: 14 },
-          6: { halign: 'center', cellWidth: 8 },
-          7: { halign: 'right', cellWidth: 14 },
-          8: { halign: 'right', cellWidth: 14 },
-          9: { halign: 'right', cellWidth: 14 },
-          10: { halign: 'center', cellWidth: 8 },
-          11: { halign: 'right', cellWidth: 14 },
-          12: { halign: 'right', fontStyle: 'bold', cellWidth: 14 },
-          13: { fontSize: 4, cellWidth: 15 }
+          2: { fontStyle: 'bold', cellWidth: 18 },
+          3: { halign: 'center', cellWidth: 12 },
+          ...(outletId === 'all' ? { 4: { cellWidth: 12 } } : {}),
+          [outletId === 'all' ? 5 : 4]: { cellWidth: 18 },
+          [outletId === 'all' ? 6 : 5]: { halign: 'center', cellWidth: 8 },
+          [outletId === 'all' ? 7 : 6]: { fontStyle: 'bold', cellWidth: 15 },
+          [outletId === 'all' ? 8 : 7]: { halign: 'right', cellWidth: 12 },
+          [outletId === 'all' ? 9 : 8]: { halign: 'center', cellWidth: 7 },
+          [outletId === 'all' ? 10 : 9]: { halign: 'right', cellWidth: 12 },
+          [outletId === 'all' ? 11 : 10]: { halign: 'right', cellWidth: 12 },
+          [outletId === 'all' ? 12 : 11]: { halign: 'right', cellWidth: 12 },
+          [outletId === 'all' ? 13 : 12]: { halign: 'center', cellWidth: 7 },
+          [outletId === 'all' ? 14 : 13]: { halign: 'right', cellWidth: 12 },
+          [outletId === 'all' ? 15 : 14]: { halign: 'right', fontStyle: 'bold', cellWidth: 12 },
+          [outletId === 'all' ? 16 : 15]: { fontSize: 4, cellWidth: 15 },
+          ...staffList.reduce((acc: any, _, idx: number) => {
+            acc[(outletId === 'all' ? 17 : 16) + idx] = { halign: 'right', cellWidth: 10 };
+            return acc;
+          }, {})
         },
         margin: { left: margin, right: margin }
       });
 
-      // Add Referrer Rewards summary table if exists
-      if (data.summary.referrerSummaries && data.summary.referrerSummaries.length > 0) {
-        const finalY = (doc as any).lastAutoTable?.finalY || currentY + 10;
-        
-        callAutoTable(doc, {
-          startY: finalY + 10,
-          head: [['SL.NO.', 'REFERRAL NAME', 'INCENTIVES']],
-          body: data.summary.referrerSummaries.map((s: any) => [
-            s.sl_no,
-            s.name.toUpperCase(),
-            formatCurrency(s.amount)
-          ]),
-          theme: 'grid',
-          headStyles: { 
-            fillColor: [79, 70, 229], // indigo-600
-            textColor: [255, 255, 255], 
-            fontStyle: 'bold', 
-            fontSize: 7, 
-            halign: 'center',
-            font: 'helvetica'
-          },
-          styles: { fontSize: 7, cellPadding: 2, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
-          columnStyles: {
-            0: { halign: 'center', cellWidth: 15 },
-            1: { fontStyle: 'bold', cellWidth: 100 },
-            2: { halign: 'right', cellWidth: 30 }
-          },
-          margin: { left: margin }
-        });
-      }
+      // Add Summary Table
+      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      
+      const summaryHead = [['STAFF NAME', 'INCENTIVES']];
+      const summaryBody = staffList.map((s: any) => {
+        const total = data.rows.reduce((sum: number, r: any) => sum + (r.staff_splits[s.id] || 0), 0);
+        return [s.name, formatCurrency(total)];
+      });
+      
+      summaryBody.push([
+        { content: 'TOTAL', styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 250, 252] } },
+        { content: formatCurrency(totalIncNet), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 250, 252] } }
+      ]);
+      summaryBody.push([
+        { content: 'DISCOUNTED AMOUNT', styles: { fontStyle: 'bold', halign: 'left', fillColor: [238, 242, 255] } },
+        { content: formatCurrency(totalDiscount), styles: { fontStyle: 'bold', halign: 'right', fillColor: [238, 242, 255] } }
+      ]);
+      summaryBody.push([
+        { content: 'NET REVENUE', styles: { fontStyle: 'bold', halign: 'left', fillColor: [219, 234, 254] } },
+        { content: formatCurrency(totalNetRev), styles: { fontStyle: 'bold', halign: 'right', fillColor: [219, 234, 254] } }
+      ]);
+
+      callAutoTable(doc, {
+        startY: finalY,
+        head: summaryHead,
+        body: summaryBody,
+        theme: 'grid',
+        headStyles: { 
+          fillColor: [254, 243, 199], 
+          textColor: [15, 23, 42], 
+          fontStyle: 'bold', 
+          fontSize: 6, 
+          halign: 'left',
+          font: 'helvetica'
+        },
+        styles: { fontSize: 6, cellPadding: 2, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { halign: 'right', cellWidth: 30 }
+        },
+        margin: { left: margin }
+      });
     }
   } else if (reportType === 'monthly_revenue') {
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -1775,6 +2213,25 @@ export const generateReportPDF = (options: PDFOptions) => {
     });
   }
 
+  // Render Signatories
+  const finalTableY = (doc as any).lastAutoTable?.finalY || currentY + 15;
+  if (signatoryConfig) {
+    const sigY = finalTableY + 15;
+    doc.setFontSize(7);
+    doc.setTextColor(15, 23, 42);
+    
+    const sigWidth = contentWidth / 3;
+    
+    doc.text("PREPARED BY", margin + (sigWidth * 0), sigY);
+    doc.text(signatoryConfig.prepared, margin + (sigWidth * 0), sigY + 5);
+    
+    doc.text("REVIEWED BY", margin + (sigWidth * 1), sigY);
+    doc.text(signatoryConfig.reviewed, margin + (sigWidth * 1), sigY + 5);
+    
+    doc.text("APPROVED BY", margin + (sigWidth * 2), sigY);
+    doc.text(signatoryConfig.approved, margin + (sigWidth * 2), sigY + 5);
+  }
+
   // --- FOOTER SECTION ---
   const footerY = pageHeight - margin;
   doc.setFont("helvetica", "normal");
@@ -1793,49 +2250,218 @@ export const generateReportPDF = (options: PDFOptions) => {
 
 // --- INCENTIVE HELPERS ---
 
-export function findBestRule(rules: any[], department: string, itemId: string, price: number, duration: number, secondaryId?: string) {
-  // 1. Exact item match (Primary ID - e.g. Category ID)
-  const exact = rules.find(r => r.applies_to === department && r.target_id === itemId);
-  if (exact) return exact;
+export function findBestRule(rules: any[], department: string, targetId: string, price: number, duration: number, scopeId?: string, secondaryId?: string) {
+  // 1. Filter candidates by active status and department (Case-insensitive)
+  const targetDept = String(department || '').toLowerCase().trim();
+  const candidates = rules.filter(r => {
+    const rDept = String(r.applies_to || r.department || '').toLowerCase().trim();
+    return r.is_active !== false && rDept === targetDept;
+  });
+  
+  if (candidates.length === 0) return null;
 
-  // 2. Exact item match (Secondary ID - e.g. Membership Type ID with 'type:' prefix)
-  if (secondaryId) {
-    const secondary = rules.find(r => r.applies_to === department && (r.target_id === secondaryId || r.target_id === `type:${secondaryId}`));
-    if (secondary) return secondary;
-  }
+  // 2. Find matches
+  const matches = candidates.filter(r => {
+    // Scope Match: If rule has an outlet scope, it must match the provided scopeId
+    if (r.scope === 'Outlet' && scopeId && String(r.scope_id) !== String(scopeId)) return false;
 
-  // 3. Department match with price/duration criteria (if applicable)
-  // For now, just return the first rule for that department if no exact match
-  const deptRule = rules.find(r => r.applies_to === department && (r.target_id === 'all' || !r.target_id));
-  return deptRule;
+    // Target Match
+    const rtRaw = String(r.target_id || '').toLowerCase().trim();
+    const t1Raw = String(targetId || '').toLowerCase().trim();
+    const t2Raw = secondaryId ? String(secondaryId).toLowerCase().trim() : '';
+
+    const cleanTargetId = rtRaw.replace(/^type:/, '');
+    const cleanMainId = t1Raw.replace(/^type:/, '');
+    const cleanSecId = t2Raw.replace(/^type:/, '');
+
+    const isAll = rtRaw === 'all' || !rtRaw;
+    const targetMatch = 
+      isAll || 
+      rtRaw === t1Raw || 
+      rtRaw === t2Raw ||
+      cleanTargetId === cleanMainId || 
+      (cleanSecId && cleanTargetId === cleanSecId);
+    
+    if (!targetMatch) return false;
+
+    // Price Match
+    const minPrice = Number(r.min_price || 0);
+    const maxPrice = Number(r.max_price || 999999);
+    if (price < minPrice || price > maxPrice) return false;
+
+    // Duration Match (mostly for massage)
+    if (targetDept === 'massage' && duration > 0) {
+      const minDur = Number(r.min_duration_minutes || 0);
+      const maxDur = Number(r.max_duration_minutes || 9999);
+      if (duration < minDur || duration > maxDur) return false;
+    }
+
+    return true;
+  });
+
+  if (matches.length === 0) return null;
+
+  // 3. Sort matches by specificity:
+  // - Specific Target ID > 'all'
+  // - Scope: Outlet (0) > Property (1) > Global (2)
+  return matches.sort((a, b) => {
+    const aRt = String(a.target_id || '').toLowerCase().trim();
+    const bRt = String(b.target_id || '').toLowerCase().trim();
+    const aIsAll = aRt === 'all' || !aRt;
+    const bIsAll = bRt === 'all' || !bRt;
+
+    // Target specificity
+    if (!aIsAll && bIsAll) return -1;
+    if (aIsAll && !bIsAll) return 1;
+    
+    // Scope specificity (Outlet is most specific, then Property, then Global)
+    const scopeOrder: Record<string, number> = { 'Outlet': 0, 'Property': 1, 'Global': 2 };
+    const aScope = scopeOrder[a.scope] ?? 9;
+    const bScope = scopeOrder[b.scope] ?? 9;
+    if (aScope !== bScope) return aScope - bScope;
+
+    return 0;
+  })[0];
 }
 
 export function getStaffOutlets(s: any): string[] {
-  if (Array.isArray(s.outlet_ids)) return s.outlet_ids;
-  if (typeof s.outlet_ids === 'string') {
+  const outlets = new Set<string>();
+  
+  // Checkboxes / Current
+  if (Array.isArray(s.outlet_ids)) {
+    s.outlet_ids.forEach((id: any) => id && outlets.add(id));
+  } else if (typeof s.outlet_ids === 'string') {
     try {
-      return JSON.parse(s.outlet_ids);
-    } catch (e) {
-      return [s.outlet_ids];
-    }
+      const parsed = JSON.parse(s.outlet_ids);
+      if (Array.isArray(parsed)) parsed.forEach((id: any) => id && outlets.add(id));
+    } catch (e) {}
   }
-  if (s.outlet_id) return [s.outlet_id];
-  return [];
+  
+  if (s.outlet_id) outlets.add(s.outlet_id);
+
+  // Historical assignments (ensure they appear in old reports too)
+  if (Array.isArray(s.outlet_assignments)) {
+    s.outlet_assignments.forEach((a: any) => {
+      if (a.outlet_id) outlets.add(a.outlet_id);
+    });
+  }
+
+  return Array.from(outlets);
+}
+
+export function isStaffAssignedToOutletOnDate(staff: any, outletId: string, dateStr: string): boolean {
+  if (!staff || !outletId || !dateStr) return false;
+  
+  const assignments = Array.isArray(staff.outlet_assignments) ? staff.outlet_assignments : [];
+  
+  // Historical check via assignments
+  if (assignments.length > 0) {
+    // Sort assignments by start_date ascending to find gaps/ranges
+    const sorted = [...assignments].sort((a: any, b: any) => a.start_date.localeCompare(b.start_date));
+    
+    // 1. Check if date falls into a specific recorded assignment for THIS outlet
+    const match = sorted.find((a: any) => {
+      const start = a.start_date;
+      const end = a.end_date;
+      // Note: We use dateStr.split('T')[0] to ensure we're comparing YYYY-MM-DD
+      const d = dateStr.split('T')[0];
+      return a.outlet_id === outletId && d >= start && (!end || d <= end);
+    });
+
+    if (match) {
+      return true;
+    }
+
+    // 2. Check if the date is before the first recorded assignment
+    // If user hasn't recorded the entire past, we fallback to current outlet_ids
+    // but we EXCLUDE the outlet that is specifically marked as starting in the future
+    const firstStart = sorted[0].start_date;
+    const d = dateStr.split('T')[0];
+    
+    if (d < firstStart) {
+      if (staff.joining_date && d < staff.joining_date) return false;
+      
+      const currentOutlets = getStaffOutlets(staff);
+      // If the outlet we are checking is the one that STARTS in the future, 
+      // we know they weren't there yet.
+      if (outletId === sorted[0].outlet_id) return false;
+      
+      return currentOutlets.includes(outletId);
+    }
+    
+    // 3. Fallback for dates after all assignments (if no open-ended ones exist)
+    // If every assignment has an end_date, they technically "left" the company or moved to a non-tracked state
+    return false;
+  }
+
+  // Fallback to current outlet_ids for legacy data (assuming they were always there if no history recorded)
+  const currentOutlets = getStaffOutlets(staff);
+  return currentOutlets.includes(outletId);
+}
+
+export function wasStaffAssignedToOutletInRange(staff: any, outletId: string, startStr: string, endStr: string): boolean {
+  if (!staff || !outletId || !startStr || !endStr) return false;
+  
+  const assignments = Array.isArray(staff.outlet_assignments) ? staff.outlet_assignments : [];
+  
+  if (assignments.length > 0) {
+    const sorted = [...assignments].sort((a: any, b: any) => a.start_date.localeCompare(b.start_date));
+    
+    // 1. Check if any assignment overlaps with the report range
+    const hasOverlap = sorted.some((a: any) => {
+      if (a.outlet_id !== outletId) return false;
+      const aStart = a.start_date;
+      const aEnd = a.end_date;
+      return aStart <= endStr && (!aEnd || aEnd >= startStr);
+    });
+    
+    if (hasOverlap) return true;
+
+    // 2. Logic for dates before the first recorded assignment
+    // Fallback to current outlets but exclude the one that starts in the future
+    if (endStr < sorted[0].start_date) {
+      if (staff.joining_date && endStr < staff.joining_date) return false;
+      if (outletId === sorted[0].outlet_id) return false;
+      return getStaffOutlets(staff).includes(outletId);
+    }
+    
+    return false;
+  }
+
+  // Fallback to legacy behavior if no history tracked
+  const currentOutlets = getStaffOutlets(staff);
+  return currentOutlets.includes(outletId);
 }
 
 export function isStaffOnLeaveOnDate(staff: any, dateStr: string) {
-  if (!staff.leaves || !Array.isArray(staff.leaves)) return false;
-  const date = new Date(dateStr);
+  if (!staff.leaves || !Array.isArray(staff.leaves) || !dateStr) return false;
+  
+  // Normalize comparison date to YYYY-MM-DD
+  const compareDate = dateStr.split('T')[0];
+  const date = new Date(compareDate);
+  
   return staff.leaves.some((l: any) => {
-    const start = new Date(l.start_date);
-    const end = new Date(l.end_date);
-    return date >= start && date <= end && l.status === 'approved';
+    if (!l.start_date || !l.end_date) return false;
+    
+    // Normalize leave dates to YYYY-MM-DD
+    const startStr = l.start_date.split('T')[0];
+    const endStr = l.end_date.split('T')[0];
+    
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    
+    return date >= start && date <= end && (!l.status || l.status === 'approved');
   });
 }
 
 export function isStaffOnProbationOnDate(staff: any, dateStr: string) {
-  if (!staff.probation_end_date) return false;
-  const date = new Date(dateStr);
-  const probationEnd = new Date(staff.probation_end_date);
+  if (!staff.probation_end_date || !dateStr) return false;
+  
+  const compareDate = dateStr.split('T')[0];
+  const date = new Date(compareDate);
+  
+  const probationEndStr = staff.probation_end_date.split('T')[0];
+  const probationEnd = new Date(probationEndStr);
+  
   return date < probationEnd;
 }

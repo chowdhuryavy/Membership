@@ -205,7 +205,7 @@ const SidebarContent = ({
       )}
     </nav>
 
-    <div className="mt-auto pt-4 border-t border-white/10 relative" ref={menuRef}>
+    <div className="mt-auto pt-4 border-t border-white/10 relative z-[60]" ref={menuRef}>
       <AnimatePresence>
         {showAccountMenu && (
           <motion.div 
