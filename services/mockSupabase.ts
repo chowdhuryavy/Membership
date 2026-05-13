@@ -3134,6 +3134,18 @@ class DatabaseService {
   async savePushSubscription(userId: string, subscription: any) {
     if (this.isSupabase()) {
       try {
+        // Only attempt to save to supabase if the user is an authenticated Supabase user
+        // Staff users authenticate via staff_session and don't have an auth.uid()
+        const sessionStr = localStorage.getItem('staff_session');
+        if (sessionStr) {
+           const staffSession = JSON.parse(sessionStr);
+           if (staffSession && staffSession.id === userId) {
+              console.log('Skipping Supabase push subscription for Staff user (to avoid RLS 403)');
+              this.saveLocalPushSubscription(userId, subscription);
+              return;
+           }
+        }
+
         const { error } = await supabase.from('push_subscriptions').upsert([{
           user_id: userId,
           subscription: subscription,

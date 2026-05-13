@@ -746,8 +746,16 @@ NOTIFY pgrst, 'reload schema';`}
       )
       .subscribe();
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [currentOutlet, currentProperty]);
 

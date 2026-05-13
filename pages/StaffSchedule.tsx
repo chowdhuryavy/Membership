@@ -385,11 +385,21 @@ const StaffSchedule = () => {
       const handleBookingUpdate = () => {
         loadSchedule();
       };
+      
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          console.log('App became visible, reloading schedule...');
+          loadSchedule();
+        }
+      };
+
       window.addEventListener('booking_updated', handleBookingUpdate);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
       
       return () => {
         supabase.removeChannel(channel);
         window.removeEventListener('booking_updated', handleBookingUpdate);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
     }
   }, [selectedOutletId, currentDate]);

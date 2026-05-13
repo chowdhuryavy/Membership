@@ -44,7 +44,7 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
             }
         };
         checkPermission();
-    }, [user]);
+    }, [user?.id]);
 
     const handleEnableNotifications = async () => {
         console.log('handleEnableNotifications clicked, user:', user);
@@ -59,17 +59,22 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
             if (granted) {
                 const subscription = await PushNotificationService.subscribeUser(user.id);
                 if (subscription) {
+                    console.log('Subscribe successful. Setting permission to granted.');
                     setPermission('granted');
                     toast.success('Push notifications enabled successfully!');
+                    console.log('Permission state updated and toast shown.');
                 } else {
+                    console.log('Subscribe failed.');
+                    setPermission('denied');
                     toast.error('Failed to subscribe. Are you in a new tab? (Iframes block push)');
                 }
             } else {
+                console.log('Request permission returned false.');
                 setPermission('denied');
                 toast.error('Notification permission denied or blocked by browser.');
             }
         } catch (error: any) {
-            console.error('Push error:', error);
+            console.error('Push error in handleEnableNotifications:', error);
             const errMsg = error?.message || String(error);
             toast.error('Error enabling: ' + errMsg.substring(0, 50));
         } finally {
