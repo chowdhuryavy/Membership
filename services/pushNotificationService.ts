@@ -1,4 +1,6 @@
 
+/// <reference types="vite/client" />
+
 import { db } from './mockSupabase';
 
 // VAPID Public Key from environment variables

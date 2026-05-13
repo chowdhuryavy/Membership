@@ -2230,7 +2230,7 @@ class DatabaseService {
         // Reduced limit to 5000 to improve performance and prevent statement timeouts
         const { data, error } = await query.order('date', { ascending: false }).limit(startDate ? 5000 : 1000);
         if (error) throw error;
-        return (data || []) as MassageBooking[];
+        return (data || []) as any as MassageBooking[];
       }, []);
     }
     return [];

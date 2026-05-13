@@ -13,6 +13,8 @@ import {
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { NotificationBell } from './components/NotificationBell';
+import { schedulerService } from './services/emailService';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Members from './pages/Members';
@@ -187,8 +189,6 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
         </div>
     );
 };
-
-import { NotificationBell } from './components/NotificationBell';
 
 const TopHeader = () => {
     const { user } = useAuth();
@@ -660,8 +660,6 @@ const DynamicHead = () => {
   return null;
 };
 
-import { schedulerService } from './services/emailService';
-
 const App = () => {
   // Scheduler effect
   useEffect(() => {
@@ -677,38 +675,34 @@ const App = () => {
   }, []);
 
   return (
-    <AuthProvider>
-      <SettingsProvider>
-        <NotificationProvider>
-          <DynamicHead />
-          <Toaster position="top-right" />
-          <UserActivityTracker />
-          <Router>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/staff-login" element={<StaffLogin />} />
-              <Route path="/staff-schedule" element={<StaffSchedule />} />
-              <Route element={<ProtectedLayout />}>
-                  <Route index element={<Dashboard />} />
-                  <Route path="members" element={<Members />} />
-                  <Route path="staff" element={<StaffPage />} />
-                  <Route path="bookings" element={<MassageScheduling />} />
-                  <Route path="sales" element={<Sales />} />
-                  <Route path="sales/stock-report" element={<RetailStockReport />} />
-                  <Route path="categories" element={<Categories />} />
-                  <Route path="users" element={<UsersPage />} />
-                  <Route path="reports" element={<Reports />} />
-                  <Route path="logs" element={<Logs />} />
-                  <Route path="settings" element={<SettingsPage />} />
-                  <Route path="profile" element={<Profile />} />
-                  <Route path="notifications" element={<NotificationsPage />} />
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Router>
-        </NotificationProvider>
-      </SettingsProvider>
-    </AuthProvider>
+    <>
+      <DynamicHead />
+      <Toaster position="top-right" />
+      <UserActivityTracker />
+      <Router>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/staff-login" element={<StaffLogin />} />
+          <Route path="/staff-schedule" element={<StaffSchedule />} />
+          <Route element={<ProtectedLayout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="members" element={<Members />} />
+              <Route path="staff" element={<StaffPage />} />
+              <Route path="bookings" element={<MassageScheduling />} />
+              <Route path="sales" element={<Sales />} />
+              <Route path="sales/stock-report" element={<RetailStockReport />} />
+              <Route path="categories" element={<Categories />} />
+              <Route path="users" element={<UsersPage />} />
+              <Route path="reports" element={<Reports />} />
+              <Route path="logs" element={<Logs />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="notifications" element={<NotificationsPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Router>
+    </>
   );
 };
 

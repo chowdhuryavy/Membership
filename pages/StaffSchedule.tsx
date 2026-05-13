@@ -400,7 +400,7 @@ const StaffSchedule = () => {
         )
         .subscribe((status) => {
           console.log(`Real-time subscription status for ${selectedOutletId}:`, status);
-          if (status === 'SUBSCRIPTION_ERROR') {
+          if ((status as any) === 'SUBSCRIPTION_ERROR' || status === 'CHANNEL_ERROR') {
             console.warn('Real-time subscription failed, falling back to polling.');
           }
         });
