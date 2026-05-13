@@ -11,9 +11,12 @@ import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { Staff } from '../types';
 
+import { useNotificationContext } from '../contexts/NotificationContext';
+
 const Profile = () => {
     const { user, changePassword, updateProfile } = useAuth();
     const { settings, formatMoney, roles } = useSettings();
+    const { isPushEnabled, enablePush, disablePush } = useNotificationContext();
     const [profileData, setProfileData] = useState({ name: '', email: '' });
     const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
     const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
@@ -249,6 +252,44 @@ const Profile = () => {
                                     Deploy New Security Key
                                 </Button>
                             </form>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg overflow-hidden">
+                        <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
+                            <CardTitle className="text-lg font-black tracking-tight flex items-center gap-3">
+                                <Sparkles className="w-5 h-5 text-indigo-600" /> Push Notifications
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-8">
+                            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                                <div className="space-y-1">
+                                    <h4 className="text-sm font-black text-slate-900 tracking-tight">
+                                        {isPushEnabled ? 'Notifications are Enabled' : 'Notifications are Disabled'}
+                                    </h4>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                        {isPushEnabled 
+                                          ? 'You will receive real-time updates even when the app is closed.' 
+                                          : 'Enable to stay updated on bookings and system alerts.'}
+                                    </p>
+                                </div>
+                                <Button 
+                                    onClick={isPushEnabled ? disablePush : enablePush}
+                                    variant={isPushEnabled ? 'secondary' : 'default'}
+                                    className={`h-12 px-8 rounded-xl font-black ${isPushEnabled ? 'bg-slate-100 hover:bg-slate-200' : 'shadow-lg shadow-indigo-100'}`}
+                                >
+                                    {isPushEnabled ? 'Disable Notifications' : 'Enable Notifications'}
+                                </Button>
+                            </div>
+                            
+                            {!isPushEnabled && (
+                                <div className="mt-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex gap-3">
+                                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                    <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest leading-relaxed">
+                                        Note: For Apple devices (iOS), you must "Add to Home Screen" first to enable push notifications.
+                                    </p>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 

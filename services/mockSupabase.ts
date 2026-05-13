@@ -2823,6 +2823,15 @@ class DatabaseService {
           this.saveLocalNotification(newNotification);
         } else {
           console.log('Notification successfully saved to Supabase');
+          
+          // Trigger Push Notification via Edge Function
+          if (newNotification.user_id) {
+            this.triggerPushNotification(
+                newNotification.user_id, 
+                newNotification.title, 
+                newNotification.message
+            ).catch(err => console.warn("Background push trigger failed:", err));
+          }
         }
       } catch (e) {
         console.error('Error adding notification to Supabase:', e);
@@ -2835,6 +2844,27 @@ class DatabaseService {
     // Always broadcast locally for immediate feedback in the same browser/tabs
     this.broadcastNotificationLocally(newNotification);
     return newNotification;
+  }
+
+  async triggerPushNotification(userId: string, title: string, body: string, url: string = '/notifications') {
+    if (!this.isSupabase()) return;
+    try {
+        console.log('Triggering push notification for user:', userId);
+        const { data, error } = await supabase.functions.invoke('send-push', {
+            body: { 
+                userId, 
+                title, 
+                body, 
+                url,
+                icon: '/icon.png',
+                tag: 'staff-alert'
+            }
+        });
+        if (error) throw error;
+        console.log('Push notification triggered:', data);
+    } catch (e) {
+        console.warn('Failed to trigger push notification:', e);
+    }
   }
 
   private broadcastNotificationLocally(notification: Notification) {
@@ -3148,24 +3178,26 @@ class DatabaseService {
   async savePushSubscription(userId: string, subscription: any) {
     if (this.isSupabase()) {
       try {
-        // Only attempt to save to supabase if the user is an authenticated Supabase user
-        // Staff users authenticate via staff_session and don't have an auth.uid()
-        const sessionStr = localStorage.getItem('staff_session');
-        if (sessionStr) {
-           const staffSession = JSON.parse(sessionStr);
-           if (staffSession && staffSession.id === userId) {
-              console.log('Push subscription saved locally for Staff user (to avoid Supabase RLS limitations)');
-              this.saveLocalPushSubscription(userId, subscription);
-              return;
-           }
-        }
-
+        // We attempt to save all subscriptions (staff included) to Supabase
+        // Note: The user MUST run the SQL to remove the foreign key constraint on push_subscriptions table
+        // to allow staff members who are not in auth.users to have subscriptions saved.
+        
         const { error } = await supabase.from('push_subscriptions').upsert([{
           user_id: userId,
           subscription: subscription,
           updated_at: new Date().toISOString()
         }], { onConflict: 'user_id' });
-        if (error) throw error;
+        
+        if (error) {
+           // If we still get an error, it might be the foreign key constraint
+           if (error.code === '23503') {
+             console.log('Push subscription FK error - saving locally. (Admin: Please remove FK constraint on push_subscriptions table)');
+           } else {
+             throw error;
+           }
+        } else {
+           console.log('Push subscription saved to Supabase for user:', userId);
+        }
       } catch (e) {
         console.warn('Failed to save push subscription to Supabase', e);
         this.saveLocalPushSubscription(userId, subscription);

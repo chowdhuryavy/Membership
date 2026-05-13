@@ -1,10 +1,8 @@
 
 import { db } from './mockSupabase';
 
-// VAPID Public Key (This should usually come from environment variables)
-// Generating a persistent one for this environment
-const VAPID_PUBLIC_KEY = 'BAPq7277sgghAs7xXLA7Tn6c6w9YpKw_hm9adqBZtJ63oJEWzewpcsGuWm2BCXpgLkiebhQB8I4wyN-UXsb5KdM'; 
-// NOTE: The above is a placeholder. In a real app, you should generate a real VAPID key pair.
+// VAPID Public Key from environment variables
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BGYWj-C5EDA6tRRja2z9R6PDP4cUA5wHK0Nx5DZcRXCbRS54k7_tEzDM7J6j914c32ePsS2axlB0Jl5YCE_OIuM'; 
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -27,81 +25,54 @@ export class PushNotificationService {
   }
 
   static async getPermission() {
-    if (localStorage.getItem('mock_push_permission') === 'granted') {
-        return 'granted';
-    }
     if (!await this.isSupported()) return 'not-supported';
     return Notification.permission;
   }
 
   static async requestPermission() {
-    if (localStorage.getItem('mock_push_permission') === 'granted') {
-        return true;
-    }
     if (!await this.isSupported()) {
-      console.warn("Native push not supported. Falling back to mock permission for iframe preview.");
-      localStorage.setItem('mock_push_permission', 'granted');
-      return true;
+      console.warn("Native push not supported.");
+      return false;
     }
     try {
-      const permissionResponse = await Promise.race([
-        Notification.requestPermission(),
-        new Promise<string>((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000))
-      ]);
+      const permissionResponse = await Notification.requestPermission();
       return permissionResponse === 'granted';
     } catch (e) {
-      console.warn("Native permission request failed or timed out. Falling back to mock permission for iframe preview.");
-      localStorage.setItem('mock_push_permission', 'granted');
-      return true; // Mock success
+      console.warn("Native permission request failed:", e);
+      return false;
     }
   }
 
   static async subscribeUser(userId: string) {
-    if (localStorage.getItem('mock_push_permission') === 'granted') {
-        console.log('Returning mock subscription...');
-        const mockSub = { endpoint: 'mock-endpoint-' + userId, toJSON: () => ({ endpoint: 'mock-endpoint-' + userId, keys: { p256dh: 'mock', auth: 'mock' } }) };
-        await this.syncSubscriptionWithBackend(userId, mockSub as any);
-        return mockSub;
+    if (!await this.isSupported()) {
+      console.warn("Push not supported on this browser");
+      return null;
     }
 
-    if (!await this.isSupported()) return null;
-
     try {
-      console.log('Waiting for SW ready...');
-      // Add a 5 second timeout to avoid hanging indefinitely if SW fails
-      const registration = await Promise.race([
-        navigator.serviceWorker.ready,
-        new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Service Worker timeout")), 5000))
-      ]);
+      console.log('Waiting for Service Worker to be ready...');
+      const registration = await navigator.serviceWorker.ready;
       
-      if (!registration) throw new Error("No SW registration");
+      if (!registration) throw new Error("No service worker registration found");
 
       // Check if already subscribed
-      const existingSubscription = await registration.pushManager.getSubscription();
-      if (existingSubscription) {
-        console.log('User already subscribed:', existingSubscription);
-        await this.syncSubscriptionWithBackend(userId, existingSubscription);
-        return existingSubscription;
+      let subscription = await registration.pushManager.getSubscription();
+      
+      if (!subscription) {
+        console.log('Subscribing user to push notification service...');
+        // Subscribe new user
+        const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey
+        });
       }
 
-      // Subscribe new user
-      const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: applicationServerKey
-      });
-
-      console.log('User subscribed:', subscription);
+      console.log('Push subscription obtained:', subscription);
       await this.syncSubscriptionWithBackend(userId, subscription);
       return subscription;
     } catch (error) {
-      console.warn('Failed to subscribe user natively:', error);
-      if (localStorage.getItem('mock_push_permission') === 'granted') {
-          console.log('Returning mock subscription...');
-          const mockSub = { endpoint: 'mock-endpoint-' + userId, toJSON: () => ({ endpoint: 'mock-endpoint-' + userId, keys: { p256dh: 'mock', auth: 'mock' } }) };
-          await this.syncSubscriptionWithBackend(userId, mockSub as any);
-          return mockSub;
-      }
+      console.error('Failed to subscribe user to push notifications:', error);
       return null;
     }
   }

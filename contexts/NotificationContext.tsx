@@ -4,6 +4,7 @@ import { Notification } from '../types';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { toast } from 'react-hot-toast';
+import { PushNotificationService } from '../services/pushNotificationService';
 
 // Unique, more complex notification sound
 const playNotificationSound = async () => {
@@ -55,6 +56,9 @@ interface NotificationContextType {
   removeNotification: (id: string) => Promise<void>;
   clearAll: () => Promise<void>;
   refresh: () => Promise<void>;
+  isPushEnabled: boolean;
+  enablePush: () => Promise<boolean>;
+  disablePush: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -66,8 +70,41 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPushEnabled, setIsPushEnabled] = useState(false);
   const lastActionTime = useRef<number | null>(null);
   const seenIds = useRef<Set<string>>(new Set());
+
+  // Check push permission on mount
+  useEffect(() => {
+    const checkPush = async () => {
+      const permission = await PushNotificationService.getPermission();
+      setIsPushEnabled(permission === 'granted');
+    };
+    checkPush();
+  }, []);
+
+  // Set up real-time subscription and push auto-registration
+  useEffect(() => {
+    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
+    const effectiveUserId = user?.id || staffUser?.id;
+
+    if (!effectiveUserId) return;
+
+    // Auto-attempt push registration if permission was already granted previously
+    const autoRegisterPush = async () => {
+        const permission = await PushNotificationService.getPermission();
+        if (permission === 'granted') {
+            try {
+                await PushNotificationService.subscribeUser(effectiveUserId);
+                setIsPushEnabled(true);
+            } catch (e) {
+                console.warn("Auto push registration failed:", e);
+            }
+        }
+    };
+    autoRegisterPush();
+  }, [user]);
 
   const fetchNotifications = useCallback(async (isAutoRefresh = false) => {
     // Try to get user from AuthContext or staff session from localStorage
@@ -110,6 +147,43 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setIsLoading(false);
     }
   }, [user, outletId]);
+
+  const enablePush = async () => {
+    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
+    const effectiveUserId = user?.id || staffUser?.id;
+    
+    if (!effectiveUserId) return false;
+
+    try {
+      const granted = await PushNotificationService.requestPermission();
+      if (granted) {
+        await PushNotificationService.subscribeUser(effectiveUserId);
+        setIsPushEnabled(true);
+        toast.success("Push notifications enabled!");
+        return true;
+      } else {
+        toast.error("Permission for notifications was denied.");
+        return false;
+      }
+    } catch (e) {
+      console.error("Failed to enable push:", e);
+      toast.error("An error occurred while enabling push notifications.");
+      return false;
+    }
+  };
+
+  const disablePush = async () => {
+    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
+    const effectiveUserId = user?.id || staffUser?.id;
+
+    if (effectiveUserId) {
+      await PushNotificationService.unsubscribeUser(effectiveUserId);
+    }
+    setIsPushEnabled(false);
+    toast.success("Push notifications disabled.");
+  };
 
   useEffect(() => {
     fetchNotifications();
@@ -285,8 +359,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     markAllAsRead,
     removeNotification,
     clearAll,
-    refresh: fetchNotifications
-  }), [notifications, isLoading, markAsRead, markAllAsRead, removeNotification, clearAll, fetchNotifications]);
+    refresh: fetchNotifications,
+    isPushEnabled,
+    enablePush,
+    disablePush
+  }), [notifications, isLoading, markAsRead, markAllAsRead, removeNotification, clearAll, fetchNotifications, isPushEnabled]);
 
   return (
     <NotificationContext.Provider value={value}>
