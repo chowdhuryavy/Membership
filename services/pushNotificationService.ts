@@ -2,7 +2,7 @@
 import { db } from './mockSupabase';
 
 // VAPID Public Key from environment variables
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BGYWj-C5EDA6tRRja2z9R6PDP4cUA5wHK0Nx5DZcRXCbRS54k7_tEzDM7J6j914c32ePsS2axlB0Jl5YCE_OIuM'; 
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BJ7C_aKVlBqq5c3bKluSbmQQ4DmFQw2SftLT-RzsTr8q31JvyEml9XuS4AZT5Nw68lrUgcW-5ikrjWpIFJR-5uc'; 
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);

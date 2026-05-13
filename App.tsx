@@ -238,7 +238,7 @@ const ProtectedLayout = () => {
 
   const isInitialLoad = useRef(true);
   const isSplashPage = useMemo(() => {
-    const splashPaths = ['/', '/members', '/sales', '/reports', '/staff', '/bookings', '/categories', '/users', '/logs'];
+    const splashPaths = ['/', '/reports', '/categories', '/users', '/logs'];
     return splashPaths.some(path => 
       path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
     );

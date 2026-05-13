@@ -779,6 +779,7 @@ NOTIFY pgrst, 'reload schema';`}
       });
 
     const handleVisibilityChange = () => {
+      // Only trigger silent refresh when coming back to the tab
       if (document.visibilityState === 'visible') {
         loadData(true);
       }
@@ -791,7 +792,16 @@ NOTIFY pgrst, 'reload schema';`}
     };
   }, [currentOutlet, currentProperty]);
 
+  const lastLoadTimeRef = useRef<number>(0);
   const loadData = async (isSilent = false) => {
+    // Throttle background refreshes to at most once every 30 seconds
+    const now = Date.now();
+    if (isSilent && now - lastLoadTimeRef.current < 30000) {
+      console.log('Skipping background refresh: last refresh was too recent');
+      return;
+    }
+    lastLoadTimeRef.current = now;
+
     if (!currentOutlet || !currentProperty) {
       setLoading(false);
       setPageLoading(false);
