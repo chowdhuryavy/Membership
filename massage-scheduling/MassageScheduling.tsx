@@ -717,16 +717,20 @@ NOTIFY pgrst, 'reload schema';`}
   useEffect(() => {
     if (!currentOutlet || !currentProperty) return;
 
+    const filter = currentOutlet ? `outlet_id=eq.${currentOutlet.id}` : undefined;
     const channel = supabase
-      .channel('realtime-bookings')
+      .channel(`massage-bookings-${currentOutlet?.id || 'global'}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'massage_bookings' },
-        () => loadData()
+        { event: '*', schema: 'public', table: 'massage_bookings', filter },
+        () => {
+          console.log('Real-time booking update received in MassageScheduling');
+          loadData();
+        }
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'therapists' },
+        { event: '*', schema: 'public', table: 'therapists', filter },
         () => loadData()
       )
       .on(
@@ -741,10 +745,20 @@ NOTIFY pgrst, 'reload schema';`}
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'inventory' },
+        { event: '*', schema: 'public', table: 'inventory', filter },
         () => loadData()
       )
-      .subscribe();
+      .on(
+        'broadcast',
+        { event: 'sync' },
+        () => {
+          console.log('Instant broadcast received, syncing data...');
+          loadData();
+        }
+      )
+      .subscribe((status) => {
+        console.log('MassageScheduling subscription status:', status);
+      });
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {

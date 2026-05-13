@@ -375,12 +375,35 @@ const StaffSchedule = () => {
       // Pre-fetch basic info for property when outlet changes
       loadPropertyDetails();
       
-      // Subscribe to real-time updates
-      const channel = supabase.channel('massage_bookings_channel')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'massage_bookings' }, () => {
-          loadSchedule();
-        })
-        .subscribe();
+      // Subscribe to real-time updates with specific outlet filter for better performance and reliability on mobile
+      const channel = supabase.channel(`staff-schedule-${selectedOutletId}`)
+        .on(
+          'postgres_changes', 
+          { 
+            event: '*', 
+            schema: 'public', 
+            table: 'massage_bookings',
+            filter: `outlet_id=eq.${selectedOutletId}` 
+          }, 
+          (payload) => {
+            console.log('Real-time booking update received via DB:', payload.eventType);
+            loadSchedule();
+          }
+        )
+        .on(
+          'broadcast',
+          { event: 'sync' },
+          (payload) => {
+            console.log('Real-time booking update received via Broadcast:', payload);
+            loadSchedule();
+          }
+        )
+        .subscribe((status) => {
+          console.log(`Real-time subscription status for ${selectedOutletId}:`, status);
+          if (status === 'SUBSCRIPTION_ERROR') {
+            console.warn('Real-time subscription failed, falling back to polling.');
+          }
+        });
       
       const handleBookingUpdate = () => {
         loadSchedule();

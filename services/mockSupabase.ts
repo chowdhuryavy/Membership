@@ -2299,6 +2299,20 @@ class DatabaseService {
     
     // Trigger local event for real-time updates
     window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: booking.outlet_id } }));
+    
+    // Also broadcast via Supabase for other clients (instant peer-to-peer)
+    if (this.isSupabase()) {
+      supabase.channel(`massage-bookings-${booking.outlet_id}`)
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            supabase.channel(`massage-bookings-${booking.outlet_id}`).send({
+              type: 'broadcast',
+              event: 'sync',
+              payload: { type: 'booking_created', outlet_id: booking.outlet_id }
+            });
+          }
+        });
+    }
   }
 
   async updateMassageBooking(id: string, updates: Partial<MassageBooking>) {
@@ -2328,7 +2342,16 @@ class DatabaseService {
     
     // Trigger local event
     if (updates.outlet_id || booking?.outlet_id) {
-      window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: updates.outlet_id || booking?.outlet_id } }));
+      const oid = updates.outlet_id || booking?.outlet_id;
+      window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: oid } }));
+      
+      if (this.isSupabase()) {
+        supabase.channel(`massage-bookings-${oid}`).send({
+          type: 'broadcast',
+          event: 'sync',
+          payload: { type: 'booking_updated', outlet_id: oid }
+        });
+      }
     } else {
       window.dispatchEvent(new CustomEvent('booking_updated', { detail: {} }));
     }
@@ -2805,7 +2828,12 @@ class DatabaseService {
         // We include all fields as the user has confirmed the columns exist in Supabase
         const { error } = await supabase.from('notifications').insert([newNotification]);
         if (error) {
-          console.warn("Failed to insert notification to Supabase, saving locally", error);
+          // If it's a foreign key error for users, it's expected for staff who aren't in the users table
+          if (error.code === '23503' && error.details?.includes('users')) {
+            console.log('Note: Notification saved locally for staff member (not in users table)');
+          } else {
+            console.warn("Failed to insert notification to Supabase, saving locally", error);
+          }
           this.saveLocalNotification(newNotification);
         } else {
           console.log('Notification successfully saved to Supabase');
@@ -3140,7 +3168,7 @@ class DatabaseService {
         if (sessionStr) {
            const staffSession = JSON.parse(sessionStr);
            if (staffSession && staffSession.id === userId) {
-              console.log('Skipping Supabase push subscription for Staff user (to avoid RLS 403)');
+              console.log('Push subscription saved locally for Staff user (to avoid Supabase RLS limitations)');
               this.saveLocalPushSubscription(userId, subscription);
               return;
            }

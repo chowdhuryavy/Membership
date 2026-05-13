@@ -289,6 +289,10 @@ const BookingForm: React.FC<BookingFormProps> = ({
       }
 
       const isPT = bookingData.category === 'Personal Training';
+      // Find the selected service to check its category more reliably
+      const selectedService = massageTypes.find(m => m.id === bookingData.massage_type_id);
+      const isActuallyPT = isPT || (selectedService && selectedService.category === 'Personal Training');
+
       const payload: any = {
         guest_id: guest.id,
         therapist_id: bookingData.therapist_id,
@@ -296,8 +300,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
         date: bookingData.date,
         start_time: bookingData.start_time,
         end_time: bookingData.end_time,
-        massage_type_id: !isPT ? (bookingData.massage_type_id || null) : null,
-        inventory_item_id: isPT ? (bookingData.massage_type_id || null) : null,
+        massage_type_id: !isActuallyPT ? (bookingData.massage_type_id || null) : null,
+        inventory_item_id: isActuallyPT ? (bookingData.massage_type_id || null) : null,
         additional_service_ids: bookingData.additional_service_ids.filter(Boolean),
         price: netPrice,
         discount: calculatedDiscountValue,
