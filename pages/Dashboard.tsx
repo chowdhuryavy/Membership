@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../services/supabase';
+import toast from 'react-hot-toast';
 import { Card, CardContent, CardHeader, Button } from '../components/ui';
 import { 
   Users, 
@@ -271,12 +272,23 @@ const Dashboard = () => {
           db.getMembershipTypes(scopeId, isProperty, limitToIds)
         ]);
         
-        const errors = results.filter(r => r.status === 'rejected');
+        const errors = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
         if (errors.length > 0) {
-            console.error("Dashboard Intelligence Partial Failure:", errors);
-            // If critical data failed, throw to main catch
+            const failingIndices = results.map((r, i) => r.status === 'rejected' ? i : null).filter(i => i !== null);
+            const sourceNames = ['Members', 'Freezes', 'Bookings', 'Sales', 'Staff', 'Leaves', 'Inventory', 'Rooms', 'Types'];
+            const failingSources = failingIndices.map(i => sourceNames[i as number]).join(', ');
+            
+            console.error("Dashboard Intelligence Partial Failure. Sources failing:", failingSources);
+            errors.forEach((err, idx) => {
+                console.error(`Error with ${sourceNames[failingIndices[idx] as number]}:`, err.reason);
+            });
+            
+            toast.error(`Dashboard Partial Failure: ${failingSources}`, { id: 'dash-partial-fail' });
+
+            // If critical data failed (Members or Sales), throw to main catch
             if (results[0].status === 'rejected' || results[3].status === 'rejected') {
-                throw (errors[0] as PromiseRejectedResult).reason;
+                const failReason = (results[0].status === 'rejected' ? (results[0] as PromiseRejectedResult).reason : (results[3] as PromiseRejectedResult).reason);
+                throw failReason;
             }
         }
 
@@ -646,8 +658,9 @@ const Dashboard = () => {
         setStaff(staff);
         setSales(sales);
         setBookings(bookings);
-    } catch (e) {
+    } catch (e: any) {
         console.error("Dashboard Intelligence Error:", e);
+        toast.error(`Dashboard Error: ${e?.message || 'Critical sync failure'}`);
     } finally {
         setLoading(false);
         setTimeout(() => {

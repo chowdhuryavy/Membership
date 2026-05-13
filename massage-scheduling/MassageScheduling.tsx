@@ -567,6 +567,15 @@ ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS property_
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS outlet_id TEXT;
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS inventory_item_id TEXT;
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS room_id TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS guest_name TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS guest_phone TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS session_notes TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS total_price NUMERIC;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS staff_id TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS member_id TEXT;
+ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS discount_reason TEXT;
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS discount_id_url TEXT;
 ALTER TABLE IF EXISTS public.massage_bookings ADD COLUMN IF NOT EXISTS check_no TEXT;
@@ -624,23 +633,32 @@ CREATE TABLE IF NOT EXISTS public.massage_bookings (
     property_id TEXT,
     outlet_id TEXT,
     guest_id TEXT,
+    guest_name TEXT,
+    guest_phone TEXT,
     therapist_id TEXT,
     room_id TEXT,
     massage_type_id TEXT,
     inventory_item_id TEXT,
+    member_id TEXT,
+    staff_id TEXT,
     date TEXT NOT NULL,
     start_time TEXT NOT NULL,
     end_time TEXT NOT NULL,
     price NUMERIC NOT NULL,
+    total_price NUMERIC,
+    is_paid BOOLEAN DEFAULT false,
     discount NUMERIC DEFAULT 0,
     discount_reason TEXT,
     discount_id_url TEXT,
+    notes TEXT,
+    session_notes TEXT,
     status TEXT DEFAULT 'confirmed',
     additional_service_ids JSONB DEFAULT '[]'::jsonb,
     payment_method TEXT,
     check_no TEXT,
     category TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 3. RESET SECURITY POLICIES

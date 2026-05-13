@@ -39,6 +39,7 @@ class DatabaseService {
         DatabaseService.supabaseFailed = true;
         return fallback;
       }
+      console.error("Critical Database Error:", e?.message || e);
       throw e;
     }
   }
