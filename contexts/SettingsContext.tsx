@@ -60,14 +60,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const permissionRegistry = useMemo(() => db.getPermissionRegistry(), []);
 
   const refreshSettings = async (broadcast = true) => {
+    console.log('[SettingsSync] Starting refresh...');
     try {
-        const [s, c, r, o, p] = await Promise.all([
-            db.getSettings(), 
-            db.getCurrencies(), 
-            db.getRoles(),
-            db.getOutlets(),
-            db.getProperties()
-        ]);
+        const calls = [
+            { name: 'settings', call: db.getSettings() },
+            { name: 'currencies', call: db.getCurrencies() },
+            { name: 'roles', call: db.getRoles() },
+            { name: 'outlets', call: db.getOutlets() },
+            { name: 'properties', call: db.getProperties() }
+        ];
+        
+        console.log('[SettingsSync] Calling database...');
+        const results = await Promise.all(calls.map(c => c.call));
+        console.log('[SettingsSync] Database calls returned');
+        
+        const [s, c, r, o, p] = results;
         
         setSettings({ ...s });
         localStorage.setItem('company_settings_cache', JSON.stringify(s));
@@ -88,6 +95,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         console.error("Critical Settings Load Failure:", e);
     } finally {
         setIsLoading(false);
+        console.log('[SettingsSync] Refresh finished');
     }
   };
 

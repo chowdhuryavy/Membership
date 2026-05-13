@@ -258,22 +258,36 @@ const ProtectedLayout = () => {
     );
   }, [location.pathname, splashPaths]);
 
-  const isAppInitializing = isAuthLoading || isSettingsLoading || (user && outlets.length > 0 && !currentOutlet);
+  const isAppInitializing = isAuthLoading || isSettingsLoading;
   
   // Track route changes to reset initial load state for splash pages
   const lastPathname = useRef(location.pathname);
   useEffect(() => {
+    console.log('App loading state:', { 
+        isAuthLoading, 
+        isSettingsLoading, 
+        user: !!user, 
+        outlets: outlets.length, 
+        currentOutlet: !!currentOutlet, 
+        isSplashPage, 
+        isInitialLoad: isInitialLoad.current, 
+        pageLoading 
+    });
+
     if (location.pathname !== lastPathname.current) {
       if (isSplashPage) {
         isInitialLoad.current = true;
       }
       lastPathname.current = location.pathname;
     }
-  }, [location.pathname, isSplashPage]);
+  }, [location.pathname, isSplashPage, isAuthLoading, isSettingsLoading, user, outlets, currentOutlet, pageLoading]);
 
   // IMMEDIATELY show loading if we are on a splash page and haven't finished its first render
   // or if the component signal it's loading via pageLoading
   const combinedLoading = isAppInitializing || (isSplashPage && (isInitialLoad.current || pageLoading));
+  
+  // Debugging log
+  console.log('Combined loading:', combinedLoading, 'Current outlet check:', !!(!currentOutlet && user && outlets.length > 0));
 
   useEffect(() => {
     if (!combinedLoading) {
