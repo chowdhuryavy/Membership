@@ -10,7 +10,21 @@ interface PushNotificationManagerProps {
 }
 
 const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ variant = 'card' }) => {
-    const { user } = useAuth();
+    const { user: authUser } = useAuth();
+    
+    // Fallback for staff portal users who authenticate via staff_session, not Firebase auth
+    let user = authUser;
+    if (!user) {
+        try {
+            const staffSessionStr = localStorage.getItem('staff_session');
+            if (staffSessionStr) {
+                user = JSON.parse(staffSessionStr);
+            }
+        } catch (e) {
+            console.error('Error parsing staff session:', e);
+        }
+    }
+
     const [permission, setPermission] = useState<NotificationPermission | 'not-supported'>('default');
     const [isSubscribing, setIsSubscribing] = useState(false);
 
@@ -33,9 +47,14 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
     }, [user]);
 
     const handleEnableNotifications = async () => {
-        if (!user) return;
+        console.log('handleEnableNotifications clicked, user:', user);
+        if (!user) {
+            console.error('No user found');
+            return;
+        }
         setIsSubscribing(true);
         try {
+            console.log('Requesting permission...');
             const granted = await PushNotificationService.requestPermission();
             if (granted) {
                 const subscription = await PushNotificationService.subscribeUser(user.id);
