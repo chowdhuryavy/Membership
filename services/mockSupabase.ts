@@ -704,17 +704,16 @@ class DatabaseService {
                 if (m.status === MemberStatus.FROZEN) return true;
                 const end = parseISO(m.current_end_date || m.original_end_date);
                 return m.status === MemberStatus.ACTIVE && today > end;
-            }).slice(0, 10); // Only auto-sync 10 at a time to prevent timeout storms
+            }).slice(0, 5); // Only auto-sync 5 at a time
             
             if (needsSync.length > 0) {
               console.log(`[Sync] Background syncing ${needsSync.length} member statuses...`);
-              // Use Promise.all with small limit or just fire and forget individually
               needsSync.forEach(m => this.syncMemberEndDate(m.id).catch(e => {}));
             }
           } catch (e) {
             console.error("Background status sync failed:", e);
           }
-        }, 3000);
+        }, 15000); // 15 seconds instead of 3 to avoid hammering the DB on every dashboard load
 
         return membersList;
       }, []);

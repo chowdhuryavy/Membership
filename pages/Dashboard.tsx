@@ -199,32 +199,32 @@ const Dashboard = () => {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'members' },
-        () => loadStats()
+        () => loadStats(true)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'massage_bookings' },
-        () => loadStats()
+        () => loadStats(true)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'sales' },
-        () => loadStats()
+        () => loadStats(true)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'staff' },
-        () => loadStats()
+        () => loadStats(true)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'staff_leaves' },
-        () => loadStats()
+        () => loadStats(true)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'freezes' },
-        () => loadStats()
+        () => loadStats(true)
       )
       .subscribe();
 
@@ -233,10 +233,12 @@ const Dashboard = () => {
     };
   }, [currentOutlet, currentProperty]);
 
-  const loadStats = async () => {
+  const loadStats = async (isBackground = false) => {
     if (!currentOutlet || !currentProperty) return;
     setLoading(true);
-    setPageLoading(true);
+    if (!isBackground) {
+      setPageLoading(true);
+    }
     
     try {
         const now = new Date();
@@ -664,9 +666,11 @@ const Dashboard = () => {
         toast.error(`Dashboard Intelligence Error: ${errorMsg}`, { id: 'dashboard-error' });
     } finally {
         setLoading(false);
-        setTimeout(() => {
-            setPageLoading(false);
-        }, 100);
+        if (!isBackground) {
+            setTimeout(() => {
+                setPageLoading(false);
+            }, 100);
+        }
     }
   };
 

@@ -263,7 +263,7 @@ const ProtectedLayout = () => {
   // Track route changes to reset initial load state for splash pages
   const lastPathname = useRef(location.pathname);
   useEffect(() => {
-    console.log('App loading state:', { 
+    console.log('App loading state detail:', { 
         isAuthLoading, 
         isSettingsLoading, 
         user: !!user, 
@@ -271,7 +271,8 @@ const ProtectedLayout = () => {
         currentOutlet: !!currentOutlet, 
         isSplashPage, 
         isInitialLoad: isInitialLoad.current, 
-        pageLoading 
+        pageLoading,
+        isAppInitializing
     });
 
     if (location.pathname !== lastPathname.current) {
@@ -284,10 +285,15 @@ const ProtectedLayout = () => {
 
   // IMMEDIATELY show loading if we are on a splash page and haven't finished its first render
   // or if the component signal it's loading via pageLoading
-  const combinedLoading = isAppInitializing || (isSplashPage && (isInitialLoad.current || pageLoading));
+  const combinedLoading = isAppInitializing || (isSplashPage && pageLoading);
   
-  // Debugging log
-  console.log('Combined loading:', combinedLoading, 'Current outlet check:', !!(!currentOutlet && user && outlets.length > 0));
+  // Track if we've successfully finished initial boot at least once
+  const initialBootFinished = useRef(false);
+  useEffect(() => {
+    if (!combinedLoading && !isAppInitializing) {
+      initialBootFinished.current = true;
+    }
+  }, [combinedLoading, isAppInitializing]);
 
   useEffect(() => {
     if (!combinedLoading) {
@@ -299,11 +305,12 @@ const ProtectedLayout = () => {
       return () => clearTimeout(timer);
     } else {
       // Re-trigger splash if we are initializing or on a splash-enabled page
-      if (isInitialLoad.current || isSplashPage) {
+      // but ONLY if we haven't finished the initial boot, to avoid getting stuck during reactive updates
+      if (isAppInitializing || (isInitialLoad.current && isSplashPage)) {
         setShowSplash(true);
       }
     }
-  }, [combinedLoading, isSplashPage]);
+  }, [combinedLoading, isSplashPage, isAppInitializing]);
   
   useEffect(() => {
     if (user && !combinedLoading) {

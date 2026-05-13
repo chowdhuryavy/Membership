@@ -59,22 +59,20 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const permissionRegistry = useMemo(() => db.getPermissionRegistry(), []);
 
+  const bcRef = useRef<BroadcastChannel | null>(null);
+
   const refreshSettings = async (broadcast = true) => {
-    console.log('[SettingsSync] Starting refresh...');
+    console.log('[SettingsSync] Starting refresh...', { broadcast });
     try {
-        const calls = [
-            { name: 'settings', call: db.getSettings() },
-            { name: 'currencies', call: db.getCurrencies() },
-            { name: 'roles', call: db.getRoles() },
-            { name: 'outlets', call: db.getOutlets() },
-            { name: 'properties', call: db.getProperties() }
-        ];
-        
         console.log('[SettingsSync] Calling database...');
-        const results = await Promise.all(calls.map(c => c.call));
+        const [s, c, r, o, p] = await Promise.all([
+          db.getSettings(),
+          db.getCurrencies(),
+          db.getRoles(),
+          db.getOutlets(),
+          db.getProperties()
+        ]);
         console.log('[SettingsSync] Database calls returned');
-        
-        const [s, c, r, o, p] = results;
         
         setSettings({ ...s });
         localStorage.setItem('company_settings_cache', JSON.stringify(s));
@@ -86,10 +84,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (user) await refreshUser();
 
         // Broadcast to other tabs for immediate real-time sync
-        if (broadcast && typeof BroadcastChannel !== 'undefined') {
-            const bc = new BroadcastChannel('settings_sync');
-            bc.postMessage('REFRESH_SETTINGS');
-            bc.close();
+        if (broadcast && bcRef.current) {
+            console.log('[SettingsSync] Broadcasting REFRESH_SETTINGS');
+            bcRef.current.postMessage('REFRESH_SETTINGS');
         }
     } catch (e) {
         console.error("Critical Settings Load Failure:", e);
@@ -103,13 +100,17 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     if (typeof BroadcastChannel !== 'undefined') {
         const bc = new BroadcastChannel('settings_sync');
+        bcRef.current = bc;
         bc.onmessage = (event) => {
             if (event.data === 'REFRESH_SETTINGS') {
-                console.log('[SettingsSync] Synchronizing settings cross-tab...');
+                console.log('[SettingsSync] Broadcast received, synchronizing settings cross-tab...');
                 refreshSettings(false); // Don't broadcast back to avoid infinite loops
             }
         };
-        return () => bc.close();
+        return () => {
+            bc.close();
+            bcRef.current = null;
+        };
     }
   }, []);
 
