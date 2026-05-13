@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import webpush from "npm:web-push";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,7 +49,6 @@ serve(async (req) => {
       });
     }
 
-    import webpush from "npm:web-push";
     webpush.setVapidDetails(subject, publicKey, privateKey);
     
     console.log(`Sending push to ${subscriptions.length} devices for user ${userId}`);
