@@ -3088,37 +3088,54 @@ class DatabaseService {
 
     // Only subscribe to Supabase if enabled
     if (this.isSupabase()) {
-      const channel = supabase
+      const handlePayload = (payload: any) => {
+        const newNotification = payload.new as Notification;
+        const oldNotification = payload.old as Notification;
+        
+        const targetNotification = newNotification || oldNotification;
+        if (targetNotification) {
+          const userMatch = !targetNotification.user_id || targetNotification.user_id === userId;
+          const outletMatch = !outletId || !targetNotification.outlet_id || targetNotification.outlet_id === outletId;
+          
+          if (userMatch && outletMatch) {
+            callback({
+              eventType: payload.eventType,
+              new: payload.new,
+              old: payload.old
+            });
+          }
+        }
+      };
+
+      let channel = supabase
         .channel('notifications-realtime')
         .on(
           'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'notifications'
-          },
-          (payload) => {
-            const newNotification = payload.new as Notification;
-            const oldNotification = payload.old as Notification;
-            
-            const targetNotification = newNotification || oldNotification;
-            if (targetNotification) {
-              const userMatch = !targetNotification.user_id || targetNotification.user_id === userId;
-              const outletMatch = !outletId || !targetNotification.outlet_id || targetNotification.outlet_id === outletId;
-              
-              if (userMatch && outletMatch) {
-                callback({
-                  eventType: payload.eventType,
-                  new: payload.new,
-                  old: payload.old
-                });
-              }
-            }
-          }
+          { event: '*', schema: 'public', table: 'notifications' },
+          handlePayload
         )
         .subscribe();
       
+      // Reconnection logic on mobile visibility change
+      const handleVisibilityChange = () => {
+          if (document.visibilityState === 'visible') {
+              console.log('Visibility changed to visible, re-subscribing Supabase channel...');
+              supabase.removeChannel(channel);
+              channel = supabase
+                  .channel('notifications-realtime')
+                  .on(
+                      'postgres_changes',
+                      { event: '*', schema: 'public', table: 'notifications' },
+                      handlePayload
+                  )
+                  .subscribe();
+          }
+      };
+      
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
       return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
         supabase.removeChannel(channel);
         if (bc) bc.close();
       };

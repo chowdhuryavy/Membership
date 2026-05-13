@@ -237,15 +237,43 @@ const ProtectedLayout = () => {
   const navigate = useNavigate();
 
   const isInitialLoad = useRef(true);
+  const splashPaths = useMemo(() => [
+    '/', 
+    '/members', 
+    '/sales', 
+    '/reports', 
+    '/staff', 
+    '/bookings', 
+    '/categories', 
+    '/users', 
+    '/logs', 
+    '/settings', 
+    '/profile', 
+    '/notifications'
+  ], []);
+
   const isSplashPage = useMemo(() => {
-    const splashPaths = ['/', '/members', '/sales', '/reports', '/staff', '/bookings', '/categories', '/users', '/logs', '/settings', '/profile', '/notifications'];
     return splashPaths.some(path => 
       path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
     );
-  }, [location.pathname]);
+  }, [location.pathname, splashPaths]);
 
   const isAppInitializing = isAuthLoading || isSettingsLoading || (user && outlets.length > 0 && !currentOutlet);
-  const combinedLoading = isAppInitializing || (isSplashPage && pageLoading);
+  
+  // Track route changes to reset initial load state for splash pages
+  const lastPathname = useRef(location.pathname);
+  useEffect(() => {
+    if (location.pathname !== lastPathname.current) {
+      if (isSplashPage) {
+        isInitialLoad.current = true;
+      }
+      lastPathname.current = location.pathname;
+    }
+  }, [location.pathname, isSplashPage]);
+
+  // IMMEDIATELY show loading if we are on a splash page and haven't finished its first render
+  // or if the component signal it's loading via pageLoading
+  const combinedLoading = isAppInitializing || (isSplashPage && (isInitialLoad.current || pageLoading));
 
   useEffect(() => {
     if (!combinedLoading) {
@@ -256,7 +284,7 @@ const ProtectedLayout = () => {
       }, 500); 
       return () => clearTimeout(timer);
     } else {
-      // Re-trigger splash if we are initializing or on the members/sales page
+      // Re-trigger splash if we are initializing or on a splash-enabled page
       if (isInitialLoad.current || isSplashPage) {
         setShowSplash(true);
       }
