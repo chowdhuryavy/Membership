@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 
 import StaffProfileView from './StaffProfileView';
+import { motion, AnimatePresence } from 'motion/react';
 
 const StaffPage = () => {
   const { user } = useAuth();
@@ -217,8 +218,13 @@ const StaffPage = () => {
     setErrorMessage(null);
     try {
       if (!formData.is_active && !formData.inactive_date) {
-        toast.error("Termination date is required for inactive staff.");
         setErrorMessage("Please specify the termination date for inactive staff.");
+        // Find the input element and scroll to it
+        const dateInput = document.querySelector('input[type="date"][required]') as HTMLInputElement;
+        if (dateInput) {
+          dateInput.focus();
+          dateInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
         setIsSubmitting(false);
         return;
       }
@@ -484,17 +490,20 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                         </div>
                         
                         {(!formData.inactive_date && formData.is_active) ? (
-                          <button 
+                          <motion.button 
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
                             type="button"
                             onClick={() => setFormData({ ...formData, inactive_date: format(new Date(), 'yyyy-MM-dd') })}
                             className="w-full h-14 rounded-2xl border-2 border-dashed border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:border-indigo-200 hover:text-indigo-600 hover:bg-white transition-all flex items-center justify-center gap-2 group bg-white/50"
                           >
                             <CalendarX className="w-4 h-4 group-hover:scale-110 transition-transform" /> Schedule Exit
-                          </button>
+                          </motion.button>
                         ) : (
                           <div className="relative group animate-in slide-in-from-top-2 duration-300">
                             <Input 
                               label="" 
+                              name="inactive_date"
                               type="date" 
                               value={formData.inactive_date} 
                               onChange={e => {
@@ -574,6 +583,11 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
                             is_active: false, 
                             inactive_date: formData.inactive_date || today 
                           });
+                          // Force focus to date input after state update
+                          setTimeout(() => {
+                            const dateInput = document.querySelector('input[name="inactive_date"]') as HTMLInputElement;
+                            if (dateInput) dateInput.focus();
+                          }, 100);
                         }} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2 ${!formData.is_active ? 'bg-white text-red-600 shadow-xl shadow-red-500/10 border border-red-50' : 'text-slate-400 hover:text-slate-500'}`}>
                           <UserX className={`w-4 h-4 ${!formData.is_active ? 'opacity-100' : 'opacity-40'}`} />
                           Inactive

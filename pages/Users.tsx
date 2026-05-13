@@ -64,34 +64,28 @@ const UserDetail = ({
       setIncentiveLoading(true);
       try {
         const propertyId = linkedStaff.property_id;
-        const depts: ('Massage' | 'Membership' | 'Personal Training' | 'Referral' | 'Sale')[] = ['Massage', 'Membership', 'Personal Training', 'Referral', 'Sale'];
-        let allRows: any[] = [];
-        let totalInc = 0;
+        
+        // Optimize to single fetch call
+        const result = await getReportData({
+          supabase,
+          propertyId,
+          outletId: 'all',
+          reportType: 'incentives',
+          date: incentiveDate,
+          incentiveDept: 'All'
+        });
 
-        for (const dept of depts) {
-          const result = await getReportData({
-            supabase,
-            propertyId,
-            outletId: 'all',
-            reportType: 'incentives',
-            date: incentiveDate,
-            incentiveDept: dept
-          });
-
-          const staffRows = result.rows.filter(r => r.staff_splits && r.staff_splits[linkedStaff.id]);
-          const rowsWithDept = staffRows.map(r => ({
-            ...r,
-            department: dept,
-            my_incentive: r.staff_splits[linkedStaff.id]
-          }));
-
-          allRows = [...allRows, ...rowsWithDept];
-          totalInc += rowsWithDept.reduce((sum, r) => sum + r.my_incentive, 0);
-        }
+        const rows = result.rows || [];
+        const staffRows = rows.filter(r => r.staff_splits && r.staff_splits[linkedStaff.id]);
+        
+        const allRows = staffRows.map(r => ({
+          ...r,
+          my_incentive: r.staff_splits[linkedStaff.id]
+        }));
 
         allRows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setIncentiveData(allRows);
-        setIncentiveSummary({ total: totalInc, count: allRows.length });
+        setIncentiveSummary({ total: allRows.reduce((sum, r) => sum + r.my_incentive, 0), count: allRows.length });
       } catch (error) {
         console.error("Failed to load incentives:", error);
       } finally {

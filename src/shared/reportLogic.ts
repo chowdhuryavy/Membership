@@ -597,7 +597,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const rows: any[] = [];
     let sl = 1;
 
-    const allDepts = ['Massage', 'Personal Training', 'Membership', 'Retail', 'Referral'];
+    const allDepts = ['Massage', 'Personal Training', 'Membership', 'Sale', 'Referral'];
     const activeDepts = (dept === 'All') ? allDepts : [dept];
 
     activeDepts.forEach(currentDept => {
@@ -691,7 +691,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           remarks: remarks,
           check_no: (b as any).check_no || '',
           duration: type.duration_minutes ? `${type.duration_minutes}m` : '',
-          staff_splits: staffSplits
+          staff_splits: staffSplits,
+          department: currentDept
         });
       });
 
@@ -785,7 +786,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             check_no: s.check_no || '',
             duration: 'Sale',
             staff_splits: staffSplits,
-            referrer_name: cleanRefForPT
+            referrer_name: cleanRefForPT,
+            department: currentDept
           });
         });
       }
@@ -916,7 +918,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
             duration: cat?.name || '',
             staff_splits: staffSplits,
             referrer_name: cleanRefForMem,
-            referral_amount: (m as any)._referral_inc_net || 0
+            referral_amount: (m as any)._referral_inc_net || 0,
+            department: currentDept
           });
       });
     } else if (currentDept === 'Sale') {
@@ -1008,7 +1011,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           check_no: s.check_no || '',
           duration: 'Sale',
           staff_splits: staffSplits,
-          referrer_name: cleanRefForSale
+          referrer_name: cleanRefForSale,
+          department: currentDept
         });
       });
     } else if (currentDept === 'Referral') {
@@ -1112,7 +1116,8 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           duration: 'Referral',
           staff_splits: staffSplits,
           referrer_name: cleanRefForReport,
-          referrer_amount: referrerNet
+          referrer_amount: referrerNet,
+          department: currentDept
         });
       });
 

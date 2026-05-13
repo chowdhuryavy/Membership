@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, Button } from './ui';
-import { X, Snowflake, Calendar, AlertCircle, CheckCircle2, Users, Search } from 'lucide-react';
+import { X, Snowflake, Calendar, AlertCircle, CheckCircle2, Users, Search, ArrowLeft } from 'lucide-react';
 import { Member } from '../types';
 import { format, differenceInCalendarDays, parse, addDays, startOfDay, parseISO } from 'date-fns';
 import { db } from '../services/mockSupabase';
 import toast from 'react-hot-toast';
+import { motion } from 'motion/react';
 
 interface BulkFreezeModalProps {
   isOpen: boolean;
@@ -266,13 +267,15 @@ export const BulkFreezeModal: React.FC<BulkFreezeModalProps> = ({ isOpen, onClos
               </Button>
             ) : (
               <div className="flex gap-4">
-                <Button 
-                  variant="outline"
+                <motion.button 
+                  whileHover={{ scale: 1.02, x: -4 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => setStep('selection')}
-                  className="flex-1 h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] border-slate-200 text-slate-600"
+                  className="flex-1 h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] border border-slate-200 text-slate-600 bg-white hover:bg-slate-50 transition-all flex items-center justify-center gap-2 group shadow-sm"
                 >
+                  <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                   Back to Selection
-                </Button>
+                </motion.button>
                 <Button 
                   onClick={handleBulkFreeze}
                   isLoading={isLoading}

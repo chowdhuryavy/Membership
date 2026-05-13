@@ -543,7 +543,7 @@ NOTIFY pgrst, 'reload schema';`}
                                   const terminationDate = staff.inactive_date ? parseISO(staff.inactive_date) : null;
                                   const leaveEndDate = parseISO(l.end_date);
                                   const displayEndDate = (terminationDate && terminationDate < leaveEndDate) 
-                                    ? format(subDays(terminationDate, 1), 'yyyy-MM-dd') 
+                                    ? format(subDays(terminationDate, 2), 'yyyy-MM-dd') 
                                     : l.end_date;
                                   const wasCapped = terminationDate && terminationDate < leaveEndDate;
 

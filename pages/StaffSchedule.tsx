@@ -932,73 +932,66 @@ const StaffSchedule = () => {
         return;
       }
 
-      // Fetch all departments in parallel for better performance
-      const depts: ('Massage' | 'Membership' | 'Personal Training' | 'Referral' | 'Sale')[] = ['Massage', 'Membership', 'Personal Training', 'Referral', 'Sale'];
-      
-      const results = await Promise.all(depts.map(dept => 
-        getReportData({
-          supabase,
-          propertyId,
-          outletId: 'all',
-          reportType: 'incentives',
-          date: currentDate,
-          incentiveDept: dept
-        })
-      ));
+      // Fetch all departments in ONE comprehensive call instead of 5 parallel calls
+      // This prevents "Failed to fetch" due to browser/Supabase rate limits on concurrent requests
+      const res = await getReportData({
+        supabase,
+        propertyId,
+        outletId: 'all',
+        reportType: 'incentives',
+        date: currentDate,
+        incentiveDept: 'All'
+      });
 
-      let allRows: any[] = [];
-      let totalInc = 0;
+      const rows = res.rows || [];
       const breakdown: Record<string, { total: number, count: number }> = {};
 
-      results.forEach((result, index) => {
-        const dept = depts[index];
-        const staffRows = result.rows.filter(r => {
-          if (!r.staff_splits) return false;
-          const matchingKey = Object.keys(r.staff_splits).find(id => String(id) === String(staff.id));
-          return matchingKey !== undefined;
-        });
-
-        const rowsWithDept = staffRows.map(r => {
-          const matchingKey = Object.keys(r.staff_splits).find(id => String(id) === String(staff.id));
-          
-          // Pre-derive grouping keys for reliable sorting
-          const itemDate = new Date(r.date || new Date());
-          const tierKey = format(itemDate, 'MMMM yyyy'); // e.g., "January 2026"
-          const typeKey = r.item_name || 'General';
-
-          return {
-            ...r,
-            department: dept,
-            my_incentive: matchingKey ? r.staff_splits[matchingKey] : 0,
-            tier: tierKey,
-            type: typeKey
-          };
-        });
-
-        allRows = [...allRows, ...rowsWithDept];
-        const deptTotal = rowsWithDept.reduce((sum, r) => sum + r.my_incentive, 0);
-        totalInc += deptTotal;
-        
-        if (rowsWithDept.length > 0) {
-          breakdown[dept] = {
-            total: deptTotal,
-            count: rowsWithDept.length
-          };
-        }
+      // Filter rows for this specific staff member
+      const staffRows = rows.filter(r => {
+        if (!r.staff_splits) return false;
+        return Object.keys(r.staff_splits).some(id => String(id) === String(staff.id));
       });
+      
+      const allRows = staffRows.map(r => {
+        const matchingKey = Object.keys(r.staff_splits).find(id => String(id) === String(staff.id));
+        const myInc = matchingKey ? Number(r.staff_splits[matchingKey]) : 0;
+        
+        // Pre-derive grouping keys for reliable sorting
+        const itemDate = new Date(r.date || new Date());
+        const tierKey = format(itemDate, 'MMMM yyyy');
+        const typeKey = r.item_name || 'General';
+
+        // Update breakdown
+        const dept = r.department || 'Misc';
+        if (!breakdown[dept]) breakdown[dept] = { total: 0, count: 0 };
+        breakdown[dept].total += myInc;
+        breakdown[dept].count += 1;
+
+        return {
+          ...r,
+          id: `${dept}-${r.id}`,
+          my_incentive: myInc,
+          tier: tierKey,
+          type: typeKey
+        };
+      });
+
+      const totalInc = allRows.reduce((sum, r) => sum + (Number(r.my_incentive) || 0), 0);
 
       // Sort by date
       allRows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-      // Batch state updates
       setIncentiveData(allRows);
       setIncentiveSummary({ 
         total: totalInc, 
         count: allRows.length,
         breakdown 
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to load incentives:", error);
+      if (error?.message?.includes('Failed to fetch')) {
+        toast.error("Network connection unstable. Falling back to local mode.", { id: 'network-error' });
+      }
     } finally {
       setIncentiveLoading(false);
     }
@@ -1639,69 +1632,95 @@ const StaffSchedule = () => {
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
                                 transition={{ delay: index * 0.02 }}
-                                className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-200 transition-all duration-300"
+                                 className="bg-white p-4 sm:p-5 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-indigo-100 transition-all duration-300"
                               >
                                 <div className="flex justify-between items-start mb-4">
-                                  <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-xl ${
+                                  <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center ${
                                       item.department === 'Massage' ? 'bg-indigo-50 text-indigo-600' :
                                       item.department === 'Membership' ? 'bg-emerald-50 text-emerald-600' :
                                       'bg-amber-50 text-amber-600'
                                     }`}>
-                                      {item.department === 'Massage' ? <Sparkles className="w-5 h-5" /> :
-                                       item.department === 'Membership' ? <TrendingUp className="w-5 h-5" /> :
-                                       <Award className="w-5 h-5" />}
+                                      {item.department === 'Massage' ? <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" /> :
+                                       item.department === 'Membership' ? <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6" /> :
+                                       <Award className="w-5 h-5 sm:w-6 sm:h-6" />}
                                     </div>
-                                    <div>
-                                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{item.item_name}</h4>
-                                      {item.membership_no && item.membership_no !== 'N/A' && (
-                                        <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mt-0.5">#{item.membership_no}</p>
-                                      )}
+                                    <div className="min-w-0 flex-1">
+                                      <h4 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-tight leading-tight mb-1">{item.item_name}</h4>
+                                      <div className="flex items-center gap-2">
+                                          {item.membership_no && item.membership_no !== 'N/A' && (
+                                            <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50/50 px-2 py-0.5 rounded-md border border-indigo-100/50">#{item.membership_no}</span>
+                                          )}
+                                          <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
+                                              item.department === 'Massage' ? 'bg-indigo-100/50 text-indigo-700' :
+                                              item.department === 'Membership' ? 'bg-emerald-100/50 text-emerald-700' :
+                                              'bg-amber-100/50 text-amber-700'
+                                          }`}>
+                                              {item.department}
+                                          </span>
+                                      </div>
                                     </div>
                                   </div>
-                            <div className="text-right">
-                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Your Share</p>
-                              <p className="text-lg font-black text-indigo-600">{formatMoney(item.my_incentive)}</p>
-                            </div>
-                          </div>
+                                  <div className="text-right">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Your Share</p>
+                                    <p className="text-xl sm:text-2xl font-black text-indigo-600 leading-none">{formatMoney(item.my_incentive)}</p>
+                                  </div>
+                                </div>
 
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-50">
-                            <div>
-                              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Price</p>
-                              <p className="text-[10px] font-bold text-slate-700">{formatMoney(item.actual_price)}</p>
-                            </div>
-                            <div>
-                              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Net Revenue</p>
-                              <p className="text-[10px] font-bold text-slate-700">{formatMoney(item.net_revenue)}</p>
-                            </div>
-                            <div>
-                              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Incentive</p>
-                              <p className="text-[10px] font-bold text-slate-700">{formatMoney(item.inc_net)}</p>
-                            </div>
-                            <div className="text-right flex flex-col items-end min-w-0">
-                              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Guest</p>
-                              <p className="text-[10px] font-bold text-slate-700 break-words text-right leading-tight max-w-[120px] sm:max-w-none">{item.guest_name}</p>
-                            </div>
-                          </div>
+                                <div className="grid grid-cols-3 gap-3 sm:gap-6 py-3 border-y border-slate-50 mb-4 bg-slate-50/30 -mx-5 px-5">
+                                  <div>
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Price</p>
+                                    <p className="text-[10px] sm:text-xs font-black text-slate-900">{formatMoney(item.actual_price)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Net Revenue</p>
+                                    <p className="text-[10px] sm:text-xs font-black text-slate-900">{formatMoney(item.net_revenue)}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Incentive</p>
+                                    <p className="text-[10px] sm:text-xs font-black text-slate-900">{formatMoney(item.inc_net)}</p>
+                                  </div>
+                                </div>
 
-                          <div className="grid grid-cols-2 gap-4 pt-4 mt-4 border-t border-slate-50 opacity-60">
-                            <div className="flex items-center gap-2">
-                              <CalendarIcon className="w-3.5 h-3.5 text-slate-300" />
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.date}</span>
-                            </div>
-                            <div className="flex items-center gap-2 justify-end">
-                              {item.department === 'Membership' ? (
-                                <Building2 className="w-3.5 h-3.5 text-slate-300" />
-                              ) : (
-                                <Clock className="w-3.5 h-3.5 text-slate-300" />
-                              )}
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                {item.department === 'Membership' ? (item.outlet_name || 'Membership') : (item.duration || 'N/A')}
-                              </span>
-                            </div>
-                          </div>
-                          </motion.div>
-                          </div>
+                                <div className="space-y-4">
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                      <div className="min-w-0">
+                                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                                            <User className="w-2.5 h-2.5" /> GUEST
+                                          </p>
+                                          <p className="text-[11px] font-bold text-slate-700 uppercase tracking-tight leading-relaxed">{item.guest_name}</p>
+                                      </div>
+                                      <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-1.5 whitespace-nowrap bg-slate-50 sm:bg-transparent p-2 sm:p-0 rounded-xl sm:rounded-none">
+                                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Transaction</p>
+                                          <p className="text-[10px] font-black text-slate-600 uppercase bg-white sm:bg-transparent px-2 sm:px-0 py-0.5 sm:py-0 rounded-lg sm:rounded-none border border-slate-100 sm:border-0 shadow-sm sm:shadow-none">#{item.check_no || item.id?.slice(0, 8) || 'N/A'}</p>
+                                      </div>
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center justify-between pt-4 border-t border-slate-50 gap-4">
+                                    <div className="flex items-center gap-6">
+                                      <div className="flex items-center gap-2">
+                                          <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
+                                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{item.date}</span>
+                                      </div>
+                                      <div className="h-4 w-px bg-slate-200"></div>
+                                      <div className="flex items-center gap-2">
+                                          {item.department === 'Membership' ? <Building2 className="w-3.5 h-3.5 text-slate-400" /> : <Clock className="w-3.5 h-3.5 text-slate-400" />}
+                                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                              {item.department === 'Membership' ? (item.outlet_name || 'All Access') : (item.duration || 'N/A')}
+                                          </span>
+                                      </div>
+                                    </div>
+                                    
+                                    {item.remarks && (
+                                      <div className="bg-slate-50/80 px-3 py-1.5 rounded-[1.25rem] border border-slate-100 max-w-full">
+                                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mr-2">Remarks:</span>
+                                          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight italic">{item.remarks}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </motion.div>
+                      </div>
                       );
                     })}
                   </AnimatePresence>
