@@ -660,7 +660,8 @@ const Dashboard = () => {
         setBookings(bookings);
     } catch (e: any) {
         console.error("Dashboard Intelligence Error:", e);
-        toast.error(`Dashboard Error: ${e?.message || 'Critical sync failure'}`);
+        const errorMsg = e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
+        toast.error(`Dashboard Intelligence Error: ${errorMsg}`, { id: 'dashboard-error' });
     } finally {
         setLoading(false);
         setTimeout(() => {

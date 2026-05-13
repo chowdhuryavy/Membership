@@ -2848,9 +2848,12 @@ class DatabaseService {
   }
 
   async triggerPushNotification(userId: string, title: string, body: string, url: string = '/notifications') {
-    if (!this.isSupabase()) return;
+    if (!this.isSupabase()) {
+        console.log('Push notification trigger skipped: Supabase offline');
+        return;
+    }
     try {
-        console.log('Triggering push notification for user:', userId);
+        console.log('Triggering push notification for user:', userId, 'Title:', title);
         const { data, error } = await supabase.functions.invoke('send-push', {
             body: { 
                 userId, 
@@ -2862,9 +2865,14 @@ class DatabaseService {
             }
         });
         if (error) throw error;
-        console.log('Push notification triggered:', data);
-    } catch (e) {
-        console.warn('Failed to trigger push notification:', e);
+        console.log('Push notification trigger response:', data);
+        if (data?.success) {
+            console.log('✅ Push notification successfully queued via Edge Function');
+        } else if (data?.message === "No subscriptions found") {
+            console.log('ℹ️ Push notification skipped: User has no active subscriptions');
+        }
+    } catch (e: any) {
+        console.error('❌ Failed to trigger push notification:', e.message || e);
     }
   }
 

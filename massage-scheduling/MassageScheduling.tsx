@@ -780,7 +780,7 @@ NOTIFY pgrst, 'reload schema';`}
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        loadData();
+        loadData(true);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
