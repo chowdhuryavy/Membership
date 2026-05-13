@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import { getReportData } from '../src/shared/reportLogic';
 import { supabase } from '../services/supabase';
 import { StaffLoadingScreens } from '../components/StaffLoadingScreens';
+import PushNotificationManager from '../components/PushNotificationManager';
 
 interface StaffNotification {
   id: string;
@@ -1415,6 +1416,7 @@ const StaffSchedule = () => {
         </div>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto w-full space-y-6 pb-24">
+          <PushNotificationManager variant="modal" />
           {/* Desktop Welcome Header */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}

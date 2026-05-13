@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { format, formatDistanceToNow } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
+import PushNotificationManager from '../components/PushNotificationManager';
 
 const NotificationsPage = () => {
     const { user } = useAuth();
@@ -55,6 +56,8 @@ const NotificationsPage = () => {
                     </button>
                 </div>
             </div>
+
+            <PushNotificationManager />
 
             <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">

@@ -67,31 +67,29 @@ self.addEventListener('fetch', (event) => {
 
 // Push notification handling
 self.addEventListener('push', (event) => {
-  let data = { title: 'Identity Sync', body: 'New notification received' };
+  let data = { title: 'Health Club', body: 'New notification received' };
   
   if (event.data) {
     try {
       data = event.data.json();
     } catch (e) {
-      data = { title: 'Identity Sync', body: event.data.text() };
+      data = { title: 'Health Club', body: event.data.text() };
     }
   }
 
   const options = {
-    body: data.body,
-    icon: '/icon.png',
+    body: data.body || 'You have a new update.',
+    icon: data.icon || '/icon.png',
     badge: '/favicon-16x16.png',
-    vibrate: [100, 50, 100, 50, 200, 100, 400], // Unique "Identity Sync" rhythm
-    tag: 'staff-alert',
+    vibrate: [100, 50, 100, 50, 200, 100, 400],
+    tag: data.tag || 'staff-alert',
     renotify: true,
     data: data,
-    // Modern browsers generally ignore the sound property in showNotification
-    // but system-level wrappers (APK) sometimes use it or the default
-    sound: '/sounds/notification-uncommon.mp3' 
+    actions: data.actions || []
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(data.title || 'Health Club', options)
   );
 });
 
@@ -99,7 +97,8 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
-  const urlToOpen = new URL('/staff-schedule', self.location.origin).href;
+  const data = event.notification.data || {};
+  const urlToOpen = new URL(data.url || '/notifications', self.location.origin).href;
 
   event.waitUntil(
     clients.matchAll({

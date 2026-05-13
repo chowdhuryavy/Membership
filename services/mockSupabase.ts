@@ -3129,6 +3129,44 @@ class DatabaseService {
       localStorage.setItem('membership_notifications', JSON.stringify(filtered));
     }
   }
+
+  // --- PUSH SUBSCRIPTIONS ---
+  async savePushSubscription(userId: string, subscription: any) {
+    if (this.isSupabase()) {
+      try {
+        const { error } = await supabase.from('push_subscriptions').upsert([{
+          user_id: userId,
+          subscription: subscription,
+          updated_at: new Date().toISOString()
+        }], { onConflict: 'user_id' });
+        if (error) throw error;
+      } catch (e) {
+        console.warn('Failed to save push subscription to Supabase', e);
+        this.saveLocalPushSubscription(userId, subscription);
+      }
+    } else {
+      this.saveLocalPushSubscription(userId, subscription);
+    }
+  }
+
+  private saveLocalPushSubscription(userId: string, subscription: any) {
+    const subs = JSON.parse(localStorage.getItem('membership_push_subscriptions') || '{}');
+    subs[userId] = subscription;
+    localStorage.setItem('membership_push_subscriptions', JSON.stringify(subs));
+  }
+
+  async deletePushSubscription(userId: string, endpoint: string) {
+    if (this.isSupabase()) {
+      try {
+        await supabase.from('push_subscriptions').delete().eq('user_id', userId);
+      } catch (e) {
+        console.warn('Failed to delete push subscription from Supabase', e);
+      }
+    }
+    const subs = JSON.parse(localStorage.getItem('membership_push_subscriptions') || '{}');
+    delete subs[userId];
+    localStorage.setItem('membership_push_subscriptions', JSON.stringify(subs));
+  }
 }
 
 export const db = new DatabaseService();
