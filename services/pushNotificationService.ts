@@ -3,7 +3,7 @@ import { db } from './mockSupabase';
 
 // VAPID Public Key (This should usually come from environment variables)
 // Generating a persistent one for this environment
-const VAPID_PUBLIC_KEY = 'BEl62i_5kyK1L5i636kZl-jY6_jB-jX-jB-jB_jB-jB-jB_jB-jB-jB_jB-jB-jB_jB-jB-jB_jB-jB-jB_jB-jB-jB'; 
+const VAPID_PUBLIC_KEY = 'BAPq7277sgghAs7xXLA7Tn6c6w9YpKw_hm9adqBZtJ63oJEWzewpcsGuWm2BCXpgLkiebhQB8I4wyN-UXsb5KdM'; 
 // NOTE: The above is a placeholder. In a real app, you should generate a real VAPID key pair.
 
 function urlBase64ToUint8Array(base64String: string) {
