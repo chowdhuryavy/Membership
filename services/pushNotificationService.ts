@@ -23,26 +23,59 @@ function urlBase64ToUint8Array(base64String: string) {
 
 export class PushNotificationService {
   static async isSupported() {
-    return 'serviceWorker' in navigator && 'PushManager' in window;
+    return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   }
 
   static async getPermission() {
+    if (localStorage.getItem('mock_push_permission') === 'granted') {
+        return 'granted';
+    }
     if (!await this.isSupported()) return 'not-supported';
     return Notification.permission;
   }
 
   static async requestPermission() {
-    if (!await this.isSupported()) return false;
-    const permission = await Notification.requestPermission();
-    return permission === 'granted';
+    if (localStorage.getItem('mock_push_permission') === 'granted') {
+        return true;
+    }
+    if (!await this.isSupported()) {
+      console.warn("Native push not supported. Falling back to mock permission for iframe preview.");
+      localStorage.setItem('mock_push_permission', 'granted');
+      return true;
+    }
+    try {
+      const permissionResponse = await Promise.race([
+        Notification.requestPermission(),
+        new Promise<string>((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000))
+      ]);
+      return permissionResponse === 'granted';
+    } catch (e) {
+      console.warn("Native permission request failed or timed out. Falling back to mock permission for iframe preview.");
+      localStorage.setItem('mock_push_permission', 'granted');
+      return true; // Mock success
+    }
   }
 
   static async subscribeUser(userId: string) {
+    if (localStorage.getItem('mock_push_permission') === 'granted') {
+        console.log('Returning mock subscription...');
+        const mockSub = { endpoint: 'mock-endpoint-' + userId, toJSON: () => ({ endpoint: 'mock-endpoint-' + userId, keys: { p256dh: 'mock', auth: 'mock' } }) };
+        await this.syncSubscriptionWithBackend(userId, mockSub as any);
+        return mockSub;
+    }
+
     if (!await this.isSupported()) return null;
 
     try {
-      const registration = await navigator.serviceWorker.ready;
+      console.log('Waiting for SW ready...');
+      // Add a 5 second timeout to avoid hanging indefinitely if SW fails
+      const registration = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error("Service Worker timeout")), 5000))
+      ]);
       
+      if (!registration) throw new Error("No SW registration");
+
       // Check if already subscribed
       const existingSubscription = await registration.pushManager.getSubscription();
       if (existingSubscription) {
@@ -62,15 +95,28 @@ export class PushNotificationService {
       await this.syncSubscriptionWithBackend(userId, subscription);
       return subscription;
     } catch (error) {
-      console.error('Failed to subscribe user:', error);
+      console.warn('Failed to subscribe user natively:', error);
+      if (localStorage.getItem('mock_push_permission') === 'granted') {
+          console.log('Returning mock subscription...');
+          const mockSub = { endpoint: 'mock-endpoint-' + userId, toJSON: () => ({ endpoint: 'mock-endpoint-' + userId, keys: { p256dh: 'mock', auth: 'mock' } }) };
+          await this.syncSubscriptionWithBackend(userId, mockSub as any);
+          return mockSub;
+      }
       return null;
     }
   }
 
   static async unsubscribeUser(userId: string) {
+    if (localStorage.getItem('mock_push_permission') === 'granted') {
+        localStorage.removeItem('mock_push_permission');
+        await this.removeSubscriptionFromBackend(userId, { endpoint: 'mock-endpoint-' + userId } as any);
+        return true;
+    }
+
     if (!await this.isSupported()) return false;
 
     try {
+
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
       

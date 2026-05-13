@@ -633,7 +633,7 @@ const DynamicHead = () => {
       if (manifestLink) {
         // Use static manifest files for iPhone compatibility
         const manifestPath = isStaff ? '/manifest-staff.json' : '/manifest.json';
-        manifestLink.setAttribute('href', window.location.origin + manifestPath + '?v=10');
+        manifestLink.setAttribute('href', window.location.origin + manifestPath);
       }
 
       // Update iOS-specific meta tags dynamically

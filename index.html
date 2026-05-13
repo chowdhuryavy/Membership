@@ -43,14 +43,14 @@
     <link rel="stylesheet" href="/index.css" />
     
     <!-- Favicon Tags -->
-    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=10" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=10" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=10" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=10" />
-    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon.png?v=10" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=10" />
-    <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon.png?v=10" />
-    <link rel="icon" sizes="192x192" href="/icon.png?v=10" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon.png" />
+    <link rel="icon" sizes="192x192" href="/icon.png" />
     
     <meta name="theme-color" content="#4f46e5">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -60,7 +60,7 @@
     <meta name="application-name" content="Health Club">
     
     <!-- Web App Manifest -->
-    <link rel="manifest" id="pwa-manifest" href="/manifest.json?v=10" />
+    <link rel="manifest" id="pwa-manifest" href="/manifest.json" />
     
     
     <script>
@@ -73,7 +73,7 @@
         // Swap manifest for Staff Portal (Critical for iPhone)
         const manifestLink = document.getElementById('pwa-manifest');
         if (manifestLink) {
-          manifestLink.setAttribute('href', '/manifest-staff.json?v=10');
+          manifestLink.setAttribute('href', '/manifest-staff.json');
         }
         
         // Only redirect if we are not already on the hash route

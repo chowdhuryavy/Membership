@@ -43,15 +43,16 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
                     setPermission('granted');
                     toast.success('Push notifications enabled successfully!');
                 } else {
-                    toast.error('Failed to subscribe to push notifications.');
+                    toast.error('Failed to subscribe. Are you in a new tab? (Iframes block push)');
                 }
             } else {
                 setPermission('denied');
-                toast.error('Notification permission denied.');
+                toast.error('Notification permission denied or blocked by browser.');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Push error:', error);
-            toast.error('An error occurred while enabling notifications.');
+            const errMsg = error?.message || String(error);
+            toast.error('Error enabling: ' + errMsg.substring(0, 50));
         } finally {
             setIsSubscribing(false);
         }
@@ -88,7 +89,7 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
                         <h3 className="text-xl font-black text-slate-900 tracking-tight">Setup Required</h3>
                         <p className="text-sm font-medium text-slate-500">To use the Staff Portal, you must enable push notifications to receive real-time booking updates.</p>
                         
-                        <div className="w-full mt-6">
+                        <div className="w-full mt-6 space-y-3">
                             <button
                                 onClick={handleEnableNotifications}
                                 disabled={isSubscribing}
