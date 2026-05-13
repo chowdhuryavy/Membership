@@ -44,13 +44,18 @@ const Members = () => {
   const canView = user && hasPermission(user.role_id, 'members:view');
 
   const loadData = async (isSilent = false) => {
-    if (!currentOutlet || !currentProperty || !canView) return;
+    if (!currentOutlet || !currentProperty || !canView) {
+      setLoading(false);
+      setPageLoading(false);
+      return;
+    }
+    
     if (members.length === 0 && !isSilent) setLoading(true);
     if (!isSilent) setPageLoading(true);
+    
     try {
       // Force property-wide fetch if possible so that search can find members in other outlets
-      // and "Identity Matching" in the form can find cross-outlet duplicates.
-      const isPropertyScope = true; // Always try property scope for broad data
+      const isPropertyScope = true; 
       const scopeId = currentProperty.id;
       
       let limitToIds: string[] | undefined = undefined;
@@ -74,6 +79,9 @@ const Members = () => {
         const updated = membersData.find(m => m.id === selectedMember.id);
         if (updated) setSelectedMember(updated);
       }
+    } catch (error) {
+      console.error("Failed to load members data:", error);
+      // If we have an error, we should still stop the loading spinner
     } finally {
       setLoading(false);
       setTimeout(() => {
@@ -89,6 +97,23 @@ const Members = () => {
       setLoading(false);
     }
   }, [currentOutlet, viewScope, canView]);
+
+  // Safety protection: Force clear loading after a reasonable timeout
+  useEffect(() => {
+    if (loading || pageLoading) {
+      const timer = setTimeout(() => {
+        if (loading) {
+          console.warn("Members loading timed out. Clearing loading state.");
+          setLoading(false);
+        }
+        if (pageLoading) {
+          console.warn("Page loading timed out in Members. Clearing pageLoading state.");
+          setPageLoading(false);
+        }
+      }, 15000); // 15s safety timeout
+      return () => clearTimeout(timer);
+    }
+  }, [loading, pageLoading]);
 
   // Real-time synchronization subscription
   useEffect(() => {

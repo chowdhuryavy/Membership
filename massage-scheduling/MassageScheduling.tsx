@@ -773,10 +773,18 @@ NOTIFY pgrst, 'reload schema';`}
     };
   }, [currentOutlet, currentProperty]);
 
-  const loadData = async (retryCount = 0) => {
-    if (!currentOutlet || !currentProperty) return;
-    setLoading(true);
-    setPageLoading(true);
+  const loadData = async (isSilent = false) => {
+    if (!currentOutlet || !currentProperty) {
+      setLoading(false);
+      setPageLoading(false);
+      return;
+    }
+
+    if (!isSilent) {
+        setLoading(true);
+        setPageLoading(true);
+    }
+    
     setIsTableMissing(false);
     setSchemaError(null);
     
@@ -787,7 +795,7 @@ NOTIFY pgrst, 'reload schema';`}
     // Try to load from cache first for immediate display
     const cacheKey = `bookings-data-${scopeId}-${isProperty}-${dateStr}`;
     const cached = getCachedData(cacheKey);
-    if (cached) {
+    if (cached && !isSilent) {
         setBookings(cached.bookings || []);
         setGuests(cached.guests || []);
         setTherapists((cached.therapists || []).sort((x: any, y: any) => x.name.localeCompare(y.name)));
@@ -819,7 +827,7 @@ NOTIFY pgrst, 'reload schema';`}
       });
       
       const fetchTherapists = db.getTherapists(scopeId, isProperty, limitToIds).then(data => {
-          const sorted = (data || []).sort((x, y) => x.name.localeCompare(y.name));
+          const sorted = (data || []).sort((x: any, y: any) => x.name.localeCompare(y.name));
           setTherapists(sorted);
           return sorted;
       });
@@ -877,27 +885,27 @@ NOTIFY pgrst, 'reload schema';`}
       
       // Distinguish between schema errors and network errors
       const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-      const isNetworkError = isOffline || errorMessage.includes('Load failed') || errorMessage.includes('fetch') || errorMessage.includes('Connection Error');
+      const isNetworkError = isOffline || errorMessage.includes('Load failed') || errorMessage.includes('fetch') || errorMessage.includes('Connection Error') || e.code === '57014';
       const isSchemaError = errorMessage.includes('schema cache') || e.code === '42P01' || e.code === '42703' || errorMessage.toLowerCase().includes('column') || (errorMessage.includes('Table [') && !isNetworkError);
 
       if (isSchemaError) {
           setSchemaError(errorMessage);
           setIsTableMissing(true);
       } else if (isNetworkError) {
-          // Just log network errors, don't show blocking UI if we have any data (even if empty)
-          console.warn("Network error during data load. Falling back to local/mock data.");
+          console.warn("Network error or timeout during data load. Falling back to local/mock data.");
           if (isOffline) {
               setSchemaError("You are currently offline. Using cached/local data.");
           }
       } else {
           setSchemaError(errorMessage);
       }
-
     } finally {
-      setLoading(false);
-      setTimeout(() => {
-          setPageLoading(false);
-      }, 100);
+      if (!isSilent) {
+        setLoading(false);
+        setTimeout(() => {
+            setPageLoading(false);
+        }, 100);
+      }
     }
   };
 

@@ -45,12 +45,15 @@ class DatabaseService {
 
   private isNetworkError(e: any): boolean {
     const msg = e.message?.toLowerCase() || '';
-    // Enable fallback for critical connection failures and transient fetch errors
-    // "Failed to fetch" is the standard browser error when a network request cannot be completed
+    const code = e.code || '';
+    // Enable fallback for critical connection failures, transient fetch errors, 
+    // and database timeouts (57014) or internal server errors (500)
     return msg.includes('failed to fetch') || 
            msg.includes('network error') || 
            msg.includes('insufficient permissions') ||
            msg.includes('database not found') ||
+           code === '57014' || // Statement timeout
+           msg.includes('timeout') ||
            DatabaseService.supabaseFailed;
   }
 
@@ -668,7 +671,7 @@ class DatabaseService {
     }
   }
 
-  async getMembers(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[], selectColumns: string = '*'): Promise<Member[]> {
+  async getMembers(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[], selectColumns: string = 'id,membership_number,guest_name,status,start_date,original_end_date,current_end_date,net_amount,original_net_amount,category_id,outlet_id,package_type'): Promise<Member[]> {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         let query = supabase.from('members').select(selectColumns);
@@ -685,52 +688,32 @@ class DatabaseService {
                 query = query.eq('outlet_id', scopeId);
             }
         }
-        query = query.order('start_date', { ascending: false });
+        query = query.order('start_date', { ascending: false }).limit(2000);
         const { data, error } = await query;
         if (error) throw error;
         
         const membersList = (data || []) as any as Member[];
 
         // Lazy background update for stale statuses (fire and forget)
+        // Optimized: only check a few to avoid system-wide lag
         setTimeout(async () => {
           try {
-            const frozenMembers = membersList.filter(m => m.status === MemberStatus.FROZEN);
-            if (frozenMembers.length > 0) {
-              const { data: freezes } = await supabase.from('freezes').select('*').in('member_id', frozenMembers.map(m => m.id));
-              if (freezes) {
-                const today = startOfDay(new Date());
-                const membersToUpdate = frozenMembers.filter(m => {
-                  const memberFreezes = freezes.filter(f => f.member_id === m.id);
-                  const isCurrentlyFrozen = memberFreezes.some(f => {
-                    const start = startOfDay(parseISO(f.start_date));
-                    const end = startOfDay(parseISO(f.end_date));
-                    return today >= start && today <= end;
-                  });
-                  return !isCurrentlyFrozen; // They are marked as frozen, but no active freeze exists today
-                });
-                
-                // Trigger sync for members whose freeze has ended
-                for (const m of membersToUpdate) {
-                  await this.syncMemberEndDate(m.id);
-                }
-              }
-            }
-
-            // Also check for members who should be expired
             const today = startOfDay(new Date());
-            const activeMembers = membersList.filter(m => m.status === MemberStatus.ACTIVE);
-            const expiredMembers = activeMembers.filter(m => {
-               const end = parseISO(m.current_end_date || m.original_end_date);
-               return today > end;
-            });
-
-            for (const m of expiredMembers) {
-               await this.syncMemberEndDate(m.id);
+            const needsSync = membersList.filter(m => {
+                if (m.status === MemberStatus.FROZEN) return true;
+                const end = parseISO(m.current_end_date || m.original_end_date);
+                return m.status === MemberStatus.ACTIVE && today > end;
+            }).slice(0, 10); // Only auto-sync 10 at a time to prevent timeout storms
+            
+            if (needsSync.length > 0) {
+              console.log(`[Sync] Background syncing ${needsSync.length} member statuses...`);
+              // Use Promise.all with small limit or just fire and forget individually
+              needsSync.forEach(m => this.syncMemberEndDate(m.id).catch(e => {}));
             }
           } catch (e) {
             console.error("Background status sync failed:", e);
           }
-        }, 1000);
+        }, 3000);
 
         return membersList;
       }, []);
@@ -2227,7 +2210,9 @@ class DatabaseService {
   async getMassageBookings(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[], startDate?: string): Promise<MassageBooking[]> {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
-        let query = supabase.from('massage_bookings').select('*');
+        // Optimization: Select only required columns to reduce payload size and query time
+        const selectCols = 'id,date,start_time,end_time,guest_id,guest_name,guest_phone,massage_type_id,outlet_id,property_id,room_id,therapist_id,status,notes,total_price,is_paid,staff_id,created_at,updated_at,inventory_item_id,member_id';
+        let query = supabase.from('massage_bookings').select(selectCols);
         if (isPropertyScope) {
             if (limitToOutletIds && limitToOutletIds.length > 0) {
                 query = query.in('outlet_id', limitToOutletIds);
@@ -2241,7 +2226,8 @@ class DatabaseService {
             query = query.gte('date', startDate);
         }
 
-        const { data, error } = await query.order('date', { ascending: false }).limit(startDate ? 10000 : 2000);
+        // Reduced limit to 5000 to improve performance and prevent statement timeouts
+        const { data, error } = await query.order('date', { ascending: false }).limit(startDate ? 5000 : 1000);
         if (error) throw error;
         return (data || []) as MassageBooking[];
       }, []);
@@ -2825,8 +2811,8 @@ class DatabaseService {
 
     if (this.isSupabase()) {
       try {
-        // We include all fields as the user has confirmed the columns exist in Supabase
-        const { error } = await supabase.from('notifications').insert([newNotification]);
+        // We use upsert to avoid 409 Conflict errors if there's a race condition or random collision
+        const { error } = await supabase.from('notifications').upsert([newNotification]);
         if (error) {
           // If it's a foreign key error for users, it's expected for staff who aren't in the users table
           if (error.code === '23503' && error.details?.includes('users')) {
