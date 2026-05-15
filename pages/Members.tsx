@@ -145,8 +145,11 @@ const Members = () => {
 
   const filteredMembers = useMemo(() => {
     if (selectedTypeId === 'all') return members;
-    return members.filter(m => m.membership_type_id === selectedTypeId);
-  }, [members, selectedTypeId]);
+    return members.filter(m => {
+      const mappedTypeId = m.membership_type_id || categories.find(c => c.id === m.category_id)?.membership_type_id;
+      return mappedTypeId === selectedTypeId;
+    });
+  }, [members, categories, selectedTypeId]);
 
   const filteredCategories = useMemo(() => {
     if (selectedTypeId === 'all') return categories;
