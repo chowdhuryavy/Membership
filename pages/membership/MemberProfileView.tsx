@@ -32,11 +32,18 @@ interface MemberProfileViewProps {
 const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   member: initialMember, categories, onBack, onEdit, onRenew, onUpdate, onDelete
 }) => {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { formatMoney, currentOutlet, currentProperty, settings, hasPermission, setPageLoading } = useSettings();
   
   const [viewingMember, setViewingMember] = useState<Member>(initialMember);
   const [freezes, setFreezes] = useState<Freeze[]>([]);
+
+  useEffect(() => {
+    if (initialMember) {
+      setViewingMember(initialMember);
+      setMemberNotes(initialMember.notes || '');
+    }
+  }, [initialMember.id, initialMember.status, initialMember.privilege_usage]);
   const [memberBookings, setMemberBookings] = useState<MassageBooking[]>([]);
   const [massageTypes, setMassageTypes] = useState<MassageType[]>([]);
   const [lifecycleHistory, setLifecycleHistory] = useState<Member[]>([]);
@@ -52,7 +59,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const [showRevertCancelModal, setShowRevertCancelModal] = useState(false);
   const [bulkFreezeToDelete, setBulkFreezeToDelete] = useState<any>(null);
   const [showNotesModal, setShowNotesModal] = useState(false);
-  const [memberNotes, setMemberNotes] = useState(viewingMember.notes || '');
+  const [showPrivilegeHistoryModal, setShowPrivilegeHistoryModal] = useState(false);
+  const [memberNotes, setMemberNotes] = useState(initialMember.notes || '');
   const [cancelDate, setCancelDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
 
@@ -121,6 +129,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
     }
   };
 
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
   const handleUpdatePrivilege = async (privilege: string, increment: number) => {
     try {
       setPageLoading(true);
@@ -128,23 +138,63 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       const existing = currentUsages.find(u => u.privilege === privilege);
       
       let newUsages;
+      const historyEntry = {
+        date: new Date().toISOString(),
+        by: user?.name || user?.email || 'System',
+        change: increment,
+      };
+
       if (existing) {
+        const newCount = Math.max(0, existing.used_count + increment);
         newUsages = currentUsages.map(u => 
           u.privilege === privilege 
-            ? { ...u, used_count: Math.max(0, u.used_count + increment), updated_date: new Date().toISOString(), updated_by: user?.email || 'System' }
+            ? { 
+                ...u, 
+                used_count: newCount, 
+                updated_date: historyEntry.date, 
+                updated_by: historyEntry.by,
+                history: [...(u.history || []), { ...historyEntry, new_total: newCount }]
+              }
             : u
         );
       } else {
-        newUsages = [...currentUsages, { privilege, used_count: Math.max(0, increment), updated_date: new Date().toISOString(), updated_by: user?.email || 'System' }];
+        const newCount = Math.max(0, increment);
+        newUsages = [...currentUsages, { 
+          privilege, 
+          used_count: newCount, 
+          updated_date: historyEntry.date, 
+          updated_by: historyEntry.by,
+          history: [{ ...historyEntry, new_total: newCount }]
+        }];
       }
       
+      console.log(`[DEBUG] Updating privilege usage for member ${viewingMember.id}:`, newUsages);
       await db.updateMember(viewingMember.id, { privilege_usage: newUsages });
       setViewingMember(prev => ({ ...prev, privilege_usage: newUsages }));
       
       toast.success('Privilege usage updated');
       onUpdate();
-    } catch (error) {
+    } catch (err) {
+      console.error("[DEBUG] Failed to update privilege:", err);
       toast.error('Failed to update privilege');
+    } finally {
+      setPageLoading(false);
+    }
+  };
+
+  const handleClearPrivilegeHistory = async () => {
+    try {
+      setPageLoading(true);
+      console.log(`[DEBUG] Clearing privilege usage for member ${viewingMember.id}`);
+      const clearedUsages: any[] = [];
+      await db.updateMember(viewingMember.id, { privilege_usage: clearedUsages });
+      setViewingMember(prev => ({ ...prev, privilege_usage: clearedUsages }));
+      toast.success('Privilege usage history cleared');
+      setShowClearConfirm(false);
+      onUpdate();
+    } catch (err) {
+      console.error("[DEBUG] Failed to clear privilege history:", err);
+      toast.error('Failed to clear privilege history');
     } finally {
       setPageLoading(false);
     }
@@ -622,14 +672,38 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
               {category?.privileges && category.privileges.length > 0 && (
                   <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-gradient-to-r from-emerald-900 to-emerald-950 text-white p-8 border-b border-emerald-800/30">
-                           <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 bg-emerald-500/20 rounded-xl flex items-center justify-center border border-emerald-400/30">
-                                     <Sparkles className="w-5 h-5 text-emerald-400" />
-                                </div>
-                                <div>
-                                     <CardTitle className="text-[11px] font-black uppercase tracking-widest leading-none">Privilege Entitlements</CardTitle>
-                                     <p className="text-[8px] font-black text-emerald-300/80 uppercase tracking-widest mt-1">Track & Manage Used Tier Benefits</p>
-                                </div>
+                           <div className="flex items-center justify-between">
+                               <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 bg-emerald-500/20 rounded-xl flex items-center justify-center border border-emerald-400/30">
+                                         <Sparkles className="w-5 h-5 text-emerald-400" />
+                                    </div>
+                                    <div>
+                                         <CardTitle className="text-[11px] font-black uppercase tracking-widest leading-none">Privilege Entitlements</CardTitle>
+                                         <p className="text-[8px] font-black text-emerald-300/80 uppercase tracking-widest mt-1">Track & Manage Used Tier Benefits</p>
+                                    </div>
+                               </div>
+                               {isSuperAdmin && (
+                                   <div className="flex items-center gap-2">
+                                       <Button 
+                                           type="button" 
+                                           variant="outline" 
+                                           onClick={() => setShowPrivilegeHistoryModal(true)}
+                                           className="h-8 px-3 rounded-lg border-emerald-800/50 text-emerald-300 hover:text-white hover:bg-emerald-800 hover:border-emerald-700 text-[10px] font-black uppercase tracking-widest bg-emerald-900/50"
+                                       >
+                                           <History className="w-3 h-3 mr-1.5" />
+                                           History
+                                       </Button>
+                                       <Button 
+                                           type="button" 
+                                           variant="outline" 
+                                           onClick={() => setShowClearConfirm(true)}
+                                           className="h-8 px-3 rounded-lg border-red-800/50 text-red-300 hover:text-white hover:bg-red-800 hover:border-red-700 text-[10px] font-black uppercase tracking-widest bg-red-900/50"
+                                       >
+                                           <RotateCcw className="w-3 h-3 mr-1.5" />
+                                           Clear History
+                                       </Button>
+                                   </div>
+                               )}
                            </div>
                       </CardHeader>
                       <CardContent className="p-0">
@@ -1438,6 +1512,113 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                             Save Intelligence
                         </Button>
                     </div>
+                </CardContent>
+            </Card>
+        </div>
+      )}
+
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-[601] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
+            <Card className="w-full max-w-md rounded-[3.5rem] shadow-2xl overflow-hidden bg-white border border-slate-200">
+                <CardHeader className="bg-red-950 text-white p-10 text-center relative">
+                    <div className="w-16 h-16 bg-red-500/20 rounded-2xl flex items-center justify-center mb-6 mx-auto border border-red-400/30 shadow-2xl">
+                        <AlertTriangle className="w-8 h-8 text-red-400" />
+                    </div>
+                    <CardTitle className="text-2xl font-black uppercase tracking-tighter leading-none mb-2">Protocol Reset</CardTitle>
+                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Authorize History Purge</p>
+                </CardHeader>
+                <CardContent className="p-10 text-center space-y-8">
+                    <p className="text-sm font-bold text-slate-600 leading-relaxed">
+                        You are about to irreversibly delete all benefit utilization records for <span className="text-red-600 font-black">Member #{viewingMember.membership_number}</span>. This action cannot be undone and will reset all running yields to zero.
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                        <Button 
+                            variant="outline" 
+                            onClick={() => setShowClearConfirm(false)}
+                            className="h-14 rounded-2xl border-slate-200 text-slate-600 font-black uppercase tracking-widest text-[10px]"
+                        >
+                            Abort
+                        </Button>
+                        <Button 
+                            onClick={() => handleClearPrivilegeHistory()}
+                            className="h-14 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-red-500/20"
+                        >
+                            Purge Records
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+      )}
+
+      {showPrivilegeHistoryModal && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+            <Card className="w-full max-w-2xl max-h-[90vh] rounded-[3.5rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden bg-white border border-white/20 flex flex-col">
+                <CardHeader className="bg-emerald-950 text-white p-10 relative flex flex-col items-center text-center shrink-0">
+                    <div className="w-16 h-16 bg-emerald-500/20 rounded-2xl flex items-center justify-center mb-6 border border-emerald-400/30 shadow-2xl">
+                        <History className="w-8 h-8 text-emerald-400" />
+                    </div>
+                    <CardTitle className="text-2xl font-black uppercase tracking-tighter leading-none mb-2">Benefit Usage Audit Log</CardTitle>
+                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Super-Admin Oversight Protocol</p>
+                    <button onClick={() => setShowPrivilegeHistoryModal(false)} className="absolute top-10 right-10 p-3 rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90 shadow-lg border border-white/5">
+                        <X className="w-6 h-6 text-slate-400"/>
+                    </button>
+                </CardHeader>
+                <CardContent className="p-10 space-y-10 overflow-y-auto custom-scrollbar bg-slate-50/30 text-slate-900">
+                    {!viewingMember.privilege_usage || viewingMember.privilege_usage.length === 0 ? (
+                        <div className="text-center py-24 bg-white rounded-[2.5rem] border border-slate-200 border-dashed">
+                            <p className="text-slate-400 font-black uppercase text-xs tracking-[0.3em]">No utilization history recorded</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-12">
+                            {viewingMember.privilege_usage.map(usage => (
+                                <div key={usage.privilege} className="space-y-4">
+                                    <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700 px-6 py-2 bg-emerald-50 border border-emerald-100 rounded-full inline-block">
+                                        {usage.privilege} Entitlements
+                                    </h3>
+                                    <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden divide-y divide-slate-100">
+                                        {!usage.history || usage.history.length === 0 ? (
+                                            <div className="p-12 text-[10px] font-bold text-slate-400 uppercase text-center italic tracking-widest leading-relaxed">
+                                                Legacy record detected. <br/> Comprehensive snapshots started after System Version 2.4.
+                                            </div>
+                                        ) : (
+                                            [...usage.history].reverse().map((entry, idx) => (
+                                                <div key={idx} className="p-10 flex items-center justify-between hover:bg-slate-50/50 transition-colors group">
+                                                    <div className="flex items-center gap-8">
+                                                        <div className={`w-14 h-14 rounded-2xl border flex items-center justify-center transition-all duration-500 group-hover:rotate-12 ${entry.change > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-inner' : 'bg-red-50 border-red-200 text-red-600 shadow-inner'}`}>
+                                                            {entry.change > 0 ? <Plus className="w-6 h-6" /> : <Minus className="w-6 h-6" />}
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-3">
+                                                                <p className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                                                                    {entry.change > 0 ? 'Credit Adjustment' : 'Benefit Redaction'}
+                                                                </p>
+                                                                <span className={`text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest ${entry.change > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                                                    {entry.change > 0 ? '+' : ''}{entry.change} Units
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex flex-col gap-1 mt-2">
+                                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                                    <UserCheck className="w-3.5 h-3.5 text-indigo-400" /> Authorized by: {entry.by}
+                                                                </p>
+                                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                                    <Clock className="w-3.5 h-3.5 text-amber-400" /> {format(parseISO(entry.date), 'dd MMM yyyy @ HH:mm:ss')}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right flex flex-col items-end">
+                                                        <div className="text-3xl font-black text-slate-900 tracking-tighter leading-none">{entry.new_total}</div>
+                                                        <div className="text-[8px] font-black uppercase tracking-[0.2em] text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100 mt-2 shadow-sm">Running Yield</div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>

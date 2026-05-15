@@ -672,7 +672,7 @@ class DatabaseService {
     }
   }
 
-  async getMembers(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[], selectColumns: string = 'id,membership_number,guest_name,status,start_date,original_end_date,current_end_date,net_amount,original_net_amount,category_id,outlet_id,package_type'): Promise<Member[]> {
+  async getMembers(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[], selectColumns: string = 'id,membership_number,guest_name,status,start_date,original_end_date,current_end_date,net_amount,original_net_amount,category_id,membership_type_id,outlet_id,package_type,privilege_usage,notes,email,phone,dob,nationality,access_type'): Promise<Member[]> {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         let query = supabase.from('members').select(selectColumns);
