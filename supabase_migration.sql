@@ -16,3 +16,15 @@ CREATE INDEX IF NOT EXISTS idx_incentive_rules_applies_to ON incentive_rules(app
 
 -- Optional: Update existing referral rules to default to 'Staff'
 UPDATE incentive_rules SET referral_payee = 'Staff' WHERE applies_to = 'Referral' AND referral_payee IS NULL;
+
+-- ----------------------------------------------------
+-- RECENT ADDITIONS FOR PRIVILEGES
+-- ----------------------------------------------------
+
+-- Add privileges to membership_categories
+ALTER TABLE membership_categories 
+ADD COLUMN IF NOT EXISTS privileges JSONB DEFAULT '[]'::jsonb;
+
+-- Add privilege_usage to members
+ALTER TABLE members
+ADD COLUMN IF NOT EXISTS privilege_usage JSONB DEFAULT '[]'::jsonb;

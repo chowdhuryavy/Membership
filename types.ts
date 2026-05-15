@@ -238,6 +238,7 @@ export interface Member {
   spouse_id_card_url?: string;
   notes?: string;
   referrer_name?: string;
+  privilege_usage?: { privilege: string; used_count: number; updated_date?: string; updated_by?: string }[];
 }
 
 export interface Freeze {

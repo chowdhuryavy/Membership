@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Component, ErrorInfo, ReactNode } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { 
   HashRouter as Router, 
@@ -614,6 +614,43 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
 
 import RetailStockReport from './pages/RetailStockReport';
 
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '20px', backgroundColor: '#fee2e2', color: '#991b1b', height: '100vh', zIndex: 9999, position: 'relative' }}>
+          <h2>Something went wrong.</h2>
+          <pre style={{ whiteSpace: 'pre-wrap' }}>{this.state.error?.toString()}</pre>
+        </div>
+      );
+    }
+    // @ts-expect-error React types issue
+    return this.props.children;
+  }
+}
+
 const DynamicHead = () => {
   const { settings } = useSettings();
 
@@ -724,7 +761,7 @@ const App = () => {
   }, []);
 
   return (
-    <>
+    <ErrorBoundary>
       <DynamicHead />
       <Toaster position="top-right" />
       <UserActivityTracker />
@@ -751,7 +788,7 @@ const App = () => {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
-    </>
+    </ErrorBoundary>
   );
 };
 

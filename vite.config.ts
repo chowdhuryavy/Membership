@@ -6,6 +6,11 @@ import tailwindcss from '@tailwindcss/vite';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  server: {
+    port: 3000,
+    host: '0.0.0.0',
+    allowedHosts: true // To prevent 'Invalid Host header' errors in AI studio
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

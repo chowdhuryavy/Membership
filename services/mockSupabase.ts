@@ -1380,6 +1380,11 @@ class DatabaseService {
       const { error } = await supabase.from('membership_categories').insert([{ ...cat, id: `cat_${crypto.randomUUID()}` }]);
       if (error) throw error;
       await this.logAction('CREATE_CATEGORY', `Created membership tier: ${cat.name} (Base Rate: ${cat.base_rate})`, cat.outlet_id);
+    } else {
+      const existing = JSON.parse(localStorage.getItem('membership_categories') || '[]');
+      const newId = `cat_${crypto.randomUUID()}`;
+      localStorage.setItem('membership_categories', JSON.stringify([...existing, { ...cat, id: newId }]));
+      await this.logAction('CREATE_CATEGORY', `Created membership tier locally: ${cat.name}`);
     }
   }
 
@@ -1403,6 +1408,11 @@ class DatabaseService {
             timestamp: new Date().toISOString()
         };
         await this.logAction('CATEGORY_HISTORY_ENTRY', JSON.stringify(historyEntry));
+    } else {
+        const existing = JSON.parse(localStorage.getItem('membership_categories') || '[]');
+        const updated = existing.map((c: any) => c.id === id ? { ...c, ...updates } : c);
+        localStorage.setItem('membership_categories', JSON.stringify(updated));
+        await this.logAction('UPDATE_CATEGORY', `Updated membership tier locally: ${id}`);
     }
   }
 
@@ -1411,6 +1421,11 @@ class DatabaseService {
         const { error } = await supabase.from('membership_categories').delete().eq('id', id);
         if (error) throw error;
         await this.logAction('DELETE_CATEGORY', `Deleted membership tier ID: ${id}`);
+    } else {
+        const existing = JSON.parse(localStorage.getItem('membership_categories') || '[]');
+        const updated = existing.filter((c: any) => c.id !== id);
+        localStorage.setItem('membership_categories', JSON.stringify(updated));
+        await this.logAction('DELETE_CATEGORY', `Deleted membership tier locally: ${id}`);
     }
   }
 

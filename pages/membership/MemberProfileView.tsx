@@ -8,7 +8,7 @@ import {
   Shield, UserCheck, CalendarDays, ClipboardList, TrendingUp, History,
   LayoutDashboard, Calendar, Pencil, ArrowRight, AlertCircle, List,
   Milestone, MousePointer, PenTool, Wallet, Tag, FileUp, Download, Printer,
-  ShieldAlert
+  ShieldAlert, Sparkles, Minus
 } from 'lucide-react';
 import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, MassageType } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -120,6 +120,36 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       toast.error("Failed to save signatures. Please try again.");
     }
   };
+
+  const handleUpdatePrivilege = async (privilege: string, increment: number) => {
+    try {
+      setPageLoading(true);
+      const currentUsages = viewingMember.privilege_usage || [];
+      const existing = currentUsages.find(u => u.privilege === privilege);
+      
+      let newUsages;
+      if (existing) {
+        newUsages = currentUsages.map(u => 
+          u.privilege === privilege 
+            ? { ...u, used_count: Math.max(0, u.used_count + increment), updated_date: new Date().toISOString(), updated_by: user?.email || 'System' }
+            : u
+        );
+      } else {
+        newUsages = [...currentUsages, { privilege, used_count: Math.max(0, increment), updated_date: new Date().toISOString(), updated_by: user?.email || 'System' }];
+      }
+      
+      await db.updateMember(viewingMember.id, { privilege_usage: newUsages });
+      setViewingMember(prev => ({ ...prev, privilege_usage: newUsages }));
+      
+      toast.success('Privilege usage updated');
+      onUpdate();
+    } catch (error) {
+      toast.error('Failed to update privilege');
+    } finally {
+      setPageLoading(false);
+    }
+  };
+
 
   const loadForensics = async (targetMember: Member) => {
     const [f, b, mt, history, guests] = await Promise.all([
@@ -588,6 +618,65 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                       <div className="space-y-1.5"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><LayoutDashboard className="w-3 h-3"/> Package Spec</p><p className="text-sm font-black uppercase text-slate-900">{viewingMember.package_type}</p></div>
                   </div>
               </Card>
+
+              {category?.privileges && category.privileges.length > 0 && (
+                  <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                      <CardHeader className="bg-gradient-to-r from-emerald-900 to-emerald-950 text-white p-8 border-b border-emerald-800/30">
+                           <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 bg-emerald-500/20 rounded-xl flex items-center justify-center border border-emerald-400/30">
+                                     <Sparkles className="w-5 h-5 text-emerald-400" />
+                                </div>
+                                <div>
+                                     <CardTitle className="text-[11px] font-black uppercase tracking-widest leading-none">Privilege Entitlements</CardTitle>
+                                     <p className="text-[8px] font-black text-emerald-300/80 uppercase tracking-widest mt-1">Track & Manage Used Tier Benefits</p>
+                                </div>
+                           </div>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                            <div className="divide-y divide-slate-100">
+                                 {category.privileges.map(privilege => {
+                                     const usage = viewingMember.privilege_usage?.find(u => u.privilege === privilege);
+                                     const count = usage?.used_count || 0;
+                                     return (
+                                          <div key={privilege} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                                              <div>
+                                                  <span className="font-bold text-sm text-slate-900">{privilege}</span>
+                                                  {usage?.updated_date && (
+                                                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">
+                                                          Last updated by {usage.updated_by} on {format(parseISO(usage.updated_date), 'dd MMM yyyy HH:mm')}
+                                                      </p>
+                                                  )}
+                                              </div>
+                                              <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-2xl p-1.5 shadow-sm">
+                                                  <Button 
+                                                      type="button" 
+                                                      variant="outline" 
+                                                      onClick={() => handleUpdatePrivilege(privilege, -1)}
+                                                      disabled={count === 0}
+                                                      className="h-10 w-10 p-0 rounded-xl border-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200"
+                                                  >
+                                                      <Minus className="w-4 h-4" />
+                                                  </Button>
+                                                  <div className="w-16 text-center space-y-0.5">
+                                                      <div className="text-xl font-black text-emerald-600 leading-none">{count}</div>
+                                                      <div className="text-[8px] font-black uppercase tracking-widest text-slate-400">Used</div>
+                                                  </div>
+                                                  <Button 
+                                                      type="button" 
+                                                      variant="outline" 
+                                                      onClick={() => handleUpdatePrivilege(privilege, 1)}
+                                                      className="h-10 w-10 p-0 rounded-xl border-slate-200 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200"
+                                                  >
+                                                      <Plus className="w-4 h-4" />
+                                                  </Button>
+                                              </div>
+                                          </div>
+                                     );
+                                 })}
+                            </div>
+                      </CardContent>
+                  </Card>
+              )}
 
               <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white flex flex-col">
                   <CardHeader className="bg-[#0f172a] text-white p-8 flex justify-between items-center border-b border-white/10 shrink-0">

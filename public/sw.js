@@ -109,8 +109,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body || 'You have a new update.',
-    icon: data.icon || '/icon.png',
-    badge: '/favicon-16x16.png',
+    icon: data.icon || '/apple-touch-icon.png',
+    badge: '/favicon-32x32.png',
     vibrate: [100, 50, 100], // Simpler vibrate
     tag: data.tag || 'staff-alert',
     renotify: true,

@@ -35,7 +35,7 @@ import { db } from '../services/mockSupabase';
 import { Member, MassageBooking, Sale, Staff, MemberStatus, InventoryItem, MassageRoom, Freeze, StaffLeave, MembershipType } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
 // Fix: Added isSameDay to date-fns imports to resolve compiler error on line 185
-import { format, endOfMonth, differenceInCalendarDays, isSameMonth, startOfMonth, subMonths, isAfter, startOfDay, isWithinInterval, parse, isSameDay } from 'date-fns';
+import { format, endOfMonth, differenceInCalendarDays, isSameMonth, startOfMonth, subMonths, isAfter, startOfDay, isWithinInterval, parse, isSameDay, startOfYear, isSameYear } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -154,6 +154,14 @@ const Dashboard = () => {
       other: 0
     },
     mtdBreakdown: {
+      membership: 0,
+      massage: 0,
+      personalTraining: 0,
+      retail: 0,
+      entranceFee: 0,
+      other: 0
+    },
+    ytdBreakdown: {
       membership: 0,
       massage: 0,
       personalTraining: 0,
@@ -310,12 +318,15 @@ const Dashboard = () => {
         let activeAtPointCount = 0;
         let frozenAtPointCount = 0;
         let mtdMembershipRevenue = 0;
+        let ytdMembershipRevenue = 0;
         let deferredRevenueAtPoint = 0;
         let monthEnrollments = 0;
         let totalDailyAccrual = 0;
         
         const typeRevenueMap: Record<string, number> = {};
         const typeCountMap: Record<string, number> = {};
+        
+        const ytdStart = startOfYear(viewDate);
 
         members.forEach(m => {
           const mStart = parseISO(m.start_date);
@@ -327,6 +338,9 @@ const Dashboard = () => {
           const memberFreezes = freezes.filter(f => f.member_id === m.id);
           const earnedInPeriod = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, contextStart, auditPoint);
           mtdMembershipRevenue += earnedInPeriod;
+          
+          const earnedYTD = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, ytdStart, auditPoint);
+          ytdMembershipRevenue += earnedYTD;
           
           // Track by type
           if (m.membership_type_id) {
@@ -461,12 +475,15 @@ const Dashboard = () => {
             });
         }).length;
 
-        // 4. Revenue Mix (MTD)
+        // 4. Revenue Mix (MTD and YTD)
         let mtdServiceRevenue = 0;
         let dailyServiceRevenue = 0;
         let mtdSalesRevenue = 0;
+        let ytdServiceRevenue = 0;
+        let ytdSalesRevenue = 0;
         const dailySalesBreakdown = { personalTraining: 0, retail: 0, entranceFee: 0, other: 0 };
         const mtdSalesBreakdown = { personalTraining: 0, retail: 0, entranceFee: 0, other: 0 };
+        const ytdSalesBreakdown = { personalTraining: 0, retail: 0, entranceFee: 0, other: 0 };
 
         // We calculate all non-membership revenue from sales to avoid double counting with bookings
         // Bookings are used for counts and utilization metrics, but Sales is the financial source of truth
@@ -474,6 +491,18 @@ const Dashboard = () => {
             const sDate = new Date(s.created_at);
             const amount = Number(s.net_amount || 0);
             const cat = s.category as string;
+            
+            if (isSameYear(sDate, viewDate)) {
+                if (cat === 'Massage') {
+                    ytdServiceRevenue += amount;
+                } else {
+                    ytdSalesRevenue += amount;
+                    if (cat === 'Personal Training') ytdSalesBreakdown.personalTraining += amount;
+                    else if (cat === 'Retail' || cat === 'Retail Items') ytdSalesBreakdown.retail += amount;
+                    else if (cat === 'Entrance Fee' || cat === 'Day Use') ytdSalesBreakdown.entranceFee += amount;
+                    else ytdSalesBreakdown.other += amount;
+                }
+            }
 
             if (isSameMonth(sDate, viewDate)) {
                 if (cat === 'Massage') {
@@ -652,6 +681,14 @@ const Dashboard = () => {
             retail: mtdSalesBreakdown.retail,
             entranceFee: mtdSalesBreakdown.entranceFee,
             other: mtdSalesBreakdown.other
+          },
+          ytdBreakdown: {
+            membership: ytdMembershipRevenue,
+            massage: ytdServiceRevenue,
+            personalTraining: ytdSalesBreakdown.personalTraining,
+            retail: ytdSalesBreakdown.retail,
+            entranceFee: ytdSalesBreakdown.entranceFee,
+            other: ytdSalesBreakdown.other
           }
         });
 
@@ -814,6 +851,7 @@ const Dashboard = () => {
                                     <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-[0.1em]">Revenue Stream</th>
                                     <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-[0.1em] text-right">Daily Yield</th>
                                     <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-[0.1em] text-right">MTD Recognition</th>
+                                    <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-[0.1em] text-right">YTD Recognition</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
@@ -840,6 +878,9 @@ const Dashboard = () => {
                                         <td className="px-8 py-5 text-right">
                                             <span className="text-[11px] font-black text-indigo-600 tabular-nums">{formatMoney(stats.mtdBreakdown[item.key as keyof typeof stats.mtdBreakdown])}</span>
                                         </td>
+                                        <td className="px-8 py-5 text-right">
+                                            <span className="text-[11px] font-black text-emerald-600 tabular-nums">{formatMoney(stats.ytdBreakdown[item.key as keyof typeof stats.ytdBreakdown])}</span>
+                                        </td>
                                     </tr>
                                 ))}
                                 <tr className="bg-indigo-50/20 border-t-2 border-indigo-100/50">
@@ -854,6 +895,11 @@ const Dashboard = () => {
                                     <td className="px-8 py-6 text-right">
                                         <span className="text-[14px] font-black text-indigo-700 tabular-nums">
                                             {formatMoney(Object.values(stats.mtdBreakdown).reduce((a: number, b: number) => a + b, 0))}
+                                        </span>
+                                    </td>
+                                    <td className="px-8 py-6 text-right">
+                                        <span className="text-[14px] font-black text-emerald-700 tabular-nums">
+                                            {formatMoney(Object.values(stats.ytdBreakdown).reduce((a: number, b: number) => a + b, 0))}
                                         </span>
                                     </td>
                                 </tr>

@@ -124,17 +124,17 @@ const Members = () => {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'members' },
-        () => loadData()
+        () => loadData(true)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'membership_categories' },
-        () => loadData()
+        () => loadData(true)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'staff' },
-        () => loadData()
+        () => loadData(true)
       )
       .subscribe();
 
