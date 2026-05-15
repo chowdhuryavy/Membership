@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
-import { MembershipCategory, MembershipType } from '../types';
+import { MembershipCategory, MembershipType, CategoryPrivilege } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Trash2, Edit2, Layers, Store, Target, Coins, CalendarClock, Plus, X, Command, Snowflake, Search, SearchCode, ChevronDown, Zap, ShieldCheck, MousePointer, ArrowRight, Clock, Loader2 } from 'lucide-react';
@@ -15,7 +15,7 @@ const Categories = () => {
   const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string | 'all'>('all');
   
-  const [formData, setFormData] = useState({ id: '', name: '', duration_months: 1, base_rate: 0, max_freeze_days: 0, membership_type_id: '', privileges: [] as string[] });
+  const [formData, setFormData] = useState({ id: '', name: '', duration_months: 1, base_rate: 0, max_freeze_days: 0, membership_type_id: '', privileges: [] as CategoryPrivilege[] });
   const [isEditing, setIsEditing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showTypeSelector, setShowTypeSelector] = useState(false);
@@ -364,8 +364,8 @@ const Categories = () => {
                           {cat.privileges && cat.privileges.length > 0 && (
                             <div className="mt-6 flex flex-wrap gap-2">
                                 {cat.privileges.slice(0, 3).map((p, i) => (
-                                    <span key={i} className="text-[8px] font-black bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-100 uppercase tracking-tighter">
-                                        {p}
+                                    <span key={i} className="text-[8px] font-black bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-100 uppercase tracking-tighter" title={`${p.name} - Quantity: ${p.quantity}`}>
+                                        {p.name} ({p.quantity})
                                     </span>
                                 ))}
                                 {cat.privileges.length > 3 && (
@@ -449,16 +449,36 @@ const Categories = () => {
                                     <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Privileges</label>
                                     <div className="flex gap-2">
                                         <Input 
-                                            id="privilege-input"
-                                            placeholder="Add perk..."
-                                            className="h-12 rounded-xl"
+                                            id="privilege-name-input"
+                                            placeholder="Add perk (e.g. PT Sessions)..."
+                                            className="h-12 rounded-xl flex-1"
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter') {
                                                     e.preventDefault();
-                                                    const val = (e.target as HTMLInputElement).value.trim();
+                                                    document.getElementById('privilege-qty-input')?.focus();
+                                                }
+                                            }}
+                                        />
+                                        <Input 
+                                            id="privilege-qty-input"
+                                            type="number"
+                                            placeholder="Qty"
+                                            className="h-12 w-24 rounded-xl shrink-0"
+                                            min="1"
+                                            defaultValue="1"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const nameEl = document.getElementById('privilege-name-input') as HTMLInputElement;
+                                                    const qtyEl = e.target as HTMLInputElement;
+                                                    const val = nameEl.value.trim();
+                                                    const qty = parseInt(qtyEl.value, 10) || 1;
                                                     if (val) {
-                                                        setFormData({ ...formData, privileges: [...formData.privileges, val] });
-                                                        (e.target as HTMLInputElement).value = '';
+                                                        const newPrivilege: CategoryPrivilege = { id: crypto.randomUUID(), name: val, quantity: qty };
+                                                        setFormData({ ...formData, privileges: [...formData.privileges, newPrivilege] });
+                                                        nameEl.value = '';
+                                                        qtyEl.value = '1';
+                                                        nameEl.focus();
                                                     }
                                                 }
                                             }}
@@ -468,11 +488,16 @@ const Categories = () => {
                                             variant="outline" 
                                             className="h-12 w-12 rounded-xl p-0 shrink-0 border-slate-200"
                                             onClick={() => {
-                                                const el = document.getElementById('privilege-input') as HTMLInputElement;
-                                                const val = el.value.trim();
+                                                const nameEl = document.getElementById('privilege-name-input') as HTMLInputElement;
+                                                const qtyEl = document.getElementById('privilege-qty-input') as HTMLInputElement;
+                                                const val = nameEl.value.trim();
+                                                const qty = parseInt(qtyEl.value, 10) || 1;
                                                 if (val) {
-                                                    setFormData({ ...formData, privileges: [...formData.privileges, val] });
-                                                    el.value = '';
+                                                    const newPrivilege: CategoryPrivilege = { id: crypto.randomUUID(), name: val, quantity: qty };
+                                                    setFormData({ ...formData, privileges: [...formData.privileges, newPrivilege] });
+                                                    nameEl.value = '';
+                                                    qtyEl.value = '1';
+                                                    nameEl.focus();
                                                 }
                                             }}
                                         >
@@ -486,7 +511,7 @@ const Categories = () => {
                                 <div className="flex flex-wrap gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-300">
                                     {formData.privileges.map((p, i) => (
                                         <span key={i} className="px-3 py-1 bg-white rounded-lg text-[9px] font-black uppercase text-indigo-600 border border-indigo-100 flex items-center gap-2 shadow-sm group/tag">
-                                            {p}
+                                            {p.name} ({p.quantity})
                                             <button 
                                                 type="button" 
                                                 onClick={() => setFormData({ ...formData, privileges: formData.privileges.filter((_, idx) => idx !== i) })}

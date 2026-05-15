@@ -633,14 +633,22 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                            </div>
                       </CardHeader>
                       <CardContent className="p-0">
-                            <div className="divide-y divide-slate-100">
-                                 {category.privileges.map(privilege => {
-                                     const usage = viewingMember.privilege_usage?.find(u => u.privilege === privilege);
+                             <div className="divide-y divide-slate-100">
+                                 {category.privileges.map(priv => {
+                                     const pName = typeof priv === 'string' ? priv : priv.name;
+                                     const pQty = typeof priv === 'string' ? null : priv.quantity;
+                                     const usage = viewingMember.privilege_usage?.find(u => u.privilege === pName);
                                      const count = usage?.used_count || 0;
                                      return (
-                                          <div key={privilege} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                                          <div key={pName} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
                                               <div>
-                                                  <span className="font-bold text-sm text-slate-900">{privilege}</span>
+                                                  <span className="font-bold text-sm text-slate-900">{pName}</span>
+                                                  {pQty !== null && (
+                                                      <span className="ml-2 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Total: {pQty}</span>
+                                                  )}
+                                                  {pQty !== null && (
+                                                      <span className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded border ${pQty - count <= 0 ? 'bg-red-50 text-red-600 border-red-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>Balance: {pQty - count}</span>
+                                                  )}
                                                   {usage?.updated_date && (
                                                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">
                                                           Last updated by {usage.updated_by} on {format(parseISO(usage.updated_date), 'dd MMM yyyy HH:mm')}
@@ -651,7 +659,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                                   <Button 
                                                       type="button" 
                                                       variant="outline" 
-                                                      onClick={() => handleUpdatePrivilege(privilege, -1)}
+                                                      onClick={() => handleUpdatePrivilege(pName, -1)}
                                                       disabled={count === 0}
                                                       className="h-10 w-10 p-0 rounded-xl border-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200"
                                                   >
@@ -664,7 +672,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                                   <Button 
                                                       type="button" 
                                                       variant="outline" 
-                                                      onClick={() => handleUpdatePrivilege(privilege, 1)}
+                                                      onClick={() => handleUpdatePrivilege(pName, 1)}
+                                                      disabled={pQty !== null && count >= pQty}
                                                       className="h-10 w-10 p-0 rounded-xl border-slate-200 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200"
                                                   >
                                                       <Plus className="w-4 h-4" />

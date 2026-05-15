@@ -632,7 +632,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                             <ul className="grid grid-cols-1 gap-2">
                                 {selectedCategory.privileges.map((p, i) => (
                                     <li key={i} className="text-[10px] font-bold text-indigo-700 flex items-center gap-2">
-                                        <span className="w-1 h-1 rounded-full bg-indigo-400"></span> {p}
+                                        <span className="w-1 h-1 rounded-full bg-indigo-400"></span> {typeof p === 'string' ? p : `${p.name} (${p.quantity})`}
                                     </li>
                                 ))}
                             </ul>

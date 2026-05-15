@@ -133,6 +133,12 @@ export interface MembershipType {
   created_at: string;
 }
 
+export interface CategoryPrivilege {
+  id: string;
+  name: string;
+  quantity: number;
+}
+
 export interface MembershipCategory {
   id: string;
   outlet_id: string;
@@ -141,7 +147,7 @@ export interface MembershipCategory {
   duration_months: number;
   base_rate: number;
   max_freeze_days: number;
-  privileges?: string[];
+  privileges?: CategoryPrivilege[];
 }
 
 export interface UserProfile {
