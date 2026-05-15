@@ -131,10 +131,11 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
+  const [activeLogUsage, setActiveLogUsage] = useState<{ privilege: string, increment: number } | null>(null);
   const [privilegeServiceDate, setPrivilegeServiceDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [privilegeServiceNote, setPrivilegeServiceNote] = useState('');
 
-  const handleUpdatePrivilege = async (privilege: string, increment: number) => {
+  const handleUpdatePrivilege = async (privilege: string, increment: number, serviceDate?: string, note?: string) => {
     try {
       setPageLoading(true);
       const currentUsages = viewingMember.privilege_usage || [];
@@ -143,8 +144,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       let newUsages;
       const historyEntry = {
         date: new Date().toISOString(), // Log date
-        service_date: privilegeServiceDate || format(new Date(), 'yyyy-MM-dd'), // Usage date
-        note: privilegeServiceNote,
+        service_date: serviceDate || format(new Date(), 'yyyy-MM-dd'), // Usage date
+        note: note || '',
         by: user?.name || user?.email || 'System',
         change: increment,
       };
@@ -178,6 +179,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       setViewingMember(prev => ({ ...prev, privilege_usage: newUsages }));
       
       setPrivilegeServiceNote('');
+      setActiveLogUsage(null);
       toast.success('Privilege usage updated');
       onUpdate();
     } catch (err) {
@@ -677,8 +679,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
               {category?.privileges && category.privileges.length > 0 && (
                   <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
-                      <CardHeader className="bg-gradient-to-r from-emerald-900 to-emerald-950 text-white p-8 border-b border-emerald-800/30">
-                           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+                       <CardHeader className="bg-gradient-to-r from-emerald-900 to-emerald-950 text-white p-8 border-b border-emerald-800/30">
+                           <div className="flex items-center justify-between">
                                <div className="flex items-center gap-3">
                                     <div className="w-9 h-9 bg-emerald-500/20 rounded-xl flex items-center justify-center border border-emerald-400/30">
                                          <Sparkles className="w-5 h-5 text-emerald-400" />
@@ -689,53 +691,27 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                     </div>
                                </div>
 
-                               <div className="flex flex-wrap items-center gap-4 bg-emerald-950/40 p-3 rounded-[1.5rem] border border-emerald-800/30">
-                                   <div className="flex flex-col gap-1.5">
-                                      <label className="text-[7px] font-black text-emerald-400/60 uppercase tracking-[0.2em] ml-2">Actual Usage Date</label>
-                                      <div className="relative group">
-                                          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-emerald-400 group-focus-within:text-white transition-colors" />
-                                          <input 
-                                              type="date" 
-                                              value={privilegeServiceDate}
-                                              onChange={(e) => setPrivilegeServiceDate(e.target.value)}
-                                              className="bg-emerald-900/50 border border-emerald-800/50 rounded-xl px-9 py-2 text-[10px] font-black text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all w-40 appearance-none"
-                                          />
-                                      </div>
-                                   </div>
-
-                                   <div className="flex flex-col gap-1.5 hidden md:flex">
-                                      <label className="text-[7px] font-black text-emerald-400/60 uppercase tracking-[0.2em] ml-2">Optional Memo</label>
-                                      <input 
-                                          type="text" 
-                                          placeholder="ADD SERVICE NOTE..."
-                                          value={privilegeServiceNote}
-                                          onChange={(e) => setPrivilegeServiceNote(e.target.value)}
-                                          className="bg-emerald-900/50 border border-emerald-800/50 rounded-xl px-4 py-2 text-[10px] font-black text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all w-48 placeholder:text-emerald-800"
-                                      />
-                                   </div>
-
-                                   <div className="flex items-center gap-2 ml-auto">
+                               <div className="flex items-center gap-2">
+                                   <Button 
+                                       type="button" 
+                                       variant="outline" 
+                                       onClick={() => setShowPrivilegeHistoryModal(true)}
+                                       className="h-8 px-3 rounded-lg border-emerald-800/50 text-emerald-300 hover:text-white hover:bg-emerald-800 hover:border-emerald-700 text-[10px] font-black uppercase tracking-widest bg-emerald-900/50"
+                                   >
+                                       <History className="w-3 h-3 mr-1.5" />
+                                       History
+                                   </Button>
+                                   {isSuperAdmin && (
                                        <Button 
                                            type="button" 
                                            variant="outline" 
-                                           onClick={() => setShowPrivilegeHistoryModal(true)}
-                                           className="h-9 px-4 rounded-xl border-emerald-800/50 text-emerald-300 hover:text-white hover:bg-emerald-800 hover:border-emerald-700 text-[10px] font-black uppercase tracking-widest bg-emerald-900/50 transition-all active:scale-95"
+                                           onClick={() => setShowClearConfirm(true)}
+                                           className="h-8 px-3 rounded-lg border-red-800/50 text-red-300 hover:text-white hover:bg-red-800 hover:border-red-700 text-[10px] font-black uppercase tracking-widest bg-red-900/50"
                                        >
-                                           <History className="w-3.5 h-3.5 mr-2" />
-                                           History
+                                           <RotateCcw className="w-3 h-3 mr-1.5" />
+                                           Purge History
                                        </Button>
-                                       {isSuperAdmin && (
-                                           <Button 
-                                               type="button" 
-                                               variant="outline" 
-                                               onClick={() => setShowClearConfirm(true)}
-                                               className="h-9 px-4 rounded-xl border-red-800/50 text-red-300 hover:text-white hover:bg-red-800 hover:border-red-700 text-[10px] font-black uppercase tracking-widest bg-red-900/50 transition-all active:scale-95"
-                                           >
-                                               <RotateCcw className="w-3.5 h-3.5 mr-2" />
-                                               Purge
-                                           </Button>
-                                       )}
-                                   </div>
+                                   )}
                                </div>
                            </div>
                       </CardHeader>
@@ -771,7 +747,11 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                                   <Button 
                                                       type="button" 
                                                       variant="outline" 
-                                                      onClick={() => handleUpdatePrivilege(pName, -1)}
+                                                      onClick={() => {
+                                                         setPrivilegeServiceDate(format(new Date(), 'yyyy-MM-dd'));
+                                                         setPrivilegeServiceNote('');
+                                                         setActiveLogUsage({ privilege: pName, increment: -1 });
+                                                      }}
                                                       disabled={count === 0}
                                                       className="h-10 w-10 p-0 rounded-xl border-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200"
                                                   >
@@ -784,7 +764,11 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                                   <Button 
                                                       type="button" 
                                                       variant="outline" 
-                                                      onClick={() => handleUpdatePrivilege(pName, 1)}
+                                                      onClick={() => {
+                                                           setPrivilegeServiceDate(format(new Date(), 'yyyy-MM-dd'));
+                                                           setPrivilegeServiceNote('');
+                                                           setActiveLogUsage({ privilege: pName, increment: 1 });
+                                                      }}
                                                       disabled={pQty !== null && count >= pQty}
                                                       className="h-10 w-10 p-0 rounded-xl border-slate-200 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200"
                                                   >
@@ -1543,6 +1527,76 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                             className="flex-[2] h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl bg-indigo-600 hover:bg-indigo-700 text-white"
                         >
                             Save Intelligence
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+      )}
+
+      {activeLogUsage && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
+            <Card className="w-full max-w-[400px] rounded-[2.5rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden bg-white border border-white/20">
+                <CardHeader className="bg-emerald-900 text-white p-8 relative flex flex-col items-center text-center">
+                    <div className="w-14 h-14 bg-emerald-500/20 rounded-2xl flex items-center justify-center mb-4 border border-emerald-400/30">
+                        <ClipboardList className="w-7 h-7 text-emerald-400" />
+                    </div>
+                    <CardTitle className="text-xl font-black uppercase tracking-tight leading-none mb-1">Log Benefit Usage</CardTitle>
+                    <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">{activeLogUsage.privilege}</p>
+                    <button onClick={() => setActiveLogUsage(null)} className="absolute top-6 right-6 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90">
+                        <X className="w-4 h-4 text-slate-400"/>
+                    </button>
+                </CardHeader>
+                <CardContent className="p-8 space-y-6">
+                    <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-lg ${activeLogUsage.increment > 0 ? 'bg-emerald-600' : 'bg-red-600'}`}>
+                            {activeLogUsage.increment > 0 ? '+' : ''}{activeLogUsage.increment}
+                        </div>
+                        <div>
+                            <p className="text-[9px] font-black text-emerald-800 uppercase tracking-widest">Adjustment Quantity</p>
+                            <p className="text-xs font-bold text-slate-700">Updating usage balance</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service Date (Actual)</label>
+                            <div className="relative">
+                                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input 
+                                    type="date" 
+                                    value={privilegeServiceDate}
+                                    onChange={(e) => setPrivilegeServiceDate(e.target.value)}
+                                    className="w-full h-12 pl-12 pr-4 rounded-xl border-2 border-slate-100 focus:border-emerald-600 bg-white font-black text-sm transition-all appearance-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service Note (Optional)</label>
+                            <input 
+                                type="text" 
+                                placeholder="E.G. GUEST PASS USED FOR SPOUSE"
+                                value={privilegeServiceNote}
+                                onChange={(e) => setPrivilegeServiceNote(e.target.value)}
+                                className="w-full h-12 px-4 rounded-xl border-2 border-slate-100 focus:border-emerald-600 bg-white font-black text-[10px] transition-all placeholder:text-slate-300"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                        <Button 
+                            onClick={() => setActiveLogUsage(null)}
+                            variant="outline"
+                            className="flex-1 h-12 rounded-xl font-black uppercase text-[10px] tracking-widest border-slate-200 text-slate-500"
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={() => handleUpdatePrivilege(activeLogUsage.privilege, activeLogUsage.increment, privilegeServiceDate, privilegeServiceNote)}
+                            className="flex-1 h-12 rounded-xl font-black uppercase text-[10px] tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg active:scale-95 transition-all"
+                        >
+                            {activeLogUsage.increment > 0 ? 'Log Usage' : 'Reverse Entry'}
                         </Button>
                     </div>
                 </CardContent>
