@@ -131,6 +131,9 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
+  const [privilegeServiceDate, setPrivilegeServiceDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [privilegeServiceNote, setPrivilegeServiceNote] = useState('');
+
   const handleUpdatePrivilege = async (privilege: string, increment: number) => {
     try {
       setPageLoading(true);
@@ -139,7 +142,9 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       
       let newUsages;
       const historyEntry = {
-        date: new Date().toISOString(),
+        date: new Date().toISOString(), // Log date
+        service_date: privilegeServiceDate || format(new Date(), 'yyyy-MM-dd'), // Usage date
+        note: privilegeServiceNote,
         by: user?.name || user?.email || 'System',
         change: increment,
       };
@@ -172,6 +177,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       await db.updateMember(viewingMember.id, { privilege_usage: newUsages });
       setViewingMember(prev => ({ ...prev, privilege_usage: newUsages }));
       
+      setPrivilegeServiceNote('');
       toast.success('Privilege usage updated');
       onUpdate();
     } catch (err) {
@@ -672,7 +678,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
               {category?.privileges && category.privileges.length > 0 && (
                   <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-gradient-to-r from-emerald-900 to-emerald-950 text-white p-8 border-b border-emerald-800/30">
-                           <div className="flex items-center justify-between">
+                           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
                                <div className="flex items-center gap-3">
                                     <div className="w-9 h-9 bg-emerald-500/20 rounded-xl flex items-center justify-center border border-emerald-400/30">
                                          <Sparkles className="w-5 h-5 text-emerald-400" />
@@ -682,28 +688,55 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                          <p className="text-[8px] font-black text-emerald-300/80 uppercase tracking-widest mt-1">Track & Manage Used Tier Benefits</p>
                                     </div>
                                </div>
-                               {isSuperAdmin && (
-                                   <div className="flex items-center gap-2">
+
+                               <div className="flex flex-wrap items-center gap-4 bg-emerald-950/40 p-3 rounded-[1.5rem] border border-emerald-800/30">
+                                   <div className="flex flex-col gap-1.5">
+                                      <label className="text-[7px] font-black text-emerald-400/60 uppercase tracking-[0.2em] ml-2">Actual Usage Date</label>
+                                      <div className="relative group">
+                                          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-emerald-400 group-focus-within:text-white transition-colors" />
+                                          <input 
+                                              type="date" 
+                                              value={privilegeServiceDate}
+                                              onChange={(e) => setPrivilegeServiceDate(e.target.value)}
+                                              className="bg-emerald-900/50 border border-emerald-800/50 rounded-xl px-9 py-2 text-[10px] font-black text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all w-40 appearance-none"
+                                          />
+                                      </div>
+                                   </div>
+
+                                   <div className="flex flex-col gap-1.5 hidden md:flex">
+                                      <label className="text-[7px] font-black text-emerald-400/60 uppercase tracking-[0.2em] ml-2">Optional Memo</label>
+                                      <input 
+                                          type="text" 
+                                          placeholder="ADD SERVICE NOTE..."
+                                          value={privilegeServiceNote}
+                                          onChange={(e) => setPrivilegeServiceNote(e.target.value)}
+                                          className="bg-emerald-900/50 border border-emerald-800/50 rounded-xl px-4 py-2 text-[10px] font-black text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all w-48 placeholder:text-emerald-800"
+                                      />
+                                   </div>
+
+                                   <div className="flex items-center gap-2 ml-auto">
                                        <Button 
                                            type="button" 
                                            variant="outline" 
                                            onClick={() => setShowPrivilegeHistoryModal(true)}
-                                           className="h-8 px-3 rounded-lg border-emerald-800/50 text-emerald-300 hover:text-white hover:bg-emerald-800 hover:border-emerald-700 text-[10px] font-black uppercase tracking-widest bg-emerald-900/50"
+                                           className="h-9 px-4 rounded-xl border-emerald-800/50 text-emerald-300 hover:text-white hover:bg-emerald-800 hover:border-emerald-700 text-[10px] font-black uppercase tracking-widest bg-emerald-900/50 transition-all active:scale-95"
                                        >
-                                           <History className="w-3 h-3 mr-1.5" />
+                                           <History className="w-3.5 h-3.5 mr-2" />
                                            History
                                        </Button>
-                                       <Button 
-                                           type="button" 
-                                           variant="outline" 
-                                           onClick={() => setShowClearConfirm(true)}
-                                           className="h-8 px-3 rounded-lg border-red-800/50 text-red-300 hover:text-white hover:bg-red-800 hover:border-red-700 text-[10px] font-black uppercase tracking-widest bg-red-900/50"
-                                       >
-                                           <RotateCcw className="w-3 h-3 mr-1.5" />
-                                           Clear History
-                                       </Button>
+                                       {isSuperAdmin && (
+                                           <Button 
+                                               type="button" 
+                                               variant="outline" 
+                                               onClick={() => setShowClearConfirm(true)}
+                                               className="h-9 px-4 rounded-xl border-red-800/50 text-red-300 hover:text-white hover:bg-red-800 hover:border-red-700 text-[10px] font-black uppercase tracking-widest bg-red-900/50 transition-all active:scale-95"
+                                           >
+                                               <RotateCcw className="w-3.5 h-3.5 mr-2" />
+                                               Purge
+                                           </Button>
+                                       )}
                                    </div>
-                               )}
+                               </div>
                            </div>
                       </CardHeader>
                       <CardContent className="p-0">
@@ -1559,7 +1592,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         <History className="w-8 h-8 text-emerald-400" />
                     </div>
                     <CardTitle className="text-2xl font-black uppercase tracking-tighter leading-none mb-2">Benefit Usage Audit Log</CardTitle>
-                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Super-Admin Oversight Protocol</p>
+                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Benefit Utilization Transparency Ledger</p>
                     <button onClick={() => setShowPrivilegeHistoryModal(false)} className="absolute top-10 right-10 p-3 rounded-full bg-white/5 hover:bg-white/10 transition-all active:scale-90 shadow-lg border border-white/5">
                         <X className="w-6 h-6 text-slate-400"/>
                     </button>
@@ -1598,12 +1631,20 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                                                 </span>
                                                             </div>
                                                             <div className="flex flex-col gap-1 mt-2">
-                                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                                    <UserCheck className="w-3.5 h-3.5 text-indigo-400" /> Authorized by: {entry.by}
+                                                                <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2">
+                                                                    <Calendar className="w-3.5 h-3.5" /> Usage Date: {format(parseISO(entry.service_date || entry.date), 'dd MMM yyyy')}
                                                                 </p>
                                                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                                    <Clock className="w-3.5 h-3.5 text-amber-400" /> {format(parseISO(entry.date), 'dd MMM yyyy @ HH:mm:ss')}
+                                                                    <UserCheck className="w-3.5 h-3.5 text-indigo-400/60" /> Authorized by: {entry.by}
                                                                 </p>
+                                                                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest flex items-center gap-2 italic">
+                                                                    <Clock className="w-3.5 h-3.5 text-amber-400/60" /> Logged on {format(parseISO(entry.date), 'dd MMM yyyy @ HH:mm:ss')}
+                                                                </p>
+                                                                {entry.note && (
+                                                                    <p className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100 mt-1 inline-block self-start">
+                                                                        Memo: {entry.note}
+                                                                    </p>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
