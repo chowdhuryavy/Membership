@@ -363,11 +363,18 @@ const Categories = () => {
 
                           {cat.privileges && cat.privileges.length > 0 && (
                             <div className="mt-6 flex flex-wrap gap-2">
-                                {cat.privileges.slice(0, 3).map((p, i) => (
-                                    <span key={i} className="text-[8px] font-black bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-100 uppercase tracking-tighter" title={`${p.name} - Quantity: ${p.quantity}`}>
-                                        {p.name} ({p.quantity})
+                                {cat.privileges.slice(0, 3).map((p, i) => {
+                                    let pObj: any = p;
+                                    if (typeof p === 'string') {
+                                        try { pObj = JSON.parse(p); } catch {}
+                                    }
+                                    const pName = typeof pObj === 'string' ? pObj : pObj.name;
+                                    const pQty = typeof pObj === 'string' ? null : pObj.quantity;
+                                    return (
+                                    <span key={i} className="text-[8px] font-black bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-100 uppercase tracking-tighter" title={`${pName} - Quantity: ${pQty || 'Unlimited'}`}>
+                                        {pName} {pQty !== null ? `(${pQty})` : ''}
                                     </span>
-                                ))}
+                                )})}
                                 {cat.privileges.length > 3 && (
                                     <span className="text-[8px] font-black bg-slate-50 text-slate-400 px-2 py-0.5 rounded border border-slate-100 uppercase tracking-tighter">
                                         +{cat.privileges.length - 3} More
@@ -509,9 +516,16 @@ const Categories = () => {
 
                             {formData.privileges.length > 0 && (
                                 <div className="flex flex-wrap gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-300">
-                                    {formData.privileges.map((p, i) => (
+                                    {formData.privileges.map((p, i) => {
+                                        let pObj: any = p;
+                                        if (typeof p === 'string') {
+                                            try { pObj = JSON.parse(p); } catch {}
+                                        }
+                                        const pName = typeof pObj === 'string' ? pObj : pObj.name;
+                                        const pQty = typeof pObj === 'string' ? null : pObj.quantity;
+                                        return (
                                         <span key={i} className="px-3 py-1 bg-white rounded-lg text-[9px] font-black uppercase text-indigo-600 border border-indigo-100 flex items-center gap-2 shadow-sm group/tag">
-                                            {p.name} ({p.quantity})
+                                            {pName} {pQty !== null ? `(${pQty})` : ''}
                                             <button 
                                                 type="button" 
                                                 onClick={() => setFormData({ ...formData, privileges: formData.privileges.filter((_, idx) => idx !== i) })}
@@ -520,7 +534,7 @@ const Categories = () => {
                                                 <X className="w-3 h-3" />
                                             </button>
                                         </span>
-                                    ))}
+                                    )})}
                                 </div>
                             )}
                             <div className="flex gap-3 pt-4">

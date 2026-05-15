@@ -634,13 +634,18 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                       </CardHeader>
                       <CardContent className="p-0">
                              <div className="divide-y divide-slate-100">
-                                 {category.privileges.map(priv => {
-                                     const pName = typeof priv === 'string' ? priv : priv.name;
-                                     const pQty = typeof priv === 'string' ? null : priv.quantity;
+                                 {category.privileges.map((priv, i) => {
+                                     let pObj: any = priv;
+                                     if (typeof priv === 'string') {
+                                         try { pObj = JSON.parse(priv); } catch {}
+                                     }
+                                     const pName = typeof pObj === 'string' ? pObj : pObj.name;
+                                     const pQty = typeof pObj === 'string' ? null : pObj.quantity;
+                                     const pId = typeof pObj === 'string' ? i : pObj.id || i;
                                      const usage = viewingMember.privilege_usage?.find(u => u.privilege === pName);
                                      const count = usage?.used_count || 0;
                                      return (
-                                          <div key={pName} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                                          <div key={pId} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
                                               <div>
                                                   <span className="font-bold text-sm text-slate-900">{pName}</span>
                                                   {pQty !== null && (

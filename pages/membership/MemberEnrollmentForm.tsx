@@ -630,11 +630,16 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                 <ShieldCheck className="w-3 h-3" /> Included Privileges
                             </h4>
                             <ul className="grid grid-cols-1 gap-2">
-                                {selectedCategory.privileges.map((p, i) => (
+                                {selectedCategory.privileges.map((p, i) => {
+                                    let pObj: any = p;
+                                    if (typeof p === 'string') {
+                                        try { pObj = JSON.parse(p); } catch {}
+                                    }
+                                    return (
                                     <li key={i} className="text-[10px] font-bold text-indigo-700 flex items-center gap-2">
-                                        <span className="w-1 h-1 rounded-full bg-indigo-400"></span> {typeof p === 'string' ? p : `${p.name} (${p.quantity})`}
+                                        <span className="w-1 h-1 rounded-full bg-indigo-400"></span> {typeof pObj === 'string' ? pObj : `${pObj.name} (${pObj.quantity})`}
                                     </li>
-                                ))}
+                                )})}
                             </ul>
                         </div>
                     )}
