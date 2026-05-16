@@ -2287,10 +2287,13 @@ class DatabaseService {
         if (error) throw error;
         await this.logAction('CREATE_BOOKING', `Created booking on ${booking.date} at ${booking.start_time} (Therapist ID: ${booking.therapist_id})`, booking.outlet_id);
         
+        const { data: guestData } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
+        const guestName = guestData?.name || 'A guest';
+
         // Add notification for the therapist AND admins
         await this.addNotification({
           title: 'New Booking Assigned',
-          message: `Therapist assigned for ${booking.date} at ${booking.start_time}.`,
+          message: `Therapist assigned for ${guestName} on ${booking.date} at ${booking.start_time}.`,
           type: 'info',
           outlet_id: booking.outlet_id,
           user_id: booking.therapist_id // TARGETED to assigned staff
@@ -2327,16 +2330,49 @@ class DatabaseService {
         const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
         if (error) throw error;
         
-        // Notify assigned therapist and admins of the modification
-        const therapistId = updates.therapist_id || booking?.therapist_id;
-        if (therapistId) {
+        const guestId = updates.guest_id || booking?.guest_id;
+        let guestName = 'A guest';
+        if (guestId) {
+          const { data: guestData } = await supabase.from('guests').select('name').eq('id', guestId).single();
+          if (guestData && guestData.name) {
+            guestName = guestData.name;
+          }
+        }
+
+        const currentTherapistId = booking?.therapist_id;
+        const newTherapistId = updates.therapist_id;
+        const bookingDate = updates.date || booking?.date || '';
+        const bookingStart = updates.start_time || booking?.start_time || '';
+
+        if (newTherapistId && currentTherapistId && newTherapistId !== currentTherapistId) {
+          // Changed therapist
           await this.addNotification({
-            title: 'Booking Modified',
-            message: `A booking on ${booking?.date || ''} has been updated.`,
+            title: 'Booking Assigned To You',
+            message: `A booking for ${guestName} on ${bookingDate} at ${bookingStart} has been assigned to you.`,
             type: 'info',
-            outlet_id: booking?.outlet_id,
-            user_id: therapistId // TARGETED to assigned staff
+            outlet_id: updates.outlet_id || booking?.outlet_id,
+            user_id: newTherapistId
           });
+          
+          await this.addNotification({
+            title: 'Booking Reassigned',
+            message: `Your booking for ${guestName} on ${bookingDate} at ${bookingStart} has been reassigned to another staff member.`,
+            type: 'warning',
+            outlet_id: booking?.outlet_id,
+            user_id: currentTherapistId // TARGETED to the staff member who was removed
+          });
+        } else {
+          // Notify assigned therapist and admins of the modification
+          const therapistId = updates.therapist_id || booking?.therapist_id;
+          if (therapistId) {
+            await this.addNotification({
+              title: 'Booking Modified',
+              message: `Your booking for ${guestName} on ${bookingDate} at ${bookingStart} has been updated.`,
+              type: 'info',
+              outlet_id: booking?.outlet_id,
+              user_id: therapistId // TARGETED to assigned staff
+            });
+          }
         }
       }, null);
     }
