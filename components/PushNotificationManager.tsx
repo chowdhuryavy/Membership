@@ -27,6 +27,7 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
 
     const [permission, setPermission] = useState<NotificationPermission | 'not-supported'>('default');
     const [isSubscribing, setIsSubscribing] = useState(false);
+    const [isDismissed, setIsDismissed] = useState(false);
 
     useEffect(() => {
         const checkPermission = async () => {
@@ -52,31 +53,61 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
             console.error('No user found');
             return;
         }
+
+        // Check if we are in an iframe
+        const isIframe = window.self !== window.top;
+        if (isIframe) {
+            toast.error('Push notifications are usually blocked in preview mode. Please open the app in a new tab to enable notifications.');
+            // Don't return, let's try anyway but the user is warned.
+        }
+
         setIsSubscribing(true);
+        
         try {
-            console.log('Requesting permission...');
-            const granted = await PushNotificationService.requestPermission();
-            if (granted) {
-                const subscription = await PushNotificationService.subscribeUser(user.id);
-                if (subscription) {
-                    console.log('Subscribe successful. Setting permission to granted.');
-                    setPermission('granted');
-                    toast.success('Push notifications enabled successfully!');
-                    console.log('Permission state updated and toast shown.');
+            console.log('Starting enable process...');
+            
+            // Timeout for the entire process
+            const enableProcess = (async () => {
+                console.log('Requesting permission...');
+                const granted = await PushNotificationService.requestPermission();
+                
+                if (granted) {
+                    console.log('Permission granted, subscribing...');
+                    const subscription = await PushNotificationService.subscribeUser(user.id);
+                    if (subscription) {
+                        console.log('Subscribe successful.');
+                        setPermission('granted');
+                        toast.success('Push notifications enabled successfully!');
+                        return true;
+                    } else {
+                        console.log('Subscribe failed.');
+                        setPermission('denied');
+                        toast.error('Failed to subscribe. Try in a new tab.');
+                        return false;
+                    }
                 } else {
-                    console.log('Subscribe failed.');
+                    console.log('Permission denied.');
                     setPermission('denied');
-                    toast.error('Failed to subscribe. Are you in a new tab? (Iframes block push)');
+                    toast.error('Notification permission denied.');
+                    return false;
                 }
-            } else {
-                console.log('Request permission returned false.');
-                setPermission('denied');
-                toast.error('Notification permission denied or blocked by browser.');
-            }
+            })();
+
+            const timeoutPromise = new Promise<never>((_, reject) => 
+                setTimeout(() => reject(new Error('Process timed out after 15s')), 15000)
+            );
+
+            await Promise.race([enableProcess, timeoutPromise]);
+            
         } catch (error: any) {
             console.error('Push error in handleEnableNotifications:', error);
             const errMsg = error?.message || String(error);
-            toast.error('Error enabling: ' + errMsg.substring(0, 50));
+            toast.error('Error: ' + errMsg);
+            
+            // If it timed out or failed, allow them to dismiss it
+            if (errMsg.includes('timeout') || errMsg.includes('timed out')) {
+                toast('If you are in the AI Studio preview, push notifications might be blocked. Click "Continue without notifications" if you are stuck.', { duration: 6000 });
+            }
         } finally {
             setIsSubscribing(false);
         }
@@ -100,8 +131,8 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
     };
 
     if (variant === 'modal') {
-        // If not supported, or already granted/denied, don't show the modal
-        if (permission !== 'default') return null;
+        // If not supported, or already granted/denied, or dismissed, don't show the modal
+        if (permission !== 'default' || isDismissed) return null;
 
         return (
             <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
@@ -123,6 +154,15 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
                                     <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Enabling...</>
                                 ) : 'Enable Notifications'}
                             </button>
+
+                            {!isSubscribing && (
+                                <button
+                                    onClick={() => setIsDismissed(true)}
+                                    className="w-full py-3 bg-white text-slate-400 font-bold tracking-tight text-xs rounded-xl hover:text-slate-600 transition-all border border-transparent hover:border-slate-100"
+                                >
+                                    Continue without notifications
+                                </button>
+                            )}
                         </div>
                     </div>
                     <div className="absolute top-0 right-0 -mr-8 -mt-8 text-indigo-50 opacity-50 rotate-12 pointer-events-none">
