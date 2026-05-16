@@ -345,9 +345,8 @@ const ProtectedLayout = () => {
 
   if (!user && !combinedLoading) {
     const isStaffPortalParam = window.location.search.includes('portal=staff');
-    const isStaffPortalStorage = localStorage.getItem('preferred_portal') === 'staff';
     
-    if (isStaffPortalParam || isStaffPortalStorage) {
+    if (isStaffPortalParam) {
       return <Navigate to="/staff-login" replace />;
     }
     return <Navigate to="/login" replace />;
