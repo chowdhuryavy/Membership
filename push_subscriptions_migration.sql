@@ -18,15 +18,22 @@ ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
 -- Policies
 -- We allow all operations for now because staff login doesn't use Supabase Auth
 -- In a production environment, you should use service-role Edge Functions or real Auth
+DROP POLICY IF EXISTS "Enable all access for push_subscriptions" ON public.push_subscriptions;
 CREATE POLICY "Enable all access for push_subscriptions"
     ON public.push_subscriptions
     FOR ALL
     USING (true)
     WITH CHECK (true);
 
--- Also ensure notifications table is accessible by staff
+-- Ensure notifications table is accessible by staff
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
+-- CRITICAL: Remove foreign key constraints that might block staff members from receiving notifications
+-- Staff members are stored in public.staff, but these tables often have FKs to public.users or auth.users
+ALTER TABLE public.notifications DROP CONSTRAINT IF EXISTS notifications_user_id_fkey;
+ALTER TABLE public.push_subscriptions DROP CONSTRAINT IF EXISTS push_subscriptions_user_id_fkey;
+
+DROP POLICY IF EXISTS "Enable all access for notifications" ON public.notifications;
 CREATE POLICY "Enable all access for notifications"
     ON public.notifications
     FOR ALL
