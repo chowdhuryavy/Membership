@@ -2842,12 +2842,13 @@ class DatabaseService {
     if (this.isSupabase()) {
       try {
         console.log(`[Push] Attempting to save and trigger push for: "${newNotification.title}"`);
-        const { error } = await supabase.from('notifications').upsert([newNotification]);
+        // Use insert instead of upsert to avoid potential 409 conflict errors
+        const { error } = await supabase.from('notifications').insert([newNotification]);
         if (error) {
           if (error.code === '23503' && error.details?.includes('users')) {
             console.log('[Push] Notification saved for non-user staff member.');
           } else {
-            console.warn("[Push] Supabase upsert error:", error);
+            console.warn("[Push] Supabase insert error:", error);
           }
           this.saveLocalNotification(newNotification);
         } else {
@@ -2864,12 +2865,13 @@ class DatabaseService {
                              title.includes('assigned');
 
           if (isImportant || !newNotification.user_id) {
-            const { data: admins } = await supabase.from('staff').select('id').eq('role', 'admin');
+            // Case-insensitive role check for reliability
+            const { data: admins } = await supabase.from('staff').select('id').ilike('role', 'admin');
             admins?.forEach(a => recipients.add(a.id));
           }
 
           if (recipients.size > 0) {
-            console.log(`[Push] Initiating targeted push for ${recipients.size} recipients.`);
+            console.log(`[Push] Initiating targeted push for ${recipients.size} recipients:`, Array.from(recipients));
             recipients.forEach(rid => {
                this.triggerPushNotification(
                    rid, 

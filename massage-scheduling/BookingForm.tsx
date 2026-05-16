@@ -99,8 +99,11 @@ const BookingForm: React.FC<BookingFormProps> = ({
       const guest = guests.find(g => g.id === initialBooking.guest_id);
       if (guest) setGuestData({ name: guest.name, phone: guest.phone, email: guest.email || '' });
       
+      const category = initialBooking.category || (initialBooking.inventory_item_id ? 'Personal Training' : 'Massage');
+      const serviceId = initialBooking.massage_type_id || initialBooking.inventory_item_id || '';
+
       setBookingData({
-        massage_type_id: initialBooking.massage_type_id || initialBooking.inventory_item_id || '',
+        massage_type_id: serviceId,
         additional_service_ids: initialBooking.additional_service_ids || [],
         therapist_id: initialBooking.therapist_id,
         room_id: initialBooking.room_id || '',
@@ -113,10 +116,10 @@ const BookingForm: React.FC<BookingFormProps> = ({
         discount_id_url: initialBooking.discount_id_url || '',
         payment_method: initialBooking.payment_method || 'cash',
         check_no: initialBooking.check_no || '',
-        category: initialBooking.category || (initialBooking.inventory_item_id ? 'Personal Training' : 'Massage')
+        category: category as any
       });
     }
-  }, [initialBooking, guests]);
+  }, [initialBooking, guests, massageTypes]);
 
   useEffect(() => {
     const primaryService = massageTypes.find(m => m.id === bookingData.massage_type_id);
