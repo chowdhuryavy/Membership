@@ -76,7 +76,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
   const [guestData, setGuestData] = useState({ name: '', phone: '', email: '' });
   const [bookingData, setBookingData] = useState({
     massage_type_id: '',
-    category: 'Massage' as 'Massage' | 'Personal Training',
+    category: initialBooking?.category || (initialBooking?.inventory_item_id ? 'Personal Training' : 'Massage'),
     additional_service_ids: [] as string[],
     therapist_id: '',
     room_id: '',
@@ -113,7 +113,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
         discount_id_url: initialBooking.discount_id_url || '',
         payment_method: initialBooking.payment_method || 'cash',
         check_no: initialBooking.check_no || '',
-        category: initialBooking.category || 'Massage'
+        category: initialBooking.category || (initialBooking.inventory_item_id ? 'Personal Training' : 'Massage')
       });
     }
   }, [initialBooking, guests]);

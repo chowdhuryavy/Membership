@@ -126,8 +126,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     try {
       if (!isAutoRefresh) setIsLoading(true);
-      console.log('Fetching notifications for user:', effectiveUserId, 'outlet:', outletId);
-      const data = await db.getNotifications(effectiveUserId, outletId);
+      const isAdmin = user?.role_id === 'admin';
+      console.log('Fetching notifications for user:', effectiveUserId, 'outlet:', outletId, 'isAdmin:', isAdmin);
+      const data = await db.getNotifications(effectiveUserId, outletId, isAdmin);
       
       // Filter by permission
       const filteredData = data.filter(n => {
@@ -196,8 +197,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const effectiveUserId = user?.id || staffUser?.id;
 
     if (effectiveUserId) {
-      console.log('Subscribing to notifications for user:', effectiveUserId, 'outlet:', outletId);
-      unsubscribe = db.subscribeToNotifications(effectiveUserId, outletId, async (payload) => {
+      const isAdmin = user?.role_id === 'admin';
+      console.log('Subscribing to notifications for user:', effectiveUserId, 'outlet:', outletId, 'isAdmin:', isAdmin);
+      unsubscribe = db.subscribeToNotifications(effectiveUserId, outletId, isAdmin, async (payload) => {
         console.log('Received real-time notification payload:', payload.eventType, payload.new?.id);
         
         if (payload.eventType === 'INSERT') {
@@ -214,12 +216,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             return;
           }
           
-          // Trigger notification UI & Sound
-          await playNotificationSound();
-          toast.success(n.title + ': ' + n.message, {
-            duration: 5000,
-            position: 'top-right',
-          });
+          // Only show toast and play sound if this is the active/focused tab
+          // to prevent duplicates when multiple tabs are open
+          const isActiveTab = document.visibilityState === 'visible' && document.hasFocus();
+          
+          if (isActiveTab) {
+            // Trigger notification UI & Sound
+            await playNotificationSound();
+            toast.success(n.title + ': ' + n.message, {
+              duration: 5000,
+              position: 'top-right',
+            });
+          }
 
           setNotifications(prev => {
             const exists = prev.some(item => item.id === n.id);

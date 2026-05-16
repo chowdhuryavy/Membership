@@ -2755,15 +2755,16 @@ class DatabaseService {
     }
   }
   // --- NOTIFICATIONS ---
-  async getNotifications(userId?: string, outletId?: string): Promise<Notification[]> {
-    console.log('Fetching notifications for:', { userId, outletId });
+  async getNotifications(userId?: string, outletId?: string, isAdmin: boolean = false): Promise<Notification[]> {
+    console.log('Fetching notifications for:', { userId, outletId, isAdmin });
     if (this.isSupabase()) {
       let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
       
       // Fetch all relevant notifications (targeted to user or system-wide)
-      if (userId) {
+      // Admins see EVERYTHING for the outlet
+      if (userId && !isAdmin) {
         query = query.or(`user_id.eq.${userId},user_id.is.null`);
-      } else {
+      } else if (!userId) {
         query = query.is('user_id', null);
       }
       
@@ -3148,7 +3149,7 @@ class DatabaseService {
     this.deleteAllLocalNotifications(userId, outletId, ids);
   }
 
-  subscribeToNotifications(userId: string, outletId: string | undefined, callback: (payload: { eventType: string, new: any, old?: any }) => void) {
+  subscribeToNotifications(userId: string, outletId: string | undefined, isAdmin: boolean = false, callback: (payload: { eventType: string, new: any, old?: any }) => void) {
     // Shared BroadcastChannel handler for cross-tab updates
     let bc: BroadcastChannel | null = null;
     
@@ -3156,7 +3157,7 @@ class DatabaseService {
       bc = new BroadcastChannel('notifications_channel');
       bc.onmessage = (event) => {
         const notification = event.data as Notification;
-        const userMatch = !notification.user_id || notification.user_id === userId;
+        const userMatch = isAdmin || !notification.user_id || notification.user_id === userId;
         const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
         
         if (userMatch && outletMatch) {
@@ -3174,7 +3175,7 @@ class DatabaseService {
         
         const targetNotification = newNotification || oldNotification;
         if (targetNotification) {
-          const userMatch = !targetNotification.user_id || targetNotification.user_id === userId;
+          const userMatch = isAdmin || !targetNotification.user_id || targetNotification.user_id === userId;
           const outletMatch = !outletId || !targetNotification.outlet_id || targetNotification.outlet_id === outletId;
           
           if (userMatch && outletMatch) {

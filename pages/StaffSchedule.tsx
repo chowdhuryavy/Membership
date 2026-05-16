@@ -859,7 +859,8 @@ const StaffSchedule = () => {
     });
 
     // Also listen for general notification table changes for the bell icon
-    const unsubNotifications = db.subscribeToNotifications(staff.id, selectedOutletId, (payload) => {
+    const isAdmin = staff.role?.toLowerCase() === 'admin';
+    const unsubNotifications = db.subscribeToNotifications(staff.id, selectedOutletId, isAdmin, (payload) => {
       if (payload.eventType === 'INSERT') {
         const n = payload.new;
         const newNotif: StaffNotification = {
