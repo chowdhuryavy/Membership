@@ -83,10 +83,10 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
           </tr>
         </thead>
         <tbody>
-          {data.rows.map(row => (
+          {data.rows?.map(row => (
             <tr key={row.category} className="hover:bg-slate-50 transition-colors">
               <td className="px-4 py-2 border border-black font-black text-slate-900 text-center">{row.category}</td>
-              {row.values.map((val, i) => (
+              {row.values?.map((val, i) => (
                 <td key={i} className="px-4 py-2 border border-black text-right font-bold text-slate-700">
                   {val > 0 ? formatMoney(val) : ''}
                 </td>
@@ -98,7 +98,7 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
           ))}
           <tr className="bg-slate-200 font-black">
             <td className="px-4 py-3 border border-black text-center text-slate-900">Monthly Revenue</td>
-            {data.monthlyTotals.map((val, i) => (
+            {data.monthlyTotals?.map((val, i) => (
               <td key={i} className="px-4 py-3 border border-black text-right text-slate-900">
                 {val > 0 ? formatMoney(val) : '-'}
               </td>
@@ -112,7 +112,7 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
           </tr>
           <tr className="bg-slate-100 font-black">
             <td className="px-4 py-3 border border-black text-center text-slate-900">Monthly Revenue {parseInt(reportMonth.split('-')[0]) - 1}</td>
-            {data.previousYearTotals.map((val, i) => (
+            {data.previousYearTotals?.map((val, i) => (
               <td key={i} className="px-4 py-3 border border-black text-right text-slate-900">
                 {val > 0 ? formatMoney(val) : '-'}
               </td>
@@ -123,8 +123,8 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
           </tr>
           <tr className="bg-white font-black">
             <td className="px-4 py-3 border border-black text-center text-slate-900">Amount (+ / -)</td>
-            {data.monthlyTotals.map((val, i) => {
-              const diff = val - data.previousYearTotals[i];
+            {data.monthlyTotals?.map((val, i) => {
+              const diff = val - (data.previousYearTotals?.[i] || 0);
               const isNegative = diff < 0;
               const formattedDiff = formatMoney(Math.abs(diff));
               return (
@@ -144,8 +144,8 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
           </tr>
           <tr className="bg-white font-black">
             <td className="px-4 py-3 border border-black text-center text-slate-900">Percentage % (+ / -)</td>
-            {data.monthlyTotals.map((val, i) => {
-              const prev = data.previousYearTotals[i];
+            {data.monthlyTotals?.map((val, i) => {
+              const prev = data.previousYearTotals?.[i] || 0;
               const diff = val - prev;
               let pct = 0;
               if (prev > 0) {

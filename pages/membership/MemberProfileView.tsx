@@ -1669,7 +1669,12 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                                 Legacy record detected. <br/> Comprehensive snapshots started after System Version 2.4.
                                             </div>
                                         ) : (
-                                            [...usage.history].reverse().map((entry, idx) => (
+                                            [...usage.history].sort((a, b) => {
+                                                const dateA = a.service_date || a.date.split('T')[0];
+                                                const dateB = b.service_date || b.date.split('T')[0];
+                                                if (dateA !== dateB) return dateB.localeCompare(dateA);
+                                                return b.date.localeCompare(a.date);
+                                            }).map((entry, idx) => (
                                                 <div key={idx} className="p-10 flex items-center justify-between hover:bg-slate-50/50 transition-colors group">
                                                     <div className="flex items-center gap-8">
                                                         <div className={`w-14 h-14 rounded-2xl border flex items-center justify-center transition-all duration-500 group-hover:rotate-12 ${entry.change > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-inner' : 'bg-red-50 border-red-200 text-red-600 shadow-inner'}`}>

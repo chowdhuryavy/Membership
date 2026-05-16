@@ -1163,6 +1163,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     return {
       rows: data.rows,
       summary: {
+        rows: data.rows,
         monthlyTotals: data.monthlyTotals,
         yearlyTotal: data.yearlyTotal,
         previousYearTotals: data.previousYearTotals,
