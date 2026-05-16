@@ -2,7 +2,7 @@
   "name": "Staff Portal",
   "short_name": "Staff Portal",
   "description": "Unified Health Club Staff Management System",
-  "start_url": "/#/staff-login",
+  "start_url": "/?portal=staff",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#4f46e5",

@@ -70,17 +70,24 @@
       const urlParams = new URLSearchParams(window.location.search);
       const isStaffPath = window.location.pathname === '/staff-login' || window.location.pathname.endsWith('/staff-login');
       const isStaffPortalParam = urlParams.get('portal') === 'staff';
+      const isStaffHash = window.location.hash.includes('staff-login') || window.location.hash.includes('staff-dashboard');
       
-      if (isStaffPath || isStaffPortalParam) {
+      if (isStaffPath || isStaffPortalParam || isStaffHash) {
         // Swap manifest for Staff Portal (Critical for iPhone)
         const manifestLink = document.getElementById('pwa-manifest');
         if (manifestLink) {
           manifestLink.setAttribute('href', '/manifest-staff.json');
         }
         
+        // Ensure ?portal=staff is in the URL so iOS "Add to Home Screen" saves it
+        if (!isStaffPortalParam) {
+          urlParams.set('portal', 'staff');
+          window.history.replaceState(null, '', '?' + urlParams.toString() + window.location.hash);
+        }
+
         // Only redirect if we are not already on the hash route
-        if (!window.location.hash.includes('/staff-login')) {
-          window.location.replace(window.location.origin + '/#/staff-login' + (window.location.search || ''));
+        if (!window.location.hash.includes('staff-login') && !window.location.hash.includes('staff-dashboard')) {
+          window.location.replace(window.location.origin + window.location.pathname + '?portal=staff#/staff-login');
         }
       }
 

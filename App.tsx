@@ -343,7 +343,12 @@ const ProtectedLayout = () => {
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [checkShortcut, navigate]);
 
-  if (!user && !combinedLoading) return <Navigate to="/login" replace />;
+  if (!user && !combinedLoading) {
+    if (window.location.search.includes('portal=staff')) {
+      return <Navigate to="/staff-login" replace />;
+    }
+    return <Navigate to="/login" replace />;
+  }
   
   return (
     <>
