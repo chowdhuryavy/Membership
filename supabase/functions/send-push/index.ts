@@ -90,13 +90,15 @@ serve(async (req) => {
 
     webpush.setVapidDetails(subject, publicKey, privateKey);
     
-    console.log(`[Push] Dispatching to ${subscriptions.length} devices for user ${userId}`);
+    const effectiveLogId = broadcast ? "GLOBAL BROADCAST" : (userId || user_id || "DIRECT PUSH");
+    console.log(`[Push] Dispatching to ${subscriptions.length} devices for ${effectiveLogId}`);
     
     const results = await Promise.all(subscriptions.map(async (s: any, index: number) => {
       try {
-        console.log(`[Push] Sending to device ${index+1}/${subscriptions.length}: ${s.subscription.endpoint}`);
+        const targetUserId = s.user_id || "unknown";
+        console.log(`[Push] Sending to device ${index+1}/${subscriptions.length} (Target User: ${targetUserId}): ${s.subscription.endpoint.substring(0, 40)}...`);
         const res = await webpush.sendNotification(s.subscription, JSON.stringify({ title, body, icon, url, tag }));
-        console.log(`[Push] Device ${index+1} success: ${res.statusCode}`);
+        console.log(`[Push] Device ${index+1} (${targetUserId}) success: ${res.statusCode}`);
         return res;
       } catch (err: any) {
         console.error(`[Push] Device ${index+1} FAILED:`, err.message || err);

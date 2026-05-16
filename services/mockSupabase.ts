@@ -2287,13 +2287,13 @@ class DatabaseService {
         if (error) throw error;
         await this.logAction('CREATE_BOOKING', `Created booking on ${booking.date} at ${booking.start_time} (Therapist ID: ${booking.therapist_id})`, booking.outlet_id);
         
-        // Add notification for the therapist
+        // Add notification for the therapist AND broadcast to all staff
         await this.addNotification({
           title: 'New Booking Assigned',
-          message: `You have a new booking on ${booking.date} at ${booking.start_time}.`,
+          message: `Therapist assigned for ${booking.date} at ${booking.start_time}.`,
           type: 'info',
           outlet_id: booking.outlet_id,
-          user_id: booking.therapist_id
+          // user_id: booking.therapist_id // Removing user_id makes it BROADCAST to all staff
         });
       }, null);
     }
@@ -2327,15 +2327,15 @@ class DatabaseService {
         const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
         if (error) throw error;
         
-        // Notify therapist if assigned
+        // Notify all staff of the modification
         const therapistId = updates.therapist_id || booking?.therapist_id;
         if (therapistId) {
           await this.addNotification({
             title: 'Booking Modified',
-            message: `A booking on ${booking?.date || ''} has been modified.`,
+            message: `A booking on ${booking?.date || ''} has been updated.`,
             type: 'info',
             outlet_id: booking?.outlet_id,
-            user_id: therapistId
+           // user_id: therapistId // Removing user_id makes it BROADCAST to all staff
           });
         }
       }, null);
@@ -2826,44 +2826,39 @@ class DatabaseService {
 
     if (this.isSupabase()) {
       try {
-        // We use upsert to avoid 409 Conflict errors if there's a race condition or random collision
+        console.log(`[Push] Attempting to save and trigger push for: "${newNotification.title}"`);
         const { error } = await supabase.from('notifications').upsert([newNotification]);
         if (error) {
-          // If it's a foreign key error for users, it's expected for staff who aren't in the users table
           if (error.code === '23503' && error.details?.includes('users')) {
-            console.log('Note: Notification saved locally for staff member (not in users table)');
+            console.log('[Push] Notification saved for non-user staff member.');
           } else {
-            console.warn("Failed to insert notification to Supabase, saving locally", error);
+            console.warn("[Push] Supabase upsert error:", error);
           }
           this.saveLocalNotification(newNotification);
         } else {
-          console.log('Notification successfully saved to Supabase');
+          console.log('[Push] Notification persisted to Supabase.');
           
-          // Trigger Push Notification via Edge Function
           if (newNotification.user_id) {
+            console.log(`[Push] Initiating DIRECT push for user: ${newNotification.user_id}`);
             this.triggerPushNotification(
                 newNotification.user_id, 
                 newNotification.title, 
                 newNotification.message
-            ).catch(err => console.warn("Background push trigger failed:", err));
+            ).catch(err => console.error("[Push] DIRECT trigger failure:", err));
+          } else {
+            console.log(`[Push] Initiating BROADCAST push for global event.`);
+            this.triggerGlobalPush(newNotification).catch(e => console.error("[Push] BROADCAST trigger failure:", e));
           }
         }
       } catch (e) {
-        console.error('Error adding notification to Supabase:', e);
+        console.error('[Push] Fatal error in addNotification sequence:', e);
         this.saveLocalNotification(newNotification);
       }
     } else {
       this.saveLocalNotification(newNotification);
     }
     
-    // Always broadcast locally for immediate feedback in the same browser/tabs
     this.broadcastNotificationLocally(newNotification);
-
-    // BACKGROUND: Trigger pushes for relevant staff if it's a global notification
-    if (!newNotification.user_id && this.isSupabase()) {
-        this.triggerGlobalPush(newNotification).catch(e => console.warn("Global push failure:", e));
-    }
-
     return newNotification;
   }
 
@@ -2900,24 +2895,31 @@ class DatabaseService {
             icon: '/notification-icon.png',
             tag: broadcast ? 'global-staff-alert' : 'direct-alert'
         };
-        console.log(`Sending ${broadcast ? 'BROADCAST' : 'DIRECT'} push payload:`, JSON.stringify(payload, null, 2));
+        console.log(`[Push] Dispatching to Edge Function (${broadcast ? 'BROADCAST' : 'DIRECT'}):`, JSON.stringify(payload, null, 2));
         
-        const { data, error } = await supabase.functions.invoke('send-push', {
+        // Use a timeout for the invoke call to prevent hanging the UI
+        const invokePromise = supabase.functions.invoke('send-push', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: payload // supabase-js should handle this, but let's be sure
+            body: payload 
         });
-        if (error) throw error;
-        console.log('Push notification trigger response:', data);
+
+        const timeoutPromise = new Promise<{data: any, error: any}>((_, reject) => 
+            setTimeout(() => reject(new Error('Edge Function invocation timed out (15s)')), 15000)
+        );
+
+        const { data, error } = await Promise.race([invokePromise, timeoutPromise]) as any;
+
+        if (error) {
+            console.error('[Push] Edge Function error response:', error);
+            throw error;
+        }
+        
+        console.log('[Push] Edge Function success response:', data);
         if (data?.success) {
-            console.log('✅ Push notification successfully queued via Edge Function');
-        } else if (data?.message === "No subscriptions found") {
-            console.log('ℹ️ Push notification skipped: User has no active subscriptions');
+            console.log(`[Push] DONE: Sent to ${data.sentCount || 0} subscriptions.`);
         }
     } catch (e: any) {
-        console.error('❌ Failed to trigger push notification:', e.message || e);
+        console.error('❌ [Push] FATAL error triggering push:', e.message || e);
         throw e;
     }
   }
