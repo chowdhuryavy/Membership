@@ -344,7 +344,10 @@ const ProtectedLayout = () => {
   }, [checkShortcut, navigate]);
 
   if (!user && !combinedLoading) {
-    if (window.location.search.includes('portal=staff')) {
+    const isStaffPortalParam = window.location.search.includes('portal=staff');
+    const isStaffPortalStorage = localStorage.getItem('preferred_portal') === 'staff';
+    
+    if (isStaffPortalParam || isStaffPortalStorage) {
       return <Navigate to="/staff-login" replace />;
     }
     return <Navigate to="/login" replace />;

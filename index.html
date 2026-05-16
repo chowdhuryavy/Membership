@@ -70,9 +70,21 @@
       const urlParams = new URLSearchParams(window.location.search);
       const isStaffPath = window.location.pathname === '/staff-login' || window.location.pathname.endsWith('/staff-login');
       const isStaffPortalParam = urlParams.get('portal') === 'staff';
-      const isStaffHash = window.location.hash.includes('staff-login') || window.location.hash.includes('staff-dashboard');
+      const isStaffHash = window.location.hash.includes('staff-login') || window.location.hash.includes('staff-dashboard') || window.location.hash.includes('staff-schedule');
+      let isStaffPreferred = false;
+      try {
+        if (localStorage.getItem('preferred_portal') === 'staff') {
+           // Only consider storage preference if we are booting up at the root with no explicit path
+           // this prevents overriding deliberate attempts to go to the admin login
+           if (!window.location.hash || window.location.hash === '#/' || window.location.hash === '' || window.location.hash.includes('staff')) {
+             isStaffPreferred = true;
+           }
+        }
+      } catch (e) {}
       
-      if (isStaffPath || isStaffPortalParam || isStaffHash) {
+      const isStaffPortal = isStaffPath || isStaffPortalParam || isStaffHash || isStaffPreferred;
+
+      if (isStaffPortal) {
         // Swap manifest for Staff Portal (Critical for iPhone)
         const manifestLink = document.getElementById('pwa-manifest');
         if (manifestLink) {
