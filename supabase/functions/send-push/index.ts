@@ -16,21 +16,29 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
+    console.log(`[Push] Request received. Method: ${req.method}`);
     const { userId, title, body, icon, url, tag } = await req.json();
+    console.log(`[Push] Target User: ${userId}, Title: ${title}`);
 
     if (!userId) {
+      console.error("[Push] No userId provided in request");
       throw new Error("userId is required");
     }
 
     // Fetch subscriptions for this user
+    console.log(`[Push] Querying push_subscriptions for user ${userId}...`);
     const { data: subscriptions, error: subError } = await supabase
       .from("push_subscriptions")
       .select("subscription")
       .eq("user_id", userId);
 
-    if (subError) throw subError;
+    if (subError) {
+      console.error("[Push] Database error fetching subscriptions:", subError);
+      throw subError;
+    }
 
     if (!subscriptions || subscriptions.length === 0) {
+      console.log(`[Push] No subscriptions found for user ${userId}. Push aborted.`);
       return new Response(JSON.stringify({ success: true, message: "No subscriptions found" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -42,8 +50,8 @@ serve(async (req) => {
     const subject = Deno.env.get("VAPID_SUBJECT") || "mailto:admin@healthclub.com";
 
     if (!publicKey || !privateKey) {
-      console.warn("VAPID keys not configured in Edge Function. Skipping push.");
-      return new Response(JSON.stringify({ success: false, error: "VAPID keys missing" }), {
+      console.error("[Push] CRITICAL ERROR: VAPID keys not configured in Edge Function environment variables.");
+      return new Response(JSON.stringify({ success: false, error: "VAPID keys missing in Edge Function environment. Please use 'supabase secrets set' to add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -51,15 +59,18 @@ serve(async (req) => {
 
     webpush.setVapidDetails(subject, publicKey, privateKey);
     
-    console.log(`Sending push to ${subscriptions.length} devices for user ${userId}`);
+    console.log(`[Push] Dispatching to ${subscriptions.length} devices for user ${userId}`);
     
-    const results = await Promise.all(subscriptions.map(async (s: any) => {
+    const results = await Promise.all(subscriptions.map(async (s: any, index: number) => {
       try {
-        return await webpush.sendNotification(s.subscription, JSON.stringify({ title, body, icon, url, tag }));
+        console.log(`[Push] Sending to device ${index+1}/${subscriptions.length}: ${s.subscription.endpoint}`);
+        const res = await webpush.sendNotification(s.subscription, JSON.stringify({ title, body, icon, url, tag }));
+        console.log(`[Push] Device ${index+1} success: ${res.statusCode}`);
+        return res;
       } catch (err: any) {
-        console.error(`Push failed for device:`, err);
+        console.error(`[Push] Device ${index+1} FAILED:`, err.message || err);
         if (err.statusCode === 410 || err.statusCode === 404) {
-           // Expired subscription
+           console.log(`[Push] Subscription expired or unsubscribed (410/404). Cleaning up database...`);
            await supabase.from("push_subscriptions").delete().eq("subscription->>endpoint", s.subscription.endpoint);
         }
         return null;

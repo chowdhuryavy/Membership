@@ -2858,7 +2858,47 @@ class DatabaseService {
     
     // Always broadcast locally for immediate feedback in the same browser/tabs
     this.broadcastNotificationLocally(newNotification);
+
+    // BACKGROUND: Trigger pushes for relevant staff if it's a global notification
+    if (!newNotification.user_id && this.isSupabase()) {
+        this.triggerGlobalPush(newNotification).catch(e => console.warn("Global push failure:", e));
+    }
+
     return newNotification;
+  }
+
+  private async triggerGlobalPush(n: Notification) {
+    try {
+        console.log(`[Push] Global notification discovered: "${n.title}". Looking for subscribers...`);
+        // Fetch all subscriptions to see who is actually reachable
+        const { data: subs, error: subError } = await supabase.from('push_subscriptions').select('user_id');
+        
+        if (subError) {
+            console.error("[Push] Error fetching push subscriptions for global push:", subError);
+            return;
+        }
+
+        if (!subs || subs.length === 0) {
+            console.log("[Push] No push subscriptions found in database. Nobody to notify.");
+            return;
+        }
+
+        // Get unique user IDs who have active subscriptions
+        const subscribedUserIds = Array.from(new Set(subs.map(s => s.user_id)));
+        
+        console.log(`[Push] Global notification: Attempting push to ${subscribedUserIds.length} unique subscribed users (staff & admins)`);
+        
+        // Notify all subscribed users in parallel (cap at 50 to avoid edge function burst limits)
+        const targets = subscribedUserIds.slice(0, 50);
+        await Promise.all(targets.map(id => 
+            this.triggerPushNotification(id, n.title, n.message).catch(e => 
+                console.warn(`[Push] Individual push failure for ${id}:`, e)
+            )
+        ));
+        console.log("[Push] Global push dispatch complete.");
+    } catch (e) {
+        console.warn("[Push] Fault while triggering global push:", e);
+    }
   }
 
   async triggerPushNotification(userId: string, title: string, body: string, url: string = '/notifications') {
@@ -2874,6 +2914,7 @@ class DatabaseService {
                 title, 
                 body, 
                 url,
+                id: crypto.randomUUID(), // Add unique ID for tag
                 icon: '/icon.png',
                 tag: 'staff-alert'
             }

@@ -168,6 +168,34 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
                     {permission === 'granted' ? (
                         <>
                             <button
+                                onClick={async () => {
+                                    if (user) {
+                                        toast.promise(
+                                            PushNotificationService.subscribeUser(user.id).then(async () => {
+                                                const m = await import('../services/mockSupabase');
+                                                const testId = crypto.randomUUID();
+                                                console.log('Push Test: Triggering for user', user.id, 'with tag', testId);
+                                                return m.db.triggerPushNotification(
+                                                    user!.id, 
+                                                    'Cloud Server Test', 
+                                                    'Notification from Supabase Edge Function: ' + new Date().toLocaleTimeString(),
+                                                    '/notifications?test=' + testId
+                                                );
+                                            }),
+                                            {
+                                                loading: 'Triggering Cloud Push...',
+                                                success: 'Signal sent to Supabase!',
+                                                error: 'Server push failed. Check console.'
+                                            }
+                                        );
+                                    }
+                                }}
+                                className="px-6 py-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-all shadow-sm flex items-center gap-2"
+                            >
+                                <Smartphone className="w-4 h-4" />
+                                Cloud Test
+                            </button>
+                            <button
                                 onClick={() => {
                                     if ('serviceWorker' in navigator) {
                                         navigator.serviceWorker.ready.then(registration => {

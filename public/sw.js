@@ -1,4 +1,4 @@
-const CACHE_NAME = 'health-club-v17';
+const CACHE_NAME = 'health-club-v18';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -40,13 +40,16 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - Network First for navigation, Cache First for others
 self.addEventListener('fetch', (event) => {
+  // Ignore non-http(s) requests (like chrome-extension, data:, etc.)
+  if (!event.request.url.startsWith('http')) return;
+
   // Navigation requests: Try Network First
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          // Important/optional: Only cache navigation if successful
-          if (response.status === 200) {
+          // Important/optional: Only cache navigation if successful and http/https
+          if (response.status === 200 && event.request.url.startsWith('http')) {
             const responseClone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
                 // DON'T always overwrite index.html, but okay to cache the navigation request
@@ -79,8 +82,9 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         }
         
-        // Only cache basic responses
-        if (networkResponse.type === 'basic') {
+        // Only cache basic responses from http/https schemes
+        const isHttp = event.request.url.startsWith('http');
+        if (networkResponse.type === 'basic' && isHttp) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
               cache.put(event.request, responseToCache);
@@ -111,8 +115,8 @@ self.addEventListener('push', (event) => {
     body: data.body || 'You have a new update.',
     icon: data.icon || '/apple-touch-icon.png',
     badge: '/favicon-32x32.png',
-    vibrate: [100, 50, 100], // Simpler vibrate
-    tag: data.tag || 'staff-alert',
+    vibrate: [200, 100, 200, 100, 200], // More noticeable vibration
+    tag: data.tag || data.id || 'staff-alert',
     renotify: true,
     data: data,
     actions: data.actions || []
