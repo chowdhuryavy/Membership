@@ -17,7 +17,20 @@ serve(async (req) => {
     );
 
     console.log(`[Push] Request received. Method: ${req.method}`);
-    const json = await req.json();
+    const userAgent = req.headers.get("user-agent") || "unknown";
+    console.log(`[Push] User-Agent: ${userAgent}`);
+    
+    let json;
+    try {
+      json = await req.json();
+    } catch (e) {
+      console.error("[Push] Raw body is not JSON or empty");
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), { 
+        status: 400, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
+    }
+
     console.log(`[Push] Received JSON:`, JSON.stringify(json));
     const { userId, user_id, title, body, icon, url, tag } = json;
     const effectiveUserId = userId || user_id;

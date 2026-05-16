@@ -53,22 +53,27 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
             return;
         }
 
-        // Check if we are in an iframe
-        const isIframe = window.self !== window.top;
-        if (isIframe) {
-            toast.error('Push notifications are usually blocked in preview mode. Please open the app in a new tab to enable notifications.');
-            // Don't return, let's try anyway but the user is warned.
-        }
-
         setIsSubscribing(true);
         
         try {
             console.log('Starting enable process...');
             
+            // Check if we are in an iframe
+            const isIframe = window.self !== window.top;
+            if (isIframe) {
+                toast.error('Iframe detected! Push notifications are blocked in preview mode. Please click the "Open in new tab" icon (arrow) at the top right to enable notifications.', { duration: 10000 });
+            }
+            
             // Timeout for the entire process (crucial as some environments trap/hang permission prompts)
             const enableProcess = (async () => {
                 console.log('Requesting permission...');
-                const granted = await PushNotificationService.requestPermission();
+                let granted = false;
+                try {
+                    granted = await PushNotificationService.requestPermission();
+                } catch (pe) {
+                    console.warn('Permission request error:', pe);
+                    throw new Error('Permission prompt blocked. Check your browser address bar for a notification icon.');
+                }
                 
                 if (granted) {
                     console.log('Permission granted, subscribing...');
@@ -79,21 +84,17 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
                         toast.success('Push notifications enabled successfully!');
                         return true;
                     } else {
-                        console.log('Subscribe failed.');
-                        setPermission('denied');
-                        toast.error('Failed to subscribe. Please try in a new browser tab.');
-                        return false;
+                        throw new Error('Failed to save subscription. Try refreshing in a new tab.');
                     }
                 } else {
                     console.log('Permission denied.');
                     setPermission('denied');
-                    toast.error('Notification permission denied by browser.');
-                    return false;
+                    throw new Error('Notification permission denied. You must reset permissions in browser settings to continue.');
                 }
             })();
 
             const timeoutPromise = new Promise<never>((_, reject) => 
-                setTimeout(() => reject(new Error('Notification prompt timed out. This usually happens in restricted preview frames. Please open the application in a NEW browser tab using the arrow icon at the top right to complete setup.')), 15000)
+                setTimeout(() => reject(new Error('Notification prompt timed out. This always happens in the AI Studio preview frame. Use the "Open in new tab" icon at the top right of this screen to complete the setup.')), 15000)
             );
 
             await Promise.race([enableProcess, timeoutPromise]);
@@ -101,7 +102,7 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
         } catch (error: any) {
             console.error('Push error in handleEnableNotifications:', error);
             const errMsg = error?.message || String(error);
-            toast.error(errMsg, { duration: 8000 });
+            toast.error(errMsg, { duration: 10000 });
         } finally {
             setIsSubscribing(false);
         }
