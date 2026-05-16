@@ -90,11 +90,13 @@ const Categories = () => {
   }, [showForm, canCreate, checkShortcut, formData, isEditing, currentOutlet]); // Depend on form state
 
   const filteredCategories = useMemo(() => {
-    return categories.filter(cat => {
+    return categories
+      .filter(cat => {
         const matchesSearch = cat.name.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesType = selectedTypeId === 'all' || cat.membership_type_id === selectedTypeId;
         return matchesSearch && matchesType;
-    });
+      })
+      .sort((a, b) => (a.duration_months || 0) - (b.duration_months || 0));
   }, [categories, searchTerm, selectedTypeId]);
 
   if (!canView) {
