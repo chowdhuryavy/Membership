@@ -2291,13 +2291,15 @@ class DatabaseService {
         const guestName = guestData?.name || 'A guest';
 
         // Add notification for the therapist AND admins
-        await this.addNotification({
-          title: 'New Booking Assigned',
-          message: `Therapist assigned for ${guestName} on ${booking.date} at ${booking.start_time}.`,
-          type: 'info',
-          outlet_id: booking.outlet_id,
-          user_id: booking.therapist_id // TARGETED to assigned staff
-        });
+        if (booking.therapist_id && booking.therapist_id !== 'unassigned') {
+          await this.addNotification({
+            title: 'New Booking Assigned',
+            message: `You have a new booking for ${guestName} on ${booking.date} at ${booking.start_time}.`,
+            type: 'info',
+            outlet_id: booking.outlet_id,
+            user_id: booking.therapist_id // TARGETED to assigned staff
+          });
+        }
       }, null);
     }
     
@@ -2339,31 +2341,37 @@ class DatabaseService {
           }
         }
 
-        const currentTherapistId = booking?.therapist_id;
-        const newTherapistId = updates.therapist_id;
+        const currentTherapistId = booking?.therapist_id && booking.therapist_id !== 'unassigned' ? booking.therapist_id : null;
+        const newTherapistId = updates.therapist_id && updates.therapist_id !== 'unassigned' ? updates.therapist_id : null;
         const bookingDate = updates.date || booking?.date || '';
         const bookingStart = updates.start_time || booking?.start_time || '';
 
-        if (newTherapistId && currentTherapistId && newTherapistId !== currentTherapistId) {
-          // Changed therapist
-          await this.addNotification({
-            title: 'Booking Assigned To You',
-            message: `A booking for ${guestName} on ${bookingDate} at ${bookingStart} has been assigned to you.`,
-            type: 'info',
-            outlet_id: updates.outlet_id || booking?.outlet_id,
-            user_id: newTherapistId
-          });
+        // Check if there's actually a change in therapist
+        if (updates.therapist_id !== undefined && newTherapistId !== currentTherapistId) {
+          // It was unassigned/someone else, now it's newTherapistId
+          if (newTherapistId) {
+            await this.addNotification({
+              title: 'Booking Assigned To You',
+              message: `A booking for ${guestName} on ${bookingDate} at ${bookingStart} has been assigned to you.`,
+              type: 'info',
+              outlet_id: updates.outlet_id || booking?.outlet_id,
+              user_id: newTherapistId
+            });
+          }
           
-          await this.addNotification({
-            title: 'Booking Reassigned',
-            message: `Your booking for ${guestName} on ${bookingDate} at ${bookingStart} has been reassigned to another staff member.`,
-            type: 'warning',
-            outlet_id: booking?.outlet_id,
-            user_id: currentTherapistId // TARGETED to the staff member who was removed
-          });
+          // It was currentTherapistId, now it's someone else or unassigned
+          if (currentTherapistId) {
+            await this.addNotification({
+              title: 'Booking Reassigned',
+              message: `Your booking for ${guestName} on ${bookingDate} at ${bookingStart} has been reassigned to another staff member.`,
+              type: 'warning',
+              outlet_id: booking?.outlet_id,
+              user_id: currentTherapistId // TARGETED to the staff member who was removed
+            });
+          }
         } else {
-          // Notify assigned therapist and admins of the modification
-          const therapistId = updates.therapist_id || booking?.therapist_id;
+          // Same therapist, but something else changed
+          const therapistId = newTherapistId || currentTherapistId;
           if (therapistId) {
             await this.addNotification({
               title: 'Booking Modified',

@@ -1,10 +1,10 @@
-const CACHE_NAME = 'health-club-v20';
+const CACHE_NAME = 'health-club-v22';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
   '/manifest-staff.json',
-  '/icon.png'
+  '/icon.svg'
 ];
 
 // Install event - cache assets safely
@@ -114,7 +114,7 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body || 'You have a new update.',
-    icon: data.icon || '/icon.png',
+    icon: data.icon || '/icon.svg',
     badge: '/favicon-32x32.png',
     vibrate: [200, 100, 200, 100, 200], // More noticeable vibration
     tag: data.tag || data.id || 'staff-alert',
