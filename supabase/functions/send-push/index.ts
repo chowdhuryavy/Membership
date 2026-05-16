@@ -17,20 +17,23 @@ serve(async (req) => {
     );
 
     console.log(`[Push] Request received. Method: ${req.method}`);
-    const { userId, title, body, icon, url, tag } = await req.json();
-    console.log(`[Push] Target User: ${userId}, Title: ${title}`);
+    const json = await req.json();
+    console.log(`[Push] Received JSON:`, JSON.stringify(json));
+    const { userId, user_id, title, body, icon, url, tag } = json;
+    const effectiveUserId = userId || user_id;
+    console.log(`[Push] Extracted UserId: ${effectiveUserId}, Title: ${title}`);
 
-    if (!userId) {
-      console.error("[Push] No userId provided in request");
+    if (!effectiveUserId) {
+      console.error("[Push] No userId or user_id provided in request");
       throw new Error("userId is required");
     }
 
     // Fetch subscriptions for this user
-    console.log(`[Push] Querying push_subscriptions for user ${userId}...`);
+    console.log(`[Push] Querying push_subscriptions for user ${effectiveUserId}...`);
     const { data: subscriptions, error: subError } = await supabase
       .from("push_subscriptions")
       .select("subscription")
-      .eq("user_id", userId);
+      .eq("user_id", effectiveUserId);
 
     if (subError) {
       console.error("[Push] Database error fetching subscriptions:", subError);

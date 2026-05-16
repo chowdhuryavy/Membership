@@ -2907,17 +2907,23 @@ class DatabaseService {
         return;
     }
     try {
-        console.log('Triggering push notification for user:', userId, 'Title:', title);
+        const payload = { 
+            userId, 
+            title, 
+            body, 
+            url,
+            id: crypto.randomUUID(), // Add unique ID for tag
+            icon: '/icon.png',
+            tag: 'staff-alert'
+        };
+        console.log('Sending push payload to Edge Function:', JSON.stringify(payload, null, 2));
+        
         const { data, error } = await supabase.functions.invoke('send-push', {
-            body: { 
-                userId, 
-                title, 
-                body, 
-                url,
-                id: crypto.randomUUID(), // Add unique ID for tag
-                icon: '/icon.png',
-                tag: 'staff-alert'
-            }
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: payload // supabase-js should handle this, but let's be sure
         });
         if (error) throw error;
         console.log('Push notification trigger response:', data);
