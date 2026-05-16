@@ -123,7 +123,15 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Health Club', options)
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Check if any client (tab/window) is currently focused
+      const isFocused = windowClients.some(client => client.focused);
+      if (isFocused) {
+        console.log('[SW] App is focused. Skipping push notification to avoid duplication with UI toast.');
+        return;
+      }
+      return self.registration.showNotification(data.title || 'Health Club', options);
+    })
   );
 });
 
@@ -132,14 +140,15 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
   const data = event.notification.data || {};
-  const urlToOpen = new URL(data.url || '/notifications', self.location.origin).href;
+  // Fix: HashRouter requires /#/ path to avoid 404 on PWA navigation
+  const urlToOpen = new URL(data.url || '/#/notifications', self.location.origin).href;
   
   event.waitUntil(
     clients.matchAll({
       type: 'window',
       includeUncontrolled: true
     }).then((windowClients) => {
-      // If a window is already open, focus it
+      // If a window is already open at this URL, focus it
       for (const client of windowClients) {
         if (client.url === urlToOpen && 'focus' in client) {
           return client.focus();

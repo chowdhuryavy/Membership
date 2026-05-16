@@ -2287,13 +2287,13 @@ class DatabaseService {
         if (error) throw error;
         await this.logAction('CREATE_BOOKING', `Created booking on ${booking.date} at ${booking.start_time} (Therapist ID: ${booking.therapist_id})`, booking.outlet_id);
         
-        // Add notification for the therapist AND broadcast to all staff
+        // Add notification for the therapist AND admins
         await this.addNotification({
           title: 'New Booking Assigned',
           message: `Therapist assigned for ${booking.date} at ${booking.start_time}.`,
           type: 'info',
           outlet_id: booking.outlet_id,
-          // user_id: booking.therapist_id // Removing user_id makes it BROADCAST to all staff
+          user_id: booking.therapist_id // TARGETED to assigned staff
         });
       }, null);
     }
@@ -2327,7 +2327,7 @@ class DatabaseService {
         const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
         if (error) throw error;
         
-        // Notify all staff of the modification
+        // Notify assigned therapist and admins of the modification
         const therapistId = updates.therapist_id || booking?.therapist_id;
         if (therapistId) {
           await this.addNotification({
@@ -2335,7 +2335,7 @@ class DatabaseService {
             message: `A booking on ${booking?.date || ''} has been updated.`,
             type: 'info',
             outlet_id: booking?.outlet_id,
-           // user_id: therapistId // Removing user_id makes it BROADCAST to all staff
+            user_id: therapistId // TARGETED to assigned staff
           });
         }
       }, null);
@@ -2378,6 +2378,7 @@ class DatabaseService {
               message: `Booking for ${guest?.name || 'Guest'} on ${booking.date} has been marked as ${status}.`,
               type: status === 'cancelled' ? 'warning' : status === 'completed' ? 'success' : 'info',
               outlet_id: booking.outlet_id,
+              user_id: booking.therapist_id, // TARGETED to assigned therapist
               required_permission: 'bookings:view'
           });
       }
@@ -2536,11 +2537,24 @@ class DatabaseService {
 
   async deleteMassageBooking(id: string) {
     if (this.isSupabase()) {
+      // Get booking info to notify therapist before deletion
+      const { data: booking } = await supabase.from('massage_bookings').select('*, guests(name)').eq('id', id).single();
+      
       // Also delete any associated sales
       await supabase.from('sales').delete().eq('booking_id', id);
       const { error } = await supabase.from('massage_bookings').delete().eq('id', id);
       if (error) throw error;
       await this.logAction('DELETE_BOOKING', `Deleted booking ID: ${id}`);
+
+      if (booking) {
+        await this.addNotification({
+          title: 'Booking Cancelled',
+          message: `Booking for ${booking.guests?.name || 'Guest'} on ${booking.date} has been cancelled.`,
+          type: 'warning',
+          outlet_id: booking.outlet_id,
+          user_id: booking.therapist_id
+        });
+      }
     }
     
     // Trigger local event
@@ -2838,14 +2852,32 @@ class DatabaseService {
         } else {
           console.log('[Push] Notification persisted to Supabase.');
           
-          if (newNotification.user_id) {
-            console.log(`[Push] Initiating DIRECT push for user: ${newNotification.user_id}`);
-            this.triggerPushNotification(
-                newNotification.user_id, 
-                newNotification.title, 
-                newNotification.message
-            ).catch(err => console.error("[Push] DIRECT trigger failure:", err));
+          const recipients = new Set<string>();
+          if (newNotification.user_id) recipients.add(newNotification.user_id);
+
+          // Always notify admins for important events (Booking, Membership, etc)
+          const title = (newNotification.title || '').toLowerCase();
+          const isImportant = title.includes('booking') || 
+                             title.includes('membership') || 
+                             title.includes('sale') ||
+                             title.includes('assigned');
+
+          if (isImportant || !newNotification.user_id) {
+            const { data: admins } = await supabase.from('staff').select('id').eq('role', 'admin');
+            admins?.forEach(a => recipients.add(a.id));
+          }
+
+          if (recipients.size > 0) {
+            console.log(`[Push] Initiating targeted push for ${recipients.size} recipients.`);
+            recipients.forEach(rid => {
+               this.triggerPushNotification(
+                   rid, 
+                   newNotification.title, 
+                   newNotification.message
+               ).catch(err => console.error(`[Push] Trigger failure for ${rid}:`, err));
+            });
           } else {
+            // Fallback to global broadcast if no specific user OR it's a truly global message
             console.log(`[Push] Initiating BROADCAST push for global event.`);
             this.triggerGlobalPush(newNotification).catch(e => console.error("[Push] BROADCAST trigger failure:", e));
           }
@@ -2879,7 +2911,7 @@ class DatabaseService {
     }
   }
 
-  async triggerPushNotification(userId: string, title: string, body: string, url: string = '/notifications', broadcast: boolean = false) {
+  async triggerPushNotification(userId: string, title: string, body: string, url: string = '/#/notifications', broadcast: boolean = false) {
     if (!this.isSupabase()) {
         console.log('Push notification trigger skipped: Supabase offline');
         return;
