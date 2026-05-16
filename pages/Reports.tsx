@@ -124,6 +124,9 @@ const Reports = () => {
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<any>(null);
   const supabase = supabaseClient;
+  
+  // Cache for report results
+  const reportCache = useRef<Record<string, any>>({});
 
   const selectedTypeName = useMemo(() => {
     if (selectedMembershipTypeId === 'all') return 'Together All Type';
@@ -269,11 +272,28 @@ const Reports = () => {
 
   const loadData = async () => {
     if (!currentOutlet || !currentProperty) return;
+    
+    const start = reportType === 'daily_sales' ? startOfDay(parseISO(dailySalesDate)) : startOfDay(parseISO(reportMonth + '-01'));
+    
+    // Create cache key
+    const cacheKey = `${reportType}_${currentOutlet.id}_${format(start, 'yyyy-MM-dd')}_${incentiveDept}_${selectedMembershipTypeId}_${revenueMode}`;
+    
+    if (reportCache.current[cacheKey]) {
+      const cached = reportCache.current[cacheKey];
+      if (reportType === 'revenue_recognition') {
+        setRevenueRows(cached.rows);
+      } else {
+        setRows(cached.rows);
+      }
+      setSummary(cached.summary);
+      if (reportType === 'incentives') {
+        setActiveStaffList(cached.summary.staffList || []);
+      }
+      return;
+    }
+
     setLoading(true);
-    setPageLoading(true);
     try {
-      const start = reportType === 'daily_sales' ? startOfDay(parseISO(dailySalesDate)) : startOfDay(parseISO(reportMonth + '-01'));
-      
       const ctx: ReportContext = {
         supabase,
         propertyId: currentProperty.id,
@@ -287,6 +307,9 @@ const Reports = () => {
       };
 
       const result = await getReportData(ctx);
+
+      // Store in cache
+      reportCache.current[cacheKey] = result;
 
       if (reportType === 'revenue_recognition') {
         setRevenueRows(result.rows);
@@ -306,9 +329,6 @@ const Reports = () => {
       toast.error('Failed to load report data');
     } finally {
       setLoading(false);
-      setTimeout(() => {
-        setPageLoading(false);
-      }, 100);
     }
   };
 

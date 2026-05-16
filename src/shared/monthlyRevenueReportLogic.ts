@@ -160,14 +160,21 @@ export const getMonthlyRevenueData = async (
     });
   } else {
     // Accrual Mode - Optimized
+    // Group freezes by member_id first to avoid O(N*M) filtering
+    const freezesByMemberId: Record<string, any[]> = {};
+    freezes.forEach((f: any) => {
+      if (!freezesByMemberId[f.member_id]) freezesByMemberId[f.member_id] = [];
+      freezesByMemberId[f.member_id].push({
+        _start: parseISO(f.start_date),
+        _end: parseISO(f.end_date)
+      });
+    });
+
     const parsedMembers = members.map((m: any) => ({
       ...m,
       _start: parseISO(m.start_date),
       _end: parseISO(m.current_end_date),
-      _freezes: freezes.filter((f: any) => f.member_id === m.id).map((f: any) => ({
-        _start: parseISO(f.start_date),
-        _end: parseISO(f.end_date)
-      }))
+      _freezes: freezesByMemberId[m.id] || []
     }));
 
     parsedMembers.forEach((m: any) => {
@@ -261,14 +268,21 @@ export const getMonthlyRevenueData = async (
     });
   } else {
     // Accrual Mode for previous year - Optimized
+    // Group freezes by member_id if not already done (it might be out of scope)
+    const freezesByMemberId: Record<string, any[]> = {};
+    freezes.forEach((f: any) => {
+      if (!freezesByMemberId[f.member_id]) freezesByMemberId[f.member_id] = [];
+      freezesByMemberId[f.member_id].push({
+        _start: parseISO(f.start_date),
+        _end: parseISO(f.end_date)
+      });
+    });
+
     const prevYearMembers = prevMembers.map((m: any) => ({
       ...m,
       _start: parseISO(m.start_date),
       _end: parseISO(m.current_end_date),
-      _freezes: freezes.filter((f: any) => f.member_id === m.id).map((f: any) => ({
-        _start: parseISO(f.start_date),
-        _end: parseISO(f.end_date)
-      }))
+      _freezes: freezesByMemberId[m.id] || []
     }));
 
     prevYearMembers.forEach((m: any) => {

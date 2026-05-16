@@ -123,6 +123,13 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const categoryDurationMap = Object.fromEntries(categories.map((c: any) => [c.id, c.duration_months]));
     const typeMap = Object.fromEntries(types.map((t: any) => [t.id, t.name]));
 
+    // Group freezes by member_id for O(1) lookup
+    const freezesByMemberId: Record<string, any[]> = {};
+    freezes.forEach((f: any) => {
+      if (!freezesByMemberId[f.member_id]) freezesByMemberId[f.member_id] = [];
+      freezesByMemberId[f.member_id].push(f);
+    });
+
     console.log(`DEBUG: Found ${members.length} members for property ${propertyId}`);
 
     // Calculate for the month of the provided date
@@ -139,7 +146,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const mStart = safeParseDate(m.start_date);
         const mEnd = safeParseDate(m.current_end_date);
         
-        const memberFreezes = freezes.filter((f: any) => f.member_id === m.id);
+        const memberFreezes = freezesByMemberId[m.id] || [];
         const prevAccrual = mStart ? RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, subDays(start, 1)) : 0;
         const periodRev = RevenueEngine.calculateRevenuePeriod(m, memberFreezes, start, subDays(end, 1));
         
