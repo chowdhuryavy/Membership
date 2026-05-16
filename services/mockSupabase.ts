@@ -2460,7 +2460,7 @@ class DatabaseService {
           .on(
             'postgres_changes',
             {
-              event: 'INSERT',
+              event: '*', // Listen to all events to catch updates/assignments
               schema: 'public',
               table: table,
               filter: `outlet_id=eq.${outletId}`

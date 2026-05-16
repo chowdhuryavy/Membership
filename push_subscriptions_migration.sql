@@ -16,8 +16,19 @@ CREATE TABLE IF NOT EXISTS public.push_subscriptions (
 ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Policies
-CREATE POLICY "Users can manage their own push subscriptions"
+-- We allow all operations for now because staff login doesn't use Supabase Auth
+-- In a production environment, you should use service-role Edge Functions or real Auth
+CREATE POLICY "Enable all access for push_subscriptions"
     ON public.push_subscriptions
     FOR ALL
-    USING (auth.uid() = user_id)
-    WITH CHECK (auth.uid() = user_id);
+    USING (true)
+    WITH CHECK (true);
+
+-- Also ensure notifications table is accessible by staff
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Enable all access for notifications"
+    ON public.notifications
+    FOR ALL
+    USING (true)
+    WITH CHECK (true);

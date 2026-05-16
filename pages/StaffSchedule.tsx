@@ -321,6 +321,7 @@ const StaffSchedule = () => {
   }, [showAccountMenu]);
   const [notifications, setNotifications] = useState<StaffNotification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const triggeredRemindersRef = useRef<Set<string>>(new Set());
   const [triggeredReminders, setTriggeredReminders] = useState<Set<string>>(() => {
     const saved = localStorage.getItem('triggered_reminders');
@@ -335,6 +336,36 @@ const StaffSchedule = () => {
   
   const [selectedOutletId, setSelectedOutletId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Load initial notifications for staff
+  useEffect(() => {
+    if (!staff?.id || !selectedOutletId) return;
+
+    const loadPastNotifications = async () => {
+      setIsLoadingNotifications(true);
+      try {
+        // Fetch past notifications targeted to this staff OR global ones for this outlet
+        const pastNotifs = await db.getNotifications(staff.id, selectedOutletId);
+        
+        const mappedNotifs: StaffNotification[] = pastNotifs.map(n => ({
+          id: n.id,
+          title: n.title,
+          message: n.message,
+          time: new Date(n.created_at),
+          isRead: n.read || false,
+          type: n.type === 'error' ? 'system' : (n.title.toLowerCase().includes('booking') ? 'booking' : 'sale')
+        }));
+        
+        setNotifications(mappedNotifs);
+      } catch (error) {
+        console.error("Failed to load past notifications:", error);
+      } finally {
+        setIsLoadingNotifications(false);
+      }
+    };
+
+    loadPastNotifications();
+  }, [staff?.id, selectedOutletId]);
 
   // Robust derived outlets for the selector
   const assignedOutlets = useMemo(() => {
@@ -827,8 +858,39 @@ const StaffSchedule = () => {
       else if (viewMode === 'incentives') loadIncentives();
     });
 
+    // Also listen for general notification table changes for the bell icon
+    const unsubNotifications = db.subscribeToNotifications(staff.id, selectedOutletId, (payload) => {
+      if (payload.eventType === 'INSERT') {
+        const n = payload.new;
+        const newNotif: StaffNotification = {
+          id: n.id,
+          title: n.title,
+          message: n.message,
+          time: new Date(n.created_at),
+          isRead: false,
+          type: n.type === 'error' ? 'system' : (n.title.toLowerCase().includes('booking') ? 'booking' : 'sale')
+        };
+        
+        // Use functional state update to prevent closure staleness
+        setNotifications(prev => {
+          // Check for duplicates
+          if (prev.some(existing => existing.id === n.id)) return prev;
+          
+          playNotificationSound();
+          toast.success(n.title, {
+            icon: '🔔',
+            duration: 5000,
+            style: { background: '#4f46e5', color: '#fff', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }
+          });
+          
+          return [newNotif, ...prev].slice(0, 50);
+        });
+      }
+    });
+
     return () => {
       unsubscribe();
+      unsubNotifications();
     };
   }, [staff?.id, staff?.property_id, currentDate, viewMode, selectedOutletId]);
 
@@ -1303,9 +1365,17 @@ const StaffSchedule = () => {
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
-                  setShowNotifications(!showNotifications);
+                  setShowNotifications(prev => !prev);
                   if (!showNotifications) {
+                    // Mark as read locally and in DB
                     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+                    notifications.forEach(n => {
+                      if (!n.isRead && staff?.id) {
+                        db.markNotificationAsRead(n.id, staff.id).catch(err => {
+                          console.warn("Silent mark read failure (mobile):", err);
+                        });
+                      }
+                    });
                   }
                 }}
                 className={`p-2.5 rounded-xl border transition-all ${showNotifications ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}
@@ -1375,9 +1445,17 @@ const StaffSchedule = () => {
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
-                  setShowNotifications(!showNotifications);
+                  setShowNotifications(prev => !prev);
                   if (!showNotifications) {
+                    // Mark as read locally and in DB
                     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+                    notifications.forEach(n => {
+                      if (!n.isRead && staff?.id) {
+                        db.markNotificationAsRead(n.id, staff.id).catch(err => {
+                          console.warn("Silent mark read failure (desktop):", err);
+                        });
+                      }
+                    });
                   }
                 }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${showNotifications ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
