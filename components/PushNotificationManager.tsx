@@ -211,7 +211,8 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
                                                     user!.id, 
                                                     'Cloud Server Test', 
                                                     'Notification from Supabase Edge Function: ' + new Date().toLocaleTimeString(),
-                                                    '/notifications?test=' + testId
+                                                    '/notifications?test=' + testId,
+                                                    false // Direct push, not broadcast
                                                 );
                                             }),
                                             {
@@ -222,28 +223,35 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
                                         );
                                     }
                                 }}
-                                className="px-6 py-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-all shadow-sm flex items-center gap-2"
+                                className="px-5 py-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-all shadow-sm flex items-center gap-2"
                             >
                                 <Smartphone className="w-4 h-4" />
-                                Cloud Test
+                                Device Test
                             </button>
                             <button
-                                onClick={() => {
-                                    if ('serviceWorker' in navigator) {
-                                        navigator.serviceWorker.ready.then(registration => {
-                                            registration.showNotification('Test Notification', {
-                                                body: 'This is a test push notification from Health Club.',
-                                                icon: '/icon.png',
-                                                badge: '/favicon-16x16.png',
-                                                vibrate: [200, 100, 200]
-                                            } as any);
-                                        });
-                                    }
+                                onClick={async () => {
+                                    toast.promise(
+                                        (async () => {
+                                            const m = await import('../services/mockSupabase');
+                                            return m.db.triggerPushNotification(
+                                                "broadcast-test", 
+                                                'Staff Broadcast Test', 
+                                                'Testing global push synchronization: ' + new Date().toLocaleTimeString(),
+                                                '/notifications',
+                                                true // Enable BROADCAST mode
+                                            );
+                                        })(),
+                                        {
+                                            loading: 'Sending Broadcast to all staff...',
+                                            success: 'Global alert sent to all devices!',
+                                            error: 'Broadcast signal failed.'
+                                        }
+                                    );
                                 }}
-                                className="px-6 py-2.5 bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-700 hover:bg-indigo-200 transition-all shadow-sm flex items-center gap-2"
+                                className="px-5 py-2.5 bg-indigo-600 border border-indigo-700 rounded-xl text-xs font-bold text-white hover:bg-indigo-700 transition-all shadow-md flex items-center gap-2"
                             >
                                 <Bell className="w-4 h-4" />
-                                Test Alert
+                                Broadcast Test
                             </button>
                             <button
                                 onClick={handleDisableNotifications}

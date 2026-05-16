@@ -2869,54 +2869,38 @@ class DatabaseService {
 
   private async triggerGlobalPush(n: Notification) {
     try {
-        console.log(`[Push] Global notification discovered: "${n.title}". Looking for subscribers...`);
-        // Fetch all subscriptions to see who is actually reachable
-        const { data: subs, error: subError } = await supabase.from('push_subscriptions').select('user_id');
-        
-        if (subError) {
-            console.error("[Push] Error fetching push subscriptions for global push:", subError);
-            return;
-        }
-
-        if (!subs || subs.length === 0) {
-            console.log("[Push] No push subscriptions found in database. Nobody to notify.");
-            return;
-        }
-
-        // Get unique user IDs who have active subscriptions
-        const subscribedUserIds = Array.from(new Set(subs.map(s => s.user_id)));
-        
-        console.log(`[Push] Global notification: Attempting push to ${subscribedUserIds.length} unique subscribed users (staff & admins)`);
-        
-        // Notify all subscribed users in parallel (cap at 50 to avoid edge function burst limits)
-        const targets = subscribedUserIds.slice(0, 50);
-        await Promise.all(targets.map(id => 
-            this.triggerPushNotification(id, n.title, n.message).catch(e => 
-                console.warn(`[Push] Individual push failure for ${id}:`, e)
-            )
-        ));
-        console.log("[Push] Global push dispatch complete.");
+        console.log(`[Push] Global notification: Broadcasting "${n.title}" to all logged-in staff...`);
+        // We now call the Edge Function ONCE with broadcast: true for efficiency
+        await this.triggerPushNotification(
+            "global-broadcast", 
+            n.title, 
+            n.message, 
+            '/notifications',
+            true // Enable broadcast mode
+        );
+        console.log("[Push] Global broadcast triggered successfully.");
     } catch (e) {
-        console.warn("[Push] Fault while triggering global push:", e);
+        console.warn("[Push] Fault while triggering global broadcast:", e);
     }
   }
 
-  async triggerPushNotification(userId: string, title: string, body: string, url: string = '/notifications') {
+  async triggerPushNotification(userId: string, title: string, body: string, url: string = '/notifications', broadcast: boolean = false) {
     if (!this.isSupabase()) {
         console.log('Push notification trigger skipped: Supabase offline');
         return;
     }
     try {
         const payload = { 
-            userId, 
+            userId: broadcast ? undefined : userId,
+            broadcast,
             title, 
             body, 
             url,
-            id: crypto.randomUUID(), // Add unique ID for tag
-            icon: '/icon.png',
-            tag: 'staff-alert'
+            id: crypto.randomUUID(), 
+            icon: '/notification-icon.png',
+            tag: broadcast ? 'global-staff-alert' : 'direct-alert'
         };
-        console.log('Sending push payload to Edge Function:', JSON.stringify(payload, null, 2));
+        console.log(`Sending ${broadcast ? 'BROADCAST' : 'DIRECT'} push payload:`, JSON.stringify(payload, null, 2));
         
         const { data, error } = await supabase.functions.invoke('send-push', {
             method: 'POST',

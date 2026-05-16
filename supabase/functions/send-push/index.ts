@@ -32,29 +32,42 @@ serve(async (req) => {
     }
 
     console.log(`[Push] Received JSON:`, JSON.stringify(json));
-    const { userId, user_id, title, body, icon, url, tag } = json;
-    const effectiveUserId = userId || user_id;
-    console.log(`[Push] Extracted UserId: ${effectiveUserId}, Title: ${title}`);
+    const { userId, user_id, title, body, icon, url, tag, broadcast } = json;
+    
+    let subscriptions = [];
+    if (broadcast) {
+      console.log(`[Push] BROADCAST MODE: Fetching all active subscriptions...`);
+      const { data, error: subError } = await supabase
+        .from("push_subscriptions")
+        .select("subscription, user_id");
+      
+      if (subError) throw subError;
+      subscriptions = data || [];
+    } else {
+      const effectiveUserId = userId || user_id;
+      console.log(`[Push] Extracted UserId: ${effectiveUserId}, Title: ${title}`);
 
-    if (!effectiveUserId) {
-      console.error("[Push] No userId or user_id provided in request");
-      throw new Error("userId is required");
-    }
+      if (!effectiveUserId) {
+        console.error("[Push] No userId or user_id provided in request and broadcast is false");
+        throw new Error("userId is required for direct push");
+      }
 
-    // Fetch subscriptions for this user
-    console.log(`[Push] Querying push_subscriptions for user ${effectiveUserId}...`);
-    const { data: subscriptions, error: subError } = await supabase
-      .from("push_subscriptions")
-      .select("subscription")
-      .eq("user_id", effectiveUserId);
+      // Fetch subscriptions for this specific user
+      console.log(`[Push] Querying push_subscriptions for user ${effectiveUserId}...`);
+      const { data: userSubs, error: subError } = await supabase
+        .from("push_subscriptions")
+        .select("subscription")
+        .eq("user_id", effectiveUserId);
 
-    if (subError) {
-      console.error("[Push] Database error fetching subscriptions:", subError);
-      throw subError;
+      if (subError) {
+        console.error("[Push] Database error fetching subscriptions:", subError);
+        throw subError;
+      }
+      subscriptions = userSubs || [];
     }
 
     if (!subscriptions || subscriptions.length === 0) {
-      console.log(`[Push] No subscriptions found for user ${userId}. Push aborted.`);
+      console.log(`[Push] No subscriptions found. Push aborted.`);
       return new Response(JSON.stringify({ success: true, message: "No subscriptions found" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
