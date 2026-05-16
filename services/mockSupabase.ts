@@ -2829,9 +2829,10 @@ class DatabaseService {
 
   async addNotification(notification: Omit<Notification, 'id' | 'created_at' | 'read'>) {
     console.log('Adding notification:', notification.title);
-    const newNotification: Notification = {
+    
+    // We omit ID here to let Supabase generate a proper UUID if not provided
+    const newNotification: any = {
       ...notification,
-      id: this.generateUUID(),
       created_at: new Date().toISOString(),
       read: false,
       user_id: notification.user_id || null,
@@ -2841,59 +2842,61 @@ class DatabaseService {
 
     if (this.isSupabase()) {
       try {
-        console.log(`[Push] Attempting to save and trigger push for: "${newNotification.title}"`);
-        // Use insert instead of upsert to avoid potential 409 conflict errors
-        const { error } = await supabase.from('notifications').insert([newNotification]);
+        console.log(`[Push] Attempting to save and trigger push for: "${notification.title}"`);
+        // Use insert without ID to let Supabase generate it, avoiding conflict errors with client-side UUID fallbacks
+        const { data, error } = await supabase.from('notifications').insert([newNotification]).select().single();
+        
         if (error) {
-          if (error.code === '23503' && error.details?.includes('users')) {
-            console.log('[Push] Notification saved for non-user staff member.');
-          } else {
-            console.warn("[Push] Supabase insert error:", error);
-          }
-          this.saveLocalNotification(newNotification);
+           console.warn("[Push] Supabase insert error (falling back to local):", error);
+           this.saveLocalNotification({ ...newNotification, id: this.generateUUID() });
+        } else if (data) {
+           console.log('[Push] Notification persisted to Supabase with ID:', data.id);
+        }
+        
+        // Trigger push notification REGARDLESS of DB persistence success (best effort delivery)
+        const recipients = new Set<string>();
+        if (notification.user_id) recipients.add(notification.user_id);
+
+        // Always notify admins and relevant staff for important events
+        const title = (notification.title || '').toLowerCase();
+        const isImportant = title.includes('booking') || 
+                            title.includes('membership') || 
+                            title.includes('sale') ||
+                            title.includes('assigned') ||
+                            title.includes('cancel') ||
+                            title.includes('delete') ||
+                            title.includes('modify') ||
+                            title.includes('remove') ||
+                            title.includes('reschedule');
+
+        if (isImportant || !notification.user_id) {
+          // Case-insensitive role check for reliability
+          const { data: admins } = await supabase.from('staff').select('id').ilike('role', 'admin');
+          admins?.forEach(a => recipients.add(a.id));
+        }
+
+        if (recipients.size > 0) {
+          console.log(`[Push] Initiating targeted push for ${recipients.size} recipients:`, Array.from(recipients));
+          recipients.forEach(rid => {
+              this.triggerPushNotification(
+                  rid, 
+                  notification.title, 
+                  notification.message
+              ).catch(err => console.error(`[Push] Trigger failure for ${rid}:`, err));
+          });
         } else {
-          console.log('[Push] Notification persisted to Supabase.');
-          
-          const recipients = new Set<string>();
-          if (newNotification.user_id) recipients.add(newNotification.user_id);
-
-          // Always notify admins for important events (Booking, Membership, etc)
-          const title = (newNotification.title || '').toLowerCase();
-          const isImportant = title.includes('booking') || 
-                             title.includes('membership') || 
-                             title.includes('sale') ||
-                             title.includes('assigned');
-
-          if (isImportant || !newNotification.user_id) {
-            // Case-insensitive role check for reliability
-            const { data: admins } = await supabase.from('staff').select('id').ilike('role', 'admin');
-            admins?.forEach(a => recipients.add(a.id));
-          }
-
-          if (recipients.size > 0) {
-            console.log(`[Push] Initiating targeted push for ${recipients.size} recipients:`, Array.from(recipients));
-            recipients.forEach(rid => {
-               this.triggerPushNotification(
-                   rid, 
-                   newNotification.title, 
-                   newNotification.message
-               ).catch(err => console.error(`[Push] Trigger failure for ${rid}:`, err));
-            });
-          } else {
-            // Fallback to global broadcast if no specific user OR it's a truly global message
-            console.log(`[Push] Initiating BROADCAST push for global event.`);
-            this.triggerGlobalPush(newNotification).catch(e => console.error("[Push] BROADCAST trigger failure:", e));
-          }
+           console.log(`[Push] Initiating BROADCAST push for global/unassigned event.`);
+           this.triggerGlobalPush({ ...newNotification, id: this.generateUUID() }).catch(e => console.error("[Push] BROADCAST trigger failure:", e));
         }
       } catch (e) {
         console.error('[Push] Fatal error in addNotification sequence:', e);
-        this.saveLocalNotification(newNotification);
+        this.saveLocalNotification({ ...newNotification, id: this.generateUUID() });
       }
     } else {
-      this.saveLocalNotification(newNotification);
+      this.saveLocalNotification({ ...newNotification, id: this.generateUUID() });
     }
     
-    this.broadcastNotificationLocally(newNotification);
+    this.broadcastNotificationLocally({ ...newNotification, id: this.generateUUID() });
     return newNotification;
   }
 

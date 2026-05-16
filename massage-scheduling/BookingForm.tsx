@@ -96,11 +96,27 @@ const BookingForm: React.FC<BookingFormProps> = ({
 
   useEffect(() => {
     if (initialBooking) {
+      console.log('Initializing BookingForm with:', { 
+        id: initialBooking.id, 
+        mtid: initialBooking.massage_type_id, 
+        inv_id: initialBooking.inventory_item_id,
+        cat: initialBooking.category
+      });
+
       const guest = guests.find(g => g.id === initialBooking.guest_id);
       if (guest) setGuestData({ name: guest.name, phone: guest.phone, email: guest.email || '' });
       
-      const category = initialBooking.category || (initialBooking.inventory_item_id ? 'Personal Training' : 'Massage');
+      // Determine service ID - check both MTID and Inventory ID to be resilient to cross-category rescheduling
       const serviceId = initialBooking.massage_type_id || initialBooking.inventory_item_id || '';
+      
+      // Look up the actual service in the registry to determine its true current category
+      const registryEntry = massageTypes.find(m => m.id === serviceId);
+      const registryCategory = registryEntry?.category;
+
+      // Priority: 1. Registry (Ground Truth), 2. Saved Category, 3. Heuristic
+      const finalCategory = (registryCategory || initialBooking.category || (initialBooking.inventory_item_id ? 'Personal Training' : 'Massage')) as any;
+
+      console.log('Determined category for initialization:', finalCategory, 'from registry:', registryCategory);
 
       setBookingData({
         massage_type_id: serviceId,
@@ -111,12 +127,12 @@ const BookingForm: React.FC<BookingFormProps> = ({
         start_time: initialBooking.start_time,
         end_time: initialBooking.end_time,
         discount: initialBooking.discount || 0,
-        discount_mode: 'amount', // Defaults to amount for editing existing
+        discount_mode: 'amount',
         discount_reason: initialBooking.discount_reason || '',
         discount_id_url: initialBooking.discount_id_url || '',
         payment_method: initialBooking.payment_method || 'cash',
         check_no: initialBooking.check_no || '',
-        category: category as any
+        category: finalCategory
       });
     }
   }, [initialBooking, guests, massageTypes]);
@@ -436,7 +452,11 @@ const BookingForm: React.FC<BookingFormProps> = ({
                             options={[
                                 { value: '', label: 'Select Item...' }, 
                                 ...massageTypes
-                                    .filter(m => m.category === bookingData.category)
+                                    .filter(m => {
+                                        // Robust matching: show if category matches OR if it's the currently selected item
+                                        // This prevents the selection from disappearing during rescheduling if categories are quirky
+                                        return m.category === bookingData.category || m.id === bookingData.massage_type_id;
+                                    })
                                     .map(m => ({ value: m.id, label: `${m.name} (${m.duration_minutes}m)` }))
                             ]} 
                             value={bookingData.massage_type_id} 
