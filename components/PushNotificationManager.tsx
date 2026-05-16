@@ -27,7 +27,6 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
 
     const [permission, setPermission] = useState<NotificationPermission | 'not-supported'>('default');
     const [isSubscribing, setIsSubscribing] = useState(false);
-    const [isDismissed, setIsDismissed] = useState(false);
 
     useEffect(() => {
         const checkPermission = async () => {
@@ -66,7 +65,7 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
         try {
             console.log('Starting enable process...');
             
-            // Timeout for the entire process
+            // Timeout for the entire process (crucial as some environments trap/hang permission prompts)
             const enableProcess = (async () => {
                 console.log('Requesting permission...');
                 const granted = await PushNotificationService.requestPermission();
@@ -82,19 +81,19 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
                     } else {
                         console.log('Subscribe failed.');
                         setPermission('denied');
-                        toast.error('Failed to subscribe. Try in a new tab.');
+                        toast.error('Failed to subscribe. Please try in a new browser tab.');
                         return false;
                     }
                 } else {
                     console.log('Permission denied.');
                     setPermission('denied');
-                    toast.error('Notification permission denied.');
+                    toast.error('Notification permission denied by browser.');
                     return false;
                 }
             })();
 
             const timeoutPromise = new Promise<never>((_, reject) => 
-                setTimeout(() => reject(new Error('Process timed out after 15s')), 15000)
+                setTimeout(() => reject(new Error('Notification prompt timed out. This usually happens in restricted preview frames. Please open the application in a NEW browser tab using the arrow icon at the top right to complete setup.')), 15000)
             );
 
             await Promise.race([enableProcess, timeoutPromise]);
@@ -102,12 +101,7 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
         } catch (error: any) {
             console.error('Push error in handleEnableNotifications:', error);
             const errMsg = error?.message || String(error);
-            toast.error('Error: ' + errMsg);
-            
-            // If it timed out or failed, allow them to dismiss it
-            if (errMsg.includes('timeout') || errMsg.includes('timed out')) {
-                toast('If you are in the AI Studio preview, push notifications might be blocked. Click "Continue without notifications" if you are stuck.', { duration: 6000 });
-            }
+            toast.error(errMsg, { duration: 8000 });
         } finally {
             setIsSubscribing(false);
         }
@@ -131,39 +125,36 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
     };
 
     if (variant === 'modal') {
-        // If not supported, or already granted/denied, or dismissed, don't show the modal
-        if (permission !== 'default' || isDismissed) return null;
+        // Mandatory: If not granted, block everything else
+        if (permission !== 'default') return null;
 
         return (
-            <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
-                <div className="bg-white p-6 sm:p-8 rounded-[2rem] w-full max-w-sm shadow-2xl relative overflow-hidden animate-in fade-in slide-in-from-bottom-8 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 border border-indigo-100">
+            <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md transition-opacity">
+                <div className="bg-white p-6 sm:p-8 rounded-[2rem] w-full max-w-sm shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-500 border border-indigo-100">
                     <div className="flex flex-col items-center text-center space-y-4 relative z-10">
                         <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-2 shadow-inner">
-                            <Bell className="w-8 h-8 animate-pulse" />
+                            <Bell className="w-8 h-8 animate-bounce" />
                         </div>
-                        <h3 className="text-xl font-black text-slate-900 tracking-tight">Setup Required</h3>
-                        <p className="text-sm font-medium text-slate-500">To use the Staff Portal, you must enable push notifications to receive real-time booking updates.</p>
+                        <h3 className="text-xl font-black text-slate-900 tracking-tight">Notification Setup</h3>
+                        <p className="text-sm font-medium text-slate-500 leading-relaxed">To ensure system integrity and real-time booking updates, all staff members must enable push notifications.</p>
                         
-                        <div className="w-full mt-6 space-y-3">
+                        <div className="w-full mt-6">
                             <button
                                 onClick={handleEnableNotifications}
                                 disabled={isSubscribing}
                                 className="w-full py-4 bg-slate-900 text-white font-black tracking-widest text-xs uppercase rounded-xl hover:bg-slate-800 active:scale-[0.98] transition-all shadow-xl flex justify-center items-center gap-2"
                             >
                                 {isSubscribing ? (
-                                    <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Enabling...</>
-                                ) : 'Enable Notifications'}
+                                    <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> SYNCING...</>
+                                ) : 'AUTHORIZE PUSH ALERTS'}
                             </button>
-
-                            {!isSubscribing && (
-                                <button
-                                    onClick={() => setIsDismissed(true)}
-                                    className="w-full py-3 bg-white text-slate-400 font-bold tracking-tight text-xs rounded-xl hover:text-slate-600 transition-all border border-transparent hover:border-slate-100"
-                                >
-                                    Continue without notifications
-                                </button>
-                            )}
                         </div>
+                        
+                        {isSubscribing && (
+                            <p className="text-[10px] text-slate-400 animate-pulse mt-2 font-bold uppercase tracking-wider">
+                                Check your browser for the permission prompt
+                            </p>
+                        )}
                     </div>
                     <div className="absolute top-0 right-0 -mr-8 -mt-8 text-indigo-50 opacity-50 rotate-12 pointer-events-none">
                         <Bell className="w-48 h-48" />
