@@ -2928,6 +2928,7 @@ class DatabaseService {
         }
     } catch (e: any) {
         console.error('❌ Failed to trigger push notification:', e.message || e);
+        throw e;
     }
   }
 

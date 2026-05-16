@@ -49,6 +49,8 @@ serve(async (req) => {
     const privateKey = Deno.env.get("VAPID_PRIVATE_KEY");
     const subject = Deno.env.get("VAPID_SUBJECT") || "mailto:admin@healthclub.com";
 
+    console.log(`[Push] VAPID Setup - Public: ${!!publicKey} (${publicKey?.substring(0, 8)}...), Private: ${!!privateKey}, Subject: ${subject}`);
+
     if (!publicKey || !privateKey) {
       console.error("[Push] CRITICAL ERROR: VAPID keys not configured in Edge Function environment variables.");
       return new Response(JSON.stringify({ success: false, error: "VAPID keys missing in Edge Function environment. Please use 'supabase secrets set' to add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY." }), {
