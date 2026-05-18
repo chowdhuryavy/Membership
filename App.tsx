@@ -686,15 +686,17 @@ const DynamicHead = () => {
         setLink('apple-touch-icon-precomposed');
         setLink('mask-icon', { color: '#4f46e5' });
       } else {
-        // Explicitly reset to local icons if settings logo is problematic or missing
-        const resetLink = (rel: string, path: string) => {
+        // Explicitly reset to branded icons if settings logo is problematic or missing
+        const resetLink = (rel: string, targetHref: string) => {
           let link = document.querySelector(`link[rel~='${rel}']`) as HTMLLinkElement;
           if (link) {
-            link.href = window.location.origin + path + '?v=10';
+            link.href = targetHref;
           }
         };
-        resetLink('icon', '/favicon.ico');
-        resetLink('apple-touch-icon', '/apple-touch-icon.png');
+        const brandedIcon = 'https://i.imgur.com/oZVRrvo.png';
+        resetLink('icon', brandedIcon);
+        resetLink('shortcut icon', brandedIcon);
+        resetLink('apple-touch-icon', brandedIcon);
       }
 
       // Set theme color for mobile browser bars

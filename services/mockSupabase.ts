@@ -1430,7 +1430,12 @@ class DatabaseService {
   }
 
   async getSettings(): Promise<CompanySettings> {
-    const defaultSettings: CompanySettings = { name: 'The Torch Hospitality', logo_url: '', address: '', currency_id: 'default' };
+    const defaultSettings: CompanySettings = { 
+      name: 'Health Club Management', 
+      logo_url: 'https://i.imgur.com/oZVRrvo.png', 
+      address: '', 
+      currency_id: 'default' 
+    };
     
     // Always check local storage first for immediate fallback availability
     const local = localStorage.getItem('company_settings_cache');
