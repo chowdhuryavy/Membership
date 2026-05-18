@@ -2812,8 +2812,11 @@ class DatabaseService {
       let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
       
       // Fetch all relevant notifications (targeted to user or system-wide)
-      // Admins see EVERYTHING for the outlet
+      // Admins see EVERYTHING for the outlet (including global ones)
+      // Staff ONLY see their own targeted notifications
       if (userId && !isAdmin) {
+        query = query.eq('user_id', userId);
+      } else if (userId && isAdmin) {
         query = query.or(`user_id.eq.${userId},user_id.is.null`);
       } else if (!userId) {
         query = query.is('user_id', null);
@@ -3224,7 +3227,12 @@ class DatabaseService {
       bc = new BroadcastChannel('notifications_channel');
       bc.onmessage = (event) => {
         const notification = event.data as Notification;
-        const userMatch = isAdmin || !notification.user_id || notification.user_id === userId;
+        // If staff (not admin), only match if explicitly targeted to them
+        // If admin, match if targeted to them OR global (null user_id)
+        const userMatch = isAdmin 
+          ? (notification.user_id === userId || !notification.user_id) 
+          : (notification.user_id === userId);
+          
         const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
         
         if (userMatch && outletMatch) {
@@ -3242,7 +3250,12 @@ class DatabaseService {
         
         const targetNotification = newNotification || oldNotification;
         if (targetNotification) {
-          const userMatch = isAdmin || !targetNotification.user_id || targetNotification.user_id === userId;
+          // If staff (not admin), only match if explicitly targeted to them
+          // If admin, match if targeted to them OR global (null user_id)
+          const userMatch = isAdmin 
+            ? (targetNotification.user_id === userId || !targetNotification.user_id) 
+            : (targetNotification.user_id === userId);
+            
           const outletMatch = !outletId || !targetNotification.outlet_id || targetNotification.outlet_id === outletId;
           
           if (userMatch && outletMatch) {

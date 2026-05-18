@@ -284,62 +284,35 @@ export const StaffLoadingScreens = React.memo(({
     >
       <div className="relative flex flex-col items-center">
         {/* Logo Container */}
-        <motion.div 
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-          className="relative w-48 h-48 flex items-center justify-center"
-        >
-          {/* Outer Ring */}
-          <motion.div 
-            animate={{ rotate: 360 }}
-            transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-            className="absolute inset-0 border-2 border-dashed border-indigo-500/20 rounded-full"
-          />
-          
-          {/* Inner Glow */}
-          <div className="absolute inset-4 bg-indigo-500/5 rounded-full blur-2xl animate-pulse"></div>
+          {logoUrl ? (
+            <motion.div
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              className="w-32 h-32 flex items-center justify-center mb-4"
+            >
+              <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            </motion.div>
+          ) : (
+            <motion.div 
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="relative w-48 h-48 flex items-center justify-center"
+            >
+              {/* Outer Ring */}
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-0 border-2 border-dashed border-indigo-500/20 rounded-full"
+              />
+              
+              {/* Inner Glow */}
+              <div className="absolute inset-4 bg-indigo-500/5 rounded-full blur-2xl animate-pulse"></div>
 
-          {/* Monogram */}
-          <motion.svg 
-            width="200" height="100" viewBox="0 0 160 100" 
-            className="stroke-[4] fill-none stroke-linecap-round stroke-linejoin-round"
-            initial="hidden"
-            animate="visible"
-            variants={{
-              hidden: { opacity: 0 },
-              visible: { opacity: 1, transition: { staggerChildren: 0.3 } }
-            }}
-          >
-            {/* H */}
-            <motion.path 
-              d="M 20 20 L 20 80 M 50 20 L 50 80 M 20 50 L 50 50"
-              stroke="white"
-              variants={{
-                hidden: { pathLength: 0, opacity: 0 },
-                visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
-              }}
-            />
-            {/* C */}
-            <motion.path 
-              d="M 90 30 A 25 25 0 1 0 90 70"
-              stroke="#6366f1"
-              variants={{
-                hidden: { pathLength: 0, opacity: 0 },
-                visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
-              }}
-            />
-            {/* M */}
-            <motion.path 
-              d="M 105 80 L 105 20 L 120 50 L 135 20 L 135 80"
-              stroke="white"
-              variants={{
-                hidden: { pathLength: 0, opacity: 0 },
-                visible: { pathLength: 1, opacity: 1, transition: { duration: 1, ease: "easeInOut" } }
-              }}
-            />
-          </motion.svg>
-        </motion.div>
+              <Sparkles className="w-16 h-16 text-indigo-500" />
+            </motion.div>
+          )}
 
         {/* Text Label */}
         <motion.div
