@@ -665,16 +665,14 @@ const DynamicHead = () => {
   useEffect(() => {
     if (settings) {
       if (settings.name) {
-        document.title = `${settings.name} | Console`;
+        document.title = settings.name;
       }
       
       const logoUrl = settings.logo_url;
-      const isExternalLogo = logoUrl && logoUrl.startsWith('http');
-      const isVercelLegacy = isExternalLogo && (logoUrl.includes('vercel.app') || logoUrl.includes('health-club-management'));
+      const isExternalLogo = logoUrl && (logoUrl.startsWith('http') || logoUrl.startsWith('https'));
       
-      // Only apply external logos if they are not from the legacy vercel domain
-      // and appear to be valid. Otherwise fallback to local icons.
-      if (isExternalLogo && !isVercelLegacy) {
+      // Update favicons if a logo is provided in settings
+      if (isExternalLogo) {
         const setLink = (rel: string, extraProps?: Record<string, string>) => {
           let link = document.querySelector(`link[rel~='${rel}']`) as HTMLLinkElement;
           if (!link) {
@@ -682,7 +680,8 @@ const DynamicHead = () => {
             link.rel = rel;
             document.head.appendChild(link);
           }
-          link.href = logoUrl.endsWith('/') ? `${logoUrl}favicon.png?v=pwa-v10` : `${logoUrl}?v=pwa-v10`;
+          // Preserve some metadata if it looks like a directory, otherwise use direct URL
+          link.href = logoUrl.endsWith('/') ? `${logoUrl}favicon.png` : logoUrl;
           if (extraProps) {
             Object.entries(extraProps).forEach(([key, val]) => link.setAttribute(key, val));
           }
@@ -691,18 +690,19 @@ const DynamicHead = () => {
         setLink('icon');
         setLink('shortcut icon');
         setLink('apple-touch-icon');
-        setLink('apple-touch-icon-precomposed');
         setLink('mask-icon', { color: '#4f46e5' });
       } else {
-        // Explicitly reset to local icons if settings logo is problematic or missing
-        const resetLink = (rel: string, path: string) => {
-          let link = document.querySelector(`link[rel~='${rel}']`) as HTMLLinkElement;
-          if (link) {
-            link.href = window.location.origin + path + '?v=10';
-          }
+        // Fallback to local icons defined in index.html - don't force overrides if we don't have to
+        // just ensure the baseline tags exist and match if they were previously overridden
+        const updateMeta = (name: string, content: string) => {
+          let meta = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
+          if (meta) meta.content = content;
         };
-        resetLink('icon', '/favicon.ico');
-        resetLink('apple-touch-icon', '/apple-touch-icon.png');
+        
+        if (settings.name) {
+          updateMeta('apple-mobile-web-app-title', settings.name);
+          updateMeta('application-name', settings.name);
+        }
       }
 
       // Set theme color for mobile browser bars
