@@ -343,14 +343,7 @@ const ProtectedLayout = () => {
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [checkShortcut, navigate]);
 
-  if (!user && !combinedLoading) {
-    const isStaffPortalParam = window.location.search.includes('portal=staff');
-    
-    if (isStaffPortalParam) {
-      return <Navigate to="/staff-login" replace />;
-    }
-    return <Navigate to="/login" replace />;
-  }
+  if (!user && !combinedLoading) return <Navigate to="/login" replace />;
   
   return (
     <>
@@ -661,18 +654,19 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 const DynamicHead = () => {
   const { settings } = useSettings();
 
-  // Update dynamic head settings and app theme
   useEffect(() => {
     if (settings) {
       if (settings.name) {
-        document.title = settings.name;
+        document.title = `${settings.name} | Console`;
       }
       
       const logoUrl = settings.logo_url;
-      const isExternalLogo = logoUrl && (logoUrl.startsWith('http') || logoUrl.startsWith('https'));
+      const isExternalLogo = logoUrl && logoUrl.startsWith('http');
+      const isVercelLegacy = isExternalLogo && (logoUrl.includes('vercel.app') || logoUrl.includes('health-club-management'));
       
-      // Update favicons if a logo is provided in settings
-      if (isExternalLogo) {
+      // Only apply external logos if they are not from the legacy vercel domain
+      // and appear to be valid. Otherwise fallback to local icons.
+      if (isExternalLogo && !isVercelLegacy) {
         const setLink = (rel: string, extraProps?: Record<string, string>) => {
           let link = document.querySelector(`link[rel~='${rel}']`) as HTMLLinkElement;
           if (!link) {
@@ -680,8 +674,7 @@ const DynamicHead = () => {
             link.rel = rel;
             document.head.appendChild(link);
           }
-          // Preserve some metadata if it looks like a directory, otherwise use direct URL
-          link.href = logoUrl.endsWith('/') ? `${logoUrl}favicon.png` : logoUrl;
+          link.href = logoUrl.endsWith('/') ? `${logoUrl}favicon.png?v=pwa-v10` : `${logoUrl}?v=pwa-v10`;
           if (extraProps) {
             Object.entries(extraProps).forEach(([key, val]) => link.setAttribute(key, val));
           }
@@ -690,31 +683,46 @@ const DynamicHead = () => {
         setLink('icon');
         setLink('shortcut icon');
         setLink('apple-touch-icon');
+        setLink('apple-touch-icon-precomposed');
         setLink('mask-icon', { color: '#4f46e5' });
       } else {
-        // Fallback to local icons defined in index.html - don't force overrides if we don't have to
-        // just ensure the baseline tags exist and match if they were previously overridden
-        const updateMeta = (name: string, content: string) => {
-          let meta = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
-          if (meta) meta.content = content;
+        // Explicitly reset to local icons if settings logo is problematic or missing
+        const resetLink = (rel: string, path: string) => {
+          let link = document.querySelector(`link[rel~='${rel}']`) as HTMLLinkElement;
+          if (link) {
+            link.href = window.location.origin + path + '?v=10';
+          }
         };
-        
-        if (settings.name) {
-          updateMeta('apple-mobile-web-app-title', settings.name);
-          updateMeta('application-name', settings.name);
-        }
+        resetLink('icon', '/favicon.ico');
+        resetLink('apple-touch-icon', '/apple-touch-icon.png');
       }
 
       // Set theme color for mobile browser bars
-      let metaTheme = document.querySelector("meta[name='theme-color']") as HTMLMetaElement;
-      if (!metaTheme) {
-        metaTheme = document.createElement('meta');
-        metaTheme.name = 'theme-color';
-        document.head.appendChild(metaTheme);
+      let meta = document.querySelector("meta[name='theme-color']") as HTMLMetaElement;
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        document.head.appendChild(meta);
       }
-      metaTheme.content = '#4f46e5';
+      meta.content = '#4f46e5';
+    }
+  }, [settings]);
 
-      // Update iOS-specific meta tags with the app name dynamically 
+  // Dynamic PWA Manifest based on current view (Staff vs Admin)
+  useEffect(() => {
+    if (!settings) return;
+
+    const updateManifest = () => {
+      const isStaff = window.location.hash.includes('staff') || window.location.search.includes('portal=staff');
+      const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
+      
+      if (manifestLink) {
+        // Use static manifest files for iPhone compatibility
+        const manifestPath = isStaff ? '/manifest-staff.json' : '/manifest.json';
+        manifestLink.setAttribute('href', window.location.origin + manifestPath);
+      }
+
+      // Update iOS-specific meta tags dynamically
       const updateMeta = (name: string, content: string) => {
         let meta = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
         if (!meta) {
@@ -725,10 +733,14 @@ const DynamicHead = () => {
         meta.content = content;
       };
 
-      const appName = settings.name || "Health Club";
-      updateMeta('apple-mobile-web-app-title', appName);
-      updateMeta('application-name', appName);
-    }
+      const portalName = isStaff ? "Staff Portal" : (settings.name || "Health Club");
+      updateMeta('apple-mobile-web-app-title', portalName);
+      updateMeta('application-name', portalName);
+    };
+
+    updateManifest();
+    window.addEventListener('hashchange', updateManifest);
+    return () => window.removeEventListener('hashchange', updateManifest);
   }, [settings]);
 
   return null;

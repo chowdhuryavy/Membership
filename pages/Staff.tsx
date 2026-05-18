@@ -152,7 +152,7 @@ const StaffPage = () => {
       }
       setStaff(data);
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to load staff roster.");
+      setErrorMessage(err.message || "Failed to load staffs roster.");
       if (err.message?.includes('schema cache') || err.message?.toLowerCase().includes('column')) {
         setIsSchemaMissing(true);
       }
