@@ -64,30 +64,7 @@
     <!-- Web App Manifest -->
     <link rel="manifest" id="pwa-manifest" href="/manifest.json" />
     
-    
     <script>
-      // Handle clean URL redirect for staff-login
-      const urlParams = new URLSearchParams(window.location.search);
-      const isStaffPath = window.location.pathname === '/staff-login' || window.location.pathname.endsWith('/staff-login');
-      const isStaffPortalParam = urlParams.get('portal') === 'staff';
-      const isStaffHash = window.location.hash.includes('staff-login') || window.location.hash.includes('staff-dashboard') || window.location.hash.includes('staff-schedule');
-      
-      const isStaffPortal = isStaffPath || isStaffPortalParam || isStaffHash;
-
-      if (isStaffPortal) {
-        // Swap manifest for Staff Portal (Critical for iPhone)
-        const manifestLink = document.getElementById('pwa-manifest');
-        if (manifestLink) {
-          manifestLink.setAttribute('href', '/manifest-staff.json');
-        }
-        
-        // Ensure ?portal=staff is in the URL so iOS "Add to Home Screen" saves it
-        if (!isStaffPortalParam) {
-          urlParams.set('portal', 'staff');
-          window.history.replaceState(null, '', window.location.pathname + '?' + urlParams.toString() + window.location.hash);
-        }
-      }
-
       // Handle chunk load errors (common in SPAs when a new version is deployed)
       window.addEventListener('error', (e) => {
         if (e.message && (e.message.includes('chunk') || e.message.includes('Loading chunk'))) {

@@ -111,7 +111,7 @@ const Login = () => {
           {/* Staff Portal Link Icon */}
           <button 
             type="button"
-            onClick={() => window.location.href = window.location.pathname + '?portal=staff#/staff-login'}
+            onClick={() => navigate('/staff-login')}
             className="absolute top-8 right-8 px-4 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all group flex items-center gap-2 shadow-sm"
             title="Staff Portal"
           >

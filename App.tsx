@@ -661,6 +661,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 const DynamicHead = () => {
   const { settings } = useSettings();
 
+  // Update dynamic head settings and app theme
   useEffect(() => {
     if (settings) {
       if (settings.name) {
@@ -705,31 +706,15 @@ const DynamicHead = () => {
       }
 
       // Set theme color for mobile browser bars
-      let meta = document.querySelector("meta[name='theme-color']") as HTMLMetaElement;
-      if (!meta) {
-        meta = document.createElement('meta');
-        meta.name = 'theme-color';
-        document.head.appendChild(meta);
+      let metaTheme = document.querySelector("meta[name='theme-color']") as HTMLMetaElement;
+      if (!metaTheme) {
+        metaTheme = document.createElement('meta');
+        metaTheme.name = 'theme-color';
+        document.head.appendChild(metaTheme);
       }
-      meta.content = '#4f46e5';
-    }
-  }, [settings]);
+      metaTheme.content = '#4f46e5';
 
-  // Dynamic PWA Manifest based on current view (Staff vs Admin)
-  useEffect(() => {
-    if (!settings) return;
-
-    const updateManifest = () => {
-      const isStaff = window.location.hash.includes('staff') || window.location.search.includes('portal=staff');
-      const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
-      
-      if (manifestLink) {
-        // Use static manifest files for iPhone compatibility
-        const manifestPath = isStaff ? '/manifest-staff.json' : '/manifest.json';
-        manifestLink.setAttribute('href', window.location.origin + manifestPath);
-      }
-
-      // Update iOS-specific meta tags dynamically
+      // Update iOS-specific meta tags with the app name dynamically 
       const updateMeta = (name: string, content: string) => {
         let meta = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
         if (!meta) {
@@ -740,14 +725,10 @@ const DynamicHead = () => {
         meta.content = content;
       };
 
-      const portalName = isStaff ? "Staff Portal" : (settings.name || "Health Club");
-      updateMeta('apple-mobile-web-app-title', portalName);
-      updateMeta('application-name', portalName);
-    };
-
-    updateManifest();
-    window.addEventListener('hashchange', updateManifest);
-    return () => window.removeEventListener('hashchange', updateManifest);
+      const appName = settings.name || "Health Club";
+      updateMeta('apple-mobile-web-app-title', appName);
+      updateMeta('application-name', appName);
+    }
   }, [settings]);
 
   return null;

@@ -102,7 +102,7 @@ const StaffLogin = () => {
           {/* Admin Portal Link Icon */}
           <button 
             type="button"
-            onClick={() => window.location.href = window.location.pathname + '#/login'}
+            onClick={() => navigate('/login')}
             className="hidden md:flex absolute top-8 right-8 px-4 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all group items-center gap-2 shadow-sm"
             title="Admin Portal"
           >
