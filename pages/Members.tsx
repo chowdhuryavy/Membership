@@ -67,7 +67,7 @@ const Members = () => {
         db.getMembers(scopeId, isPropertyScope, limitToIds),
         db.getCategories(currentOutlet.id),
         db.getStaff(currentOutlet.id),
-        db.getMembershipTypes(currentOutlet.id)
+        db.getMembershipTypes(scopeId, isPropertyScope, limitToIds)
       ]);
 
       setMembers(membersData);
