@@ -57,17 +57,6 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
     }, [members]);
 
     const groupedMembers = useMemo(() => {
-        if (selectedMembershipTypeId !== 'all') {
-            const filteredGrouped: Record<string, Record<string, Member[]>> = { 'Filtered Results': {} };
-            activeMembers.forEach(member => {
-                const cat = categories.find(c => c.id === member.category_id);
-                const catKey = cat?.name || 'Other';
-                if (!filteredGrouped['Filtered Results'][catKey]) filteredGrouped['Filtered Results'][catKey] = [];
-                filteredGrouped['Filtered Results'][catKey].push(member);
-            });
-            return filteredGrouped;
-        }
-
         return activeMembers.reduce((acc, member) => {
             const type = membershipTypes.find(t => t.id === member.membership_type_id);
             const typeKey = type?.name || 'Membership';
@@ -80,7 +69,7 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
             acc[typeKey][catKey].push(member);
             return acc;
         }, {} as Record<string, Record<string, Member[]>>);
-    }, [activeMembers, membershipTypes, categories, selectedMembershipTypeId]);
+    }, [activeMembers, membershipTypes, categories]);
 
     const handleExportPDF = () => {
         window.print();
@@ -160,13 +149,11 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
 
                                             return (
                                                 <React.Fragment key={type}>
-                                                    {selectedMembershipTypeId === 'all' && (
                                                         <tr className="bg-slate-900 text-white">
                                                             <td colSpan={10} className="px-4 py-2 font-black uppercase tracking-widest text-[11px] border border-black">
                                                                 Type: {type}
                                                             </td>
                                                         </tr>
-                                                    )}
                                                     {Object.entries(typeCategories).sort(([a], [b]) => a.localeCompare(b)).map(([catName, groupMembers]) => (
                                                         <React.Fragment key={catName}>
                                                             <tr className="bg-slate-100">
@@ -206,12 +193,10 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                                                             </tr>
                                                         </React.Fragment>
                                                     ))}
-                                                    {selectedMembershipTypeId === 'all' && (
                                                         <tr className="bg-indigo-100 font-black text-[10px]">
                                                             <td colSpan={9} className="px-4 py-2 text-right uppercase tracking-widest border border-black">Type Total ({type}):</td>
                                                             <td className="px-2 py-2 text-center text-indigo-900 border border-black">{typeTotalCount}</td>
                                                         </tr>
-                                                    )}
                                                 </React.Fragment>
                                             );
                                         })
