@@ -27,7 +27,6 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
 
     const loadData = async () => {
         setIsLoading(true);
-        setPageLoading(true);
         try {
             let query = supabase.from('members').select('*').eq('outlet_id', currentOutlet?.id);
             
@@ -48,7 +47,6 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
             console.error("Error loading data:", error);
         } finally {
             setIsLoading(false);
-            setPageLoading(false);
         }
     };
 

@@ -104,6 +104,7 @@ const Reports = () => {
   const [dailySalesDate, setDailySalesDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [selectedCustomReportId, setSelectedCustomReportId] = useState<string | null>(null);
   const [customReports, setCustomReports] = useState<CustomReportConfig[]>([]);
+  const isInitialLoad = useRef(true);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -295,7 +296,10 @@ const Reports = () => {
     }
 
     setLoading(true);
-    // setPageLoading(true); // Disable global top loader to avoid overlap with internal report loader
+    if (isInitialLoad.current) {
+        setPageLoading(true);
+        isInitialLoad.current = false;
+    }
     try {
       const ctx: ReportContext = {
         supabase,
@@ -332,7 +336,7 @@ const Reports = () => {
       toast.error('Failed to load report data');
     } finally {
       setLoading(false);
-      // setPageLoading(false);
+      setPageLoading(false);
     }
   };
 
@@ -1082,7 +1086,7 @@ const Reports = () => {
                           </div>
 
                           {/* 1.1 MEMBERSHIP TYPE TOGGLE (For Revenue Recognition, Members Joined, and Expiring Memberships) */}
-                          {['revenue_recognition', 'members_joined', 'expiring_memberships'].includes(reportType) && membershipTypes.length > 0 && (
+                          {['revenue_recognition', 'members_joined', 'expiring_memberships', 'active_members'].includes(reportType) && membershipTypes.length > 0 && (
                                <div className="space-y-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
                                    <div className="flex items-center gap-2 mb-1">
                                        <Filter className="w-3.5 h-3.5 text-indigo-600"/>
