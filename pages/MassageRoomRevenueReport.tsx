@@ -85,7 +85,7 @@ const MassageRoomRevenueReport = ({ isEmbedded, embeddedMonth }: MassageRoomReve
   }, [totalsByRoom]);
 
   const content = (
-    <div className="overflow-x-auto">
+    <div className={`overflow-x-auto transition-opacity duration-300 ${loading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
       <table className={`w-full text-left border-collapse border-2 border-black ${isEmbedded ? 'text-[9px]' : 'text-sm'}`}>
         <thead>
           <tr className="bg-slate-950 text-white font-black uppercase tracking-widest">

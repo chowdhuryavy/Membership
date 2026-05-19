@@ -84,16 +84,11 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
         window.print();
     };
 
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-            </div>
-        );
-    }
+    // Removing full page spinner to prevent UI jumping
+    // We will just dim the content while loading if needed
 
     return (
-        <div className={`space-y-8 animate-in fade-in duration-700 ${isEmbedded ? '' : 'pb-20'}`}>
+        <div className={`space-y-8 animate-in fade-in duration-700 ${isEmbedded ? '' : 'pb-20'} transition-opacity ${isLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
             {!isEmbedded && (
                 <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-xl no-print">
                     <div className="flex items-center gap-6">
