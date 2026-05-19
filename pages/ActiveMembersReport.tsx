@@ -12,7 +12,7 @@ interface ActiveMembersReportProps {
 }
 
 export default function ActiveMembersReport({ isEmbedded, selectedMembershipTypeId = 'all' }: ActiveMembersReportProps = {}) {
-    const { currentOutlet, currentProperty } = useSettings();
+    const { currentOutlet, currentProperty, formatMoney } = useSettings();
     const [members, setMembers] = useState<Member[]>([]);
     const [categories, setCategories] = useState<MembershipCategory[]>([]);
     const [membershipTypes, setMembershipTypes] = useState<{id: string, name: string}[]>([]);
@@ -143,13 +143,16 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                                         <th className={`px-2 py-4 tracking-widest border border-black ${isEmbedded ? '' : 'px-6 text-[10px] text-slate-400 uppercase'}`}>Category</th>
                                         <th className={`px-2 py-4 tracking-widest border border-black ${isEmbedded ? '' : 'px-6 text-[10px] text-slate-400 uppercase'}`}>Start Date</th>
                                         <th className={`px-2 py-4 tracking-widest border border-black ${isEmbedded ? '' : 'px-6 text-[10px] text-slate-400 uppercase'}`}>End Date</th>
+                                        <th className={`px-2 py-4 tracking-widest border border-black ${isEmbedded ? 'text-right' : 'px-6 text-[10px] text-slate-400 uppercase text-right'}`}>Actual Rate</th>
+                                        <th className={`px-2 py-4 tracking-widest border border-black ${isEmbedded ? 'text-right' : 'px-6 text-[10px] text-slate-400 uppercase text-right'}`}>Discount</th>
+                                        <th className={`px-2 py-4 tracking-widest border border-black ${isEmbedded ? 'text-right' : 'px-6 text-[10px] text-slate-400 uppercase text-right'}`}>Net Rate</th>
                                         <th className={`px-2 py-4 tracking-widest border border-black ${isEmbedded ? '' : 'px-6 text-[10px] text-slate-400 uppercase'}`}>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody className={isEmbedded ? '' : 'divide-y divide-slate-100'}>
                                     {activeMembers.length === 0 ? (
                                         <tr>
-                                            <td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-medium text-sm border border-black">
+                                            <td colSpan={10} className="px-6 py-12 text-center text-slate-400 font-medium text-sm border border-black">
                                                 No active members found.
                                             </td>
                                         </tr>
@@ -162,7 +165,7 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                                                 <React.Fragment key={type}>
                                                     {selectedMembershipTypeId === 'all' && (
                                                         <tr className="bg-slate-900 text-white">
-                                                            <td colSpan={7} className="px-4 py-2 font-black uppercase tracking-widest text-[11px] border border-black">
+                                                            <td colSpan={10} className="px-4 py-2 font-black uppercase tracking-widest text-[11px] border border-black">
                                                                 Type: {type}
                                                             </td>
                                                         </tr>
@@ -170,7 +173,7 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                                                     {Object.entries(typeCategories).map(([catName, groupMembers]) => (
                                                         <React.Fragment key={catName}>
                                                             <tr className="bg-slate-100">
-                                                                <td colSpan={7} className="px-4 py-2 font-black text-slate-900 uppercase tracking-tight text-[10px] border border-black pl-8">
+                                                                <td colSpan={10} className="px-4 py-2 font-black text-slate-900 uppercase tracking-tight text-[10px] border border-black pl-8">
                                                                     Tier: {catName} ({groupMembers.length} Members)
                                                                 </td>
                                                             </tr>
@@ -184,6 +187,9 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                                                                         <td className={`px-2 py-3 font-bold border border-black ${isEmbedded ? 'text-indigo-600' : 'px-6 text-sm text-indigo-600'}`}>{cat?.name || 'Unknown'}</td>
                                                                         <td className={`px-2 py-3 border border-black ${isEmbedded ? 'text-slate-600 text-center' : 'px-6 text-sm text-slate-500'}`}>{format(parseISO(member.start_date), 'dd MMM yyyy')}</td>
                                                                         <td className={`px-2 py-3 font-black border border-black ${isEmbedded ? 'text-indigo-600 text-center' : 'px-6 text-sm text-indigo-600'}`}>{format(parseISO(member.current_end_date), 'dd MMM yyyy')}</td>
+                                                                        <td className={`px-2 py-3 font-mono border border-black ${isEmbedded ? 'text-slate-500 text-right' : 'px-6 text-sm text-slate-500 text-right'}`}>{formatMoney(member.actual_rate || 0)}</td>
+                                                                        <td className={`px-2 py-3 font-mono border border-black ${isEmbedded ? 'text-red-500 text-right' : 'px-6 text-sm text-red-500 text-right'}`}>{member.discount ? formatMoney(member.discount) : '-'}</td>
+                                                                        <td className={`px-2 py-3 font-black border border-black ${isEmbedded ? 'text-indigo-900 text-right' : 'px-6 text-sm text-indigo-900 text-right'}`}>{formatMoney((member.original_net_amount && member.original_net_amount > 0) ? member.original_net_amount : ((member.actual_rate || 0) - (member.discount || 0)))}</td>
                                                                         <td className={`px-2 py-3 border border-black ${isEmbedded ? 'text-center' : 'px-6'}`}>
                                                                             <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-widest ${
                                                                                 member.status === MemberStatus.ACTIVE ? 'bg-emerald-100 text-emerald-700' :
@@ -198,14 +204,14 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                                                                 );
                                                             })}
                                                             <tr className="bg-slate-50 font-bold text-[9px]">
-                                                                <td colSpan={6} className="px-4 py-2 text-right uppercase tracking-widest border border-black italic">Tier Subtotal ({catName}):</td>
+                                                                <td colSpan={9} className="px-4 py-2 text-right uppercase tracking-widest border border-black italic">Tier Subtotal ({catName}):</td>
                                                                 <td className="px-2 py-2 text-center text-indigo-600 border border-black">{groupMembers.length}</td>
                                                             </tr>
                                                         </React.Fragment>
                                                     ))}
                                                     {selectedMembershipTypeId === 'all' && (
                                                         <tr className="bg-indigo-100 font-black text-[10px]">
-                                                            <td colSpan={6} className="px-4 py-2 text-right uppercase tracking-widest border border-black">Type Total ({type}):</td>
+                                                            <td colSpan={9} className="px-4 py-2 text-right uppercase tracking-widest border border-black">Type Total ({type}):</td>
                                                             <td className="px-2 py-2 text-center text-indigo-900 border border-black">{typeTotalCount}</td>
                                                         </tr>
                                                     )}
@@ -217,7 +223,7 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                                 {isEmbedded && activeMembers.length > 0 && (
                                     <tfoot>
                                         <tr className="bg-slate-50 text-slate-900 font-black text-[10px]">
-                                            <td colSpan={6} className="px-4 py-4 text-right uppercase tracking-widest border border-black">Aggregate Active Total</td>
+                                            <td colSpan={9} className="px-4 py-4 text-right uppercase tracking-widest border border-black">Aggregate Active Total</td>
                                             <td className="px-2 py-4 text-center text-indigo-600 border border-black">{activeMembers.length}</td>
                                         </tr>
                                     </tfoot>
