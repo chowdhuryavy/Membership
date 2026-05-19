@@ -672,7 +672,7 @@ class DatabaseService {
     }
   }
 
-  async getMembers(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[], selectColumns: string = 'id,membership_number,guest_name,status,start_date,original_end_date,current_end_date,net_amount,original_net_amount,category_id,membership_type_id,outlet_id,package_type,privilege_usage,notes,email,phone,dob,nationality,access_type'): Promise<Member[]> {
+  async getMembers(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[], selectColumns: string = '*'): Promise<Member[]> {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         let query = supabase.from('members').select(selectColumns);
@@ -743,7 +743,7 @@ class DatabaseService {
         message: `${member.guest_name} has joined with membership ${member.membership_number}.`,
         type: 'success',
         outlet_id: member.outlet_id,
-        required_permission: 'members:view'
+        required_permission: 'members:manage'
       });
     } else {
       const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
@@ -755,7 +755,7 @@ class DatabaseService {
         message: `${member.guest_name} has joined with membership ${member.membership_number}.`,
         type: 'success',
         outlet_id: member.outlet_id,
-        required_permission: 'members:view'
+        required_permission: 'members:manage'
       });
     }
   }
@@ -778,7 +778,7 @@ class DatabaseService {
           message: `${m?.guest_name || 'A member'} has cancelled their membership.`,
           type: 'error',
           outlet_id: m?.outlet_id,
-          required_permission: 'members:view'
+          required_permission: 'members:manage'
         });
       }
     } else {
@@ -815,7 +815,7 @@ class DatabaseService {
           message: `Member ${memberData.guest_name} (${memberData.membership_number}) has been deleted.`,
           type: 'error',
           outlet_id: memberData.outlet_id,
-          required_permission: 'members:view'
+          required_permission: 'members:manage'
         });
       }
     } else {
@@ -870,7 +870,7 @@ class DatabaseService {
         message: `${memberName} has been suspended for ${freeze.total_days} days.`,
         type: 'warning',
         outlet_id: member?.outlet_id,
-        required_permission: 'members:view'
+        required_permission: 'members:manage'
       });
     } else {
       const freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');

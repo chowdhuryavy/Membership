@@ -38,12 +38,13 @@ import html2canvas from 'html2canvas';
 import ExpiringMembershipsReport from './ExpiringMembershipsReport';
 import MassageRoomRevenueReport from './MassageRoomRevenueReport';
 import MonthlyRevenueReport from './MonthlyRevenueReport';
+import ActiveMembersReport from './ActiveMembersReport';
 import { CustomReportViewer } from '../components/CustomReportViewer';
 
 const startOfMonthLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
 // Report Types
-type ReportType = 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'expiring_memberships' | 'massage_room_revenue' | 'monthly_revenue' | 'custom_report';
+type ReportType = 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'active_members' | 'expiring_memberships' | 'massage_room_revenue' | 'monthly_revenue' | 'custom_report';
 
 interface ReportRow {
   sl_no: number;
@@ -1057,6 +1058,7 @@ const Reports = () => {
                                       { id: 'incentives', label: 'Incentive Audit', icon: Award, permission: canViewStaffReports },
                                       { id: 'daily_sales', label: 'Daily Sales Ledger', icon: CreditCard, permission: canViewOperational },
                                       { id: 'members_joined', label: 'Members Joined', icon: UserCheck, permission: canViewMembersJoined },
+                                      { id: 'active_members', label: 'Active Members', icon: UserCheck, permission: canViewMembersJoined },
                                       { id: 'expiring_memberships', label: 'Expiring Memberships', icon: CalendarX, permission: canViewMembersJoined },
                                       { id: 'massage_room_revenue', label: 'Massage Room Revenue', icon: Building2, permission: canViewFinancial },
                                       { id: 'monthly_revenue', label: 'Monthly Revenue Report', icon: TrendingUp, permission: canViewFinancial }
@@ -1279,7 +1281,7 @@ const Reports = () => {
                               <h3 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">
                                 {getReportTitle(reportType, incentiveDept)}
                               </h3>
-                              {(reportType === 'revenue_recognition' || reportType === 'members_joined' || reportType === 'expiring_memberships') && (
+                              {(reportType === 'revenue_recognition' || reportType === 'members_joined' || reportType === 'active_members' || reportType === 'expiring_memberships') && (
                                   <div className="flex items-center gap-2 px-3 py-1 bg-indigo-50 rounded-lg border border-indigo-100 mb-1">
                                       <Layers className="w-3 h-3 text-indigo-500" />
                                       <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">
@@ -1294,7 +1296,9 @@ const Reports = () => {
                                       ? format(parseISO(dailySalesDate), 'dd MMMM yyyy') 
                                       : reportType === 'monthly_revenue' 
                                         ? format(parseISO(reportMonth + '-01'), 'yyyy')
-                                        : format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
+                                        : reportType === 'active_members'
+                                          ? format(new Date(), 'dd MMMM yyyy')
+                                          : format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
                                   </span>
                               </div>
                               <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-lg">
@@ -1306,6 +1310,7 @@ const Reports = () => {
                       
                       <div className="flex-1">
                           {reportType === 'revenue_recognition' ? <RenderRevenueTable /> : 
+                           reportType === 'active_members' ? <ActiveMembersReport isEmbedded={true} selectedMembershipTypeId={selectedMembershipTypeId} /> : 
                            reportType === 'expiring_memberships' ? <ExpiringMembershipsReport isEmbedded={true} embeddedMonth={reportMonth} selectedMembershipTypeId={selectedMembershipTypeId} /> : 
                            reportType === 'massage_room_revenue' ? <MassageRoomRevenueReport isEmbedded={true} embeddedMonth={reportMonth} /> :
                            reportType === 'monthly_revenue' ? <MonthlyRevenueReport isEmbedded={true} embeddedMonth={reportMonth} revenueMode={revenueMode} data={summary} /> :
