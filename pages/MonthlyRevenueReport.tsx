@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
 import { getMonthlyRevenueData, MonthlyRevenueData } from '../src/shared/monthlyRevenueReportLogic';
-import { Building2, ShieldCheck } from 'lucide-react';
+import { Building2, ShieldCheck, Loader2 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import TabLoader from '../components/TabLoader';
 
 import { format, parseISO } from 'date-fns';
 
@@ -223,10 +224,10 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
           </div>
         </div>
         
-        <div className="flex-1">
+        <div className="flex-1 min-h-[400px] relative">
           {loading ? (
-            <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <div className="absolute inset-0 z-[10] flex items-center justify-center bg-white/60 backdrop-blur-[2px] no-print">
+              <TabLoader message="Compiling Annual Revenue Matrix..." />
             </div>
           ) : (
             content

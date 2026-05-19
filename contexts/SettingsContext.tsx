@@ -194,23 +194,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     // 2. GLOBAL FEATURE CONTROL (Refined Logic)
     if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
-        // A. Global Grant (Show to everyone as requested)
-        if (settings.restricted_permissions.includes(permission)) {
-            return true;
-        }
-
-        // B. Module-Scoped Restriction
-        // If the module (group) is under global control, but this specific permission isn't enabled, 
-        // then it is blocked for non-superadmins.
-        const group = permissionRegistry.find(g => g.permissions.some(p => p.key === permission));
-        if (group) {
-            const isGroupControlled = group.permissions.some(p => settings.restricted_permissions!.includes(p.key as Permission));
-            if (isGroupControlled) {
-                // Feature is in a controlled module but NOT enabled -> Explicitly Blocked
+        // Module-Scoped Restriction: ONLY APPLES TO 'settings' GROUP
+        // This prevents other admins from accessing global configurations like Properties or Outlets
+        // unless explicitly granted via "Feature Visibility"
+        if (permission.startsWith('settings:')) {
+            if (!settings.restricted_permissions.includes(permission)) {
                 return false;
             }
         }
-        // If the module is NOT controlled, fallback to role definitions below.
     }
 
     // 1.5. LEGACY ADMIN BYPASS

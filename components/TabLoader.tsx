@@ -8,67 +8,41 @@ interface TabLoaderProps {
 
 const TabLoader: React.FC<TabLoaderProps> = ({ message = "Synchronizing Data..." }) => {
   return (
-    <div className="flex flex-col items-center justify-center py-24 animate-in fade-in duration-500">
-      <div className="relative">
-        {/* Animated outer ring */}
+    <div className="flex flex-col items-center justify-center py-24 animate-in fade-in duration-700">
+      <div className="relative flex items-center justify-center">
+        {/* Simplified professional spinner */}
         <motion.div 
+          className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full shadow-sm"
           animate={{ rotate: 360 }}
-          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-          className="w-24 h-24 rounded-[2rem] border-2 border-dashed border-indigo-200/50"
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
         />
         
-        {/* Inner glass icon */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.5 }}
-            className="w-16 h-16 bg-white/40 backdrop-blur-md rounded-2xl shadow-xl flex items-center justify-center border border-white/50 relative overflow-hidden group"
-          >
-            {/* Shimmer effect inside the glass */}
-            <motion.div 
-              animate={{ x: ['100%', '-100%'] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -skew-x-20"
-            />
-            
-            <Sparkles className="w-8 h-8 text-indigo-600 relative z-10 animate-pulse" />
-          </motion.div>
-        </div>
-        
-        {/* Floating particles */}
-        {[...Array(4)].map((_, i) => (
-          <motion.div
-            key={i}
-            animate={{ 
-              y: [-10, 10, -10],
-              x: [-10, 10, -10],
-              opacity: [0, 1, 0]
-            }}
-            transition={{ 
-              duration: 2 + i, 
-              repeat: Infinity, 
-              delay: i * 0.5,
-              ease: "easeInOut" 
-            }}
-            className="absolute w-1 h-1 bg-indigo-400 rounded-full"
-            style={{
-              top: `${Math.random() * 100}%`,
-              left: `${Math.random() * 100}%`,
-            }}
-          />
-        ))}
+        {/* Center dot */}
+        <div className="absolute w-2 h-2 bg-indigo-600 rounded-full animate-pulse" />
       </div>
       
-      <div className="mt-8 flex flex-col items-center gap-2">
-        <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em] animate-pulse">
-          {message}
-        </span>
-        <div className="w-12 h-0.5 bg-slate-100 rounded-full overflow-hidden">
+      <div className="mt-8 flex flex-col items-center gap-4">
+        <div className="flex items-center gap-2">
+          <motion.div 
+            animate={{ scale: [1, 1.2, 1] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="w-1.5 h-1.5 bg-indigo-600 rounded-full"
+          />
+          <span className="text-[10px] font-black text-slate-900 uppercase tracking-[0.4em] leading-none">
+            {message}
+          </span>
+          <motion.div 
+            animate={{ scale: [1, 1.2, 1] }}
+            transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
+            className="w-1.5 h-1.5 bg-indigo-600 rounded-full"
+          />
+        </div>
+        
+        <div className="w-24 h-px bg-slate-100 relative overflow-hidden">
           <motion.div 
             animate={{ x: ['-100%', '100%'] }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-            className="w-full h-full bg-indigo-500"
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inset-0 bg-indigo-600/30"
           />
         </div>
       </div>

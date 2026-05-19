@@ -6,6 +6,8 @@ import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'da
 import { useSettings } from '../contexts/SettingsContext';
 import { Building2 } from 'lucide-react';
 
+import TabLoader from '../components/TabLoader';
+
 interface MassageRoomRevenueReportProps {
   isEmbedded?: boolean;
   embeddedMonth?: string;
@@ -27,14 +29,19 @@ const MassageRoomRevenueReport = ({ isEmbedded, embeddedMonth }: MassageRoomReve
   useEffect(() => {
     if (!currentOutlet) return;
     setLoading(true);
-    Promise.all([
+    // Explicit artificial delay for smoother branding transition
+    const dataPromise = Promise.all([
       db.getMassageBookings(currentOutlet.id, false),
       db.getMassageRooms(currentOutlet.id)
-    ]).then(([bookingsData, roomsData]) => {
-      setBookings(bookingsData);
-      setRooms(roomsData);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    ]);
+
+    setTimeout(() => {
+      dataPromise.then(([bookingsData, roomsData]) => {
+        setBookings(bookingsData);
+        setRooms(roomsData);
+        setLoading(false);
+      }).catch(() => setLoading(false));
+    }, 600);
   }, [currentOutlet]);
 
   const reportData = useMemo(() => {
@@ -175,7 +182,12 @@ const MassageRoomRevenueReport = ({ isEmbedded, embeddedMonth }: MassageRoomReve
         </div>
       </div>
 
-      <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden bg-white">
+      <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden bg-white relative">
+        {loading && (
+          <div className="absolute inset-0 z-[10] flex items-center justify-center bg-white/60 backdrop-blur-[2px] no-print">
+            <TabLoader message="Synchronizing Spa Revenue Ledger..." />
+          </div>
+        )}
         <CardHeader className="bg-slate-950 text-white p-8 border-b border-slate-800 flex flex-row items-center justify-between no-print">
           <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em]">
             Revenue Ledger for {format(new Date(reportMonth + '-01'), 'MMMM yyyy')}

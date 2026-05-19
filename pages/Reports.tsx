@@ -295,7 +295,7 @@ const Reports = () => {
     }
 
     setLoading(true);
-    setPageLoading(true);
+    // setPageLoading(true); // Disable global top loader to avoid overlap with internal report loader
     try {
       const ctx: ReportContext = {
         supabase,
@@ -332,7 +332,7 @@ const Reports = () => {
       toast.error('Failed to load report data');
     } finally {
       setLoading(false);
-      setPageLoading(false);
+      // setPageLoading(false);
     }
   };
 
