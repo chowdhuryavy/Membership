@@ -1227,7 +1227,7 @@ const SettingsPage = () => {
                               </div>
                           </div>
                           <PermissionMatrix 
-                              registry={permissionRegistry.filter(g => g.id === 'settings')} 
+                              registry={permissionRegistry} 
                               selectedPermissions={(settings?.restricted_permissions || []) as Permission[]} 
                               onChange={async (perms) => {
                                   try {
@@ -1859,10 +1859,13 @@ const SettingsPage = () => {
                                 </div>
                                 <PermissionMatrix 
                                   registry={permissionRegistry.map(group => {
-                                    if (group.id === 'settings' && settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
+                                    const isGroupControlled = settings?.restricted_permissions && settings.restricted_permissions.length > 0 && 
+                                        group.permissions.some(p => settings.restricted_permissions!.includes(p.key as Permission));
+                                    
+                                    if (isGroupControlled) {
                                       return {
                                         ...group,
-                                        permissions: group.permissions.filter(p => settings.restricted_permissions.includes(p.key))
+                                        permissions: group.permissions.filter(p => settings.restricted_permissions!.includes(p.key as Permission))
                                       };
                                     }
                                     return group;

@@ -182,7 +182,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   /**
    * Performance-Critical Hybrid Permission Resolver
-   * REFINED: Strictly follows DB roles and user overrides.
+   * REFINED: Supports Global Feature Control overrides and Module-Scoped logic.
    */
   const hasPermission = useCallback((userRoleId: string, permission: Permission, userId?: string): boolean => {
     if (!userRoleId) return false;
@@ -192,13 +192,25 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Super Admins (Admins/Owners) always have full system clearance.
     if (isSuperAdmin) return true;
 
-    // 2. GLOBAL FEATURE TOGGLE (Whitelist Logic)
-    // If the admin has defined a set of "Enabled Features", only those are visible to non-admins.
-    // If the list is empty, all features are enabled by default (following role permissions).
+    // 2. GLOBAL FEATURE CONTROL (Refined Logic)
     if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
-        if (!settings.restricted_permissions.includes(permission)) {
-            return false;
+        // A. Global Grant (Show to everyone as requested)
+        if (settings.restricted_permissions.includes(permission)) {
+            return true;
         }
+
+        // B. Module-Scoped Restriction
+        // If the module (group) is under global control, but this specific permission isn't enabled, 
+        // then it is blocked for non-superadmins.
+        const group = permissionRegistry.find(g => g.permissions.some(p => p.key === permission));
+        if (group) {
+            const isGroupControlled = group.permissions.some(p => settings.restricted_permissions!.includes(p.key as Permission));
+            if (isGroupControlled) {
+                // Feature is in a controlled module but NOT enabled -> Explicitly Blocked
+                return false;
+            }
+        }
+        // If the module is NOT controlled, fallback to role definitions below.
     }
 
     // 1.5. LEGACY ADMIN BYPASS

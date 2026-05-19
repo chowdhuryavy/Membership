@@ -743,7 +743,7 @@ class DatabaseService {
         message: `${member.guest_name} has joined with membership ${member.membership_number}.`,
         type: 'success',
         outlet_id: member.outlet_id,
-        required_permission: 'members:manage'
+        required_permission: 'members:edit'
       });
     } else {
       const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
@@ -755,7 +755,7 @@ class DatabaseService {
         message: `${member.guest_name} has joined with membership ${member.membership_number}.`,
         type: 'success',
         outlet_id: member.outlet_id,
-        required_permission: 'members:manage'
+        required_permission: 'members:edit'
       });
     }
   }
@@ -778,7 +778,7 @@ class DatabaseService {
           message: `${m?.guest_name || 'A member'} has cancelled their membership.`,
           type: 'error',
           outlet_id: m?.outlet_id,
-          required_permission: 'members:manage'
+          required_permission: 'members:edit'
         });
       }
     } else {
@@ -815,7 +815,7 @@ class DatabaseService {
           message: `Member ${memberData.guest_name} (${memberData.membership_number}) has been deleted.`,
           type: 'error',
           outlet_id: memberData.outlet_id,
-          required_permission: 'members:manage'
+          required_permission: 'members:edit'
         });
       }
     } else {
@@ -870,7 +870,7 @@ class DatabaseService {
         message: `${memberName} has been suspended for ${freeze.total_days} days.`,
         type: 'warning',
         outlet_id: member?.outlet_id,
-        required_permission: 'members:manage'
+        required_permission: 'members:edit'
       });
     } else {
       const freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
