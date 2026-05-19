@@ -294,6 +294,7 @@ const Reports = () => {
     }
 
     setLoading(true);
+    setPageLoading(true);
     try {
       const ctx: ReportContext = {
         supabase,
@@ -330,6 +331,7 @@ const Reports = () => {
       toast.error('Failed to load report data');
     } finally {
       setLoading(false);
+      setPageLoading(false);
     }
   };
 

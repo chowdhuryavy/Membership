@@ -65,6 +65,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Permission, Property } from './types';
 import { db } from './services/mockSupabase';
 import UserActivityTracker from './components/UserActivityTracker';
+import TopLoader from './components/TopLoader';
 import SplashLoading from './components/SplashLoading';
 
 const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
@@ -347,6 +348,7 @@ const ProtectedLayout = () => {
   
   return (
     <>
+      <TopLoader />
       {showSplash && <SplashLoading />}
       {user && (
         <div className={`flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible transition-opacity duration-1000 ${showSplash ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>

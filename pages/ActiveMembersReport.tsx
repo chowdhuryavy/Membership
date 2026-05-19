@@ -12,7 +12,7 @@ interface ActiveMembersReportProps {
 }
 
 export default function ActiveMembersReport({ isEmbedded, selectedMembershipTypeId = 'all' }: ActiveMembersReportProps = {}) {
-    const { currentOutlet, currentProperty, formatMoney } = useSettings();
+    const { currentOutlet, currentProperty, formatMoney, setPageLoading } = useSettings();
     const [members, setMembers] = useState<Member[]>([]);
     const [categories, setCategories] = useState<MembershipCategory[]>([]);
     const [membershipTypes, setMembershipTypes] = useState<{id: string, name: string}[]>([]);
@@ -26,6 +26,7 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
 
     const loadData = async () => {
         setIsLoading(true);
+        setPageLoading(true);
         try {
             let query = supabase.from('members').select('*').eq('outlet_id', currentOutlet?.id);
             
@@ -46,12 +47,13 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
             console.error("Error loading data:", error);
         } finally {
             setIsLoading(false);
+            setPageLoading(false);
         }
     };
 
     const activeMembers = useMemo(() => {
         return members.filter(m => m.status === MemberStatus.ACTIVE)
-            .sort((a, b) => a.guest_name.localeCompare(b.guest_name));
+            .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
     }, [members]);
 
     const groupedMembers = useMemo(() => {
@@ -165,7 +167,7 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                                                             </td>
                                                         </tr>
                                                     )}
-                                                    {Object.entries(typeCategories).map(([catName, groupMembers]) => (
+                                                    {Object.entries(typeCategories).sort(([a], [b]) => a.localeCompare(b)).map(([catName, groupMembers]) => (
                                                         <React.Fragment key={catName}>
                                                             <tr className="bg-slate-100">
                                                                 <td colSpan={10} className="px-4 py-2 font-black text-slate-900 uppercase tracking-tight text-[10px] border border-black pl-8">
