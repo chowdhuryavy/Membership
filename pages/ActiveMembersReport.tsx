@@ -5,6 +5,7 @@ import { Member, MembershipCategory, MemberStatus } from '../types';
 import { format, parseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { UserCheck, FileDown, Filter } from 'lucide-react';
+import TabLoader from '../components/TabLoader';
 
 interface ActiveMembersReportProps {
     isEmbedded?: boolean;
@@ -59,9 +60,9 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
     const groupedMembers = useMemo(() => {
         return activeMembers.reduce((acc, member) => {
             const type = membershipTypes.find(t => t.id === member.membership_type_id);
-            const typeKey = type?.name || 'Membership';
+            const typeKey = type?.name || (member.membership_type_id ? 'Unknown Type' : 'General');
             const cat = categories.find(c => c.id === member.category_id);
-            const catKey = cat?.name || 'Other';
+            const catKey = cat?.name || 'Uncategorized';
             
             if (!acc[typeKey]) acc[typeKey] = {};
             if (!acc[typeKey][catKey]) acc[typeKey][catKey] = [];
@@ -71,6 +72,10 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
         }, {} as Record<string, Record<string, Member[]>>);
     }, [activeMembers, membershipTypes, categories]);
 
+    const sortedGroupedEntries = useMemo(() => {
+        return Object.entries(groupedMembers).sort(([a], [b]) => a.localeCompare(b));
+    }, [groupedMembers]);
+
     const handleExportPDF = () => {
         window.print();
     };
@@ -79,7 +84,12 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
     // We will just dim the content while loading if needed
 
     return (
-        <div className={`space-y-8 animate-in fade-in duration-700 ${isEmbedded ? '' : 'pb-20'} transition-opacity ${isLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+        <div className={`space-y-8 animate-in fade-in duration-700 ${isEmbedded ? '' : 'pb-20'} relative`}>
+            {isLoading && (
+                <div className="absolute inset-0 z-[50] flex items-center justify-center bg-white/60 backdrop-blur-[2px] rounded-[2.5rem] no-print">
+                    <TabLoader message="Synchronizing Active Roster..." />
+                </div>
+            )}
             {!isEmbedded && (
                 <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-xl no-print">
                     <div className="flex items-center gap-6">
@@ -143,7 +153,7 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                                             </td>
                                         </tr>
                                     ) : (
-                                        Object.entries(groupedMembers).map(([type, categoriesData]) => {
+                                        sortedGroupedEntries.map(([type, categoriesData]) => {
                                             const typeCategories = categoriesData as Record<string, Member[]>;
                                             const typeTotalCount = Object.values(typeCategories).flat().length;
 

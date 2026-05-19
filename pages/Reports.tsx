@@ -40,6 +40,7 @@ import MassageRoomRevenueReport from './MassageRoomRevenueReport';
 import MonthlyRevenueReport from './MonthlyRevenueReport';
 import ActiveMembersReport from './ActiveMembersReport';
 import { CustomReportViewer } from '../components/CustomReportViewer';
+import TabLoader from '../components/TabLoader';
 
 const startOfMonthLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
@@ -1263,9 +1264,14 @@ const Reports = () => {
               </div>
           )}
 
-          <div className={`${showConfig ? 'lg:col-span-9' : 'lg:col-span-12'} transition-all duration-700`}>
-              <Card className="rounded-none border-slate-200 shadow-2xl overflow-hidden bg-white min-h-[1200px] print:shadow-none print:rounded-none">
-                  <div ref={reportRef} className={`print-container p-12 md:p-16 flex flex-col bg-white transition-opacity duration-300 ${loading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+          <div className={`${showConfig ? 'lg:col-span-9' : 'lg:col-span-12'} transition-all duration-700 relative`}>
+              <Card className="rounded-none border-slate-200 shadow-2xl overflow-hidden bg-white min-h-[1200px] print:shadow-none print:rounded-none relative">
+                  {loading && (
+                      <div className="absolute inset-0 z-[10] flex items-center justify-center bg-white/60 backdrop-blur-[2px] no-print">
+                          <TabLoader message="Synchronizing Financial Ledger..." />
+                      </div>
+                  )}
+                  <div ref={reportRef} className={`print-container p-12 md:p-16 flex flex-col bg-white transition-opacity duration-300 ${loading ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
                       <div className="flex justify-between items-start mb-16">
                           <div className="flex items-center gap-6">
                               {currentProperty?.logo_url && <img src={currentProperty.logo_url} crossOrigin="anonymous" className="h-20 w-auto object-contain" />}
