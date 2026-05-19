@@ -36,7 +36,7 @@ const Categories = () => {
                 // Fetch membership types property-wide to ensure they are available across all outlets
                 const [cats, types] = await Promise.all([
                     db.getCategories(currentOutlet.id),
-                    db.getMembershipTypes(currentOutlet.property_id, true)
+                    db.getMembershipTypes(currentOutlet.id)
                 ]);
                 setCategories(cats);
                 setMembershipTypes(types);

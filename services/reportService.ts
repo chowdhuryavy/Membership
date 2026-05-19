@@ -10,12 +10,15 @@ export const reportService = {
     const end = new Date(start);
     end.setHours(23, 59, 59, 999);
 
+    const isProperty = outletId === 'all';
+    const scopeId = isProperty ? propertyId : outletId;
+
     const [members, sales, bookings, categories, mTypes] = await Promise.all([
-      db.getMembers(outletId === 'all' ? propertyId : outletId, outletId === 'all'),
-      db.getSales(outletId === 'all' ? propertyId : outletId, outletId === 'all'),
-      db.getMassageBookings(outletId === 'all' ? propertyId : outletId, outletId === 'all'),
-      db.getCategories(outletId === 'all' ? propertyId : outletId),
-      db.getMembershipTypes(outletId === 'all' ? propertyId : outletId)
+      db.getMembers(scopeId, isProperty),
+      db.getSales(scopeId, isProperty),
+      db.getMassageBookings(scopeId, isProperty),
+      db.getCategories(scopeId),
+      db.getMembershipTypes(scopeId, isProperty)
     ]);
 
     const dailyRevenue: { category: string; amount: number; count: number }[] = [];
