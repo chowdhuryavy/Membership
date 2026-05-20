@@ -955,14 +955,17 @@ const StaffSchedule = () => {
         return;
       }
 
-      const [allBookings, allTreatments, allInventory, allGuests, allRooms, allOutlets, allSales] = await Promise.all([
+      const [allBookings, allTreatments, allInventory, allSales] = await Promise.all([
         db.getMassageBookingsByDate(propertyId, true, dateStr),
         db.getMassageTypes(propertyId, true, sOutlets),
         db.getInventory(propertyId, true, sOutlets),
+        db.getSalesByDate(propertyId, true, dateStr)
+      ]);
+
+      const [allGuests, allRooms, allOutlets] = await Promise.all([
         db.getGuests(propertyId),
         db.getMassageRooms(undefined, propertyId),
-        db.getOutlets(),
-        db.getSalesByDate(propertyId, true, dateStr)
+        db.getOutlets()
       ]);
 
       // Filter bookings for this specific therapist
@@ -1134,14 +1137,17 @@ const StaffSchedule = () => {
         return;
       }
 
-      const [allBookings, allTreatments, allInventory, allGuests, allRooms, allOutlets, allSales] = await Promise.all([
+      const [allBookings, allTreatments, allInventory, allSales] = await Promise.all([
         db.getMassageBookingsByDateRange(propertyId, true, startOfMonthStr, endOfMonthStr),
         db.getMassageTypes(propertyId, true, sOutlets),
         db.getInventory(propertyId, true, sOutlets),
+        db.getSalesByDateRange(propertyId, true, startOfMonthStr, endOfMonthStr)
+      ]);
+
+      const [allGuests, allRooms, allOutlets] = await Promise.all([
         db.getGuests(propertyId),
         db.getMassageRooms(undefined, propertyId),
-        db.getOutlets(),
-        db.getSalesByDateRange(propertyId, true, startOfMonthStr, endOfMonthStr)
+        db.getOutlets()
       ]);
 
       // Filter bookings for this specific therapist

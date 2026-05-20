@@ -528,11 +528,14 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     // For most incentive reports, we want staff from all outlets in the property to ensure we can match sales reps
     const staffQueryOutletIds = (dept === 'Personal Training' || dept === 'Massage' || dept === 'Membership' || dept === 'Referral') ? allPropertyOutletIds : outletIds;
 
-    const [salesRes, bookingsRes, membersRes, rulesRes, staffRes, inventoryRes, mTypesRes, categoriesRes, guestsRes] = await Promise.all([
+    const [salesRes, bookingsRes, membersRes, rulesRes] = await Promise.all([
       supabase.from('sales').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59`),
       supabase.from('massage_bookings').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('date', startStr).lte('date', endStr),
       supabase.from('members').select('*').in('outlet_id', outletIds).neq('status', 'tentative').gte('start_date', startStr).lte('start_date', endStr),
-      supabase.from('incentive_rules').select('*').eq('is_active', true),
+      supabase.from('incentive_rules').select('*').eq('is_active', true)
+    ]);
+
+    const [staffRes, inventoryRes, mTypesRes, categoriesRes, guestsRes] = await Promise.all([
       supabase.from('staff').select('*, leaves:staff_leaves!fk_staff_leaves_staff(*)'),
       supabase.from('inventory').select('*').in('outlet_id', outletIds),
       supabase.from('massage_types').select('*').eq('property_id', propertyId),

@@ -65,13 +65,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     console.log('[SettingsSync] Starting refresh...', { broadcast });
     try {
         console.log('[SettingsSync] Calling database...');
-        const [s, c, r, o, p] = await Promise.all([
-          db.getSettings(),
-          db.getCurrencies(),
-          db.getRoles(),
-          db.getOutlets(),
-          db.getProperties()
-        ]);
+      const [s, c, r] = await Promise.all([
+        db.getSettings(),
+        db.getCurrencies(),
+        db.getRoles()
+      ]);
+      const [o, p] = await Promise.all([
+        db.getOutlets(),
+        db.getProperties()
+      ]);
         console.log('[SettingsSync] Database calls returned');
         
         setSettings({ ...s });

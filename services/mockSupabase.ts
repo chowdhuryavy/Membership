@@ -2077,6 +2077,27 @@ class DatabaseService {
         
         const therapists = (data || []) as Therapist[];
         
+        const getStaffOutletsSet = (s: Staff) => {
+            const outlets = new Set<string>();
+            if (Array.isArray(s.outlet_ids)) {
+                s.outlet_ids.forEach(id => id && outlets.add(id));
+            } else if (typeof s.outlet_ids === 'string') {
+                try {
+                    const parsed = JSON.parse(s.outlet_ids);
+                    if (Array.isArray(parsed)) parsed.forEach(id => id && outlets.add(id));
+                } catch (e) {
+                    if (s.outlet_ids) outlets.add(s.outlet_ids);
+                }
+            }
+            if ((s as any).outlet_id) outlets.add((s as any).outlet_id);
+            if (Array.isArray(s.outlet_assignments)) {
+                s.outlet_assignments.forEach((a: any) => {
+                    if (a.outlet_id) outlets.add(a.outlet_id);
+                });
+            }
+            return outlets;
+        };
+
         const { data: staffData } = await supabase.from('staff').select('*');
         
         if (staffData) {
@@ -2085,7 +2106,8 @@ class DatabaseService {
                 const staff = staffData.find(s => s.id === t.id);
                 if (staff) {
                     t.type = staff.role;
-                    return /therapist|specialist|masseur|masseuse|trainer|coach|instructor|pt|gym|fitness/i.test(staff.role);
+                    if (!staff.role) return false;
+                    return /therapist|specialist|masseur|masseuse|trainer|coach|instructor|pt|gym|fitness|doctor|stylist|technician|consultant|expert|professional|provider|service|nurse|aesthetician|beautician|physio|chiro|osteopath/i.test(staff.role);
                 } else {
                     t.type = 'Therapist';
                     return true;
@@ -2094,19 +2116,32 @@ class DatabaseService {
 
             // 2. Add staff members who have therapist/trainer roles but aren't in therapists table
             const existingIds = new Set(validTherapists.map(t => t.id));
-            const newTherapistsFromStaff = staffData.filter(s => 
-                !existingIds.has(s.id) && 
-                /therapist|specialist|masseur|masseuse|trainer|coach|instructor|pt|gym|fitness/i.test(s.role) &&
-                (isPropertyScope ? (limitToOutletIds?.length ? limitToOutletIds.includes(s.outlet_id) : true) : s.outlet_id === scopeId)
-            ).map(s => ({
-                id: s.id,
-                name: s.name,
-                specialty: s.role,
-                country: 'Local',
-                property_id: isPropertyScope ? scopeId : '', // We don't have property_id in staff, but it's fine for UI
-                outlet_id: s.outlet_id,
-                type: s.role
-            }));
+            const newTherapistsFromStaff = staffData.filter(s => {
+                if (existingIds.has(s.id)) return false;
+                if (!s.role) return false;
+                if (!/therapist|specialist|masseur|masseuse|trainer|coach|instructor|pt|gym|fitness|doctor|stylist|technician|consultant|expert|professional|provider|service|nurse|aesthetician|beautician|physio|chiro|osteopath/i.test(s.role)) return false;
+                
+                const sOutlets = getStaffOutletsSet(s as Staff);
+                if (isPropertyScope) {
+                    if (limitToOutletIds && limitToOutletIds.length > 0) {
+                        return limitToOutletIds.some(id => sOutlets.has(id));
+                    }
+                    return true; // We don't have property_id in staff, assume they belong to this property if not filtering by outlets
+                } else {
+                    return sOutlets.has(scopeId);
+                }
+            }).map(s => {
+                const sOutlets = getStaffOutletsSet(s as Staff);
+                return {
+                    id: s.id,
+                    name: s.name,
+                    specialty: s.role,
+                    country: 'Local',
+                    property_id: isPropertyScope ? scopeId : '', // We don't have property_id in staff, but it's fine for UI
+                    outlet_id: sOutlets.has(scopeId) ? scopeId : Array.from(sOutlets)[0] || '',
+                    type: s.role
+                };
+            });
 
             return [...validTherapists, ...newTherapistsFromStaff];
         }
@@ -2947,10 +2982,7 @@ class DatabaseService {
               ).catch(err => console.error(`[Push] Trigger failure for ${rid}:`, err));
           });
         } else {
-           console.log(`[Push] No specific recipients found, triggering BROADCAST push.`);
-           // For broadcast, we need a UUID for the local UI even if DB insert failed
-           const localNotif = { ...dbNotification, id: this.generateUUID(), created_at: new Date().toISOString() };
-           this.triggerGlobalPush(localNotif).catch(e => console.error("[Push] BROADCAST trigger failure:", e));
+           console.log(`[Push] No specific recipients found for push trigger. Skipping push notification (will remain in-app only).`);
         }
       } catch (e) {
         console.error('[Push] Fatal error in addNotification sequence:', e);

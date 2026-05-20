@@ -64,7 +64,7 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { currentOutlet, hasPermission } = useSettings();
   const outletId = currentOutlet?.id;
 
@@ -126,7 +126,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     try {
       if (!isAutoRefresh) setIsLoading(true);
-      const isAdmin = user?.role_id === 'admin';
+      const isAdmin = isSuperAdmin;
       console.log('Fetching notifications for user:', effectiveUserId, 'outlet:', outletId, 'isAdmin:', isAdmin);
       const data = await db.getNotifications(effectiveUserId, outletId, isAdmin);
       
@@ -197,7 +197,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const effectiveUserId = user?.id || staffUser?.id;
 
     if (effectiveUserId) {
-      const isAdmin = user?.role_id === 'admin';
+      const isAdmin = isSuperAdmin;
       console.log('Subscribing to notifications for user:', effectiveUserId, 'outlet:', outletId, 'isAdmin:', isAdmin);
       unsubscribe = db.subscribeToNotifications(effectiveUserId, outletId, isAdmin, async (payload) => {
         console.log('Received real-time notification payload:', payload.eventType, payload.new?.id);

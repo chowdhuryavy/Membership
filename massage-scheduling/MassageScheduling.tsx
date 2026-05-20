@@ -458,6 +458,13 @@ const MassageScheduling = () => {
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [massageTypes, setMassageTypes] = useState<MassageType[]>([]);
   const [massageRooms, setMassageRooms] = useState<MassageRoom[]>([]);
+
+  const [newType, setNewType] = useState<{ id: string, name: string, price: number, duration_minutes: number, description?: string }>({ id: '', name: '', price: 0, duration_minutes: 60, description: '' });
+  const [newTherapist, setNewTherapist] = useState({ id: '', name: '', specialty: '', country: '', type: 'Therapist' });
+  const [isEditingResource, setIsEditingResource] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest' | 'booking', name: string} | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+
   
   const filteredTreatments = useMemo(() => {
       return massageTypes.filter(mt => mt.category === treatmentType);
@@ -682,10 +689,7 @@ NOTIFY pgrst, 'reload schema';`}
     </Card>
   );
   
-  const [newType, setNewType] = useState<{ id: string, name: string, price: number, duration_minutes: number, description?: string }>({ id: '', name: '', price: 0, duration_minutes: 60, description: '' });
-  const [newTherapist, setNewTherapist] = useState({ id: '', name: '', specialty: '', country: '', type: 'Therapist' });
-  const [isEditingResource, setIsEditingResource] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest' | 'booking', name: string} | null>(null);
+  const [itemToDelete_deprecated_removed, _] = useState<null>(null); // Kept layout to not break offsets in this multi-edit
 
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user || !outlets) return [];
@@ -718,7 +722,7 @@ NOTIFY pgrst, 'reload schema';`}
   
   // NEW: Strict Permission gating for scope switch and deletion
   const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
-  const [members, setMembers] = useState<Member[]>([]);
+  // Moved 'members' hook to the top of the component
   const canDeleteGuests = user && hasPermission(user.role_id, 'members:delete');
 
   useEffect(() => {
@@ -842,46 +846,36 @@ NOTIFY pgrst, 'reload schema';`}
           limitToIds = allowedOutletsInProperty.map(o => o.id);
       }
       
-      // Fetch data in parallel but update state as they complete for faster perceived performance
+      // Fetch data in batches to avoid browser/Supabase rate limits (max 6 concurrent requests)
       const dataStartDate = format(subDays(viewDate, 3), 'yyyy-MM-dd'); 
-      const fetchBookings = db.getMassageBookings(scopeId, isProperty, limitToIds, dataStartDate).then(data => {
-          setBookings(data || []);
-          return data;
-      });
-      
-      const fetchGuests = db.getGuests(currentProperty.id).then(data => {
-          setGuests(data || []);
-          return data;
-      });
-      
-      const fetchTherapists = db.getTherapists(scopeId, isProperty, limitToIds).then(data => {
-          const sorted = (data || []).sort((x: any, y: any) => x.name.localeCompare(y.name));
-          setTherapists(sorted);
-          return sorted;
-      });
-      
-      const fetchMassageTypes = db.getMassageTypes(scopeId, isProperty, limitToIds);
-      const fetchInventory = db.getInventory(scopeId, isProperty, limitToIds);
-      
-      const fetchRooms = db.getMassageRooms(isProperty ? undefined : currentOutlet.id, currentProperty.id).then(data => {
-          setMassageRooms(data || []);
-          return data;
-      });
-      
-      const fetchMembers = db.getMembers(scopeId, isProperty, limitToIds).then(data => {
-          setMembers(data || []);
-          return data;
-      });
-
-      const [b, g, t, m, inv, rooms, mems] = await Promise.all([
-          fetchBookings,
-          fetchGuests,
-          fetchTherapists,
-          fetchMassageTypes,
-          fetchInventory,
-          fetchRooms,
-          fetchMembers
+      const [bookingsRaw, guestsRaw, therapistsRaw] = await Promise.all([
+          db.getMassageBookings(scopeId, isProperty, limitToIds, dataStartDate),
+          db.getGuests(currentProperty.id),
+          db.getTherapists(scopeId, isProperty, limitToIds)
       ]);
+      
+      setBookings(bookingsRaw || []);
+      setGuests(guestsRaw || []);
+      const sortedTherapists = (therapistsRaw || []).sort((x: any, y: any) => x.name.localeCompare(y.name));
+      setTherapists(sortedTherapists);
+      
+      const [massageTypesRaw, inventoryRaw, roomsRaw, membersRaw] = await Promise.all([
+          db.getMassageTypes(scopeId, isProperty, limitToIds),
+          db.getInventory(scopeId, isProperty, limitToIds),
+          db.getMassageRooms(isProperty ? undefined : currentOutlet.id, currentProperty.id),
+          db.getMembers(scopeId, isProperty, limitToIds)
+      ]);
+      
+      setMassageRooms(roomsRaw || []);
+      setMembers(membersRaw || []);
+      
+      const b = bookingsRaw || [];
+      const g = guestsRaw || [];
+      const t = sortedTherapists || [];
+      const m = massageTypesRaw || [];
+      const inv = inventoryRaw || [];
+      const rooms = roomsRaw || [];
+      const mems = membersRaw || [];
 
       const ptItems = (inv || []).filter(i => i.category === 'Personal Training').map(i => ({
           id: i.id,
