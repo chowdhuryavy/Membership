@@ -753,31 +753,24 @@ class DatabaseService {
         let error: any = null;
 
         try {
-          // Race the potentially unindexed start_date query against a fast 5-second timeout
+          // Race the query against a robust 20-second timeout to allow slow queries/cold starts to finish
           const queryPromise = query.order('start_date', { ascending: false }).limit(1000);
           const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('start_date query timeout')), 5000)
+            setTimeout(() => reject(new Error('start_date query timeout')), 20000)
           );
           const res = await Promise.race([queryPromise, timeoutPromise]);
           data = res.data;
           error = res.error;
         } catch (err) {
-          console.warn("Query with order('start_date') failed or timed out in 5s. Falling back to order('created_at')...", err);
+          console.warn("Query with order('start_date') failed or timed out in 20s. Trying simpler unordered query...", err);
           try {
-            // order('created_at') is indexed by default and highly optimized
-            const res = await query.order('created_at', { ascending: false }).limit(1000);
+            // Unordered queries avoid the expensive sort operation entirely
+            const res = await query.limit(1000);
             data = res.data;
             error = res.error;
           } catch (err2) {
-            console.warn("Query with order('created_at') failed too. Falling back to unordered query...", err2);
-            try {
-              const res = await query.limit(1000);
-              data = res.data;
-              error = res.error;
-            } catch (err3) {
-              console.error("All fallback query strategies for members failed:", err3);
-              throw err3;
-            }
+            console.error("All fallback query strategies for members failed:", err2);
+            throw err2;
           }
         }
 
