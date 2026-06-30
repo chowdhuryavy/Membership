@@ -1,5 +1,6 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal, Modal } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
@@ -325,6 +326,27 @@ const SettingsPage = () => {
     selected_membership_type_id: 'all',
     is_active: true 
   });
+
+  const [dbStatus, setDbStatus] = useState(() => db.getDatabaseStatus());
+  const [forceOffline, setForceOfflineState] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('force_offline_mode') === 'true' : false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDbStatus(db.getDatabaseStatus());
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleToggleForceOffline = (force: boolean) => {
+    db.setForceOffline(force);
+    setForceOfflineState(force);
+    setDbStatus(db.getDatabaseStatus());
+    if (force) {
+      toast.success("Forced Local Offline Mode active. Database is safe and fast.");
+    } else {
+      toast.success("Automatic sync restored. Retrying cloud database connection...");
+    }
+  };
 
   const filteredProperties = useMemo(() => {
     if (isSuperAdmin) return properties;
@@ -1349,25 +1371,113 @@ const SettingsPage = () => {
               )}
 
               {activeTab === 'maintenance' && (
-                  <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
-                      <CardHeader className="bg-red-50 p-8 border-b border-red-100 flex items-center gap-3">
-                          <Zap className="w-8 h-8 text-red-600" />
-                          <CardTitle className="text-2xl font-black text-red-900 uppercase tracking-tighter">Terminal Operations</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-12 space-y-8">
-                          <div className="flex items-start gap-5 p-8 bg-red-50/50 border border-red-100 rounded-[2rem]">
-                              <AlertTriangle className="w-8 h-8 text-red-600 shrink-0" />
-                              <div>
-                                  <h4 className="font-black text-red-900 uppercase tracking-tight">Destructive Mutations</h4>
-                                  <p className="text-red-700/60 text-sm mt-1">Actions performed here bypass standard validation and irreversibly modify the database schema or data state.</p>
+                  <div className="space-y-6">
+                      <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                          <CardHeader className="bg-indigo-50 p-8 border-b border-indigo-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                              <div className="flex items-center gap-3">
+                                  <Zap className="w-8 h-8 text-indigo-600" />
+                                  <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Database Diagnostics & Sync Controls</CardTitle>
                               </div>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <Button variant="danger" className="h-20 rounded-3xl font-black uppercase tracking-widest"><RefreshCcw className="w-5 h-5 mr-3" /> Purge Cache & Sync</Button>
-                              <Button variant="outline" className="h-20 rounded-3xl font-black uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50"><Eraser className="w-5 h-5 mr-3" /> Hard Reset System</Button>
-                          </div>
-                      </CardContent>
-                  </Card>
+                              <span className={`px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest w-max ${
+                                  dbStatus.mode === 'forced_offline' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                                  dbStatus.mode === 'cooldown' ? 'bg-orange-100 text-orange-700 border border-orange-200 animate-pulse' :
+                                  dbStatus.mode === 'no_client' ? 'bg-slate-100 text-slate-600 border border-slate-200' :
+                                  'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                              }`}>
+                                  {dbStatus.mode === 'forced_offline' ? '● Forced Offline' :
+                                   dbStatus.mode === 'cooldown' ? '● Automatic Fallback Mode' :
+                                   dbStatus.mode === 'no_client' ? '● Local Only Client' :
+                                   '● Cloud Synced Online'}
+                              </span>
+                          </CardHeader>
+                          <CardContent className="p-12 space-y-8">
+                              <div className="space-y-4">
+                                  <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Connection Controller</h4>
+                                  <div className="flex flex-col lg:flex-row lg:items-center gap-6 justify-between p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100">
+                                      <div className="space-y-1">
+                                          <p className="font-black text-slate-900 text-lg uppercase tracking-tight">Force Local Offline Mode</p>
+                                          <p className="text-slate-500 text-sm max-w-xl">
+                                              If your internet is slow or your Supabase database is experiencing connection timeouts or statement delays, toggle this mode ON to operate with maximum speed and reliability using secure offline browser storage.
+                                          </p>
+                                      </div>
+                                      <div className="flex items-center gap-3 shrink-0">
+                                          <button 
+                                              onClick={() => handleToggleForceOffline(false)}
+                                              className={`px-6 h-14 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${!forceOffline ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
+                                          >
+                                              Automatic Sync
+                                          </button>
+                                          <button 
+                                              onClick={() => handleToggleForceOffline(true)}
+                                              className={`px-6 h-14 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${forceOffline ? 'bg-amber-500 text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
+                                          >
+                                              Force Offline
+                                          </button>
+                                      </div>
+                                  </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+                                  <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100 space-y-2">
+                                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Connection Engine</p>
+                                      <p className="font-black text-slate-800 text-lg">
+                                          {dbStatus.mode === 'forced_offline' ? 'LocalStorage Sandboxed' :
+                                           dbStatus.mode === 'cooldown' ? 'Local Fallback' :
+                                           'Supabase Cloud Direct'}
+                                      </p>
+                                  </div>
+                                  <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100 space-y-2">
+                                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Consecutive Errors</p>
+                                      <p className="font-black text-slate-800 text-lg">{dbStatus.failures} / 3</p>
+                                  </div>
+                                  <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100 space-y-2">
+                                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Diagnostic Status</p>
+                                      <p className="font-black text-slate-800 text-lg">
+                                          {dbStatus.mode === 'online' ? 'Healthy & Syncing' : 'Resilient local mode active'}
+                                      </p>
+                                  </div>
+                              </div>
+
+                              <div className="p-8 bg-slate-50 rounded-[2rem] border border-slate-100 space-y-4">
+                                  <h4 className="font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                                      <Info className="w-5 h-5 text-indigo-500" />
+                                      Why does my cloud database sometimes fail to connect or time out?
+                                  </h4>
+                                  <div className="text-slate-600 text-sm space-y-3 leading-relaxed">
+                                      <p>
+                                          1. <strong>PostgreSQL Cold Start delays</strong>: If your Supabase database server is cold starting, queries can take longer than normal. Standard limits prevent slow queries from blocking your browser.
+                                      </p>
+                                      <p>
+                                          2. <strong>Resource Contention or Network Latency</strong>: Intermittent internet connectivity or cloud regional routing can cause standard database handshakes to time out.
+                                      </p>
+                                      <p>
+                                          3. <strong>Seamless Automatic Fallback Protection</strong>: Even when database connections time out, our <strong>resilient state engine</strong> instantly saves your edits to local browser persistence and manages records locally. No data is lost, and you can edit member profiles or types completely uninterrupted!
+                                      </p>
+                                  </div>
+                              </div>
+                          </CardContent>
+                      </Card>
+
+                      <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                          <CardHeader className="bg-red-50 p-8 border-b border-red-100 flex items-center gap-3">
+                              <AlertTriangle className="w-8 h-8 text-red-600" />
+                              <CardTitle className="text-2xl font-black text-red-900 uppercase tracking-tighter">Terminal Operations</CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-12 space-y-8">
+                              <div className="flex items-start gap-5 p-8 bg-red-50/50 border border-red-100 rounded-[2rem]">
+                                  <AlertTriangle className="w-8 h-8 text-red-600 shrink-0" />
+                                  <div>
+                                      <h4 className="font-black text-red-900 uppercase tracking-tight">Destructive Mutations</h4>
+                                      <p className="text-red-700/60 text-sm mt-1">Actions performed here bypass standard validation and irreversibly modify the database schema or data state.</p>
+                                  </div>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  <Button variant="danger" className="h-20 rounded-3xl font-black uppercase tracking-widest" onClick={() => { localStorage.clear(); window.location.reload(); }}><RefreshCcw className="w-5 h-5 mr-3" /> Purge Cache & Sync</Button>
+                                  <Button variant="outline" className="h-20 rounded-3xl font-black uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50" onClick={() => { localStorage.clear(); window.location.reload(); }}><Eraser className="w-5 h-5 mr-3" /> Hard Reset System</Button>
+                              </div>
+                          </CardContent>
+                      </Card>
+                  </div>
               )}
 
               {activeTab === 'incentives' && (

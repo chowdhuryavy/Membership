@@ -13,7 +13,10 @@ const realSupabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    lock: async (name: string, acquireTimeout: number, callback: () => Promise<any>) => {
+      return callback();
+    }
   }
 });
 
@@ -28,6 +31,9 @@ const createResilientSupabase = (rawClient: any) => {
   let lastFailureTime = 0;
 
   const isSupabaseOnline = () => {
+    if (typeof window !== 'undefined' && localStorage.getItem('force_offline_mode') === 'true') {
+      return false;
+    }
     if (supabaseFailed) {
       if (Date.now() - lastFailureTime > 60000) {
         console.log("Resilient Supabase: Cooldown expired. Retrying database connection...");

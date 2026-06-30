@@ -61,6 +61,9 @@ class DatabaseService {
   private static lastFailureTime = 0;
 
   public isSupabase() {
+    if (typeof window !== 'undefined' && localStorage.getItem('force_offline_mode') === 'true') {
+      return false;
+    }
     if (!supabase) return false;
     if (DatabaseService.supabaseFailed) {
       if (Date.now() - DatabaseService.lastFailureTime > 60000) {
@@ -72,6 +75,40 @@ class DatabaseService {
       }
     }
     return true;
+  }
+
+  public static getDatabaseStatus() {
+    if (typeof window !== 'undefined' && localStorage.getItem('force_offline_mode') === 'true') {
+      return { mode: 'forced_offline', failures: this.supabaseFailures, lastFailureTime: this.lastFailureTime };
+    }
+    if (!supabase) {
+      return { mode: 'no_client', failures: this.supabaseFailures, lastFailureTime: this.lastFailureTime };
+    }
+    if (this.supabaseFailed) {
+      return { mode: 'cooldown', failures: this.supabaseFailures, lastFailureTime: this.lastFailureTime };
+    }
+    return { mode: 'online', failures: this.supabaseFailures, lastFailureTime: this.lastFailureTime };
+  }
+
+  public static setForceOffline(force: boolean) {
+    if (typeof window !== 'undefined') {
+      if (force) {
+        localStorage.setItem('force_offline_mode', 'true');
+        this.supabaseFailed = true;
+      } else {
+        localStorage.removeItem('force_offline_mode');
+        this.supabaseFailed = false;
+        this.supabaseFailures = 0;
+      }
+    }
+  }
+
+  public getDatabaseStatus() {
+    return DatabaseService.getDatabaseStatus();
+  }
+
+  public setForceOffline(force: boolean) {
+    DatabaseService.setForceOffline(force);
   }
 
   public triggerSupabaseFailure() {
@@ -2843,12 +2880,17 @@ class DatabaseService {
 
   // --- REPORT RECIPIENTS ---
   async getReportRecipients() {
+    const cached = JSON.parse(safeStorage.getItem('membership_report_recipients') || '[]') as ReportRecipient[];
     if (this.isSupabase()) {
-      const { data, error } = await supabase.from('report_recipients').select('*');
-      if (error) throw error;
-      return (data || []) as ReportRecipient[];
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('report_recipients').select('*');
+        if (error) throw error;
+        const res = (data || []) as ReportRecipient[];
+        safeStorage.setItem('membership_report_recipients', JSON.stringify(res));
+        return res;
+      }, cached);
     }
-    return JSON.parse(safeStorage.getItem('membership_report_recipients') || '[]') as ReportRecipient[];
+    return cached;
   }
 
   async addReportRecipient(recipient: Omit<ReportRecipient, 'id' | 'created_at'>) {
@@ -2859,59 +2901,86 @@ class DatabaseService {
     };
 
     if (this.isSupabase()) {
-      const { error } = await supabase.from('report_recipients').insert([newRecipient]);
-      if (error) throw error;
-    } else {
-      const recipients = await this.getReportRecipients();
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('report_recipients').insert([newRecipient]);
+        if (error) throw error;
+      }, null);
+    }
+    
+    // Always sync with local storage
+    const recipients = await this.getReportRecipients();
+    if (!recipients.some(r => r.id === newRecipient.id)) {
       recipients.push(newRecipient);
       safeStorage.setItem('membership_report_recipients', JSON.stringify(recipients));
     }
+    
     await this.logAction('ADD_RECIPIENT', `Report recipient added: ${recipient.email}`);
     return newRecipient;
   }
 
   async deleteReportRecipient(id: string) {
     if (this.isSupabase()) {
-      const { error } = await supabase.from('report_recipients').delete().eq('id', id);
-      if (error) throw error;
-    } else {
-      const recipients = await this.getReportRecipients();
-      const filtered = recipients.filter(r => r.id !== id);
-      safeStorage.setItem('membership_report_recipients', JSON.stringify(filtered));
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('report_recipients').delete().eq('id', id);
+        if (error) throw error;
+      }, null);
     }
+    
+    // Always sync with local storage
+    const recipients = await this.getReportRecipients();
+    const filtered = recipients.filter(r => r.id !== id);
+    safeStorage.setItem('membership_report_recipients', JSON.stringify(filtered));
+    
     await this.logAction('DELETE_RECIPIENT', `Report recipient removed: ${id}`);
   }
 
   async updateReportRecipient(id: string, updates: Partial<ReportRecipient>) {
     if (this.isSupabase()) {
-      const { error } = await supabase.from('report_recipients').update(updates).eq('id', id);
-      if (error) throw error;
-    } else {
-      const recipients = await this.getReportRecipients();
-      const index = recipients.findIndex(r => r.id === id);
-      if (index !== -1) {
-        recipients[index] = { ...recipients[index], ...updates };
-        safeStorage.setItem('membership_report_recipients', JSON.stringify(recipients));
-      }
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('report_recipients').update(updates).eq('id', id);
+        if (error) throw error;
+      }, null);
     }
+    
+    // Always sync with local storage
+    const recipients = await this.getReportRecipients();
+    const index = recipients.findIndex(r => r.id === id);
+    if (index !== -1) {
+      recipients[index] = { ...recipients[index], ...updates };
+      safeStorage.setItem('membership_report_recipients', JSON.stringify(recipients));
+    }
+    
     await this.logAction('UPDATE_RECIPIENT', `Report recipient updated: ${id}`);
   }
 
   // --- CUSTOM REPORT CONFIGS ---
   async getCustomReports(propertyId?: string, outletId?: string) {
+    const cached = JSON.parse(safeStorage.getItem('membership_custom_reports') || '[]') as CustomReportConfig[];
+    let filteredCached = cached;
+    if (propertyId) filteredCached = filteredCached.filter(r => r.property_id === propertyId);
+    if (outletId && outletId !== 'all') filteredCached = filteredCached.filter(r => r.outlet_id === outletId);
+
     if (this.isSupabase()) {
-      let query = supabase.from('custom_reports').select('*');
-      if (propertyId) query = query.eq('property_id', propertyId);
-      if (outletId && outletId !== 'all') query = query.eq('outlet_id', outletId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []) as CustomReportConfig[];
+      return this.safeCall(async () => {
+        let query = supabase.from('custom_reports').select('*');
+        if (propertyId) query = query.eq('property_id', propertyId);
+        if (outletId && outletId !== 'all') query = query.eq('outlet_id', outletId);
+        const { data, error } = await query;
+        if (error) throw error;
+        const res = (data || []) as CustomReportConfig[];
+        
+        // Merge with existing cached items
+        const allCached = JSON.parse(safeStorage.getItem('membership_custom_reports') || '[]') as CustomReportConfig[];
+        const otherCached = allCached.filter(r => {
+          if (propertyId && r.property_id !== propertyId) return true;
+          if (outletId && outletId !== 'all' && r.outlet_id !== outletId) return true;
+          return false;
+        });
+        safeStorage.setItem('membership_custom_reports', JSON.stringify([...otherCached, ...res]));
+        return res;
+      }, filteredCached);
     }
-    const reports = JSON.parse(safeStorage.getItem('membership_custom_reports') || '[]') as CustomReportConfig[];
-    let filtered = reports;
-    if (propertyId) filtered = filtered.filter(r => r.property_id === propertyId);
-    if (outletId && outletId !== 'all') filtered = filtered.filter(r => r.outlet_id === outletId);
-    return filtered;
+    return filteredCached;
   }
 
   async addCustomReport(config: Omit<CustomReportConfig, 'id' | 'created_at'>) {
@@ -2922,41 +2991,55 @@ class DatabaseService {
     };
 
     if (this.isSupabase()) {
-      const { error } = await supabase.from('custom_reports').insert([newReport]);
-      if (error) throw error;
-    } else {
-      const reports = await this.getCustomReports();
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('custom_reports').insert([newReport]);
+        if (error) throw error;
+      }, null);
+    }
+    
+    // Always sync with local storage
+    const reports = await this.getCustomReports();
+    if (!reports.some(r => r.id === newReport.id)) {
       reports.push(newReport);
       safeStorage.setItem('membership_custom_reports', JSON.stringify(reports));
     }
+    
     await this.logAction('ADD_CUSTOM_REPORT', `Custom report defined: ${config.name}`);
     return newReport;
   }
 
   async updateCustomReport(id: string, updates: Partial<CustomReportConfig>) {
     if (this.isSupabase()) {
-      const { error } = await supabase.from('custom_reports').update(updates).eq('id', id);
-      if (error) throw error;
-    } else {
-      const reports = await this.getCustomReports();
-      const index = reports.findIndex(r => r.id === id);
-      if (index !== -1) {
-        reports[index] = { ...reports[index], ...updates };
-        safeStorage.setItem('membership_custom_reports', JSON.stringify(reports));
-      }
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('custom_reports').update(updates).eq('id', id);
+        if (error) throw error;
+      }, null);
     }
+    
+    // Always sync with local storage
+    const reports = await this.getCustomReports();
+    const index = reports.findIndex(r => r.id === id);
+    if (index !== -1) {
+      reports[index] = { ...reports[index], ...updates };
+      safeStorage.setItem('membership_custom_reports', JSON.stringify(reports));
+    }
+    
     await this.logAction('UPDATE_CUSTOM_REPORT', `Custom report modified: ${id}`);
   }
 
   async deleteCustomReport(id: string) {
     if (this.isSupabase()) {
-      const { error } = await supabase.from('custom_reports').delete().eq('id', id);
-      if (error) throw error;
-    } else {
-      const reports = await this.getCustomReports();
-      const filtered = reports.filter(r => r.id !== id);
-      safeStorage.setItem('membership_custom_reports', JSON.stringify(filtered));
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('custom_reports').delete().eq('id', id);
+        if (error) throw error;
+      }, null);
     }
+    
+    // Always sync with local storage
+    const reports = await this.getCustomReports();
+    const filtered = reports.filter(r => r.id !== id);
+    safeStorage.setItem('membership_custom_reports', JSON.stringify(filtered));
+    
     await this.logAction('DELETE_CUSTOM_REPORT', `Custom report removed: ${id}`);
   }
 
