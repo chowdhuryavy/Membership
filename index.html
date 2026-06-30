@@ -84,12 +84,21 @@
       }
 
       // Handle chunk load errors (common in SPAs when a new version is deployed)
+      window.onerror = function(msg, url, line, col, error) {
+        console.error("Window Error Caught:", msg, url, line, col, error);
+      };
       window.addEventListener('error', (e) => {
+        if (e.message !== 'Script error.') {
+            console.error("Global Error Caught:", e.message, e.filename, e.lineno, e.colno, e.error);
+        }
         if (e.message && (e.message.includes('chunk') || e.message.includes('Loading chunk'))) {
           console.warn('Chunk load error detected, reloading...', e);
           window.location.reload();
         }
       }, true);
+      window.addEventListener('unhandledrejection', (e) => {
+        console.error("Unhandled Rejection:", e.reason);
+      });
     </script>
 </head>
   <body>

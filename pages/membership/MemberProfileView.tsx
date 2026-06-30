@@ -1,3 +1,13 @@
+
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '../../components/ui';
@@ -315,7 +325,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             });
         } else {
             await db.addFreeze({ 
-                id: crypto.randomUUID(), 
+                id: generateUUID(), 
                 member_id: viewingMember.id, 
                 start_date: freezeForm.start_date, 
                 end_date: freezeForm.end_date, 

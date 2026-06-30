@@ -259,7 +259,7 @@ const ProtectedLayout = () => {
     );
   }, [location.pathname, splashPaths]);
 
-  const isAppInitializing = isAuthLoading || isSettingsLoading;
+  const isAppInitializing = isAuthLoading || (user && isSettingsLoading);
   
   // Track route changes to reset initial load state for splash pages
   const lastPathname = useRef(location.pathname);

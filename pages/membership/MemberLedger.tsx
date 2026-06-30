@@ -47,7 +47,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   members = [], categories = [], membershipTypes = [], selectedTypeId, onTypeChange, loading, viewScope, setViewScope, 
   onAdd, onViewDetail, onEdit, onRenew, onDelete, onRefresh, pageLoading
 }) => {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [] } = useSettings();
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -60,14 +60,14 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
 
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user || !outlets || !Array.isArray(outlets)) return [];
-    if (user.role_id?.toLowerCase() === 'admin') {
+    if (isSuperAdmin) {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }
     return outlets.filter(o => 
         o.property_id === currentProperty.id && 
         user.allowed_outlets?.includes(o.id)
     );
-  }, [currentProperty, user, outlets]);
+  }, [currentProperty, user, outlets, isSuperAdmin]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -149,6 +149,15 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
     });
   }, [members, searchTerm, statusFilter, viewScope, currentOutlet]);
 
+  console.log("[Diagnostic - MemberLedger.tsx] filteredMembers computed:", {
+    inputMembersCount: members?.length,
+    searchTerm,
+    statusFilter,
+    viewScope,
+    currentOutletId: currentOutlet?.id,
+    outputFilteredCount: filteredMembers?.length
+  });
+
   const groupedMembers = useMemo(() => {
     if (!Array.isArray(categories)) return [];
     
@@ -184,6 +193,14 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
       });
       
     if (uncategorized.length > 0) groups.push({ category: null, members: uncategorized });
+
+    console.log("[Diagnostic - MemberLedger.tsx] groupedMembers computed:", {
+      categoriesCount: categories?.length,
+      groupsCount: groups?.length,
+      uncategorizedCount: uncategorized?.length,
+      groupedDetails: groups.map(g => ({ catName: g.category?.name || 'Unassigned', count: g.members?.length }))
+    });
+
     return groups;
   }, [categories, filteredMembers]);
 

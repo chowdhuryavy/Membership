@@ -10,7 +10,7 @@ import MemberProfileView from './membership/MemberProfileView';
 import { ConfirmationModal } from '../components/ui';
 
 const Members = () => {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { currentOutlet, currentProperty, hasPermission, outlets, setPageLoading, pageLoading } = useSettings();
   
   // View State
@@ -31,14 +31,14 @@ const Members = () => {
 
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user) return [];
-    if (user.role_id?.toLowerCase() === 'admin') {
+    if (isSuperAdmin) {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }
     return outlets.filter(o => 
         o.property_id === currentProperty.id && 
         user.allowed_outlets?.includes(o.id)
     );
-  }, [currentProperty, user, outlets]);
+  }, [currentProperty, user, outlets, isSuperAdmin]);
 
   // Permissions
   const canView = user && hasPermission(user.role_id, 'members:view');
@@ -59,7 +59,7 @@ const Members = () => {
       const scopeId = currentProperty.id;
       
       let limitToIds: string[] | undefined = undefined;
-      if (user?.role_id?.toLowerCase() !== 'admin') {
+      if (!isSuperAdmin) {
           limitToIds = allowedOutletsInProperty.map(o => o.id);
       }
       
@@ -69,6 +69,16 @@ const Members = () => {
         db.getStaff(currentOutlet.id),
         db.getMembershipTypes(currentOutlet.id)
       ]);
+
+      console.log("[Diagnostic - Members.tsx] Loaded Data:", {
+        scopeId,
+        isPropertyScope,
+        limitToIds,
+        membersCount: membersData?.length,
+        categoriesCount: categoriesData?.length,
+        staffCount: staffData?.length,
+        typesCount: typesData?.length
+      });
 
       setMembers(membersData);
       setCategories(categoriesData);
@@ -193,8 +203,8 @@ const Members = () => {
           isEditing={isEditing}
           isRenewal={isRenewal}
           categories={
-            (isEditing || isRenewal) && selectedMember?.membership_type_id
-              ? categories.filter(c => c.membership_type_id === selectedMember.membership_type_id)
+            isEditing || isRenewal
+              ? categories
               : filteredCategories
           }
           membershipTypes={membershipTypes}

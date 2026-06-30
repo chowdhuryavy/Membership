@@ -1,3 +1,16 @@
+
+const safeStorage = {
+  getItem(key: string): string | null {
+    try { return localStorage.getItem(key); } catch(e) { return null; }
+  },
+  setItem(key: string, value: string): void {
+    try { localStorage.setItem(key, value); } catch(e) {}
+  },
+  removeItem(key: string): void {
+    try { localStorage.removeItem(key); } catch(e) {}
+  }
+};
+
 /**
  * StaffSchedule.tsx
  * Comprehensive component for staff daily/monthly views and incentive reports.
@@ -324,14 +337,23 @@ const StaffSchedule = () => {
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const triggeredRemindersRef = useRef<Set<string>>(new Set());
   const [triggeredReminders, setTriggeredReminders] = useState<Set<string>>(() => {
-    const saved = localStorage.getItem('triggered_reminders');
+    let saved = null;
+    try {
+      saved = safeStorage.getItem('triggered_reminders');
+    } catch (e) {
+      console.warn("Storage access failed:", e);
+    }
     const initialSet = saved ? new Set(JSON.parse(saved)) : new Set();
     triggeredRemindersRef.current = initialSet;
     return initialSet;
   });
 
   useEffect(() => {
-    localStorage.setItem('triggered_reminders', JSON.stringify(Array.from(triggeredReminders)));
+    try {
+      safeStorage.setItem('triggered_reminders', JSON.stringify(Array.from(triggeredReminders)));
+    } catch (e) {
+      console.warn("Storage access failed:", e);
+    }
   }, [triggeredReminders]);
   
   const [selectedOutletId, setSelectedOutletId] = useState<string | null>(null);
@@ -390,7 +412,12 @@ const StaffSchedule = () => {
   // Initialize selectedOutletId when staff is loaded
   useEffect(() => {
     if (staff && !selectedOutletId) {
-      const stored = localStorage.getItem(`staff_selected_outlet_${staff.id}`);
+      let stored = null;
+      try {
+        stored = safeStorage.getItem(`staff_selected_outlet_${staff.id}`);
+      } catch (e) {
+        console.warn("Storage access failed:", e);
+      }
       if (stored && assignedOutlets.includes(stored)) {
         setSelectedOutletId(stored);
       } else if (assignedOutlets.length > 0) {
@@ -402,7 +429,7 @@ const StaffSchedule = () => {
   // Update localStorage when selectedOutletId changes (but don't trigger loads here, main effect handles it)
   useEffect(() => {
     if (staff && selectedOutletId) {
-      localStorage.setItem(`staff_selected_outlet_${staff.id}`, selectedOutletId);
+      safeStorage.setItem(`staff_selected_outlet_${staff.id}`, selectedOutletId);
       // Pre-fetch basic info for property when outlet changes
       loadPropertyDetails();
       
@@ -718,7 +745,13 @@ const StaffSchedule = () => {
   const isPasswordValid = passwordValidation.length && passwordValidation.match;
 
   useEffect(() => {
-    const sessionStr = localStorage.getItem('staff_session');
+    let sessionStr = null;
+    try {
+      sessionStr = safeStorage.getItem('staff_session');
+    } catch (e) {
+      console.warn("Storage access failed:", e);
+    }
+    
     if (!sessionStr) {
       navigate('/staff-login');
       return;
@@ -730,7 +763,7 @@ const StaffSchedule = () => {
         if (updatedStaff) {
           setStaff(updatedStaff);
           // Update session in localStorage
-          localStorage.setItem('staff_session', JSON.stringify(updatedStaff));
+          safeStorage.setItem('staff_session', JSON.stringify(updatedStaff));
         } else {
           setStaff(session);
         }
@@ -1180,7 +1213,7 @@ const StaffSchedule = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('staff_session');
+    safeStorage.removeItem('staff_session');
     navigate('/staff-login');
   };
 
@@ -1200,7 +1233,7 @@ const StaffSchedule = () => {
       
       // Update local session just in case
       const updatedStaff = { ...staff, password: newPassword };
-      localStorage.setItem('staff_session', JSON.stringify(updatedStaff));
+      safeStorage.setItem('staff_session', JSON.stringify(updatedStaff));
       setStaff(updatedStaff);
       
       setTimeout(() => {
@@ -1222,7 +1255,7 @@ const StaffSchedule = () => {
       const updatedStaff = await db.getStaffById(staff.id);
       if (updatedStaff) {
         setStaff(updatedStaff);
-        localStorage.setItem('staff_session', JSON.stringify(updatedStaff));
+        safeStorage.setItem('staff_session', JSON.stringify(updatedStaff));
         toast.success('Permissions synced');
       }
     } catch (e) {

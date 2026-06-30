@@ -3,6 +3,28 @@ import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format, parse, differenceInCalendarDays } from 'date-fns';
 
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+const safeStorage = {
+  getItem(key: string): string | null {
+    try { return localStorage.getItem(key); } catch(e) { return null; }
+  },
+  setItem(key: string, value: string): void {
+    try { localStorage.setItem(key, value); } catch(e) {}
+  },
+  removeItem(key: string): void {
+    try { localStorage.removeItem(key); } catch(e) {}
+  }
+};
+
 // Robust date parsing for the Intelligence Engine
 const parseISO = (dateString: string) => {
   if (!dateString) return new Date();
@@ -23,45 +45,78 @@ const startOfDay = (date: Date) => {
   return d;
 };
 
+const safeParseJSON = <T>(str: string | null, fallback: T): T => {
+  if (!str) return fallback;
+  try {
+    return JSON.parse(str) as T;
+  } catch (e) {
+    console.warn("Failed to parse JSON string from local storage:", str, e);
+    return fallback;
+  }
+};
+
 class DatabaseService {
   private static supabaseFailed = false;
-  private isSupabase() {
-    return !!supabase && !DatabaseService.supabaseFailed;
+  private static supabaseFailures = 0;
+  private static lastFailureTime = 0;
+
+  public isSupabase() {
+    if (!supabase) return false;
+    if (DatabaseService.supabaseFailed) {
+      if (Date.now() - DatabaseService.lastFailureTime > 60000) {
+        console.log("Supabase cooldown expired. Retrying database connection...");
+        DatabaseService.supabaseFailed = false;
+        DatabaseService.supabaseFailures = 0;
+      } else {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  public triggerSupabaseFailure() {
+    DatabaseService.supabaseFailures = 2;
+    DatabaseService.supabaseFailed = true;
+    DatabaseService.lastFailureTime = Date.now();
   }
 
   public async safeCall<T>(call: () => Promise<T>, fallback: T): Promise<T> {
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Database call timeout')), 45000)
+    );
     try {
-      const result = await call();
+      const result = await Promise.race([call(), timeoutPromise]);
+      DatabaseService.supabaseFailures = 0;
       return result;
     } catch (e: any) {
-      if (this.isNetworkError(e)) {
-        console.warn("Supabase fetch failed, disabling Supabase for this session and falling back to mock data", e);
+      DatabaseService.supabaseFailures++;
+      DatabaseService.lastFailureTime = Date.now();
+      console.warn(`Supabase call failed or timed out (consecutive failures: ${DatabaseService.supabaseFailures})`, e);
+      
+      if (DatabaseService.supabaseFailures >= 3) {
+        console.warn("Disabling Supabase temporarily for 60 seconds due to consecutive failures");
         DatabaseService.supabaseFailed = true;
-        return fallback;
       }
-      console.error("Critical Database Error:", e?.message || e);
-      throw e;
+      return fallback;
     }
   }
 
   private isNetworkError(e: any): boolean {
     const msg = e.message?.toLowerCase() || '';
     const code = e.code || '';
-    // Enable fallback for critical connection failures, transient fetch errors, 
-    // and database timeouts (57014) or internal server errors (500)
     return msg.includes('failed to fetch') || 
            msg.includes('network error') || 
            msg.includes('insufficient permissions') ||
            msg.includes('database not found') ||
-           code === '57014' || // Statement timeout
+           code === '57014' || 
            msg.includes('timeout') ||
            DatabaseService.supabaseFailed;
   }
 
   private generateUUID() {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-      return crypto.randomUUID();
-    }
+    return crypto.randomUUID();
+  }
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
@@ -246,8 +301,8 @@ class DatabaseService {
   async syncMemberEndDate(memberId: string) {
     if (!this.isSupabase()) {
         // Local Mode Sync
-        const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
-        const freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
+        const members = JSON.parse(safeStorage.getItem('membership_members') || '[]');
+        const freezes = JSON.parse(safeStorage.getItem('membership_freezes') || '[]');
         
         const mIndex = members.findIndex((mem: any) => mem.id === memberId);
         if (mIndex === -1) return null;
@@ -275,7 +330,7 @@ class DatabaseService {
             : newStatus;
 
         members[mIndex] = { ...m, status: finalStatus, current_end_date: newEndDateStr };
-        localStorage.setItem('membership_members', JSON.stringify(members));
+        safeStorage.setItem('membership_members', JSON.stringify(members));
         return newEndDateStr;
     }
 
@@ -311,10 +366,10 @@ class DatabaseService {
   }
 
   async logAction(action: string, details: string, outlet_id?: string, explicitUser?: { id: string, name: string }) {
-    const sessionStr = localStorage.getItem('membership_session');
+    const sessionStr = safeStorage.getItem('membership_session');
     const session = sessionStr ? JSON.parse(sessionStr) : null;
     const logEntry = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         timestamp: new Date().toISOString(),
         user_id: explicitUser?.id || session?.id || 'system',
         user_name: explicitUser?.name || session?.name || 'System Engine',
@@ -437,9 +492,9 @@ class DatabaseService {
         if (error) throw error;
         await this.logAction('CREATE_USER', `Identity provisioned: ${user.name} (${user.email})`);
         return data as UserProfile;
-      }, { ...user, id: crypto.randomUUID() } as UserProfile);
+      }, { ...user, id: generateUUID() } as UserProfile);
     }
-    return { ...user, id: crypto.randomUUID() } as UserProfile;
+    return { ...user, id: generateUUID() } as UserProfile;
   }
 
   async updateUser(id: string, updates: Partial<UserProfile>) { 
@@ -594,7 +649,7 @@ class DatabaseService {
 
   async addStaffLeave(leave: Omit<StaffLeave, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
-      const { data, error } = await supabase.from('staff_leaves').insert([{ ...leave, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select();
+      const { data, error } = await supabase.from('staff_leaves').insert([{ ...leave, id: generateUUID(), created_at: new Date().toISOString() }]).select();
       if (error) throw error;
       return data;
     }
@@ -644,7 +699,7 @@ class DatabaseService {
 
   async addStaff(staff: Omit<Staff, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
-      const { data, error } = await supabase.from('staff').insert([{ ...staff, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select();
+      const { data, error } = await supabase.from('staff').insert([{ ...staff, id: generateUUID(), created_at: new Date().toISOString() }]).select();
       if (error) throw error;
       await this.logAction('CREATE_STAFF', `Added staff member: ${staff.name} (${staff.role})`, staff.outlet_ids[0]);
       return data;
@@ -673,6 +728,10 @@ class DatabaseService {
   }
 
   async getMembers(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[], selectColumns: string = '*'): Promise<Member[]> {
+    const cacheKey = `company_members_cache_${scopeId || 'all'}_${isProperty}`;
+    const local = safeStorage.getItem(cacheKey);
+    const cached = safeParseJSON<Member[]>(local, []);
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         let query = supabase.from('members').select(selectColumns);
@@ -689,11 +748,43 @@ class DatabaseService {
                 query = query.eq('outlet_id', scopeId);
             }
         }
-        query = query.order('start_date', { ascending: false }).limit(2000);
-        const { data, error } = await query;
+        
+        let data: any[] | null = null;
+        let error: any = null;
+
+        try {
+          // Race the potentially unindexed start_date query against a fast 5-second timeout
+          const queryPromise = query.order('start_date', { ascending: false }).limit(1000);
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('start_date query timeout')), 5000)
+          );
+          const res = await Promise.race([queryPromise, timeoutPromise]);
+          data = res.data;
+          error = res.error;
+        } catch (err) {
+          console.warn("Query with order('start_date') failed or timed out in 5s. Falling back to order('created_at')...", err);
+          try {
+            // order('created_at') is indexed by default and highly optimized
+            const res = await query.order('created_at', { ascending: false }).limit(1000);
+            data = res.data;
+            error = res.error;
+          } catch (err2) {
+            console.warn("Query with order('created_at') failed too. Falling back to unordered query...", err2);
+            try {
+              const res = await query.limit(1000);
+              data = res.data;
+              error = res.error;
+            } catch (err3) {
+              console.error("All fallback query strategies for members failed:", err3);
+              throw err3;
+            }
+          }
+        }
+
         if (error) throw error;
         
         const membersList = (data || []) as any as Member[];
+        safeStorage.setItem(cacheKey, JSON.stringify(membersList));
 
         // Lazy background update for stale statuses (fire and forget)
         // Optimized: only check a few to avoid system-wide lag
@@ -716,9 +807,28 @@ class DatabaseService {
         }, 15000); // 15 seconds instead of 3 to avoid hammering the DB on every dashboard load
 
         return membersList;
-      }, []);
+      }, cached);
     }
-    return [];
+    // Offline/Local mock fallback
+    try {
+      const members = safeParseJSON<Member[]>(safeStorage.getItem('membership_members'), []);
+      if (scopeId) {
+          if (isProperty) {
+              if (limitToOutletIds && limitToOutletIds.length > 0) {
+                  return members.filter(m => limitToOutletIds.includes(m.outlet_id));
+              } else {
+                  const outlets = JSON.parse(safeStorage.getItem('membership_outlets') || '[]');
+                  const ids = outlets.filter((o: any) => o.property_id === scopeId).map((o: any) => o.id);
+                  return members.filter(m => ids.includes(m.outlet_id));
+              }
+          } else {
+              return members.filter(m => m.outlet_id === scopeId);
+          }
+      }
+      return members;
+    } catch {
+      return [];
+    }
   }
 
   async getMemberHistory(membershipNumber: string, outletId?: string): Promise<Member[]> {
@@ -746,9 +856,9 @@ class DatabaseService {
         required_permission: 'reports:view'
       });
     } else {
-      const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+      const members = JSON.parse(safeStorage.getItem('membership_members') || '[]');
       members.push(member);
-      localStorage.setItem('membership_members', JSON.stringify(members));
+      safeStorage.setItem('membership_members', JSON.stringify(members));
       await this.logAction('CREATE_MEMBER', `Enrolled new member locally: ${member.guest_name}`, member.outlet_id);
       await this.addNotification({
         title: 'New Member Enrolled',
@@ -783,11 +893,11 @@ class DatabaseService {
       }
     } else {
         // Local Mode Fallback
-        const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+        const members = JSON.parse(safeStorage.getItem('membership_members') || '[]');
         const mIndex = members.findIndex((mem: any) => mem.id === id);
         if (mIndex !== -1) {
             members[mIndex] = { ...members[mIndex], ...member };
-            localStorage.setItem('membership_members', JSON.stringify(members));
+            safeStorage.setItem('membership_members', JSON.stringify(members));
             await this.logAction('UPDATE_MEMBER', `Updated member profile locally: ${members[mIndex].guest_name || id}.`);
             
             if (member.status === MemberStatus.CANCELLED) {
@@ -819,10 +929,10 @@ class DatabaseService {
         });
       }
     } else {
-      const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+      const members = JSON.parse(safeStorage.getItem('membership_members') || '[]');
       const member = members.find((m: any) => m.id === id);
       const newMembers = members.filter((m: any) => m.id !== id);
-      localStorage.setItem('membership_members', JSON.stringify(newMembers));
+      safeStorage.setItem('membership_members', JSON.stringify(newMembers));
       await this.logAction('DELETE_MEMBER', `Deleted member record locally ID: ${id}`);
       
       if (member) {
@@ -873,16 +983,16 @@ class DatabaseService {
         required_permission: 'reports:view'
       });
     } else {
-      const freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
+      const freezes = JSON.parse(safeStorage.getItem('membership_freezes') || '[]');
       const data = { ...freeze, id: freeze.id || this.generateUUID() };
       freezes.push(data);
-      localStorage.setItem('membership_freezes', JSON.stringify(freezes));
+      safeStorage.setItem('membership_freezes', JSON.stringify(freezes));
       
-      const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+      const members = JSON.parse(safeStorage.getItem('membership_members') || '[]');
       const mIndex = members.findIndex((m: any) => m.id === freeze.member_id);
       if (mIndex !== -1) {
         members[mIndex].status = MemberStatus.FROZEN;
-        localStorage.setItem('membership_members', JSON.stringify(members));
+        safeStorage.setItem('membership_members', JSON.stringify(members));
         
         await this.logAction('FREEZE_MEMBER', `Suspended membership locally for ${members[mIndex].guest_name}.`, members[mIndex].outlet_id);
         await this.addNotification({
@@ -1000,7 +1110,7 @@ class DatabaseService {
     } else {
       // Local Mode Fallback
       const batchId = this.generateUUID();
-      const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+      const members = JSON.parse(safeStorage.getItem('membership_members') || '[]');
       
       const newFreezes = memberIds.map(id => {
         const m = members.find((mem: any) => mem.id === id);
@@ -1033,11 +1143,11 @@ class DatabaseService {
         };
       });
 
-      const existing = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
-      localStorage.setItem('membership_freezes', JSON.stringify([...existing, ...newFreezes]));
+      const existing = JSON.parse(safeStorage.getItem('membership_freezes') || '[]');
+      safeStorage.setItem('membership_freezes', JSON.stringify([...existing, ...newFreezes]));
       
       // Store batch history locally
-      const batches = JSON.parse(localStorage.getItem('membership_maintenance_batches') || '[]');
+      const batches = JSON.parse(safeStorage.getItem('membership_maintenance_batches') || '[]');
       batches.push({
         id: batchId,
         start_date: startDate,
@@ -1047,7 +1157,7 @@ class DatabaseService {
         outlet_id: outletId,
         created_at: timestamp
       });
-      localStorage.setItem('membership_maintenance_batches', JSON.stringify(batches));
+      safeStorage.setItem('membership_maintenance_batches', JSON.stringify(batches));
 
       await Promise.all(memberIds.map(id => this.syncMemberEndDate(id)));
       return batchId;
@@ -1112,10 +1222,10 @@ class DatabaseService {
       }, []);
     } else {
         // Local Mode Fallback
-        const allFreezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]')
+        const allFreezes = JSON.parse(safeStorage.getItem('membership_freezes') || '[]')
             .filter((f: any) => !!f.is_maintenance && (!outletId || f.outlet_id === outletId));
         
-        const localBatches = JSON.parse(localStorage.getItem('membership_maintenance_batches') || '[]');
+        const localBatches = JSON.parse(safeStorage.getItem('membership_maintenance_batches') || '[]');
         const filteredBatches = localBatches.filter((b: any) => !outletId || b.outlet_id === outletId);
 
         const grouped = allFreezes.reduce((acc: any, curr: any) => {
@@ -1174,7 +1284,7 @@ class DatabaseService {
         }
     } else {
         // Local Mode Delete
-        let freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
+        let freezes = JSON.parse(safeStorage.getItem('membership_freezes') || '[]');
         const toDelete = freezes.filter((f: any) => {
             if (batchId.startsWith('synthetic_')) {
                 const parts = batchId.split('_');
@@ -1185,7 +1295,7 @@ class DatabaseService {
         
         memberIds = Array.from(new Set(toDelete.map((f: any) => f.member_id)));
         freezes = freezes.filter((f: any) => !toDelete.some((td: any) => td.id === f.id));
-        localStorage.setItem('membership_freezes', JSON.stringify(freezes));
+        safeStorage.setItem('membership_freezes', JSON.stringify(freezes));
     }
 
     // Sync all affected members
@@ -1267,8 +1377,8 @@ class DatabaseService {
         await this.logAction('UPDATE_BULK_FREEZE', `Bulk suspension modified for batch: ${batchId}`);
     } else {
         // Local Mode Update
-        let freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
-        const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+        let freezes = JSON.parse(safeStorage.getItem('membership_freezes') || '[]');
+        const members = JSON.parse(safeStorage.getItem('membership_members') || '[]');
         
         const affected = freezes.filter((f: any) => {
             if (batchId.startsWith('synthetic_')) {
@@ -1304,13 +1414,17 @@ class DatabaseService {
             return f;
         });
 
-        localStorage.setItem('membership_freezes', JSON.stringify(updated));
+        safeStorage.setItem('membership_freezes', JSON.stringify(updated));
         await Promise.all(memberIds.map(id => this.syncMemberEndDate(id as string)));
         await this.logAction('UPDATE_BULK_FREEZE', `Bulk suspension updated for batch: ${batchId}`);
     }
   }
 
   async getMembershipTypes(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[]): Promise<MembershipType[]> {
+    const cacheKey = `company_membership_types_cache_${scopeId || 'all'}_${isProperty}`;
+    const local = safeStorage.getItem(cacheKey);
+    const cached = safeParseJSON<MembershipType[]>(local, []);
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         let query = supabase.from('membership_types').select('*');
@@ -1329,17 +1443,19 @@ class DatabaseService {
         }
         const { data, error } = await query;
         if (error) throw error;
-        return (data || []) as MembershipType[];
-      }, []);
+        const res = (data || []) as MembershipType[];
+        safeStorage.setItem(cacheKey, JSON.stringify(res));
+        return res;
+      }, cached);
     }
-    return [];
+    return cached;
   }
 
   async addMembershipType(type: Omit<MembershipType, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
       const newType = {
         ...type,
-        id: `type_${crypto.randomUUID()}`,
+        id: `type_${generateUUID()}`,
         created_at: new Date().toISOString()
       };
       const { error } = await supabase.from('membership_types').insert([newType]);
@@ -1365,25 +1481,33 @@ class DatabaseService {
   }
 
   async getCategories(outletId?: string): Promise<MembershipCategory[]> {
+    const cacheKey = `company_categories_cache_${outletId || 'all'}`;
+    const local = safeStorage.getItem(cacheKey);
+    const cached = safeParseJSON<MembershipCategory[]>(local, []);
+
     if (this.isSupabase()) {
-      let query = supabase.from('membership_categories').select('*');
-      if (outletId) query = query.eq('outlet_id', outletId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []) as MembershipCategory[];
+      return this.safeCall(async () => {
+        let query = supabase.from('membership_categories').select('*');
+        if (outletId) query = query.eq('outlet_id', outletId);
+        const { data, error } = await query;
+        if (error) throw error;
+        const res = (data || []) as MembershipCategory[];
+        safeStorage.setItem(cacheKey, JSON.stringify(res));
+        return res;
+      }, cached);
     }
-    return JSON.parse(localStorage.getItem('membership_categories') || '[]');
+    return safeParseJSON<MembershipCategory[]>(safeStorage.getItem('membership_categories'), []);
   }
 
   async addCategory(cat: Omit<MembershipCategory, 'id'>) {
     if (this.isSupabase()) {
-      const { error } = await supabase.from('membership_categories').insert([{ ...cat, id: `cat_${crypto.randomUUID()}` }]);
+      const { error } = await supabase.from('membership_categories').insert([{ ...cat, id: `cat_${generateUUID()}` }]);
       if (error) throw error;
       await this.logAction('CREATE_CATEGORY', `Created membership tier: ${cat.name} (Base Rate: ${cat.base_rate})`, cat.outlet_id);
     } else {
-      const existing = JSON.parse(localStorage.getItem('membership_categories') || '[]');
-      const newId = `cat_${crypto.randomUUID()}`;
-      localStorage.setItem('membership_categories', JSON.stringify([...existing, { ...cat, id: newId }]));
+      const existing = safeParseJSON<any[]>(safeStorage.getItem('membership_categories'), []);
+      const newId = `cat_${generateUUID()}`;
+      safeStorage.setItem('membership_categories', JSON.stringify([...existing, { ...cat, id: newId }]));
       await this.logAction('CREATE_CATEGORY', `Created membership tier locally: ${cat.name}`);
     }
   }
@@ -1409,9 +1533,9 @@ class DatabaseService {
         };
         await this.logAction('CATEGORY_HISTORY_ENTRY', JSON.stringify(historyEntry));
     } else {
-        const existing = JSON.parse(localStorage.getItem('membership_categories') || '[]');
+        const existing = JSON.parse(safeStorage.getItem('membership_categories') || '[]');
         const updated = existing.map((c: any) => c.id === id ? { ...c, ...updates } : c);
-        localStorage.setItem('membership_categories', JSON.stringify(updated));
+        safeStorage.setItem('membership_categories', JSON.stringify(updated));
         await this.logAction('UPDATE_CATEGORY', `Updated membership tier locally: ${id}`);
     }
   }
@@ -1422,9 +1546,9 @@ class DatabaseService {
         if (error) throw error;
         await this.logAction('DELETE_CATEGORY', `Deleted membership tier ID: ${id}`);
     } else {
-        const existing = JSON.parse(localStorage.getItem('membership_categories') || '[]');
+        const existing = JSON.parse(safeStorage.getItem('membership_categories') || '[]');
         const updated = existing.filter((c: any) => c.id !== id);
-        localStorage.setItem('membership_categories', JSON.stringify(updated));
+        safeStorage.setItem('membership_categories', JSON.stringify(updated));
         await this.logAction('DELETE_CATEGORY', `Deleted membership tier locally: ${id}`);
     }
   }
@@ -1438,14 +1562,14 @@ class DatabaseService {
     };
     
     // Always check local storage first for immediate fallback availability
-    const local = localStorage.getItem('company_settings_cache');
+    const local = safeStorage.getItem('company_settings_cache');
     let current = local ? JSON.parse(local) : defaultSettings;
 
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
         if (data) {
-          localStorage.setItem('company_settings_cache', JSON.stringify(data));
+          safeStorage.setItem('company_settings_cache', JSON.stringify(data));
           return data as CompanySettings;
         }
         return current;
@@ -1456,7 +1580,7 @@ class DatabaseService {
 
   async updateSettings(settings: CompanySettings) {
     // 1. Update localStorage immediately for cross-tab speed
-    localStorage.setItem('company_settings_cache', JSON.stringify(settings));
+    safeStorage.setItem('company_settings_cache', JSON.stringify(settings));
 
     if (this.isSupabase()) {
       const { error } = await supabase.from('company_settings').upsert({ ...settings, id: 'global' });
@@ -1488,14 +1612,19 @@ class DatabaseService {
   }
 
   async getCurrencies(): Promise<Currency[]> {
+    const local = safeStorage.getItem('company_currencies_cache');
+    const cached = safeParseJSON<Currency[]>(local, []);
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('currencies').select('*');
         if (error) throw error;
-        return (data || []) as Currency[];
-      }, []);
+        const res = (data || []) as Currency[];
+        safeStorage.setItem('company_currencies_cache', JSON.stringify(res));
+        return res;
+      }, cached);
     }
-    return [];
+    return cached;
   }
 
   async addCurrency(curr: Omit<Currency, 'id'>) {
@@ -1542,14 +1671,19 @@ class DatabaseService {
   }
 
   async getRoles(): Promise<Role[]> {
+    const local = safeStorage.getItem('company_roles_cache');
+    const cached = safeParseJSON<Role[]>(local, []);
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('roles').select('*');
         if (error) throw error;
-        return (data || []) as Role[];
-      }, []);
+        const res = (data || []) as Role[];
+        safeStorage.setItem('company_roles_cache', JSON.stringify(res));
+        return res;
+      }, cached);
     }
-    return [];
+    return cached;
   }
 
   async addRole(role: Omit<Role, 'id'>) {
@@ -1576,19 +1710,24 @@ class DatabaseService {
   }
 
   async getOutlets(): Promise<Outlet[]> {
+    const local = safeStorage.getItem('company_outlets_cache');
+    const cached = safeParseJSON<Outlet[]>(local, []);
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('outlets').select('*');
         if (error) throw error;
-        return (data || []) as Outlet[];
-      }, []);
+        const res = (data || []) as Outlet[];
+        safeStorage.setItem('company_outlets_cache', JSON.stringify(res));
+        return res;
+      }, cached);
     }
-    return [];
+    return cached;
   }
 
   async addOutlet(outlet: Omit<Outlet, 'id'>) {
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('outlets').insert([{ ...outlet, id: crypto.randomUUID() }]).select();
+        const { data, error } = await supabase.from('outlets').insert([{ ...outlet, id: generateUUID() }]).select();
         if (error) throw error;
         await this.logAction('CREATE_OUTLET', `Facility outlet commissioned: ${outlet.name}`);
         return data;
@@ -1629,7 +1768,7 @@ class DatabaseService {
 
   async addMassageRoom(room: Omit<MassageRoom, 'id'>) {
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('massage_rooms').insert([{ ...room, id: crypto.randomUUID() }]).select();
+        const { data, error } = await supabase.from('massage_rooms').insert([{ ...room, id: generateUUID() }]).select();
         if (error) throw error;
         await this.logAction('CREATE_ROOM', `Massage room added: ${room.name}`);
         return data;
@@ -1653,19 +1792,24 @@ class DatabaseService {
   }
 
   async getProperties(): Promise<Property[]> {
+    const local = safeStorage.getItem('company_properties_cache');
+    const cached = safeParseJSON<Property[]>(local, []);
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('properties').select('*');
         if (error) throw error;
-        return (data || []) as Property[];
-      }, []);
+        const res = (data || []) as Property[];
+        safeStorage.setItem('company_properties_cache', JSON.stringify(res));
+        return res;
+      }, cached);
     }
-    return [];
+    return cached;
   }
 
   async addProperty(prop: Omit<Property, 'id'>) {
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('properties').insert([{ ...prop, id: crypto.randomUUID() }]).select();
+        const { data, error } = await supabase.from('properties').insert([{ ...prop, id: generateUUID() }]).select();
         if (error) throw error;
         await this.logAction('CREATE_PROPERTY', `Property asset registered: ${prop.name}`);
         return data;
@@ -1777,13 +1921,13 @@ class DatabaseService {
 
   async addInventoryLog(log: Omit<InventoryLog, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
-      await supabase.from('inventory_logs').insert([{ ...log, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
+      await supabase.from('inventory_logs').insert([{ ...log, id: generateUUID(), created_at: new Date().toISOString() }]);
     }
   }
 
   async addInventoryItem(item: Omit<InventoryItem, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('inventory').insert([{ ...item, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select().single();
+        const { data, error } = await supabase.from('inventory').insert([{ ...item, id: generateUUID(), created_at: new Date().toISOString() }]).select().single();
         if (error) throw error;
         
         // Log initial stock
@@ -1908,7 +2052,7 @@ class DatabaseService {
 
   async addSale(sale: Omit<Sale, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
-        const { data: newSale, error } = await supabase.from('sales').insert([{ ...sale, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select().single();
+        const { data: newSale, error } = await supabase.from('sales').insert([{ ...sale, id: generateUUID(), created_at: new Date().toISOString() }]).select().single();
         if (error) throw error;
         await this.logAction('POS_SALE', `Processed sale: ${sale.quantity}x ${sale.item_name} for ${sale.guest_name || 'Walk-in'} (Total: ${sale.net_amount})`, sale.outlet_id);
         
@@ -2044,12 +2188,12 @@ class DatabaseService {
         if (error) throw error;
         return data as Guest;
       } else {
-        const { data, error } = await supabase.from('guests').insert([{ ...guest, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select().single();
+        const { data, error } = await supabase.from('guests').insert([{ ...guest, id: generateUUID(), created_at: new Date().toISOString() }]).select().single();
         if (error) throw error;
         return data as Guest;
       }
     }
-    return { ...guest, id: crypto.randomUUID(), created_at: new Date().toISOString() } as Guest;
+    return { ...guest, id: generateUUID(), created_at: new Date().toISOString() } as Guest;
   }
 
   async deleteGuest(id: string) {
@@ -2154,7 +2298,7 @@ class DatabaseService {
 
   async addTherapist(therapist: Omit<Therapist, 'id'>) {
     if (this.isSupabase()) {
-        const id = crypto.randomUUID();
+        const id = generateUUID();
         const { type, ...therapistData } = therapist;
         const { data, error } = await supabase.from('therapists').insert([{ ...therapistData, id }]).select();
         if (error) throw error;
@@ -2241,7 +2385,7 @@ class DatabaseService {
 
   async addMassageType(type: Omit<MassageType, 'id'>) {
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('massage_types').insert([{ ...type, id: crypto.randomUUID() }]).select();
+        const { data, error } = await supabase.from('massage_types').insert([{ ...type, id: generateUUID() }]).select();
         if (error) throw error;
         await this.logAction('CREATE_TREATMENT', `Service portfolio item added: ${type.name}`, type.outlet_id);
         return data;
@@ -2323,7 +2467,7 @@ class DatabaseService {
   async addMassageBooking(booking: Omit<MassageBooking, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
       await this.safeCall(async () => {
-        const { error } = await supabase.from('massage_bookings').insert([{ ...booking, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
+        const { error } = await supabase.from('massage_bookings').insert([{ ...booking, id: generateUUID(), created_at: new Date().toISOString() }]);
         if (error) throw error;
         await this.logAction('CREATE_BOOKING', `Created booking on ${booking.date} at ${booking.start_time} (Therapist ID: ${booking.therapist_id})`, booking.outlet_id);
         
@@ -2667,7 +2811,7 @@ class DatabaseService {
 
   async addIncentiveRule(rule: Omit<IncentiveRule, 'id'>) {
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('incentive_rules').insert([{ ...rule, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select();
+        const { data, error } = await supabase.from('incentive_rules').insert([{ ...rule, id: generateUUID(), created_at: new Date().toISOString() }]).select();
         if (error) throw error;
         await this.logAction('CREATE_INCENTIVE', `Yield strategy authorized: ${rule.name}`);
         return data;
@@ -2694,11 +2838,11 @@ class DatabaseService {
         await this.logAction('UPDATE_MEMBER_NOTES', `Member notes updated for ID: ${id}`);
     } else {
         // Local Mode Fallback
-        const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
+        const members = JSON.parse(safeStorage.getItem('membership_members') || '[]');
         const mIndex = members.findIndex((mem: any) => mem.id === id);
         if (mIndex !== -1) {
             members[mIndex] = { ...members[mIndex], notes };
-            localStorage.setItem('membership_members', JSON.stringify(members));
+            safeStorage.setItem('membership_members', JSON.stringify(members));
             await this.logAction('UPDATE_MEMBER_NOTES', `Member notes updated locally for ID: ${id}`);
         }
     }
@@ -2711,7 +2855,7 @@ class DatabaseService {
       if (error) throw error;
       return (data || []) as ReportRecipient[];
     }
-    return JSON.parse(localStorage.getItem('membership_report_recipients') || '[]') as ReportRecipient[];
+    return JSON.parse(safeStorage.getItem('membership_report_recipients') || '[]') as ReportRecipient[];
   }
 
   async addReportRecipient(recipient: Omit<ReportRecipient, 'id' | 'created_at'>) {
@@ -2727,7 +2871,7 @@ class DatabaseService {
     } else {
       const recipients = await this.getReportRecipients();
       recipients.push(newRecipient);
-      localStorage.setItem('membership_report_recipients', JSON.stringify(recipients));
+      safeStorage.setItem('membership_report_recipients', JSON.stringify(recipients));
     }
     await this.logAction('ADD_RECIPIENT', `Report recipient added: ${recipient.email}`);
     return newRecipient;
@@ -2740,7 +2884,7 @@ class DatabaseService {
     } else {
       const recipients = await this.getReportRecipients();
       const filtered = recipients.filter(r => r.id !== id);
-      localStorage.setItem('membership_report_recipients', JSON.stringify(filtered));
+      safeStorage.setItem('membership_report_recipients', JSON.stringify(filtered));
     }
     await this.logAction('DELETE_RECIPIENT', `Report recipient removed: ${id}`);
   }
@@ -2754,7 +2898,7 @@ class DatabaseService {
       const index = recipients.findIndex(r => r.id === id);
       if (index !== -1) {
         recipients[index] = { ...recipients[index], ...updates };
-        localStorage.setItem('membership_report_recipients', JSON.stringify(recipients));
+        safeStorage.setItem('membership_report_recipients', JSON.stringify(recipients));
       }
     }
     await this.logAction('UPDATE_RECIPIENT', `Report recipient updated: ${id}`);
@@ -2770,7 +2914,7 @@ class DatabaseService {
       if (error) throw error;
       return (data || []) as CustomReportConfig[];
     }
-    const reports = JSON.parse(localStorage.getItem('membership_custom_reports') || '[]') as CustomReportConfig[];
+    const reports = JSON.parse(safeStorage.getItem('membership_custom_reports') || '[]') as CustomReportConfig[];
     let filtered = reports;
     if (propertyId) filtered = filtered.filter(r => r.property_id === propertyId);
     if (outletId && outletId !== 'all') filtered = filtered.filter(r => r.outlet_id === outletId);
@@ -2790,7 +2934,7 @@ class DatabaseService {
     } else {
       const reports = await this.getCustomReports();
       reports.push(newReport);
-      localStorage.setItem('membership_custom_reports', JSON.stringify(reports));
+      safeStorage.setItem('membership_custom_reports', JSON.stringify(reports));
     }
     await this.logAction('ADD_CUSTOM_REPORT', `Custom report defined: ${config.name}`);
     return newReport;
@@ -2805,7 +2949,7 @@ class DatabaseService {
       const index = reports.findIndex(r => r.id === id);
       if (index !== -1) {
         reports[index] = { ...reports[index], ...updates };
-        localStorage.setItem('membership_custom_reports', JSON.stringify(reports));
+        safeStorage.setItem('membership_custom_reports', JSON.stringify(reports));
       }
     }
     await this.logAction('UPDATE_CUSTOM_REPORT', `Custom report modified: ${id}`);
@@ -2818,7 +2962,7 @@ class DatabaseService {
     } else {
       const reports = await this.getCustomReports();
       const filtered = reports.filter(r => r.id !== id);
-      localStorage.setItem('membership_custom_reports', JSON.stringify(filtered));
+      safeStorage.setItem('membership_custom_reports', JSON.stringify(filtered));
     }
     await this.logAction('DELETE_CUSTOM_REPORT', `Custom report removed: ${id}`);
   }
@@ -2890,7 +3034,7 @@ class DatabaseService {
   }
 
   private getLocalNotifications(userId?: string, outletId?: string): Notification[] {
-    const all = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    const all = JSON.parse(safeStorage.getItem('membership_notifications') || '[]') as Notification[];
     console.log('getLocalNotifications: all count', all.length, 'userId', userId);
     let filtered = all;
     
@@ -3026,7 +3170,7 @@ class DatabaseService {
             title, 
             body, 
             url,
-            id: crypto.randomUUID(), 
+            id: generateUUID(), 
             icon: '/notification-icon.png',
             tag: broadcast ? 'global-staff-alert' : 'direct-alert'
         };
@@ -3062,18 +3206,22 @@ class DatabaseService {
   private broadcastNotificationLocally(notification: Notification) {
     // Broadcast for local mode real-time updates across tabs
     if (typeof BroadcastChannel !== 'undefined') {
-      const bc = new BroadcastChannel('notifications_channel');
-      bc.postMessage(notification);
-      bc.close();
+      try {
+        const bc = new BroadcastChannel('notifications_channel');
+        bc.postMessage(notification);
+        bc.close();
+      } catch (e) {
+        console.warn("BroadcastChannel failed", e);
+      }
     }
     // Dispatch custom event for same-tab updates
     // window.dispatchEvent(new CustomEvent('notification_received', { detail: notification }));
   }
 
   private saveLocalNotification(notification: Notification) {
-    const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]');
+    const notifications = JSON.parse(safeStorage.getItem('membership_notifications') || '[]');
     notifications.push(notification);
-    localStorage.setItem('membership_notifications', JSON.stringify(notifications));
+    safeStorage.setItem('membership_notifications', JSON.stringify(notifications));
   }
 
   async markNotificationAsRead(id: string, userId?: string) {
@@ -3154,7 +3302,7 @@ class DatabaseService {
   }
 
   private updateLocalNotification(id: string, updates: Partial<Notification>, userId?: string) {
-    const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    const notifications = JSON.parse(safeStorage.getItem('membership_notifications') || '[]') as Notification[];
     const index = notifications.findIndex(n => n.id === id);
     if (index !== -1) {
       const n = notifications[index];
@@ -3170,12 +3318,12 @@ class DatabaseService {
       } else {
         notifications[index] = { ...n, ...updates };
       }
-      localStorage.setItem('membership_notifications', JSON.stringify(notifications));
+      safeStorage.setItem('membership_notifications', JSON.stringify(notifications));
     }
   }
 
   private markAllLocalNotificationsAsRead(userId?: string, outletId?: string, ids?: string[]) {
-    const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    const notifications = JSON.parse(safeStorage.getItem('membership_notifications') || '[]') as Notification[];
     const updated = notifications.map(n => {
       // Check if already read by this user
       const isRead = n.user_id === userId ? n.read : (n.read_by?.includes(userId || '') || false);
@@ -3197,7 +3345,7 @@ class DatabaseService {
       }
       return n;
     });
-    localStorage.setItem('membership_notifications', JSON.stringify(updated));
+    safeStorage.setItem('membership_notifications', JSON.stringify(updated));
   }
 
   async deleteNotification(id: string, userId?: string) {
@@ -3256,22 +3404,26 @@ class DatabaseService {
     let bc: BroadcastChannel | null = null;
     
     if (typeof BroadcastChannel !== 'undefined') {
-      bc = new BroadcastChannel('notifications_channel');
-      bc.onmessage = (event) => {
-        const notification = event.data as Notification;
-        // If staff (not admin), only match if explicitly targeted to them
-        // If admin, match if targeted to them OR global (null user_id)
-        const userMatch = isAdmin 
-          ? (notification.user_id === userId || !notification.user_id) 
-          : (notification.user_id === userId);
+      try {
+        bc = new BroadcastChannel('notifications_channel');
+        bc.onmessage = (event) => {
+          const notification = event.data as Notification;
+          // If staff (not admin), only match if explicitly targeted to them
+          // If admin, match if targeted to them OR global (null user_id)
+          const userMatch = isAdmin 
+            ? (notification.user_id === userId || !notification.user_id) 
+            : (notification.user_id === userId);
+            
+          const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
           
-        const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
-        
-        if (userMatch && outletMatch) {
-          // We assume BroadcastChannel only sends new notifications
-          callback({ eventType: 'INSERT', new: notification });
-        }
-      };
+          if (userMatch && outletMatch) {
+            // We assume BroadcastChannel only sends new notifications
+            callback({ eventType: 'INSERT', new: notification });
+          }
+        };
+      } catch(e) {
+        console.warn("Broadcast channel init failed", e);
+      }
     }
 
     // Only subscribe to Supabase if enabled
@@ -3346,25 +3498,25 @@ class DatabaseService {
   }
 
   private deleteLocalNotification(id: string, userId?: string) {
-    const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    const notifications = JSON.parse(safeStorage.getItem('membership_notifications') || '[]') as Notification[];
     if (userId) {
       const index = notifications.findIndex(n => n.id === id);
       if (index !== -1) {
         const dismissedBy = (notifications[index].dismissed_by || []) as string[];
         if (!dismissedBy.includes(userId)) {
           notifications[index].dismissed_by = [...dismissedBy, userId];
-          localStorage.setItem('membership_notifications', JSON.stringify(notifications));
+          safeStorage.setItem('membership_notifications', JSON.stringify(notifications));
         }
       }
     } else {
       // Fallback to actual delete if no userId (should not happen in this new flow)
       const filtered = notifications.filter(n => n.id !== id);
-      localStorage.setItem('membership_notifications', JSON.stringify(filtered));
+      safeStorage.setItem('membership_notifications', JSON.stringify(filtered));
     }
   }
 
   private deleteAllLocalNotifications(userId?: string, outletId?: string, ids?: string[]) {
-    const notifications = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    const notifications = JSON.parse(safeStorage.getItem('membership_notifications') || '[]') as Notification[];
     if (userId) {
       const updated = notifications.map(n => {
         let shouldDismiss = false;
@@ -3384,7 +3536,7 @@ class DatabaseService {
         }
         return n;
       });
-      localStorage.setItem('membership_notifications', JSON.stringify(updated));
+      safeStorage.setItem('membership_notifications', JSON.stringify(updated));
     } else {
       // Fallback to actual delete
       const filtered = notifications.filter(n => {
@@ -3395,7 +3547,7 @@ class DatabaseService {
         const outletMatch = !outletId || !n.outlet_id || n.outlet_id === outletId;
         return !(userMatch && outletMatch);
       });
-      localStorage.setItem('membership_notifications', JSON.stringify(filtered));
+      safeStorage.setItem('membership_notifications', JSON.stringify(filtered));
     }
   }
 
@@ -3433,9 +3585,9 @@ class DatabaseService {
   }
 
   private saveLocalPushSubscription(userId: string, subscription: any) {
-    const subs = JSON.parse(localStorage.getItem('membership_push_subscriptions') || '{}');
+    const subs = JSON.parse(safeStorage.getItem('membership_push_subscriptions') || '{}');
     subs[userId] = subscription;
-    localStorage.setItem('membership_push_subscriptions', JSON.stringify(subs));
+    safeStorage.setItem('membership_push_subscriptions', JSON.stringify(subs));
   }
 
   async deletePushSubscription(userId: string, endpoint: string) {
@@ -3446,9 +3598,9 @@ class DatabaseService {
         console.warn('Failed to delete push subscription from Supabase', e);
       }
     }
-    const subs = JSON.parse(localStorage.getItem('membership_push_subscriptions') || '{}');
+    const subs = JSON.parse(safeStorage.getItem('membership_push_subscriptions') || '{}');
     delete subs[userId];
-    localStorage.setItem('membership_push_subscriptions', JSON.stringify(subs));
+    safeStorage.setItem('membership_push_subscriptions', JSON.stringify(subs));
   }
 }
 

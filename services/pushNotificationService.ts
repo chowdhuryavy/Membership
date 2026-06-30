@@ -1,4 +1,17 @@
 
+const safeStorage = {
+  getItem(key: string): string | null {
+    try { return localStorage.getItem(key); } catch(e) { return null; }
+  },
+  setItem(key: string, value: string): void {
+    try { localStorage.setItem(key, value); } catch(e) {}
+  },
+  removeItem(key: string): void {
+    try { localStorage.removeItem(key); } catch(e) {}
+  }
+};
+
+
 /// <reference types="vite/client" />
 
 import { db } from './mockSupabase';
@@ -80,10 +93,14 @@ export class PushNotificationService {
   }
 
   static async unsubscribeUser(userId: string) {
-    if (localStorage.getItem('mock_push_permission') === 'granted') {
-        localStorage.removeItem('mock_push_permission');
-        await this.removeSubscriptionFromBackend(userId, { endpoint: 'mock-endpoint-' + userId } as any);
-        return true;
+    try {
+        if (safeStorage.getItem('mock_push_permission') === 'granted') {
+            safeStorage.removeItem('mock_push_permission');
+            await this.removeSubscriptionFromBackend(userId, { endpoint: 'mock-endpoint-' + userId } as any);
+            return true;
+        }
+    } catch (e) {
+        console.warn("Storage access failed:", e);
     }
 
     if (!await this.isSupported()) return false;

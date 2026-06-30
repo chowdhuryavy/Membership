@@ -47,7 +47,7 @@ import StaffProfileView from './StaffProfileView';
 import { motion, AnimatePresence } from 'motion/react';
 
 const StaffPage = () => {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { settings, currentOutlet, currentProperty, hasPermission, outlets = [], setPageLoading } = useSettings();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,14 +119,14 @@ const StaffPage = () => {
 
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user || !outlets) return [];
-    if (user.role_id?.toLowerCase() === 'admin') {
+    if (isSuperAdmin) {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }
     return outlets.filter(o => 
         o.property_id === currentProperty.id && 
         user.allowed_outlets?.includes(o.id)
     );
-  }, [currentProperty, user, outlets]);
+  }, [currentProperty, user, outlets, isSuperAdmin]);
 
   // Security Check
   const canView = user && hasPermission(user.role_id, 'staff:view');

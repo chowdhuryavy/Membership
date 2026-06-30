@@ -1,3 +1,16 @@
+
+const safeStorage = {
+  getItem(key: string): string | null {
+    try { return localStorage.getItem(key); } catch(e) { return null; }
+  },
+  setItem(key: string, value: string): void {
+    try { localStorage.setItem(key, value); } catch(e) {}
+  },
+  removeItem(key: string): void {
+    try { localStorage.removeItem(key); } catch(e) {}
+  }
+};
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -40,8 +53,14 @@ const Login = () => {
     } else if (requiresPasswordChange) {
       setMustChangePassword(true);
     } else {
-      const session = JSON.parse(localStorage.getItem('membership_session') || '{}');
-      db.logAction('AUTH_LOGIN', `User session authenticated for: ${session.name || email} (${email.toLowerCase()}) at ${new Date().toLocaleString()}`);
+      let sessionName = email;
+      try {
+          const session = JSON.parse(safeStorage.getItem('membership_session') || '{}');
+          if (session.name) sessionName = session.name;
+      } catch (e) {
+          console.warn("Storage read failed:", e);
+      }
+      db.logAction('AUTH_LOGIN', `User session authenticated for: ${sessionName} (${email.toLowerCase()}) at ${new Date().toLocaleString()}`);
       navigate('/');
     }
   };
@@ -67,7 +86,7 @@ const Login = () => {
   const companyName = settings?.name || 'Health Club Management';
 
   useEffect(() => {
-    localStorage.setItem('preferred_portal', 'admin');
+    safeStorage.setItem('preferred_portal', 'admin');
   }, []);
 
   return (

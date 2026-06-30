@@ -1,4 +1,14 @@
 
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
@@ -483,7 +493,7 @@ const Categories = () => {
                                                     const val = nameEl.value.trim();
                                                     const qty = parseInt(qtyEl.value, 10) || 1;
                                                     if (val) {
-                                                        const newPrivilege: CategoryPrivilege = { id: crypto.randomUUID(), name: val, quantity: qty };
+                                                        const newPrivilege: CategoryPrivilege = { id: generateUUID(), name: val, quantity: qty };
                                                         setFormData({ ...formData, privileges: [...formData.privileges, newPrivilege] });
                                                         nameEl.value = '';
                                                         qtyEl.value = '1';
@@ -502,7 +512,7 @@ const Categories = () => {
                                                 const val = nameEl.value.trim();
                                                 const qty = parseInt(qtyEl.value, 10) || 1;
                                                 if (val) {
-                                                    const newPrivilege: CategoryPrivilege = { id: crypto.randomUUID(), name: val, quantity: qty };
+                                                    const newPrivilege: CategoryPrivilege = { id: generateUUID(), name: val, quantity: qty };
                                                     setFormData({ ...formData, privileges: [...formData.privileges, newPrivilege] });
                                                     nameEl.value = '';
                                                     qtyEl.value = '1';

@@ -1,11 +1,44 @@
 
+const safeSessionStorage = {
+  getItem(key: string): string | null {
+    try { return sessionStorage.getItem(key); } catch(e) { return null; }
+  },
+  setItem(key: string, value: string): void {
+    try { sessionStorage.setItem(key, value); } catch(e) {}
+  },
+  removeItem(key: string): void {
+    try { sessionStorage.removeItem(key); } catch(e) {}
+  }
+};
+
+
+const safeStorage = {
+  getItem(key: string): string | null {
+    try { return localStorage.getItem(key); } catch(e) { return null; }
+  },
+  setItem(key: string, value: string): void {
+    try { localStorage.setItem(key, value); } catch(e) {}
+  },
+  removeItem(key: string): void {
+    try { localStorage.removeItem(key); } catch(e) {}
+  }
+};
+
+
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { UserProfile } from '../types';
 import { db } from '../services/mockSupabase';
 
 export const isSuperAdminRole = (roleId: string | undefined | null) => {
     const id = roleId?.toLowerCase();
-    return id === 'super_admin' || id === 'superadmin' || id === 'owner' || id === 'admin' || id === 'system_admin' || id === 'system_administrator' || id === 'administrator';
+    return id === 'super_admin' || 
+           id === 'superadmin' || 
+           id === 'owner' || 
+           id === 'admin' || 
+           id === 'system_admin' || 
+           id === 'system_administrator' || 
+           id === 'administrator' ||
+           id === '0958cdaa-7dd0-48bd-a80d-21d856d2526b';
 };
 
 export const isSuperAdmin = (user: UserProfile | null) => {
@@ -30,15 +63,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(() => {
-      const stored = localStorage.getItem('membership_session');
-      if (stored) {
-          const parsed = JSON.parse(stored);
-          // NEW: If it's an admin and there's no session heartbeat in this tab, don't set user yet
-          // The useEffect will try to recover it from other tabs or logout if none
-          if (isSuperAdminRole(parsed?.role_id) && !sessionStorage.getItem('admin_session_active')) {
-              return null;
+      try {
+          const stored = safeStorage.getItem('membership_session');
+          if (stored) {
+              return JSON.parse(stored);
           }
-          return parsed;
+      } catch (e) {
+          console.warn('Storage access failed:', e);
       }
       return null;
   });
@@ -52,18 +83,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('membership_session');
-    sessionStorage.removeItem('membership_session');
-    sessionStorage.removeItem('admin_session_active');
-    localStorage.removeItem('membership_last_outlet');
+    try {
+        safeStorage.removeItem('membership_session');
+        safeSessionStorage.removeItem('membership_session');
+        safeSessionStorage.removeItem('admin_session_active');
+        safeStorage.removeItem('membership_last_outlet');
+    } catch (e) {
+        console.warn('Storage cleanup failed:', e);
+    }
   };
 
   const refreshUser = async () => {
-      const storedUser = localStorage.getItem('membership_session');
-      if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          
-          try {
+      try {
+          const storedUser = safeStorage.getItem('membership_session');
+          if (storedUser) {
+              const parsed = JSON.parse(storedUser);
               const users = await db.getUsers();
               const freshUser = users.find(u => u.email.toLowerCase() === parsed.email.toLowerCase());
               if (freshUser) {
@@ -74,74 +108,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   const overrides = await db.getPermissionOverrides(freshUser.id);
                   const hydrated = { ...freshUser, overrides };
                   setUser(hydrated);
-                  localStorage.setItem('membership_session', JSON.stringify(hydrated));
+                  safeStorage.setItem('membership_session', JSON.stringify(hydrated));
               }
-          } catch (e) {
-              console.warn("User state sync failed, using cached session.");
           }
+      } catch (e) {
+          console.warn("User state sync failed, using cached session or storage blocked.", e);
       }
   };
 
   useEffect(() => {
-    const channel = new BroadcastChannel('auth_session_sync');
-    
     const init = async () => {
-        const stored = localStorage.getItem('membership_session');
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            if (isSuperAdminRole(parsed.role_id)) {
-                // If we don't have a local session lock, ask other tabs
-                if (!sessionStorage.getItem('admin_session_active')) {
-                    channel.postMessage({ type: 'REQUEST_SESSION_STATUS' });
-                    
-                    // Delay to wait for answers from other tabs
-                    await new Promise(resolve => setTimeout(resolve, 600));
-                    
-                    if (!sessionStorage.getItem('admin_session_active')) {
-                        // No other tab responded. Force logout for admins.
-                        console.log("No active admin session heartbeat found. Terminating session.");
-                        logout();
-                    } else {
-                        // Recovered from another tab!
-                        await refreshUser();
-                    }
-                } else {
-                    // We already have the heartbeat in this tab
-                    await refreshUser();
-                }
-            } else {
-                // Not an admin, standard persistence applies
+        try {
+            const stored = safeStorage.getItem('membership_session');
+            if (stored) {
                 await refreshUser();
             }
+        } catch (e) {
+            console.warn("Storage access failed during init:", e);
         }
-        
         setIsLoading(false);
     };
 
-    channel.onmessage = (event) => {
-        if (event.data.type === 'REQUEST_SESSION_STATUS') {
-            if (sessionStorage.getItem('admin_session_active')) {
-                channel.postMessage({ type: 'SESSION_ALIVE' });
-            }
-        } else if (event.data.type === 'SESSION_ALIVE') {
-            sessionStorage.setItem('admin_session_active', 'true');
-        }
-    };
-
     init();
-
-    return () => {
-        channel.close();
-    };
   }, []);
 
   const login = async (email: string, password: string) => {
     const { user: foundUser, error, requiresPasswordChange } = await db.login(email, password);
     if (foundUser) {
       setUser(foundUser);
-      localStorage.setItem('membership_session', JSON.stringify(foundUser));
-      if (isSuperAdminRole(foundUser.role_id)) {
-          sessionStorage.setItem('admin_session_active', 'true');
+      try {
+          safeStorage.setItem('membership_session', JSON.stringify(foundUser));
+          if (isSuperAdminRole(foundUser.role_id)) {
+              safeSessionStorage.setItem('admin_session_active', 'true');
+          }
+      } catch (e) {
+          console.warn("Storage failed during login:", e);
       }
       return { error: null, requiresPasswordChange };
     }
@@ -173,10 +174,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await db.updateUser(user.id, updates);
       const updatedUser = { ...user, ...updates };
       setUser(updatedUser);
-      localStorage.setItem('membership_session', JSON.stringify(updatedUser));
+      safeStorage.setItem('membership_session', JSON.stringify(updatedUser));
       
       if (isSuperAdminRole(updatedUser.role_id)) {
-          sessionStorage.setItem('admin_session_active', 'true');
+          safeSessionStorage.setItem('admin_session_active', 'true');
       }
   };
 

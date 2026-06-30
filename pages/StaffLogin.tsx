@@ -1,3 +1,16 @@
+
+const safeStorage = {
+  getItem(key: string): string | null {
+    try { return localStorage.getItem(key); } catch(e) { return null; }
+  },
+  setItem(key: string, value: string): void {
+    try { localStorage.setItem(key, value); } catch(e) {}
+  },
+  removeItem(key: string): void {
+    try { localStorage.removeItem(key); } catch(e) {}
+  }
+};
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
@@ -23,7 +36,7 @@ const StaffLogin = () => {
       const staff = await db.loginStaff(employeeNumber, password);
       if (staff) {
         // Store staff session
-        localStorage.setItem('staff_session', JSON.stringify(staff));
+        safeStorage.setItem('staff_session', JSON.stringify(staff));
         navigate('/staff-schedule');
       } else {
         setError('Invalid employee number or password, or access denied.');
@@ -38,20 +51,24 @@ const StaffLogin = () => {
   const companyName = settings?.name || 'Health Club Management';
 
   useEffect(() => {
-    localStorage.setItem('preferred_portal', 'staff');
-    
-    // Check for existing session and redirect if valid
-    const sessionStr = localStorage.getItem('staff_session');
-    if (sessionStr) {
-      try {
-        const session = JSON.parse(sessionStr);
-        if (session && session.id) {
-          navigate('/staff-schedule');
+    try {
+        safeStorage.setItem('preferred_portal', 'staff');
+        
+        // Check for existing session and redirect if valid
+        const sessionStr = safeStorage.getItem('staff_session');
+        if (sessionStr) {
+          try {
+            const session = JSON.parse(sessionStr);
+            if (session && session.id) {
+              navigate('/staff-schedule');
+            }
+          } catch (e) {
+            console.error("Invalid session found, clearing...");
+            safeStorage.removeItem('staff_session');
+          }
         }
-      } catch (e) {
-        console.error("Invalid session found, clearing...");
-        localStorage.removeItem('staff_session');
-      }
+    } catch (e) {
+        console.warn("Storage access failed:", e);
     }
   }, [navigate]);
 
