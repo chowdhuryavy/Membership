@@ -1,18 +1,23 @@
-import { supabase } from './services/supabase.ts';
+import { createClient } from '@supabase/supabase-js';
+import { supabaseUrl, supabaseAnonKey } from './services/supabase';
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const go = async () => {
     try {
-        const { data, error } = await supabase.from('profiles').select('*');
+        const { data, error } = await supabase.from('company_settings').select('*').limit(1).maybeSingle();
         if (error) {
-            console.error("Error reading profiles:", error);
+            console.error("Error reading company_settings:", error);
             return;
         }
 
-        console.log(`=== profiles Table Rows (${data?.length || 0}) ===`);
-        data?.forEach(row => {
-            console.log(`- User: ${row.name || row.username} | Email: ${row.email} | Role: ${row.role_id}`);
-            console.log(`  Allowed Outlets:`, row.allowed_outlets);
-        });
+        console.log(`=== company_settings columns ===`);
+        if (data) {
+            console.log(Object.keys(data));
+            console.log("Entire row data:", data);
+        } else {
+            console.log("No row found in company_settings.");
+        }
 
     } catch (e) {
         console.error(e);

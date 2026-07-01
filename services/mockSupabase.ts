@@ -118,14 +118,20 @@ class DatabaseService {
   }
 
   public async safeCall<T>(call: () => Promise<T>, fallback: T): Promise<T> {
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Database call timeout')), 45000)
-    );
+    let timeoutId: NodeJS.Timeout;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Database call timeout')), 45000);
+    });
+    // Prevent unhandled rejection if this promise rejects after Promise.race resolves
+    timeoutPromise.catch(() => {});
+    
     try {
       const result = await Promise.race([call(), timeoutPromise]);
+      clearTimeout(timeoutId!);
       DatabaseService.supabaseFailures = 0;
       return result;
     } catch (e: any) {
+      clearTimeout(timeoutId!);
       DatabaseService.supabaseFailures++;
       DatabaseService.lastFailureTime = Date.now();
       console.warn(`Supabase call failed or timed out (consecutive failures: ${DatabaseService.supabaseFailures})`, e);
@@ -993,6 +999,8 @@ class DatabaseService {
   }
 
   async addFreeze(freeze: Freeze) {
+    let memberName = 'Unknown Member';
+    
     if (this.isSupabase()) {
       const data = { ...freeze, id: freeze.id || this.generateUUID() };
       await supabase.from('freezes').insert([data]);
@@ -1000,8 +1008,7 @@ class DatabaseService {
       
       // Fetch member name for better logging
       const { data: member } = await supabase.from('members').select('guest_name, membership_number, outlet_id').eq('id', freeze.member_id).single();
-      const memberName = member?.guest_name || 'Unknown Member';
-      const memberId = member?.membership_number || freeze.member_id;
+      memberName = member?.guest_name || 'Unknown Member';
       
       await this.logAction('FREEZE_MEMBER', `Account suspended: ${memberName}. Membership extended to ${newEndDate}`, member?.outlet_id);
       
@@ -1023,15 +1030,53 @@ class DatabaseService {
       if (mIndex !== -1) {
         members[mIndex].status = MemberStatus.FROZEN;
         safeStorage.setItem('membership_members', JSON.stringify(members));
+        memberName = members[mIndex].guest_name;
         
-        await this.logAction('FREEZE_MEMBER', `Suspended membership locally for ${members[mIndex].guest_name}.`, members[mIndex].outlet_id);
+        await this.logAction('FREEZE_MEMBER', `Suspended membership locally for ${memberName}.`, members[mIndex].outlet_id);
         await this.addNotification({
           title: 'Membership Suspended',
-          message: `${members[mIndex].guest_name} has suspended their membership for ${freeze.total_days} days.`,
+          message: `${memberName} has suspended their membership for ${freeze.total_days} days.`,
           type: 'warning',
           outlet_id: members[mIndex].outlet_id
         });
       }
+    }
+    
+    // Check for email notifications
+    try {
+      const settings = await this.getSettings();
+      if (settings?.freeze_notification_emails) {
+        const emails = settings.freeze_notification_emails.split(',').map(e => e.trim()).filter(e => e);
+        if (emails.length > 0) {
+          if (this.isSupabase()) {
+            console.log('[Supabase Edge Function] Invoking send-freeze-notification');
+            const { error } = await supabase.functions.invoke('send-freeze-notification', {
+              body: {
+                emails,
+                memberName,
+                totalDays: freeze.total_days,
+                startDate: freeze.start_date
+              }
+            });
+            if (error) {
+              console.error('Edge function failed:', error);
+            } else {
+              console.log('Successfully invoked Edge Function for freeze email');
+            }
+          } else {
+            const { emailService } = await import('./emailService');
+            for (const email of emails) {
+              await emailService.sendEmail(
+                email,
+                `Member Frozen: ${memberName}`,
+                `<h2>Membership Frozen</h2><p>The member <strong>${memberName}</strong> has been frozen for ${freeze.total_days} days starting from ${freeze.start_date}.</p>`
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to send freeze notification email:', e);
     }
   }
 
@@ -1594,13 +1639,20 @@ class DatabaseService {
     // Always check local storage first for immediate fallback availability
     const local = safeStorage.getItem('company_settings_cache');
     let current = local ? JSON.parse(local) : defaultSettings;
+    if (current && current.staff_portal_settings && typeof current.staff_portal_settings === 'object' && !current.freeze_notification_emails) {
+      current.freeze_notification_emails = (current.staff_portal_settings as any).freeze_notification_emails || '';
+    }
 
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
         if (data) {
-          safeStorage.setItem('company_settings_cache', JSON.stringify(data));
-          return data as CompanySettings;
+          const mappedData = { ...data };
+          if (data.staff_portal_settings && typeof data.staff_portal_settings === 'object') {
+            mappedData.freeze_notification_emails = (data.staff_portal_settings as any).freeze_notification_emails || '';
+          }
+          safeStorage.setItem('company_settings_cache', JSON.stringify(mappedData));
+          return mappedData as CompanySettings;
         }
         return current;
       }, current);
@@ -1609,11 +1661,25 @@ class DatabaseService {
   }
 
   async updateSettings(settings: CompanySettings) {
+    // Ensure freeze_notification_emails is saved in staff_portal_settings
+    const updatedStaffPortalSettings = {
+      ...(settings.staff_portal_settings || {}),
+      freeze_notification_emails: settings.freeze_notification_emails || ''
+    };
+    
+    const settingsToSave = {
+      ...settings,
+      staff_portal_settings: updatedStaffPortalSettings
+    };
+
     // 1. Update localStorage immediately for cross-tab speed
-    safeStorage.setItem('company_settings_cache', JSON.stringify(settings));
+    safeStorage.setItem('company_settings_cache', JSON.stringify(settingsToSave));
 
     if (this.isSupabase()) {
-      const { error } = await supabase.from('company_settings').upsert({ ...settings, id: 'global' });
+      // Create a payload without the custom column to avoid SQL column-not-found error in database
+      const { freeze_notification_emails, ...payload } = settingsToSave;
+      
+      const { error } = await supabase.from('company_settings').upsert({ ...payload, id: 'global' });
       if (error) {
         console.error('Error updating settings in Supabase:', error);
         // We don't throw here if we have local storage as a valid secondary source

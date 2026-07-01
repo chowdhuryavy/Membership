@@ -189,6 +189,7 @@ export interface CompanySettings {
   currency_id: string;
   report_title?: string;
   report_subtitle?: string;
+  freeze_notification_emails?: string;
   signatory_config?: Record<string, { prepared?: string, reviewed?: string, approved?: string }>;
   keyboard_shortcuts?: Record<string, string>;
   contract_template?: string; 

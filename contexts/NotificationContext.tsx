@@ -161,7 +161,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       if (!isAutoRefresh) setIsLoading(true);
       const isAdmin = isSuperAdmin;
-      console.log('Fetching notifications for user:', effectiveUserId, 'outlet:', outletId, 'isAdmin:', isAdmin);
       const data = await db.getNotifications(effectiveUserId, outletId, isAdmin);
       
       // Filter by permission
@@ -172,7 +171,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return hasPermission(user?.role_id || '', n.required_permission, user?.id);
       });
 
-      console.log('Fetched notifications count:', filteredData.length);
       // Pre-populate seenIds with existing notifications to prevent alerts on reload
       filteredData.forEach(n => seenIds.current.add(n.id));
       setNotifications(filteredData);

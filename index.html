@@ -99,6 +99,31 @@
       window.addEventListener('unhandledrejection', (e) => {
         console.error("Unhandled Rejection:", e.reason);
       });
+
+      // Clear Service Worker and cache storage in dev/preview environments to prevent "@vitejs/plugin-react can't detect preamble" errors
+      if (window.location.hostname === 'localhost' || window.location.hostname.includes('-dev-') || window.location.hostname.includes('-pre-') || window.location.hostname.includes('127.0.0.1')) {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then((registrations) => {
+            for (let registration of registrations) {
+              registration.unregister().then((success) => {
+                if (success) {
+                  console.log('Dev Service Worker unregistered successfully.');
+                  // Reload once to ensure a clean state without SW interception
+                  window.location.reload();
+                }
+              });
+            }
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then((names) => {
+            for (let name of names) {
+              caches.delete(name);
+              console.log('Cleared dev cache:', name);
+            }
+          });
+        }
+      }
     </script>
 </head>
   <body>

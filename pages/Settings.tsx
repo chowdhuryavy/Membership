@@ -155,7 +155,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'email_config' | 'custom_reports';
 
 const SignatoryConfig = ({
   config = {},
@@ -291,12 +291,13 @@ const SettingsPage = () => {
       { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_booking_engine') && !!currentProperty, icon: Timer },
       { id: 'membership_types', label: 'Membership Types', visible: hasPermission(user?.role_id || '', 'settings:view_membership_types') && !!currentOutlet, icon: Target },
       { id: 'massage_rooms', label: 'Massage Rooms', visible: hasPermission(user?.role_id || '', 'settings:view_massage_rooms') && !!currentProperty, icon: Store },
-      { id: 'reports_config', label: 'Report Distribution', visible: hasPermission(user?.role_id || '', 'settings:view_reports_config'), icon: Mail },
+      { id: 'email_config', label: 'Email Configuration', visible: hasPermission(user?.role_id || '', 'settings:view_reports_config'), icon: Mail },
       { id: 'custom_reports', label: 'Custom Intelligence', visible: hasPermission(user?.role_id || '', 'settings:view_custom_reports'), icon: FileText },
     ].filter(t => t.visible);
   }, [user, roles, hasPermission, currentProperty, currentOutlet]);
 
   const [activeTab, setActiveTab] = useState<TabId>(availableTabs[0]?.id as TabId || 'company');
+  const [activeEmailTab, setActiveEmailTab] = useState<'reports' | 'freeze'>('reports');
 
   useEffect(() => {
     if (!availableTabs.find(t => t.id === activeTab)) {
@@ -511,7 +512,7 @@ const SettingsPage = () => {
           const types = await db.getMembershipTypes(currentOutlet.id);
           setMembershipTypes(types);
       }
-      if (activeTab === 'reports_config') {
+      if (activeTab === 'email_config') {
           const recipients = await db.getReportRecipients();
           setReportRecipients(recipients);
       }
@@ -1005,6 +1006,7 @@ const SettingsPage = () => {
                               <Input label="Report Title" value={companyForm.report_title || ''} onChange={e => setCompanyForm({...companyForm, report_title: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                               <Input label="Report Subtitle" value={companyForm.report_subtitle || ''} onChange={e => setCompanyForm({...companyForm, report_subtitle: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                           </div>
+
                           <SignatoryConfig 
                             labelPrefix="Global"
                             config={companyForm.signatory_config}
@@ -1588,36 +1590,54 @@ const SettingsPage = () => {
                   </Card>
               )}
 
-              {activeTab === 'reports_config' && (
+              {activeTab === 'email_config' && (
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
-                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
+                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex flex-col gap-6">
                           <div className="flex items-center gap-5">
                               <Mail className="w-8 h-8 text-indigo-600" />
-                              <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Report Distribution</CardTitle>
+                              <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Email Configuration</CardTitle>
                           </div>
-                          <Button 
-                              onClick={() => { 
-                                  setEditingId(null); 
-                                  setReportRecipientForm({ 
-                                      email: '', 
-                                      property_id: '', 
-                                      outlet_id: 'all', 
-                                      report_type: 'revenue_recognition', 
-                                      send_time: '08:00',
-                                      report_date_type: 'today',
-                                      incentive_dept: 'Massage',
-                                      selected_membership_type_id: 'all',
-                                      is_active: true 
-                                  }); 
-                                  setShowForm(true); 
-                              }} 
-                              className="h-14 px-8 rounded-2xl font-black text-xs uppercase"
-                          >
-                              <Plus className="w-4 h-4 mr-2" /> Authorize Recipient
-                          </Button>
+                          <div className="flex gap-4">
+                              <button 
+                                  onClick={() => { setActiveEmailTab('reports'); setShowForm(false); }} 
+                                  className={`px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${activeEmailTab === 'reports' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-500 border-2 hover:bg-slate-50'}`}
+                              >
+                                  Report Distribution
+                              </button>
+                              <button 
+                                  onClick={() => { setActiveEmailTab('freeze'); setShowForm(false); }} 
+                                  className={`px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${activeEmailTab === 'freeze' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-500 border-2 hover:bg-slate-50'}`}
+                              >
+                                  Freeze Notifications
+                              </button>
+                          </div>
                       </CardHeader>
                       <CardContent className="p-0">
-                          <table className="w-full text-left">
+                          {activeEmailTab === 'reports' && (
+                              <>
+                              <div className="p-8 border-b border-slate-100 flex justify-end">
+                                  <Button 
+                                      onClick={() => { 
+                                          setEditingId(null); 
+                                          setReportRecipientForm({ 
+                                              email: '', 
+                                              property_id: '', 
+                                              outlet_id: 'all', 
+                                              report_type: 'revenue_recognition', 
+                                              send_time: '08:00',
+                                              report_date_type: 'today',
+                                              incentive_dept: 'Massage',
+                                              selected_membership_type_id: 'all',
+                                              is_active: true 
+                                          }); 
+                                          setShowForm(true); 
+                                      }} 
+                                      className="h-14 px-8 rounded-2xl font-black text-xs uppercase"
+                                  >
+                                      <Plus className="w-4 h-4 mr-2" /> Authorize Recipient
+                                  </Button>
+                              </div>
+                              <table className="w-full text-left">
                               <thead className="bg-slate-50 border-b">
                                   <tr>
                                       <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Recipient</th>
@@ -1710,6 +1730,75 @@ const SettingsPage = () => {
                                   )}
                               </tbody>
                           </table>
+                          </>
+                          )}
+
+                          {activeEmailTab === 'freeze' && (
+                              <div className="p-8">
+                                  <div className="p-8 border-2 border-indigo-100 bg-indigo-50/50 rounded-3xl space-y-6">
+                                      <div className="flex items-center gap-3">
+                                          <Mail className="w-6 h-6 text-indigo-600" />
+                                          <h3 className="text-xl font-bold text-indigo-900">Edge Function Delivery</h3>
+                                      </div>
+                                      <p className="text-sm text-indigo-700 font-medium">Configure which email addresses should receive automated system alerts via Supabase Edge Functions whenever a member's contract is frozen/suspended.</p>
+                                      
+                                      <div className="md:col-span-2 space-y-4">
+                                          <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Freeze Notification Recipients *</label>
+                                          {(companyForm.freeze_notification_emails ? companyForm.freeze_notification_emails.split(',').map(e => e.trim()) : ['']).map((email, index, arr) => (
+                                              <div key={index} className="flex gap-2 animate-in slide-in-from-left-2 duration-200">
+                                                  <div className="relative flex-1">
+                                                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                                      <Input 
+                                                          value={email} 
+                                                          onChange={e => {
+                                                              const newEmails = [...arr];
+                                                              newEmails[index] = e.target.value;
+                                                              setCompanyForm({
+                                                                  ...companyForm,
+                                                                  freeze_notification_emails: newEmails.join(', ')
+                                                              });
+                                                          }} 
+                                                          placeholder="e.g. admin@example.com"
+                                                          className="h-14 pl-12 rounded-xl font-bold border-2 w-full bg-white" 
+                                                      />
+                                                  </div>
+                                                  {arr.length > 1 && (
+                                                      <Button 
+                                                          variant="ghost" 
+                                                          onClick={() => {
+                                                              const newEmails = arr.filter((_, i) => i !== index);
+                                                              setCompanyForm({
+                                                                  ...companyForm,
+                                                                  freeze_notification_emails: newEmails.join(', ')
+                                                              });
+                                                          }}
+                                                          className="h-14 w-14 rounded-xl border-2 border-slate-100 text-red-500 hover:bg-red-50 hover:border-red-100 shrink-0 bg-white"
+                                                      >
+                                                          <Trash2 className="w-4 h-4" />
+                                                      </Button>
+                                                  )}
+                                              </div>
+                                          ))}
+                                          <Button 
+                                              variant="outline" 
+                                              type="button"
+                                              onClick={() => {
+                                                  const currentEmails = companyForm.freeze_notification_emails ? companyForm.freeze_notification_emails.split(',').map(e => e.trim()) : [];
+                                                  setCompanyForm({
+                                                      ...companyForm,
+                                                      freeze_notification_emails: [...currentEmails, ''].join(', ')
+                                                  });
+                                              }}
+                                              className="w-full h-12 rounded-xl border-dashed border-2 text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all bg-white"
+                                          >
+                                              + ADD EMAIL RECIPIENT
+                                          </Button>
+                                      </div>
+                                      
+                                      <Button onClick={handleUpdateCompany} isLoading={isSaving} className="h-14 px-8 rounded-2xl font-black uppercase tracking-widest shadow-xl bg-indigo-600">Save Freeze Email Recipients</Button>
+                                  </div>
+                              </div>
+                          )}
                       </CardContent>
                   </Card>
               )}
@@ -1828,7 +1917,7 @@ const SettingsPage = () => {
                   <CardHeader className="bg-indigo-600 text-white p-10 flex flex-col gap-1">
                       <CardTitle className="text-xl font-black uppercase tracking-widest flex items-center gap-3">
                         {editingId ? <Edit2 className="w-6 h-6"/> : <Plus className="w-6 h-6" />}
-                        {activeTab === 'properties' ? 'Property Configuration' : activeTab === 'outlets' ? 'Outlet Configuration' : activeTab === 'roles' ? 'Role Configuration' : activeTab === 'currency' ? 'Currency Settings' : activeTab === 'reports_config' ? 'Report Settings' : 'Settings'}
+                        {activeTab === 'properties' ? 'Property Configuration' : activeTab === 'outlets' ? 'Outlet Configuration' : activeTab === 'roles' ? 'Role Configuration' : activeTab === 'currency' ? 'Currency Settings' : activeTab === 'email_config' ? 'Report Settings' : 'Settings'}
                       </CardTitle>
                       <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Configuration</p>
                   </CardHeader>
@@ -1996,7 +2085,7 @@ const SettingsPage = () => {
                             <Button onClick={handleCurrencySubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Save Currency</Button>
                         </div>
                       )}
-                      {activeTab === 'reports_config' && (
+                      {activeTab === 'email_config' && activeEmailTab === 'reports' && (
                         <div className="space-y-6">
                             <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100 mb-6">
                                 <div className="flex items-center gap-3 mb-2">
