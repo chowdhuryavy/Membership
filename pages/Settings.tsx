@@ -267,7 +267,7 @@ const SignatoryConfig = ({
 
 const SettingsPage = () => {
   // Fix: Destructured currentOutlet and currentProperty from useSettings to provide necessary context for data fetching
-  const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry, currentOutlet, currentProperty } = useSettings();
+  const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry, currentOutlet, currentProperty, setCurrentOutlet } = useSettings();
   const { user, isSuperAdmin } = useAuth();
   const availableTabs = useMemo(() => {
     const isSuper = isSuperAdmin;
@@ -298,6 +298,18 @@ const SettingsPage = () => {
 
   const [activeTab, setActiveTab] = useState<TabId>(availableTabs[0]?.id as TabId || 'company');
   const [activeEmailTab, setActiveEmailTab] = useState<'reports' | 'freeze'>('reports');
+
+  const [freezeEmails, setFreezeEmails] = useState<string[]>(['']);
+
+  useEffect(() => {
+    if (currentOutlet) {
+      const emailsStr = currentOutlet.freeze_notification_emails || '';
+      const emailsList = emailsStr ? emailsStr.split(',').map(e => e.trim()).filter(Boolean) : [];
+      setFreezeEmails(emailsList.length > 0 ? emailsList : ['']);
+    } else {
+      setFreezeEmails(['']);
+    }
+  }, [currentOutlet]);
 
   useEffect(() => {
     if (!availableTabs.find(t => t.id === activeTab)) {
@@ -544,6 +556,45 @@ const SettingsPage = () => {
     } finally { 
       setIsSaving(false); 
     } 
+  };
+
+  const handleSaveFreezeEmails = async () => {
+    if (!isSuperAdmin) {
+        showStatus('Unauthorized: Super Admin access required.', 'error');
+        return;
+    }
+    if (!currentOutlet) {
+      showStatus('No active outlet selected. Please select an outlet from the top dropdown.', 'error');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const emailString = freezeEmails.map(e => e.trim()).filter(Boolean).join(', ');
+      await db.updateOutlet(currentOutlet.id, {
+        freeze_notification_emails: emailString
+      });
+      await refreshSettings();
+      showStatus(`Freeze notifications saved for outlet: ${currentOutlet.name}`);
+    } catch (e: any) {
+      showStatus(e.message, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEmailChange = (index: number, value: string) => {
+    const updated = [...freezeEmails];
+    updated[index] = value;
+    setFreezeEmails(updated);
+  };
+
+  const handleAddEmail = () => {
+    setFreezeEmails([...freezeEmails, '']);
+  };
+
+  const handleRemoveEmail = (index: number) => {
+    const updated = freezeEmails.filter((_, i) => i !== index);
+    setFreezeEmails(updated.length > 0 ? updated : ['']);
   };
 
   const handlePropertySubmit = async () => {
@@ -1734,16 +1785,86 @@ const SettingsPage = () => {
                           )}
 
                           {activeEmailTab === 'freeze' && (
-                              <div className="p-8">
-                                  <div className="p-8 border-2 border-indigo-100 bg-indigo-50/50 rounded-3xl space-y-6">
+                              <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                                  {/* Outlet Selector Dropdown */}
+                                  <div className="p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                                      <div className="space-y-1">
+                                          <span className="text-[9px] font-black uppercase tracking-wider text-indigo-600">Configuration Target Scope</span>
+                                          <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">Active Outlet: {currentOutlet?.name || 'No Outlet Selected'}</h4>
+                                          <p className="text-xs text-slate-500 font-medium">Select which facility outlet's freeze notifications you want to configure.</p>
+                                      </div>
+                                      <select
+                                          value={currentOutlet?.id || ''}
+                                          onChange={(e) => {
+                                              const selected = outlets.find(o => o.id === e.target.value);
+                                              if (selected) setCurrentOutlet(selected);
+                                          }}
+                                          className="h-12 px-4 rounded-xl border-2 border-slate-200 font-bold text-xs bg-white focus:border-indigo-600 focus:outline-none transition-all cursor-pointer shadow-sm w-full md:w-64"
+                                      >
+                                          <option value="" disabled>-- Select Outlet --</option>
+                                          {outlets.map(o => (
+                                              <option key={o.id} value={o.id}>{o.name}</option>
+                                          ))}
+                                      </select>
+                                  </div>
+
+                                  {/* Outlet Specific Recipients */}
+                                  <div className="p-8 border-2 border-indigo-100 bg-indigo-50/20 rounded-3xl space-y-6">
                                       <div className="flex items-center gap-3">
                                           <Mail className="w-6 h-6 text-indigo-600" />
-                                          <h3 className="text-xl font-bold text-indigo-900">Edge Function Delivery</h3>
+                                          <h3 className="text-xl font-black text-indigo-900 uppercase tracking-tight">Localized Freeze Delivery ({currentOutlet?.name || 'Selected Outlet'})</h3>
                                       </div>
-                                      <p className="text-sm text-indigo-700 font-medium">Configure which email addresses should receive automated system alerts via Supabase Edge Functions whenever a member's contract is frozen/suspended.</p>
+                                      <p className="text-xs text-indigo-700 font-semibold uppercase tracking-wider">Automated system alerts via Supabase Edge Functions whenever a contract is suspended at this facility.</p>
                                       
-                                      <div className="md:col-span-2 space-y-4">
-                                          <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Freeze Notification Recipients *</label>
+                                      <div className="space-y-4">
+                                          <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Outlet Recipient Addresses *</label>
+                                          {freezeEmails.map((email, index) => (
+                                              <div key={index} className="flex gap-2 animate-in slide-in-from-left-2 duration-200">
+                                                  <div className="relative flex-1">
+                                                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                                      <Input 
+                                                          value={email} 
+                                                          onChange={e => handleEmailChange(index, e.target.value)} 
+                                                          placeholder="e.g. admin@example.com"
+                                                          className="h-14 pl-12 rounded-xl font-bold border-2 w-full bg-white" 
+                                                      />
+                                                  </div>
+                                                  {freezeEmails.length > 1 && (
+                                                      <Button 
+                                                          variant="ghost" 
+                                                          onClick={() => handleRemoveEmail(index)}
+                                                          className="h-14 w-14 rounded-xl border-2 border-slate-100 text-red-500 hover:bg-red-50 hover:border-red-100 shrink-0 bg-white"
+                                                      >
+                                                          <Trash2 className="w-4 h-4" />
+                                                      </Button>
+                                                  )}
+                                              </div>
+                                          ))}
+                                          <Button 
+                                              variant="outline" 
+                                              type="button"
+                                              onClick={handleAddEmail}
+                                              className="w-full h-12 rounded-xl border-dashed border-2 text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all bg-white"
+                                          >
+                                              + ADD EMAIL RECIPIENT
+                                          </Button>
+                                      </div>
+                                      
+                                      <Button onClick={handleSaveFreezeEmails} isLoading={isSaving} className="h-14 px-8 rounded-2xl font-black uppercase tracking-widest shadow-xl bg-indigo-600">
+                                          Save {currentOutlet?.name || 'Outlet'} Recipients
+                                      </Button>
+                                  </div>
+
+                                  {/* Global Fallback Recipients */}
+                                  <div className="p-8 border-2 border-slate-200 bg-slate-50/50 rounded-3xl space-y-6">
+                                      <div className="flex items-center gap-3">
+                                          <Globe className="w-6 h-6 text-slate-500" />
+                                          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Global Fallback Delivery</h3>
+                                      </div>
+                                      <p className="text-xs text-slate-600 font-medium">Configure global fallback email addresses. If a member's outlet has no custom recipients configured above, these fallback email addresses will receive the freeze notification alerts.</p>
+                                      
+                                      <div className="space-y-4">
+                                          <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Global Fallback Recipient Addresses</label>
                                           {(companyForm.freeze_notification_emails ? companyForm.freeze_notification_emails.split(',').map(e => e.trim()) : ['']).map((email, index, arr) => (
                                               <div key={index} className="flex gap-2 animate-in slide-in-from-left-2 duration-200">
                                                   <div className="relative flex-1">
@@ -1758,7 +1879,7 @@ const SettingsPage = () => {
                                                                   freeze_notification_emails: newEmails.join(', ')
                                                               });
                                                           }} 
-                                                          placeholder="e.g. admin@example.com"
+                                                          placeholder="e.g. corporate@example.com"
                                                           className="h-14 pl-12 rounded-xl font-bold border-2 w-full bg-white" 
                                                       />
                                                   </div>
@@ -1789,13 +1910,15 @@ const SettingsPage = () => {
                                                       freeze_notification_emails: [...currentEmails, ''].join(', ')
                                                   });
                                               }}
-                                              className="w-full h-12 rounded-xl border-dashed border-2 text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all bg-white"
+                                              className="w-full h-12 rounded-xl border-dashed border-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all bg-white"
                                           >
-                                              + ADD EMAIL RECIPIENT
+                                              + ADD GLOBAL RECIPIENT
                                           </Button>
                                       </div>
                                       
-                                      <Button onClick={handleUpdateCompany} isLoading={isSaving} className="h-14 px-8 rounded-2xl font-black uppercase tracking-widest shadow-xl bg-indigo-600">Save Freeze Email Recipients</Button>
+                                      <Button onClick={handleUpdateCompany} isLoading={isSaving} className="h-14 px-8 rounded-2xl font-black uppercase tracking-widest shadow-xl bg-slate-700 hover:bg-slate-800 text-white">
+                                          Save Global Fallback Recipients
+                                      </Button>
                                   </div>
                               </div>
                           )}

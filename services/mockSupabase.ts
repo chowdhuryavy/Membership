@@ -409,7 +409,12 @@ class DatabaseService {
   }
 
   async logAction(action: string, details: string, outlet_id?: string, explicitUser?: { id: string, name: string }) {
-    const sessionStr = safeStorage.getItem('membership_session');
+    let sessionStr = null;
+    try {
+        sessionStr = sessionStorage.getItem('membership_session') || safeStorage.getItem('membership_session');
+    } catch (e) {
+        sessionStr = safeStorage.getItem('membership_session');
+    }
     const session = sessionStr ? JSON.parse(sessionStr) : null;
     const logEntry = {
         id: generateUUID(),
@@ -1000,6 +1005,7 @@ class DatabaseService {
 
   async addFreeze(freeze: Freeze) {
     let memberName = 'Unknown Member';
+    let targetOutletId: string | undefined = undefined;
     
     if (this.isSupabase()) {
       const data = { ...freeze, id: freeze.id || this.generateUUID() };
@@ -1009,6 +1015,7 @@ class DatabaseService {
       // Fetch member name for better logging
       const { data: member } = await supabase.from('members').select('guest_name, membership_number, outlet_id').eq('id', freeze.member_id).single();
       memberName = member?.guest_name || 'Unknown Member';
+      targetOutletId = member?.outlet_id;
       
       await this.logAction('FREEZE_MEMBER', `Account suspended: ${memberName}. Membership extended to ${newEndDate}`, member?.outlet_id);
       
@@ -1031,6 +1038,7 @@ class DatabaseService {
         members[mIndex].status = MemberStatus.FROZEN;
         safeStorage.setItem('membership_members', JSON.stringify(members));
         memberName = members[mIndex].guest_name;
+        targetOutletId = members[mIndex].outlet_id;
         
         await this.logAction('FREEZE_MEMBER', `Suspended membership locally for ${memberName}.`, members[mIndex].outlet_id);
         await this.addNotification({
@@ -1044,34 +1052,51 @@ class DatabaseService {
     
     // Check for email notifications
     try {
-      const settings = await this.getSettings();
-      if (settings?.freeze_notification_emails) {
-        const emails = settings.freeze_notification_emails.split(',').map(e => e.trim()).filter(e => e);
-        if (emails.length > 0) {
-          if (this.isSupabase()) {
-            console.log('[Supabase Edge Function] Invoking send-freeze-notification');
-            const { error } = await supabase.functions.invoke('send-freeze-notification', {
-              body: {
-                emails,
-                memberName,
-                totalDays: freeze.total_days,
-                startDate: freeze.start_date
-              }
-            });
-            if (error) {
-              console.error('Edge function failed:', error);
-            } else {
-              console.log('Successfully invoked Edge Function for freeze email');
+      let emails: string[] = [];
+      
+      // 1. Try to get specific outlet settings first
+      if (targetOutletId) {
+        const outlets = await this.getOutlets();
+        const outlet = outlets.find(o => o.id === targetOutletId);
+        if (outlet && outlet.freeze_notification_emails) {
+          emails = outlet.freeze_notification_emails.split(',').map(e => e.trim()).filter(e => e);
+          console.log(`[Freeze Notifications] Found outlet-specific emails for outlet ${outlet.name}:`, emails);
+        }
+      }
+      
+      // 2. Fallback to global settings if no outlet-specific emails are configured
+      if (emails.length === 0) {
+        const settings = await this.getSettings();
+        if (settings?.freeze_notification_emails) {
+          emails = settings.freeze_notification_emails.split(',').map(e => e.trim()).filter(e => e);
+          console.log('[Freeze Notifications] Falling back to global email settings:', emails);
+        }
+      }
+
+      if (emails.length > 0) {
+        if (this.isSupabase()) {
+          console.log('[Supabase Edge Function] Invoking send-freeze-notification');
+          const { error } = await supabase.functions.invoke('send-freeze-notification', {
+            body: {
+              emails,
+              memberName,
+              totalDays: freeze.total_days,
+              startDate: freeze.start_date
             }
+          });
+          if (error) {
+            console.error('Edge function failed:', error);
           } else {
-            const { emailService } = await import('./emailService');
-            for (const email of emails) {
-              await emailService.sendEmail(
-                email,
-                `Member Frozen: ${memberName}`,
-                `<h2>Membership Frozen</h2><p>The member <strong>${memberName}</strong> has been frozen for ${freeze.total_days} days starting from ${freeze.start_date}.</p>`
-              );
-            }
+            console.log('Successfully invoked Edge Function for freeze email');
+          }
+        } else {
+          const { emailService } = await import('./emailService');
+          for (const email of emails) {
+            await emailService.sendEmail(
+              email,
+              `Member Frozen: ${memberName}`,
+              `<h2>Membership Frozen</h2><p>The member <strong>${memberName}</strong> has been frozen for ${freeze.total_days} days starting from ${freeze.start_date}.</p>`
+            );
           }
         }
       }
@@ -1807,15 +1832,22 @@ class DatabaseService {
 
   async getOutlets(): Promise<Outlet[]> {
     const local = safeStorage.getItem('company_outlets_cache');
-    const cached = safeParseJSON<Outlet[]>(local, []);
+    const cached = safeParseJSON<Outlet[]>(local, []).map(o => ({
+      ...o,
+      freeze_notification_emails: o.freeze_notification_emails || (o.signatory_config as any)?.freeze_notification_emails || ''
+    }));
 
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('outlets').select('*');
         if (error) throw error;
         const res = (data || []) as Outlet[];
-        safeStorage.setItem('company_outlets_cache', JSON.stringify(res));
-        return res;
+        const mapped = res.map(o => ({
+          ...o,
+          freeze_notification_emails: (o.signatory_config as any)?.freeze_notification_emails || ''
+        })) as Outlet[];
+        safeStorage.setItem('company_outlets_cache', JSON.stringify(mapped));
+        return mapped;
       }, cached);
     }
     return cached;
@@ -1823,7 +1855,15 @@ class DatabaseService {
 
   async addOutlet(outlet: Omit<Outlet, 'id'>) {
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('outlets').insert([{ ...outlet, id: generateUUID() }]).select();
+        const { freeze_notification_emails, ...rest } = outlet;
+        const payload: any = { ...rest };
+        if (freeze_notification_emails !== undefined) {
+          payload.signatory_config = {
+            ...(outlet.signatory_config || {}),
+            freeze_notification_emails: freeze_notification_emails || ''
+          };
+        }
+        const { data, error } = await supabase.from('outlets').insert([{ ...payload, id: generateUUID() }]).select();
         if (error) throw error;
         await this.logAction('CREATE_OUTLET', `Facility outlet commissioned: ${outlet.name}`);
         return data;
@@ -1831,8 +1871,29 @@ class DatabaseService {
   }
 
   async updateOutlet(id: string, updates: Partial<Outlet>) {
+    // 1. Update localStorage immediately for responsiveness
+    const local = safeStorage.getItem('company_outlets_cache');
+    const cached = safeParseJSON<Outlet[]>(local, []);
+    const updatedCache = cached.map(o => {
+      if (o.id === id) {
+        return { ...o, ...updates };
+      }
+      return o;
+    });
+    safeStorage.setItem('company_outlets_cache', JSON.stringify(updatedCache));
+
     if (this.isSupabase()) {
-        const { error } = await supabase.from('outlets').update(updates).eq('id', id);
+        const { freeze_notification_emails, ...rest } = updates;
+        const payload: any = { ...rest };
+        
+        if (freeze_notification_emails !== undefined) {
+          payload.signatory_config = {
+            ...(updates.signatory_config || {}),
+            freeze_notification_emails: freeze_notification_emails || ''
+          };
+        }
+        
+        const { error } = await supabase.from('outlets').update(payload).eq('id', id);
         if (error) throw error;
         await this.logAction('UPDATE_OUTLET', `Outlet modified: ${id}`);
     }

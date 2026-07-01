@@ -55,7 +55,7 @@ const Login = () => {
     } else {
       let sessionName = email;
       try {
-          const session = JSON.parse(safeStorage.getItem('membership_session') || '{}');
+          const session = JSON.parse(sessionStorage.getItem('membership_session') || '{}');
           if (session.name) sessionName = session.name;
       } catch (e) {
           console.warn("Storage read failed:", e);

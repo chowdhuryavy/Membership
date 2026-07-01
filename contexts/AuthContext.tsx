@@ -64,7 +64,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(() => {
       try {
-          const stored = safeStorage.getItem('membership_session');
+          const stored = safeSessionStorage.getItem('membership_session');
           if (stored) {
               return JSON.parse(stored);
           }
@@ -95,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshUser = async () => {
       try {
-          const storedUser = safeStorage.getItem('membership_session');
+          const storedUser = safeSessionStorage.getItem('membership_session');
           if (storedUser) {
               const parsed = JSON.parse(storedUser);
               const users = await db.getUsers();
@@ -108,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   const overrides = await db.getPermissionOverrides(freshUser.id);
                   const hydrated = { ...freshUser, overrides };
                   setUser(hydrated);
-                  safeStorage.setItem('membership_session', JSON.stringify(hydrated));
+                  safeSessionStorage.setItem('membership_session', JSON.stringify(hydrated));
               }
           }
       } catch (e) {
@@ -119,7 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const init = async () => {
         try {
-            const stored = safeStorage.getItem('membership_session');
+            const stored = safeSessionStorage.getItem('membership_session');
             if (stored) {
                 await refreshUser();
             }
@@ -137,7 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (foundUser) {
       setUser(foundUser);
       try {
-          safeStorage.setItem('membership_session', JSON.stringify(foundUser));
+          safeSessionStorage.setItem('membership_session', JSON.stringify(foundUser));
           if (isSuperAdminRole(foundUser.role_id)) {
               safeSessionStorage.setItem('admin_session_active', 'true');
           }
@@ -174,7 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await db.updateUser(user.id, updates);
       const updatedUser = { ...user, ...updates };
       setUser(updatedUser);
-      safeStorage.setItem('membership_session', JSON.stringify(updatedUser));
+      safeSessionStorage.setItem('membership_session', JSON.stringify(updatedUser));
       
       if (isSuperAdminRole(updatedUser.role_id)) {
           safeSessionStorage.setItem('admin_session_active', 'true');
