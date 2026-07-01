@@ -1802,9 +1802,14 @@ const SettingsPage = () => {
                                           className="h-12 px-4 rounded-xl border-2 border-slate-200 font-bold text-xs bg-white focus:border-indigo-600 focus:outline-none transition-all cursor-pointer shadow-sm w-full md:w-64"
                                       >
                                           <option value="" disabled>-- Select Outlet --</option>
-                                          {outlets.map(o => (
-                                              <option key={o.id} value={o.id}>{o.name}</option>
-                                          ))}
+                                          {outlets.map(o => {
+                                              const prop = properties.find(p => p.id === o.property_id);
+                                              return (
+                                                  <option key={o.id} value={o.id}>
+                                                      {o.name} {prop ? `(${prop.name})` : ''}
+                                                  </option>
+                                              );
+                                          })}
                                       </select>
                                   </div>
 

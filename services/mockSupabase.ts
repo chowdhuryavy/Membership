@@ -1900,8 +1900,39 @@ class DatabaseService {
   }
 
   async deleteOutlet(id: string) {
+    // 1. Update localStorage immediately for responsiveness
+    const local = safeStorage.getItem('company_outlets_cache');
+    const cached = safeParseJSON<Outlet[]>(local, []);
+    const updated = cached.filter(o => o.id !== id);
+    safeStorage.setItem('company_outlets_cache', JSON.stringify(updated));
+
     if (this.isSupabase()) {
-        await supabase.from('outlets').delete().eq('id', id);
+        // Find members belonging to this outlet
+        const { data: members } = await supabase.from('members').select('id').eq('outlet_id', id);
+        const memberIds = (members || []).map(m => m.id);
+
+        if (memberIds.length > 0) {
+            await supabase.from('freezes').delete().in('member_id', memberIds);
+            await supabase.from('push_subscriptions').delete().in('user_id', memberIds);
+            await supabase.from('members').delete().in('id', memberIds);
+        }
+
+        // Delete other outlet dependencies
+        await supabase.from('sales').delete().eq('outlet_id', id);
+        await supabase.from('notifications').delete().eq('outlet_id', id);
+        await supabase.from('maintenance_batches').delete().eq('outlet_id', id);
+        await supabase.from('therapists').delete().eq('outlet_id', id);
+        await supabase.from('massage_bookings').delete().eq('outlet_id', id);
+        await supabase.from('massage_rooms').delete().eq('outlet_id', id);
+        await supabase.from('massage_types').delete().eq('outlet_id', id);
+        await supabase.from('inventory').delete().eq('outlet_id', id);
+        await supabase.from('report_recipients').delete().eq('outlet_id', id);
+        await supabase.from('custom_reports').delete().eq('outlet_id', id);
+
+        // Finally, delete the outlet itself
+        const { error } = await supabase.from('outlets').delete().eq('id', id);
+        if (error) throw error;
+
         await this.logAction('DELETE_OUTLET', `Outlet decommissioned: ${id}`);
     }
   }
@@ -1981,8 +2012,75 @@ class DatabaseService {
   }
 
   async deleteProperty(id: string) {
+    // 1. Update localStorage immediately for responsiveness
+    const localProps = safeStorage.getItem('company_properties_cache');
+    const cachedProps = safeParseJSON<Property[]>(localProps, []);
+    const updatedProps = cachedProps.filter(p => p.id !== id);
+    safeStorage.setItem('company_properties_cache', JSON.stringify(updatedProps));
+
+    const localOutlets = safeStorage.getItem('company_outlets_cache');
+    const cachedOutlets = safeParseJSON<Outlet[]>(localOutlets, []);
+    const updatedOutlets = cachedOutlets.filter(o => o.property_id !== id);
+    safeStorage.setItem('company_outlets_cache', JSON.stringify(updatedOutlets));
+
     if (this.isSupabase()) {
-        await supabase.from('properties').delete().eq('id', id);
+        // Find all outlets under this property
+        const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', id);
+        const outletIds = (outlets || []).map(o => o.id);
+
+        if (outletIds.length > 0) {
+            // Find members belonging to these outlets
+            const { data: members } = await supabase.from('members').select('id').in('outlet_id', outletIds);
+            const memberIds = (members || []).map(m => m.id);
+
+            if (memberIds.length > 0) {
+                // Delete freezes for these members
+                await supabase.from('freezes').delete().in('member_id', memberIds);
+                // Delete push subscriptions for members
+                await supabase.from('push_subscriptions').delete().in('user_id', memberIds);
+                // Delete members
+                await supabase.from('members').delete().in('id', memberIds);
+            }
+
+            // Find staff belonging to this property or these outlets
+            const { data: staff } = await supabase.from('staff').select('id').eq('property_id', id);
+            const staffIds = (staff || []).map(s => s.id);
+            if (staffIds.length > 0) {
+                await supabase.from('staff_leaves').delete().in('staff_id', staffIds);
+                // Delete push subscriptions for staff
+                await supabase.from('push_subscriptions').delete().in('user_id', staffIds);
+                await supabase.from('staff').delete().in('id', staffIds);
+            }
+
+            // Delete outlet specific dependencies
+            await supabase.from('sales').delete().in('outlet_id', outletIds);
+            await supabase.from('notifications').delete().in('outlet_id', outletIds);
+            await supabase.from('maintenance_batches').delete().in('outlet_id', outletIds);
+            await supabase.from('therapists').delete().in('outlet_id', outletIds);
+            await supabase.from('massage_bookings').delete().in('outlet_id', outletIds);
+            await supabase.from('massage_rooms').delete().in('outlet_id', outletIds);
+            await supabase.from('massage_types').delete().in('outlet_id', outletIds);
+            await supabase.from('inventory').delete().in('outlet_id', outletIds);
+            await supabase.from('report_recipients').delete().in('outlet_id', outletIds);
+            await supabase.from('custom_reports').delete().in('outlet_id', outletIds);
+        }
+
+        // Delete any remaining property-wide dependencies
+        await supabase.from('massage_bookings').delete().eq('property_id', id);
+        await supabase.from('inventory').delete().eq('property_id', id);
+        await supabase.from('therapists').delete().eq('property_id', id);
+        await supabase.from('massage_types').delete().eq('property_id', id);
+        await supabase.from('massage_rooms').delete().eq('property_id', id);
+        await supabase.from('currencies').delete().eq('property_id', id);
+        await supabase.from('report_recipients').delete().eq('property_id', id);
+
+        // Delete the outlets themselves
+        await supabase.from('outlets').delete().eq('property_id', id);
+
+        // Finally, delete the property itself
+        const { error } = await supabase.from('properties').delete().eq('id', id);
+        if (error) throw error;
+
         await this.logAction('DELETE_PROPERTY', `Property purged: ${id}`);
     }
   }
