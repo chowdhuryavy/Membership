@@ -5,35 +5,54 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-async function testQuery() {
-  console.log('Counting members in the entire database...');
+async function testDelete() {
+  console.log('--- DIAGNOSTIC SCRIPT START ---');
   try {
-    const start = Date.now();
-    const { count, error } = await supabase
-      .from('members')
-      .select('*', { count: 'exact', head: true });
+    console.log('1. Fetching all treatments (massage_types) from Supabase...');
+    const { data: treatments, error: fetchErr } = await supabase
+      .from('massage_types')
+      .select('*');
       
-    if (error) {
-      console.error('Count Failed with error:', error);
-    } else {
-      console.log(`Total members in database: ${count}. Count query took ${Date.now() - start}ms.`);
+    if (fetchErr) {
+      console.error('Fetch Failed:', fetchErr);
+      return;
     }
     
-    console.log('Querying first 10 members in database...');
-    const start2 = Date.now();
-    const { data, error: error2 } = await supabase
-      .from('members')
-      .select('id, guest_name, outlet_id, status')
-      .limit(10);
-    if (error2) {
-      console.error('Fetch Failed with error:', error2);
+    console.log(`Found ${treatments?.length || 0} treatments:`);
+    treatments?.forEach(t => {
+      console.log(`  - ID: ${t.id}, Name: ${t.name}, Price: ${t.price}, Outlet ID: ${t.outlet_id}`);
+    });
+    
+    // Let's find one to delete.
+    const target = treatments?.find(t => t.name === 'TRSTQWE' || t.name.includes('TRSTQWE'));
+    if (!target) {
+      console.log('Could not find a treatment named "TRSTQWE" to delete.');
+      return;
+    }
+    
+    console.log(`\n2. Attempting to delete treatment "${target.name}" (ID: ${target.id})...`);
+    const { data: delData, error: delErr, status, statusText } = await supabase
+      .from('massage_types')
+      .delete()
+      .eq('id', target.id)
+      .select(); // Ask for deleted data back
+      
+    console.log('Deletion Response:');
+    console.log('  - Status:', status);
+    console.log('  - Status Text:', statusText);
+    console.log('  - Error:', delErr);
+    console.log('  - Returned Deleted Data:', delData);
+    
+    if (delErr) {
+      console.error('  -> Deletion explicitly failed with error:', delErr.message);
+    } else if (!delData || delData.length === 0) {
+      console.log('  -> Deletion completed with success status but 0 ROWS WERE DELETED (likely RLS / Policy restriction or row not found).');
     } else {
-      console.log(`Successfully fetched first 10 members in ${Date.now() - start2}ms:`);
-      data?.forEach(m => console.log(`ID: ${m.id}, Guest: ${m.guest_name}, Outlet: ${m.outlet_id}, Status: ${m.status}`));
+      console.log('  -> Deletion was 100% SUCCESSFUL! Row was removed.');
     }
   } catch (e) {
     console.error('Unexpected exception:', e);
   }
 }
 
-testQuery();
+testDelete();

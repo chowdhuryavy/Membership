@@ -462,7 +462,7 @@ const MassageScheduling = () => {
   const [newType, setNewType] = useState<{ id: string, name: string, price: number, duration_minutes: number, description?: string }>({ id: '', name: '', price: 0, duration_minutes: 60, description: '' });
   const [newTherapist, setNewTherapist] = useState({ id: '', name: '', specialty: '', country: '', type: 'Therapist' });
   const [isEditingResource, setIsEditingResource] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest' | 'booking', name: string} | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest' | 'booking' | 'inventory', name: string} | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
 
   
@@ -998,7 +998,9 @@ NOTIFY pgrst, 'reload schema';`}
   const handleDeleteConfirmed = async () => {
       if (!itemToDelete) return;
       try {
+          setSaveError(null);
           if (itemToDelete.type === 'treatment') await db.deleteMassageType(itemToDelete.id);
+          else if (itemToDelete.type === 'inventory') await db.deleteInventoryItem(itemToDelete.id);
           else if (itemToDelete.type === 'therapist') await db.deleteTherapist(itemToDelete.id);
           else if (itemToDelete.type === 'guest') {
               if (canDeleteGuests) await db.deleteGuest(itemToDelete.id);
@@ -1008,7 +1010,12 @@ NOTIFY pgrst, 'reload schema';`}
               setSelectedBooking(null);
           }
           loadData();
-      } finally { setItemToDelete(null); }
+      } catch (err: any) {
+          console.error("Deletion failed:", err);
+          setSaveError(err.message || "Failed to delete the record. Ensure no dependent bookings or sessions exist for this item.");
+      } finally { 
+          setItemToDelete(null); 
+      }
   };
 
   const HOURS = useMemo(() => {
@@ -1109,6 +1116,21 @@ NOTIFY pgrst, 'reload schema';`}
           </div>
           <Button onClick={() => loadData()} variant="secondary" className="h-9 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest bg-white border-red-100 text-red-600 hover:bg-red-50 shrink-0">
             <RefreshCcw className="w-3.5 h-3.5 mr-2" /> Retry Connection
+          </Button>
+        </div>
+      )}
+
+      {saveError && (
+        <div className="bg-red-50 border border-red-200 p-4 rounded-2xl flex items-center justify-between gap-4 animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-3 text-red-700">
+            <ShieldAlert className="w-5 h-5 shrink-0" />
+            <div className="space-y-0.5">
+              <p className="text-[10px] font-black uppercase tracking-widest">Operation Failed</p>
+              <p className="text-xs font-bold">{saveError}</p>
+            </div>
+          </div>
+          <Button onClick={() => setSaveError(null)} variant="secondary" className="h-9 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest bg-white border-red-100 text-red-600 hover:bg-red-50 shrink-0">
+            Dismiss
           </Button>
         </div>
       )}
@@ -1647,7 +1669,11 @@ NOTIFY pgrst, 'reload schema';`}
                                                               setSaveError(null); 
                                                           }
                                                         }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit3 className="w-3.5 h-3.5"/></button>
-                                                        <button onClick={() => setItemToDelete({id: mt.id, type: 'treatment', name: mt.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5"/></button>
+                                                        <button onClick={() => setItemToDelete({
+                                                            id: mt.id,
+                                                            type: mt.category === 'Personal Training' ? 'inventory' : 'treatment',
+                                                            name: mt.name
+                                                        })} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5"/></button>
                                                     </>
                                                 )}
                                             </div>

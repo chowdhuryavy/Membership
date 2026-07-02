@@ -2245,7 +2245,8 @@ class DatabaseService {
 
   async deleteInventoryItem(id: string) {
     if (this.isSupabase()) {
-        await supabase.from('inventory').delete().eq('id', id);
+        const { error } = await supabase.from('inventory').delete().eq('id', id);
+        if (error) throw error;
         await this.logAction('DELETE_INVENTORY', `Deleted inventory item ID: ${id}`);
     }
   }
@@ -2453,7 +2454,8 @@ class DatabaseService {
 
   async deleteGuest(id: string) {
     if (this.isSupabase()) {
-        await supabase.from('guests').delete().eq('id', id);
+        const { error } = await supabase.from('guests').delete().eq('id', id);
+        if (error) throw error;
         await this.logAction('DELETE_GUEST', `Guest record purged: ${id}`);
     }
   }
@@ -2611,8 +2613,10 @@ class DatabaseService {
 
   async deleteTherapist(id: string) {
     if (this.isSupabase()) {
-        await supabase.from('therapists').delete().eq('id', id);
-        await supabase.from('staff').delete().eq('id', id);
+        const { error: err1 } = await supabase.from('therapists').delete().eq('id', id);
+        if (err1) throw err1;
+        const { error: err2 } = await supabase.from('staff').delete().eq('id', id);
+        if (err2) throw err2;
         await this.logAction('DELETE_THERAPIST', `Specialist record purged: ${id}`);
     }
   }
@@ -2656,7 +2660,8 @@ class DatabaseService {
 
   async deleteMassageType(id: string) {
     if (this.isSupabase()) {
-        await supabase.from('massage_types').delete().eq('id', id);
+        const { error } = await supabase.from('massage_types').delete().eq('id', id);
+        if (error) throw error;
         await this.logAction('DELETE_TREATMENT', `Service retired: ${id}`);
     }
   }
