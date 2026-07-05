@@ -344,7 +344,7 @@ const ProtectedLayout = () => {
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [checkShortcut, navigate]);
 
-  if (!user && !combinedLoading) return <Navigate to="/login" replace />;
+  if (!user && !combinedLoading) return <Navigate to="/login" replace state={{ from: location }} />;
   
   return (
     <>

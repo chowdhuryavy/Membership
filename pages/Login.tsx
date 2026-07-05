@@ -15,7 +15,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Button } from '../components/ui';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Sparkles, ShieldAlert, CheckCircle2, UserCircle2, Users } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 
@@ -35,6 +35,7 @@ const Login = () => {
   const { login, changePassword } = useAuth();
   const { settings } = useSettings();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
       setPasswordsMatch(newPassword !== '' && newPassword === confirmPassword);
@@ -61,7 +62,8 @@ const Login = () => {
           console.warn("Storage read failed:", e);
       }
       db.logAction('AUTH_LOGIN', `User session authenticated for: ${sessionName} (${email.toLowerCase()}) at ${new Date().toLocaleString()}`);
-      navigate('/');
+      const from = location.state?.from ? `${location.state.from.pathname}${location.state.from.search || ''}` : '/';
+      navigate(from, { replace: true });
     }
   };
 
@@ -75,7 +77,8 @@ const Login = () => {
           await changePassword(password, newPassword);
           db.logAction('AUTH_SECURITY_UPDATE', `Credential migration completed for: ${email.toLowerCase()}`);
           setMustChangePassword(false);
-          navigate('/');
+          const from = location.state?.from ? `${location.state.from.pathname}${location.state.from.search || ''}` : '/';
+          navigate(from, { replace: true });
       } catch (err: any) {
           setError(err.message || "Failed to update security credentials.");
       } finally {

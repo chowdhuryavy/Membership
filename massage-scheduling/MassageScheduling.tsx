@@ -747,35 +747,35 @@ NOTIFY pgrst, 'reload schema';`}
         { event: '*', schema: 'public', table: 'massage_bookings', filter },
         () => {
           console.log('Real-time booking update received in MassageScheduling');
-          loadData();
+          loadData(true, true);
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'therapists', filter },
-        () => loadData()
+        () => loadData(true, true)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'massage_types' },
-        () => loadData()
+        () => loadData(true, true)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'guests' },
-        () => loadData()
+        () => loadData(true, true)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'inventory', filter },
-        () => loadData()
+        () => loadData(true, true)
       )
       .on(
         'broadcast',
         { event: 'sync' },
         () => {
           console.log('Instant broadcast received, syncing data...');
-          loadData();
+          loadData(true, true);
         }
       )
       .subscribe((status) => {
@@ -797,14 +797,18 @@ NOTIFY pgrst, 'reload schema';`}
   }, [currentOutlet, currentProperty]);
 
   const lastLoadTimeRef = useRef<number>(0);
-  const loadData = async (isSilent = false) => {
+  const loadData = async (isSilent = false, forceFresh = false) => {
     // Throttle background refreshes to at most once every 30 seconds
     const now = Date.now();
-    if (isSilent && now - lastLoadTimeRef.current < 30000) {
+    if (isSilent && now - lastLoadTimeRef.current < 30000 && !forceFresh) {
       console.log('Skipping background refresh: last refresh was too recent');
       return;
     }
     lastLoadTimeRef.current = now;
+
+    if (forceFresh) {
+      bookingCache.clear();
+    }
 
     if (!currentOutlet || !currentProperty) {
       setLoading(false);
@@ -826,7 +830,7 @@ NOTIFY pgrst, 'reload schema';`}
     
     // Try to load from cache first for immediate display
     const cacheKey = `bookings-data-${scopeId}-${isProperty}-${dateStr}`;
-    const cached = getCachedData(cacheKey);
+    const cached = forceFresh ? null : getCachedData(cacheKey);
     if (cached && !isSilent) {
         setBookings(cached.bookings || []);
         setGuests(cached.guests || []);
@@ -943,7 +947,7 @@ NOTIFY pgrst, 'reload schema';`}
     try {
       await db.updateMassageBookingStatus(id, status, roomId, paymentMethod);
       setSelectedBooking(null);
-      loadData();
+      loadData(false, true);
     } catch (e: any) {
       console.error(e);
     }
@@ -962,7 +966,7 @@ NOTIFY pgrst, 'reload schema';`}
       }
       setNewType({ id: '', name: '', price: 0, duration_minutes: 60, description: '' });
       setIsEditingResource(false);
-      loadData();
+      loadData(false, true);
     } catch (err: any) {
         if (err.message?.includes('outlet_id') || err.code === '42703' || err.message?.toLowerCase().includes('column')) {
             setIsTableMissing(true);
@@ -985,7 +989,7 @@ NOTIFY pgrst, 'reload schema';`}
       }
       setNewTherapist({ id: '', name: '', specialty: '', country: '', type: 'Therapist' });
       setIsEditingResource(false);
-      loadData();
+      loadData(false, true);
     } catch (err: any) {
         if (err.message?.includes('outlet_id') || err.code === '42703' || err.message?.toLowerCase().includes('column')) {
             setIsTableMissing(true);
@@ -1009,7 +1013,7 @@ NOTIFY pgrst, 'reload schema';`}
               if (canDelete) await db.deleteMassageBooking(itemToDelete.id);
               setSelectedBooking(null);
           }
-          loadData();
+          loadData(false, true);
       } catch (err: any) {
           console.error("Deletion failed:", err);
           setSaveError(err.message || "Failed to delete the record. Ensure no dependent bookings or sessions exist for this item.");
@@ -1893,7 +1897,7 @@ NOTIFY pgrst, 'reload schema';`}
       {showBookingForm && (
           <BookingForm 
             onClose={() => { setShowBookingForm(false); setEditingBooking(null); }}
-            onSuccess={() => { setShowBookingForm(false); setEditingBooking(null); loadData(); }}
+            onSuccess={() => { setShowBookingForm(false); setEditingBooking(null); loadData(false, true); }}
             onGoToManagement={() => {}}
             therapists={therapists}
             massageTypes={massageTypes}
