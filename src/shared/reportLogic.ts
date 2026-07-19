@@ -94,7 +94,11 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const membersRes = await membersQuery;
 
     if (membersRes.error) {
-      console.error('Error fetching members:', membersRes.error);
+      if (membersRes.error.message?.toLowerCase().includes('failed to fetch')) {
+        console.warn('Network error fetching members');
+      } else {
+        console.error('Error fetching members:', membersRes.error);
+      }
       throw new Error(`Failed to fetch members: ${membersRes.error.message}`);
     }
 

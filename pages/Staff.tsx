@@ -175,7 +175,7 @@ const StaffPage = () => {
     if (!currentOutlet || !currentProperty || !canView) return;
 
     const channel = supabase
-      .channel('realtime-staff')
+      .channel(`realtime-staff-${currentOutlet.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'staff' },

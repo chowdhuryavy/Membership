@@ -84,10 +84,28 @@
       }
 
       // Handle chunk load errors (common in SPAs when a new version is deployed)
+      const originalConsoleError = console.error;
+      console.error = function(...args) {
+        if (args.some(arg => {
+          if (!arg) return false;
+          if (typeof arg === 'string') return arg.toLowerCase().includes('failed to fetch');
+          if (arg instanceof Error) return arg.message && arg.message.toLowerCase().includes('failed to fetch');
+          return false;
+        })) {
+          return; // Suppress
+        }
+        originalConsoleError.apply(console, args);
+      };
+
       window.onerror = function(msg, url, line, col, error) {
+        if (msg && msg.toString().toLowerCase().includes('failed to fetch')) return true;
         console.error("Window Error Caught:", msg, url, line, col, error);
       };
       window.addEventListener('error', (e) => {
+        if (e.message && e.message.toLowerCase().includes('failed to fetch')) {
+            e.preventDefault();
+            return;
+        }
         if (e.message !== 'Script error.') {
             console.error("Global Error Caught:", e.message, e.filename, e.lineno, e.colno, e.error);
         }
@@ -97,6 +115,10 @@
         }
       }, true);
       window.addEventListener('unhandledrejection', (e) => {
+        if (e.reason && e.reason.message && e.reason.message.toLowerCase().includes('failed to fetch')) {
+            e.preventDefault();
+            return;
+        }
         console.error("Unhandled Rejection:", e.reason);
       });
 

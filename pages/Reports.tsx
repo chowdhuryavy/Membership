@@ -333,8 +333,12 @@ const Reports = () => {
         setActiveStaffList(result.summary.staffList || []);
       }
 
-    } catch (error) {
-      console.error('Error loading report data:', error);
+    } catch (error: any) {
+      if (error?.message?.toLowerCase().includes('failed to fetch')) {
+          console.warn('Network error loading report data');
+      } else {
+          console.error('Error loading report data:', error);
+      }
       toast.error('Failed to load report data');
     } finally {
       setLoading(false);

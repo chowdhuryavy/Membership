@@ -174,8 +174,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Pre-populate seenIds with existing notifications to prevent alerts on reload
       filteredData.forEach(n => seenIds.current.add(n.id));
       setNotifications(filteredData);
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+    } catch (error: any) {
+      if (error?.message?.toLowerCase().includes('failed to fetch')) {
+        console.warn('Network error fetching notifications, retrying later...');
+      } else {
+        console.error('Failed to fetch notifications:', error);
+      }
     } finally {
       setIsLoading(false);
     }

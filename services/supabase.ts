@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { toast } from 'react-hot-toast';
 
 // Provided credentials linked directly to the code
 export const supabaseUrl = 'https://fqwfffkkaeknaqjorygy.supabase.co';
@@ -29,6 +30,26 @@ const createResilientSupabase = (rawClient: any) => {
   let supabaseFailed = false;
   let supabaseFailures = 0;
   let lastFailureTime = 0;
+  let hasToastedOffline = false;
+
+  const isNetworkError = (e: any): boolean => {
+    if (!e) return false;
+    let msg = '';
+    let code = '';
+    if (typeof e === 'string') {
+       msg = e.toLowerCase();
+    } else {
+       msg = e.message?.toLowerCase() || e.details?.toLowerCase() || '';
+       code = e.code || '';
+    }
+    return msg.includes('failed to fetch') || 
+           msg.includes('network error') || 
+           msg.includes('database not found') ||
+           code === '57014' || 
+           msg.includes('timeout') ||
+           msg.includes('522') ||
+           msg.includes('connection timed out');
+  };
 
   const isSupabaseOnline = () => {
     if (typeof window !== 'undefined' && localStorage.getItem('force_offline_mode') === 'true') {
@@ -48,10 +69,23 @@ const createResilientSupabase = (rawClient: any) => {
 
   const triggerSupabaseFailure = (err?: any) => {
     supabaseFailures++;
-    if (supabaseFailures >= 3) { // Fall back on 3 consecutive failures/timeouts to prevent false positives
+    const isNetErr = isNetworkError(err);
+    if (isNetErr || supabaseFailures >= 2) { 
       supabaseFailed = true;
       lastFailureTime = Date.now();
-      console.warn("Resilient Supabase: Marked offline due to 3 consecutive failures/timeouts:", err);
+      console.warn("Resilient Supabase: Marked offline due to connection error or consecutive failures:", err);
+      try {
+        localStorage.setItem('force_offline_mode', 'true');
+        if (!hasToastedOffline && typeof window !== 'undefined') {
+          hasToastedOffline = true;
+          setTimeout(() => {
+            toast.error("Cloud database timed out. Seamlessly switched to offline local-storage mode for instant loading!", {
+              duration: 8000,
+              id: 'offline-mode-toast'
+            });
+          }, 100);
+        }
+      } catch (e) {}
     }
   };
 
@@ -164,6 +198,7 @@ const createResilientSupabase = (rawClient: any) => {
             isMutation: false,
             filters: [] as any[],
             selectColumns: '*',
+            isSingle: false,
           };
 
           const wrapQueryBuilder = (builder: any): any => {
@@ -179,9 +214,9 @@ const createResilientSupabase = (rawClient: any) => {
 
                       // 2. Try the real query but race it against a timeout
                       if (bTarget && typeof bTarget.then === 'function') {
-                        // Allow 45s timeout for standard queries to account for database cold-starts or latency
+                        // Allow 30s timeout for standard queries to account for database cold-starts or latency
                         const timeoutPromise = new Promise<never>((_, reject) =>
-                          setTimeout(() => reject(new Error('Query timeout')), 45000)
+                          setTimeout(() => reject(new Error('Query timeout')), 30000)
                         );
                         const result = await Promise.race([bTarget, timeoutPromise]);
 
@@ -206,12 +241,13 @@ const createResilientSupabase = (rawClient: any) => {
                         triggerSupabaseFailure(err);
                         try {
                           const fallbackData = await getFallbackData(builderState.table, builderState.filters);
-                          const result = { data: fallbackData, error: null };
+                          const finalData = builderState.isSingle ? (fallbackData[0] || null) : fallbackData;
+                          const result = { data: finalData, error: null };
                           if (onfulfilled) return onfulfilled(result);
                           return result;
                         } catch (fallbackErr) {
                           console.error('Resilient Supabase: Local fallback failed too:', fallbackErr);
-                          const result = { data: [], error: fallbackErr };
+                          const result = { data: builderState.isSingle ? null : [], error: fallbackErr };
                           if (onfulfilled) return onfulfilled(result);
                           return result;
                         }
@@ -233,6 +269,9 @@ const createResilientSupabase = (rawClient: any) => {
                     }
                     if (method === 'select' && args[0]) {
                       builderState.selectColumns = args[0];
+                    }
+                    if (['single', 'maybeSingle'].includes(method)) {
+                      builderState.isSingle = true;
                     }
                     if (['eq', 'neq', 'in', 'gte', 'lte', 'limit', 'order'].includes(method)) {
                       builderState.filters.push({ method, args });

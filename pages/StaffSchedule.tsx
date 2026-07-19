@@ -830,6 +830,22 @@ const StaffSchedule = () => {
     };
 
     loadPageData();
+  }, [staff?.id, staff?.property_id, currentDate, viewMode, selectedOutletId]);
+
+  const loadScheduleRef = useRef(loadSchedule);
+  const loadMonthlyScheduleRef = useRef(loadMonthlySchedule);
+  const loadIncentivesRef = useRef(loadIncentives);
+  const viewModeRef = useRef(viewMode);
+
+  useEffect(() => {
+    loadScheduleRef.current = loadSchedule;
+    loadMonthlyScheduleRef.current = loadMonthlySchedule;
+    loadIncentivesRef.current = loadIncentives;
+    viewModeRef.current = viewMode;
+  }, [loadSchedule, loadMonthlySchedule, loadIncentives, viewMode]);
+
+  useEffect(() => {
+    if (!staff?.id || !selectedOutletId) return;
 
     // Set up comprehensive real-time staff portal events (Bookings, Sales, Memberships)
     const unsubscribe = db.subscribeToStaffPortalEvents(selectedOutletId, staff.id, async (payload) => {
@@ -886,9 +902,9 @@ const StaffSchedule = () => {
       }
 
       // Refresh data on any update
-      if (viewMode === 'daily') loadSchedule();
-      else if (viewMode === 'monthly') loadMonthlySchedule();
-      else if (viewMode === 'incentives') loadIncentives();
+      if (viewModeRef.current === 'daily') loadScheduleRef.current();
+      else if (viewModeRef.current === 'monthly') loadMonthlyScheduleRef.current();
+      else if (viewModeRef.current === 'incentives') loadIncentivesRef.current();
     });
 
     // Also listen for general notification table changes for the bell icon
@@ -926,9 +942,9 @@ const StaffSchedule = () => {
       unsubscribe();
       unsubNotifications();
     };
-  }, [staff?.id, staff?.property_id, currentDate, viewMode, selectedOutletId]);
+  }, [staff?.id, selectedOutletId]);
 
-  const loadPropertyDetails = async () => {
+  async function loadPropertyDetails() {
     if (!staff || !selectedOutletId) return;
     try {
       const outlets = await db.getOutlets();
@@ -949,7 +965,7 @@ const StaffSchedule = () => {
     }
   };
 
-  const loadSchedule = async () => {
+  async function loadSchedule() {
     if (!staff || !selectedOutletId) return;
     setLoading(true);
     try {
@@ -1028,7 +1044,7 @@ const StaffSchedule = () => {
     }
   };
 
-  const loadIncentives = async () => {
+  async function loadIncentives() {
     if (!staff || !selectedOutletId) return;
     setIncentiveLoading(true);
     try {
@@ -1121,16 +1137,18 @@ const StaffSchedule = () => {
         breakdown 
       });
     } catch (error: any) {
-      console.error("Failed to load incentives:", error);
-      if (error?.message?.includes('Failed to fetch')) {
+      if (error?.message?.toLowerCase().includes('failed to fetch')) {
+        console.warn("Failed to load incentives (Network error)");
         toast.error("Network connection unstable. Falling back to local mode.", { id: 'network-error' });
+      } else {
+        console.error("Failed to load incentives:", error);
       }
     } finally {
       setIncentiveLoading(false);
     }
   };
 
-  const loadMonthlySchedule = async () => {
+  async function loadMonthlySchedule() {
     if (!staff || !selectedOutletId) return;
     setLoading(true);
     try {

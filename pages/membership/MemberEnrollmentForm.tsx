@@ -643,10 +643,9 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         >
                             <option value="">Select Category...</option>
                             {sortedCategories.map(c => {
-                              const typeName = membershipTypes.find(t => t.id === c.membership_type_id)?.name || '';
                               return (
                                 <option key={c.id} value={c.id}>
-                                  {typeName ? `[${typeName}] ` : ''}{c.name} — {formatMoney(c.base_rate)}
+                                  {c.name} — {formatMoney(c.base_rate)}
                                 </option>
                               );
                             })}

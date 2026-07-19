@@ -53,3 +53,34 @@ try {
     console.error('Could not polyfill sessionStorage:', err);
   }
 }
+
+// Intercept console.warn and console.error to filter out benign/noisy layout or development tools logs
+if (typeof window !== 'undefined') {
+  const originalWarn = console.warn;
+  console.warn = function (...args: any[]) {
+    const firstArg = args[0];
+    if (typeof firstArg === 'string') {
+      // Filter out Recharts container measurement warnings during layout phase
+      if (firstArg.includes('The width(0) and height(0) of chart should be greater than 0')) {
+        return;
+      }
+      // Filter out Vite WebSocket reconnection attempts
+      if (firstArg.includes('failed to connect to websocket') || firstArg.includes('[vite] failed to connect')) {
+        return;
+      }
+    }
+    originalWarn.apply(console, args);
+  };
+
+  const originalError = console.error;
+  console.error = function (...args: any[]) {
+    const firstArg = args[0];
+    if (typeof firstArg === 'string') {
+      if (firstArg.includes('failed to connect to websocket') || firstArg.includes('[vite] failed to connect')) {
+        return;
+      }
+    }
+    originalError.apply(console, args);
+  };
+}
+

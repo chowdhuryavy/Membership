@@ -37,8 +37,12 @@ export const BulkFreezeHistoryModal: React.FC<BulkFreezeHistoryModalProps> = ({ 
         try {
             const data = await db.getBulkFreezeHistory(outletId);
             setHistory(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-        } catch (error) {
-            console.error('Failed to fetch bulk freeze history:', error);
+        } catch (error: any) {
+            if (error?.message?.toLowerCase().includes('failed to fetch')) {
+                console.warn('Network error fetching bulk freeze history');
+            } else {
+                console.error('Failed to fetch bulk freeze history:', error);
+            }
         } finally {
             setIsLoading(false);
         }

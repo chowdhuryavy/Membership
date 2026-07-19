@@ -130,7 +130,7 @@ const Members = () => {
     if (!currentOutlet || !currentProperty || !canView) return;
 
     const channel = supabase
-      .channel('realtime-members')
+      .channel(`realtime-members-${currentOutlet.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'members' },

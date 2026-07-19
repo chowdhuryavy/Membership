@@ -1003,12 +1003,18 @@ const Sales = () => {
         }
     }, [currentOutlet, canView, viewScope, selectedDate, loadData]);
 
+    const selectedDateRef = useRef(selectedDate);
+    useEffect(() => {
+        selectedDateRef.current = selectedDate;
+    }, [selectedDate]);
+
     // Optimized real-time synchronization subscription
     useEffect(() => {
         if (!currentOutlet || !currentProperty || !canView) return;
 
+        const channelName = `realtime-sales-${currentOutlet.id}`;
         const channel = supabase
-            .channel('realtime-sales')
+            .channel(channelName)
             .on(
                 'postgres_changes',
                 { 
@@ -1019,7 +1025,7 @@ const Sales = () => {
                 },
                 (payload) => {
                     // Optimistically add new sale
-                    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                    const dateStr = format(selectedDateRef.current, 'yyyy-MM-dd');
                     const saleDate = format(new Date(payload.new.created_at), 'yyyy-MM-dd');
                     
                     if (saleDate === dateStr) {
@@ -1060,7 +1066,7 @@ const Sales = () => {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [currentOutlet, currentProperty, canView, selectedDate]);
+    }, [currentOutlet?.id, currentProperty?.id, canView]);
 
     if (!canView) {
         return (
