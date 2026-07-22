@@ -52,10 +52,22 @@ class DatabaseService {
   }
 
   private isNetworkError(e: any): boolean {
-    const msg = e.message?.toLowerCase() || '';
-    return msg.includes('failed to fetch') || 
-           msg.includes('network error') || 
-           msg.includes('database not found');
+    const msg = (e?.message || e?.error?.message || '').toLowerCase();
+    if (
+      msg.includes('statement timeout') || 
+      msg.includes('canceling statement') || 
+      msg.includes('timeout') ||
+      msg.includes('jwt') ||
+      msg.includes('syntax error') ||
+      msg.includes('column')
+    ) {
+      return false; // Statement timeout or SQL error is NOT a network connection loss!
+    }
+    return (
+      (e?.name === 'TypeError' && msg === 'failed to fetch') || 
+      msg.includes('network error') || 
+      msg.includes('database not found')
+    );
   }
 
   private generateUUID() {
@@ -768,15 +780,26 @@ class DatabaseService {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         let query = supabase.from('members').select(targetCols);
-        if (scopeId) {
+        if (scopeId && scopeId !== 'all') {
             if (isProperty) {
                 if (limitToOutletIds && limitToOutletIds.length > 0) {
                     query = query.in('outlet_id', limitToOutletIds);
                 } else {
-                    const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
-                    const ids = (outlets || []).map(o => o.id);
-                    if (ids && ids.length > 0) {
+                    let { data: outlets } = await supabase.from('outlets').select('id, property_id').eq('property_id', scopeId);
+                    let ids = (outlets || []).map(o => o.id);
+                    if (ids.length === 0) {
+                        const { data: allOutlets } = await supabase.from('outlets').select('id, property_id');
+                        if (allOutlets && allOutlets.length > 0) {
+                            const matched = allOutlets.filter(o => o.property_id === scopeId || o.id === scopeId);
+                            if (matched.length > 0) {
+                                ids = matched.map(m => m.id);
+                            }
+                        }
+                    }
+                    if (ids.length > 0) {
                         query = query.in('outlet_id', ids);
+                    } else {
+                        return [];
                     }
                 }
             } else {
