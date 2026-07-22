@@ -4,15 +4,14 @@ import { UserProfile } from '../types';
 import { db } from '../services/mockSupabase';
 
 export const isSuperAdminRole = (roleId: string | undefined | null) => {
-    const id = roleId?.toLowerCase();
+    const id = roleId?.toLowerCase()?.trim();
     return id === 'super_admin' || 
            id === 'superadmin' || 
            id === 'owner' || 
            id === 'admin' || 
            id === 'system_admin' || 
            id === 'system_administrator' || 
-           id === 'administrator' ||
-           id === '0958cdaa-7dd0-48bd-a80d-21d856d2526b';
+           id === 'administrator';
 };
 
 export const isSuperAdmin = (user: UserProfile | null) => {
