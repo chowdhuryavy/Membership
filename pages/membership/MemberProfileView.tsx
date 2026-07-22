@@ -1,13 +1,3 @@
-
-function generateUUID() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
 import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '../../components/ui';
@@ -220,6 +210,12 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
 
   const loadForensics = async (targetMember: Member) => {
+    if (!targetMember.member_signature && !targetMember.id_card_url) {
+      db.getMemberById(targetMember.id).then(full => {
+        if (full) setViewingMember(prev => ({ ...prev, ...full }));
+      }).catch(err => console.error("Error loading full member details:", err));
+    }
+
     const [f, b, mt, history, guests] = await Promise.all([
       db.getFreezes(targetMember.id),
       db.getMassageBookings(currentProperty?.id || '', true),
@@ -325,7 +321,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             });
         } else {
             await db.addFreeze({ 
-                id: generateUUID(), 
+                id: crypto.randomUUID(), 
                 member_id: viewingMember.id, 
                 start_date: freezeForm.start_date, 
                 end_date: freezeForm.end_date, 

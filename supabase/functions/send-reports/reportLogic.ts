@@ -1678,14 +1678,14 @@ export const generateReportPDF = (options: PDFOptions) => {
         body: data.rows.map((r: any, idx: number) => [
           idx + 1,
           r.date,
-          r.guest_name,
+          r.name,
           r.category,
           r.check_no,
-          r.item_name || 'Membership',
-          formatCurrency(r.actual_price),
+          r.item,
+          formatCurrency(r.gross),
           r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
-          formatCurrency(r.discount_amount),
-          formatCurrency(r.net_revenue),
+          formatCurrency(r.discount_amt),
+          formatCurrency(r.net),
           r.remarks
         ]),
         foot: [[

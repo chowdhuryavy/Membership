@@ -1,13 +1,3 @@
-
-function generateUUID() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useForm, SubmitHandler, useFieldArray } from 'react-hook-form';
@@ -257,16 +247,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       }
   }, [isRenewal, existingMember, matchedMembers.length]);
 
-  const isUpdate = !!(isEditing && !isRenewal && existingMember);
-  const hasCategoryChanged = isUpdate && existingMember?.category_id !== categoryId;
-
-  const baseRate = useMemo(() => {
-    if (isUpdate && !hasCategoryChanged && existingMember) {
-      return existingMember.actual_rate;
-    }
-    return selectedCategory?.base_rate || 0;
-  }, [isUpdate, hasCategoryChanged, existingMember, selectedCategory]);
-
+  const baseRate = selectedCategory?.base_rate || 0;
   const netAmount = Math.max(0, baseRate - (Number(discount) || 0));
   
   const recognition = useMemo(() => {
@@ -362,25 +343,18 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
     const isUpdate = !!(isEditing && !isRenewal && existingMember);
     
-    // Check if key fields (category, start date, discount) have changed to determine if we should recalculate finances/dates
-    const hasCategoryChanged = isUpdate && existingMember?.category_id !== sanitizedData.category_id;
-    const hasStartDateChanged = isUpdate && existingMember?.start_date !== sanitizedData.start_date;
-    const hasDiscountChanged = isUpdate && Number(existingMember?.discount) !== Number(sanitizedData.discount);
-    
-    const shouldRecalculateFinances = !isUpdate || hasCategoryChanged || hasStartDateChanged || hasDiscountChanged;
-
     const payload: Member = {
       ...(isUpdate ? existingMember : {}),
       ...sanitizedData,
-      id: isUpdate ? existingMember!.id : generateUUID(),
+      id: isUpdate ? existingMember!.id : crypto.randomUUID(),
       outlet_id: currentOutlet.id,
-      original_end_date: shouldRecalculateFinances ? recognition.expiry : existingMember!.original_end_date,
-      current_end_date: shouldRecalculateFinances ? recognition.expiry : existingMember!.current_end_date,
-      actual_rate: shouldRecalculateFinances ? baseRate : existingMember!.actual_rate,
-      net_amount: shouldRecalculateFinances ? netAmount : existingMember!.net_amount,
-      original_net_amount: shouldRecalculateFinances ? netAmount : (existingMember!.original_net_amount ?? existingMember!.net_amount),
-      daily_rate: shouldRecalculateFinances ? recognition.daily : existingMember!.daily_rate,
-      status: isUpdate ? existingMember!.status : MemberStatus.ACTIVE
+      original_end_date: recognition.expiry,
+      current_end_date: recognition.expiry,
+      actual_rate: baseRate,
+      net_amount: netAmount,
+      original_net_amount: netAmount,
+      daily_rate: recognition.daily,
+      status: MemberStatus.ACTIVE
     } as Member;
 
     try {
@@ -642,13 +616,11 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                             className="w-full h-14 px-4 rounded-2xl bg-white border border-slate-200 font-black focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm shadow-sm cursor-pointer appearance-none"
                         >
                             <option value="">Select Category...</option>
-                            {sortedCategories.map(c => {
-                              return (
-                                <option key={c.id} value={c.id}>
-                                  {c.name} — {formatMoney(c.base_rate)}
-                                </option>
-                              );
-                            })}
+                            {sortedCategories.map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.name} — {formatMoney(c.base_rate)}
+                              </option>
+                            ))}
                         </select>
                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>

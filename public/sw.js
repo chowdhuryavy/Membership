@@ -1,4 +1,4 @@
-const CACHE_NAME = 'health-club-v22';
+const CACHE_NAME = 'health-club-v23';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -43,23 +43,6 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   // Ignore non-http(s) requests (like chrome-extension, data:, etc.)
   if (!event.request.url.startsWith('http')) return;
-
-  // Never cache .ts/.tsx files, node_modules, hot-update scripts or Vite development scripts
-  const url = event.request.url;
-  const isViteOrSource = 
-    url.includes('.ts') || 
-    url.includes('.tsx') || 
-    url.includes('/node_modules/') || 
-    url.includes('/@') || 
-    url.includes('.hot-update.') || 
-    url.includes('?import') || 
-    url.includes('&import') ||
-    url.includes('?v=') ||
-    url.includes('&v=');
-
-  if (isViteOrSource) {
-    return event.respondWith(fetch(event.request));
-  }
 
   // Navigation requests: Try Network First
   if (event.request.mode === 'navigate') {

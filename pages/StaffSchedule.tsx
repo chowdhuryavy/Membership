@@ -1,16 +1,3 @@
-
-const safeStorage = {
-  getItem(key: string): string | null {
-    try { return localStorage.getItem(key); } catch(e) { return null; }
-  },
-  setItem(key: string, value: string): void {
-    try { localStorage.setItem(key, value); } catch(e) {}
-  },
-  removeItem(key: string): void {
-    try { localStorage.removeItem(key); } catch(e) {}
-  }
-};
-
 /**
  * StaffSchedule.tsx
  * Comprehensive component for staff daily/monthly views and incentive reports.
@@ -337,23 +324,14 @@ const StaffSchedule = () => {
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const triggeredRemindersRef = useRef<Set<string>>(new Set());
   const [triggeredReminders, setTriggeredReminders] = useState<Set<string>>(() => {
-    let saved = null;
-    try {
-      saved = safeStorage.getItem('triggered_reminders');
-    } catch (e) {
-      console.warn("Storage access failed:", e);
-    }
+    const saved = localStorage.getItem('triggered_reminders');
     const initialSet = saved ? new Set(JSON.parse(saved)) : new Set();
     triggeredRemindersRef.current = initialSet;
     return initialSet;
   });
 
   useEffect(() => {
-    try {
-      safeStorage.setItem('triggered_reminders', JSON.stringify(Array.from(triggeredReminders)));
-    } catch (e) {
-      console.warn("Storage access failed:", e);
-    }
+    localStorage.setItem('triggered_reminders', JSON.stringify(Array.from(triggeredReminders)));
   }, [triggeredReminders]);
   
   const [selectedOutletId, setSelectedOutletId] = useState<string | null>(null);
@@ -412,12 +390,7 @@ const StaffSchedule = () => {
   // Initialize selectedOutletId when staff is loaded
   useEffect(() => {
     if (staff && !selectedOutletId) {
-      let stored = null;
-      try {
-        stored = safeStorage.getItem(`staff_selected_outlet_${staff.id}`);
-      } catch (e) {
-        console.warn("Storage access failed:", e);
-      }
+      const stored = localStorage.getItem(`staff_selected_outlet_${staff.id}`);
       if (stored && assignedOutlets.includes(stored)) {
         setSelectedOutletId(stored);
       } else if (assignedOutlets.length > 0) {
@@ -429,7 +402,7 @@ const StaffSchedule = () => {
   // Update localStorage when selectedOutletId changes (but don't trigger loads here, main effect handles it)
   useEffect(() => {
     if (staff && selectedOutletId) {
-      safeStorage.setItem(`staff_selected_outlet_${staff.id}`, selectedOutletId);
+      localStorage.setItem(`staff_selected_outlet_${staff.id}`, selectedOutletId);
       // Pre-fetch basic info for property when outlet changes
       loadPropertyDetails();
       
@@ -745,13 +718,7 @@ const StaffSchedule = () => {
   const isPasswordValid = passwordValidation.length && passwordValidation.match;
 
   useEffect(() => {
-    let sessionStr = null;
-    try {
-      sessionStr = safeStorage.getItem('staff_session');
-    } catch (e) {
-      console.warn("Storage access failed:", e);
-    }
-    
+    const sessionStr = localStorage.getItem('staff_session');
     if (!sessionStr) {
       navigate('/staff-login');
       return;
@@ -763,7 +730,7 @@ const StaffSchedule = () => {
         if (updatedStaff) {
           setStaff(updatedStaff);
           // Update session in localStorage
-          safeStorage.setItem('staff_session', JSON.stringify(updatedStaff));
+          localStorage.setItem('staff_session', JSON.stringify(updatedStaff));
         } else {
           setStaff(session);
         }
@@ -830,22 +797,6 @@ const StaffSchedule = () => {
     };
 
     loadPageData();
-  }, [staff?.id, staff?.property_id, currentDate, viewMode, selectedOutletId]);
-
-  const loadScheduleRef = useRef(loadSchedule);
-  const loadMonthlyScheduleRef = useRef(loadMonthlySchedule);
-  const loadIncentivesRef = useRef(loadIncentives);
-  const viewModeRef = useRef(viewMode);
-
-  useEffect(() => {
-    loadScheduleRef.current = loadSchedule;
-    loadMonthlyScheduleRef.current = loadMonthlySchedule;
-    loadIncentivesRef.current = loadIncentives;
-    viewModeRef.current = viewMode;
-  }, [loadSchedule, loadMonthlySchedule, loadIncentives, viewMode]);
-
-  useEffect(() => {
-    if (!staff?.id || !selectedOutletId) return;
 
     // Set up comprehensive real-time staff portal events (Bookings, Sales, Memberships)
     const unsubscribe = db.subscribeToStaffPortalEvents(selectedOutletId, staff.id, async (payload) => {
@@ -902,9 +853,9 @@ const StaffSchedule = () => {
       }
 
       // Refresh data on any update
-      if (viewModeRef.current === 'daily') loadScheduleRef.current();
-      else if (viewModeRef.current === 'monthly') loadMonthlyScheduleRef.current();
-      else if (viewModeRef.current === 'incentives') loadIncentivesRef.current();
+      if (viewMode === 'daily') loadSchedule();
+      else if (viewMode === 'monthly') loadMonthlySchedule();
+      else if (viewMode === 'incentives') loadIncentives();
     });
 
     // Also listen for general notification table changes for the bell icon
@@ -942,9 +893,9 @@ const StaffSchedule = () => {
       unsubscribe();
       unsubNotifications();
     };
-  }, [staff?.id, selectedOutletId]);
+  }, [staff?.id, staff?.property_id, currentDate, viewMode, selectedOutletId]);
 
-  async function loadPropertyDetails() {
+  const loadPropertyDetails = async () => {
     if (!staff || !selectedOutletId) return;
     try {
       const outlets = await db.getOutlets();
@@ -965,7 +916,7 @@ const StaffSchedule = () => {
     }
   };
 
-  async function loadSchedule() {
+  const loadSchedule = async () => {
     if (!staff || !selectedOutletId) return;
     setLoading(true);
     try {
@@ -1044,7 +995,7 @@ const StaffSchedule = () => {
     }
   };
 
-  async function loadIncentives() {
+  const loadIncentives = async () => {
     if (!staff || !selectedOutletId) return;
     setIncentiveLoading(true);
     try {
@@ -1137,18 +1088,16 @@ const StaffSchedule = () => {
         breakdown 
       });
     } catch (error: any) {
-      if (error?.message?.toLowerCase().includes('failed to fetch')) {
-        console.warn("Failed to load incentives (Network error)");
+      console.error("Failed to load incentives:", error);
+      if (error?.message?.includes('Failed to fetch')) {
         toast.error("Network connection unstable. Falling back to local mode.", { id: 'network-error' });
-      } else {
-        console.error("Failed to load incentives:", error);
       }
     } finally {
       setIncentiveLoading(false);
     }
   };
 
-  async function loadMonthlySchedule() {
+  const loadMonthlySchedule = async () => {
     if (!staff || !selectedOutletId) return;
     setLoading(true);
     try {
@@ -1231,7 +1180,7 @@ const StaffSchedule = () => {
   };
 
   const handleLogout = () => {
-    safeStorage.removeItem('staff_session');
+    localStorage.removeItem('staff_session');
     navigate('/staff-login');
   };
 
@@ -1251,7 +1200,7 @@ const StaffSchedule = () => {
       
       // Update local session just in case
       const updatedStaff = { ...staff, password: newPassword };
-      safeStorage.setItem('staff_session', JSON.stringify(updatedStaff));
+      localStorage.setItem('staff_session', JSON.stringify(updatedStaff));
       setStaff(updatedStaff);
       
       setTimeout(() => {
@@ -1273,7 +1222,7 @@ const StaffSchedule = () => {
       const updatedStaff = await db.getStaffById(staff.id);
       if (updatedStaff) {
         setStaff(updatedStaff);
-        safeStorage.setItem('staff_session', JSON.stringify(updatedStaff));
+        localStorage.setItem('staff_session', JSON.stringify(updatedStaff));
         toast.success('Permissions synced');
       }
     } catch (e) {

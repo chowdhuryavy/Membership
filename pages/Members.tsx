@@ -130,7 +130,7 @@ const Members = () => {
     if (!currentOutlet || !currentProperty || !canView) return;
 
     const channel = supabase
-      .channel(`realtime-members-${currentOutlet.id}`)
+      .channel('realtime-members')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'members' },
@@ -203,8 +203,8 @@ const Members = () => {
           isEditing={isEditing}
           isRenewal={isRenewal}
           categories={
-            isEditing || isRenewal
-              ? categories
+            (isEditing || isRenewal) && selectedMember?.membership_type_id
+              ? categories.filter(c => c.membership_type_id === selectedMember.membership_type_id)
               : filteredCategories
           }
           membershipTypes={membershipTypes}

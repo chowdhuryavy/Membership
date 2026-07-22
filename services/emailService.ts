@@ -18,6 +18,7 @@ export const emailService = {
 
 export const schedulerService = {
   async processScheduledReports() {
+    console.log('[Scheduler] Checking for scheduled reports...');
     const now = new Date();
     const currentTime = format(now, 'HH:mm');
     

@@ -1,17 +1,4 @@
 
-const safeStorage = {
-  getItem(key: string): string | null {
-    try { return localStorage.getItem(key); } catch(e) { return null; }
-  },
-  setItem(key: string, value: string): void {
-    try { localStorage.setItem(key, value); } catch(e) {}
-  },
-  removeItem(key: string): void {
-    try { localStorage.removeItem(key); } catch(e) {}
-  }
-};
-
-
 import { CompanySettings, Currency, Role, Permission, Outlet, Property, UserPermissionOverride, PermissionGroup, UserProfile } from '../types';
 import { db } from '../services/mockSupabase';
 import { useAuth } from './AuthContext';
@@ -40,35 +27,23 @@ interface SettingsContextType {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-function safeParse<T>(key: string, fallback: T): T {
-  try {
-    const cached = safeStorage.getItem(key);
-    if (cached) {
-      return JSON.parse(cached) as T;
-    }
-  } catch (e) {
-    console.warn("Storage access failed:", e);
-  }
-  return fallback;
-}
-
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, refreshUser, isSuperAdmin } = useAuth();
   const [settings, setSettings] = useState<CompanySettings | null>(() => {
-    return safeParse<CompanySettings | null>('company_settings_cache', null);
+    const cached = localStorage.getItem('company_settings_cache');
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
   });
-  const [currencies, setCurrencies] = useState<Currency[]>(() => {
-    return safeParse<Currency[]>('company_currencies_cache', []);
-  });
-  const [roles, setRoles] = useState<Role[]>(() => {
-    return safeParse<Role[]>('company_roles_cache', []);
-  });
-  const [outlets, setOutlets] = useState<Outlet[]>(() => {
-    return safeParse<Outlet[]>('company_outlets_cache', []);
-  });
-  const [properties, setProperties] = useState<Property[]>(() => {
-    return safeParse<Property[]>('company_properties_cache', []);
-  });
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [outlets, setOutlets] = useState<Outlet[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [currency, setCurrency] = useState<Currency | null>(null);
   const [currentOutlet, setCurrentOutletState] = useState<Outlet | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,7 +77,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         console.log('[SettingsSync] Database calls returned');
         
         setSettings({ ...s });
-        safeStorage.setItem('company_settings_cache', JSON.stringify(s));
+        localStorage.setItem('company_settings_cache', JSON.stringify(s));
         setCurrencies([...c]);
         setRoles([...r]);
         setOutlets([...o]);
@@ -126,22 +101,18 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Listen for sync messages from other tabs
   useEffect(() => {
     if (typeof BroadcastChannel !== 'undefined') {
-        try {
-            const bc = new BroadcastChannel('settings_sync');
-            bcRef.current = bc;
-            bc.onmessage = (event) => {
-                if (event.data === 'REFRESH_SETTINGS') {
-                    console.log('[SettingsSync] Broadcast received, synchronizing settings cross-tab...');
-                    refreshSettings(false); // Don't broadcast back to avoid infinite loops
-                }
-            };
-            return () => {
-                bc.close();
-                bcRef.current = null;
-            };
-        } catch (e) {
-            console.warn("BroadcastChannel not available or blocked in this environment");
-        }
+        const bc = new BroadcastChannel('settings_sync');
+        bcRef.current = bc;
+        bc.onmessage = (event) => {
+            if (event.data === 'REFRESH_SETTINGS') {
+                console.log('[SettingsSync] Broadcast received, synchronizing settings cross-tab...');
+                refreshSettings(false); // Don't broadcast back to avoid infinite loops
+            }
+        };
+        return () => {
+            bc.close();
+            bcRef.current = null;
+        };
     }
   }, []);
 
@@ -168,11 +139,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const setCurrentOutlet = (outlet: Outlet) => {
       setCurrentOutletState(outlet);
-      try {
-          safeStorage.setItem('membership_last_outlet', outlet.id);
-      } catch (e) {
-          console.warn("Storage write failed:", e);
-      }
+      localStorage.setItem('membership_last_outlet', outlet.id);
   };
 
   useEffect(() => {
@@ -192,12 +159,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           
           if (!prev || !isAllowed || userChanged || defaultChanged) {
               // Priority: Browser's last used outlet -> User's Admin-assigned default outlet -> First allowed outlet
-              let storedOutletId = null;
-              try {
-                  storedOutletId = safeStorage.getItem('membership_last_outlet');
-              } catch (e) {
-                  console.warn("Storage access failed:", e);
-              }
+              const storedOutletId = localStorage.getItem('membership_last_outlet');
               const storedOutlet = userAllowedOutlets.find(out => out.id === storedOutletId);
               if (storedOutlet) return storedOutlet;
 

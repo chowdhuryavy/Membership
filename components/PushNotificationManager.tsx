@@ -1,27 +1,4 @@
 
-function generateUUID() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
-const safeStorage = {
-  getItem(key: string): string | null {
-    try { return localStorage.getItem(key); } catch(e) { return null; }
-  },
-  setItem(key: string, value: string): void {
-    try { localStorage.setItem(key, value); } catch(e) {}
-  },
-  removeItem(key: string): void {
-    try { localStorage.removeItem(key); } catch(e) {}
-  }
-};
-
-
 import React, { useState, useEffect } from 'react';
 import { Bell, BellOff, Shield, Smartphone } from 'lucide-react';
 import { PushNotificationService } from '../services/pushNotificationService';
@@ -39,7 +16,7 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
     let user = authUser;
     if (!user) {
         try {
-            const staffSessionStr = safeStorage.getItem('staff_session');
+            const staffSessionStr = localStorage.getItem('staff_session');
             if (staffSessionStr) {
                 user = JSON.parse(staffSessionStr);
             }
@@ -228,7 +205,7 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
                                         toast.promise(
                                             PushNotificationService.subscribeUser(user.id).then(async () => {
                                                 const m = await import('../services/mockSupabase');
-                                                const testId = generateUUID();
+                                                const testId = crypto.randomUUID();
                                                 console.log('Push Test: Triggering for user', user.id, 'with tag', testId);
                                                 return m.db.triggerPushNotification(
                                                     user!.id, 

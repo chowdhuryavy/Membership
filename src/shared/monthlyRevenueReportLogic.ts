@@ -91,6 +91,8 @@ export const getMonthlyRevenueData = async (
   const prevBookings = (prevBookingsRes.data || []).filter(b => b.date >= prevStartStr && b.date <= prevEndStr);
   const prevSales = (prevSalesRes.data || []).filter(s => s.created_at >= `${prevStartStr}T00:00:00` && s.created_at <= `${prevEndStr}T23:59:59`);
 
+const MEMBER_LIGHT_COLUMNS = 'id, outlet_id, membership_type_id, membership_number, guest_name, category_id, start_date, original_end_date, current_end_date, cancellation_date, actual_rate, discount, net_amount, original_net_amount, daily_rate, check_no, status, created_at, nationality, dob, email, phone, is_married, package_type, access_type, membership_type, spouse_name, spouse_dob, kids, remarks, sales_rep_id, notes, referrer_name, privilege_usage';
+
   // Fetch members differently based on mode
   let membersRes, prevMembersRes;
   if (revenueMode === 'cash') {
@@ -101,8 +103,8 @@ export const getMonthlyRevenueData = async (
   } else {
     // Accrual mode: fetch all members who could have active days in current or previous year
     [membersRes, prevMembersRes] = await Promise.all([
-      supabase.from('members').select('*').in('outlet_id', outletIds).lte('start_date', endStr).gte('current_end_date', startStr),
-      supabase.from('members').select('*').in('outlet_id', outletIds).lte('start_date', prevEndStr).gte('current_end_date', prevStartStr)
+      supabase.from('members').select(MEMBER_LIGHT_COLUMNS).in('outlet_id', outletIds).lte('start_date', endStr).gte('current_end_date', startStr),
+      supabase.from('members').select(MEMBER_LIGHT_COLUMNS).in('outlet_id', outletIds).lte('start_date', prevEndStr).gte('current_end_date', prevStartStr)
     ]);
   }
 

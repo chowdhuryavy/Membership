@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button } from '../components/ui';
 import { supabase } from '../services/supabase';
 import { Member, MembershipCategory, MemberStatus } from '../types';
+import { DEFAULT_MEMBER_COLUMNS } from '../services/mockSupabase';
 import { format, parseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { UserCheck, FileDown, Filter } from 'lucide-react';
@@ -28,7 +29,7 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
     const loadData = async () => {
         setIsLoading(true);
         try {
-            let query = supabase.from('members').select('*').eq('outlet_id', currentOutlet?.id);
+            let query = supabase.from('members').select(DEFAULT_MEMBER_COLUMNS).eq('outlet_id', currentOutlet?.id);
             
             if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
                 query = query.eq('membership_type_id', selectedMembershipTypeId);

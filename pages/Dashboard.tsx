@@ -203,7 +203,7 @@ const Dashboard = () => {
     if (!currentOutlet || !currentProperty) return;
 
     const channel = supabase
-      .channel(`realtime-dashboard-${currentOutlet.id}`)
+      .channel('realtime-dashboard')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'members' },
@@ -372,23 +372,17 @@ const Dashboard = () => {
         });
 
         // Prepare Membership Type Mix
-        const nameToMixMap: Record<string, {name: string, value: number, count: number, color: string}> = {};
+        const typeMix: {name: string, value: number, count: number, color: string}[] = [];
         
-        // 1. Add known types grouped by name
-        mTypes.forEach((t) => {
-            if (!nameToMixMap[t.name]) {
-                nameToMixMap[t.name] = {
-                    name: t.name,
-                    value: 0,
-                    count: 0,
-                    color: ['#4f46e5', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b'][Object.keys(nameToMixMap).length % 5]
-                };
-            }
-            nameToMixMap[t.name].value += typeRevenueMap[t.id] || 0;
-            nameToMixMap[t.name].count += typeCountMap[t.id] || 0;
+        // 1. Add known types
+        mTypes.forEach((t, i) => {
+            typeMix.push({
+                name: t.name,
+                value: typeRevenueMap[t.id] || 0,
+                count: typeCountMap[t.id] || 0,
+                color: ['#4f46e5', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b'][i % 5]
+            });
         });
-
-        const typeMix = Object.values(nameToMixMap);
 
         // 2. Add "Unassigned" or "Other" for any revenue/count not in mTypes
         const knownTypeIds = new Set(mTypes.map(t => t.id));

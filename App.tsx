@@ -259,7 +259,7 @@ const ProtectedLayout = () => {
     );
   }, [location.pathname, splashPaths]);
 
-  const isAppInitializing = isAuthLoading || (user && isSettingsLoading);
+  const isAppInitializing = isAuthLoading || isSettingsLoading;
   
   // Track route changes to reset initial load state for splash pages
   const lastPathname = useRef(location.pathname);
@@ -344,7 +344,7 @@ const ProtectedLayout = () => {
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [checkShortcut, navigate]);
 
-  if (!user && !combinedLoading) return <Navigate to="/login" replace state={{ from: location }} />;
+  if (!user && !combinedLoading) return <Navigate to="/login" replace />;
   
   return (
     <>

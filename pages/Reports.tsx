@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '../components/ui';
 import { db } from '../services/mockSupabase';
-import { supabase } from '../services/supabase';
+import { supabase as supabaseClient } from '../services/supabase';
 import { Member, MassageBooking, MassageType, IncentiveRule, MemberStatus, Staff, Sale, Guest, MembershipCategory, StaffLeave, MembershipType, InventoryItem, CustomReportConfig } from '../types';
 import { RevenueEngine } from '../services/revenueEngine';
 import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO, endOfDay, startOfMonth, addMonths, parse } from 'date-fns';
@@ -95,8 +95,6 @@ interface RevenueRow {
     daily_rate: number;
 }
 
-
-
 const Reports = () => {
   const { user } = useAuth();
   const { settings, currency, currentOutlet, currentProperty, formatMoney, hasPermission, setPageLoading } = useSettings();
@@ -128,7 +126,7 @@ const Reports = () => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<any>(null);
-
+  const supabase = supabaseClient;
   
   // Cache for report results
   const reportCache = useRef<Record<string, any>>({});
@@ -333,12 +331,8 @@ const Reports = () => {
         setActiveStaffList(result.summary.staffList || []);
       }
 
-    } catch (error: any) {
-      if (error?.message?.toLowerCase().includes('failed to fetch')) {
-          console.warn('Network error loading report data');
-      } else {
-          console.error('Error loading report data:', error);
-      }
+    } catch (error) {
+      console.error('Error loading report data:', error);
       toast.error('Failed to load report data');
     } finally {
       setLoading(false);

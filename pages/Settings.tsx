@@ -1,6 +1,5 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal, Modal } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
@@ -155,7 +154,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'email_config' | 'custom_reports';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports';
 
 const SignatoryConfig = ({
   config = {},
@@ -267,7 +266,7 @@ const SignatoryConfig = ({
 
 const SettingsPage = () => {
   // Fix: Destructured currentOutlet and currentProperty from useSettings to provide necessary context for data fetching
-  const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry, currentOutlet, currentProperty, setCurrentOutlet } = useSettings();
+  const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry, currentOutlet, currentProperty } = useSettings();
   const { user, isSuperAdmin } = useAuth();
   const availableTabs = useMemo(() => {
     const isSuper = isSuperAdmin;
@@ -291,25 +290,12 @@ const SettingsPage = () => {
       { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_booking_engine') && !!currentProperty, icon: Timer },
       { id: 'membership_types', label: 'Membership Types', visible: hasPermission(user?.role_id || '', 'settings:view_membership_types') && !!currentOutlet, icon: Target },
       { id: 'massage_rooms', label: 'Massage Rooms', visible: hasPermission(user?.role_id || '', 'settings:view_massage_rooms') && !!currentProperty, icon: Store },
-      { id: 'email_config', label: 'Email Configuration', visible: hasPermission(user?.role_id || '', 'settings:view_reports_config'), icon: Mail },
+      { id: 'reports_config', label: 'Report Distribution', visible: hasPermission(user?.role_id || '', 'settings:view_reports_config'), icon: Mail },
       { id: 'custom_reports', label: 'Custom Intelligence', visible: hasPermission(user?.role_id || '', 'settings:view_custom_reports'), icon: FileText },
     ].filter(t => t.visible);
   }, [user, roles, hasPermission, currentProperty, currentOutlet]);
 
   const [activeTab, setActiveTab] = useState<TabId>(availableTabs[0]?.id as TabId || 'company');
-  const [activeEmailTab, setActiveEmailTab] = useState<'reports' | 'freeze'>('reports');
-
-  const [freezeEmails, setFreezeEmails] = useState<string[]>(['']);
-
-  useEffect(() => {
-    if (currentOutlet) {
-      const emailsStr = currentOutlet.freeze_notification_emails || '';
-      const emailsList = emailsStr ? emailsStr.split(',').map(e => e.trim()).filter(Boolean) : [];
-      setFreezeEmails(emailsList.length > 0 ? emailsList : ['']);
-    } else {
-      setFreezeEmails(['']);
-    }
-  }, [currentOutlet]);
 
   useEffect(() => {
     if (!availableTabs.find(t => t.id === activeTab)) {
@@ -339,27 +325,6 @@ const SettingsPage = () => {
     selected_membership_type_id: 'all',
     is_active: true 
   });
-
-  const [dbStatus, setDbStatus] = useState(() => db.getDatabaseStatus());
-  const [forceOffline, setForceOfflineState] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('force_offline_mode') === 'true' : false);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDbStatus(db.getDatabaseStatus());
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleToggleForceOffline = (force: boolean) => {
-    db.setForceOffline(force);
-    setForceOfflineState(force);
-    setDbStatus(db.getDatabaseStatus());
-    if (force) {
-      toast.success("Forced Local Offline Mode active. Database is safe and fast.");
-    } else {
-      toast.success("Automatic sync restored. Retrying cloud database connection...");
-    }
-  };
 
   const filteredProperties = useMemo(() => {
     if (isSuperAdmin) return properties;
@@ -524,7 +489,7 @@ const SettingsPage = () => {
           const types = await db.getMembershipTypes(currentOutlet.id);
           setMembershipTypes(types);
       }
-      if (activeTab === 'email_config') {
+      if (activeTab === 'reports_config') {
           const recipients = await db.getReportRecipients();
           setReportRecipients(recipients);
       }
@@ -556,45 +521,6 @@ const SettingsPage = () => {
     } finally { 
       setIsSaving(false); 
     } 
-  };
-
-  const handleSaveFreezeEmails = async () => {
-    if (!isSuperAdmin) {
-        showStatus('Unauthorized: Super Admin access required.', 'error');
-        return;
-    }
-    if (!currentOutlet) {
-      showStatus('No active outlet selected. Please select an outlet from the top dropdown.', 'error');
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const emailString = freezeEmails.map(e => e.trim()).filter(Boolean).join(', ');
-      await db.updateOutlet(currentOutlet.id, {
-        freeze_notification_emails: emailString
-      });
-      await refreshSettings();
-      showStatus(`Freeze notifications saved for outlet: ${currentOutlet.name}`);
-    } catch (e: any) {
-      showStatus(e.message, 'error');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleEmailChange = (index: number, value: string) => {
-    const updated = [...freezeEmails];
-    updated[index] = value;
-    setFreezeEmails(updated);
-  };
-
-  const handleAddEmail = () => {
-    setFreezeEmails([...freezeEmails, '']);
-  };
-
-  const handleRemoveEmail = (index: number) => {
-    const updated = freezeEmails.filter((_, i) => i !== index);
-    setFreezeEmails(updated.length > 0 ? updated : ['']);
   };
 
   const handlePropertySubmit = async () => {
@@ -1057,7 +983,6 @@ const SettingsPage = () => {
                               <Input label="Report Title" value={companyForm.report_title || ''} onChange={e => setCompanyForm({...companyForm, report_title: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                               <Input label="Report Subtitle" value={companyForm.report_subtitle || ''} onChange={e => setCompanyForm({...companyForm, report_subtitle: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                           </div>
-
                           <SignatoryConfig 
                             labelPrefix="Global"
                             config={companyForm.signatory_config}
@@ -1424,113 +1349,25 @@ const SettingsPage = () => {
               )}
 
               {activeTab === 'maintenance' && (
-                  <div className="space-y-6">
-                      <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
-                          <CardHeader className="bg-indigo-50 p-8 border-b border-indigo-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                              <div className="flex items-center gap-3">
-                                  <Zap className="w-8 h-8 text-indigo-600" />
-                                  <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Database Diagnostics & Sync Controls</CardTitle>
+                  <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                      <CardHeader className="bg-red-50 p-8 border-b border-red-100 flex items-center gap-3">
+                          <Zap className="w-8 h-8 text-red-600" />
+                          <CardTitle className="text-2xl font-black text-red-900 uppercase tracking-tighter">Terminal Operations</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-12 space-y-8">
+                          <div className="flex items-start gap-5 p-8 bg-red-50/50 border border-red-100 rounded-[2rem]">
+                              <AlertTriangle className="w-8 h-8 text-red-600 shrink-0" />
+                              <div>
+                                  <h4 className="font-black text-red-900 uppercase tracking-tight">Destructive Mutations</h4>
+                                  <p className="text-red-700/60 text-sm mt-1">Actions performed here bypass standard validation and irreversibly modify the database schema or data state.</p>
                               </div>
-                              <span className={`px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest w-max ${
-                                  dbStatus.mode === 'forced_offline' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
-                                  dbStatus.mode === 'cooldown' ? 'bg-orange-100 text-orange-700 border border-orange-200 animate-pulse' :
-                                  dbStatus.mode === 'no_client' ? 'bg-slate-100 text-slate-600 border border-slate-200' :
-                                  'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                              }`}>
-                                  {dbStatus.mode === 'forced_offline' ? '● Forced Offline' :
-                                   dbStatus.mode === 'cooldown' ? '● Automatic Fallback Mode' :
-                                   dbStatus.mode === 'no_client' ? '● Local Only Client' :
-                                   '● Cloud Synced Online'}
-                              </span>
-                          </CardHeader>
-                          <CardContent className="p-12 space-y-8">
-                              <div className="space-y-4">
-                                  <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Connection Controller</h4>
-                                  <div className="flex flex-col lg:flex-row lg:items-center gap-6 justify-between p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100">
-                                      <div className="space-y-1">
-                                          <p className="font-black text-slate-900 text-lg uppercase tracking-tight">Force Local Offline Mode</p>
-                                          <p className="text-slate-500 text-sm max-w-xl">
-                                              If your internet is slow or your Supabase database is experiencing connection timeouts or statement delays, toggle this mode ON to operate with maximum speed and reliability using secure offline browser storage.
-                                          </p>
-                                      </div>
-                                      <div className="flex items-center gap-3 shrink-0">
-                                          <button 
-                                              onClick={() => handleToggleForceOffline(false)}
-                                              className={`px-6 h-14 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${!forceOffline ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
-                                          >
-                                              Automatic Sync
-                                          </button>
-                                          <button 
-                                              onClick={() => handleToggleForceOffline(true)}
-                                              className={`px-6 h-14 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${forceOffline ? 'bg-amber-500 text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
-                                          >
-                                              Force Offline
-                                          </button>
-                                      </div>
-                                  </div>
-                              </div>
-
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-                                  <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100 space-y-2">
-                                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Connection Engine</p>
-                                      <p className="font-black text-slate-800 text-lg">
-                                          {dbStatus.mode === 'forced_offline' ? 'LocalStorage Sandboxed' :
-                                           dbStatus.mode === 'cooldown' ? 'Local Fallback' :
-                                           'Supabase Cloud Direct'}
-                                      </p>
-                                  </div>
-                                  <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100 space-y-2">
-                                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Consecutive Errors</p>
-                                      <p className="font-black text-slate-800 text-lg">{dbStatus.failures} / 3</p>
-                                  </div>
-                                  <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100 space-y-2">
-                                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Diagnostic Status</p>
-                                      <p className="font-black text-slate-800 text-lg">
-                                          {dbStatus.mode === 'online' ? 'Healthy & Syncing' : 'Resilient local mode active'}
-                                      </p>
-                                  </div>
-                              </div>
-
-                              <div className="p-8 bg-slate-50 rounded-[2rem] border border-slate-100 space-y-4">
-                                  <h4 className="font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-                                      <Info className="w-5 h-5 text-indigo-500" />
-                                      Why does my cloud database sometimes fail to connect or time out?
-                                  </h4>
-                                  <div className="text-slate-600 text-sm space-y-3 leading-relaxed">
-                                      <p>
-                                          1. <strong>PostgreSQL Cold Start delays</strong>: If your Supabase database server is cold starting, queries can take longer than normal. Standard limits prevent slow queries from blocking your browser.
-                                      </p>
-                                      <p>
-                                          2. <strong>Resource Contention or Network Latency</strong>: Intermittent internet connectivity or cloud regional routing can cause standard database handshakes to time out.
-                                      </p>
-                                      <p>
-                                          3. <strong>Seamless Automatic Fallback Protection</strong>: Even when database connections time out, our <strong>resilient state engine</strong> instantly saves your edits to local browser persistence and manages records locally. No data is lost, and you can edit member profiles or types completely uninterrupted!
-                                      </p>
-                                  </div>
-                              </div>
-                          </CardContent>
-                      </Card>
-
-                      <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
-                          <CardHeader className="bg-red-50 p-8 border-b border-red-100 flex items-center gap-3">
-                              <AlertTriangle className="w-8 h-8 text-red-600" />
-                              <CardTitle className="text-2xl font-black text-red-900 uppercase tracking-tighter">Terminal Operations</CardTitle>
-                          </CardHeader>
-                          <CardContent className="p-12 space-y-8">
-                              <div className="flex items-start gap-5 p-8 bg-red-50/50 border border-red-100 rounded-[2rem]">
-                                  <AlertTriangle className="w-8 h-8 text-red-600 shrink-0" />
-                                  <div>
-                                      <h4 className="font-black text-red-900 uppercase tracking-tight">Destructive Mutations</h4>
-                                      <p className="text-red-700/60 text-sm mt-1">Actions performed here bypass standard validation and irreversibly modify the database schema or data state.</p>
-                                  </div>
-                              </div>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                  <Button variant="danger" className="h-20 rounded-3xl font-black uppercase tracking-widest" onClick={() => { localStorage.clear(); window.location.reload(); }}><RefreshCcw className="w-5 h-5 mr-3" /> Purge Cache & Sync</Button>
-                                  <Button variant="outline" className="h-20 rounded-3xl font-black uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50" onClick={() => { localStorage.clear(); window.location.reload(); }}><Eraser className="w-5 h-5 mr-3" /> Hard Reset System</Button>
-                              </div>
-                          </CardContent>
-                      </Card>
-                  </div>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <Button variant="danger" className="h-20 rounded-3xl font-black uppercase tracking-widest"><RefreshCcw className="w-5 h-5 mr-3" /> Purge Cache & Sync</Button>
+                              <Button variant="outline" className="h-20 rounded-3xl font-black uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50"><Eraser className="w-5 h-5 mr-3" /> Hard Reset System</Button>
+                          </div>
+                      </CardContent>
+                  </Card>
               )}
 
               {activeTab === 'incentives' && (
@@ -1641,54 +1478,36 @@ const SettingsPage = () => {
                   </Card>
               )}
 
-              {activeTab === 'email_config' && (
+              {activeTab === 'reports_config' && (
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
-                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex flex-col gap-6">
+                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-5">
                               <Mail className="w-8 h-8 text-indigo-600" />
-                              <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Email Configuration</CardTitle>
+                              <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Report Distribution</CardTitle>
                           </div>
-                          <div className="flex gap-4">
-                              <button 
-                                  onClick={() => { setActiveEmailTab('reports'); setShowForm(false); }} 
-                                  className={`px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${activeEmailTab === 'reports' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-500 border-2 hover:bg-slate-50'}`}
-                              >
-                                  Report Distribution
-                              </button>
-                              <button 
-                                  onClick={() => { setActiveEmailTab('freeze'); setShowForm(false); }} 
-                                  className={`px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${activeEmailTab === 'freeze' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-500 border-2 hover:bg-slate-50'}`}
-                              >
-                                  Freeze Notifications
-                              </button>
-                          </div>
+                          <Button 
+                              onClick={() => { 
+                                  setEditingId(null); 
+                                  setReportRecipientForm({ 
+                                      email: '', 
+                                      property_id: '', 
+                                      outlet_id: 'all', 
+                                      report_type: 'revenue_recognition', 
+                                      send_time: '08:00',
+                                      report_date_type: 'today',
+                                      incentive_dept: 'Massage',
+                                      selected_membership_type_id: 'all',
+                                      is_active: true 
+                                  }); 
+                                  setShowForm(true); 
+                              }} 
+                              className="h-14 px-8 rounded-2xl font-black text-xs uppercase"
+                          >
+                              <Plus className="w-4 h-4 mr-2" /> Authorize Recipient
+                          </Button>
                       </CardHeader>
                       <CardContent className="p-0">
-                          {activeEmailTab === 'reports' && (
-                              <>
-                              <div className="p-8 border-b border-slate-100 flex justify-end">
-                                  <Button 
-                                      onClick={() => { 
-                                          setEditingId(null); 
-                                          setReportRecipientForm({ 
-                                              email: '', 
-                                              property_id: '', 
-                                              outlet_id: 'all', 
-                                              report_type: 'revenue_recognition', 
-                                              send_time: '08:00',
-                                              report_date_type: 'today',
-                                              incentive_dept: 'Massage',
-                                              selected_membership_type_id: 'all',
-                                              is_active: true 
-                                          }); 
-                                          setShowForm(true); 
-                                      }} 
-                                      className="h-14 px-8 rounded-2xl font-black text-xs uppercase"
-                                  >
-                                      <Plus className="w-4 h-4 mr-2" /> Authorize Recipient
-                                  </Button>
-                              </div>
-                              <table className="w-full text-left">
+                          <table className="w-full text-left">
                               <thead className="bg-slate-50 border-b">
                                   <tr>
                                       <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Recipient</th>
@@ -1781,152 +1600,6 @@ const SettingsPage = () => {
                                   )}
                               </tbody>
                           </table>
-                          </>
-                          )}
-
-                          {activeEmailTab === 'freeze' && (
-                              <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                                  {/* Outlet Selector Dropdown */}
-                                  <div className="p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                                      <div className="space-y-1">
-                                          <span className="text-[9px] font-black uppercase tracking-wider text-indigo-600">Configuration Target Scope</span>
-                                          <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">Active Outlet: {currentOutlet?.name || 'No Outlet Selected'}</h4>
-                                          <p className="text-xs text-slate-500 font-medium">Select which facility outlet's freeze notifications you want to configure.</p>
-                                      </div>
-                                      <select
-                                          value={currentOutlet?.id || ''}
-                                          onChange={(e) => {
-                                              const selected = outlets.find(o => o.id === e.target.value);
-                                              if (selected) setCurrentOutlet(selected);
-                                          }}
-                                          className="h-12 px-4 rounded-xl border-2 border-slate-200 font-bold text-xs bg-white focus:border-indigo-600 focus:outline-none transition-all cursor-pointer shadow-sm w-full md:w-64"
-                                      >
-                                          <option value="" disabled>-- Select Outlet --</option>
-                                          {outlets.map(o => {
-                                              const prop = properties.find(p => p.id === o.property_id);
-                                              return (
-                                                  <option key={o.id} value={o.id}>
-                                                      {o.name} {prop ? `(${prop.name})` : ''}
-                                                  </option>
-                                              );
-                                          })}
-                                      </select>
-                                  </div>
-
-                                  {/* Outlet Specific Recipients */}
-                                  <div className="p-8 border-2 border-indigo-100 bg-indigo-50/20 rounded-3xl space-y-6">
-                                      <div className="flex items-center gap-3">
-                                          <Mail className="w-6 h-6 text-indigo-600" />
-                                          <h3 className="text-xl font-black text-indigo-900 uppercase tracking-tight">Localized Freeze Delivery ({currentOutlet?.name || 'Selected Outlet'})</h3>
-                                      </div>
-                                      <p className="text-xs text-indigo-700 font-semibold uppercase tracking-wider">Automated system alerts via Supabase Edge Functions whenever a contract is suspended at this facility.</p>
-                                      
-                                      <div className="space-y-4">
-                                          <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Outlet Recipient Addresses *</label>
-                                          {freezeEmails.map((email, index) => (
-                                              <div key={index} className="flex gap-2 animate-in slide-in-from-left-2 duration-200">
-                                                  <div className="relative flex-1">
-                                                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                                      <Input 
-                                                          value={email} 
-                                                          onChange={e => handleEmailChange(index, e.target.value)} 
-                                                          placeholder="e.g. admin@example.com"
-                                                          className="h-14 pl-12 rounded-xl font-bold border-2 w-full bg-white" 
-                                                      />
-                                                  </div>
-                                                  {freezeEmails.length > 1 && (
-                                                      <Button 
-                                                          variant="ghost" 
-                                                          onClick={() => handleRemoveEmail(index)}
-                                                          className="h-14 w-14 rounded-xl border-2 border-slate-100 text-red-500 hover:bg-red-50 hover:border-red-100 shrink-0 bg-white"
-                                                      >
-                                                          <Trash2 className="w-4 h-4" />
-                                                      </Button>
-                                                  )}
-                                              </div>
-                                          ))}
-                                          <Button 
-                                              variant="outline" 
-                                              type="button"
-                                              onClick={handleAddEmail}
-                                              className="w-full h-12 rounded-xl border-dashed border-2 text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all bg-white"
-                                          >
-                                              + ADD EMAIL RECIPIENT
-                                          </Button>
-                                      </div>
-                                      
-                                      <Button onClick={handleSaveFreezeEmails} isLoading={isSaving} className="h-14 px-8 rounded-2xl font-black uppercase tracking-widest shadow-xl bg-indigo-600">
-                                          Save {currentOutlet?.name || 'Outlet'} Recipients
-                                      </Button>
-                                  </div>
-
-                                  {/* Global Fallback Recipients */}
-                                  <div className="p-8 border-2 border-slate-200 bg-slate-50/50 rounded-3xl space-y-6">
-                                      <div className="flex items-center gap-3">
-                                          <Globe className="w-6 h-6 text-slate-500" />
-                                          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Global Fallback Delivery</h3>
-                                      </div>
-                                      <p className="text-xs text-slate-600 font-medium">Configure global fallback email addresses. If a member's outlet has no custom recipients configured above, these fallback email addresses will receive the freeze notification alerts.</p>
-                                      
-                                      <div className="space-y-4">
-                                          <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Global Fallback Recipient Addresses</label>
-                                          {(companyForm.freeze_notification_emails ? companyForm.freeze_notification_emails.split(',').map(e => e.trim()) : ['']).map((email, index, arr) => (
-                                              <div key={index} className="flex gap-2 animate-in slide-in-from-left-2 duration-200">
-                                                  <div className="relative flex-1">
-                                                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                                      <Input 
-                                                          value={email} 
-                                                          onChange={e => {
-                                                              const newEmails = [...arr];
-                                                              newEmails[index] = e.target.value;
-                                                              setCompanyForm({
-                                                                  ...companyForm,
-                                                                  freeze_notification_emails: newEmails.join(', ')
-                                                              });
-                                                          }} 
-                                                          placeholder="e.g. corporate@example.com"
-                                                          className="h-14 pl-12 rounded-xl font-bold border-2 w-full bg-white" 
-                                                      />
-                                                  </div>
-                                                  {arr.length > 1 && (
-                                                      <Button 
-                                                          variant="ghost" 
-                                                          onClick={() => {
-                                                              const newEmails = arr.filter((_, i) => i !== index);
-                                                              setCompanyForm({
-                                                                  ...companyForm,
-                                                                  freeze_notification_emails: newEmails.join(', ')
-                                                              });
-                                                          }}
-                                                          className="h-14 w-14 rounded-xl border-2 border-slate-100 text-red-500 hover:bg-red-50 hover:border-red-100 shrink-0 bg-white"
-                                                      >
-                                                          <Trash2 className="w-4 h-4" />
-                                                      </Button>
-                                                  )}
-                                              </div>
-                                          ))}
-                                          <Button 
-                                              variant="outline" 
-                                              type="button"
-                                              onClick={() => {
-                                                  const currentEmails = companyForm.freeze_notification_emails ? companyForm.freeze_notification_emails.split(',').map(e => e.trim()) : [];
-                                                  setCompanyForm({
-                                                      ...companyForm,
-                                                      freeze_notification_emails: [...currentEmails, ''].join(', ')
-                                                  });
-                                              }}
-                                              className="w-full h-12 rounded-xl border-dashed border-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all bg-white"
-                                          >
-                                              + ADD GLOBAL RECIPIENT
-                                          </Button>
-                                      </div>
-                                      
-                                      <Button onClick={handleUpdateCompany} isLoading={isSaving} className="h-14 px-8 rounded-2xl font-black uppercase tracking-widest shadow-xl bg-slate-700 hover:bg-slate-800 text-white">
-                                          Save Global Fallback Recipients
-                                      </Button>
-                                  </div>
-                              </div>
-                          )}
                       </CardContent>
                   </Card>
               )}
@@ -2045,7 +1718,7 @@ const SettingsPage = () => {
                   <CardHeader className="bg-indigo-600 text-white p-10 flex flex-col gap-1">
                       <CardTitle className="text-xl font-black uppercase tracking-widest flex items-center gap-3">
                         {editingId ? <Edit2 className="w-6 h-6"/> : <Plus className="w-6 h-6" />}
-                        {activeTab === 'properties' ? 'Property Configuration' : activeTab === 'outlets' ? 'Outlet Configuration' : activeTab === 'roles' ? 'Role Configuration' : activeTab === 'currency' ? 'Currency Settings' : activeTab === 'email_config' ? 'Report Settings' : 'Settings'}
+                        {activeTab === 'properties' ? 'Property Configuration' : activeTab === 'outlets' ? 'Outlet Configuration' : activeTab === 'roles' ? 'Role Configuration' : activeTab === 'currency' ? 'Currency Settings' : activeTab === 'reports_config' ? 'Report Settings' : 'Settings'}
                       </CardTitle>
                       <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Configuration</p>
                   </CardHeader>
@@ -2213,7 +1886,7 @@ const SettingsPage = () => {
                             <Button onClick={handleCurrencySubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Save Currency</Button>
                         </div>
                       )}
-                      {activeTab === 'email_config' && activeEmailTab === 'reports' && (
+                      {activeTab === 'reports_config' && (
                         <div className="space-y-6">
                             <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100 mb-6">
                                 <div className="flex items-center gap-3 mb-2">

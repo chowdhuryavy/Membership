@@ -56,12 +56,8 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
         setData(res);
         setLoading(false);
       })
-      .catch((err: any) => {
-        if (err?.message?.toLowerCase().includes('failed to fetch')) {
-            console.warn('Network error fetching monthly revenue data');
-        } else {
-            console.error('Error fetching monthly revenue data:', err);
-        }
+      .catch(err => {
+        console.error('Error fetching monthly revenue data:', err);
         setLoading(false);
       });
   }, [currentOutlet, currentProperty, reportMonth, revenueMode, externalData]);

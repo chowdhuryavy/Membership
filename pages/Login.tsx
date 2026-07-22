@@ -1,21 +1,8 @@
-
-const safeStorage = {
-  getItem(key: string): string | null {
-    try { return localStorage.getItem(key); } catch(e) { return null; }
-  },
-  setItem(key: string, value: string): void {
-    try { localStorage.setItem(key, value); } catch(e) {}
-  },
-  removeItem(key: string): void {
-    try { localStorage.removeItem(key); } catch(e) {}
-  }
-};
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Button } from '../components/ui';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Sparkles, ShieldAlert, CheckCircle2, UserCircle2, Users } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 
@@ -35,7 +22,6 @@ const Login = () => {
   const { login, changePassword } = useAuth();
   const { settings } = useSettings();
   const navigate = useNavigate();
-  const location = useLocation();
 
   useEffect(() => {
       setPasswordsMatch(newPassword !== '' && newPassword === confirmPassword);
@@ -54,16 +40,9 @@ const Login = () => {
     } else if (requiresPasswordChange) {
       setMustChangePassword(true);
     } else {
-      let sessionName = email;
-      try {
-          const session = JSON.parse(sessionStorage.getItem('membership_session') || '{}');
-          if (session.name) sessionName = session.name;
-      } catch (e) {
-          console.warn("Storage read failed:", e);
-      }
-      db.logAction('AUTH_LOGIN', `User session authenticated for: ${sessionName} (${email.toLowerCase()}) at ${new Date().toLocaleString()}`);
-      const from = location.state?.from ? `${location.state.from.pathname}${location.state.from.search || ''}` : '/';
-      navigate(from, { replace: true });
+      const session = JSON.parse(localStorage.getItem('membership_session') || '{}');
+      db.logAction('AUTH_LOGIN', `User session authenticated for: ${session.name || email} (${email.toLowerCase()}) at ${new Date().toLocaleString()}`);
+      navigate('/');
     }
   };
 
@@ -77,8 +56,7 @@ const Login = () => {
           await changePassword(password, newPassword);
           db.logAction('AUTH_SECURITY_UPDATE', `Credential migration completed for: ${email.toLowerCase()}`);
           setMustChangePassword(false);
-          const from = location.state?.from ? `${location.state.from.pathname}${location.state.from.search || ''}` : '/';
-          navigate(from, { replace: true });
+          navigate('/');
       } catch (err: any) {
           setError(err.message || "Failed to update security credentials.");
       } finally {
@@ -89,7 +67,7 @@ const Login = () => {
   const companyName = settings?.name || 'Health Club Management';
 
   useEffect(() => {
-    safeStorage.setItem('preferred_portal', 'admin');
+    localStorage.setItem('preferred_portal', 'admin');
   }, []);
 
   return (

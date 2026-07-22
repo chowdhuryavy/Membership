@@ -1,7 +1,5 @@
-import './polyfill';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-
 import App from './App';
 import './index.css';
 import { AuthProvider } from './contexts/AuthContext';
@@ -24,18 +22,10 @@ root.render(
   </React.StrictMode>
 );
 
-// if ('serviceWorker' in navigator) {
-//   const registerSW = () => {
-//     navigator.serviceWorker.register('/sw.js').then(reg => {
-//       console.log('SW registered:', reg);
-//     }).catch(err => {
-//       console.log('SW registration failed:', err);
-//     });
-//   };
-// 
-//   if (document.readyState === 'complete') {
-//     registerSW();
-//   } else {
-//     window.addEventListener('load', registerSW);
-//   }
-// }
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(registrations) {
+    for(let registration of registrations) {
+      registration.unregister();
+    }
+  });
+}

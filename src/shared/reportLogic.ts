@@ -13,6 +13,8 @@ export interface ReportData {
   summary: any;
 }
 
+const MEMBER_LIGHT_COLUMNS = 'id, outlet_id, membership_type_id, membership_number, guest_name, category_id, start_date, original_end_date, current_end_date, cancellation_date, actual_rate, discount, net_amount, original_net_amount, daily_rate, check_no, status, created_at, nationality, dob, email, phone, is_married, package_type, access_type, membership_type, spouse_name, spouse_dob, kids, remarks, sales_rep_id, notes, referrer_name, privilege_usage';
+
 import { getMonthlyRevenueData } from './monthlyRevenueReportLogic';
 
 export interface ReportContext {
@@ -86,7 +88,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     if (outletIds.length === 0) return { rows: [], summary: { totalNetFees: 0, totalEarned: 0, totalDeferred: 0, count: 0 } };
 
-    let membersQuery = supabase.from('members').select('*').in('outlet_id', outletIds);
+    let membersQuery = supabase.from('members').select(MEMBER_LIGHT_COLUMNS).in('outlet_id', outletIds);
     if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
       membersQuery = membersQuery.eq('membership_type_id', selectedMembershipTypeId);
     }
@@ -94,11 +96,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const membersRes = await membersQuery;
 
     if (membersRes.error) {
-      if (membersRes.error.message?.toLowerCase().includes('failed to fetch')) {
-        console.warn('Network error fetching members');
-      } else {
-        console.error('Error fetching members:', membersRes.error);
-      }
+      console.error('Error fetching members:', membersRes.error);
       throw new Error(`Failed to fetch members: ${membersRes.error.message}`);
     }
 
@@ -371,7 +369,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     if (outletIds.length === 0) return { rows: [], summary: { count: 0 } };
 
     // members_joined
-    let membersQuery = supabase.from('members').select('*').in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr);
+    let membersQuery = supabase.from('members').select(MEMBER_LIGHT_COLUMNS).in('outlet_id', outletIds).gte('start_date', startStr).lte('start_date', endStr);
     if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
       membersQuery = membersQuery.eq('membership_type_id', selectedMembershipTypeId);
     }
@@ -451,7 +449,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     if (outletIds.length === 0) return { rows: [], summary: { count: 0 } };
 
     // expiring_memberships
-    let membersQuery = supabase.from('members').select('*').in('outlet_id', outletIds);
+    let membersQuery = supabase.from('members').select(MEMBER_LIGHT_COLUMNS).in('outlet_id', outletIds);
     if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
       membersQuery = membersQuery.eq('membership_type_id', selectedMembershipTypeId);
     }
@@ -542,7 +540,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
     const [salesRes, bookingsRes, membersRes, rulesRes] = await Promise.all([
       supabase.from('sales').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59`),
       supabase.from('massage_bookings').select('*').in('outlet_id', outletIds).eq('status', 'completed').gte('date', startStr).lte('date', endStr),
-      supabase.from('members').select('*').in('outlet_id', outletIds).neq('status', 'tentative').gte('start_date', startStr).lte('start_date', endStr),
+      supabase.from('members').select(MEMBER_LIGHT_COLUMNS).in('outlet_id', outletIds).neq('status', 'tentative').gte('start_date', startStr).lte('start_date', endStr),
       supabase.from('incentive_rules').select('*').eq('is_active', true)
     ]);
 
@@ -1752,14 +1750,14 @@ export const generateReportPDF = (options: PDFOptions) => {
         body: data.rows.map((r: any, idx: number) => [
           idx + 1,
           r.date,
-          r.guest_name,
+          r.name,
           r.category,
           r.check_no,
-          r.item_name || 'Membership',
-          formatCurrency(r.actual_price),
+          r.item,
+          formatCurrency(r.gross),
           r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
-          formatCurrency(r.discount_amount),
-          formatCurrency(r.net_revenue),
+          formatCurrency(r.discount_amt),
+          formatCurrency(r.net),
           r.remarks
         ]),
         foot: [[
