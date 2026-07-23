@@ -494,25 +494,37 @@ const Users = () => {
   };
 
   const callEdgeFunction = async (funcName: string, payload: any) => {
-    const { data: { session } } = await (supabase.auth as any).getSession();
-    if (!session) throw new Error("Session expired. Please refresh the page or login again.");
-    
+    // Check if we are in a failed state globally to avoid making doomed requests
+    if ((db as any).supabaseFailed) {
+      throw new Error("Application is currently in offline mode. This operation requires a network connection.");
+    }
+
     try {
-        const response = await fetch(`${supabaseUrl}/functions/v1/${funcName}`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseAnonKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...payload, accessToken: session.access_token })
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Server returned status ${response.status}: ${errorText}`);
-        }
-        
-        return await response.json();
+      const { data: { session } } = await (supabase.auth as any).getSession();
+      if (!session) throw new Error("Session expired. Please refresh the page or login again.");
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/${funcName}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseAnonKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...payload, accessToken: session.access_token })
+      });
+      
+      if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Server returned status ${response.status}: ${errorText}`);
+      }
+      
+      return await response.json();
     } catch (error: any) {
         console.error(`Edge function call failed: ${funcName}`, error);
-        throw new Error(`Failed to call edge function ${funcName}: ${error.message}`);
+        
+        // Handle "Failed to fetch" specifically
+        if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
+            (db as any).supabaseFailed = true;
+            throw new Error("Network connection lost. Please check your internet and try again.");
+        }
+        
+        throw error;
     }
   };
 

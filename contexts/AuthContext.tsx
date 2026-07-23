@@ -36,7 +36,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(() => {
-      const stored = localStorage.getItem('membership_session');
+      const stored = sessionStorage.getItem('membership_session');
       if (stored) {
           try {
               return JSON.parse(stored);
@@ -56,14 +56,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('membership_session');
     sessionStorage.removeItem('membership_session');
     sessionStorage.removeItem('admin_session_active');
     localStorage.removeItem('membership_last_outlet');
   };
 
   const refreshUser = async () => {
-      const storedUser = localStorage.getItem('membership_session');
+      const storedUser = sessionStorage.getItem('membership_session');
       if (storedUser) {
           const parsed = JSON.parse(storedUser);
           
@@ -78,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   const overrides = await db.getPermissionOverrides(freshUser.id);
                   const hydrated = { ...freshUser, overrides };
                   setUser(hydrated);
-                  localStorage.setItem('membership_session', JSON.stringify(hydrated));
+                  sessionStorage.setItem('membership_session', JSON.stringify(hydrated));
               }
           } catch (e) {
               console.warn("User state sync failed, using cached session.");
@@ -88,7 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const init = async () => {
-        const stored = localStorage.getItem('membership_session');
+        const stored = sessionStorage.getItem('membership_session');
         if (stored) {
             await refreshUser();
         }
@@ -102,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { user: foundUser, error, requiresPasswordChange } = await db.login(email, password);
     if (foundUser) {
       setUser(foundUser);
-      localStorage.setItem('membership_session', JSON.stringify(foundUser));
+      sessionStorage.setItem('membership_session', JSON.stringify(foundUser));
       if (isSuperAdminRole(foundUser.role_id)) {
           sessionStorage.setItem('admin_session_active', 'true');
       }
@@ -136,7 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await db.updateUser(user.id, updates);
       const updatedUser = { ...user, ...updates };
       setUser(updatedUser);
-      localStorage.setItem('membership_session', JSON.stringify(updatedUser));
+      sessionStorage.setItem('membership_session', JSON.stringify(updatedUser));
       
       if (isSuperAdminRole(updatedUser.role_id)) {
           sessionStorage.setItem('admin_session_active', 'true');

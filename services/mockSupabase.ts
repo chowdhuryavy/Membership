@@ -52,11 +52,10 @@ class DatabaseService {
   }
 
   private isNetworkError(e: any): boolean {
-    const msg = (e?.message || e?.error?.message || '').toLowerCase();
+    const msg = (e?.message || e?.error?.message || e?.toString() || '').toLowerCase();
     if (
       msg.includes('statement timeout') || 
       msg.includes('canceling statement') || 
-      msg.includes('timeout') ||
       msg.includes('jwt') ||
       msg.includes('syntax error') ||
       msg.includes('column')
@@ -64,9 +63,14 @@ class DatabaseService {
       return false; // Statement timeout or SQL error is NOT a network connection loss!
     }
     return (
-      (e?.name === 'TypeError' && msg === 'failed to fetch') || 
+      msg.includes('failed to fetch') || 
       msg.includes('network error') || 
-      msg.includes('database not found')
+      msg.includes('database not found') ||
+      msg.includes('load failed') ||
+      msg.includes('timeout') ||
+      msg.includes('abort') ||
+      msg.includes('connection') ||
+      (e?.name === 'TypeError' && (msg.includes('fetch') || msg.includes('network') || msg.includes('failed')))
     );
   }
 
@@ -239,20 +243,26 @@ class DatabaseService {
 
   async getPermissionOverrides(userId: string): Promise<UserPermissionOverride[]> {
     if (!this.isSupabase()) return [];
-    const { data } = await supabase.from('user_permission_overrides').select('*').eq('user_id', userId);
-    return (data || []) as UserPermissionOverride[];
+    return this.safeCall(async () => {
+      const { data } = await supabase.from('user_permission_overrides').select('*').eq('user_id', userId);
+      return (data || []) as UserPermissionOverride[];
+    }, []);
   }
 
   async savePermissionOverride(override: Omit<UserPermissionOverride, 'id'>) {
     if (!this.isSupabase()) return;
-    await supabase.from('user_permission_overrides').upsert([override], { onConflict: 'user_id,permission_key' });
-    await this.logAction('SECURITY_OVERRIDE', `Updated override for ${override.permission_key} on User ID: ${override.user_id}`);
+    await this.safeCall(async () => {
+      await supabase.from('user_permission_overrides').upsert([override], { onConflict: 'user_id,permission_key' });
+      await this.logAction('SECURITY_OVERRIDE', `Updated override for ${override.permission_key} on User ID: ${override.user_id}`);
+    }, null);
   }
 
   async deletePermissionOverride(userId: string, key: Permission) {
     if (!this.isSupabase()) return;
-    await supabase.from('user_permission_overrides').delete().eq('user_id', userId).eq('permission_key', key);
-    await this.logAction('SECURITY_OVERRIDE_PURGE', `Removed override for ${key} on User ID: ${userId}`);
+    await this.safeCall(async () => {
+      await supabase.from('user_permission_overrides').delete().eq('user_id', userId).eq('permission_key', key);
+      await this.logAction('SECURITY_OVERRIDE_PURGE', `Removed override for ${key} on User ID: ${userId}`);
+    }, null);
   }
 
   async syncMemberEndDate(memberId: string) {
@@ -292,33 +302,35 @@ class DatabaseService {
     }
 
     try {
-        const [{ data: m }, { data: freezes }] = await Promise.all([
-          supabase.from('members').select('id, original_end_date, status').eq('id', memberId).single(),
-          supabase.from('freezes').select('total_days, start_date, end_date').eq('member_id', memberId)
-        ]);
-        if (!m || m.status === MemberStatus.TENTATIVE) return;
+        return await this.safeCall(async () => {
+          const [{ data: m }, { data: freezes }] = await Promise.all([
+            supabase.from('members').select('id, original_end_date, status').eq('id', memberId).single(),
+            supabase.from('freezes').select('total_days, start_date, end_date').eq('member_id', memberId)
+          ]);
+          if (!m || m.status === MemberStatus.TENTATIVE) return null;
 
-        const totalDeferred = (freezes || []).reduce((sum, f) => sum + (Number(f.total_days) || 0), 0);
-        const baselineDate = startOfDay(parseISO(m.original_end_date));
-        const calculatedEndDate = addDays(baselineDate, totalDeferred);
-        const newEndDateStr = format(calculatedEndDate, 'yyyy-MM-dd');
-        
-        const today = startOfDay(new Date());
-        const isCurrentlyFrozen = (freezes || []).some(f => {
-            const start = startOfDay(parseISO(f.start_date));
-            const end = startOfDay(parseISO(f.end_date));
-            return today >= start && today <= end;
-        });
+          const totalDeferred = (freezes || []).reduce((sum, f) => sum + (Number(f.total_days) || 0), 0);
+          const baselineDate = startOfDay(parseISO(m.original_end_date));
+          const calculatedEndDate = addDays(baselineDate, totalDeferred);
+          const newEndDateStr = format(calculatedEndDate, 'yyyy-MM-dd');
+          
+          const today = startOfDay(new Date());
+          const isCurrentlyFrozen = (freezes || []).some(f => {
+              const start = startOfDay(parseISO(f.start_date));
+              const end = startOfDay(parseISO(f.end_date));
+              return today >= start && today <= end;
+          });
 
-        const newStatus = isCurrentlyFrozen ? MemberStatus.FROZEN : MemberStatus.ACTIVE;
-        
-        // Final check for expiry
-        const finalStatus = (newStatus === MemberStatus.ACTIVE && today > startOfDay(parseISO(newEndDateStr))) 
-            ? MemberStatus.EXPIRED 
-            : newStatus;
+          const newStatus = isCurrentlyFrozen ? MemberStatus.FROZEN : MemberStatus.ACTIVE;
+          
+          // Final check for expiry
+          const finalStatus = (newStatus === MemberStatus.ACTIVE && today > startOfDay(parseISO(newEndDateStr))) 
+              ? MemberStatus.EXPIRED 
+              : newStatus;
 
-        await supabase.from('members').update({ status: finalStatus, current_end_date: newEndDateStr }).eq('id', memberId);
-        return newEndDateStr;
+          await supabase.from('members').update({ status: finalStatus, current_end_date: newEndDateStr }).eq('id', memberId);
+          return newEndDateStr;
+        }, null);
     } catch (err) { console.error(err); }
   }
 
@@ -337,7 +349,7 @@ class DatabaseService {
         affected_entity?: string;
     } = {}
   ) {
-    const sessionStr = localStorage.getItem('membership_session');
+    const sessionStr = sessionStorage.getItem('membership_session');
     const session = sessionStr ? JSON.parse(sessionStr) : null;
     
     // Inferred Metadata (Mocked)
@@ -545,6 +557,9 @@ class DatabaseService {
 
       } catch (err: any) {
         console.error("Login attempt error:", err);
+        if (this.isNetworkError(err)) {
+          DatabaseService.supabaseFailed = true;
+        }
       }
     }
 
@@ -651,9 +666,11 @@ class DatabaseService {
 
   async getStaffById(id: string): Promise<Staff | null> {
     if (this.isSupabase()) {
-      const { data, error } = await supabase.from('staff').select('*').eq('id', id).single();
-      if (error) return null;
-      return data as Staff;
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('staff').select('*').eq('id', id).single();
+        if (error) return null;
+        return data as Staff;
+      }, null);
     }
     return null;
   }
@@ -724,8 +741,10 @@ class DatabaseService {
 
   async getStaffLeaves(staffId: string): Promise<StaffLeave[]> {
     if (this.isSupabase()) {
-      const { data } = await supabase.from('staff_leaves').select('*').eq('staff_id', staffId).order('start_date', { ascending: false });
-      return (data || []) as StaffLeave[];
+      return this.safeCall(async () => {
+        const { data } = await supabase.from('staff_leaves').select('*').eq('staff_id', staffId).order('start_date', { ascending: false });
+        return (data || []) as StaffLeave[];
+      }, []);
     }
     return [];
   }
@@ -778,19 +797,21 @@ class DatabaseService {
 
   async loginStaff(employeeNumber: string, password: string): Promise<Staff | null> {
     if (this.isSupabase()) {
-      const { data, error } = await supabase
-        .from('staff')
-        .select('*')
-        .eq('employee_number', employeeNumber)
-        .eq('password', password)
-        .eq('can_login', true)
-        .eq('is_active', true)
-        .single();
-      
-      if (error || !data) {
-        return null;
-      }
-      return data as Staff;
+      return this.safeCall(async () => {
+        const { data, error } = await supabase
+          .from('staff')
+          .select('*')
+          .eq('employee_number', employeeNumber)
+          .eq('password', password)
+          .eq('can_login', true)
+          .eq('is_active', true)
+          .single();
+        
+        if (error || !data) {
+          return null;
+        }
+        return data as Staff;
+      }, null);
     }
     return null;
   }
@@ -1890,10 +1911,12 @@ class DatabaseService {
 
   async getLogs(outlet_id?: string): Promise<SystemLog[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(1000);
-      if (outlet_id) query = query.or(`outlet_id.eq.${outlet_id},outlet_id.is.null`);
-      const { data } = await query;
-      return (data || []) as SystemLog[];
+      return this.safeCall(async () => {
+        let query = supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(1000);
+        if (outlet_id) query = query.or(`outlet_id.eq.${outlet_id},outlet_id.is.null`);
+        const { data } = await query;
+        return (data || []) as SystemLog[];
+      }, []);
     }
     return [];
   }
@@ -1963,28 +1986,33 @@ class DatabaseService {
 
   async getInventoryLogs(scopeId: string, isPropertyScope: boolean = false): Promise<InventoryLog[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('inventory_logs').select('*');
-      if (isPropertyScope) {
-          const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
-          const ids = (outlets || []).map(o => o.id);
-          query = query.in('outlet_id', ids);
-      } else {
-          query = query.eq('outlet_id', scopeId);
-      }
-      const { data } = await query.order('created_at', { ascending: false });
-      return (data || []) as InventoryLog[];
+      return this.safeCall(async () => {
+        let query = supabase.from('inventory_logs').select('*');
+        if (isPropertyScope) {
+            const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
+            const ids = (outlets || []).map(o => o.id);
+            query = query.in('outlet_id', ids);
+        } else {
+            query = query.eq('outlet_id', scopeId);
+        }
+        const { data } = await query.order('created_at', { ascending: false });
+        return (data || []) as InventoryLog[];
+      }, []);
     }
     return [];
   }
 
   async addInventoryLog(log: Omit<InventoryLog, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
-      await supabase.from('inventory_logs').insert([{ ...log, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
+      await this.safeCall(async () => {
+        await supabase.from('inventory_logs').insert([{ ...log, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
+      }, null);
     }
   }
 
   async addInventoryItem(item: Omit<InventoryItem, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
+      return this.safeCall(async () => {
         const { data, error } = await supabase.from('inventory').insert([{ ...item, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select().single();
         if (error) throw error;
         
@@ -2004,11 +2032,13 @@ class DatabaseService {
 
         await this.logAction('CREATE_INVENTORY', `Added inventory item: ${item.name} (Price: ${item.price}, Stock: ${item.stock_quantity})`, item.outlet_id);
         return data;
+      }, null);
     }
   }
 
   async updateInventoryItem(id: string, updates: Partial<InventoryItem>, reason?: string, userId?: string) {
     if (this.isSupabase()) {
+      await this.safeCall(async () => {
         // Get current item for logging
         const { data: currentItem } = await supabase.from('inventory').select('*').eq('id', id).single();
 
@@ -2043,13 +2073,16 @@ class DatabaseService {
 
         const changedFields = Object.keys(updates).filter(k => updates[k] !== undefined && updates[k] !== null).join(', ');
         await this.logAction('UPDATE_INVENTORY', `Updated inventory item: ${id}. Modified fields: [${changedFields}]`);
+      }, null);
     }
   }
 
   async deleteInventoryItem(id: string) {
     if (this.isSupabase()) {
+      await this.safeCall(async () => {
         await supabase.from('inventory').delete().eq('id', id);
         await this.logAction('DELETE_INVENTORY', `Deleted inventory item ID: ${id}`);
+      }, null);
     }
   }
 
@@ -2080,6 +2113,7 @@ class DatabaseService {
 
   async getSalesByDate(scopeId: string, isPropertyScope: boolean, dateStr: string): Promise<Sale[]> {
     if (this.isSupabase()) {
+      return this.safeCall(async () => {
         let query = supabase.from('sales').select('*');
         if (isPropertyScope) query = query.eq('property_id', scopeId);
         else query = query.eq('outlet_id', scopeId);
@@ -2089,12 +2123,14 @@ class DatabaseService {
         const { data, error } = await query.order('created_at', { ascending: false });
         if (error) throw error;
         return (data || []) as Sale[];
+      }, []);
     }
     return [];
   }
 
   async getSalesByDateRange(scopeId: string, isPropertyScope: boolean, startDate: string, endDate: string): Promise<Sale[]> {
     if (this.isSupabase()) {
+      return this.safeCall(async () => {
         let query = supabase.from('sales').select('*');
         if (isPropertyScope) query = query.eq('property_id', scopeId);
         else query = query.eq('outlet_id', scopeId);
@@ -2104,12 +2140,14 @@ class DatabaseService {
         const { data, error } = await query.order('created_at', { ascending: false });
         if (error) throw error;
         return (data || []) as Sale[];
+      }, []);
     }
     return [];
   }
 
   async addSale(sale: Omit<Sale, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
+      await this.safeCall(async () => {
         const { data: newSale, error } = await supabase.from('sales').insert([{ ...sale, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select().single();
         if (error) throw error;
         await this.logAction('POS_SALE', `Processed sale: ${sale.quantity}x ${sale.item_name} for ${sale.guest_name || 'Walk-in'} (Total: ${sale.net_amount})`, sale.outlet_id);
@@ -2143,19 +2181,23 @@ class DatabaseService {
           outlet_id: sale.outlet_id,
           required_permission: 'sales:view'
         });
+      }, null);
     }
   }
 
   async updateSale(id: string, updates: Partial<Sale>) {
     if (this.isSupabase()) {
+      await this.safeCall(async () => {
         await supabase.from('sales').update(updates).eq('id', id);
         const changedFields = Object.keys(updates).filter(k => updates[k] !== undefined && updates[k] !== null).join(', ');
         await this.logAction('POS_SALE_UPDATE', `Updated sale: ${id}. Modified fields: [${changedFields}]`);
+      }, null);
     }
   }
 
   async deleteSale(id: string) {
     if (this.isSupabase()) {
+      await this.safeCall(async () => {
         const { data: saleData } = await supabase.from('sales').select('*').eq('id', id).single();
         
         if (saleData) {
@@ -2203,61 +2245,72 @@ class DatabaseService {
             await supabase.from('massage_bookings').update({ status: 'confirmed' }).eq('id', saleData.booking_id);
             await this.logAction('BOOKING_RESTORED', `Booking ${saleData.booking_id} restored after sale void.`);
         }
+      }, null);
     }
   }
 
   async getGuests(propertyId: string, options?: { limit?: number }): Promise<Guest[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('guests').select('*').eq('property_id', propertyId);
-      if (options?.limit) query = query.limit(options.limit);
-      const { data, error } = await query.order('name');
-      if (error) throw error;
-      return (data || []) as Guest[];
+      return this.safeCall(async () => {
+        let query = supabase.from('guests').select('*').eq('property_id', propertyId);
+        if (options?.limit) query = query.limit(options.limit);
+        const { data, error } = await query.order('name');
+        if (error) throw error;
+        return (data || []) as Guest[];
+      }, []);
     }
     return [];
   }
 
   async getGuestById(id: string): Promise<Guest | null> {
     if (this.isSupabase()) {
-      const { data, error } = await supabase.from('guests').select('*').eq('id', id).maybeSingle();
-      if (error) throw error;
-      return data as Guest | null;
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('guests').select('*').eq('id', id).maybeSingle();
+        if (error) throw error;
+        return data as Guest | null;
+      }, null);
     }
     return null;
   }
 
   async getMassageTypeById(id: string): Promise<MassageType | null> {
     if (this.isSupabase()) {
-      const { data, error } = await supabase.from('massage_types').select('*').eq('id', id).maybeSingle();
-      if (error) throw error;
-      return data as MassageType | null;
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('massage_types').select('*').eq('id', id).maybeSingle();
+        if (error) throw error;
+        return data as MassageType | null;
+      }, null);
     }
     return null;
   }
 
   async saveGuest(guest: Omit<Guest, 'id' | 'created_at'>): Promise<Guest> {
     if (this.isSupabase()) {
-      const { data: existing } = await supabase.from('guests').select('*').eq('phone', guest.phone).eq('property_id', guest.property_id).maybeSingle();
-      if (existing) {
-        const updates: any = { name: guest.name, email: guest.email };
-        if (guest.id_card_url) updates.id_card_url = guest.id_card_url;
-        
-        const { data, error } = await supabase.from('guests').update(updates).eq('id', existing.id).select().single();
-        if (error) throw error;
-        return data as Guest;
-      } else {
-        const { data, error } = await supabase.from('guests').insert([{ ...guest, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select().single();
-        if (error) throw error;
-        return data as Guest;
-      }
+      return this.safeCall(async () => {
+        const { data: existing } = await supabase.from('guests').select('*').eq('phone', guest.phone).eq('property_id', guest.property_id).maybeSingle();
+        if (existing) {
+          const updates: any = { name: guest.name, email: guest.email };
+          if (guest.id_card_url) updates.id_card_url = guest.id_card_url;
+          
+          const { data, error } = await supabase.from('guests').update(updates).eq('id', existing.id).select().single();
+          if (error) throw error;
+          return data as Guest;
+        } else {
+          const { data, error } = await supabase.from('guests').insert([{ ...guest, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select().single();
+          if (error) throw error;
+          return data as Guest;
+        }
+      }, { ...guest, id: crypto.randomUUID(), created_at: new Date().toISOString() } as Guest);
     }
     return { ...guest, id: crypto.randomUUID(), created_at: new Date().toISOString() } as Guest;
   }
 
   async deleteGuest(id: string) {
     if (this.isSupabase()) {
+      await this.safeCall(async () => {
         await supabase.from('guests').delete().eq('id', id);
         await this.logAction('DELETE_GUEST', `Guest record purged: ${id}`);
+      }, null);
     }
   }
 
@@ -2356,6 +2409,7 @@ class DatabaseService {
 
   async addTherapist(therapist: Omit<Therapist, 'id'>) {
     if (this.isSupabase()) {
+      return this.safeCall(async () => {
         const id = crypto.randomUUID();
         const { type, ...therapistData } = therapist;
         const { data, error } = await supabase.from('therapists').insert([{ ...therapistData, id }]).select();
@@ -2372,11 +2426,13 @@ class DatabaseService {
 
         await this.logAction('CREATE_THERAPIST', `Specialist enrolled: ${therapist.name}`, therapist.outlet_id);
         return data;
+      }, null);
     }
   }
 
   async updateTherapist(id: string, updates: Partial<Therapist>) {
     if (this.isSupabase()) {
+      await this.safeCall(async () => {
         const { type, ...therapistUpdates } = updates;
         
         // Check if therapist exists
@@ -2409,58 +2465,69 @@ class DatabaseService {
         }
 
         await this.logAction('UPDATE_THERAPIST', `Specialist profile adjusted: ${id}`);
+      }, null);
     }
   }
 
   async deleteTherapist(id: string) {
     if (this.isSupabase()) {
+      await this.safeCall(async () => {
         await supabase.from('therapists').delete().eq('id', id);
         await supabase.from('staff').delete().eq('id', id);
         await this.logAction('DELETE_THERAPIST', `Specialist record purged: ${id}`);
+      }, null);
     }
   }
 
   async getMassageTypes(scopeId?: string, isPropertyScope: boolean = false, limitToOutletIds?: string[]): Promise<MassageType[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('massage_types').select('*');
-      if (scopeId && scopeId !== 'all') {
-          if (isPropertyScope) {
-              if (limitToOutletIds && limitToOutletIds.length > 0) {
-                  query = query.in('outlet_id', limitToOutletIds);
-              } else {
-                  query = query.eq('property_id', scopeId);
-              }
-          }
-          else query = query.eq('outlet_id', scopeId);
-      }
+      return this.safeCall(async () => {
+        let query = supabase.from('massage_types').select('*');
+        if (scopeId && scopeId !== 'all') {
+            if (isPropertyScope) {
+                if (limitToOutletIds && limitToOutletIds.length > 0) {
+                    query = query.in('outlet_id', limitToOutletIds);
+                } else {
+                    query = query.eq('property_id', scopeId);
+                }
+            }
+            else query = query.eq('outlet_id', scopeId);
+        }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []) as MassageType[];
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data || []) as MassageType[];
+      }, []);
     }
     return [];
   }
 
   async addMassageType(type: Omit<MassageType, 'id'>) {
     if (this.isSupabase()) {
+      return this.safeCall(async () => {
         const { data, error } = await supabase.from('massage_types').insert([{ ...type, id: crypto.randomUUID() }]).select();
         if (error) throw error;
         await this.logAction('CREATE_TREATMENT', `Service portfolio item added: ${type.name}`, type.outlet_id);
         return data;
+      }, null);
     }
   }
 
   async updateMassageType(id: string, updates: Partial<MassageType>) {
     if (this.isSupabase()) {
+      await this.safeCall(async () => {
         await supabase.from('massage_types').update(updates).eq('id', id);
         await this.logAction('UPDATE_TREATMENT', `Service modified: ${id}`);
+      }, null);
     }
   }
 
   async deleteMassageType(id: string) {
     if (this.isSupabase()) {
+      await this.safeCall(async () => {
         await supabase.from('massage_types').delete().eq('id', id);
         await this.logAction('DELETE_TREATMENT', `Service retired: ${id}`);
+      }, null);
     }
   }
 
@@ -2494,30 +2561,34 @@ class DatabaseService {
 
   async getMassageBookingsByDate(scopeId: string, isPropertyScope: boolean, dateStr: string): Promise<MassageBooking[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('massage_bookings').select('*');
-      if (isPropertyScope) query = query.eq('property_id', scopeId);
-      else query = query.eq('outlet_id', scopeId);
-      
-      query = query.eq('date', dateStr);
+      return this.safeCall(async () => {
+        let query = supabase.from('massage_bookings').select('*');
+        if (isPropertyScope) query = query.eq('property_id', scopeId);
+        else query = query.eq('outlet_id', scopeId);
+        
+        query = query.eq('date', dateStr);
 
-      const { data, error } = await query.order('start_time', { ascending: true });
-      if (error) throw error;
-      return (data || []) as MassageBooking[];
+        const { data, error } = await query.order('start_time', { ascending: true });
+        if (error) throw error;
+        return (data || []) as MassageBooking[];
+      }, []);
     }
     return [];
   }
 
   async getMassageBookingsByDateRange(scopeId: string, isPropertyScope: boolean, startDate: string, endDate: string): Promise<MassageBooking[]> {
     if (this.isSupabase()) {
-      let query = supabase.from('massage_bookings').select('*');
-      if (isPropertyScope) query = query.eq('property_id', scopeId);
-      else query = query.eq('outlet_id', scopeId);
-      
-      query = query.gte('date', startDate).lte('date', endDate);
+      return this.safeCall(async () => {
+        let query = supabase.from('massage_bookings').select('*');
+        if (isPropertyScope) query = query.eq('property_id', scopeId);
+        else query = query.eq('outlet_id', scopeId);
+        
+        query = query.gte('date', startDate).lte('date', endDate);
 
-      const { data, error } = await query.order('date', { ascending: false }).order('start_time', { ascending: true });
-      if (error) throw error;
-      return (data || []) as MassageBooking[];
+        const { data, error } = await query.order('date', { ascending: false }).order('start_time', { ascending: true });
+        if (error) throw error;
+        return (data || []) as MassageBooking[];
+      }, []);
     }
     return [];
   }
@@ -2646,90 +2717,92 @@ class DatabaseService {
 
   async updateMassageBookingStatus(id: string, status: MassageBooking['status'], roomId?: string, paymentMethod?: MassageBooking['payment_method']) {
     if (this.isSupabase()) {
-      const { data: booking } = await supabase.from('massage_bookings').select('*').eq('id', id).single();
-      if (!booking) return;
+      await this.safeCall(async () => {
+        const { data: booking } = await supabase.from('massage_bookings').select('*').eq('id', id).single();
+        if (!booking) return;
 
-      const updates: any = { status };
-      if (roomId) updates.room_id = roomId;
-      if (paymentMethod) updates.payment_method = paymentMethod;
+        const updates: any = { status };
+        if (roomId) updates.room_id = roomId;
+        if (paymentMethod) updates.payment_method = paymentMethod;
 
-      const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
-      if (error) throw error;
+        const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
+        if (error) throw error;
 
-      // Notification for status change
-      if (status && status !== booking.status) {
-          const { data: guest } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
-          await this.addNotification({
-              title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-              message: `Booking for ${guest?.name || 'Guest'} on ${booking.date} has been marked as ${status}.`,
-              type: status === 'cancelled' ? 'warning' : status === 'completed' ? 'success' : 'info',
-              outlet_id: booking.outlet_id,
-              user_id: booking.therapist_id, // TARGETED to assigned therapist
-              required_permission: 'bookings:view'
-          });
-      }
-
-      // If status changed FROM completed TO something else, delete the associated sale
-      if (booking.status === 'completed' && status !== 'completed') {
-          await supabase.from('sales').delete().eq('booking_id', id);
-          await this.logAction('BOOKING_UNSERVED', `Sale record removed for booking ${id} as status changed to ${status}`);
-      }
-
-      // If status changed TO completed, create a sale record
-      if (status === 'completed' && booking.status !== 'completed') {
-        const { data: guest } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
-        
-        let itemName = 'Service';
-        let itemCategory = 'Massage';
-        let itemId = null;
-
-        if (booking.inventory_item_id) {
-            const { data: inv } = await supabase.from('inventory').select('name, category').eq('id', booking.inventory_item_id).single();
-            if (inv) {
-                itemName = inv.name;
-                itemCategory = inv.category;
-                itemId = booking.inventory_item_id;
-            }
-        } else if (booking.massage_type_id) {
-            const { data: type } = await supabase.from('massage_types').select('name, category').eq('id', booking.massage_type_id).single();
-            if (type) {
-                itemName = type.name;
-                itemCategory = type.category || 'Massage';
-            }
+        // Notification for status change
+        if (status && status !== booking.status) {
+            const { data: guest } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
+            await this.addNotification({
+                title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+                message: `Booking for ${guest?.name || 'Guest'} on ${booking.date} has been marked as ${status}.`,
+                type: status === 'cancelled' ? 'warning' : status === 'completed' ? 'success' : 'info',
+                outlet_id: booking.outlet_id,
+                user_id: booking.therapist_id, // TARGETED to assigned therapist
+                required_permission: 'bookings:view'
+            });
         }
 
-        const sale: Omit<Sale, 'id' | 'created_at'> = {
-          property_id: booking.property_id,
-          outlet_id: booking.outlet_id,
-          guest_id: booking.guest_id,
-          guest_name: guest?.name || 'Guest',
-          category: itemCategory as SaleCategory,
-          item_id: itemId,
-          item_name: itemName,
-          quantity: 1,
-          unit_price: booking.price + (booking.discount || 0),
-          gross_amount: booking.price + (booking.discount || 0),
-          discount_amount: booking.discount || 0,
-          net_amount: booking.price,
-          payment_method: 'Cash', // Default
-          status: 'completed',
-          sold_by_id: booking.therapist_id,
-          booking_id: booking.id,
-          discount_reason: booking.discount_reason,
-          discount_id_url: booking.discount_id_url,
-          remarks: ''
-        };
+        // If status changed FROM completed TO something else, delete the associated sale
+        if (booking.status === 'completed' && status !== 'completed') {
+            await supabase.from('sales').delete().eq('booking_id', id);
+            await this.logAction('BOOKING_UNSERVED', `Sale record removed for booking ${id} as status changed to ${status}`);
+        }
 
-        await this.addSale(sale);
+        // If status changed TO completed, create a sale record
+        if (status === 'completed' && booking.status !== 'completed') {
+          const { data: guest } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
+          
+          let itemName = 'Service';
+          let itemCategory = 'Massage';
+          let itemId = null;
 
-        // Add notification for completed booking
-        await this.addNotification({
-          title: 'Booking Completed',
-          message: `Booking for ${guest?.name || 'Guest'} has been marked as completed.`,
-          type: 'success',
-          outlet_id: booking.outlet_id
-        });
-      }
+          if (booking.inventory_item_id) {
+              const { data: inv } = await supabase.from('inventory').select('name, category').eq('id', booking.inventory_item_id).single();
+              if (inv) {
+                  itemName = inv.name;
+                  itemCategory = inv.category;
+                  itemId = booking.inventory_item_id;
+              }
+          } else if (booking.massage_type_id) {
+              const { data: type } = await supabase.from('massage_types').select('name, category').eq('id', booking.massage_type_id).single();
+              if (type) {
+                  itemName = type.name;
+                  itemCategory = type.category || 'Massage';
+              }
+          }
+
+          const sale: Omit<Sale, 'id' | 'created_at'> = {
+            property_id: booking.property_id,
+            outlet_id: booking.outlet_id,
+            guest_id: booking.guest_id,
+            guest_name: guest?.name || 'Guest',
+            category: itemCategory as SaleCategory,
+            item_id: itemId,
+            item_name: itemName,
+            quantity: 1,
+            unit_price: booking.price + (booking.discount || 0),
+            gross_amount: booking.price + (booking.discount || 0),
+            discount_amount: booking.discount || 0,
+            net_amount: booking.price,
+            payment_method: 'Cash', // Default
+            status: 'completed',
+            sold_by_id: booking.therapist_id,
+            booking_id: booking.id,
+            discount_reason: booking.discount_reason,
+            discount_id_url: booking.discount_id_url,
+            remarks: ''
+          };
+
+          await this.addSale(sale);
+
+          // Add notification for completed booking
+          await this.addNotification({
+            title: 'Booking Completed',
+            message: `Booking for ${guest?.name || 'Guest'} has been marked as completed.`,
+            type: 'success',
+            outlet_id: booking.outlet_id
+          });
+        }
+      }, null);
     }
     // Trigger local event
     window.dispatchEvent(new CustomEvent('booking_updated', { detail: {} }));
@@ -2825,24 +2898,26 @@ class DatabaseService {
 
   async deleteMassageBooking(id: string) {
     if (this.isSupabase()) {
-      // Get booking info to notify therapist before deletion
-      const { data: booking } = await supabase.from('massage_bookings').select('*, guests(name)').eq('id', id).single();
-      
-      // Also delete any associated sales
-      await supabase.from('sales').delete().eq('booking_id', id);
-      const { error } = await supabase.from('massage_bookings').delete().eq('id', id);
-      if (error) throw error;
-      await this.logAction('DELETE_BOOKING', `Deleted booking ID: ${id}`);
+      await this.safeCall(async () => {
+        // Get booking info to notify therapist before deletion
+        const { data: booking } = await supabase.from('massage_bookings').select('*, guests(name)').eq('id', id).single();
+        
+        // Also delete any associated sales
+        await supabase.from('sales').delete().eq('booking_id', id);
+        const { error } = await supabase.from('massage_bookings').delete().eq('id', id);
+        if (error) throw error;
+        await this.logAction('DELETE_BOOKING', `Deleted booking ID: ${id}`);
 
-      if (booking) {
-        await this.addNotification({
-          title: 'Booking Cancelled',
-          message: `Booking for ${booking.guests?.name || 'Guest'} on ${booking.date} has been cancelled.`,
-          type: 'warning',
-          outlet_id: booking.outlet_id,
-          user_id: booking.therapist_id
-        });
-      }
+        if (booking) {
+          await this.addNotification({
+            title: 'Booking Cancelled',
+            message: `Booking for ${booking.guests?.name || 'Guest'} on ${booking.date} has been cancelled.`,
+            type: 'warning',
+            outlet_id: booking.outlet_id,
+            user_id: booking.therapist_id
+          });
+        }
+      }, null);
     }
     
     // Trigger local event
@@ -2851,7 +2926,7 @@ class DatabaseService {
 
   async getIncentiveRules(propertyId?: string, outletId?: string): Promise<IncentiveRule[]> {
     if (this.isSupabase()) {
-      try {
+      return this.safeCall(async () => {
         let query = supabase.from('incentive_rules').select('*').order('created_at', { ascending: false });
         if (propertyId || outletId) {
             const filterArr = ["scope.eq.Global"];
@@ -2862,38 +2937,46 @@ class DatabaseService {
         const { data, error } = await query;
         if (error) throw error;
         return (data || []) as IncentiveRule[];
-      } catch (e) { return []; }
+      }, []);
     }
     return [];
   }
 
   async addIncentiveRule(rule: Omit<IncentiveRule, 'id'>) {
     if (this.isSupabase()) {
+      return this.safeCall(async () => {
         const { data, error } = await supabase.from('incentive_rules').insert([{ ...rule, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select();
         if (error) throw error;
         await this.logAction('CREATE_INCENTIVE', `Yield strategy authorized: ${rule.name}`);
         return data;
+      }, null);
     }
   }
 
   async updateIncentiveRule(id: string, updates: Partial<IncentiveRule>) {
     if (this.isSupabase()) {
+      await this.safeCall(async () => {
         await supabase.from('incentive_rules').update(updates).eq('id', id);
         await this.logAction('UPDATE_INCENTIVE', `Incentive logic adjusted: ${id}`);
+      }, null);
     }
   }
 
   async deleteIncentiveRule(id: string) {
     if (this.isSupabase()) {
+      await this.safeCall(async () => {
         await supabase.from('incentive_rules').delete().eq('id', id);
         await this.logAction('DELETE_INCENTIVE', `Incentive rule decommissioned: ${id}`);
+      }, null);
     }
   }
 
   async updateMemberNotes(id: string, notes: string) {
     if (this.isSupabase()) {
+      await this.safeCall(async () => {
         await supabase.from('members').update({ notes }).eq('id', id);
         await this.logAction('UPDATE_MEMBER_NOTES', `Member notes updated for ID: ${id}`);
+      }, null);
     } else {
         // Local Mode Fallback
         const members = JSON.parse(localStorage.getItem('membership_members') || '[]');
@@ -2909,9 +2992,11 @@ class DatabaseService {
   // --- REPORT RECIPIENTS ---
   async getReportRecipients() {
     if (this.isSupabase()) {
-      const { data, error } = await supabase.from('report_recipients').select('*');
-      if (error) throw error;
-      return (data || []) as ReportRecipient[];
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('report_recipients').select('*');
+        if (error) throw error;
+        return (data || []) as ReportRecipient[];
+      }, []);
     }
     return JSON.parse(localStorage.getItem('membership_report_recipients') || '[]') as ReportRecipient[];
   }
