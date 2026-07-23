@@ -17,35 +17,61 @@ const UserActivityTracker: React.FC = () => {
       if (element || (target.innerText && target.innerText.length < 50)) {
         const el = element || target;
         const tagName = el.tagName.toLowerCase();
-        let text = (el as HTMLElement).innerText?.trim() || (el as HTMLInputElement).value?.trim() || el.getAttribute('aria-label') || el.getAttribute('title') || '';
+        const isPassword = (el as HTMLInputElement).type === 'password';
+        
+        let text = (el as HTMLElement).innerText?.trim() || 
+                   (isPassword ? '********' : (el as HTMLInputElement).value?.trim()) || 
+                   el.getAttribute('aria-label') || 
+                   el.getAttribute('title') || 
+                   '';
         text = text.replace(/\n/g, ' ').substring(0, 50).trim();
         
-        if (!text && tagName !== 'input') return;
+        // If it's a small element like an icon with no text/label, skip it unless it's an input
+        if (!text && tagName !== 'input' && tagName !== 'select' && tagName !== 'textarea') return;
 
+        const pageTitle = document.title.split('|')[0].trim();
+        const pathName = window.location.hash.replace('#', '') || '/';
+        
         // Smart Detail Formatting
-        let details = `Interacted with [${text || tagName}]`;
+        let details = `User interacted with [${text || tagName}] on ${pageTitle}`;
         
         // Contextual labeling
         const nav = el.closest('nav') || el.closest('aside');
         const modal = el.closest('[role="dialog"]') || el.closest('.modal');
         const form = el.closest('form');
+        const table = el.closest('table');
 
         if (nav) {
-          details = `Navigation: [${text}]`;
+          details = `Navigation: User clicked [${text || 'Menu Item'}] to navigate ${pathName}`;
         } else if (el.closest('.calendar') || text.match(/^\d{4}-\d{2}-\d{2}$/)) {
           const dateStr = text.match(/\d{4}-\d{2}-\d{2}/) ? text.match(/\d{4}-\d{2}-\d{2}/)?.[0] : text;
-          details = `Calendar: Selected ${dateStr}`;
-        } else if (tagName === 'button' && (text.toLowerCase().includes('save') || text.toLowerCase().includes('update') || text.toLowerCase().includes('add'))) {
-          details = `Action -> [${text}] triggered`;
-        } else if (tagName === 'input' && (el as HTMLInputElement).type === 'text') {
-           const label = el.closest('label')?.innerText || el.getAttribute('placeholder') || 'Input Field';
-           details = `Data Entry: Edited [${label}]`;
-        } else if (text.length < 3 && !isNaN(Number(text)) && !el.closest('.calendar')) {
-          return;
+          details = `Calendar: User selected ${dateStr || 'a date'} in ${pageTitle}`;
+        } else if (tagName === 'button') {
+          const actionWord = text.toLowerCase().includes('save') ? 'Saved' : 
+                             text.toLowerCase().includes('update') ? 'Updated' : 
+                             text.toLowerCase().includes('add') ? 'Added' : 
+                             text.toLowerCase().includes('delete') ? 'Deleted' : 'Clicked';
+          details = `${actionWord} [${text || 'Button'}] in ${pageTitle}`;
+        } else if (tagName === 'input' || tagName === 'select' || tagName === 'textarea') {
+           const label = el.closest('label')?.innerText?.trim() || el.getAttribute('placeholder') || el.getAttribute('name') || 'Field';
+           let val = (el as HTMLInputElement).value;
+           if ((el as HTMLInputElement).type === 'checkbox') {
+             val = (el as HTMLInputElement).checked ? 'Checked' : 'Unchecked';
+           } else if (isPassword) {
+             val = '********';
+           }
+           details = `Data Entry: User interacted with [${label}] (Value: ${val}) in ${pageTitle}`;
+        } else if (table) {
+           details = `Table Interaction: User selected row/item [${text.substring(0, 20)}...] in ${pageTitle}`;
         }
 
         if (modal) details = `[Modal] ${details}`;
-        if (form && !details.includes('Action')) details = `[Form] ${details}`;
+        if (form && !details.includes('Saved') && !details.includes('Updated')) details = `[Form] ${details}`;
+
+        // Final safety check
+        if (!details || details.trim() === '') {
+            details = `Activity: ${tagName.toUpperCase()} interaction on ${pageTitle}`;
+        }
 
         // We use a special action type 'INTERACTION'
         db.logAction('INTERACTION', details, currentOutlet?.id); 

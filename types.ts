@@ -163,14 +163,50 @@ export interface UserProfile {
   is_active: boolean;
 }
 
+export type LogModule = 
+  | 'Authentication' | 'Dashboard' | 'Members' | 'Memberships' 
+  | 'Check-In / Check-Out' | 'POS' | 'Massage & Spa' 
+  | 'Facility Booking' | 'Staff Management' | 'Inventory' 
+  | 'Reports' | 'Settings' | 'User Management' | 'Roles & Permissions' 
+  | 'System' | 'Actions';
+
+export type LogSeverity = 'info' | 'warning' | 'error' | 'success';
+
 export interface SystemLog {
   id: string;
   timestamp: string;
   user_id: string;
   user_name: string;
-  action: string;
-  details: string;
+  role_name?: string;
+  property_id?: string;
+  property_name?: string;
   outlet_id?: string;
+  outlet_name?: string;
+  module: LogModule;
+  action: string;
+  description: string;
+  status: 'success' | 'failed' | 'warning';
+  severity: LogSeverity;
+  
+  // Detailed tracking
+  details?: string; // Kept for legacy compatibility
+  old_values?: any;
+  new_values?: any;
+  record_id?: string;
+  affected_entity?: string; // e.g. 'Member', 'Invoice'
+  
+  // Contextual data
+  ip_address?: string;
+  browser?: string;
+  os?: string;
+  device_type?: string;
+  session_id?: string;
+  request_url?: string;
+  http_method?: string;
+  response_status?: number;
+  execution_time_ms?: number;
+  error_message?: string;
+  stack_trace?: string;
 }
 
 export interface Currency {
