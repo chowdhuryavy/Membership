@@ -504,10 +504,10 @@ const Logs = () => {
                                     <td className="p-6">
                                         <div className="flex items-center gap-3">
                                             <div className="w-9 h-9 bg-slate-100 rounded-xl flex items-center justify-center text-xs font-black text-slate-600 border border-slate-200/50 shadow-sm group-hover:bg-white transition-colors">
-                                                {log.user_name.charAt(0).toUpperCase()}
+                                                {(log.user_name || '?').charAt(0).toUpperCase()}
                                             </div>
                                             <div className="flex flex-col">
-                                                <span className="text-xs font-black text-slate-900 tracking-tight">{log.user_name}</span>
+                                                <span className="text-xs font-black text-slate-900 tracking-tight">{log.user_name || 'System'}</span>
                                                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{log.role_name || 'VERIFIED_AGENT'}</span>
                                             </div>
                                         </div>

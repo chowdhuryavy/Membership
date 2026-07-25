@@ -413,31 +413,32 @@ class DatabaseService {
     console.log(`[DatabaseService] Logging Action: ${logEntry.action} | Description: ${logEntry.description}`);
 
     if (this.isSupabase()) {
-        // Strip extended metadata that might not exist in the DB schema to avoid 400 errors
-        const { 
-            ip_address, browser, os, device_type, session_id, 
-            request_url, http_method, response_status, execution_time_ms,
-            affected_entity, record_id, old_values, new_values,
-            ...dbEntry 
-        } = logEntry;
-
-        try { 
-            const { error } = await supabase.from('system_logs').insert([dbEntry]); 
-            if (error) {
-                if (error.code === '42703' || error.code === 'PGRST204' || (error as any).status === 400) {
-                     // The database schema cache is stale. Try removing the specific missing column if we can parse it.
-                     const match = error.message?.match(/Could not find the '([^']+)' column/);
-                     if (match && match[1]) {
-                         delete (dbEntry as any)[match[1]];
-                         // Attempt one retry
-                         await supabase.from('system_logs').insert([dbEntry]);
-                     }
-                } else {
+        let currentEntry: any = { ...logEntry };
+        let retries = 15;
+        
+        while (retries > 0) {
+            try {
+                const { error } = await supabase.from('system_logs').insert([currentEntry]);
+                if (error) {
+                    if (error.code === '42703' || error.code === 'PGRST204' || (error as any).status === 400) {
+                        const match = error.message?.match(/Could not find the '([^']+)' column/);
+                        if (match && match[1]) {
+                            const missingCol = match[1];
+                            if (missingCol === 'description' && currentEntry.description) {
+                                currentEntry.details = currentEntry.details ? currentEntry.details + ' | ' + currentEntry.description : currentEntry.description;
+                            }
+                            delete currentEntry[missingCol];
+                            retries--;
+                            continue;
+                        }
+                    }
                     console.warn("[DatabaseService] Supabase log insert error:", error);
                 }
+                break;
+            } catch (e) {
+                console.error("[DatabaseService] Fatal error during Supabase logging:", e);
+                break;
             }
-        } catch (e) { 
-            console.error("[DatabaseService] Fatal error during Supabase logging:", e); 
         }
     }
   }

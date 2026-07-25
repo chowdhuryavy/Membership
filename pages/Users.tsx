@@ -136,10 +136,10 @@ const UserDetail = ({
                         <CardContent className="p-8 text-center">
                             <div className="inline-flex p-1.5 bg-white rounded-3xl shadow-xl mb-4">
                                 <div className="w-24 h-24 bg-slate-900 rounded-[1.8rem] flex items-center justify-center text-white text-4xl font-black">
-                                    {user.name.charAt(0)}
+                                    {(user.name || '?').charAt(0)}
                                 </div>
                             </div>
-                            <h3 className="text-xl font-black text-slate-900 tracking-tight">{user.name}</h3>
+                            <h3 className="text-xl font-black text-slate-900 tracking-tight">{user.name || 'Unknown'}</h3>
                             <p className="text-xs font-bold text-indigo-600 mt-1">{user.email}</p>
                             <div className="mt-3">
                                 {user.is_active !== false ? (
