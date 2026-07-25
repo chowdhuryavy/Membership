@@ -413,7 +413,32 @@ class DatabaseService {
     console.log(`[DatabaseService] Logging Action: ${logEntry.action} | Description: ${logEntry.description}`);
 
     if (this.isSupabase()) {
-        try { await supabase.from('system_logs').insert([logEntry]); } catch (e) { console.error(e); }
+        // Strip extended metadata that might not exist in the DB schema to avoid 400 errors
+        const { 
+            ip_address, browser, os, device_type, session_id, 
+            request_url, http_method, response_status, execution_time_ms,
+            affected_entity, record_id, old_values, new_values,
+            ...dbEntry 
+        } = logEntry;
+
+        try { 
+            const { error } = await supabase.from('system_logs').insert([dbEntry]); 
+            if (error) {
+                if (error.code === '42703' || error.code === 'PGRST204' || (error as any).status === 400) {
+                     // The database schema cache is stale. Try removing the specific missing column if we can parse it.
+                     const match = error.message?.match(/Could not find the '([^']+)' column/);
+                     if (match && match[1]) {
+                         delete (dbEntry as any)[match[1]];
+                         // Attempt one retry
+                         await supabase.from('system_logs').insert([dbEntry]);
+                     }
+                } else {
+                    console.warn("[DatabaseService] Supabase log insert error:", error);
+                }
+            }
+        } catch (e) { 
+            console.error("[DatabaseService] Fatal error during Supabase logging:", e); 
+        }
     }
   }
 
