@@ -413,32 +413,39 @@ class DatabaseService {
     console.log(`[DatabaseService] Logging Action: ${logEntry.action} | Description: ${logEntry.description}`);
 
     if (this.isSupabase()) {
-        let currentEntry: any = { ...logEntry };
-        let retries = 15;
+        // Send ONLY standard schema columns to avoid 400 Bad Request errors on legacy tables
+        const coreDbEntry: any = {
+            id: logEntry.id,
+            timestamp: logEntry.timestamp,
+            user_id: logEntry.user_id,
+            user_name: logEntry.user_name,
+            action: logEntry.action,
+            description: logEntry.description,
+            details: logEntry.details,
+            status: logEntry.status,
+            severity: logEntry.severity,
+            outlet_id: logEntry.outlet_id
+        };
         
-        while (retries > 0) {
-            try {
-                const { error } = await supabase.from('system_logs').insert([currentEntry]);
-                if (error) {
-                    if (error.code === '42703' || error.code === 'PGRST204' || (error as any).status === 400) {
-                        const match = error.message?.match(/Could not find the '([^']+)' column/);
-                        if (match && match[1]) {
-                            const missingCol = match[1];
-                            if (missingCol === 'description' && currentEntry.description) {
-                                currentEntry.details = currentEntry.details ? currentEntry.details + ' | ' + currentEntry.description : currentEntry.description;
-                            }
-                            delete currentEntry[missingCol];
-                            retries--;
-                            continue;
-                        }
-                    }
+        try {
+            const { error } = await supabase.from('system_logs').insert([coreDbEntry]);
+            if (error) {
+                // If it fails (e.g. missing description or user_name), do one ultra-minimal fallback
+                if (error.code === '42703' || error.code === 'PGRST204' || (error as any).status === 400) {
+                    const ultraMinimal: any = {
+                        id: coreDbEntry.id,
+                        timestamp: coreDbEntry.timestamp,
+                        user_id: coreDbEntry.user_id,
+                        action: coreDbEntry.action,
+                        details: coreDbEntry.description // Map description to details as fallback
+                    };
+                    await supabase.from('system_logs').insert([ultraMinimal]);
+                } else {
                     console.warn("[DatabaseService] Supabase log insert error:", error);
                 }
-                break;
-            } catch (e) {
-                console.error("[DatabaseService] Fatal error during Supabase logging:", e);
-                break;
             }
+        } catch (e) {
+            console.error("[DatabaseService] Fatal error during Supabase logging:", e);
         }
     }
   }
