@@ -413,39 +413,52 @@ class DatabaseService {
     console.log(`[DatabaseService] Logging Action: ${logEntry.action} | Description: ${logEntry.description}`);
 
     if (this.isSupabase()) {
-        // Send ONLY standard schema columns to avoid 400 Bad Request errors on legacy tables
-        const coreDbEntry: any = {
-            id: logEntry.id,
-            timestamp: logEntry.timestamp,
-            user_id: logEntry.user_id,
-            user_name: logEntry.user_name,
-            action: logEntry.action,
-            description: logEntry.description,
-            details: logEntry.details,
-            status: logEntry.status,
-            severity: logEntry.severity,
-            outlet_id: logEntry.outlet_id
-        };
-        
         try {
-            const { error } = await supabase.from('system_logs').insert([coreDbEntry]);
-            if (error) {
-                // If it fails (e.g. missing description or user_name), do one ultra-minimal fallback
-                if (error.code === '42703' || error.code === 'PGRST204' || (error as any).status === 400) {
-                    const ultraMinimal: any = {
-                        id: coreDbEntry.id,
-                        timestamp: coreDbEntry.timestamp,
-                        user_id: coreDbEntry.user_id,
-                        action: coreDbEntry.action,
-                        details: coreDbEntry.description // Map description to details as fallback
-                    };
-                    await supabase.from('system_logs').insert([ultraMinimal]);
-                } else {
-                    console.warn("[DatabaseService] Supabase log insert error:", error);
+            // Dynamically discover columns to avoid 400 Bad Request if schema is out of sync
+            if (!(this as any)._systemLogColumns) {
+                // If we haven't fetched columns yet, just try to get one row or empty result
+                const { data } = await supabase.from('system_logs').select('*').limit(1);
+                if (data) {
+                    (this as any)._systemLogColumns = data.length > 0 ? Object.keys(data[0]) : null;
                 }
             }
+
+            let insertData: any = {};
+            const knownColumns = (this as any)._systemLogColumns;
+
+            if (knownColumns) {
+                // We know the columns, only pick what's available
+                for (const key of Object.keys(logEntry)) {
+                    if (knownColumns.includes(key)) {
+                        insertData[key] = (logEntry as any)[key];
+                    }
+                }
+                
+                // Fallbacks if primary keys are missing but alternatives exist
+                if (!knownColumns.includes('description') && knownColumns.includes('details') && logEntry.description) {
+                    insertData.details = logEntry.details ? logEntry.details + ' | ' + logEntry.description : logEntry.description;
+                }
+            } else {
+                // We don't know the columns (table empty or fetch failed), guess minimal safe set
+                insertData = {
+                    id: logEntry.id,
+                    user_id: logEntry.user_id,
+                    action: logEntry.action,
+                };
+                if (logEntry.timestamp) insertData.timestamp = logEntry.timestamp;
+                if ((logEntry as any).created_at) insertData.created_at = (logEntry as any).created_at;
+            }
+
+            const { error } = await supabase.from('system_logs').insert([insertData]);
+            
+            // If it still fails, it might be that the table is completely missing or totally different schema
+            if (error && (error.code === '42703' || error.code === 'PGRST204' || (error as any).status === 400)) {
+                // Ignore, we tried our best. Don't spam the console.
+            } else if (error) {
+                console.warn("[DatabaseService] Supabase log insert error:", error);
+            }
         } catch (e) {
-            console.error("[DatabaseService] Fatal error during Supabase logging:", e);
+            console.error("[DatabaseService] Error during Supabase logging:", e);
         }
     }
   }
