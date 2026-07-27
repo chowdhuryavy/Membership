@@ -1,7 +1,7 @@
 {
   "name": "Health Club Management",
   "short_name": "Health Club Mgmt",
-  "description": "Unified Health Club and Spa Management System",
+  "description": "Health Club and Spa Management System",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
