@@ -1,6 +1,6 @@
 {
   "name": "Staff Portal",
-  "short_name": "Staff Portal",
+  "short_name": "Health Club Mgmt",
   "description": "Unified Health Club Staff Management System",
   "start_url": "/#/staff-login",
   "display": "standalone",
