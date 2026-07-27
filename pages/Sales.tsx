@@ -63,6 +63,7 @@ import { Sale, Guest, SaleCategory, InventoryItem, MassageBooking, MassageType, 
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay, addDays, isSameDay, subMonths } from 'date-fns';
+import { PTRegistrationModal } from '../components/PTRegistrationModal';
 
 // Lazy load RetailStockReport
 const RetailStockReport = React.lazy(() => import('./RetailStockReport'));
@@ -133,7 +134,7 @@ const POSForm = ({
     users: UserProfile[],
     staff?: Staff[],
     onCancel: () => void, 
-    onSuccess: () => void, 
+    onSuccess: (saleData?: any) => void, 
     currentOutletId: string,
     currentPropertyId: string,
     initialSale?: Sale
@@ -293,14 +294,14 @@ const POSForm = ({
             if (initialSale) {
                 await (db as any).updateSale(initialSale.id, payload);
             } else {
-                await db.addSale(payload);
+                await db.addSale(payload as any);
             }
             
             // Invalidate cache after successful operation
             cache.invalidate('sales');
             cache.invalidate('inventory');
             
-            onSuccess();
+            onSuccess(payload);
         } catch (err: any) {
             setError(err.message || "Checkout failed.");
         } finally {
@@ -880,6 +881,7 @@ const Sales = () => {
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingSale, setEditingSale] = useState<Sale | null>(null);
+    const [showPTRegistration, setShowPTRegistration] = useState<{ guestName: string; saleId?: string; qty: number; itemName?: string; trainerId?: string } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
     const [itemToDelete, setItemToDelete] = useState<{ id: string; type: 'pos' | 'booking' } | null>(null);
@@ -1385,18 +1387,41 @@ const Sales = () => {
                             currentOutletId={currentOutlet?.id || ''} 
                             currentPropertyId={currentProperty?.id || ''} 
                             onCancel={() => {setShowForm(false); setEditingSale(null);}} 
-                            onSuccess={() => { 
+                            onSuccess={(saleData) => { 
                                 setShowForm(false); 
                                 setEditingSale(null); 
                                 cache.invalidate('sales');
                                 cache.invalidate('inventory');
-                                loadData(); 
+                                loadData();
+                                if (saleData && saleData.category === 'Personal Training') {
+                                    setShowPTRegistration({
+                                        guestName: saleData.guest_name,
+                                        saleId: saleData.id,
+                                        qty: saleData.quantity || 10,
+                                        itemName: saleData.item_name,
+                                        trainerId: saleData.sold_by_id || (saleData as any).therapist_id || ''
+                                    });
+                                }
                             }} 
                             initialSale={editingSale || undefined} 
                         />
                     </div>
                 </div>
             )}
+            
+            {showPTRegistration && (
+                <PTRegistrationModal
+                    isOpen={true}
+                    onClose={() => setShowPTRegistration(null)}
+                    onSuccess={(ptMember) => {
+                        setShowPTRegistration(null);
+                        toast.success('PT Profile Created successfully!');
+                    }}
+                    initialData={showPTRegistration}
+                    staff={staff}
+                />
+            )}
+            
             <ConfirmationModal 
                 isOpen={!!itemToDelete} 
                 onClose={() => setItemToDelete(null)} 

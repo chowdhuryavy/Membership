@@ -18,6 +18,7 @@ import { schedulerService } from './services/emailService';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Members from './pages/Members';
+import PTMembers from './pages/PTMembers';
 import Categories from './pages/Categories';
 import UsersPage from './pages/Users';
 import StaffPage from './pages/Staff'; 
@@ -59,7 +60,8 @@ import {
   Sparkles, 
   CalendarClock, 
   ShoppingBag,
-  Contact2
+  Contact2,
+  Dumbbell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Permission, Property } from './types';
@@ -375,6 +377,7 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
         const items = [
             { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:view' as Permission },
             { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
+            { id: 'pt-members', to: '/pt-members', icon: Dumbbell, label: 'PT Members', permission: 'members:view' as Permission },
             { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
             { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
             { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
@@ -507,6 +510,7 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
         const items = [
             { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:view' as Permission },
             { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
+            { id: 'pt-members', to: '/pt-members', icon: Dumbbell, label: 'PT Members', permission: 'members:view' as Permission },
             { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
             { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
             { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
@@ -777,6 +781,7 @@ const App = () => {
           <Route element={<ProtectedLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="members" element={<Members />} />
+              <Route path="pt-members" element={<PTMembers />} />
               <Route path="staff" element={<StaffPage />} />
               <Route path="bookings" element={<MassageScheduling />} />
               <Route path="sales" element={<Sales />} />

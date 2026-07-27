@@ -9,7 +9,7 @@ interface SignaturePadProps {
   initialData?: string;
 }
 
-const SignaturePad: React.FC<SignaturePadProps> = ({ title, onSave, onClear, initialData }) => {
+export const SignaturePad: React.FC<SignaturePadProps> = ({ title, onSave, onClear, initialData }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(!!initialData);

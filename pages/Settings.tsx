@@ -355,6 +355,7 @@ const SettingsPage = () => {
   const navItems = useMemo(() => [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'members', label: 'Members' },
+    { id: 'pt-members', label: 'PT Members' },
     { id: 'staff', label: 'Staff Roster' },
     { id: 'bookings', label: 'Booking' },
     { id: 'sales', label: 'Sales & Retail' },

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button } from '../components/ui';
 import { supabase } from '../services/supabase';
 import { Member, MembershipCategory, MemberStatus } from '../types';
-import { DEFAULT_MEMBER_COLUMNS } from '../services/mockSupabase';
+import { db, DEFAULT_MEMBER_COLUMNS } from '../services/mockSupabase';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -42,21 +42,20 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth, s
     const loadData = async () => {
         setIsLoading(true);
         try {
-            let query = supabase.from('members').select(DEFAULT_MEMBER_COLUMNS).eq('outlet_id', currentOutlet?.id);
-            
-            if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
-                query = query.eq('membership_type_id', selectedMembershipTypeId);
-            }
-
-            const [membersRes, catsRes, typesRes] = await Promise.all([
-                query,
-                supabase.from('membership_categories').select('*'),
-                supabase.from('membership_types').select('id, name').eq('outlet_id', currentOutlet?.id)
+            const [membersList, catsList, typesList] = await Promise.all([
+                db.getMembers(currentOutlet?.id),
+                db.getCategories(currentOutlet?.id),
+                db.getMembershipTypes(currentOutlet?.id)
             ]);
             
-            setMembers(membersRes.data || []);
-            setCategories(catsRes.data || []);
-            setMembershipTypes(typesRes.data || []);
+            let filteredMembers = membersList || [];
+            if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
+                filteredMembers = filteredMembers.filter(m => m.membership_type_id === selectedMembershipTypeId);
+            }
+            
+            setMembers(filteredMembers);
+            setCategories(catsList || []);
+            setMembershipTypes(typesList || []);
         } catch (error) {
             console.error("Error loading data:", error);
         } finally {

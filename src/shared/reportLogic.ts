@@ -1,11 +1,32 @@
 import { format, isWithinInterval, eachDayOfInterval, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth, addMonths, parse, startOfDay, endOfDay, addDays, subDays } from 'date-fns';
 import { RevenueEngine } from '../../services/revenueEngine';
+import { db } from '../../services/mockSupabase';
 
 /**
  * SHARED REPORT LOGIC
  * This file is the single source of truth for report calculations.
  * It is synced to the Supabase Edge Function via a build script.
  */
+
+export const safeQuery = async <T>(queryPromise: Promise<{ data: T | null; error: any }>, localFallback: () => T): Promise<T> => {
+  try {
+    const res = await queryPromise;
+    if (res.error) {
+      const msg = (res.error?.message || '').toLowerCase();
+      if (msg.includes('fetch') || msg.includes('network') || msg.includes('connection')) {
+        (db as any).supabaseFailed = true;
+      }
+      return localFallback();
+    }
+    return (res.data ?? localFallback()) as T;
+  } catch (err: any) {
+    const msg = (err?.message || '').toLowerCase();
+    if (msg.includes('fetch') || msg.includes('network') || msg.includes('connection')) {
+      (db as any).supabaseFailed = true;
+    }
+    return localFallback();
+  }
+};
 
 export interface ReportData {
   rows: any[];
@@ -95,12 +116,19 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
 
     const membersRes = await membersQuery;
 
+    let members = membersRes.data || [];
     if (membersRes.error) {
-      console.error('Error fetching members:', membersRes.error);
-      throw new Error(`Failed to fetch members: ${membersRes.error.message}`);
+      console.warn('Error fetching members from Supabase, using local fallback:', membersRes.error);
+      const msg = (membersRes.error?.message || '').toLowerCase();
+      if (msg.includes('fetch') || msg.includes('network') || msg.includes('connection')) {
+        (db as any).supabaseFailed = true;
+      }
+      const localMembers = JSON.parse(localStorage.getItem('membership_members') || '[]');
+      members = localMembers.filter((m: any) => outletIds.includes(m.outlet_id));
+      if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
+        members = members.filter((m: any) => m.membership_type_id === selectedMembershipTypeId);
+      }
     }
-
-    const members = membersRes.data || [];
     const memberIds = members.map((m: any) => m.id);
     
     // Fetch freezes ONLY for the members we are reporting on

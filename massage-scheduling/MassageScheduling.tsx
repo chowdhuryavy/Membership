@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
+import toast from 'react-hot-toast';
 import { supabase } from '../services/supabase';
 import { 
   Card, 
@@ -78,6 +79,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import BookingForm from './BookingForm';
 import { InventoryManager } from '../pages/Sales';
+import { PTRegistrationModal } from '../components/PTRegistrationModal';
 import { useNavigate } from 'react-router-dom';
 
 const SLOT_HEIGHT = 52; 
@@ -466,6 +468,8 @@ const MassageScheduling = () => {
   const [members, setMembers] = useState<Member[]>([]);
 
   
+  const [showPTRegistration, setShowPTRegistration] = useState<{ guestName: string; saleId?: string; qty: number; itemName?: string; trainerId?: string } | null>(null);
+
   const filteredTreatments = useMemo(() => {
       return massageTypes.filter(mt => mt.category === treatmentType);
   }, [massageTypes, treatmentType]);
@@ -668,12 +672,68 @@ CREATE TABLE IF NOT EXISTS public.massage_bookings (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS public.pt_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    outlet_id TEXT NOT NULL,
+    guest_name TEXT NOT NULL,
+    phone TEXT,
+    email TEXT,
+    total_sessions INTEGER NOT NULL,
+    used_sessions INTEGER DEFAULT 0,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    sale_id TEXT,
+    trainer_id TEXT,
+    notes TEXT,
+    status TEXT DEFAULT 'Active',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ensure existing pt_members tables get new columns
+ALTER TABLE IF EXISTS public.pt_members ADD COLUMN IF NOT EXISTS trainer_id TEXT;
+ALTER TABLE IF EXISTS public.pt_members ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE IF EXISTS public.pt_members ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Active';
+
+CREATE TABLE IF NOT EXISTS public.pt_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    pt_member_id UUID NOT NULL REFERENCES public.pt_members(id) ON DELETE CASCADE,
+    date TIMESTAMPTZ NOT NULL,
+    staff_id TEXT NOT NULL,
+    notes TEXT,
+    guest_signature TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 3. RESET SECURITY POLICIES
 ALTER TABLE public.therapists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.massage_types ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.massage_bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.staff ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pt_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pt_sessions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all on therapists" ON public.therapists;
+CREATE POLICY "Allow all on therapists" ON public.therapists FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all on massage_types" ON public.massage_types;
+CREATE POLICY "Allow all on massage_types" ON public.massage_types FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all on massage_bookings" ON public.massage_bookings;
+CREATE POLICY "Allow all on massage_bookings" ON public.massage_bookings FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all on inventory" ON public.inventory;
+CREATE POLICY "Allow all on inventory" ON public.inventory FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all on staff" ON public.staff;
+CREATE POLICY "Allow all on staff" ON public.staff FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all on pt_members" ON public.pt_members;
+CREATE POLICY "Allow all on pt_members" ON public.pt_members FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all on pt_sessions" ON public.pt_sessions;
+CREATE POLICY "Allow all on pt_sessions" ON public.pt_sessions FOR ALL USING (true) WITH CHECK (true);
+
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, postgres;
 
 -- 4. RELOAD SCHEMA CACHE
@@ -1867,7 +1927,22 @@ NOTIFY pgrst, 'reload schema';`}
       {showBookingForm && (
           <BookingForm 
             onClose={() => { setShowBookingForm(false); setEditingBooking(null); }}
-            onSuccess={() => { setShowBookingForm(false); setEditingBooking(null); loadData(); }}
+            onSuccess={(bookingData) => { 
+                setShowBookingForm(false); 
+                setEditingBooking(null); 
+                loadData(); 
+                if (bookingData && bookingData.category === 'Personal Training') {
+                    // Try to extract guest name if possible, else empty
+                    const gName = guests.find(g => g.id === bookingData.guest_id)?.name || (bookingData as any).guest_name || 'Guest';
+                    setShowPTRegistration({
+                        guestName: gName,
+                        saleId: bookingData.id,
+                        qty: 10, // Default sessions for a PT booking package
+                        itemName: (bookingData as any).item_name || 'Personal Training',
+                        trainerId: bookingData.therapist_id || ''
+                    });
+                }
+            }}
             onGoToManagement={() => {}}
             therapists={therapists}
             massageTypes={massageTypes}
@@ -1876,6 +1951,19 @@ NOTIFY pgrst, 'reload schema';`}
             members={members}
             massageRooms={massageRooms}
             initialBooking={editingBooking || undefined}
+          />
+      )}
+
+      {showPTRegistration && (
+          <PTRegistrationModal
+              isOpen={true}
+              onClose={() => setShowPTRegistration(null)}
+              onSuccess={(ptMember) => {
+                  setShowPTRegistration(null);
+                  toast.success('PT Profile Created successfully!');
+              }}
+              initialData={showPTRegistration}
+              staff={therapists as any[]}
           />
       )}
 

@@ -1,4 +1,4 @@
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, LogModule, LogSeverity, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, Notification, CustomReportConfig } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, LogModule, LogSeverity, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, Notification, CustomReportConfig, PTMember, PTSession } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format, parse, differenceInCalendarDays } from 'date-fns';
@@ -36,23 +36,44 @@ class DatabaseService {
     return !!supabase && !DatabaseService.supabaseFailed;
   }
 
-  public async safeCall<T>(call: () => Promise<T>, fallback: T): Promise<T> {
+  public async safeCall<T>(call: () => Promise<T>, fallback: T | (() => T | Promise<T>)): Promise<T> {
+    const resolveFallback = async (): Promise<T> => {
+      if (typeof fallback === 'function') {
+        try {
+          return await (fallback as () => T | Promise<T>)();
+        } catch (err) {
+          console.error("Fallback execution error:", err);
+        }
+      }
+      return fallback as T;
+    };
+
+    if (!this.isSupabase()) {
+      return resolveFallback();
+    }
+
     try {
-      const result = await call();
+      const result: any = await call();
+      if (result && typeof result === 'object' && result.error && this.isNetworkError(result.error)) {
+        console.warn("Supabase connection error detected, disabling Supabase for this session", result.error);
+        DatabaseService.supabaseFailed = true;
+        return resolveFallback();
+      }
       return result;
     } catch (e: any) {
       if (this.isNetworkError(e)) {
         console.warn("Supabase connection error detected, disabling Supabase for this session", e);
         DatabaseService.supabaseFailed = true;
-        return fallback;
+        return resolveFallback();
       }
       console.error("Database Call Error:", e?.message || e);
-      return fallback;
+      return resolveFallback();
     }
   }
 
-  private isNetworkError(e: any): boolean {
-    const msg = (e?.message || e?.error?.message || e?.toString() || '').toLowerCase();
+  public isNetworkError(e: any): boolean {
+    if (!e) return false;
+    const msg = (e?.message || e?.error?.message || e?.details || e?.toString() || '').toLowerCase();
     if (
       msg.includes('statement timeout') || 
       msg.includes('canceling statement') || 
@@ -70,7 +91,9 @@ class DatabaseService {
       msg.includes('timeout') ||
       msg.includes('abort') ||
       msg.includes('connection') ||
-      (e?.name === 'TypeError' && (msg.includes('fetch') || msg.includes('network') || msg.includes('failed')))
+      msg.includes('fetch') ||
+      e?.name === 'TypeError' ||
+      e?.name === 'FetchError'
     );
   }
 
@@ -2132,15 +2155,231 @@ class DatabaseService {
     }
   }
 
-  async getSales(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[], startDate?: string): Promise<Sale[]> {
+  async getPTMembers(scopeId: string, isProperty: boolean = false, phone?: string, email?: string): Promise<PTMember[]> {
+    let supabaseMembers: PTMember[] = [];
+    if (this.isSupabase()) {
+      supabaseMembers = await this.safeCall(async () => {
+        let query = supabase.from('pt_members').select('*');
+        if (phone) {
+            query = query.eq('phone', phone);
+        } else if (email) {
+            query = query.eq('email', email);
+        } else if (!isProperty) {
+            query = query.eq('outlet_id', scopeId);
+        } else {
+            query = query.eq('property_id', scopeId).limit(500); // Ensure property_id filtering if isProperty
+        }
+        
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (error) {
+            if (error.code === '42P01' || (error.message && error.message.includes('schema cache'))) return []; // Table doesn't exist yet
+            throw error;
+        }
+        return (data || []) as PTMember[];
+      }, []);
+    }
+
+    let localMembers: PTMember[] = [];
+    try {
+      localMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]).filter(m => isProperty || m.outlet_id === scopeId);
+    } catch (e) {}
+
+    const combinedMap = new Map<string, PTMember>();
+    for (const m of localMembers) combinedMap.set(m.id, m);
+    for (const m of supabaseMembers) combinedMap.set(m.id, m);
+
+    return Array.from(combinedMap.values()).sort((a,b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  }
+
+  async addPTMember(member: Omit<PTMember, 'id' | 'created_at'>) {
+    const payload: PTMember = {
+      ...member,
+      id: crypto.randomUUID(),
+      created_at: new Date().toISOString()
+    };
+
+    try {
+      const existing = JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[];
+      localStorage.setItem('pt_members', JSON.stringify([payload, ...existing]));
+    } catch (e) {}
+
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('pt_members').insert([payload]);
+        if (error) {
+          if (error.message && (error.message.includes('column') || error.message.includes('schema cache'))) {
+            const corePayload = {
+              id: payload.id,
+              outlet_id: payload.outlet_id,
+              guest_name: payload.guest_name,
+              phone: payload.phone || null,
+              email: payload.email || null,
+              total_sessions: payload.total_sessions,
+              used_sessions: payload.used_sessions || 0,
+              start_date: payload.start_date,
+              end_date: payload.end_date,
+              sale_id: payload.sale_id || null,
+              created_at: payload.created_at
+            };
+            const { error: retryErr } = await supabase.from('pt_members').insert([corePayload]);
+            if (retryErr) throw retryErr;
+          } else {
+            throw error;
+          }
+        }
+        await this.logAction('CREATE_PT_MEMBER', `Registered PT Member: ${payload.guest_name} (${payload.total_sessions} sessions)`);
+      }, null);
+    }
+  }
+
+  async updatePTMember(id: string, updates: Partial<PTMember>) {
+    try {
+      const existing = JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[];
+      const updated = existing.map(m => m.id === id ? { ...m, ...updates } : m);
+      localStorage.setItem('pt_members', JSON.stringify(updated));
+    } catch (e) {}
+
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('pt_members').update(updates).eq('id', id);
+        if (error) throw error;
+        await this.logAction('UPDATE_PT_MEMBER', `Updated PT Member: ${id}`);
+      }, null);
+    }
+  }
+
+  async getPTSessions(ptMemberId: string): Promise<PTSession[]> {
+    let supabaseSessions: PTSession[] = [];
+    if (this.isSupabase()) {
+      supabaseSessions = await this.safeCall(async () => {
+        const { data, error } = await supabase.from('pt_sessions').select('*').eq('pt_member_id', ptMemberId).order('date', { ascending: false });
+        if (error) {
+            if (error.code === '42P01' || (error.message && error.message.includes('schema cache'))) return [];
+            throw error;
+        }
+        return (data || []) as PTSession[];
+      }, []);
+    }
+
+    let localSessions: PTSession[] = [];
+    try {
+      localSessions = (JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[]).filter(s => s.pt_member_id === ptMemberId);
+    } catch (e) {}
+
+    const combinedMap = new Map<string, PTSession>();
+    for (const s of supabaseSessions) combinedMap.set(s.id, s);
+    for (const s of localSessions) {
+      if (!combinedMap.has(s.id)) combinedMap.set(s.id, s);
+    }
+
+    return Array.from(combinedMap.values()).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  async addPTSession(session: Omit<PTSession, 'id' | 'created_at'>) {
+    const newId = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    const newSessionItem: PTSession = { ...session, id: newId, created_at: createdAt };
+
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        const { error: sessionError } = await supabase.from('pt_sessions').insert([newSessionItem]);
+        if (sessionError) throw sessionError;
+        
+        const { data: memberData } = await supabase.from('pt_members').select('used_sessions').eq('id', session.pt_member_id).single();
+        if (memberData) {
+           await supabase.from('pt_members').update({ used_sessions: (memberData.used_sessions || 0) + 1 }).eq('id', session.pt_member_id);
+        }
+
+        await this.logAction('LOG_PT_SESSION', `Logged PT session for member ID: ${session.pt_member_id}`);
+      }, null);
+    }
+
+    try {
+      const localSessions = JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[];
+      localSessions.unshift(newSessionItem);
+      localStorage.setItem('pt_sessions', JSON.stringify(localSessions));
+
+      const localMembers = JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[];
+      const updatedMembers = localMembers.map(m => {
+        if (m.id === session.pt_member_id) {
+          return { ...m, used_sessions: (m.used_sessions || 0) + 1 };
+        }
+        return m;
+      });
+      localStorage.setItem('pt_members', JSON.stringify(updatedMembers));
+    } catch (e) {}
+  }
+
+  async updatePTSession(id: string, updates: Partial<PTSession>) {
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('pt_sessions').update(updates).eq('id', id);
+        if (error) throw error;
+        await this.logAction('UPDATE_PT_SESSION', `Updated PT session ID: ${id}`);
+      }, null);
+    }
+
+    try {
+      const localSessions = JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[];
+      const updated = localSessions.map(s => s.id === id ? { ...s, ...updates } : s);
+      localStorage.setItem('pt_sessions', JSON.stringify(updated));
+    } catch (e) {}
+  }
+
+  async deletePTSession(id: string, memberId: string) {
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('pt_sessions').delete().eq('id', id);
+        if (error) console.warn('[deletePTSession] Supabase delete warning:', error);
+
+        const { data: memberData } = await supabase.from('pt_members').select('used_sessions').eq('id', memberId).single();
+        if (memberData && memberData.used_sessions > 0) {
+          await supabase.from('pt_members').update({ used_sessions: memberData.used_sessions - 1 }).eq('id', memberId);
+        }
+
+        await this.logAction('DELETE_PT_SESSION', `Deleted PT session ID: ${id} for member: ${memberId}`);
+      }, null);
+    }
+
+    try {
+      const localSessions = JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[];
+      const filtered = localSessions.filter(s => s.id !== id);
+      localStorage.setItem('pt_sessions', JSON.stringify(filtered));
+
+      const localMembers = JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[];
+      const updatedMembers = localMembers.map(m => {
+        if (m.id === memberId && m.used_sessions > 0) {
+          return { ...m, used_sessions: m.used_sessions - 1 };
+        }
+        return m;
+      });
+      localStorage.setItem('pt_members', JSON.stringify(updatedMembers));
+    } catch (e) {}
+  }
+
+  async getSaleById(id: string): Promise<Sale | null> {
+    if (this.isSupabase()) {
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('sales').select('*').eq('id', id).single();
+        if (error) return null;
+        return data as Sale;
+      }, null);
+    }
+    return null;
+  }
+
+  async getSales(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[], startDate?: string, guestId?: string): Promise<Sale[]> {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         let query = supabase.from('sales').select('*');
-        if (isPropertyScope) {
+        
+        if (guestId) {
+            query = query.eq('guest_id', guestId).limit(500);
+        } else if (isPropertyScope) {
             if (limitToOutletIds && limitToOutletIds.length > 0) {
                 query = query.in('outlet_id', limitToOutletIds);
             } else {
-                query = query.eq('property_id', scopeId);
+                query = query.eq('property_id', scopeId).limit(500);
             }
         }
         else query = query.eq('outlet_id', scopeId);
@@ -2295,10 +2534,15 @@ class DatabaseService {
     }
   }
 
-  async getGuests(propertyId: string, options?: { limit?: number }): Promise<Guest[]> {
+  async getGuests(propertyId: string, options?: { limit?: number, phone?: string, email?: string, name?: string }): Promise<Guest[]> {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         let query = supabase.from('guests').select('*').eq('property_id', propertyId);
+        
+        if (options?.phone) query = query.eq('phone', options.phone);
+        if (options?.email) query = query.eq('email', options.email);
+        if (options?.name) query = query.ilike('name', options.name);
+
         if (options?.limit) query = query.limit(options.limit);
         const { data, error } = await query.order('name');
         if (error) throw error;
@@ -2577,17 +2821,20 @@ class DatabaseService {
     }
   }
 
-  async getMassageBookings(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[], startDate?: string): Promise<MassageBooking[]> {
+  async getMassageBookings(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[], startDate?: string, guestId?: string): Promise<MassageBooking[]> {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         // Optimization: Select only required columns to reduce payload size and query time
         const selectCols = 'id,date,start_time,end_time,guest_id,guest_name,guest_phone,massage_type_id,outlet_id,property_id,room_id,therapist_id,status,notes,total_price,is_paid,staff_id,created_at,updated_at,inventory_item_id,member_id';
         let query = supabase.from('massage_bookings').select(selectCols);
-        if (isPropertyScope) {
+        
+        if (guestId) {
+            query = query.eq('guest_id', guestId).limit(500);
+        } else if (isPropertyScope) {
             if (limitToOutletIds && limitToOutletIds.length > 0) {
                 query = query.in('outlet_id', limitToOutletIds);
             } else {
-                query = query.eq('property_id', scopeId);
+                query = query.eq('property_id', scopeId).limit(500);
             }
         }
         else query = query.eq('outlet_id', scopeId);
@@ -3182,9 +3429,7 @@ class DatabaseService {
       // Fetch all relevant notifications (targeted to user or system-wide)
       // Admins see EVERYTHING for the outlet (including global ones)
       // Staff ONLY see their own targeted notifications
-      if (userId && !isAdmin) {
-        query = query.eq('user_id', userId);
-      } else if (userId && isAdmin) {
+      if (userId) {
         query = query.or(`user_id.eq.${userId},user_id.is.null`);
       } else if (!userId) {
         query = query.is('user_id', null);
@@ -3223,7 +3468,32 @@ class DatabaseService {
   }
 
   private getLocalNotifications(userId?: string, outletId?: string): Notification[] {
-    const all = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    let all = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
+    if (all.length === 0) {
+      all = [
+        {
+          id: 'notif-default-1',
+          title: 'System Notifications Active',
+          message: 'Personal Training session logs, member updates, and sales activity are tracked here.',
+          type: 'info',
+          created_at: new Date().toISOString(),
+          read: false,
+          read_by: [],
+          dismissed_by: []
+        },
+        {
+          id: 'notif-default-2',
+          title: 'PT Client Profile Manager Updated',
+          message: 'You can now view PT guest profiles, track package sessions, log dates, verify digital signatures, and monitor revenue generated per member.',
+          type: 'success',
+          created_at: new Date(Date.now() - 1800000).toISOString(),
+          read: false,
+          read_by: [],
+          dismissed_by: []
+        }
+      ];
+      localStorage.setItem('membership_notifications', JSON.stringify(all));
+    }
     console.log('getLocalNotifications: all count', all.length, 'userId', userId);
     let filtered = all;
     
@@ -3319,15 +3589,20 @@ class DatabaseService {
         }
       } catch (e) {
         console.error('[Push] Fatal error in addNotification sequence:', e);
-        this.saveLocalNotification({ ...dbNotification, id: this.generateUUID(), created_at: new Date().toISOString() });
+        const localNotif = { ...dbNotification, id: this.generateUUID(), created_at: new Date().toISOString() };
+        this.saveLocalNotification(localNotif);
+        this.broadcastNotificationLocally(localNotif);
+        return localNotif;
       }
+      const fullNotif = { ...dbNotification, id: this.generateUUID(), created_at: new Date().toISOString() };
+      this.broadcastNotificationLocally(fullNotif);
+      return fullNotif;
     } else {
-      this.saveLocalNotification({ ...dbNotification, id: this.generateUUID(), created_at: new Date().toISOString() });
+      const localNotif = { ...dbNotification, id: this.generateUUID(), created_at: new Date().toISOString() };
+      this.saveLocalNotification(localNotif);
+      this.broadcastNotificationLocally(localNotif);
+      return localNotif;
     }
-    
-    const finalLocalNotif = { ...dbNotification, id: this.generateUUID(), created_at: new Date().toISOString() };
-    this.broadcastNotificationLocally(finalLocalNotif);
-    return finalLocalNotif;
   }
 
   private async triggerGlobalPush(n: Notification) {
@@ -3395,12 +3670,16 @@ class DatabaseService {
   private broadcastNotificationLocally(notification: Notification) {
     // Broadcast for local mode real-time updates across tabs
     if (typeof BroadcastChannel !== 'undefined') {
-      const bc = new BroadcastChannel('notifications_channel');
-      bc.postMessage(notification);
-      bc.close();
+      try {
+        const bc = new BroadcastChannel('notifications_channel');
+        bc.postMessage(notification);
+        bc.close();
+      } catch (e) {}
     }
     // Dispatch custom event for same-tab updates
-    // window.dispatchEvent(new CustomEvent('notification_received', { detail: notification }));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('notification_added', { detail: notification }));
+    }
   }
 
   private saveLocalNotification(notification: Notification) {
@@ -3585,10 +3864,10 @@ class DatabaseService {
   }
 
   subscribeToNotifications(userId: string, outletId: string | undefined, isAdmin: boolean = false, callback: (payload: { eventType: string, new: any, old?: any }) => void) {
-    // Shared BroadcastChannel handler for cross-tab updates
+    // Shared BroadcastChannel handler for cross-tab updates (only needed in local/offline mode)
     let bc: BroadcastChannel | null = null;
     
-    if (typeof BroadcastChannel !== 'undefined') {
+    if (!this.isSupabase() && typeof BroadcastChannel !== 'undefined') {
       bc = new BroadcastChannel('notifications_channel');
       bc.onmessage = (event) => {
         const notification = event.data as Notification;

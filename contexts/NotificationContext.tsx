@@ -73,6 +73,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isPushEnabled, setIsPushEnabled] = useState(false);
   const lastActionTime = useRef<number | null>(null);
   const seenIds = useRef<Set<string>>(new Set());
+  const recentToasts = useRef<Map<string, number>>(new Map());
 
   // Check push permission on mount
   useEffect(() => {
@@ -196,6 +197,34 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
     const effectiveUserId = user?.id || staffUser?.id;
 
+    const handleLocalNotification = async (e: Event) => {
+      const customEvt = e as CustomEvent;
+      if (!customEvt.detail) return;
+      const n = customEvt.detail as Notification;
+      if (seenIds.current.has(n.id)) return;
+      seenIds.current.add(n.id);
+
+      const contentKey = `${n.title}:${n.message}`;
+      const now = Date.now();
+      const lastShown = recentToasts.current.get(contentKey) || 0;
+
+      if (now - lastShown > 3000) {
+        recentToasts.current.set(contentKey, now);
+        await playNotificationSound();
+        toast.success(n.title + ': ' + n.message, {
+          duration: 5000,
+          position: 'top-right',
+        });
+      }
+
+      setNotifications(prev => {
+        if (prev.some(item => item.id === n.id)) return prev;
+        return [n, ...prev];
+      });
+    };
+
+    window.addEventListener('notification_added', handleLocalNotification);
+
     if (effectiveUserId) {
       const isAdmin = isSuperAdmin;
       console.log('Subscribing to notifications for user:', effectiveUserId, 'outlet:', outletId, 'isAdmin:', isAdmin);
@@ -221,12 +250,19 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           const isActiveTab = document.visibilityState === 'visible' && document.hasFocus();
           
           if (isActiveTab) {
-            // Trigger notification UI & Sound
-            await playNotificationSound();
-            toast.success(n.title + ': ' + n.message, {
-              duration: 5000,
-              position: 'top-right',
-            });
+            const contentKey = `${n.title}:${n.message}`;
+            const now = Date.now();
+            const lastShown = recentToasts.current.get(contentKey) || 0;
+
+            if (now - lastShown > 3000) {
+              recentToasts.current.set(contentKey, now);
+              // Trigger notification UI & Sound
+              await playNotificationSound();
+              toast.success(n.title + ': ' + n.message, {
+                duration: 5000,
+                position: 'top-right',
+              });
+            }
           }
 
           setNotifications(prev => {
@@ -280,6 +316,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }, 30000);
     
     return () => {
+      window.removeEventListener('notification_added', handleLocalNotification);
       if (unsubscribe) unsubscribe();
       clearInterval(interval);
     };

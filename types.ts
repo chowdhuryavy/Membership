@@ -389,6 +389,33 @@ export interface Sale {
   session_notes?: string;
 }
 
+export interface PTSession {
+  id: string;
+  pt_member_id: string;
+  date: string;
+  staff_id: string;
+  notes?: string;
+  guest_signature?: string;
+  created_at: string;
+}
+
+export interface PTMember {
+  id: string;
+  outlet_id: string;
+  guest_name: string;
+  phone?: string;
+  email?: string;
+  total_sessions: number;
+  used_sessions: number;
+  sale_id?: string;
+  start_date: string;
+  end_date: string;
+  status: 'Active' | 'Completed' | 'Expired';
+  trainer_id?: string;
+  notes?: string;
+  created_at: string;
+}
+
 export interface InventoryItem {
   id: string;
   property_id: string;

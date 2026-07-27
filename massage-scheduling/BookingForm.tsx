@@ -45,7 +45,7 @@ import { addMinutes, format } from 'date-fns';
 
 interface BookingFormProps {
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (bookingData?: any) => void;
   onGoToManagement: (tab: 'treatments' | 'therapists' | 'guests') => void;
   therapists: Therapist[];
   massageTypes: MassageType[];
@@ -344,7 +344,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
         }); 
       }
       toast.success("Booking saved successfully.");
-      onSuccess(); 
+      onSuccess(payload); 
       onClose();
     } catch (err: any) { 
         const msg = err.message || "";

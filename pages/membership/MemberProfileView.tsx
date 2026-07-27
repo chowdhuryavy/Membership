@@ -10,7 +10,7 @@ import {
   Milestone, MousePointer, PenTool, Wallet, Tag, FileUp, Download, Printer,
   ShieldAlert, Sparkles, Minus
 } from 'lucide-react';
-import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, MassageType } from '../../types';
+import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, MassageType, PTMember } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../services/mockSupabase';
@@ -45,8 +45,12 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
     }
   }, [initialMember.id, initialMember.status, initialMember.privilege_usage]);
   const [memberBookings, setMemberBookings] = useState<MassageBooking[]>([]);
+  const [serviceEngagements, setServiceEngagements] = useState<any[]>([]);
+  const [forensicsLoading, setForensicsLoading] = useState(false);
   const [massageTypes, setMassageTypes] = useState<MassageType[]>([]);
   const [lifecycleHistory, setLifecycleHistory] = useState<Member[]>([]);
+  const [ptMembers, setPtMembers] = useState<PTMember[]>([]);
+  const [allSales, setAllSales] = useState<any[]>([]);
   
   const [showFreezeModal, setShowFreezeModal] = useState(false);
   const [editingFreezeId, setEditingFreezeId] = useState<string | null>(null);
@@ -210,32 +214,115 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
 
   const loadForensics = async (targetMember: Member) => {
-    if (!targetMember.member_signature && !targetMember.id_card_url) {
-      db.getMemberById(targetMember.id).then(full => {
-        if (full) setViewingMember(prev => ({ ...prev, ...full }));
-      }).catch(err => console.error("Error loading full member details:", err));
-    }
+    setForensicsLoading(true);
+    try {
+      if (!targetMember.member_signature && !targetMember.id_card_url) {
+        db.getMemberById(targetMember.id).then(full => {
+          if (full) setViewingMember(prev => ({ ...prev, ...full }));
+        }).catch(err => console.error("Error loading full member details:", err));
+      }
 
-    const [f, b, mt, history, guests] = await Promise.all([
-      db.getFreezes(targetMember.id),
-      db.getMassageBookings(currentProperty?.id || '', true),
-      db.getMassageTypes(currentOutlet?.id || ''),
-      db.getMemberHistory(targetMember.membership_number, currentOutlet?.id),
-      db.getGuests(currentProperty?.id || '')
-    ]);
-    setFreezes(f);
-    
-    // Find the guest record that matches this member's phone, email, or name
-    const matchedGuest = guests.find(g => 
-      (targetMember.phone && g.phone === targetMember.phone) || 
-      (targetMember.email && g.email === targetMember.email) ||
-      (g.name.toLowerCase() === targetMember.guest_name.toLowerCase())
-    );
-    const linked = matchedGuest ? b.filter(booking => booking.guest_id === matchedGuest.id) : [];
-    
-    setMemberBookings(linked);
-    setMassageTypes(mt);
-    setLifecycleHistory(history);
+      // 1. Fetch matching guest first to narrow down other queries
+      const propertyId = currentProperty?.id || '';
+      const outletId = currentOutlet?.id || '';
+      
+      const guests = await db.getGuests(propertyId, { 
+        phone: targetMember.phone,
+        email: targetMember.email,
+        name: targetMember.guest_name
+      });
+
+      const matchedGuest = guests.find(g => 
+        (targetMember.phone && g.phone === targetMember.phone) || 
+        (targetMember.email && g.email === targetMember.email) ||
+        (targetMember.guest_name && g.name.toLowerCase() === targetMember.guest_name.toLowerCase())
+      );
+
+      const guestId = matchedGuest?.id;
+
+      // 2. Fetch other data, using guestId where possible to narrow search
+      // Fetch data in batches to avoid overwhelming the database and hitting statement timeouts
+      const [f, mt, history] = await Promise.all([
+        db.getFreezes(targetMember.id),
+        db.getMassageTypes(outletId),
+        db.getMemberHistory(targetMember.membership_number, outletId),
+      ]);
+      
+      const [b, pts, sales] = await Promise.all([
+        db.getMassageBookings(propertyId, true, undefined, undefined, guestId),
+        db.getPTMembers(propertyId, true, targetMember.phone || undefined, targetMember.email || undefined),
+        db.getSales(propertyId, true, undefined, undefined, guestId)
+      ]);
+
+      setFreezes(f);
+      setPtMembers(pts);
+      setAllSales(sales);
+      setMemberBookings(guestId ? b.filter(booking => booking.guest_id === guestId) : []);
+      setMassageTypes(mt);
+      setLifecycleHistory(history);
+
+      const matchedPts = pts.filter(pt => 
+        (targetMember.guest_name && pt.guest_name.toLowerCase() === targetMember.guest_name.toLowerCase()) ||
+        (targetMember.phone && pt.phone && pt.phone === targetMember.phone) ||
+        (targetMember.email && pt.email && pt.email.toLowerCase() === targetMember.email.toLowerCase())
+      );
+
+      let flattenedPtSessions: any[] = [];
+      try {
+        const ptSessionsPromises = matchedPts.map(pt => 
+          db.getPTSessions(pt.id).catch(e => {
+            console.warn(`Could not fetch sessions for PT ${pt.id}`, e);
+            return [];
+          })
+        );
+        const allPtSessionsArrays = await Promise.all(ptSessionsPromises);
+        flattenedPtSessions = allPtSessionsArrays.flat();
+      } catch (err) {
+        console.error("Error in loadForensics PT sessions load:", err);
+      }
+
+      const engagements = [
+        ...b.map(booking => ({
+          id: booking.id,
+          title: mt.find(m => m.id === (booking.massage_type_id || booking.inventory_item_id))?.name || 'Spa Service',
+          date: booking.date || new Date().toISOString(),
+          status: booking.status,
+          price: Number(booking.price || 0),
+          discount: Number(booking.discount || 0),
+          discount_reason: booking.discount_reason,
+          discount_id_url: booking.discount_id_url
+        })),
+        ...matchedPts.map(pt => {
+          const matchingSale = sales.find(s => 
+            (pt.sale_id && s.id === pt.sale_id) ||
+            (s.guest_name && targetMember.guest_name && s.guest_name.toLowerCase() === targetMember.guest_name.toLowerCase())
+          );
+          const ptRev = matchingSale ? Number(matchingSale.net_amount || 0) : 0;
+          return {
+            id: pt.id,
+            title: `Personal Training (${pt.total_sessions} Sessions)`,
+            date: pt.start_date || pt.created_at || new Date().toISOString(),
+            status: pt.used_sessions >= pt.total_sessions ? 'completed' : 'active',
+            price: ptRev,
+            discount: 0
+          };
+        }),
+        ...flattenedPtSessions.map(s => ({
+          id: s.id,
+          title: `PT Training Session`,
+          date: s.date || new Date().toISOString(),
+          status: 'completed',
+          price: 0,
+          discount: 0
+        }))
+      ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+      setServiceEngagements(engagements);
+    } catch (err) {
+      console.error("Forensics error:", err);
+    } finally {
+      setForensicsLoading(false);
+    }
   };
 
   useEffect(() => { 
@@ -254,8 +341,23 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   }, [lifecycleHistory]);
 
   const totalServiceRevenue = useMemo(() => {
-    return memberBookings.reduce((sum, booking) => sum + Number(booking.price || 0), 0);
-  }, [memberBookings]);
+    const bookingRev = memberBookings.reduce((sum, booking) => sum + Number(booking.price || 0), 0);
+    const matchedPts = ptMembers.filter(pt => 
+      (viewingMember.guest_name && pt.guest_name.toLowerCase() === viewingMember.guest_name.toLowerCase()) ||
+      (viewingMember.phone && pt.phone && pt.phone === viewingMember.phone) ||
+      (viewingMember.email && pt.email && pt.email.toLowerCase() === viewingMember.email.toLowerCase())
+    );
+    const ptRev = matchedPts.reduce((sum, pt) => {
+      const matchingSales = allSales.filter(s => 
+        (pt.sale_id && s.id === pt.sale_id) ||
+        (s.guest_name && s.guest_name.toLowerCase() === viewingMember.guest_name.toLowerCase()) ||
+        (pt.phone && s.phone && s.phone === pt.phone) ||
+        (pt.email && s.email && s.email.toLowerCase() === viewingMember.email.toLowerCase())
+      );
+      return sum + matchingSales.reduce((sSum, s) => sSum + (s.net_amount || s.total_amount || 0), 0);
+    }, 0);
+    return bookingRev + ptRev;
+  }, [memberBookings, ptMembers, allSales, viewingMember]);
 
   const grandTotal = totalRevenue + totalServiceRevenue;
 
@@ -988,7 +1090,14 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                   </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-50">
-                                  {(!Array.isArray(memberBookings) || memberBookings.length === 0) ? (
+                                  {forensicsLoading ? (
+                                      <tr><td colSpan={3} className="px-8 py-28 text-center">
+                                          <div className="flex flex-col items-center gap-4 animate-pulse">
+                                              <History className="w-12 h-12 text-slate-200 animate-spin" />
+                                              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Synthesizing Ledger...</p>
+                                          </div>
+                                      </td></tr>
+                                  ) : (!Array.isArray(serviceEngagements) || serviceEngagements.length === 0) ? (
                                       <tr><td colSpan={3} className="px-8 py-28 text-center">
                                           <div className="flex flex-col items-center gap-4 opacity-30">
                                               <History className="w-12 h-12 text-slate-300" />
@@ -996,44 +1105,45 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                           </div>
                                       </td></tr>
                                   ) : (
-                                      Array.isArray(memberBookings) && memberBookings.map(b => {
-                                          const type = massageTypes.find(mt => mt.id === (b.massage_type_id || b.inventory_item_id));
-                                          return (
-                                          <tr key={b.id} className="hover:bg-purple-50/20 transition-colors">
+                                      serviceEngagements.map(engagement => (
+                                          <tr key={engagement.id} className="hover:bg-purple-50/20 transition-colors">
                                               <td className="px-8 py-5">
-                                                  <div className="text-[11px] font-black text-slate-900 uppercase truncate max-w-[140px] tracking-tight">{type?.name || 'Standard Service'}</div>
-                                                  <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 flex items-center gap-1.5"><Calendar className="w-2.5 h-2.5" /> {format(parseISO(b.date), 'dd MMM yy')}</div>
-                                                   {(b.discount_reason || b.discount_id_url) && (
-                                                       <div className="mt-1 flex items-center gap-1 text-[8px] font-black text-indigo-500 italic uppercase tracking-tighter">
-                                                           {b.discount_reason && <><Tag className="w-2 h-2" /> {b.discount_reason}</>}
-                                                           {b.discount_id_url && (
-                                                               <button 
-                                                                   onClick={() => setViewingIdUrl(b.discount_id_url!)}
-                                                                   className="ml-1 hover:text-indigo-700 flex items-center gap-0.5"
-                                                                   title="View Supportive ID"
-                                                               >
-                                                                   <FileUp className="w-2 h-2" />
-                                                                   <ExternalLink className="w-2 h-2" />
-                                                               </button>
-                                                           )}
-                                                       </div>
-                                                   )}
+                                                  <div className="text-[11px] font-black text-slate-900 uppercase truncate max-w-[140px] tracking-tight">{engagement.title}</div>
+                                                  <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 flex items-center gap-1.5">
+                                                      <Calendar className="w-2.5 h-2.5" /> 
+                                                      {engagement.date ? format(parseISO(engagement.date), 'dd MMM yy') : 'N/A'}
+                                                  </div>
+                                                  {(engagement.discount_reason || engagement.discount_id_url) && (
+                                                      <div className="mt-1 flex items-center gap-1 text-[8px] font-black text-indigo-500 italic uppercase tracking-tighter">
+                                                          {engagement.discount_reason && <><Tag className="w-2 h-2" /> {engagement.discount_reason}</>}
+                                                          {engagement.discount_id_url && (
+                                                              <button 
+                                                                  onClick={() => setViewingIdUrl(engagement.discount_id_url!)}
+                                                                  className="ml-1 hover:text-indigo-700 flex items-center gap-0.5"
+                                                                  title="View Supportive ID"
+                                                              >
+                                                                  <FileUp className="w-2 h-2" />
+                                                                  <ExternalLink className="w-2 h-2" />
+                                                              </button>
+                                                          )}
+                                                      </div>
+                                                  )}
                                               </td>
                                               <td className="px-8 py-5 text-center">
-                                                  <span className={`inline-flex px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border shadow-sm ${b.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                                                      {b.status}
+                                                  <span className={`inline-flex px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border shadow-sm ${engagement.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                                                      {engagement.status}
                                                   </span>
                                               </td>
                                               <td className="px-8 py-5 text-right font-black text-slate-900 text-xs tabular-nums">
-                                                  {formatMoney(Number(b.price))}
-                                                  {Number(b.discount) > 0 && (
+                                                  {formatMoney(Number(engagement.price))}
+                                                  {Number(engagement.discount) > 0 && (
                                                       <div className="text-[8px] font-bold text-red-500 mt-0.5">
-                                                          -{formatMoney(Number(b.discount))} Discount
+                                                          -{formatMoney(Number(engagement.discount))} Discount
                                                       </div>
                                                   )}
                                               </td>
                                           </tr>
-                                      )})
+                                      ))
                                   )}
                               </tbody>
                           </table>
