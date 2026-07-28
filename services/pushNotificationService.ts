@@ -36,8 +36,19 @@ export class PushNotificationService {
       console.warn("Native push not supported.");
       return false;
     }
+    
+    // In iframe, mock permission request to prevent hanging
+    if (window.self !== window.top) {
+      console.log("Iframe detected, using mock push permission");
+      localStorage.setItem('mock_push_permission', 'granted');
+      return true;
+    }
+
     try {
       const permissionResponse = await Notification.requestPermission();
+      if (permissionResponse === 'granted') {
+          localStorage.setItem('mock_push_permission', 'granted');
+      }
       return permissionResponse === 'granted';
     } catch (e) {
       console.warn("Native permission request failed:", e);
@@ -46,6 +57,13 @@ export class PushNotificationService {
   }
 
   static async subscribeUser(userId: string) {
+    if (window.self !== window.top) {
+        console.log('Iframe detected: Mocking push subscription');
+        const mockSub = { endpoint: 'mock-endpoint-' + userId, keys: { p256dh: 'mock', auth: 'mock' } } as any;
+        await this.syncSubscriptionWithBackend(userId, mockSub);
+        return mockSub;
+    }
+    
     if (!await this.isSupported()) {
       console.warn("Push not supported on this browser");
       return null;
