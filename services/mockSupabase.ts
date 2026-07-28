@@ -3092,7 +3092,8 @@ class DatabaseService {
             title: 'Booking Completed',
             message: `Booking for ${guest?.name || 'Guest'} has been marked as completed.`,
             type: 'success',
-            outlet_id: booking.outlet_id
+            outlet_id: booking.outlet_id,
+            user_id: booking.therapist_id || null
           });
         }
       }, null);
@@ -3426,13 +3427,21 @@ class DatabaseService {
     if (this.isSupabase()) {
       let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
       
-      // Fetch all relevant notifications (targeted to user or system-wide)
-      // Admins see EVERYTHING for the outlet (including global ones)
-      // Staff ONLY see their own targeted notifications
-      if (userId) {
-        query = query.or(`user_id.eq.${userId},user_id.is.null`);
-      } else if (!userId) {
-        query = query.is('user_id', null);
+      // Fetch all relevant notifications:
+      // Admins see EVERYTHING for the outlet (including global ones with user_id is null)
+      // Non-admin staff ONLY see notifications assigned to them (user_id = userId)
+      if (isAdmin) {
+        if (userId) {
+          query = query.or(`user_id.eq.${userId},user_id.is.null`);
+        } else {
+          query = query.is('user_id', null);
+        }
+      } else {
+        if (userId) {
+          query = query.eq('user_id', userId);
+        } else {
+          return [];
+        }
       }
       
       const { data, error } = await query;
@@ -3440,7 +3449,7 @@ class DatabaseService {
         if (error.code !== 'PGRST205') {
           console.warn("Failed to fetch notifications from Supabase, falling back to local storage", error);
         }
-        return this.getLocalNotifications(userId, outletId);
+        return this.getLocalNotifications(userId, outletId, isAdmin);
       }
       
       let notifications = (data || []) as Notification[];
@@ -3464,10 +3473,10 @@ class DatabaseService {
       console.log(`Fetched ${notifications.length} notifications from Supabase`);
       return notifications;
     }
-    return this.getLocalNotifications(userId, outletId);
+    return this.getLocalNotifications(userId, outletId, isAdmin);
   }
 
-  private getLocalNotifications(userId?: string, outletId?: string): Notification[] {
+  private getLocalNotifications(userId?: string, outletId?: string, isAdmin: boolean = false): Notification[] {
     let all = JSON.parse(localStorage.getItem('membership_notifications') || '[]') as Notification[];
     if (all.length === 0) {
       all = [
@@ -3494,10 +3503,16 @@ class DatabaseService {
       ];
       localStorage.setItem('membership_notifications', JSON.stringify(all));
     }
-    console.log('getLocalNotifications: all count', all.length, 'userId', userId);
+    console.log('getLocalNotifications: all count', all.length, 'userId', userId, 'isAdmin', isAdmin);
     let filtered = all;
     
     if (userId) {
+      if (isAdmin) {
+        filtered = filtered.filter(n => !n.user_id || n.user_id === userId);
+      } else {
+        // Non-admin staff ONLY see notifications specifically assigned to them
+        filtered = filtered.filter(n => n.user_id === userId);
+      }
       // Filter out dismissed notifications for this user
       filtered = filtered.filter(n => !n.dismissed_by || !n.dismissed_by.includes(userId));
       console.log('getLocalNotifications: after dismiss filter', filtered.length);
@@ -3508,7 +3523,11 @@ class DatabaseService {
         read: n.user_id === userId ? n.read : (n.read_by?.includes(userId) || false)
       }));
     } else {
-      filtered = filtered.filter(n => !n.user_id);
+      if (isAdmin) {
+        filtered = filtered.filter(n => !n.user_id);
+      } else {
+        filtered = [];
+      }
     }
     
     if (outletId) {

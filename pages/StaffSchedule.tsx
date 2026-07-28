@@ -345,7 +345,8 @@ const StaffSchedule = () => {
       setIsLoadingNotifications(true);
       try {
         // Fetch past notifications targeted to this staff OR global ones for this outlet
-        const pastNotifs = await db.getNotifications(staff.id, selectedOutletId);
+        const isAdmin = staff.role?.toLowerCase() === 'admin';
+        const pastNotifs = await db.getNotifications(staff.id, selectedOutletId, isAdmin);
         
         const mappedNotifs: StaffNotification[] = pastNotifs.map(n => ({
           id: n.id,

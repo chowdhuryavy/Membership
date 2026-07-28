@@ -202,6 +202,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (!customEvt.detail) return;
       const n = customEvt.detail as Notification;
       if (seenIds.current.has(n.id)) return;
+
+      const isAdmin = user ? isSuperAdmin : false;
+      if (!isAdmin) {
+        if (!n.user_id || n.user_id !== effectiveUserId) return;
+      }
+
       seenIds.current.add(n.id);
 
       const contentKey = `${n.title}:${n.message}`;
