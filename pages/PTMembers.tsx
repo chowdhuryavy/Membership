@@ -83,7 +83,7 @@ export default function PTMembers() {
                 message: `Session details updated for ${selectedMember.guest_name}.`,
                 type: 'info',
                 outlet_id: currentOutlet?.id,
-                user_id: user?.id
+                user_id: undefined
             });
 
             // Reload sessions
@@ -102,19 +102,20 @@ export default function PTMembers() {
 
     const executeDeleteSession = async () => {
         if (!deletingSession || !selectedMember) return;
+        const activeTargetPkg = selectedPackage || selectedMember;
         const targetId = deletingSession.id;
         setPageLoading(true);
         try {
-            await db.deletePTSession(targetId, selectedMember.id);
+            await db.deletePTSession(targetId, activeTargetPkg.id);
             toast.success("Session deleted successfully!");
 
             // Notification
             await db.addNotification({
-                title: `PT Session Deleted: ${selectedMember.guest_name}`,
-                message: `A training session for ${selectedMember.guest_name} was removed.`,
+                title: `PT Session Deleted: ${activeTargetPkg.guest_name}`,
+                message: `A training session for ${activeTargetPkg.guest_name} was removed.`,
                 type: 'warning',
                 outlet_id: currentOutlet?.id,
-                user_id: user?.id
+                user_id: undefined
             });
 
             setDeletingSession(null);
@@ -123,7 +124,7 @@ export default function PTMembers() {
             const updatedMembers = await db.getPTMembers(currentOutlet!.id);
             setPtMembers(updatedMembers);
 
-            const updatedSessions = await db.getPTSessions(selectedMember.id);
+            const updatedSessions = await db.getPTSessions(activeTargetPkg.id);
             setSessions(updatedSessions);
 
             const updatedSelected = updatedMembers.find(m => m.id === selectedMember.id);
@@ -131,6 +132,12 @@ export default function PTMembers() {
                 setSelectedMember(updatedSelected);
             } else {
                 setSelectedMember(prev => prev ? { ...prev, used_sessions: Math.max(0, (prev.used_sessions || 1) - 1) } : null);
+            }
+            
+            if (selectedPackage) {
+                // If it's a sub-package, it's not going to be in updatedMembers. Wait, we need to fetch the sub-package?
+                // For now, let's just decrement the local state so the UI updates immediately.
+                setSelectedPackage(prev => prev ? { ...prev, used_sessions: Math.max(0, (prev.used_sessions || 1) - 1) } : null);
             }
         } catch (err: any) {
             toast.error("Failed to delete session: " + (err.message || ''));
@@ -190,7 +197,7 @@ export default function PTMembers() {
                 message: `${activeTarget.guest_name} was assigned to trainer ${trainerName}.`,
                 type: 'info',
                 outlet_id: currentOutlet?.id,
-                user_id: user?.id
+                user_id: undefined
             });
         } catch (err: any) {
             toast.error("Failed to update trainer");
@@ -252,7 +259,7 @@ export default function PTMembers() {
             return;
         }
 
-        if (activeTargetPkg.used_sessions >= activeTargetPkg.total_sessions) {
+        if (sessions.length >= activeTargetPkg.total_sessions) {
             toast.error("All package sessions have already been completed!");
             return;
         }
@@ -282,7 +289,7 @@ export default function PTMembers() {
                 message: `Session #${newUsedCount} of ${activeTargetPkg.total_sessions} completed for ${activeTargetPkg.guest_name} by ${trainerObj?.name || 'Trainer'}. Verified with digital signature.`,
                 type: 'success',
                 outlet_id: currentOutlet?.id,
-                user_id: user.id
+                user_id: undefined
             });
 
             // Reload data and update selected member counts
@@ -880,7 +887,7 @@ export default function PTMembers() {
                                                                 setSessionNotes(`Session #${(sessions.length || 0) + 1} Workout`);
                                                                 setShowLogSession(true);
                                                             }}
-                                                            disabled={selectedPackage.used_sessions >= selectedPackage.total_sessions}
+                                                            disabled={sessions.length >= selectedPackage.total_sessions}
                                                             className="h-10 px-5 rounded-xl font-black text-xs uppercase bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-950/40 flex items-center gap-2"
                                                         >
                                                             <Plus className="w-4 h-4" />
@@ -896,11 +903,11 @@ export default function PTMembers() {
                                                     </div>
                                                     <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
                                                         <span className="text-[10px] font-black uppercase text-indigo-300 block">Used Sessions</span>
-                                                        <span className="text-lg font-black text-amber-400">{selectedPackage.used_sessions} Completed</span>
+                                                        <span className="text-lg font-black text-amber-400">{sessions.length} Completed</span>
                                                     </div>
                                                     <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
                                                         <span className="text-[10px] font-black uppercase text-indigo-300 block">Available Balance</span>
-                                                        <span className="text-lg font-black text-emerald-400">{Math.max(0, selectedPackage.total_sessions - selectedPackage.used_sessions)} Remaining</span>
+                                                        <span className="text-lg font-black text-emerald-400">{Math.max(0, selectedPackage.total_sessions - sessions.length)} Remaining</span>
                                                     </div>
                                                     <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
                                                         <span className="text-[10px] font-black uppercase text-indigo-300 block">Validity Expiry</span>
