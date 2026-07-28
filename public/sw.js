@@ -1,4 +1,4 @@
-const CACHE_NAME = 'health-club-v23';
+const CACHE_NAME = 'health-club-v24';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -128,8 +128,8 @@ self.addEventListener('push', (event) => {
       // Check if any client (tab/window) is currently focused
       const isFocused = windowClients.some(client => client.focused);
       if (isFocused) {
-        console.log('[SW] App is focused. Skipping push notification to avoid duplication with UI toast.');
-        return;
+        console.log('[SW] App is focused. Still showing push notification for testing.');
+        // return; // Commented out to ensure notifications show during testing
       }
       return self.registration.showNotification(data.title || 'Health Club', options);
     })
