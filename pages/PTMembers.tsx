@@ -146,7 +146,14 @@ export default function PTMembers() {
             const membersData = await db.getPTMembers(currentOutlet.id);
             setPtMembers(membersData);
             
-            const staffData = await db.getStaff(currentProperty.id, true);
+            let staffData = [];
+            if (currentOutlet.id === 'all') {
+                const allowedIds = currentProperty.outlets.map(o => o.id);
+                staffData = await db.getStaff(currentProperty.id, true, allowedIds);
+            } else {
+                staffData = await db.getStaff(currentOutlet.id);
+            }
+            console.log('DEBUG: staffData loaded:', staffData);
             setStaff(staffData);
 
             const salesData = await db.getSales(currentOutlet.id);
@@ -670,9 +677,14 @@ export default function PTMembers() {
                                             className="bg-indigo-900 border border-indigo-700 text-white text-xs font-bold rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer"
                                         >
                                             <option value="">Assign Staff / Trainer</option>
-                                            {staff.filter(s => s.is_active !== false).map(s => (
-                                                <option key={s.id} value={s.id}>{s.name} ({s.role || 'Staff'})</option>
-                                            ))}
+                                            {(() => {
+                                                const activeStaff = staff.filter(s => s.is_active !== false);
+                                                const trainers = activeStaff.filter(s => s.role?.toLowerCase().includes('trainer'));
+                                                const displayStaff = trainers.length > 0 ? trainers : activeStaff;
+                                                return displayStaff.map(s => (
+                                                    <option key={s.id} value={s.id}>{s.name} ({s.role || 'Staff'})</option>
+                                                ));
+                                            })()}
                                         </select>
                                     </div>
 
@@ -999,9 +1011,14 @@ export default function PTMembers() {
                                                                                     className="w-full h-10 px-3 rounded-xl border border-slate-200 text-xs font-bold bg-white"
                                                                                 >
                                                                                     <option value="">Select Trainer</option>
-                                                                                    {staff.filter(st => st.is_active !== false).map(st => (
-                                                                                        <option key={st.id} value={st.id}>{st.name} ({st.role || 'Staff'})</option>
-                                                                                    ))}
+                                                                                    {(() => {
+                                                                                        const activeStaff = staff.filter(s => s.is_active !== false);
+                                                                                        const trainers = activeStaff.filter(s => s.role?.toLowerCase().includes('trainer'));
+                                                                                        const displayStaff = trainers.length > 0 ? trainers : activeStaff;
+                                                                                        return displayStaff.map(st => (
+                                                                                            <option key={st.id} value={st.id}>{st.name} ({st.role || 'Staff'})</option>
+                                                                                        ));
+                                                                                    })()}
                                                                                 </select>
                                                                             </div>
                                                                         </div>
@@ -1243,9 +1260,14 @@ export default function PTMembers() {
                                         className="w-full h-11 px-4 rounded-xl border border-slate-200 text-xs font-bold bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500"
                                     >
                                         <option value="">Select Trainer</option>
-                                        {staff.filter(s => s.is_active !== false).map(st => (
-                                            <option key={st.id} value={st.id}>{st.name} ({st.role || 'Staff'})</option>
-                                        ))}
+                                        {(() => {
+                                            const activeStaff = staff.filter(s => s.is_active !== false);
+                                            const trainers = activeStaff.filter(s => s.role?.toLowerCase().includes('trainer'));
+                                            const displayStaff = trainers.length > 0 ? trainers : activeStaff;
+                                            return displayStaff.map(st => (
+                                                <option key={st.id} value={st.id}>{st.name} ({st.role || 'Staff'})</option>
+                                            ));
+                                        })()}
                                     </select>
                                 </div>
                             </div>
