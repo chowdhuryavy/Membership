@@ -441,6 +441,24 @@ const StaffSchedule = () => {
           }
         )
         .on(
+          'postgres_changes', 
+          { 
+            event: '*', 
+            schema: 'public', 
+            table: 'pt_sessions'
+          }, 
+          () => {
+            console.log('Real-time PT session update received via DB');
+            if (viewMode === 'monthly') {
+              loadMonthlySchedule(true);
+            } else if (viewMode === 'daily') {
+              loadSchedule(true);
+            } else if (viewMode === 'pt_members') {
+              loadPTMembers(true);
+            }
+          }
+        )
+        .on(
           'broadcast',
           { event: 'sync' },
           (payload) => {
@@ -462,7 +480,9 @@ const StaffSchedule = () => {
         });
       
       const handleBookingUpdate = () => {
-        if (viewMode === 'pt_members') {
+        if (viewMode === 'monthly') {
+          loadMonthlySchedule(true);
+        } else if (viewMode === 'pt_members') {
           loadPTMembers(true);
         } else {
           loadSchedule(true);

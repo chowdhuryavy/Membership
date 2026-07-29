@@ -139,6 +139,7 @@ export default function PTMembers() {
                 // For now, let's just decrement the local state so the UI updates immediately.
                 setSelectedPackage(prev => prev ? { ...prev, used_sessions: Math.max(0, (prev.used_sessions || 1) - 1) } : null);
             }
+            window.dispatchEvent(new Event('booking_updated'));
         } catch (err: any) {
             toast.error("Failed to delete session: " + (err.message || ''));
         } finally {
@@ -307,6 +308,7 @@ export default function PTMembers() {
                 }
                 const sessionsData = await db.getPTSessions(updatedTarget.id);
                 setSessions(sessionsData);
+                window.dispatchEvent(new Event('booking_updated'));
             }
         } catch (err: any) {
             const msg = err.message || '';
