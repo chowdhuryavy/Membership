@@ -211,7 +211,7 @@ const SidebarContent = ({
         }}
         className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'pt_members' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
       >
-        <Users className="w-3.5 h-3.5" /> My PT Members
+        <Dumbbell className="w-3.5 h-3.5" /> My PT Members & Sessions
       </button>
     </nav>
 
@@ -1447,7 +1447,7 @@ const StaffSchedule = () => {
             <div className="flex flex-col">
               <h1 className="text-sm font-black uppercase tracking-tighter leading-none">{settings?.name || 'Staff Portal'}</h1>
               <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mt-1">
-                {viewMode === 'daily' ? "Today's Schedule" : viewMode === 'monthly' ? "Monthly Summary" : viewMode === 'pt_members' ? "My PT Members" : "Incentive Earnings"}
+                {viewMode === 'daily' ? "Today's Schedule" : viewMode === 'monthly' ? "Monthly Summary" : viewMode === 'pt_members' ? "My PT Members & Sessions" : "Incentive Earnings"}
               </p>
             </div>
           </div>
@@ -1527,7 +1527,7 @@ const StaffSchedule = () => {
         <div className="hidden lg:flex items-center justify-between px-8 py-6 bg-white border-b border-slate-200 sticky top-0 z-30">
           <div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">
-              {viewMode === 'daily' ? "Today's Schedule" : viewMode === 'monthly' ? "Monthly Summary" : viewMode === 'pt_members' ? "My PT Members" : "Incentive Earnings"}
+              {viewMode === 'daily' ? "Today's Schedule" : viewMode === 'monthly' ? "Monthly Summary" : viewMode === 'pt_members' ? "My PT Members & Sessions" : "Incentive Earnings"}
             </h1>
             <p className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] mt-1">{propertyName || 'Terminal Overview'}</p>
           </div>
