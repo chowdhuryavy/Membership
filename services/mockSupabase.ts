@@ -2166,10 +2166,8 @@ class DatabaseService {
             query = query.eq('phone', phone);
         } else if (email) {
             query = query.eq('email', email);
-        } else if (!isProperty) {
+        } else if (!isProperty && scopeId) {
             query = query.eq('outlet_id', scopeId);
-        } else {
-            query = query.eq('property_id', scopeId).limit(500); // Ensure property_id filtering if isProperty
         }
         
         const { data, error } = await query.order('created_at', { ascending: false });
@@ -2186,19 +2184,16 @@ class DatabaseService {
 
     if (this.isSupabase() && querySuccess && supabaseMembers !== null) {
       allMembers = supabaseMembers;
-      // Sync local storage so manually deleted items in Supabase table don't ghost back
+      // Sync local storage so manually deleted items in Supabase table don't ghost back from browser cache
       try {
-        const localMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]);
         const fetchedIds = new Set(supabaseMembers.map(m => m.id));
-        const updatedLocal = localMembers.filter(m => {
-          const isSameScope = isProperty ? m.property_id === scopeId : m.outlet_id === scopeId;
-          return isSameScope ? fetchedIds.has(m.id) : true;
-        });
+        const localMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]);
+        const updatedLocal = localMembers.filter(m => fetchedIds.has(m.id));
         localStorage.setItem('pt_members', JSON.stringify(updatedLocal));
       } catch (e) {}
     } else {
       try {
-        allMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]).filter(m => isProperty ? m.property_id === scopeId : m.outlet_id === scopeId);
+        allMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]).filter(m => isProperty || !scopeId || m.outlet_id === scopeId);
       } catch (e) {}
     }
 
