@@ -2156,7 +2156,9 @@ class DatabaseService {
   }
 
   async getPTMembers(scopeId: string, isProperty: boolean = false, phone?: string, email?: string): Promise<PTMember[]> {
-    let supabaseMembers: PTMember[] = [];
+    let supabaseMembers: PTMember[] | null = null;
+    let querySuccess = false;
+
     if (this.isSupabase()) {
       supabaseMembers = await this.safeCall(async () => {
         let query = supabase.from('pt_members').select('*');
@@ -2175,20 +2177,30 @@ class DatabaseService {
             if (error.code === '42P01' || (error.message && error.message.includes('schema cache'))) return []; // Table doesn't exist yet
             throw error;
         }
+        querySuccess = true;
         return (data || []) as PTMember[];
-      }, []);
+      }, null);
     }
 
-    let localMembers: PTMember[] = [];
-    try {
-      localMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]).filter(m => isProperty || m.outlet_id === scopeId);
-    } catch (e) {}
+    let allMembers: PTMember[] = [];
 
-    const combinedMap = new Map<string, PTMember>();
-    for (const m of localMembers) combinedMap.set(m.id, m);
-    for (const m of supabaseMembers) combinedMap.set(m.id, m);
-
-    let allMembers = Array.from(combinedMap.values()).sort((a,b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+    if (this.isSupabase() && querySuccess && supabaseMembers !== null) {
+      allMembers = supabaseMembers;
+      // Sync local storage so manually deleted items in Supabase table don't ghost back
+      try {
+        const localMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]);
+        const fetchedIds = new Set(supabaseMembers.map(m => m.id));
+        const updatedLocal = localMembers.filter(m => {
+          const isSameScope = isProperty ? m.property_id === scopeId : m.outlet_id === scopeId;
+          return isSameScope ? fetchedIds.has(m.id) : true;
+        });
+        localStorage.setItem('pt_members', JSON.stringify(updatedLocal));
+      } catch (e) {}
+    } else {
+      try {
+        allMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]).filter(m => isProperty ? m.property_id === scopeId : m.outlet_id === scopeId);
+      } catch (e) {}
+    }
 
     // Filter out PT Members associated with voided or deleted sales
     const saleIdsToCheck = Array.from(new Set(allMembers.map(m => m.sale_id).filter(Boolean))) as string[];
@@ -2213,7 +2225,7 @@ class DatabaseService {
       }
     }
 
-    return allMembers;
+    return allMembers.sort((a,b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   }
 
   async addPTMember(member: Omit<PTMember, 'id' | 'created_at'>) {
@@ -2298,7 +2310,9 @@ class DatabaseService {
   }
 
   async getPTSessions(ptMemberId: string): Promise<PTSession[]> {
-    let supabaseSessions: PTSession[] = [];
+    let supabaseSessions: PTSession[] | null = null;
+    let querySuccess = false;
+
     if (this.isSupabase()) {
       supabaseSessions = await this.safeCall(async () => {
         const { data, error } = await supabase.from('pt_sessions').select('*').eq('pt_member_id', ptMemberId).order('date', { ascending: false });
@@ -2306,26 +2320,32 @@ class DatabaseService {
             if (error.code === '42P01' || (error.message && error.message.includes('schema cache'))) return [];
             throw error;
         }
+        querySuccess = true;
         return (data || []) as PTSession[];
-      }, []);
+      }, null);
     }
 
-    let localSessions: PTSession[] = [];
-    try {
-      localSessions = (JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[]).filter(s => s.pt_member_id === ptMemberId);
-    } catch (e) {}
+    if (this.isSupabase() && querySuccess && supabaseSessions !== null) {
+      try {
+        const localSessions = (JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[]);
+        const fetchedIds = new Set(supabaseSessions.map(s => s.id));
+        const updatedLocal = localSessions.filter(s => s.pt_member_id !== ptMemberId || fetchedIds.has(s.id));
+        localStorage.setItem('pt_sessions', JSON.stringify(updatedLocal));
+      } catch (e) {}
 
-    const combinedMap = new Map<string, PTSession>();
-    for (const s of supabaseSessions) combinedMap.set(s.id, s);
-    for (const s of localSessions) {
-      if (!combinedMap.has(s.id)) combinedMap.set(s.id, s);
+      return supabaseSessions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } else {
+      try {
+        return (JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[]).filter(s => s.pt_member_id === ptMemberId).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      } catch (e) {
+        return [];
+      }
     }
-
-    return Array.from(combinedMap.values()).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
   async getPTSessionsForStaff(staffId: string, startDate?: string, endDate?: string): Promise<PTSession[]> {
-    let supabaseSessions: PTSession[] = [];
+    let supabaseSessions: PTSession[] | null = null;
+    let querySuccess = false;
     const startStr = startDate ? (startDate.includes('T') ? startDate : `${startDate}T00:00:00`) : undefined;
     const endStr = endDate ? (endDate.includes('T') ? endDate : `${endDate}T23:59:59.999Z`) : undefined;
 
@@ -2339,37 +2359,36 @@ class DatabaseService {
             if (error.code === '42P01' || (error.message && error.message.includes('schema cache'))) return [];
             throw error;
         }
+        querySuccess = true;
         return (data || []) as PTSession[];
-      }, []);
+      }, null);
     }
 
-    let localSessions: PTSession[] = [];
-    try {
-      const allLocal = JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[];
-      const localMembers = JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[];
-      const myMemberIds = new Set(localMembers.filter(m => m.trainer_id === staffId).map(m => m.id));
+    if (this.isSupabase() && querySuccess && supabaseSessions !== null) {
+      return supabaseSessions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } else {
+      let localSessions: PTSession[] = [];
+      try {
+        const allLocal = JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[];
+        const localMembers = JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[];
+        const myMemberIds = new Set(localMembers.filter(m => m.trainer_id === staffId).map(m => m.id));
 
-      localSessions = allLocal.filter(s => {
-        const isMyStaff = s.staff_id === staffId || myMemberIds.has(s.pt_member_id);
-        if (!isMyStaff) return false;
+        localSessions = allLocal.filter(s => {
+          const isMyStaff = s.staff_id === staffId || myMemberIds.has(s.pt_member_id);
+          if (!isMyStaff) return false;
 
-        const sDateOnly = s.date ? (s.date.includes('T') ? s.date.slice(0, 10) : s.date) : '';
-        const startOnly = startDate ? startDate.slice(0, 10) : '';
-        const endOnly = endDate ? endDate.slice(0, 10) : '';
+          const sDateOnly = s.date ? (s.date.includes('T') ? s.date.slice(0, 10) : s.date) : '';
+          const startOnly = startDate ? startDate.slice(0, 10) : '';
+          const endOnly = endDate ? endDate.slice(0, 10) : '';
 
-        if (startOnly && sDateOnly < startOnly) return false;
-        if (endOnly && sDateOnly > endOnly) return false;
-        return true;
-      });
-    } catch (e) {}
+          if (startOnly && sDateOnly < startOnly) return false;
+          if (endOnly && sDateOnly > endOnly) return false;
+          return true;
+        });
+      } catch (e) {}
 
-    const combinedMap = new Map<string, PTSession>();
-    for (const s of supabaseSessions) combinedMap.set(s.id, s);
-    for (const s of localSessions) {
-      if (!combinedMap.has(s.id)) combinedMap.set(s.id, s);
+      return localSessions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
-
-    return Array.from(combinedMap.values()).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
   async addPTSession(session: Omit<PTSession, 'id' | 'created_at'>) {

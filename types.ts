@@ -402,6 +402,7 @@ export interface PTSession {
 export interface PTMember {
   id: string;
   outlet_id: string;
+  property_id?: string;
   guest_name: string;
   phone?: string;
   email?: string;
