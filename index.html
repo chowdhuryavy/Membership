@@ -65,22 +65,6 @@
     
     
     <script>
-      // Force clear all service workers and caches on load to ensure latest version
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          for(let registration of registrations) {
-            registration.unregister();
-          }
-        });
-      }
-      if ('caches' in window) {
-        caches.keys().then(function(names) {
-          for (let name of names) {
-            caches.delete(name);
-          }
-        });
-      }
-
       // Handle clean URL redirect for staff-login
       const urlParams = new URLSearchParams(window.location.search);
       const isStaffPath = window.location.pathname === '/staff-login' || window.location.pathname.endsWith('/staff-login');

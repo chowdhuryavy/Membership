@@ -201,7 +201,7 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
                         <>
                             <button
                                 onClick={async () => {
-                                    if (user) {
+                                    if (user) { navigator.serviceWorker.ready.then(reg => reg.showNotification("Local Device Test", { body: "Your device is capable of receiving notifications." }).catch(console.error));
                                         toast.promise(
                                             PushNotificationService.subscribeUser(user.id).then(async () => {
                                                 const m = await import('../services/mockSupabase');
@@ -218,7 +218,7 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
                                             {
                                                 loading: 'Triggering Cloud Push...',
                                                 success: 'Signal sent to Supabase!',
-                                                error: 'Server push failed. Check console.'
+                                                error: 'Cloud push failed (Check Edge Functions).'
                                             }
                                         );
                                     }

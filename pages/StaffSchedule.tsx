@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { Staff, MassageBooking, MassageType, Guest, MassageRoom, Sale } from '../types';
 import { format, parseISO, addDays, subDays } from 'date-fns';
-import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, RefreshCw, KeyRound, X, ShieldCheck, Building2, Menu, Eye, EyeOff, Check, AlertCircle, Sparkles, Award, TrendingUp, FileText, ChevronDown, Bell } from 'lucide-react';
+import { LogOut, Calendar as CalendarIcon, Clock, User, MapPin, ChevronLeft, ChevronRight, RefreshCcw, RefreshCw, KeyRound, X, ShieldCheck, Building2, Menu, Eye, EyeOff, Check, AlertCircle, Sparkles, Award, TrendingUp, FileText, ChevronDown, Bell, Users } from 'lucide-react';
 import { Button, Input } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -204,6 +204,15 @@ const SidebarContent = ({
           <Award className="w-3.5 h-3.5" /> Incentive Earnings
         </button>
       )}
+      <button 
+        onClick={() => {
+          setViewMode('pt_members');
+          setIsSidebarOpen(false);
+        }}
+        className={`w-full flex items-center gap-3 p-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${viewMode === 'pt_members' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'hover:bg-white/5 text-slate-300 hover:text-white'}`}
+      >
+        <Users className="w-3.5 h-3.5" /> My PT Members
+      </button>
     </nav>
 
     <div className="mt-auto pt-4 border-t border-white/10 relative z-[60]" ref={menuRef}>
@@ -281,6 +290,7 @@ const StaffSchedule = () => {
   const [outletName, setOutletName] = useState<string>('');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [bookings, setBookings] = useState<MassageBooking[]>([]);
+  const [ptSessions, setPtSessions] = useState<any[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [treatments, setTreatments] = useState<MassageType[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
@@ -288,12 +298,14 @@ const StaffSchedule = () => {
   const [rooms, setRooms] = useState<MassageRoom[]>([]);
   const [outlets, setOutlets] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [incentiveLoading, setIncentiveLoading] = useState(false);
-  const [minLoadingFinished, setMinLoadingFinished] = useState(false);
   const loadingInitialTimeRef = React.useRef(Date.now());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'incentives'>('daily');
+  const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'incentives' | 'pt_members'>('daily');
   const [monthlyBookings, setMonthlyBookings] = useState<MassageBooking[]>([]);
+  const [monthlyPtSessions, setMonthlyPtSessions] = useState<any[]>([]);
+  const [ptMembers, setPtMembers] = useState<any[]>([]);
   const [incentiveData, setIncentiveData] = useState<any[]>([]);
   const [incentiveSummary, setIncentiveSummary] = useState<any>({ total: 0, count: 0, breakdown: {} });
   const [selectedIncentiveDept, setSelectedIncentiveDept] = useState<string | null>(null);
@@ -419,7 +431,13 @@ const StaffSchedule = () => {
           }, 
           (payload) => {
             console.log('Real-time booking update received via DB:', payload.eventType);
-            loadSchedule();
+            if (viewMode === 'monthly') {
+              loadMonthlySchedule(true);
+            } else if (viewMode === 'daily') {
+              loadSchedule(true);
+            } else if (viewMode === 'pt_members') {
+              loadPTMembers(true);
+            }
           }
         )
         .on(
@@ -427,7 +445,13 @@ const StaffSchedule = () => {
           { event: 'sync' },
           (payload) => {
             console.log('Real-time booking update received via Broadcast:', payload);
-            loadSchedule();
+            if (viewMode === 'monthly') {
+              loadMonthlySchedule(true);
+            } else if (viewMode === 'daily') {
+              loadSchedule(true);
+            } else if (viewMode === 'pt_members') {
+              loadPTMembers(true);
+            }
           }
         )
         .subscribe((status) => {
@@ -438,13 +462,23 @@ const StaffSchedule = () => {
         });
       
       const handleBookingUpdate = () => {
-        loadSchedule();
+        if (viewMode === 'pt_members') {
+          loadPTMembers(true);
+        } else {
+          loadSchedule(true);
+        }
       };
       
       const handleVisibilityChange = () => {
         if (document.visibilityState === 'visible') {
-          console.log('App became visible, reloading schedule...');
-          loadSchedule();
+          console.log('App became visible, reloading schedule in background...');
+          if (viewMode === 'monthly') {
+            loadMonthlySchedule(true);
+          } else if (viewMode === 'daily') {
+            loadSchedule(true);
+          } else if (viewMode === 'pt_members') {
+            loadPTMembers(true);
+          }
         }
       };
 
@@ -457,29 +491,24 @@ const StaffSchedule = () => {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
     }
-  }, [selectedOutletId, currentDate]);
+  }, [selectedOutletId, currentDate, viewMode]);
 
-  // Splash Screen Logic: Show for AT LEAST 1500ms whenever loading occurs
+  // Splash Screen Logic: Only enforce delay on initial mount
   useEffect(() => {
-    const isLoadingAny = loading || incentiveLoading || !staff;
-    
-    if (isLoadingAny) {
-      setMinLoadingFinished(false);
-      loadingInitialTimeRef.current = Date.now();
-    } else {
+    if (!initialLoadComplete && staff && !loading && !incentiveLoading) {
       const elapsed = Date.now() - loadingInitialTimeRef.current;
       const remainingTime = Math.max(0, 1500 - elapsed);
       
       const timer = setTimeout(() => {
-        setMinLoadingFinished(true);
+        setInitialLoadComplete(true);
       }, remainingTime);
       
       return () => clearTimeout(timer);
     }
-  }, [loading, incentiveLoading, !!staff]);
+  }, [loading, incentiveLoading, !!staff, initialLoadComplete]);
 
   // Derived state to determine if the portal is ready for display
-  const isAppReady = minLoadingFinished && !!staff && !loading && !incentiveLoading;
+  const isAppReady = initialLoadComplete;
 
   // Safety protection: Force clear loading after a reasonable timeout
   useEffect(() => {
@@ -638,8 +667,11 @@ const StaffSchedule = () => {
       if (cat === 'PT' || cat.toLowerCase() === 'personal training') cat = 'Personal Training';
       categories.add(cat);
     });
+    if (monthlyPtSessions.length > 0) {
+      categories.add('Personal Training');
+    }
     return Array.from(categories);
-  }, [monthlyBookings, sales, outlets, treatments, inventory]);
+  }, [monthlyBookings, sales, monthlyPtSessions, outlets, treatments, inventory]);
 
   const filteredMonthlyItems = useMemo(() => {
     const items = [
@@ -648,7 +680,8 @@ const StaffSchedule = () => {
         let cat = s.category || 'Sale';
         if (cat === 'PT' || cat.toLowerCase() === 'personal training') cat = 'Personal Training';
         return { ...s, _type: 'sale' as const, _category: cat };
-      })
+      }),
+      ...monthlyPtSessions.map(p => ({ ...p, _type: 'pt_session' as const, _category: 'Personal Training' }))
     ];
 
     const filtered = selectedMonthlyCategory 
@@ -656,15 +689,15 @@ const StaffSchedule = () => {
       : items;
 
     return filtered.sort((a, b) => {
-      const dateA = a._type === 'booking' ? a.date : format(new Date(a.created_at), 'yyyy-MM-dd');
-      const dateB = b._type === 'booking' ? b.date : format(new Date(b.created_at), 'yyyy-MM-dd');
+      const dateA = a._type === 'booking' ? a.date : a._type === 'pt_session' ? format(new Date(a.date), 'yyyy-MM-dd') : format(new Date(a.created_at), 'yyyy-MM-dd');
+      const dateB = b._type === 'booking' ? b.date : b._type === 'pt_session' ? format(new Date(b.date), 'yyyy-MM-dd') : format(new Date(b.created_at), 'yyyy-MM-dd');
       if (dateA !== dateB) return dateA.localeCompare(dateB);
       
-      const timeA = a._type === 'booking' ? a.start_time : format(new Date(a.created_at), 'HH:mm');
-      const timeB = b._type === 'booking' ? b.start_time : format(new Date(b.created_at), 'HH:mm');
+      const timeA = a._type === 'booking' ? a.start_time : a._type === 'pt_session' ? format(new Date(a.date), 'HH:mm') : format(new Date(a.created_at), 'HH:mm');
+      const timeB = b._type === 'booking' ? b.start_time : b._type === 'pt_session' ? format(new Date(b.date), 'HH:mm') : format(new Date(b.created_at), 'HH:mm');
       return timeA.localeCompare(timeB);
     });
-  }, [monthlyBookings, sales, selectedMonthlyCategory, outlets, treatments, inventory]);
+  }, [monthlyBookings, sales, monthlyPtSessions, selectedMonthlyCategory, outlets, treatments, inventory]);
 
   // Session Notes State
   const [selectedItemForNotes, setSelectedItemForNotes] = useState<(MassageBooking & { _type: 'booking' }) | (Sale & { _type: 'sale' }) | null>(null);
@@ -786,6 +819,8 @@ const StaffSchedule = () => {
           await Promise.all([loadMonthlySchedule(), loadIncentives()]);
         } else if (viewMode === 'incentives') {
           await loadIncentives();
+        } else if (viewMode === 'pt_members') {
+          await loadPTMembers();
         }
         await loadPropertyDetails();
       } catch (err) {
@@ -857,6 +892,7 @@ const StaffSchedule = () => {
       if (viewMode === 'daily') loadSchedule();
       else if (viewMode === 'monthly') loadMonthlySchedule();
       else if (viewMode === 'incentives') loadIncentives();
+      else if (viewMode === 'pt_members') loadPTMembers();
     });
 
     // Also listen for general notification table changes for the bell icon
@@ -917,9 +953,9 @@ const StaffSchedule = () => {
     }
   };
 
-  const loadSchedule = async () => {
+  const loadSchedule = async (background = false) => {
     if (!staff || !selectedOutletId) return;
-    setLoading(true);
+    if (!background) setLoading(true);
     try {
       const dateStr = format(currentDate, 'yyyy-MM-dd');
       
@@ -956,17 +992,19 @@ const StaffSchedule = () => {
         return;
       }
 
-      const [allBookings, allTreatments, allInventory, allSales] = await Promise.all([
+      const [allBookings, allTreatments, allInventory, allSales, staffPtSessions] = await Promise.all([
         db.getMassageBookingsByDate(propertyId, true, dateStr),
         db.getMassageTypes(propertyId, true, sOutlets),
         db.getInventory(propertyId, true, sOutlets),
-        db.getSalesByDate(propertyId, true, dateStr)
+        db.getSalesByDate(propertyId, true, dateStr),
+        (db as any).getPTSessionsForStaff ? (db as any).getPTSessionsForStaff(staff.id, dateStr, dateStr) : Promise.resolve([])
       ]);
 
-      const [allGuests, allRooms, allOutlets] = await Promise.all([
+      const [allGuests, allRooms, allOutlets, allPtMembers] = await Promise.all([
         db.getGuests(propertyId),
         db.getMassageRooms(undefined, propertyId),
-        db.getOutlets()
+        db.getOutlets(),
+        (db as any).getPTMembers ? (db as any).getPTMembers(selectedOutletId, false) : Promise.resolve([])
       ]);
 
       // Filter bookings for this specific therapist
@@ -983,6 +1021,8 @@ const StaffSchedule = () => {
       myBookings.sort((a, b) => a.start_time.localeCompare(b.start_time));
 
       setBookings(myBookings);
+      setPtSessions(staffPtSessions);
+      setPtMembers(allPtMembers);
       setSales(mySales);
       setTreatments(allTreatments);
       setInventory(allInventory);
@@ -993,6 +1033,26 @@ const StaffSchedule = () => {
       console.error("Failed to load schedule:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPTMembers = async (background = false) => {
+    if (!staff || !selectedOutletId) return;
+    if (!background) setLoading(true);
+    try {
+      const propertyId = staff.property_id || (await db.getOutlets()).find(o => o.id === selectedOutletId)?.property_id;
+      if (!propertyId) return;
+      
+      const allMembers = await db.getPTMembers(selectedOutletId, false);
+      const myMembers = allMembers.filter(m => m.trainer_id === staff.id);
+      
+      const sortedMembers = myMembers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setPtMembers(sortedMembers);
+    } catch (error) {
+      console.error('Failed to load PT members:', error);
+      toast.error('Failed to load PT members');
+    } finally {
+      if (!background) setLoading(false);
     }
   };
 
@@ -1098,9 +1158,9 @@ const StaffSchedule = () => {
     }
   };
 
-  const loadMonthlySchedule = async () => {
+  const loadMonthlySchedule = async (background = false) => {
     if (!staff || !selectedOutletId) return;
-    setLoading(true);
+    if (!background) setLoading(true);
     try {
       const startOfMonthStr = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), 'yyyy-MM-dd');
       const endOfMonthStr = format(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), 'yyyy-MM-dd');
@@ -1138,17 +1198,19 @@ const StaffSchedule = () => {
         return;
       }
 
-      const [allBookings, allTreatments, allInventory, allSales] = await Promise.all([
+      const [allBookings, allTreatments, allInventory, allSales, staffMonthlyPtSessions] = await Promise.all([
         db.getMassageBookingsByDateRange(propertyId, true, startOfMonthStr, endOfMonthStr),
         db.getMassageTypes(propertyId, true, sOutlets),
         db.getInventory(propertyId, true, sOutlets),
-        db.getSalesByDateRange(propertyId, true, startOfMonthStr, endOfMonthStr)
+        db.getSalesByDateRange(propertyId, true, startOfMonthStr, endOfMonthStr),
+        (db as any).getPTSessionsForStaff ? (db as any).getPTSessionsForStaff(staff.id, startOfMonthStr, endOfMonthStr) : Promise.resolve([])
       ]);
 
-      const [allGuests, allRooms, allOutlets] = await Promise.all([
+      const [allGuests, allRooms, allOutlets, allPtMembers] = await Promise.all([
         db.getGuests(propertyId),
         db.getMassageRooms(undefined, propertyId),
-        db.getOutlets()
+        db.getOutlets(),
+        (db as any).getPTMembers ? (db as any).getPTMembers(selectedOutletId, false) : Promise.resolve([])
       ]);
 
       // Filter bookings for this specific therapist
@@ -1167,6 +1229,8 @@ const StaffSchedule = () => {
       });
 
       setMonthlyBookings(myBookings);
+      setMonthlyPtSessions(staffMonthlyPtSessions);
+      setPtMembers(allPtMembers);
       setSales(mySales);
       setTreatments(allTreatments);
       setInventory(allInventory);
@@ -1363,7 +1427,7 @@ const StaffSchedule = () => {
             <div className="flex flex-col">
               <h1 className="text-sm font-black uppercase tracking-tighter leading-none">{settings?.name || 'Staff Portal'}</h1>
               <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mt-1">
-                {viewMode === 'daily' ? "Today's Schedule" : viewMode === 'monthly' ? "Monthly Summary" : "Incentive Earnings"}
+                {viewMode === 'daily' ? "Today's Schedule" : viewMode === 'monthly' ? "Monthly Summary" : viewMode === 'pt_members' ? "My PT Members" : "Incentive Earnings"}
               </p>
             </div>
           </div>
@@ -1443,7 +1507,7 @@ const StaffSchedule = () => {
         <div className="hidden lg:flex items-center justify-between px-8 py-6 bg-white border-b border-slate-200 sticky top-0 z-30">
           <div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">
-              {viewMode === 'daily' ? "Today's Schedule" : viewMode === 'monthly' ? "Monthly Summary" : "Incentive Earnings"}
+              {viewMode === 'daily' ? "Today's Schedule" : viewMode === 'monthly' ? "Monthly Summary" : viewMode === 'pt_members' ? "My PT Members" : "Incentive Earnings"}
             </h1>
             <p className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] mt-1">{propertyName || 'Terminal Overview'}</p>
           </div>
@@ -1543,7 +1607,7 @@ const StaffSchedule = () => {
             className="hidden lg:block mb-8"
           >
             <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight mb-2">Welcome Back, {staff?.name?.split(' ')[0] || 'Member'}</h1>
-            <p className="text-slate-500 font-medium">Here is your {viewMode === 'daily' ? 'schedule for today' : viewMode === 'monthly' ? 'monthly summary' : 'incentive earnings'}.</p>
+            <p className="text-slate-500 font-medium">Here is your {viewMode === 'daily' ? 'schedule for today' : viewMode === 'monthly' ? 'monthly summary' : viewMode === 'pt_members' ? 'assigned personal training members' : 'incentive earnings'}.</p>
           </motion.div>
         
         {/* Date Navigation */}
@@ -1589,11 +1653,11 @@ const StaffSchedule = () => {
 
         <div className="flex justify-between items-end px-1 mb-2">
           <div>
-            <h2 className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{viewMode === 'daily' ? 'Daily Appointments' : viewMode === 'monthly' ? 'Monthly Performance' : 'Incentive Earnings'}</h2>
+            <h2 className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{viewMode === 'daily' ? 'Daily Appointments' : viewMode === 'monthly' ? 'Monthly Performance' : viewMode === 'pt_members' ? 'Assigned PT Members' : 'Incentive Earnings'}</h2>
             <div className="h-1 w-8 bg-indigo-500 rounded-full"></div>
           </div>
           <button 
-            onClick={viewMode === 'daily' ? loadSchedule : viewMode === 'monthly' ? loadMonthlySchedule : loadIncentives} 
+            onClick={viewMode === 'daily' ? () => loadSchedule() : viewMode === 'monthly' ? () => loadMonthlySchedule() : viewMode === 'pt_members' ? () => loadPTMembers() : loadIncentives} 
             disabled={loading || incentiveLoading} 
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:bg-indigo-100 rounded-lg transition-all active:scale-95 disabled:opacity-50"
           >
@@ -1856,11 +1920,11 @@ const StaffSchedule = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Bookings</div>
-                <div className="text-3xl font-black text-slate-900">{monthlyBookings.length + sales.length}</div>
+                <div className="text-3xl font-black text-slate-900">{monthlyBookings.length + sales.length + monthlyPtSessions.length}</div>
               </div>
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Completed</div>
-                <div className="text-3xl font-black text-emerald-600">{monthlyBookings.filter(b => b.status === 'completed').length + sales.length}</div>
+                <div className="text-3xl font-black text-emerald-600">{monthlyBookings.filter(b => b.status === 'completed').length + sales.length + monthlyPtSessions.length}</div>
               </div>
             </div>
             
@@ -1892,7 +1956,7 @@ const StaffSchedule = () => {
               </div>
             </div>
             
-            {(monthlyBookings.length === 0 && sales.length === 0) ? (
+            {(filteredMonthlyItems.length === 0) ? (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1908,6 +1972,56 @@ const StaffSchedule = () => {
               <div className="grid grid-cols-1 gap-4">
                 <AnimatePresence mode="popLayout">
                   {filteredMonthlyItems.map((item, index) => {
+                    if (item._type === 'pt_session') {
+                      const session = item as any;
+                      const member = ptMembers?.find(m => m.id === session.pt_member_id);
+                      return (
+                      <motion.div 
+                        key={`pt-${session.id}`}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ delay: index * 0.02 }}
+                        className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-blue-200 transition-all duration-300"
+                      >
+                      <div className="absolute left-0 top-0 bottom-0 w-1 sm:w-2 bg-blue-500"></div>
+                        
+                      <div className="flex justify-between items-start mb-3 sm:mb-5 pl-1 sm:pl-2">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <div className="p-1.5 sm:p-2 bg-blue-50 rounded-lg sm:rounded-xl text-blue-600 group-hover:scale-110 transition-transform">
+                            <CalendarIcon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                          </div>
+                          <div>
+                            <span className="font-black text-sm sm:text-lg tracking-tight text-slate-900 block leading-none mb-1">
+                              {format(new Date(session.date), 'MMM dd')}
+                            </span>
+                            <span className="font-bold text-xs sm:text-sm tracking-tight text-slate-500 block leading-none">
+                              {format(new Date(session.date), 'HH:mm')}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <div className="px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-blue-100 text-blue-700">
+                            PT Session
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pl-1 sm:pl-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center font-black text-sm sm:text-base border border-slate-100 shrink-0 shadow-inner">
+                            <User className="w-5 h-5 sm:w-6 sm:h-6" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm sm:text-base font-bold text-slate-800">{member?.guest_name || 'Unknown Member'}</h3>
+                            {session.notes && <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{session.notes}</p>}
+                          </div>
+                        </div>
+                      </div>
+                      </motion.div>
+                      );
+                    }
+
                     if (item._type === 'booking') {
                       const booking = item as MassageBooking;
                       const treatment = treatments.find(t => t.id === booking.massage_type_id) || 
@@ -2083,7 +2197,77 @@ const StaffSchedule = () => {
               </div>
             )}
           </div>
-        ) : (bookings.length === 0 && sales.length === 0) ? (
+        ) : viewMode === 'pt_members' ? (
+          <div className="space-y-6">
+            {ptMembers.length === 0 ? (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white p-12 rounded-[2rem] border border-slate-200/60 text-center shadow-sm"
+              >
+                <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100">
+                  <Users className="w-8 h-8 text-slate-300" />
+                </div>
+                <h3 className="text-base font-black uppercase tracking-widest text-slate-900">No Assigned Members</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xs mx-auto leading-relaxed">You do not have any Personal Training members assigned to you.</p>
+              </motion.div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {ptMembers.map(member => {
+                  const outlet = outlets.find(o => o.id === member.outlet_id);
+                  const progress = member.total_sessions > 0 ? (member.used_sessions / member.total_sessions) * 100 : 0;
+                  return (
+                    <motion.div
+                      key={member.id}
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="bg-white p-5 sm:p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden"
+                    >
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight uppercase">{member.guest_name}</h3>
+                          <p className="text-[10px] font-bold text-slate-500 mt-0.5">{member.phone || 'No phone'} {member.email ? `• ${member.email}` : ''}</p>
+                        </div>
+                        <div className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+                          member.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                          member.status === 'Completed' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
+                          'bg-red-50 text-red-600 border border-red-100'
+                        }`}>
+                          {member.status}
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="bg-slate-50 p-3 rounded-2xl">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Sessions</p>
+                          <p className="text-lg font-black text-slate-900">{member.used_sessions} <span className="text-xs text-slate-400">/ {member.total_sessions}</span></p>
+                        </div>
+                        <div className="bg-slate-50 p-3 rounded-2xl">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Expiration</p>
+                          <p className="text-[11px] font-bold text-slate-700 mt-2">{format(parseISO(member.end_date), 'MMM dd, yyyy')}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-4">
+                        <div className="bg-indigo-500 h-full rounded-full transition-all duration-1000" style={{ width: `${progress}%` }} />
+                      </div>
+                      
+                      <Button 
+                        onClick={() => {
+                          toast.error("Please log sessions through the admin portal for now.");
+                        }}
+                        disabled={member.used_sessions >= member.total_sessions || member.status !== 'Active'}
+                        className="w-full h-12 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all"
+                      >
+                        Log Session
+                      </Button>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (viewMode === 'daily' && bookings.length === 0 && sales.length === 0 && ptSessions.length === 0) ? (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -2098,11 +2282,47 @@ const StaffSchedule = () => {
         ) : (
           <div className="grid grid-cols-1 gap-4">
             <AnimatePresence mode="popLayout">
-              {[...bookings.map(b => ({...b, _type: 'booking' as const})), ...sales.map(s => ({...s, _type: 'sale' as const}))].sort((a, b) => {
-                const timeA = a._type === 'booking' ? a.start_time : format(new Date(a.created_at), 'HH:mm');
-                const timeB = b._type === 'booking' ? b.start_time : format(new Date(b.created_at), 'HH:mm');
+              {[...bookings.map(b => ({...b, _type: 'booking' as const})), ...sales.map(s => ({...s, _type: 'sale' as const})), ...ptSessions.map(p => ({...p, _type: 'pt_session' as const}))].sort((a, b) => {
+                const timeA = a._type === 'booking' ? a.start_time : a._type === 'pt_session' ? format(new Date(a.date), 'HH:mm') : format(new Date(a.created_at), 'HH:mm');
+                const timeB = b._type === 'booking' ? b.start_time : b._type === 'pt_session' ? format(new Date(b.date), 'HH:mm') : format(new Date(b.created_at), 'HH:mm');
                 return timeA.localeCompare(timeB);
               }).map((item, index) => {
+                if (item._type === 'pt_session') {
+                  const session = item as any;
+                  const member = ptMembers?.find(m => m.id === session.pt_member_id);
+                  return (
+                    <motion.div 
+                      key={`pt-${session.id}`}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="bg-white p-4 sm:p-6 rounded-[1.25rem] sm:rounded-[2rem] border border-slate-200/60 shadow-sm relative overflow-hidden group hover:shadow-md hover:border-blue-200 transition-all duration-300"
+                    >
+                      <div className="absolute left-0 top-0 bottom-0 w-1 sm:w-2 bg-blue-500" />
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                         <div className="flex items-center gap-3">
+                           <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-black text-sm sm:text-base border border-blue-100 shrink-0 shadow-inner">
+                              <Dumbbell className="w-5 h-5 sm:w-6 sm:h-6" />
+                           </div>
+                           <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="px-2 py-0.5 rounded text-[9px] font-black bg-blue-100 text-blue-700 tracking-widest uppercase">
+                                  {format(new Date(session.date), 'HH:mm')}
+                                </span>
+                                <span className="px-2 py-0.5 rounded text-[9px] font-black bg-blue-50 text-blue-600 tracking-widest uppercase">
+                                  PT Session
+                                </span>
+                              </div>
+                              <h3 className="text-sm sm:text-base font-bold text-slate-800">{member?.guest_name || 'Unknown Member'}</h3>
+                              {session.notes && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{session.notes}</p>}
+                           </div>
+                         </div>
+                      </div>
+                    </motion.div>
+                  );
+                }
+                
                 if (item._type === 'booking') {
                   const booking = item as MassageBooking;
                   const treatment = treatments.find(t => t.id === booking.massage_type_id) || 

@@ -116,12 +116,15 @@ self.addEventListener('push', (event) => {
     body: data.body || 'You have a new update.',
     icon: data.icon || '/icon.svg',
     badge: '/favicon-32x32.png',
-    vibrate: [200, 100, 200, 100, 200], // More noticeable vibration
+    vibrate: [200, 100, 200, 100, 200],
     tag: data.tag || data.id || 'staff-alert',
     renotify: true,
     data: data,
-    actions: data.actions || []
   };
+  
+  if (data.actions && Array.isArray(data.actions) && data.actions.length > 0) {
+    options.actions = data.actions;
+  }
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {

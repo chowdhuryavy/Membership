@@ -2275,6 +2275,54 @@ class DatabaseService {
     return Array.from(combinedMap.values()).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
+  async getPTSessionsForStaff(staffId: string, startDate?: string, endDate?: string): Promise<PTSession[]> {
+    let supabaseSessions: PTSession[] = [];
+    const startStr = startDate ? (startDate.includes('T') ? startDate : `${startDate}T00:00:00`) : undefined;
+    const endStr = endDate ? (endDate.includes('T') ? endDate : `${endDate}T23:59:59.999Z`) : undefined;
+
+    if (this.isSupabase()) {
+      supabaseSessions = await this.safeCall(async () => {
+        let query = supabase.from('pt_sessions').select('*').eq('staff_id', staffId).order('date', { ascending: false });
+        if (startStr) query = query.gte('date', startStr);
+        if (endStr) query = query.lte('date', endStr);
+        const { data, error } = await query;
+        if (error) {
+            if (error.code === '42P01' || (error.message && error.message.includes('schema cache'))) return [];
+            throw error;
+        }
+        return (data || []) as PTSession[];
+      }, []);
+    }
+
+    let localSessions: PTSession[] = [];
+    try {
+      const allLocal = JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[];
+      const localMembers = JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[];
+      const myMemberIds = new Set(localMembers.filter(m => m.trainer_id === staffId).map(m => m.id));
+
+      localSessions = allLocal.filter(s => {
+        const isMyStaff = s.staff_id === staffId || myMemberIds.has(s.pt_member_id);
+        if (!isMyStaff) return false;
+
+        const sDateOnly = s.date ? (s.date.includes('T') ? s.date.slice(0, 10) : s.date) : '';
+        const startOnly = startDate ? startDate.slice(0, 10) : '';
+        const endOnly = endDate ? endDate.slice(0, 10) : '';
+
+        if (startOnly && sDateOnly < startOnly) return false;
+        if (endOnly && sDateOnly > endOnly) return false;
+        return true;
+      });
+    } catch (e) {}
+
+    const combinedMap = new Map<string, PTSession>();
+    for (const s of supabaseSessions) combinedMap.set(s.id, s);
+    for (const s of localSessions) {
+      if (!combinedMap.has(s.id)) combinedMap.set(s.id, s);
+    }
+
+    return Array.from(combinedMap.values()).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
   async addPTSession(session: Omit<PTSession, 'id' | 'created_at'>) {
     const newId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
