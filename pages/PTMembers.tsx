@@ -47,6 +47,29 @@ export default function PTMembers() {
     const [printingSession, setPrintingSession] = useState<PTSession | null>(null);
     const [printingPackageForm, setPrintingPackageForm] = useState<boolean>(false);
     const [deletingSession, setDeletingSession] = useState<PTSession | null>(null);
+    const [deletingMember, setDeletingMember] = useState<PTMember | null>(null);
+
+    const executeDeleteMember = async () => {
+        if (!deletingMember) return;
+        const targetId = deletingMember.id;
+        setPageLoading(true);
+        try {
+            await db.deletePTMember(targetId);
+            toast.success("PT Member deleted successfully!");
+            setDeletingMember(null);
+            if (selectedMember?.id === targetId) {
+                setSelectedMember(null);
+            }
+            if (currentOutlet) {
+                const updatedMembers = await db.getPTMembers(currentOutlet.id);
+                setPtMembers(updatedMembers);
+            }
+        } catch (err: any) {
+            toast.error("Failed to delete PT member: " + (err.message || ''));
+        } finally {
+            setPageLoading(false);
+        }
+    };
 
     const startEditSession = (s: PTSession) => {
         setEditingSession(s);
@@ -179,6 +202,13 @@ export default function PTMembers() {
 
     useEffect(() => {
         loadData();
+        const handleBookingUpdate = () => {
+            loadData();
+        };
+        window.addEventListener('booking_updated', handleBookingUpdate);
+        return () => {
+            window.removeEventListener('booking_updated', handleBookingUpdate);
+        };
     }, [currentOutlet?.id]);
 
     const handleUpdateTrainer = async (trainerId: string) => {
@@ -1478,6 +1508,29 @@ export default function PTMembers() {
                             </Button>
                             <Button onClick={executeDeleteSession} className="h-9 px-5 rounded-xl text-xs font-black uppercase bg-rose-600 hover:bg-rose-700 text-white shadow-md">
                                 Yes, Delete Session
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* DELETE PT MEMBER CONFIRMATION MODAL */}
+            {deletingMember && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-200 animate-in zoom-in-95 space-y-4">
+                        <div className="flex items-center gap-3 text-rose-600 font-black text-base uppercase tracking-wide">
+                            <AlertTriangle className="w-6 h-6" />
+                            Delete PT Member?
+                        </div>
+                        <p className="text-xs font-semibold text-slate-600 leading-relaxed">
+                            Are you sure you want to delete <strong className="text-slate-900">{deletingMember.guest_name}</strong>? This will permanently remove this PT profile and all logged training sessions.
+                        </p>
+                        <div className="flex justify-end gap-3 pt-2">
+                            <Button onClick={() => setDeletingMember(null)} variant="secondary" className="h-9 px-4 rounded-xl text-xs font-black uppercase">
+                                Cancel
+                            </Button>
+                            <Button onClick={executeDeleteMember} className="h-9 px-5 rounded-xl text-xs font-black uppercase bg-rose-600 hover:bg-rose-700 text-white shadow-md">
+                                Yes, Delete Member
                             </Button>
                         </div>
                     </div>

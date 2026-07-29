@@ -2188,7 +2188,32 @@ class DatabaseService {
     for (const m of localMembers) combinedMap.set(m.id, m);
     for (const m of supabaseMembers) combinedMap.set(m.id, m);
 
-    return Array.from(combinedMap.values()).sort((a,b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+    let allMembers = Array.from(combinedMap.values()).sort((a,b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+    // Filter out PT Members associated with voided or deleted sales
+    const saleIdsToCheck = Array.from(new Set(allMembers.map(m => m.sale_id).filter(Boolean))) as string[];
+    if (saleIdsToCheck.length > 0) {
+      if (this.isSupabase()) {
+        const activeSalesData = await this.safeCall<{ id: string; status?: string }[] | null>(async () => {
+          const { data, error } = await supabase.from('sales').select('id, status').in('id', saleIdsToCheck);
+          if (error) throw error;
+          return data;
+        }, null);
+        
+        if (activeSalesData !== null) {
+          const activeSaleSet = new Set(activeSalesData.filter(s => s.status !== 'void').map(s => s.id));
+          allMembers = allMembers.filter(m => !m.sale_id || activeSaleSet.has(m.sale_id));
+        }
+      } else {
+        try {
+          const localSales = JSON.parse(localStorage.getItem('sales') || '[]') as any[];
+          const activeSaleSet = new Set(localSales.filter(s => s.status !== 'void').map(s => s.id));
+          allMembers = allMembers.filter(m => !m.sale_id || activeSaleSet.has(m.sale_id));
+        } catch (e) {}
+      }
+    }
+
+    return allMembers;
   }
 
   async addPTMember(member: Omit<PTMember, 'id' | 'created_at'>) {
@@ -2245,6 +2270,30 @@ class DatabaseService {
         if (error) throw error;
         await this.logAction('UPDATE_PT_MEMBER', `Updated PT Member: ${id}`);
       }, null);
+    }
+  }
+
+  async deletePTMember(id: string) {
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        await supabase.from('pt_sessions').delete().eq('pt_member_id', id);
+        await supabase.from('pt_members').delete().eq('id', id);
+        await this.logAction('DELETE_PT_MEMBER', `Deleted PT Member: ${id}`);
+      }, null);
+    }
+
+    try {
+      const localMembers = JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[];
+      const filtered = localMembers.filter(m => m.id !== id);
+      localStorage.setItem('pt_members', JSON.stringify(filtered));
+
+      const localSessions = JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[];
+      const filteredSessions = localSessions.filter(s => s.pt_member_id !== id);
+      localStorage.setItem('pt_sessions', JSON.stringify(filteredSessions));
+    } catch (e) {}
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('booking_updated'));
     }
   }
 
@@ -2556,6 +2605,26 @@ class DatabaseService {
           }
         }
 
+        // Delete associated PT Member and PT Sessions created for this sale
+        try {
+          const { data: allPtMembers } = await supabase.from('pt_members').select('*');
+          if (allPtMembers && allPtMembers.length > 0) {
+            const matchingMembers = allPtMembers.filter((m: any) => 
+              m.sale_id === id || 
+              m.id === id || 
+              (saleData && m.guest_name === saleData.guest_name && (m.notes?.includes(saleData.item_name) || m.notes?.includes(id)))
+            );
+            
+            if (matchingMembers.length > 0) {
+              const ptMemberIds = matchingMembers.map((m: any) => m.id);
+              await supabase.from('pt_sessions').delete().in('pt_member_id', ptMemberIds);
+              await supabase.from('pt_members').delete().in('id', ptMemberIds);
+            }
+          }
+        } catch (err) {
+          console.warn('Non-fatal error deleting associated PT member:', err);
+        }
+
         await supabase.from('sales').delete().eq('id', id);
         await this.logAction('POS_VOID', `Voided sale ID: ${id}`);
 
@@ -2579,6 +2648,29 @@ class DatabaseService {
             await this.logAction('BOOKING_RESTORED', `Booking ${saleData.booking_id} restored after sale void.`);
         }
       }, null);
+    }
+
+    // Clean up local storage for sales, pt_members, and pt_sessions
+    try {
+      const localSales = JSON.parse(localStorage.getItem('sales') || '[]') as any[];
+      const updatedSales = localSales.filter(s => s.id !== id);
+      localStorage.setItem('sales', JSON.stringify(updatedSales));
+
+      const localMembers = JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[];
+      const ptMembersToDelete = localMembers.filter(m => m.sale_id === id || m.id === id);
+      const ptMemberIds = new Set(ptMembersToDelete.map(m => m.id));
+      if (ptMemberIds.size > 0) {
+        const updatedMembers = localMembers.filter(m => !ptMemberIds.has(m.id));
+        localStorage.setItem('pt_members', JSON.stringify(updatedMembers));
+
+        const localSessions = JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[];
+        const updatedSessions = localSessions.filter(s => !ptMemberIds.has(s.pt_member_id));
+        localStorage.setItem('pt_sessions', JSON.stringify(updatedSessions));
+      }
+    } catch (e) {}
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('booking_updated'));
     }
   }
 

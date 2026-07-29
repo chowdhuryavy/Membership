@@ -33,7 +33,7 @@ interface SidebarContentProps {
   propertyName: string;
   outletName: string;
   viewMode: string;
-  setViewMode: (mode: 'daily' | 'monthly' | 'incentives') => void;
+  setViewMode: (mode: 'daily' | 'monthly' | 'incentives' | 'pt_members') => void;
   setCurrentDate: (date: Date) => void;
   setIsSidebarOpen: (open: boolean) => void;
   refreshStaffData: () => void;
