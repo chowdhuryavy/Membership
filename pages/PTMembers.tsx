@@ -87,8 +87,11 @@ export default function PTMembers() {
             });
 
             // Reload sessions
-            const updatedSessions = await db.getPTSessions(selectedMember.id);
+            const activeTargetPkg = selectedPackage || selectedMember;
+            const updatedSessions = await db.getPTSessions(activeTargetPkg.id);
             setSessions(updatedSessions);
+
+            window.dispatchEvent(new Event('booking_updated'));
         } catch (err: any) {
             toast.error("Failed to update session: " + (err.message || ''));
         } finally {
