@@ -1797,9 +1797,7 @@ export default function PTMembers() {
                     display: none !important;
                 }
                 .print-container-pt {
-                    position: absolute !important;
-                    top: 0 !important;
-                    left: 0 !important;
+                    position: static !important;
                     display: block !important;
                     width: 100% !important;
                     height: auto !important;

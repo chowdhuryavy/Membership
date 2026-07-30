@@ -755,10 +755,15 @@ const DynamicHead = () => {
 };
 
 const SecurityConsoleLog = () => {
-  const { user, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, isLoading } = useAuth();
+  const hasLogged = useRef(false);
   
   useEffect(() => {
-      if (user && !isSuperAdmin) {
+      if (isLoading) return;
+      if (hasLogged.current) return;
+
+      if (!user || !isSuperAdmin) {
+          hasLogged.current = true;
           const timer = setTimeout(() => {
               console.log(
                   "%cStop!",
@@ -771,7 +776,7 @@ const SecurityConsoleLog = () => {
           }, 1000);
           return () => clearTimeout(timer);
       }
-  }, [user, isSuperAdmin]);
+  }, [user, isSuperAdmin, isLoading]);
   return null;
 };
 
