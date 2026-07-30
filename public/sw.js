@@ -114,7 +114,7 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body || 'You have a new update.',
-    icon: data.icon || '/icon.svg',
+    icon: (data.icon && !data.icon.includes('notification-icon.png')) ? data.icon : '/icon.png',
     badge: '/favicon-32x32.png',
     vibrate: [200, 100, 200, 100, 200],
     tag: data.tag || data.id || 'staff-alert',

@@ -3836,39 +3836,16 @@ class DatabaseService {
            console.log('[Push] Notification persisted to Supabase.');
         }
         
-        // TRIGGER PUSH NOTIFICATION: This is the most critical part for real-time alerts
-        const recipients = new Set<string>();
-        if (notification.user_id) recipients.add(notification.user_id);
-
-        // Map titles to keywords for automated staff/admin alerts
-        const title = (notification.title || '').toLowerCase();
-        const keywords = [
-            'booking', 'membership', 'sale', 'assigned', 'cancel', 
-            'delete', 'modify', 'remove', 'reschedule', 'waitlist',
-            'payment', 'checkout', 'check-in', 'staff', 'pt', 'trainer'
-        ];
-        
-        const isImportant = keywords.some(kw => title.includes(kw));
-
-        if (isImportant || !notification.user_id) {
-          // Notify all admins for these events
-          const { data: admins } = await supabase.from('staff').select('id').ilike('role', 'admin');
-          admins?.forEach(a => recipients.add(a.id));
-        }
-
-        if (recipients.size > 0) {
-          console.log(`[Push] Initiating targeted push for ${recipients.size} recipients:`, Array.from(recipients));
-          recipients.forEach(rid => {
-              this.triggerPushNotification(
-                  rid, 
-                  notification.title, 
-                  notification.message
-              ).catch(err => console.error(`[Push] Trigger failure for ${rid}:`, err));
-          });
-        }
-        
-        // Broadcast push notification to all subscribed PWA staff devices for general/important alerts
-        if (!notification.user_id || isImportant) {
+        // TRIGGER PUSH NOTIFICATION: Send targeted push to user_id if specified, or global broadcast if not
+        if (notification.user_id) {
+          console.log(`[Push] Initiating targeted push for assigned user: ${notification.user_id}`);
+          this.triggerPushNotification(
+              notification.user_id, 
+              notification.title, 
+              notification.message
+          ).catch(err => console.error(`[Push] Trigger failure for ${notification.user_id}:`, err));
+        } else {
+          // Broadcast push notification to all subscribed PWA staff devices for general alerts
           this.triggerGlobalPush({
               id: crypto.randomUUID(),
               title: notification.title,
@@ -3927,7 +3904,7 @@ class DatabaseService {
             body, 
             url,
             id: crypto.randomUUID(), 
-            icon: '/notification-icon.png',
+            icon: '/icon.png',
             tag: broadcast ? 'global-staff-alert' : 'direct-alert'
         };
         console.log(`[Push] Dispatching to Edge Function (${broadcast ? 'BROADCAST' : 'DIRECT'}):`, JSON.stringify(payload, null, 2));
@@ -3971,29 +3948,6 @@ class DatabaseService {
     // Dispatch custom event for same-tab updates
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('notification_added', { detail: notification }));
-
-      // Trigger native OS Push Banner if permission is granted on this browser/PWA device
-      if ('Notification' in window && Notification.permission === 'granted') {
-        try {
-          if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-            navigator.serviceWorker.ready.then(reg => {
-              reg.showNotification(notification.title, {
-                body: notification.message,
-                icon: '/notification-icon.png',
-                badge: '/notification-icon.png',
-                tag: notification.id || 'system-alert',
-                data: { url: '/#/notifications' }
-              } as NotificationOptions).catch(() => {
-                new Notification(notification.title, { body: notification.message, icon: '/notification-icon.png' });
-              });
-            });
-          } else {
-            new Notification(notification.title, { body: notification.message, icon: '/notification-icon.png' });
-          }
-        } catch (e) {
-          console.warn('[Push] Local native push trigger error:', e);
-        }
-      }
     }
   }
 

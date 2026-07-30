@@ -271,29 +271,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             }
           }
 
-          // Trigger native OS Push Banner if permission is granted on this browser/PWA device
-          if ('Notification' in window && Notification.permission === 'granted') {
-            try {
-              if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-                navigator.serviceWorker.ready.then(reg => {
-                  reg.showNotification(n.title, {
-                    body: n.message,
-                    icon: '/notification-icon.png',
-                    badge: '/notification-icon.png',
-                    tag: n.id || 'system-alert',
-                    data: { url: '/#/notifications' }
-                  } as NotificationOptions).catch(() => {
-                    new Notification(n.title, { body: n.message, icon: '/notification-icon.png' });
-                  });
-                });
-              } else {
-                new Notification(n.title, { body: n.message, icon: '/notification-icon.png' });
-              }
-            } catch (e) {
-              console.warn('[Push] Native push notification trigger failed:', e);
-            }
-          }
-
           setNotifications(prev => {
             const exists = prev.some(item => item.id === n.id);
             if (exists) return prev;
