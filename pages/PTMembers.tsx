@@ -1782,25 +1782,33 @@ export default function PTMembers() {
         <style>{`
             @media print {
                 @page {
-                    margin: 0;
+                    size: A4 portrait;
+                    margin: 0 !important;
                 }
-                body {
+                html, body {
                     background: white !important;
                     margin: 0 !important;
                     padding: 0 !important;
-                    height: auto !important;
+                    height: 100% !important;
+                    width: 100% !important;
+                    overflow: hidden !important;
                 }
                 #root {
                     display: none !important;
                 }
                 .print-container-pt {
-                    position: static !important;
+                    position: absolute !important;
+                    top: 0 !important;
+                    left: 0 !important;
                     display: block !important;
                     width: 100% !important;
-                    height: auto !important;
-                    padding: 40px !important;
+                    height: 100% !important;
+                    padding: 15mm !important;
                     box-sizing: border-box !important;
                     visibility: visible !important;
+                    overflow: hidden !important;
+                    page-break-inside: avoid !important;
+                    page-break-after: avoid !important;
                 }
                 .print-container-pt * {
                     visibility: visible !important;
