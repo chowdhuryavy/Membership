@@ -564,7 +564,7 @@ export default function PTMembers() {
         if (!printingPackageForm || !activeTargetPkg) return null;
 
         return (
-            <div id="printable-package-card" className="p-6 bg-white border-2 border-slate-900 rounded-2xl space-y-4 print:p-4 print:space-y-3 print:border-none print:shadow-none">
+            <div id="printable-package-card" className="p-6 bg-white border-2 border-slate-900 rounded-2xl space-y-4 print:p-4 print:space-y-3 print:border-none print:shadow-none print:break-inside-avoid print:h-auto print:max-h-none">
                 {/* Gym & Document Header */}
                 <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
                     <div className="flex items-center gap-4">
@@ -1783,17 +1783,17 @@ export default function PTMembers() {
             @media print {
                 @page {
                     size: A4 portrait;
-                    margin: 0 !important;
+                    margin: 0;
                 }
                 html, body {
                     background: white !important;
                     margin: 0 !important;
                     padding: 0 !important;
-                    height: 100% !important;
+                    height: auto !important;
                     width: 100% !important;
-                    overflow: hidden !important;
+                    overflow: visible !important;
                 }
-                #root {
+                #root, .no-print {
                     display: none !important;
                 }
                 .print-container-pt {
@@ -1802,13 +1802,12 @@ export default function PTMembers() {
                     left: 0 !important;
                     display: block !important;
                     width: 100% !important;
-                    height: 100% !important;
-                    padding: 15mm !important;
+                    height: auto !important;
+                    padding: 20mm !important;
                     box-sizing: border-box !important;
                     visibility: visible !important;
-                    overflow: hidden !important;
-                    page-break-inside: avoid !important;
-                    page-break-after: avoid !important;
+                    margin: 0 !important;
+                    page-break-after: auto !important;
                 }
                 .print-container-pt * {
                     visibility: visible !important;

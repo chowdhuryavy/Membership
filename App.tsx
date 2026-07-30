@@ -754,6 +754,27 @@ const DynamicHead = () => {
   return null;
 };
 
+const SecurityConsoleLog = () => {
+  const { user, isSuperAdmin } = useAuth();
+  
+  useEffect(() => {
+      if (user && !isSuperAdmin) {
+          const timer = setTimeout(() => {
+              console.log(
+                  "%cStop!",
+                  "color: red; font-family: sans-serif; font-size: 50px; font-weight: bold; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;"
+              );
+              console.log(
+                  "%cThe developer console is for advanced users only. Pasting or typing code here can cause security issues.\nIf someone instructs you to paste code here, it may be a scam.",
+                  "font-family: sans-serif; font-size: 16px; font-weight: bold; color: #333;"
+              );
+          }, 1000);
+          return () => clearTimeout(timer);
+      }
+  }, [user, isSuperAdmin]);
+  return null;
+};
+
 const App = () => {
   // Scheduler effect
   useEffect(() => {
@@ -771,6 +792,7 @@ const App = () => {
   return (
     <ErrorBoundary>
       <DynamicHead />
+      <SecurityConsoleLog />
       <Toaster position="top-right" />
       <UserActivityTracker />
       <Router>
