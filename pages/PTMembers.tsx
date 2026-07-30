@@ -564,7 +564,7 @@ export default function PTMembers() {
         if (!printingPackageForm || !activeTargetPkg) return null;
 
         return (
-            <div id="printable-package-card" className="p-6 bg-white border-2 border-slate-900 rounded-2xl flex flex-col space-y-4 print:p-4 print:space-y-3 print:border-none print:shadow-none print:break-inside-avoid print:flex-1 print:max-h-none">
+            <div id="printable-package-card" className="p-6 bg-white border-2 border-slate-900 rounded-2xl flex flex-col space-y-4 print:p-4 print:space-y-3 print:border-none print:shadow-none print:break-inside-avoid print:max-h-none">
                 {/* Gym & Document Header */}
                 <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
                     <div className="flex items-center gap-4">
@@ -692,7 +692,7 @@ export default function PTMembers() {
                 </div>
 
                 {/* Footer Signatures */}
-                <div className="pt-4 grid grid-cols-2 gap-8 items-end mt-auto">
+                <div className="pt-4 grid grid-cols-2 gap-8 items-end mt-8 print:mt-12">
                     <div className="border-t border-slate-300 pt-2 text-center">
                         <p className="text-[10px] font-black uppercase text-slate-400 mb-6">Member Acknowledgement</p>
                         <p className="text-xs font-bold text-slate-800">{activeTargetPkg.guest_name}</p>
@@ -1789,9 +1789,8 @@ export default function PTMembers() {
                     background: white !important;
                     margin: 0 !important;
                     padding: 0 !important;
-                    height: 100vh !important;
                     width: 100% !important;
-                    overflow: hidden !important;
+                    overflow: visible !important;
                 }
                 #root, .no-print {
                     display: none !important;
@@ -1803,12 +1802,11 @@ export default function PTMembers() {
                     display: flex !important;
                     flex-direction: column !important;
                     width: 100% !important;
-                    height: 100vh !important;
                     padding: 15mm !important;
                     box-sizing: border-box !important;
                     visibility: visible !important;
                     margin: 0 !important;
-                    overflow: hidden !important;
+                    overflow: visible !important;
                     page-break-after: avoid !important;
                     page-break-inside: avoid !important;
                 }

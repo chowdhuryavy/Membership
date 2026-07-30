@@ -7,12 +7,18 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import PushNotificationManager from '../components/PushNotificationManager';
 
+import { Navigate } from 'react-router-dom';
+
 const NotificationsPage = () => {
-    const { user } = useAuth();
+    const { user, isSuperAdmin } = useAuth();
     const { outlets } = useSettings();
     const { notifications, isLoading, markAsRead, markAllAsRead, removeNotification, clearAll } = useNotificationContext();
     const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
     const [searchQuery, setSearchQuery] = useState('');
+
+    if (!isSuperAdmin) {
+        return <Navigate to="/" replace />;
+    }
 
     const hasMultipleOutlets = (user?.allowed_outlets?.length || 0) > 1;
 

@@ -13,7 +13,7 @@ export const NotificationBell = () => {
     const [showConfirmClear, setShowConfirmClear] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const { currentOutlet, outlets } = useSettings();
-    const { user } = useAuth();
+    const { user, isSuperAdmin } = useAuth();
     const { notifications, isLoading, markAsRead, markAllAsRead, removeNotification, clearAll } = useNotificationContext();
     const navigate = useNavigate();
 
@@ -92,7 +92,7 @@ export const NotificationBell = () => {
                                         Mark all read
                                     </button>
                                 )}
-                                {notifications.length > 0 && (
+                                {notifications.length > 0 && isSuperAdmin && (
                                     <button 
                                         onClick={() => setShowConfirmClear(true)}
                                         className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -177,7 +177,7 @@ export const NotificationBell = () => {
                                 </div>
                             )}
                         </div>
-                        {notifications.length > 0 && (
+                        {notifications.length > 0 && isSuperAdmin && (
                             <div className="p-3 bg-slate-50 border-t border-slate-100 text-center">
                                 <button 
                                     onClick={() => { setIsOpen(false); navigate('/notifications'); }}
