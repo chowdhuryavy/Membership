@@ -564,7 +564,7 @@ export default function PTMembers() {
         if (!printingPackageForm || !activeTargetPkg) return null;
 
         return (
-            <div id="printable-package-card" className="p-6 bg-white border-2 border-slate-900 rounded-2xl space-y-4 print:p-4 print:space-y-3 print:border-none print:shadow-none print:break-inside-avoid print:h-auto print:max-h-none">
+            <div id="printable-package-card" className="p-6 bg-white border-2 border-slate-900 rounded-2xl flex flex-col space-y-4 print:p-4 print:space-y-3 print:border-none print:shadow-none print:break-inside-avoid print:flex-1 print:max-h-none">
                 {/* Gym & Document Header */}
                 <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
                     <div className="flex items-center gap-4">
@@ -692,7 +692,7 @@ export default function PTMembers() {
                 </div>
 
                 {/* Footer Signatures */}
-                <div className="pt-4 grid grid-cols-2 gap-8 items-end">
+                <div className="pt-4 grid grid-cols-2 gap-8 items-end mt-auto">
                     <div className="border-t border-slate-300 pt-2 text-center">
                         <p className="text-[10px] font-black uppercase text-slate-400 mb-6">Member Acknowledgement</p>
                         <p className="text-xs font-bold text-slate-800">{activeTargetPkg.guest_name}</p>
@@ -1789,6 +1789,7 @@ export default function PTMembers() {
                     background: white !important;
                     margin: 0 !important;
                     padding: 0 !important;
+                    min-height: 100vh !important;
                     height: auto !important;
                     width: 100% !important;
                     overflow: visible !important;
@@ -1797,11 +1798,11 @@ export default function PTMembers() {
                     display: none !important;
                 }
                 .print-container-pt {
-                    position: static !important;
-                    display: block !important;
+                    display: flex !important;
+                    flex-direction: column !important;
                     width: 100% !important;
-                    height: auto !important;
-                    padding: 20mm !important;
+                    min-height: 100vh !important;
+                    padding: 15mm !important;
                     box-sizing: border-box !important;
                     visibility: visible !important;
                     margin: 0 !important;

@@ -765,6 +765,7 @@ const SecurityConsoleLog = () => {
       if (!user || !isSuperAdmin) {
           hasLogged.current = true;
           const timer = setTimeout(() => {
+              console.clear();
               console.log(
                   "%cStop!",
                   "color: red; font-family: sans-serif; font-size: 50px; font-weight: bold; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;"
