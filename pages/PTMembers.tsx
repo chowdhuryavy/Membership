@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { db } from '../services/mockSupabase';
@@ -1765,16 +1766,47 @@ export default function PTMembers() {
         </div>
 
         {/* Dedicated Print Section */}
-        {printingSession && selectedMember && (
-            <div className="absolute -left-[9999px] top-0 print:static print:block print-only print:left-0 z-[99999]">
+        {printingSession && selectedMember && createPortal(
+            <div className="hidden print:block print:bg-white print:z-[99999] print-container-pt">
                 {renderSessionSlip()}
-            </div>
+            </div>,
+            document.body
         )}
-        {printingPackageForm && (selectedPackage || selectedMember) && (
-            <div className="absolute -left-[9999px] top-0 print:static print:block print-only print:left-0 z-[99999]">
+        {printingPackageForm && (selectedPackage || selectedMember) && createPortal(
+            <div className="hidden print:block print:bg-white print:z-[99999] print-container-pt">
                 {renderPackageCard()}
-            </div>
+            </div>,
+            document.body
         )}
+
+        <style>{`
+            @media print {
+                @page {
+                    margin: 0;
+                }
+                body {
+                    background: white !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    height: auto !important;
+                }
+                #root {
+                    display: none !important;
+                }
+                .print-container-pt {
+                    position: static !important;
+                    display: block !important;
+                    width: 100% !important;
+                    height: auto !important;
+                    padding: 40px !important;
+                    box-sizing: border-box !important;
+                    visibility: visible !important;
+                }
+                .print-container-pt * {
+                    visibility: visible !important;
+                }
+            }
+        `}</style>
         </>
     );
 }

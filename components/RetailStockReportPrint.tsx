@@ -58,7 +58,7 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
       <style>{`
         @page {
           size: landscape;
-          margin: 10mm;
+          margin: 0;
         }
         @media print {
           body {

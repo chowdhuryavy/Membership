@@ -364,7 +364,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
 
       <style>{`
         @media print {
-          body > *:not(.print-root) {
+          #root {
             display: none !important;
           }
           html, body {
@@ -375,7 +375,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             overflow: visible !important;
           }
           .print-root {
-            position: absolute !important;
+            position: static !important;
             top: 0 !important;
             left: 0 !important;
             display: block !important;
@@ -419,7 +419,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
           .print-rule-item {
             break-inside: avoid;
           }
-          @page { size: A4; margin: 15mm; }
+          @page { margin: 0; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
         .font-arabic { font-family: 'Amiri', 'Traditional Arabic', serif; }
