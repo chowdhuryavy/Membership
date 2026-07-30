@@ -423,10 +423,293 @@ export default function PTMembers() {
     const currentUsed = selectedMember?.used_sessions || 0;
     const currentTotal = selectedMember?.total_sessions || 10;
     const currentRemaining = Math.max(0, currentTotal - currentUsed);
+    const renderSessionSlip = () => {
+        if (!printingSession || !selectedMember) return null;
+        return (
+            <div id="printable-session-slip" className="p-6 bg-white border-2 border-slate-900 rounded-2xl space-y-5 print:p-4 print:space-y-4 print:border-none print:shadow-none">
+                {/* Header */}
+                <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
+                    <div className="flex items-center gap-4">
+                        {logoUrl ? (
+                            <img 
+                                src={logoUrl} 
+                                alt="Property Logo" 
+                                referrerPolicy="no-referrer"
+                                className="h-14 w-auto max-w-[120px] max-h-14 object-contain rounded-lg shrink-0"
+                                onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    if (!target.src.includes('corsproxy') && logoUrl.startsWith('http')) {
+                                        target.src = `https://corsproxy.io/?${encodeURIComponent(logoUrl)}`;
+                                    }
+                                }}
+                            />
+                        ) : (
+                            <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                                <Dumbbell className="w-6 h-6" />
+                            </div>
+                        )}
+                        <div>
+                            <h2 className="text-xl font-black text-slate-900 uppercase tracking-wider">
+                                {currentProperty?.name || 'HEALTH & FITNESS CLUB'}
+                            </h2>
+                            <p className="text-xs font-bold text-slate-600">
+                                {currentOutlet?.name || 'Personal Training Department'}
+                            </p>
+                            <p className="text-[10px] font-semibold text-slate-500 mt-1">
+                                Official Member Session Attendance Voucher
+                            </p>
+                        </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                        <div className="inline-block bg-slate-900 text-white text-[10px] font-black uppercase px-3 py-1 rounded-md tracking-widest">
+                            SESSION SLIP
+                        </div>
+                        <p className="text-xs font-mono font-bold text-slate-700 mt-2">
+                            Ref: PTS-{(printingSession.id || '').slice(0, 8).toUpperCase()}
+                        </p>
+                        <p className="text-[10px] font-semibold text-slate-500">
+                            Issued: {format(new Date(), 'dd MMM yyyy, hh:mm a')}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Client & Package Info Grid */}
+                <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+                    <div>
+                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Member / Client</p>
+                        <p className="font-black text-slate-900 text-sm">{selectedMember.guest_name}</p>
+                        {selectedMember.phone && <p className="font-semibold text-slate-600 mt-0.5">Phone: {selectedMember.phone}</p>}
+                        {selectedMember.email && <p className="font-semibold text-slate-600">Email: {selectedMember.email}</p>}
+                    </div>
+                    <div className="border-l border-slate-200 pl-4">
+                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">PT Package Details</p>
+                        <p className="font-bold text-slate-800">
+                            Total Package: <span className="font-black text-indigo-700">{selectedMember.total_sessions} Sessions</span>
+                        </p>
+                        <p className="font-bold text-slate-800">
+                            Sessions Used: <span className="font-black text-amber-700">{selectedMember.used_sessions}</span> / Remaining: <span className="font-black text-emerald-700">{Math.max(0, selectedMember.total_sessions - selectedMember.used_sessions)}</span>
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-1">
+                            Validity: {selectedMember.start_date} to {selectedMember.end_date}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Session Specific Details */}
+                <div className="border-2 border-indigo-100 rounded-xl p-4 bg-indigo-50/40 space-y-3">
+                    <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
+                        <div>
+                            <p className="text-[10px] font-black uppercase text-indigo-500 tracking-wider">Session Date & Time</p>
+                            <p className="font-black text-slate-900 text-sm">
+                                {(() => {
+                                    try { return format(new Date(printingSession.date), 'EEEE, MMMM dd, yyyy • hh:mm a'); }
+                                    catch (e) { return printingSession.date; }
+                                })()}
+                            </p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-[10px] font-black uppercase text-indigo-500 tracking-wider">Conducting Trainer</p>
+                            <p className="font-black text-indigo-900 text-sm">
+                                {staff.find(st => st.id === printingSession.staff_id)?.name || 'Health Club Trainer'}
+                            </p>
+                        </div>
+                    </div>
+
+                    {printingSession.notes ? (
+                        <div>
+                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1">Session Workout Notes / Focus</p>
+                            <p className="text-xs font-medium text-slate-800 bg-white p-3 rounded-lg border border-slate-200 leading-relaxed whitespace-pre-wrap">
+                                {printingSession.notes}
+                            </p>
+                        </div>
+                    ) : (
+                        <p className="text-xs italic text-slate-500">No workout notes recorded for this session.</p>
+                    )}
+                </div>
+
+                {/* Verification Signatures & Stamp */}
+                <div className="pt-4 grid grid-cols-2 gap-6 items-end">
+                    <div className="border border-slate-200 rounded-xl p-3 text-center bg-slate-50">
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Guest Digital Signature</p>
+                        {printingSession.guest_signature ? (
+                            <img src={printingSession.guest_signature} alt="Guest Signature" className="h-12 object-contain mx-auto my-1" />
+                        ) : (
+                            <div className="h-12 flex items-center justify-center text-[10px] text-slate-400 italic">Signature Verified</div>
+                        )}
+                        <p className="text-[10px] font-bold text-slate-700 border-t border-slate-200 pt-1 mt-1">{selectedMember.guest_name}</p>
+                    </div>
+
+                    <div className="border border-slate-200 rounded-xl p-3 text-center bg-slate-50">
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Authorized Staff / Trainer</p>
+                        <div className="h-12 border-b border-dashed border-slate-300 mx-4 flex items-end justify-center pb-1 text-xs font-bold text-slate-600">
+                            {staff.find(st => st.id === printingSession.staff_id)?.name || 'Trainer Signature'}
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-700 pt-1">Official Gym Stamp & Approval</p>
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="text-center pt-2 border-t border-slate-200">
+                    <p className="text-[10px] font-semibold text-slate-400">
+                        Thank you for training with us at {currentProperty?.name || 'our Health Club'}. Please keep this voucher for your personal records.
+                    </p>
+                </div>
+            </div>
+        );
+    };
+
+    const renderPackageCard = () => {
+        const activeTargetPkg = selectedPackage || selectedMember;
+        if (!printingPackageForm || !activeTargetPkg) return null;
+
+        return (
+            <div id="printable-package-card" className="p-6 bg-white border-2 border-slate-900 rounded-2xl space-y-4 print:p-4 print:space-y-3 print:border-none print:shadow-none">
+                {/* Gym & Document Header */}
+                <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
+                    <div className="flex items-center gap-4">
+                        {logoUrl ? (
+                            <img 
+                                src={logoUrl} 
+                                alt="Property Logo" 
+                                referrerPolicy="no-referrer"
+                                className="h-16 w-auto max-w-[140px] max-h-16 object-contain rounded-lg shrink-0"
+                                onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    if (!target.src.includes('corsproxy') && logoUrl.startsWith('http')) {
+                                        target.src = `https://corsproxy.io/?${encodeURIComponent(logoUrl)}`;
+                                    }
+                                }}
+                            />
+                        ) : (
+                            <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                                <Dumbbell className="w-7 h-7" />
+                            </div>
+                        )}
+                        <div>
+                            <h2 className="text-2xl font-black text-slate-900 uppercase tracking-wider">
+                                {currentProperty?.name || 'HEALTH & FITNESS CLUB'}
+                            </h2>
+                            <p className="text-xs font-bold text-slate-700">
+                                {currentOutlet?.name || 'Personal Training Department'}
+                            </p>
+                            <p className="text-[11px] font-bold text-indigo-900 mt-1 uppercase">
+                                Official PT Member Session Attendance & Voucher Sheet
+                            </p>
+                        </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                        <div className="inline-block bg-indigo-950 text-white text-[11px] font-black uppercase px-4 py-1.5 rounded-md tracking-widest">
+                            {activeTargetPkg.total_sessions}-SESSION PACKAGE CARD
+                        </div>
+                        <p className="text-xs font-mono font-bold text-slate-700 mt-2">
+                            Sale Ref: #{(activeTargetPkg.sale_id || activeTargetPkg.id).slice(0, 8).toUpperCase()}
+                        </p>
+                        <p className="text-[10px] font-semibold text-slate-500">
+                            Issued: {format(new Date(), 'dd MMM yyyy')}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Member & Package Info Summary */}
+                <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+                    <div>
+                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Member Details</p>
+                        <p className="font-black text-slate-900 text-sm">{activeTargetPkg.guest_name}</p>
+                        {activeTargetPkg.phone && <p className="font-semibold text-slate-600 mt-0.5">Phone: {activeTargetPkg.phone}</p>}
+                        {activeTargetPkg.email && <p className="font-semibold text-slate-600">Email: {activeTargetPkg.email}</p>}
+                    </div>
+                    <div className="border-l border-slate-200 pl-4">
+                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Package & Validity</p>
+                        <p className="font-bold text-slate-900">{activeTargetPkg.notes || `${activeTargetPkg.total_sessions} Sessions PT Package`}</p>
+                        <p className="font-bold text-slate-800 mt-1">
+                            Sessions Completed: <span className="font-black text-indigo-700">{activeTargetPkg.used_sessions} / {activeTargetPkg.total_sessions}</span> • Balance Left: <span className="font-black text-emerald-700">{Math.max(0, activeTargetPkg.total_sessions - activeTargetPkg.used_sessions)}</span>
+                        </p>
+                        <p className="text-[10px] font-medium text-slate-500">
+                            Valid From: {activeTargetPkg.start_date} To {activeTargetPkg.end_date}
+                        </p>
+                    </div>
+                </div>
+
+                {/* All Sessions Grid Table */}
+                <div className="space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Session Attendance Logbook</p>
+                    <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr className="bg-slate-900 text-white text-[10px] uppercase font-black tracking-wider">
+                                <th className="p-2 border border-slate-900 text-center w-12">#</th>
+                                <th className="p-2 border border-slate-900 w-28">Status</th>
+                                <th className="p-2 border border-slate-900">Date & Time</th>
+                                <th className="p-2 border border-slate-900">Conducting Trainer</th>
+                                <th className="p-2 border border-slate-900">Workout Notes</th>
+                                <th className="p-2 border border-slate-900 text-center w-28">Member Signature</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {Array.from({ length: activeTargetPkg.total_sessions || 10 }, (_, idx) => {
+                                const slotNum = idx + 1;
+                                const sortedSess = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                                const s = sortedSess[idx];
+                                const trainerObj = s ? staff.find(st => st.id === s.staff_id) : null;
+
+                                let formattedDate = '-';
+                                if (s) {
+                                    try { formattedDate = format(new Date(s.date), 'dd MMM yyyy, hh:mm a'); }
+                                    catch (e) { formattedDate = s.date; }
+                                }
+
+                                return (
+                                    <tr key={slotNum} className={slotNum % 2 === 0 ? 'bg-slate-50' : 'bg-white'}>
+                                        <td className="p-2 border border-slate-300 font-black text-center text-slate-900">{slotNum}</td>
+                                        <td className="p-2 border border-slate-300 font-bold">
+                                            {s ? (
+                                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-black uppercase rounded">
+                                                    Completed
+                                                </span>
+                                            ) : (
+                                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[9px] font-bold uppercase rounded">
+                                                    Available
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="p-2 border border-slate-300 font-semibold text-slate-800">{s ? formattedDate : 'Unbooked'}</td>
+                                        <td className="p-2 border border-slate-300 font-bold text-slate-800">{s ? (trainerObj?.name || 'Trainer') : '-'}</td>
+                                        <td className="p-2 border border-slate-300 text-slate-700">{s ? (s.notes || 'Workout completed') : '-'}</td>
+                                        <td className="p-2 border border-slate-300 text-center">
+                                            {s && s.guest_signature ? (
+                                                <img src={s.guest_signature} alt="Sig" className="h-6 object-contain mx-auto" />
+                                            ) : s ? (
+                                                <span className="text-[9px] italic text-slate-400">Verified</span>
+                                            ) : (
+                                                <span className="text-[9px] text-slate-300">-</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Footer Signatures */}
+                <div className="pt-4 grid grid-cols-2 gap-8 items-end">
+                    <div className="border-t border-slate-300 pt-2 text-center">
+                        <p className="text-[10px] font-black uppercase text-slate-400 mb-6">Member Acknowledgement</p>
+                        <p className="text-xs font-bold text-slate-800">{activeTargetPkg.guest_name}</p>
+                    </div>
+                    <div className="border-t border-slate-300 pt-2 text-center">
+                        <p className="text-[10px] font-black uppercase text-slate-400 mb-6">Authorized PT Manager</p>
+                        <p className="text-xs font-bold text-slate-800">{currentProperty?.name || 'Health Club Management'}</p>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const progressPct = Math.min(100, Math.round((currentUsed / Math.max(1, currentTotal)) * 100));
 
     return (
-        <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+        <>
+        <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 no-print">
             
             {/* VIEW MODE 1: GUEST DIRECTORY GRID (WHEN NO SPECIFIC MEMBER IS SELECTED) */}
             {!selectedMember ? (
@@ -1388,136 +1671,8 @@ export default function PTMembers() {
                             </div>
                         </div>
 
-                        {/* Printable Content Container */}
-                        <div id="printable-session-slip" className="p-6 bg-white border-2 border-slate-900 rounded-2xl space-y-5 print:p-4 print:space-y-4">
-                            {/* Header */}
-                            <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
-                                <div className="flex items-center gap-4">
-                                    {logoUrl ? (
-                                        <img 
-                                            src={logoUrl} 
-                                            alt="Property Logo" 
-                                            referrerPolicy="no-referrer"
-                                            className="h-14 w-auto max-w-[120px] max-h-14 object-contain rounded-lg shrink-0"
-                                            onError={(e) => {
-                                                const target = e.target as HTMLImageElement;
-                                                if (!target.src.includes('corsproxy') && logoUrl.startsWith('http')) {
-                                                    target.src = `https://corsproxy.io/?${encodeURIComponent(logoUrl)}`;
-                                                }
-                                            }}
-                                        />
-                                    ) : (
-                                        <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
-                                            <Dumbbell className="w-6 h-6" />
-                                        </div>
-                                    )}
-                                    <div>
-                                        <h2 className="text-xl font-black text-slate-900 uppercase tracking-wider">
-                                            {currentProperty?.name || 'HEALTH & FITNESS CLUB'}
-                                        </h2>
-                                        <p className="text-xs font-bold text-slate-600">
-                                            {currentOutlet?.name || 'Personal Training Department'}
-                                        </p>
-                                        <p className="text-[10px] font-semibold text-slate-500 mt-1">
-                                            Official Member Session Attendance Voucher
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="text-right shrink-0">
-                                    <div className="inline-block bg-slate-900 text-white text-[10px] font-black uppercase px-3 py-1 rounded-md tracking-widest">
-                                        SESSION SLIP
-                                    </div>
-                                    <p className="text-xs font-mono font-bold text-slate-700 mt-2">
-                                        Ref: PTS-{(printingSession.id || '').slice(0, 8).toUpperCase()}
-                                    </p>
-                                    <p className="text-[10px] font-semibold text-slate-500">
-                                        Issued: {format(new Date(), 'dd MMM yyyy, hh:mm a')}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Client & Package Info Grid */}
-                            <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-                                <div>
-                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Member / Client</p>
-                                    <p className="font-black text-slate-900 text-sm">{selectedMember.guest_name}</p>
-                                    {selectedMember.phone && <p className="font-semibold text-slate-600 mt-0.5">Phone: {selectedMember.phone}</p>}
-                                    {selectedMember.email && <p className="font-semibold text-slate-600">Email: {selectedMember.email}</p>}
-                                </div>
-                                <div className="border-l border-slate-200 pl-4">
-                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">PT Package Details</p>
-                                    <p className="font-bold text-slate-800">
-                                        Total Package: <span className="font-black text-indigo-700">{selectedMember.total_sessions} Sessions</span>
-                                    </p>
-                                    <p className="font-bold text-slate-800">
-                                        Sessions Used: <span className="font-black text-amber-700">{selectedMember.used_sessions}</span> / Remaining: <span className="font-black text-emerald-700">{Math.max(0, selectedMember.total_sessions - selectedMember.used_sessions)}</span>
-                                    </p>
-                                    <p className="text-[10px] text-slate-500 mt-1">
-                                        Validity: {selectedMember.start_date} to {selectedMember.end_date}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Session Specific Details */}
-                            <div className="border-2 border-indigo-100 rounded-xl p-4 bg-indigo-50/40 space-y-3">
-                                <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
-                                    <div>
-                                        <p className="text-[10px] font-black uppercase text-indigo-500 tracking-wider">Session Date & Time</p>
-                                        <p className="font-black text-slate-900 text-sm">
-                                            {(() => {
-                                                try { return format(new Date(printingSession.date), 'EEEE, MMMM dd, yyyy • hh:mm a'); }
-                                                catch (e) { return printingSession.date; }
-                                            })()}
-                                        </p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-[10px] font-black uppercase text-indigo-500 tracking-wider">Conducting Trainer</p>
-                                        <p className="font-black text-indigo-900 text-sm">
-                                            {staff.find(st => st.id === printingSession.staff_id)?.name || 'Health Club Trainer'}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {printingSession.notes ? (
-                                    <div>
-                                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1">Session Workout Notes / Focus</p>
-                                        <p className="text-xs font-medium text-slate-800 bg-white p-3 rounded-lg border border-slate-200 leading-relaxed whitespace-pre-wrap">
-                                            {printingSession.notes}
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <p className="text-xs italic text-slate-500">No workout notes recorded for this session.</p>
-                                )}
-                            </div>
-
-                            {/* Verification Signatures & Stamp */}
-                            <div className="pt-4 grid grid-cols-2 gap-6 items-end">
-                                <div className="border border-slate-200 rounded-xl p-3 text-center bg-slate-50">
-                                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Guest Digital Signature</p>
-                                    {printingSession.guest_signature ? (
-                                        <img src={printingSession.guest_signature} alt="Guest Signature" className="h-12 object-contain mx-auto my-1" />
-                                    ) : (
-                                        <div className="h-12 flex items-center justify-center text-[10px] text-slate-400 italic">Signature Verified</div>
-                                    )}
-                                    <p className="text-[10px] font-bold text-slate-700 border-t border-slate-200 pt-1 mt-1">{selectedMember.guest_name}</p>
-                                </div>
-
-                                <div className="border border-slate-200 rounded-xl p-3 text-center bg-slate-50">
-                                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Authorized Staff / Trainer</p>
-                                    <div className="h-12 border-b border-dashed border-slate-300 mx-4 flex items-end justify-center pb-1 text-xs font-bold text-slate-600">
-                                        {staff.find(st => st.id === printingSession.staff_id)?.name || 'Trainer Signature'}
-                                    </div>
-                                    <p className="text-[10px] font-bold text-slate-700 pt-1">Official Gym Stamp & Approval</p>
-                                </div>
-                            </div>
-
-                            {/* Footer */}
-                            <div className="text-center pt-2 border-t border-slate-200">
-                                <p className="text-[10px] font-semibold text-slate-400">
-                                    Thank you for training with us at {currentProperty?.name || 'our Health Club'}. Please keep this voucher for your personal records.
-                                </p>
-                            </div>
-                        </div>
+                        {/* Printable Content Container Preview */}
+                        {renderSessionSlip()}
                     </div>
                 </div>
             )}
@@ -1600,207 +1755,26 @@ export default function PTMembers() {
                             </div>
                         </div>
 
-                        {/* Printable Package Container */}
-                        <div id="printable-package-card" className="p-6 bg-white border-2 border-slate-900 rounded-2xl space-y-4 print:p-4 print:space-y-3">
-                            {/* Gym & Document Header */}
-                            <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
-                                <div className="flex items-center gap-4">
-                                    {logoUrl ? (
-                                        <img 
-                                            src={logoUrl} 
-                                            alt="Property Logo" 
-                                            referrerPolicy="no-referrer"
-                                            className="h-16 w-auto max-w-[140px] max-h-16 object-contain rounded-lg shrink-0"
-                                            onError={(e) => {
-                                                const target = e.target as HTMLImageElement;
-                                                if (!target.src.includes('corsproxy') && logoUrl.startsWith('http')) {
-                                                    target.src = `https://corsproxy.io/?${encodeURIComponent(logoUrl)}`;
-                                                }
-                                            }}
-                                        />
-                                    ) : (
-                                        <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
-                                            <Dumbbell className="w-7 h-7" />
-                                        </div>
-                                    )}
-                                    <div>
-                                        <h2 className="text-2xl font-black text-slate-900 uppercase tracking-wider">
-                                            {currentProperty?.name || 'HEALTH & FITNESS CLUB'}
-                                        </h2>
-                                        <p className="text-xs font-bold text-slate-700">
-                                            {currentOutlet?.name || 'Personal Training Department'}
-                                        </p>
-                                        <p className="text-[11px] font-bold text-indigo-900 mt-1 uppercase">
-                                            Official PT Member Session Attendance & Voucher Sheet
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="text-right shrink-0">
-                                    <div className="inline-block bg-indigo-950 text-white text-[11px] font-black uppercase px-4 py-1.5 rounded-md tracking-widest">
-                                        {activeTargetPkg.total_sessions}-SESSION PACKAGE CARD
-                                    </div>
-                                    <p className="text-xs font-mono font-bold text-slate-700 mt-2">
-                                        Sale Ref: #{(activeTargetPkg.sale_id || activeTargetPkg.id).slice(0, 8).toUpperCase()}
-                                    </p>
-                                    <p className="text-[10px] font-semibold text-slate-500">
-                                        Issued: {format(new Date(), 'dd MMM yyyy')}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Member & Package Info Summary */}
-                            <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-                                <div>
-                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Member Details</p>
-                                    <p className="font-black text-slate-900 text-sm">{activeTargetPkg.guest_name}</p>
-                                    {activeTargetPkg.phone && <p className="font-semibold text-slate-600 mt-0.5">Phone: {activeTargetPkg.phone}</p>}
-                                    {activeTargetPkg.email && <p className="font-semibold text-slate-600">Email: {activeTargetPkg.email}</p>}
-                                </div>
-                                <div className="border-l border-slate-200 pl-4">
-                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Package & Validity</p>
-                                    <p className="font-bold text-slate-900">{activeTargetPkg.notes || `${activeTargetPkg.total_sessions} Sessions PT Package`}</p>
-                                    <p className="font-bold text-slate-800 mt-1">
-                                        Sessions Completed: <span className="font-black text-indigo-700">{activeTargetPkg.used_sessions} / {activeTargetPkg.total_sessions}</span> • Balance Left: <span className="font-black text-emerald-700">{Math.max(0, activeTargetPkg.total_sessions - activeTargetPkg.used_sessions)}</span>
-                                    </p>
-                                    <p className="text-[10px] font-medium text-slate-500">
-                                        Valid From: {activeTargetPkg.start_date} To {activeTargetPkg.end_date}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* All Sessions Grid Table */}
-                            <div className="space-y-2">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Session Attendance Logbook</p>
-                                <table className="w-full text-left border-collapse text-xs">
-                                    <thead>
-                                        <tr className="bg-slate-900 text-white text-[10px] uppercase font-black tracking-wider">
-                                            <th className="p-2 border border-slate-900 text-center w-12">#</th>
-                                            <th className="p-2 border border-slate-900 w-28">Status</th>
-                                            <th className="p-2 border border-slate-900">Date & Time</th>
-                                            <th className="p-2 border border-slate-900">Conducting Trainer</th>
-                                            <th className="p-2 border border-slate-900">Workout Notes</th>
-                                            <th className="p-2 border border-slate-900 text-center w-28">Member Signature</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {Array.from({ length: activeTargetPkg.total_sessions || 10 }, (_, idx) => {
-                                            const slotNum = idx + 1;
-                                            const sortedSess = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-                                            const s = sortedSess[idx];
-                                            const trainerObj = s ? staff.find(st => st.id === s.staff_id) : null;
-
-                                            let formattedDate = '-';
-                                            if (s) {
-                                                try { formattedDate = format(new Date(s.date), 'dd MMM yyyy, hh:mm a'); }
-                                                catch (e) { formattedDate = s.date; }
-                                            }
-
-                                            return (
-                                                <tr key={slotNum} className={slotNum % 2 === 0 ? 'bg-slate-50' : 'bg-white'}>
-                                                    <td className="p-2 border border-slate-300 font-black text-center text-slate-900">{slotNum}</td>
-                                                    <td className="p-2 border border-slate-300 font-bold">
-                                                        {s ? (
-                                                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-black uppercase rounded">
-                                                                Completed
-                                                            </span>
-                                                        ) : (
-                                                            <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[9px] font-bold uppercase rounded">
-                                                                Available
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-2 border border-slate-300 font-semibold text-slate-800">{s ? formattedDate : 'Unbooked'}</td>
-                                                    <td className="p-2 border border-slate-300 font-bold text-slate-800">{s ? (trainerObj?.name || 'Trainer') : '-'}</td>
-                                                    <td className="p-2 border border-slate-300 text-slate-700">{s ? (s.notes || 'Workout completed') : '-'}</td>
-                                                    <td className="p-2 border border-slate-300 text-center">
-                                                        {s && s.guest_signature ? (
-                                                            <img src={s.guest_signature} alt="Sig" className="h-6 object-contain mx-auto" />
-                                                        ) : s ? (
-                                                            <span className="text-[9px] italic text-slate-400">Verified</span>
-                                                        ) : (
-                                                            <span className="text-[9px] text-slate-300">-</span>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            {/* Signatures & Approvals */}
-                            <div className="pt-4 grid grid-cols-2 gap-6 items-end">
-                                <div className="border border-slate-300 rounded-xl p-3 text-center bg-slate-50">
-                                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Guest / Member Confirmation</p>
-                                    <div className="h-10 border-b border-dashed border-slate-300 mx-4 flex items-end justify-center pb-1 text-xs font-bold text-slate-800">
-                                        {activeTargetPkg.guest_name}
-                                    </div>
-                                    <p className="text-[9px] font-bold text-slate-500 pt-1">Client Signature</p>
-                                </div>
-
-                                <div className="border border-slate-300 rounded-xl p-3 text-center bg-slate-50">
-                                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Health Club Manager / Stamp</p>
-                                    <div className="h-10 border-b border-dashed border-slate-300 mx-4 flex items-end justify-center pb-1 text-xs font-bold text-slate-800">
-                                        Official Approval
-                                    </div>
-                                    <p className="text-[9px] font-bold text-slate-500 pt-1">Gym Authorization & Seal</p>
-                                </div>
-                            </div>
-
-                            <div className="text-center pt-2 border-t border-slate-200">
-                                <p className="text-[10px] font-semibold text-slate-400">
-                                    Thank you for training with us at {currentProperty?.name || 'our Health Club'}. Please keep this voucher for your personal records.
-                                </p>
-                            </div>
-                        </div>
+                        {/* Printable Package Container Preview */}
+                        {renderPackageCard()}
                     </div>
                 </div>
                 );
             })()}
 
-            {/* PRINT MEDIA STYLES */}
-            <style>{`
-                @media print {
-                    @page {
-                        size: portrait;
-                        margin: 5mm;
-                    }
-                    html, body {
-                        background: white !important;
-                        height: 100% !important;
-                        max-height: 100vh !important;
-                        overflow: hidden !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                    }
-                    body * {
-                        visibility: hidden !important;
-                    }
-                    #printable-session-slip, #printable-session-slip *, 
-                    #printable-package-card, #printable-package-card * {
-                        visibility: visible !important;
-                    }
-                    #printable-session-slip, #printable-package-card {
-                        position: fixed !important;
-                        left: 0 !important;
-                        top: 0 !important;
-                        width: 100% !important;
-                        max-width: 100% !important;
-                        height: auto !important;
-                        border: 2px solid #0f172a !important;
-                        box-shadow: none !important;
-                        background: white !important;
-                        padding: 12px !important;
-                        margin: 0 !important;
-                        box-sizing: border-box !important;
-                        page-break-inside: avoid !important;
-                        break-inside: avoid !important;
-                        page-break-after: avoid !important;
-                        break-after: avoid !important;
-                        z-index: 9999999 !important;
-                    }
-                }
-            `}</style>
         </div>
+
+        {/* Dedicated Print Section */}
+        {printingSession && selectedMember && (
+            <div className="absolute -left-[9999px] top-0 print:static print:block print-only print:left-0 z-[99999]">
+                {renderSessionSlip()}
+            </div>
+        )}
+        {printingPackageForm && (selectedPackage || selectedMember) && (
+            <div className="absolute -left-[9999px] top-0 print:static print:block print-only print:left-0 z-[99999]">
+                {renderPackageCard()}
+            </div>
+        )}
+        </>
     );
 }
