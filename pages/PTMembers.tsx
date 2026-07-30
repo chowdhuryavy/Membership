@@ -17,6 +17,16 @@ export default function PTMembers() {
     const { user } = useAuth();
     const { currentOutlet, currentProperty, settings, setPageLoading, formatMoney } = useSettings();
     const logoUrl = currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || '';
+    
+    const handleTriggerPrint = () => {
+        setTimeout(() => {
+            try {
+                window.print();
+            } catch (err) {
+                console.warn('[Print] Window print execution caught:', err);
+            }
+        }, 50);
+    };
     const [ptMembers, setPtMembers] = useState<PTMember[]>([]);
     const [allSales, setAllSales] = useState<Sale[]>([]);
     const [staff, setStaff] = useState<Staff[]>([]);
@@ -1351,8 +1361,8 @@ export default function PTMembers() {
 
             {/* PRINTABLE SESSION VOUCHER MODAL */}
             {printingSession && selectedMember && (
-                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:fixed print:inset-0">
-                    <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 border border-slate-200 relative animate-in zoom-in-95 duration-200 print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full">
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:static print:inset-auto print:p-0 print:bg-transparent print:overflow-visible">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 border border-slate-200 relative animate-in zoom-in-95 duration-200 print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full print:bg-transparent">
                         {/* Action Bar (Hidden during print) */}
                         <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6 print:hidden">
                             <div className="flex items-center gap-2">
@@ -1363,7 +1373,7 @@ export default function PTMembers() {
                             </div>
                             <div className="flex items-center gap-2">
                                 <Button 
-                                    onClick={() => window.print()} 
+                                    onClick={handleTriggerPrint} 
                                     className="bg-indigo-900 hover:bg-indigo-950 text-white font-black text-xs uppercase px-4 h-9 rounded-xl flex items-center gap-2 shadow-md"
                                 >
                                     <Printer className="w-4 h-4" /> Print Voucher
@@ -1379,7 +1389,7 @@ export default function PTMembers() {
                         </div>
 
                         {/* Printable Content Container */}
-                        <div id="printable-session-slip" className="p-6 bg-white border-2 border-slate-900 rounded-2xl space-y-6">
+                        <div id="printable-session-slip" className="p-6 bg-white border-2 border-slate-900 rounded-2xl space-y-5 print:p-4 print:space-y-4">
                             {/* Header */}
                             <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
                                 <div className="flex items-center gap-4">
@@ -1563,8 +1573,8 @@ export default function PTMembers() {
                 const activeTargetPkg = selectedPackage || selectedMember;
                 if (!activeTargetPkg) return null;
                 return (
-                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:fixed print:inset-0">
-                    <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 border border-slate-200 relative animate-in zoom-in-95 duration-200 print:shadow-none print:border-none print:p-0 print:max-h-none print:max-w-none print:w-full">
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:static print:inset-auto print:p-0 print:bg-transparent print:overflow-visible">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 border border-slate-200 relative animate-in zoom-in-95 duration-200 print:shadow-none print:border-none print:p-0 print:max-h-none print:max-w-none print:w-full print:bg-transparent">
                         {/* Header Action Bar */}
                         <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6 print:hidden sticky top-0 bg-white z-10 py-2">
                             <div className="flex items-center gap-2">
@@ -1575,7 +1585,7 @@ export default function PTMembers() {
                             </div>
                             <div className="flex items-center gap-2">
                                 <Button 
-                                    onClick={() => window.print()} 
+                                    onClick={handleTriggerPrint} 
                                     className="bg-indigo-900 hover:bg-indigo-950 text-white font-black text-xs uppercase px-4 h-9 rounded-xl flex items-center gap-2 shadow-md"
                                 >
                                     <Printer className="w-4 h-4" /> Print Full Package Card
@@ -1591,7 +1601,7 @@ export default function PTMembers() {
                         </div>
 
                         {/* Printable Package Container */}
-                        <div id="printable-package-card" className="p-6 bg-white border-2 border-slate-900 rounded-2xl space-y-6">
+                        <div id="printable-package-card" className="p-6 bg-white border-2 border-slate-900 rounded-2xl space-y-4 print:p-4 print:space-y-3">
                             {/* Gym & Document Header */}
                             <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
                                 <div className="flex items-center gap-4">
@@ -1751,23 +1761,42 @@ export default function PTMembers() {
             {/* PRINT MEDIA STYLES */}
             <style>{`
                 @media print {
+                    @page {
+                        size: portrait;
+                        margin: 8mm;
+                    }
+                    html, body {
+                        background: white !important;
+                        height: auto !important;
+                        min-height: 0 !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        overflow: visible !important;
+                    }
                     body * {
                         visibility: hidden !important;
                     }
-                    #printable-session-slip, #printable-session-slip *, #printable-package-card, #printable-package-card * {
+                    #printable-session-slip, #printable-session-slip *, 
+                    #printable-package-card, #printable-package-card * {
                         visibility: visible !important;
                     }
                     #printable-session-slip, #printable-package-card {
-                        position: fixed !important;
+                        position: absolute !important;
                         left: 0 !important;
                         top: 0 !important;
                         width: 100% !important;
+                        max-width: 100% !important;
                         height: auto !important;
                         border: 2px solid #0f172a !important;
                         box-shadow: none !important;
                         background: white !important;
-                        padding: 24px !important;
+                        padding: 16px !important;
                         margin: 0 !important;
+                        box-sizing: border-box !important;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                        page-break-after: avoid !important;
+                        break-after: avoid !important;
                         z-index: 99999 !important;
                     }
                 }
