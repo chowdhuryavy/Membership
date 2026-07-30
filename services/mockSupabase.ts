@@ -1,4 +1,5 @@
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, LogModule, LogSeverity, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, Notification, CustomReportConfig, PTMember, PTSession } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, LogModule, LogSeverity, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, CustomReportConfig, PTMember, PTSession } from '../types';
+import type { Notification } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format, parse, differenceInCalendarDays } from 'date-fns';
@@ -2302,6 +2303,14 @@ class DatabaseService {
           }
         }
         await this.logAction('CREATE_PT_MEMBER', `Registered PT Member: ${payload.guest_name} (${payload.total_sessions} sessions)`);
+        
+        await this.addNotification({
+          title: 'PT Client Enrolled',
+          message: `Client ${payload.guest_name} registered for ${payload.total_sessions} PT sessions.`,
+          type: 'success',
+          outlet_id: payload.outlet_id,
+          user_id: payload.trainer_id || undefined
+        });
       }, null);
     }
   }
@@ -2438,12 +2447,20 @@ class DatabaseService {
         const { error: sessionError } = await supabase.from('pt_sessions').insert([newSessionItem]);
         if (sessionError) throw sessionError;
         
-        const { data: memberData } = await supabase.from('pt_members').select('used_sessions').eq('id', session.pt_member_id).single();
+        const { data: memberData } = await supabase.from('pt_members').select('used_sessions, guest_name').eq('id', session.pt_member_id).single();
         if (memberData) {
            await supabase.from('pt_members').update({ used_sessions: (memberData.used_sessions || 0) + 1 }).eq('id', session.pt_member_id);
         }
 
         await this.logAction('LOG_PT_SESSION', `Logged PT session for member ID: ${session.pt_member_id}`);
+        
+        await this.addNotification({
+          title: 'PT Session Completed',
+          message: `Training session logged for ${memberData?.guest_name || 'PT Member'} on ${session.date}.`,
+          type: 'info',
+          outlet_id: session.outlet_id,
+          user_id: session.staff_id || undefined
+        });
       }, null);
     }
 
@@ -2603,6 +2620,14 @@ class DatabaseService {
         if (error) throw error;
         await this.logAction('POS_SALE', `Processed sale: ${sale.quantity}x ${sale.item_name} for ${sale.guest_name || 'Walk-in'} (Total: ${sale.net_amount})`, sale.outlet_id);
         
+        // Notify staff/admins of new sale
+        await this.addNotification({
+          title: 'New POS Sale Processed',
+          message: `Sale of ${sale.quantity}x ${sale.item_name} for ${sale.guest_name || 'Walk-in'} (${sale.net_amount}) processed.`,
+          type: 'success',
+          outlet_id: sale.outlet_id
+        });
+
         // Handle Inventory Tracking
         if (sale.item_id) {
           const { data: item } = await supabase.from('inventory').select('*').eq('id', sale.item_id).single();
@@ -3820,7 +3845,7 @@ class DatabaseService {
         const keywords = [
             'booking', 'membership', 'sale', 'assigned', 'cancel', 
             'delete', 'modify', 'remove', 'reschedule', 'waitlist',
-            'payment', 'checkout', 'check-in', 'staff'
+            'payment', 'checkout', 'check-in', 'staff', 'pt', 'trainer'
         ];
         
         const isImportant = keywords.some(kw => title.includes(kw));
@@ -3840,8 +3865,19 @@ class DatabaseService {
                   notification.message
               ).catch(err => console.error(`[Push] Trigger failure for ${rid}:`, err));
           });
-        } else {
-           console.log(`[Push] No specific recipients found for push trigger. Skipping push notification (will remain in-app only).`);
+        }
+        
+        // Broadcast push notification to all subscribed PWA staff devices for general/important alerts
+        if (!notification.user_id || isImportant) {
+          this.triggerGlobalPush({
+              id: crypto.randomUUID(),
+              title: notification.title,
+              message: notification.message,
+              type: notification.type || 'info',
+              created_at: new Date().toISOString(),
+              read: false,
+              outlet_id: notification.outlet_id
+          }).catch(err => console.warn('[Push] Global push fallback error:', err));
         }
       } catch (e) {
         console.error('[Push] Fatal error in addNotification sequence:', e);
@@ -3935,6 +3971,29 @@ class DatabaseService {
     // Dispatch custom event for same-tab updates
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('notification_added', { detail: notification }));
+
+      // Trigger native OS Push Banner if permission is granted on this browser/PWA device
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.ready.then(reg => {
+              reg.showNotification(notification.title, {
+                body: notification.message,
+                icon: '/notification-icon.png',
+                badge: '/notification-icon.png',
+                tag: notification.id || 'system-alert',
+                data: { url: '/#/notifications' }
+              } as NotificationOptions).catch(() => {
+                new Notification(notification.title, { body: notification.message, icon: '/notification-icon.png' });
+              });
+            });
+          } else {
+            new Notification(notification.title, { body: notification.message, icon: '/notification-icon.png' });
+          }
+        } catch (e) {
+          console.warn('[Push] Local native push trigger error:', e);
+        }
+      }
     }
   }
 
@@ -4127,12 +4186,8 @@ class DatabaseService {
       bc = new BroadcastChannel('notifications_channel');
       bc.onmessage = (event) => {
         const notification = event.data as Notification;
-        // If staff (not admin), only match if explicitly targeted to them
-        // If admin, match if targeted to them OR global (null user_id)
-        const userMatch = isAdmin 
-          ? (notification.user_id === userId || !notification.user_id) 
-          : (notification.user_id === userId);
-          
+        // Match if targeted to user OR if global/outlet notification (user_id is null)
+        const userMatch = !notification.user_id || notification.user_id === userId;
         const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
         
         if (userMatch && outletMatch) {
@@ -4150,12 +4205,8 @@ class DatabaseService {
         
         const targetNotification = newNotification || oldNotification;
         if (targetNotification) {
-          // If staff (not admin), only match if explicitly targeted to them
-          // If admin, match if targeted to them OR global (null user_id)
-          const userMatch = isAdmin 
-            ? (targetNotification.user_id === userId || !targetNotification.user_id) 
-            : (targetNotification.user_id === userId);
-            
+          // Match if targeted to user OR if global/outlet notification (user_id is null)
+          const userMatch = !targetNotification.user_id || targetNotification.user_id === userId;
           const outletMatch = !outletId || !targetNotification.outlet_id || targetNotification.outlet_id === outletId;
           
           if (userMatch && outletMatch) {

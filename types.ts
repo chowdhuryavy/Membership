@@ -392,6 +392,7 @@ export interface Sale {
 export interface PTSession {
   id: string;
   pt_member_id: string;
+  outlet_id?: string;
   date: string;
   staff_id: string;
   notes?: string;

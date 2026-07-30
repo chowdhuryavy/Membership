@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { db } from '../services/mockSupabase';
-import { Notification } from '../types';
+import type { Notification } from '../types';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { toast } from 'react-hot-toast';
@@ -268,6 +268,29 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 duration: 5000,
                 position: 'top-right',
               });
+            }
+          }
+
+          // Trigger native OS Push Banner if permission is granted on this browser/PWA device
+          if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+              if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.ready.then(reg => {
+                  reg.showNotification(n.title, {
+                    body: n.message,
+                    icon: '/notification-icon.png',
+                    badge: '/notification-icon.png',
+                    tag: n.id || 'system-alert',
+                    data: { url: '/#/notifications' }
+                  } as NotificationOptions).catch(() => {
+                    new Notification(n.title, { body: n.message, icon: '/notification-icon.png' });
+                  });
+                });
+              } else {
+                new Notification(n.title, { body: n.message, icon: '/notification-icon.png' });
+              }
+            } catch (e) {
+              console.warn('[Push] Native push notification trigger failed:', e);
             }
           }
 
