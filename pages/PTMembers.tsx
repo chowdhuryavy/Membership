@@ -1789,24 +1789,28 @@ export default function PTMembers() {
                     background: white !important;
                     margin: 0 !important;
                     padding: 0 !important;
-                    min-height: 100vh !important;
-                    height: auto !important;
+                    height: 100vh !important;
                     width: 100% !important;
-                    overflow: visible !important;
+                    overflow: hidden !important;
                 }
                 #root, .no-print {
                     display: none !important;
                 }
                 .print-container-pt {
+                    position: absolute !important;
+                    top: 0 !important;
+                    left: 0 !important;
                     display: flex !important;
                     flex-direction: column !important;
                     width: 100% !important;
-                    min-height: 100vh !important;
+                    height: 100vh !important;
                     padding: 15mm !important;
                     box-sizing: border-box !important;
                     visibility: visible !important;
                     margin: 0 !important;
-                    page-break-after: auto !important;
+                    overflow: hidden !important;
+                    page-break-after: avoid !important;
+                    page-break-inside: avoid !important;
                 }
                 .print-container-pt * {
                     visibility: visible !important;

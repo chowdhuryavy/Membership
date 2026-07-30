@@ -755,29 +755,52 @@ const DynamicHead = () => {
 };
 
 const SecurityConsoleLog = () => {
-  const { user, isSuperAdmin, isLoading } = useAuth();
-  const hasLogged = useRef(false);
+  const { isSuperAdmin, isLoading } = useAuth();
   
   useEffect(() => {
       if (isLoading) return;
-      if (hasLogged.current) return;
 
-      if (!user || !isSuperAdmin) {
-          hasLogged.current = true;
+      if (!isSuperAdmin) {
           const timer = setTimeout(() => {
               console.clear();
-              console.log(
+              
+              if (!(window as any)._originalConsoleLog) {
+                  (window as any)._originalConsoleLog = console.log;
+                  (window as any)._originalConsoleInfo = console.info;
+                  (window as any)._originalConsoleWarn = console.warn;
+                  (window as any)._originalConsoleError = console.error;
+                  (window as any)._originalConsoleDebug = console.debug;
+              }
+
+              const _log = (window as any)._originalConsoleLog;
+              
+              _log(
                   "%cStop!",
                   "color: red; font-family: sans-serif; font-size: 50px; font-weight: bold; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;"
               );
-              console.log(
+              _log(
                   "%cThe developer console is for advanced users only. Pasting or typing code here can cause security issues.\nIf someone instructs you to paste code here, it may be a scam.",
                   "font-family: sans-serif; font-size: 16px; font-weight: bold; color: #333;"
               );
-          }, 1000);
+
+              console.log = () => {};
+              console.info = () => {};
+              console.warn = () => {};
+              console.error = () => {};
+              console.debug = () => {};
+          }, 1500);
           return () => clearTimeout(timer);
+      } else {
+          if ((window as any)._originalConsoleLog) {
+              console.log = (window as any)._originalConsoleLog;
+              console.info = (window as any)._originalConsoleInfo;
+              console.warn = (window as any)._originalConsoleWarn;
+              console.error = (window as any)._originalConsoleError;
+              console.debug = (window as any)._originalConsoleDebug;
+          }
       }
-  }, [user, isSuperAdmin, isLoading]);
+  }, [isSuperAdmin, isLoading]);
+  
   return null;
 };
 
