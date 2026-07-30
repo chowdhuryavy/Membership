@@ -1763,15 +1763,15 @@ export default function PTMembers() {
                 @media print {
                     @page {
                         size: portrait;
-                        margin: 8mm;
+                        margin: 5mm;
                     }
                     html, body {
                         background: white !important;
-                        height: auto !important;
-                        min-height: 0 !important;
+                        height: 100% !important;
+                        max-height: 100vh !important;
+                        overflow: hidden !important;
                         margin: 0 !important;
                         padding: 0 !important;
-                        overflow: visible !important;
                     }
                     body * {
                         visibility: hidden !important;
@@ -1781,7 +1781,7 @@ export default function PTMembers() {
                         visibility: visible !important;
                     }
                     #printable-session-slip, #printable-package-card {
-                        position: absolute !important;
+                        position: fixed !important;
                         left: 0 !important;
                         top: 0 !important;
                         width: 100% !important;
@@ -1790,14 +1790,14 @@ export default function PTMembers() {
                         border: 2px solid #0f172a !important;
                         box-shadow: none !important;
                         background: white !important;
-                        padding: 16px !important;
+                        padding: 12px !important;
                         margin: 0 !important;
                         box-sizing: border-box !important;
                         page-break-inside: avoid !important;
                         break-inside: avoid !important;
                         page-break-after: avoid !important;
                         break-after: avoid !important;
-                        z-index: 99999 !important;
+                        z-index: 9999999 !important;
                     }
                 }
             `}</style>
