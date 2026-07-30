@@ -15,7 +15,8 @@ import { SignaturePad } from '../components/SignatureModal';
 
 export default function PTMembers() {
     const { user } = useAuth();
-    const { currentOutlet, currentProperty, setPageLoading, formatMoney } = useSettings();
+    const { currentOutlet, currentProperty, settings, setPageLoading, formatMoney } = useSettings();
+    const logoUrl = currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || '';
     const [ptMembers, setPtMembers] = useState<PTMember[]>([]);
     const [allSales, setAllSales] = useState<Sale[]>([]);
     const [staff, setStaff] = useState<Staff[]>([]);
@@ -1381,18 +1382,38 @@ export default function PTMembers() {
                         <div id="printable-session-slip" className="p-6 bg-white border-2 border-slate-900 rounded-2xl space-y-6">
                             {/* Header */}
                             <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
-                                <div>
-                                    <h2 className="text-xl font-black text-slate-900 uppercase tracking-wider">
-                                        {currentProperty?.name || 'HEALTH & FITNESS CLUB'}
-                                    </h2>
-                                    <p className="text-xs font-bold text-slate-600">
-                                        {currentOutlet?.name || 'Personal Training Department'}
-                                    </p>
-                                    <p className="text-[10px] font-semibold text-slate-500 mt-1">
-                                        Official Member Session Attendance Voucher
-                                    </p>
+                                <div className="flex items-center gap-4">
+                                    {logoUrl ? (
+                                        <img 
+                                            src={logoUrl} 
+                                            alt="Property Logo" 
+                                            referrerPolicy="no-referrer"
+                                            className="h-14 w-auto max-w-[120px] max-h-14 object-contain rounded-lg shrink-0"
+                                            onError={(e) => {
+                                                const target = e.target as HTMLImageElement;
+                                                if (!target.src.includes('corsproxy') && logoUrl.startsWith('http')) {
+                                                    target.src = `https://corsproxy.io/?${encodeURIComponent(logoUrl)}`;
+                                                }
+                                            }}
+                                        />
+                                    ) : (
+                                        <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                                            <Dumbbell className="w-6 h-6" />
+                                        </div>
+                                    )}
+                                    <div>
+                                        <h2 className="text-xl font-black text-slate-900 uppercase tracking-wider">
+                                            {currentProperty?.name || 'HEALTH & FITNESS CLUB'}
+                                        </h2>
+                                        <p className="text-xs font-bold text-slate-600">
+                                            {currentOutlet?.name || 'Personal Training Department'}
+                                        </p>
+                                        <p className="text-[10px] font-semibold text-slate-500 mt-1">
+                                            Official Member Session Attendance Voucher
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-right shrink-0">
                                     <div className="inline-block bg-slate-900 text-white text-[10px] font-black uppercase px-3 py-1 rounded-md tracking-widest">
                                         SESSION SLIP
                                     </div>
@@ -1573,18 +1594,38 @@ export default function PTMembers() {
                         <div id="printable-package-card" className="p-6 bg-white border-2 border-slate-900 rounded-2xl space-y-6">
                             {/* Gym & Document Header */}
                             <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
-                                <div>
-                                    <h2 className="text-2xl font-black text-slate-900 uppercase tracking-wider">
-                                        {currentProperty?.name || 'HEALTH & FITNESS CLUB'}
-                                    </h2>
-                                    <p className="text-xs font-bold text-slate-700">
-                                        {currentOutlet?.name || 'Personal Training Department'}
-                                    </p>
-                                    <p className="text-[11px] font-bold text-indigo-900 mt-1 uppercase">
-                                        Official PT Member Session Attendance & Voucher Sheet
-                                    </p>
+                                <div className="flex items-center gap-4">
+                                    {logoUrl ? (
+                                        <img 
+                                            src={logoUrl} 
+                                            alt="Property Logo" 
+                                            referrerPolicy="no-referrer"
+                                            className="h-16 w-auto max-w-[140px] max-h-16 object-contain rounded-lg shrink-0"
+                                            onError={(e) => {
+                                                const target = e.target as HTMLImageElement;
+                                                if (!target.src.includes('corsproxy') && logoUrl.startsWith('http')) {
+                                                    target.src = `https://corsproxy.io/?${encodeURIComponent(logoUrl)}`;
+                                                }
+                                            }}
+                                        />
+                                    ) : (
+                                        <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                                            <Dumbbell className="w-7 h-7" />
+                                        </div>
+                                    )}
+                                    <div>
+                                        <h2 className="text-2xl font-black text-slate-900 uppercase tracking-wider">
+                                            {currentProperty?.name || 'HEALTH & FITNESS CLUB'}
+                                        </h2>
+                                        <p className="text-xs font-bold text-slate-700">
+                                            {currentOutlet?.name || 'Personal Training Department'}
+                                        </p>
+                                        <p className="text-[11px] font-bold text-indigo-900 mt-1 uppercase">
+                                            Official PT Member Session Attendance & Voucher Sheet
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-right shrink-0">
                                     <div className="inline-block bg-indigo-950 text-white text-[11px] font-black uppercase px-4 py-1.5 rounded-md tracking-widest">
                                         {activeTargetPkg.total_sessions}-SESSION PACKAGE CARD
                                     </div>
