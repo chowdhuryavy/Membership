@@ -291,17 +291,20 @@ const POSForm = ({
                 discount_id_url: saleData.discount_id_url
             };
 
+            let savedSaleData: any = payload;
             if (initialSale) {
                 await (db as any).updateSale(initialSale.id, payload);
+                savedSaleData = { ...payload, id: initialSale.id };
             } else {
-                await db.addSale(payload as any);
+                const createdSale = await db.addSale(payload as any);
+                if (createdSale) savedSaleData = createdSale;
             }
             
             // Invalidate cache after successful operation
             cache.invalidate('sales');
             cache.invalidate('inventory');
             
-            onSuccess(payload);
+            onSuccess(savedSaleData);
         } catch (err: any) {
             setError(err.message || "Checkout failed.");
         } finally {

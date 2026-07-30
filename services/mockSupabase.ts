@@ -2198,26 +2198,68 @@ class DatabaseService {
     }
 
     // Filter out PT Members associated with voided or deleted sales
-    const saleIdsToCheck = Array.from(new Set(allMembers.map(m => m.sale_id).filter(Boolean))) as string[];
-    if (saleIdsToCheck.length > 0) {
-      if (this.isSupabase()) {
-        const activeSalesData = await this.safeCall<{ id: string; status?: string }[] | null>(async () => {
-          const { data, error } = await supabase.from('sales').select('id, status').in('id', saleIdsToCheck);
-          if (error) throw error;
-          return data;
-        }, null);
-        
-        if (activeSalesData !== null) {
-          const activeSaleSet = new Set(activeSalesData.filter(s => s.status !== 'void').map(s => s.id));
-          allMembers = allMembers.filter(m => !m.sale_id || activeSaleSet.has(m.sale_id));
+    let activeSalesList: any[] = [];
+    if (this.isSupabase()) {
+      const dbSales = await this.safeCall<any[] | null>(async () => {
+        const { data, error } = await supabase.from('sales').select('id, guest_name, category, item_name, status');
+        if (error) throw error;
+        return data || [];
+      }, null);
+      if (dbSales) activeSalesList = dbSales;
+    }
+    
+    if (activeSalesList.length === 0) {
+      try {
+        activeSalesList = JSON.parse(localStorage.getItem('sales') || '[]') as any[];
+      } catch (e) {}
+    }
+
+    const activeSaleIdSet = new Set(activeSalesList.filter(s => s.status !== 'void').map(s => s.id));
+    const activePtGuestSet = new Set(
+      activeSalesList
+        .filter(s => s.status !== 'void' && s.guest_name)
+        .map(s => s.guest_name.trim().toLowerCase())
+    );
+
+    const orphanMemberIds: string[] = [];
+
+    allMembers = allMembers.filter(m => {
+      // 1. If sale_id is explicitly set
+      if (m.sale_id) {
+        const isSaleActive = activeSaleIdSet.has(m.sale_id);
+        if (!isSaleActive) {
+          orphanMemberIds.push(m.id);
+          return false;
         }
-      } else {
-        try {
-          const localSales = JSON.parse(localStorage.getItem('sales') || '[]') as any[];
-          const activeSaleSet = new Set(localSales.filter(s => s.status !== 'void').map(s => s.id));
-          allMembers = allMembers.filter(m => !m.sale_id || activeSaleSet.has(m.sale_id));
-        } catch (e) {}
+        return true;
       }
+      
+      // 2. If no sale_id but notes indicate it came from a purchased item / sale
+      if (m.notes && m.notes.toLowerCase().includes('purchased item') && m.guest_name) {
+        const guestNameLower = m.guest_name.trim().toLowerCase();
+        const hasActiveSaleForGuest = activePtGuestSet.has(guestNameLower);
+        if (!hasActiveSaleForGuest) {
+          orphanMemberIds.push(m.id);
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // Clean up orphan PT members from Supabase & localStorage so they don't ghost back
+    if (orphanMemberIds.length > 0) {
+      if (this.isSupabase()) {
+        this.safeCall(async () => {
+          await supabase.from('pt_sessions').delete().in('pt_member_id', orphanMemberIds);
+          await supabase.from('pt_members').delete().in('id', orphanMemberIds);
+        }, null);
+      }
+      try {
+        const orphanSet = new Set(orphanMemberIds);
+        const localMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]);
+        const updatedLocal = localMembers.filter(m => !orphanSet.has(m.id));
+        localStorage.setItem('pt_members', JSON.stringify(updatedLocal));
+      } catch (e) {}
     }
 
     return allMembers.sort((a,b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
@@ -2541,10 +2583,23 @@ class DatabaseService {
     return [];
   }
 
-  async addSale(sale: Omit<Sale, 'id' | 'created_at'>) {
+  async addSale(sale: Omit<Sale, 'id' | 'created_at'>): Promise<Sale> {
+    const saleId = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    const newSaleObj: Sale = {
+      ...sale,
+      id: saleId,
+      created_at: createdAt
+    };
+
+    try {
+      const localSales = JSON.parse(localStorage.getItem('sales') || '[]') as any[];
+      localStorage.setItem('sales', JSON.stringify([newSaleObj, ...localSales]));
+    } catch (e) {}
+
     if (this.isSupabase()) {
       await this.safeCall(async () => {
-        const { data: newSale, error } = await supabase.from('sales').insert([{ ...sale, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select().single();
+        const { error } = await supabase.from('sales').insert([newSaleObj]);
         if (error) throw error;
         await this.logAction('POS_SALE', `Processed sale: ${sale.quantity}x ${sale.item_name} for ${sale.guest_name || 'Walk-in'} (Total: ${sale.net_amount})`, sale.outlet_id);
         
@@ -2564,7 +2619,7 @@ class DatabaseService {
               previous_stock: item.stock_quantity,
               new_stock: newStock,
               reason: 'Sale',
-              notes: `Sale ID: ${newSale.id}`,
+              notes: `Sale ID: ${saleId}`,
             });
           }
         }
@@ -2579,6 +2634,8 @@ class DatabaseService {
         });
       }, null);
     }
+
+    return newSaleObj;
   }
 
   async updateSale(id: string, updates: Partial<Sale>) {
@@ -2592,9 +2649,19 @@ class DatabaseService {
   }
 
   async deleteSale(id: string) {
+    let saleData: any = null;
+
+    try {
+      const localSales = JSON.parse(localStorage.getItem('sales') || '[]') as any[];
+      saleData = localSales.find((s: any) => s.id === id) || null;
+    } catch (e) {}
+
     if (this.isSupabase()) {
       await this.safeCall(async () => {
-        const { data: saleData } = await supabase.from('sales').select('*').eq('id', id).single();
+        if (!saleData) {
+          const { data } = await supabase.from('sales').select('*').eq('id', id).single();
+          if (data) saleData = data;
+        }
         
         if (saleData) {
           // Restore Inventory if needed
@@ -2623,11 +2690,17 @@ class DatabaseService {
         try {
           const { data: allPtMembers } = await supabase.from('pt_members').select('*');
           if (allPtMembers && allPtMembers.length > 0) {
-            const matchingMembers = allPtMembers.filter((m: any) => 
-              m.sale_id === id || 
-              m.id === id || 
-              (saleData && m.guest_name === saleData.guest_name && (m.notes?.includes(saleData.item_name) || m.notes?.includes(id)))
-            );
+            const matchingMembers = allPtMembers.filter((m: any) => {
+              if (m.sale_id === id || m.id === id || (m.notes && m.notes.includes(id))) return true;
+              if (saleData && m.guest_name && saleData.guest_name) {
+                const sameGuest = m.guest_name.trim().toLowerCase() === saleData.guest_name.trim().toLowerCase();
+                const isPtItem = saleData.category === 'Personal Training' || 
+                                (saleData.item_name && m.notes?.toLowerCase().includes(saleData.item_name.toLowerCase())) ||
+                                (m.notes && m.notes.toLowerCase().includes('purchased item'));
+                if (sameGuest && isPtItem) return true;
+              }
+              return false;
+            });
             
             if (matchingMembers.length > 0) {
               const ptMemberIds = matchingMembers.map((m: any) => m.id);
@@ -2667,11 +2740,21 @@ class DatabaseService {
     // Clean up local storage for sales, pt_members, and pt_sessions
     try {
       const localSales = JSON.parse(localStorage.getItem('sales') || '[]') as any[];
-      const updatedSales = localSales.filter(s => s.id !== id);
+      const updatedSales = localSales.filter((s: any) => s.id !== id);
       localStorage.setItem('sales', JSON.stringify(updatedSales));
 
       const localMembers = JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[];
-      const ptMembersToDelete = localMembers.filter(m => m.sale_id === id || m.id === id);
+      const ptMembersToDelete = localMembers.filter(m => {
+        if (m.sale_id === id || m.id === id || (m.notes && m.notes.includes(id))) return true;
+        if (saleData && m.guest_name && saleData.guest_name) {
+          const sameGuest = m.guest_name.trim().toLowerCase() === saleData.guest_name.trim().toLowerCase();
+          const isPtItem = saleData.category === 'Personal Training' || 
+                          (saleData.item_name && m.notes?.toLowerCase().includes(saleData.item_name.toLowerCase())) ||
+                          (m.notes && m.notes.toLowerCase().includes('purchased item'));
+          if (sameGuest && isPtItem) return true;
+        }
+        return false;
+      });
       const ptMemberIds = new Set(ptMembersToDelete.map(m => m.id));
       if (ptMemberIds.size > 0) {
         const updatedMembers = localMembers.filter(m => !ptMemberIds.has(m.id));
