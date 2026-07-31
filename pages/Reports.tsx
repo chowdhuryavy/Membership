@@ -445,7 +445,7 @@ const Reports = () => {
       );
   }
 
-  const RenderRevenueTable = () => {
+  const renderRevenueTable = () => {
       const displayRows = revenueRows;
       const colSpan = (visibleColumns.sl_no ? 1 : 0) +
                       (visibleColumns.guest_name ? 1 : 0) +
@@ -657,7 +657,7 @@ const Reports = () => {
       );
   };
 
-  const RenderStandardTable = () => {
+  const renderStandardTable = () => {
     const isIncentiveReport = reportType === 'incentives';
     const isDailySales = reportType === 'daily_sales';
     const isMembersJoined = reportType === 'members_joined';
@@ -683,41 +683,34 @@ const Reports = () => {
                         (isIncentiveReport ? (activeStaffList?.length || 0) : 0);
 
     // Calculation variables
-    const totals = useMemo(() => {
-        let totalActual = 0;
-        let totalDiscount = 0;
-        let totalNetRev = 0;
-        let totalIncNet = 0;
-        const staffTotals: Record<string, number> = {};
+    let totalActual = 0;
+    let totalDiscount = 0;
+    let totalNetRev = 0;
+    let totalIncNet = 0;
+    const staffTotals: Record<string, number> = {};
 
-        rows.forEach(row => {
-            totalActual += Number(row.actual_price || 0);
-            totalDiscount += Number(row.discount_amount || 0);
-            totalNetRev += Number(row.net_revenue || 0);
-            totalIncNet += Number(row.inc_net || 0);
-            
-            if (row.staff_splits) {
-                Object.entries(row.staff_splits).forEach(([staffId, amount]) => {
-                    staffTotals[staffId] = (staffTotals[staffId] || 0) + (Number(amount) || 0);
-                });
-            }
-        });
-
-        console.log('DEBUG: UI Totals:', { totalActual, totalDiscount, totalNetRev, totalIncNet });
-        console.log('DEBUG: UI Rows count:', rows.length);
-
-        return { totalActual, totalDiscount, totalNetRev, totalIncNet, staffTotals };
-    }, [rows]);
-
-    const specialistLabel = useMemo(() => {
-        if (reportType === 'incentives') {
-            if (incentiveDept === 'Massage') return 'Therapist';
-            if (incentiveDept === 'Personal Training') return 'Personal Trainer';
-            if (incentiveDept === 'Membership') return 'Performance';
-            if (incentiveDept === 'Referral') return 'Referral Name';
+    rows.forEach(row => {
+        totalActual += Number(row.actual_price || 0);
+        totalDiscount += Number(row.discount_amount || 0);
+        totalNetRev += Number(row.net_revenue || 0);
+        totalIncNet += Number(row.inc_net || 0);
+        
+        if (row.staff_splits) {
+            Object.entries(row.staff_splits).forEach(([staffId, amount]) => {
+                staffTotals[staffId] = (staffTotals[staffId] || 0) + (Number(amount) || 0);
+            });
         }
-        return 'Staff';
-    }, [reportType, incentiveDept]);
+    });
+
+    const totals = { totalActual, totalDiscount, totalNetRev, totalIncNet, staffTotals };
+
+    let specialistLabel = 'Staff';
+    if (reportType === 'incentives') {
+        if (incentiveDept === 'Massage') specialistLabel = 'Therapist';
+        else if (incentiveDept === 'Personal Training') specialistLabel = 'Personal Trainer';
+        else if (incentiveDept === 'Membership') specialistLabel = 'Performance';
+        else if (incentiveDept === 'Referral') specialistLabel = 'Referral Name';
+    }
 
     return (
         <div className="w-full">
@@ -1321,7 +1314,7 @@ const Reports = () => {
                       </div>
                       
                       <div className="flex-1">
-                          {reportType === 'revenue_recognition' ? <RenderRevenueTable /> : 
+                          {reportType === 'revenue_recognition' ? renderRevenueTable() : 
                            reportType === 'active_members' ? <ActiveMembersReport isEmbedded={true} selectedMembershipTypeId={selectedMembershipTypeId} /> : 
                            reportType === 'expiring_memberships' ? <ExpiringMembershipsReport isEmbedded={true} embeddedMonth={reportMonth} selectedMembershipTypeId={selectedMembershipTypeId} /> : 
                            reportType === 'massage_room_revenue' ? <MassageRoomRevenueReport isEmbedded={true} embeddedMonth={reportMonth} /> :
@@ -1332,7 +1325,7 @@ const Reports = () => {
                                onBack={() => setReportType('revenue_recognition')}
                              />
                            ) :
-                           <RenderStandardTable />}
+                           renderStandardTable()}
                       </div>
 
                       {signatoryConfig && (

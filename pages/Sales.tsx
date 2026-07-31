@@ -419,7 +419,10 @@ const POSForm = ({
                                 <button type="button" onClick={() => setSaleData({...saleData, discount_mode: 'percent'})} className={`flex-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center justify-center gap-1 ${saleData.discount_mode === 'percent' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-400'}`}><Percent className="w-2.5 h-2.5" /> %</button>
                             </div>
                         </div>
-                        <Input label={saleData.discount_mode === 'amount' ? 'Value' : 'Rate (%)'} type="number" step="0.01" value={saleData.discount} onChange={e => setSaleData({...saleData, discount: parseFloat(e.target.value) || 0})} className="h-11 rounded-xl text-xs font-bold" />
+                        <Input label={saleData.discount_mode === 'amount' ? 'Value' : 'Rate (%)'} type="number" step="0.01" value={saleData.discount} onChange={e => {
+                            const val = e.target.value;
+                            setSaleData({...saleData, discount: val === '-' ? ('-' as any) : (parseFloat(val) || 0)});
+                        }} className="h-11 rounded-xl text-xs font-bold" />
                         <div className="bg-slate-950 text-white px-4 py-2 rounded-xl flex items-center justify-between h-11 shadow-lg shadow-slate-200">
                             <span className="text-[7px] font-black opacity-60 uppercase tracking-widest">Net Total</span>
                             <span className="text-xs font-black text-indigo-400 tracking-tighter">{formatMoney(netAmount)}</span>

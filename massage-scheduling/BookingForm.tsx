@@ -494,7 +494,10 @@ const BookingForm: React.FC<BookingFormProps> = ({
                             label={bookingData.discount_mode === 'amount' ? "Discount Amount" : "Discount (%)"} 
                             type="number" 
                             value={bookingData.discount} 
-                            onChange={e => setBookingData({...bookingData, discount: Number(e.target.value) || 0})}
+                            onChange={e => {
+                                const val = e.target.value;
+                                setBookingData({...bookingData, discount: val === '-' ? ('-' as any) : (Number(val) || 0)});
+                            }}
                             className="h-11 rounded-xl text-xs font-bold" 
                             placeholder={bookingData.discount_mode === 'amount' ? "e.g. 50" : "e.g. 10"}
                         />
