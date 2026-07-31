@@ -21,9 +21,9 @@ const memberSchema = z.object({
   membership_number: z.string().min(1, "ID required"),
   guest_name: z.string().min(2, "Name required"),
   membership_type_id: z.string().optional().nullable(),
-  category_id: z.string().min(1, "Tier required"),
+  category_id: z.string().optional().nullable(),
   start_date: z.string().min(1, "Start date required"),
-  discount: z.coerce.number().min(0),
+  discount: z.coerce.number(),
   check_no: z.string().optional().nullable(),
   email: z.string().email().or(z.literal("")).optional().nullable(),
   phone: z.string().optional().nullable(),
@@ -65,7 +65,7 @@ interface MemberEnrollmentFormProps {
 const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   existingMember, isEditing, isRenewal, categories, membershipTypes, selectedTypeId, onTypeChange, staff, allMembers, onCancel, onSuccess
 }) => {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { currentOutlet, formatMoney, setPageLoading, currency } = useSettings();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -171,7 +171,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('dob', '');
     setValue('membership_type_id', selectedTypeId !== 'all' ? selectedTypeId : '');
     setValue('category_id', '');
-    setValue('start_date', format(new Date(), 'yyyy-MM-dd'));
+    console.log("clearFormExceptID called"); setValue('start_date', format(new Date(), 'yyyy-MM-dd'));
     setValue('package_type', 'Single');
     setValue('access_type', 'Both');
     setValue('spouse_name', '');
@@ -203,7 +203,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     setValue('check_no', '');
     
     const newStart = calculateDefaultStartDate(found.current_end_date);
-    setValue('start_date', newStart);
+    console.log("setMemberDefaults called"); setValue('start_date', newStart);
   };
 
   // Handle Identity Matching & Auto-Start Date Calculation
@@ -217,12 +217,10 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
               setMemberDefaults(sorted[0]);
           } else {
               setMatchedMembers([]);
-              clearFormExceptID();
           }
         });
       } else if (!membershipNo || membershipNo.length === 0) {
           setMatchedMembers([]);
-          clearFormExceptID();
       }
     }
   }, [membershipNo, isEditing, isRenewal, setValue, clearFormExceptID, currentOutlet]);
@@ -248,15 +246,22 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   }, [isRenewal, existingMember, matchedMembers.length]);
 
   const baseRate = selectedCategory?.base_rate || 0;
-  const netAmount = Math.max(0, baseRate - (Number(discount) || 0));
+  const netAmount = isSuperAdmin ? (baseRate - (Number(discount) || 0)) : Math.max(0, baseRate - (Number(discount) || 0));
   
   const recognition = useMemo(() => {
-    if (!startDateStr || !selectedCategory) return { expiry: null, daily: 0 };
+    if (!startDateStr) return { expiry: null, daily: 0 };
+    if (!selectedCategory) {
+        if (isSuperAdmin) {
+            const start = parseISO(startDateStr);
+            return { expiry: format(start, 'yyyy-MM-dd'), daily: netAmount };
+        }
+        return { expiry: null, daily: 0 };
+    }
     const start = parseISO(startDateStr);
     const end = RevenueEngine.calculateOriginalEndDate(start, selectedCategory.duration_months);
     const daily = RevenueEngine.calculateDailyRate(netAmount, start, end);
     return { expiry: format(end, 'yyyy-MM-dd'), daily };
-  }, [startDateStr, selectedCategory, netAmount]);
+  }, [startDateStr, selectedCategory, netAmount, isSuperAdmin]);
 
   const currentReferrerName = watch('referrer_name');
 
@@ -272,6 +277,15 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         const newData = { ...pendingSubmitData, calculate_referral_incentive: calculateIncentive };
         setPendingSubmitData(null);
         await processSubmit(newData);
+    }
+  };
+
+  const onFormError = (errors: any) => {
+    const firstErrorKey = Object.keys(errors)[0];
+    if (firstErrorKey) {
+        setSubmitError(`Validation Error: ${errors[firstErrorKey].message} (${firstErrorKey})`);
+    } else {
+        setSubmitError("Please fill all required fields correctly.");
     }
   };
 
@@ -340,6 +354,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     if (sanitizedData.dob === '') sanitizedData.dob = null;
     if (sanitizedData.spouse_dob === '') sanitizedData.spouse_dob = null;
     if (sanitizedData.membership_type_id === '') sanitizedData.membership_type_id = null;
+    if (sanitizedData.category_id === '') sanitizedData.category_id = null;
 
     const isUpdate = !!(isEditing && !isRenewal && existingMember);
     
@@ -484,7 +499,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
       {getMatchBanner()}
 
-      <form onSubmit={handleSubmit(onFormSubmit as any)} className="p-8 space-y-10">
+      <form onSubmit={handleSubmit(onFormSubmit as any, onFormError)} className="p-8 space-y-10">
         
         <section className="space-y-4">
             <div className="flex items-center gap-3 px-2">

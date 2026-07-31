@@ -2439,7 +2439,7 @@ class DatabaseService {
 
   async addPTSession(session: Omit<PTSession, 'id' | 'created_at'>) {
     const newId = crypto.randomUUID();
-    const createdAt = new Date().toISOString();
+    const createdAt = sale.created_at || new Date().toISOString();
     const newSessionItem: PTSession = { ...session, id: newId, created_at: createdAt };
 
     if (this.isSupabase()) {
@@ -2600,9 +2600,9 @@ class DatabaseService {
     return [];
   }
 
-  async addSale(sale: Omit<Sale, 'id' | 'created_at'>): Promise<Sale> {
+  async addSale(sale: Omit<Sale, 'id'> & { created_at?: string }): Promise<Sale> {
     const saleId = crypto.randomUUID();
-    const createdAt = new Date().toISOString();
+    const createdAt = sale.created_at || new Date().toISOString();
     const newSaleObj: Sale = {
       ...sale,
       id: saleId,

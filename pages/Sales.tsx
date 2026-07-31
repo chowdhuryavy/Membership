@@ -140,7 +140,7 @@ const POSForm = ({
     initialSale?: Sale
 }) => {
     const { formatMoney, setPageLoading } = useSettings();
-    const { user: currentUser } = useAuth();
+    const { user: currentUser, isSuperAdmin } = useAuth();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     
@@ -159,7 +159,8 @@ const POSForm = ({
         sold_by_id: initialSale?.sold_by_id || '',
         secondary_sold_by_id: initialSale?.secondary_sold_by_id || '',
         discount_reason: initialSale?.discount_reason || '',
-        discount_id_url: initialSale?.discount_id_url || ''
+        discount_id_url: initialSale?.discount_id_url || '',
+        transaction_date: initialSale?.created_at ? format(new Date(initialSale.created_at), 'yyyy-MM-dd') : ''
     });
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -243,7 +244,7 @@ const POSForm = ({
     const discountValue = saleData.discount_mode === 'percent' 
         ? (grossAmount * saleData.discount) / 100 
         : saleData.discount;
-    const netAmount = Math.max(0, grossAmount - discountValue);
+    const netAmount = isSuperAdmin ? (grossAmount - discountValue) : Math.max(0, grossAmount - discountValue);
 
     const handleItemSelect = (item: InventoryItem) => {
         setSaleData(prev => ({
@@ -258,7 +259,7 @@ const POSForm = ({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!saleData.item_name || saleData.unit_price < 0) {
+        if (!saleData.item_name || (saleData.unit_price < 0 && !isSuperAdmin)) {
             setError("Specify valid item and price.");
             return;
         }
@@ -269,7 +270,7 @@ const POSForm = ({
         setLoading(true);
         setPageLoading(true);
         try {
-            const payload = {
+            const payload: any = {
                 property_id: currentPropertyId,
                 outlet_id: currentOutletId,
                 guest_id: saleData.guest_id || undefined,
@@ -290,6 +291,11 @@ const POSForm = ({
                 discount_reason: saleData.discount_reason,
                 discount_id_url: saleData.discount_id_url
             };
+
+            if (isSuperAdmin && saleData.transaction_date) {
+                // Ensure we create a valid ISO string from the date string
+                payload.created_at = new Date(`${saleData.transaction_date}T12:00:00Z`).toISOString();
+            }
 
             let savedSaleData: any = payload;
             if (initialSale) {
@@ -511,7 +517,15 @@ const POSForm = ({
                         </div>
                     )}
                     
-                    <Input label="Internal Audit Remarks" value={saleData.remarks} onChange={e => setSaleData({...saleData, remarks: e.target.value})} placeholder="Notes..." className="h-11 rounded-xl text-xs" />
+                    {isSuperAdmin && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <Input label="Historical Transaction Date (Optional)" type="date" value={saleData.transaction_date} onChange={e => setSaleData({...saleData, transaction_date: e.target.value})} className="h-11 rounded-xl text-xs" />
+                            <Input label="Internal Audit Remarks" value={saleData.remarks} onChange={e => setSaleData({...saleData, remarks: e.target.value})} placeholder="Notes..." className="h-11 rounded-xl text-xs" />
+                        </div>
+                    )}
+                    {!isSuperAdmin && (
+                        <Input label="Internal Audit Remarks" value={saleData.remarks} onChange={e => setSaleData({...saleData, remarks: e.target.value})} placeholder="Notes..." className="h-11 rounded-xl text-xs" />
+                    )}
 
                     {error && <div className="bg-red-50 text-red-600 text-[10px] font-bold p-4 rounded-xl flex items-center gap-3 animate-in shake duration-300"><AlertTriangle className="w-4 h-4 shrink-0" /><span>{error}</span></div>}
 
