@@ -1,10 +1,23 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { db } from '../services/mockSupabase';
 import type { Notification } from '../types';
-import { useAuth } from './AuthContext';
+import { useAuth, isSuperAdminRole } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { toast } from 'react-hot-toast';
 import { PushNotificationService } from '../services/pushNotificationService';
+
+const checkIsAdmin = (user: any, staffUser: any, isSuperAdminFromAuth?: boolean): boolean => {
+  if (isSuperAdminFromAuth) return true;
+  if (user) {
+    if (user.is_admin || user.is_super_admin) return true;
+    if (isSuperAdminRole(user.role_id || user.role)) return true;
+  }
+  if (staffUser) {
+    if (staffUser.is_admin || staffUser.is_super_admin) return true;
+    if (isSuperAdminRole(staffUser.role || staffUser.role_id)) return true;
+  }
+  return false;
+};
 
 // Unique, more complex notification sound
 const playNotificationSound = async () => {
@@ -127,16 +140,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     try {
       if (!isAutoRefresh) setIsLoading(true);
-      const isAdmin = isSuperAdmin;
+      const isAdmin = checkIsAdmin(user, staffUser, isSuperAdmin);
       console.log('Fetching notifications for user:', effectiveUserId, 'outlet:', outletId, 'isAdmin:', isAdmin);
       const data = await db.getNotifications(effectiveUserId, outletId, isAdmin);
       
       // Filter by permission
       const filteredData = data.filter(n => {
         if (!n.required_permission) return true;
-        // If it's a staff user from local storage, we might not have their role_id easily here
-        // but usually notifications are for the main logged in user
-        return hasPermission(user?.role_id || '', n.required_permission, user?.id);
+        return hasPermission(user?.role_id || staffUser?.role || '', n.required_permission, user?.id || staffUser?.id);
       });
 
       console.log('Fetched notifications count:', filteredData.length);
@@ -148,7 +159,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } finally {
       setIsLoading(false);
     }
-  }, [user, outletId]);
+  }, [user, outletId, isSuperAdmin, hasPermission]);
 
   const enablePush = async () => {
     const staffSessionStr = localStorage.getItem('staff_session');
@@ -196,6 +207,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const staffSessionStr = localStorage.getItem('staff_session');
     const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
     const effectiveUserId = user?.id || staffUser?.id;
+    const isAdmin = checkIsAdmin(user, staffUser, isSuperAdmin);
 
     const handleLocalNotification = async (e: Event) => {
       const customEvt = e as CustomEvent;
@@ -203,10 +215,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const n = customEvt.detail as Notification;
       if (seenIds.current.has(n.id)) return;
 
-      const isAdmin = user ? isSuperAdmin : false;
-      if (!isAdmin) {
-        if (n.user_id !== effectiveUserId) return;
-      }
+      if (!isAdmin && n.user_id !== effectiveUserId) return;
 
       seenIds.current.add(n.id);
 
@@ -232,7 +241,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     window.addEventListener('notification_added', handleLocalNotification);
 
     if (effectiveUserId) {
-      const isAdmin = isSuperAdmin;
       console.log('Subscribing to notifications for user:', effectiveUserId, 'outlet:', outletId, 'isAdmin:', isAdmin);
       unsubscribe = db.subscribeToNotifications(effectiveUserId, outletId, isAdmin, async (payload) => {
         console.log('Received real-time notification payload:', payload.eventType, payload.new?.id);
@@ -253,12 +261,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           if (n.dismissed_by?.includes(effectiveUserId)) return;
           
           // Check permission
-          if (n.required_permission && !hasPermission(user?.role_id || '', n.required_permission, user?.id)) {
+          if (n.required_permission && !hasPermission(user?.role_id || staffUser?.role || '', n.required_permission, user?.id || staffUser?.id)) {
             return;
           }
           
           // Only show toast and play sound if this is the active/focused tab
-          // to prevent duplicates when multiple tabs are open
           const isActiveTab = document.visibilityState === 'visible' && document.hasFocus();
           
           if (isActiveTab) {
@@ -304,7 +311,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           }
           
           // Check permission - if permission changed and user no longer has it, remove it
-          if (n.required_permission && !hasPermission(user?.role_id || '', n.required_permission, user?.id)) {
+          if (n.required_permission && !hasPermission(user?.role_id || staffUser?.role || '', n.required_permission, user?.id || staffUser?.id)) {
             setNotifications(prev => prev.filter(item => item.id !== n.id));
             return;
           }

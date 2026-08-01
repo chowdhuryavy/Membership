@@ -11,7 +11,8 @@ export const isSuperAdminRole = (roleId: string | undefined | null) => {
            id === 'admin' || 
            id === 'system_admin' || 
            id === 'system_administrator' || 
-           id === 'administrator';
+           id === 'administrator' ||
+           id === 'manager';
 };
 
 export const isSuperAdmin = (user: UserProfile | null) => {
