@@ -35,8 +35,29 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const getStoredSessionStr = () => {
+      return localStorage.getItem('membership_session') || sessionStorage.getItem('membership_session');
+  };
+
+  const saveSession = (userData: UserProfile) => {
+      const str = JSON.stringify(userData);
+      localStorage.setItem('membership_session', str);
+      sessionStorage.setItem('membership_session', str);
+      if (isSuperAdminRole(userData.role_id)) {
+          localStorage.setItem('admin_session_active', 'true');
+          sessionStorage.setItem('admin_session_active', 'true');
+      }
+  };
+
+  const clearSession = () => {
+      localStorage.removeItem('membership_session');
+      sessionStorage.removeItem('membership_session');
+      localStorage.removeItem('admin_session_active');
+      sessionStorage.removeItem('admin_session_active');
+  };
+
   const [user, setUser] = useState<UserProfile | null>(() => {
-      const stored = sessionStorage.getItem('membership_session');
+      const stored = getStoredSessionStr();
       if (stored) {
           try {
               return JSON.parse(stored);
@@ -56,13 +77,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setUser(null);
-    sessionStorage.removeItem('membership_session');
-    sessionStorage.removeItem('admin_session_active');
+    clearSession();
     localStorage.removeItem('membership_last_outlet');
   };
 
   const refreshUser = async () => {
-      const storedUser = sessionStorage.getItem('membership_session');
+      const storedUser = getStoredSessionStr();
       if (storedUser) {
           const parsed = JSON.parse(storedUser);
           
@@ -77,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   const overrides = await db.getPermissionOverrides(freshUser.id);
                   const hydrated = { ...freshUser, overrides };
                   setUser(hydrated);
-                  sessionStorage.setItem('membership_session', JSON.stringify(hydrated));
+                  saveSession(hydrated);
               }
           } catch (e) {
               console.warn("User state sync failed, using cached session.");
@@ -87,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const init = async () => {
-        const stored = sessionStorage.getItem('membership_session');
+        const stored = getStoredSessionStr();
         if (stored) {
             await refreshUser();
         }
@@ -101,10 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { user: foundUser, error, requiresPasswordChange } = await db.login(email, password);
     if (foundUser) {
       setUser(foundUser);
-      sessionStorage.setItem('membership_session', JSON.stringify(foundUser));
-      if (isSuperAdminRole(foundUser.role_id)) {
-          sessionStorage.setItem('admin_session_active', 'true');
-      }
+      saveSession(foundUser);
       return { error: null, requiresPasswordChange };
     }
     return { error: error || 'Authentication failed.', requiresPasswordChange: false };
@@ -135,11 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await db.updateUser(user.id, updates);
       const updatedUser = { ...user, ...updates };
       setUser(updatedUser);
-      sessionStorage.setItem('membership_session', JSON.stringify(updatedUser));
-      
-      if (isSuperAdminRole(updatedUser.role_id)) {
-          sessionStorage.setItem('admin_session_active', 'true');
-      }
+      saveSession(updatedUser);
   };
 
   const authContextValue = useMemo(() => ({ 

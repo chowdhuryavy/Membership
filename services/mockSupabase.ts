@@ -373,7 +373,7 @@ class DatabaseService {
         affected_entity?: string;
     } = {}
   ) {
-    const sessionStr = sessionStorage.getItem('membership_session');
+    const sessionStr = localStorage.getItem('membership_session') || sessionStorage.getItem('membership_session');
     const session = sessionStr ? JSON.parse(sessionStr) : null;
     
     // Inferred Metadata (Mocked)
@@ -2439,7 +2439,7 @@ class DatabaseService {
 
   async addPTSession(session: Omit<PTSession, 'id' | 'created_at'>) {
     const newId = crypto.randomUUID();
-    const createdAt = sale.created_at || new Date().toISOString();
+    const createdAt = (session as any).created_at || new Date().toISOString();
     const newSessionItem: PTSession = { ...session, id: newId, created_at: createdAt };
 
     if (this.isSupabase()) {
@@ -3325,7 +3325,7 @@ class DatabaseService {
               }
           }
 
-          const sale: Omit<Sale, 'id' | 'created_at'> = {
+          const sale: Omit<Sale, 'id'> & { created_at?: string } = {
             property_id: booking.property_id,
             outlet_id: booking.outlet_id,
             guest_id: booking.guest_id,
@@ -3344,7 +3344,8 @@ class DatabaseService {
             booking_id: booking.id,
             discount_reason: booking.discount_reason,
             discount_id_url: booking.discount_id_url,
-            remarks: ''
+            remarks: '',
+            created_at: new Date().toISOString()
           };
 
           await this.addSale(sale);
@@ -3700,7 +3701,7 @@ class DatabaseService {
         }
       } else {
         if (userId) {
-          query = query.or(`user_id.eq.${userId},user_id.is.null`);
+          query = query.eq('user_id', userId);
         } else {
           return [];
         }
@@ -3836,7 +3837,7 @@ class DatabaseService {
            console.log('[Push] Notification persisted to Supabase.');
         }
         
-        // TRIGGER PUSH NOTIFICATION: Send targeted push to user_id if specified, or global broadcast if not
+        // TRIGGER PUSH NOTIFICATION: Send targeted push ONLY if user_id is specified
         if (notification.user_id) {
           console.log(`[Push] Initiating targeted push for assigned user: ${notification.user_id}`);
           this.triggerPushNotification(
@@ -3845,16 +3846,8 @@ class DatabaseService {
               notification.message
           ).catch(err => console.error(`[Push] Trigger failure for ${notification.user_id}:`, err));
         } else {
-          // Broadcast push notification to all subscribed PWA staff devices for general alerts
-          this.triggerGlobalPush({
-              id: crypto.randomUUID(),
-              title: notification.title,
-              message: notification.message,
-              type: notification.type || 'info',
-              created_at: new Date().toISOString(),
-              read: false,
-              outlet_id: notification.outlet_id
-          }).catch(err => console.warn('[Push] Global push fallback error:', err));
+          // Unassigned/Global notification: Do not broadcast push to general staff devices
+          console.log(`[Push] Unassigned/Global notification created: "${notification.title}". Skipping general staff push broadcast.`);
         }
       } catch (e) {
         console.error('[Push] Fatal error in addNotification sequence:', e);
@@ -4140,8 +4133,8 @@ class DatabaseService {
       bc = new BroadcastChannel('notifications_channel');
       bc.onmessage = (event) => {
         const notification = event.data as Notification;
-        // Match if targeted to user OR if global/outlet notification (user_id is null)
-        const userMatch = !notification.user_id || notification.user_id === userId;
+        // Match if targeted to user (admins also see global notifications with user_id is null)
+        const userMatch = isAdmin ? (!notification.user_id || notification.user_id === userId) : (notification.user_id === userId);
         const outletMatch = !outletId || !notification.outlet_id || notification.outlet_id === outletId;
         
         if (userMatch && outletMatch) {
@@ -4159,8 +4152,8 @@ class DatabaseService {
         
         const targetNotification = newNotification || oldNotification;
         if (targetNotification) {
-          // Match if targeted to user OR if global/outlet notification (user_id is null)
-          const userMatch = !targetNotification.user_id || targetNotification.user_id === userId;
+          // Match if targeted to user (admins also see global notifications with user_id is null)
+          const userMatch = isAdmin ? (!targetNotification.user_id || targetNotification.user_id === userId) : (targetNotification.user_id === userId);
           const outletMatch = !outletId || !targetNotification.outlet_id || targetNotification.outlet_id === outletId;
           
           if (userMatch && outletMatch) {

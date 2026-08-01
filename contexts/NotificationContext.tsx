@@ -205,7 +205,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       const isAdmin = user ? isSuperAdmin : false;
       if (!isAdmin) {
-        if (!n.user_id || n.user_id !== effectiveUserId) return;
+        if (n.user_id !== effectiveUserId) return;
       }
 
       seenIds.current.add(n.id);
@@ -239,6 +239,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         
         if (payload.eventType === 'INSERT') {
           const n = payload.new as Notification;
+
+          // Non-admin staff ONLY receive notifications specifically assigned to them
+          if (!isAdmin && n.user_id !== effectiveUserId) {
+            return;
+          }
+
           // Check if already seen in this session to prevent spam
           if (seenIds.current.has(n.id)) return;
           seenIds.current.add(n.id);
@@ -284,6 +290,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           });
         } else if (payload.eventType === 'UPDATE') {
           const n = payload.new as Notification;
+
+          // Non-admin staff ONLY receive notifications specifically assigned to them
+          if (!isAdmin && n.user_id !== effectiveUserId) {
+            setNotifications(prev => prev.filter(item => item.id !== n.id));
+            return;
+          }
+
           // If dismissed by current user, remove it
           if (n.dismissed_by?.includes(effectiveUserId)) {
             setNotifications(prev => prev.filter(item => item.id !== n.id));
