@@ -80,15 +80,15 @@ class DatabaseService {
     if (!e) return false;
     const msg = (e?.message || e?.error?.message || e?.details || e?.toString() || '').toLowerCase();
     if (
-      msg.includes('statement timeout') || 
-      msg.includes('canceling statement') || 
       msg.includes('jwt') ||
       msg.includes('syntax error') ||
       msg.includes('column')
     ) {
-      return false; // Statement timeout or SQL error is NOT a network connection loss!
+      return false; // SQL or auth syntax error is not network loss
     }
     return (
+      msg.includes('statement timeout') || 
+      msg.includes('canceling statement') || 
       msg.includes('failed to fetch') || 
       msg.includes('network error') || 
       msg.includes('database not found') ||
@@ -938,6 +938,31 @@ class DatabaseService {
 
   async getMembers(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[], selectColumns?: string): Promise<Member[]> {
     const targetCols = (!selectColumns || selectColumns === '*') ? DEFAULT_MEMBER_COLUMNS : selectColumns;
+    const fallbackFn = () => {
+      try {
+        const members = JSON.parse(localStorage.getItem('membership_members') || '[]') as Member[];
+        if (scopeId && scopeId !== 'all') {
+            if (isProperty) {
+                if (limitToOutletIds && limitToOutletIds.length > 0) {
+                    return members.filter(m => limitToOutletIds.includes(m.outlet_id));
+                } else {
+                    const outlets = JSON.parse(localStorage.getItem('membership_outlets') || '[]');
+                    const ids = outlets.filter((o: any) => o.property_id === scopeId || o.id === scopeId).map((o: any) => o.id);
+                    if (ids.length > 0) {
+                      return members.filter(m => ids.includes(m.outlet_id));
+                    }
+                    return members.filter(m => m.outlet_id === scopeId);
+                }
+            } else {
+                return members.filter(m => m.outlet_id === scopeId);
+            }
+        }
+        return members;
+      } catch {
+        return [];
+      }
+    };
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         let query = supabase.from('members').select(targetCols);
@@ -960,7 +985,7 @@ class DatabaseService {
                     if (ids.length > 0) {
                         query = query.in('outlet_id', ids);
                     } else {
-                        return [];
+                        return fallbackFn();
                     }
                 }
             } else {
@@ -994,28 +1019,9 @@ class DatabaseService {
         }, 15000); // 15 seconds instead of 3 to avoid hammering the DB on every dashboard load
 
         return membersList;
-      }, []);
+      }, fallbackFn);
     }
-    // Offline/Local mock fallback
-    try {
-      const members = JSON.parse(localStorage.getItem('membership_members') || '[]') as Member[];
-      if (scopeId) {
-          if (isProperty) {
-              if (limitToOutletIds && limitToOutletIds.length > 0) {
-                  return members.filter(m => limitToOutletIds.includes(m.outlet_id));
-              } else {
-                  const outlets = JSON.parse(localStorage.getItem('membership_outlets') || '[]');
-                  const ids = outlets.filter((o: any) => o.property_id === scopeId).map((o: any) => o.id);
-                  return members.filter(m => ids.includes(m.outlet_id));
-              }
-          } else {
-              return members.filter(m => m.outlet_id === scopeId);
-          }
-      }
-      return members;
-    } catch {
-      return [];
-    }
+    return fallbackFn();
   }
 
   async getMemberHistory(membershipNumber: string, outletId?: string): Promise<Member[]> {
