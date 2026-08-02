@@ -7,15 +7,14 @@ import { toast } from 'react-hot-toast';
 import { PushNotificationService } from '../services/pushNotificationService';
 
 const checkIsAdmin = (user: any, staffUser: any, isSuperAdminFromAuth?: boolean): boolean => {
-  if (isSuperAdminFromAuth) return true;
-  if (user) {
-    if (user.is_admin || user.is_super_admin) return true;
-    if (isSuperAdminRole(user.role_id || user.role)) return true;
+  // Any user logged into the Main Portal (has AuthContext user or membership_session) is a portal user
+  // (e.g. Admin, Manager, Receptionist, Accountant, Sales, etc.) who receives general/global notifications.
+  const hasMainPortalSession = !!user || !!localStorage.getItem('membership_session') || !!sessionStorage.getItem('membership_session');
+  if (hasMainPortalSession) {
+    return true;
   }
-  if (staffUser) {
-    if (staffUser.is_admin || staffUser.is_super_admin) return true;
-    if (isSuperAdminRole(staffUser.role || staffUser.role_id)) return true;
-  }
+  // Staff Portal users (therapists / service workers logged into /staff PWA without main portal access)
+  // ONLY receive notifications specifically assigned to them.
   return false;
 };
 
