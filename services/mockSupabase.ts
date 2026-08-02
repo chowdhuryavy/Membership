@@ -55,9 +55,13 @@ class DatabaseService {
 
     try {
       const result: any = await call();
-      if (result && typeof result === 'object' && result.error && this.isNetworkError(result.error)) {
-        console.warn("Supabase connection error detected, disabling Supabase for this session", result.error);
-        DatabaseService.supabaseFailed = true;
+      if (result && typeof result === 'object' && result.error) {
+        if (this.isNetworkError(result.error)) {
+          console.warn("Supabase connection error detected, disabling Supabase for this session", result.error);
+          DatabaseService.supabaseFailed = true;
+          return resolveFallback();
+        }
+        console.warn("Database Call Warning:", result.error?.message || result.error);
         return resolveFallback();
       }
       return result;
@@ -67,7 +71,7 @@ class DatabaseService {
         DatabaseService.supabaseFailed = true;
         return resolveFallback();
       }
-      console.error("Database Call Error:", e?.message || e);
+      console.warn("Database Call Warning:", e?.message || e);
       return resolveFallback();
     }
   }
@@ -1016,24 +1020,26 @@ class DatabaseService {
 
   async getMemberHistory(membershipNumber: string, outletId?: string): Promise<Member[]> {
     if (!membershipNumber) return [];
-    if (this.isSupabase()) {
-        let query = supabase.from('members').select(DEFAULT_MEMBER_COLUMNS).eq('membership_number', membershipNumber).order('start_date', { ascending: false });
-        if (outletId) {
-            query = query.eq('outlet_id', outletId);
-        }
-        const { data } = await query;
-        return (data || []) as Member[];
-    }
-    try {
-      const members = JSON.parse(localStorage.getItem('membership_members') || '[]') as Member[];
-      let filtered = members.filter(m => m.membership_number === membershipNumber);
+    return this.safeCall(async () => {
+      let query = supabase.from('members').select(DEFAULT_MEMBER_COLUMNS).eq('membership_number', membershipNumber).order('start_date', { ascending: false });
       if (outletId) {
-        filtered = filtered.filter(m => m.outlet_id === outletId);
+        query = query.eq('outlet_id', outletId);
       }
-      return filtered.sort((a, b) => new Date(b.start_date || 0).getTime() - new Date(a.start_date || 0).getTime());
-    } catch {
-      return [];
-    }
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as Member[];
+    }, () => {
+      try {
+        const members = JSON.parse(localStorage.getItem('membership_members') || '[]') as Member[];
+        let filtered = members.filter(m => m.membership_number === membershipNumber);
+        if (outletId) {
+          filtered = filtered.filter(m => m.outlet_id === outletId);
+        }
+        return filtered.sort((a, b) => new Date(b.start_date || 0).getTime() - new Date(a.start_date || 0).getTime());
+      } catch {
+        return [];
+      }
+    });
   }
 
   async addMember(member: Member) {
