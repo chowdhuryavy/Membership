@@ -1015,6 +1015,7 @@ class DatabaseService {
   }
 
   async getMemberHistory(membershipNumber: string, outletId?: string): Promise<Member[]> {
+    if (!membershipNumber) return [];
     if (this.isSupabase()) {
         let query = supabase.from('members').select(DEFAULT_MEMBER_COLUMNS).eq('membership_number', membershipNumber).order('start_date', { ascending: false });
         if (outletId) {
@@ -1023,7 +1024,16 @@ class DatabaseService {
         const { data } = await query;
         return (data || []) as Member[];
     }
-    return [];
+    try {
+      const members = JSON.parse(localStorage.getItem('membership_members') || '[]') as Member[];
+      let filtered = members.filter(m => m.membership_number === membershipNumber);
+      if (outletId) {
+        filtered = filtered.filter(m => m.outlet_id === outletId);
+      }
+      return filtered.sort((a, b) => new Date(b.start_date || 0).getTime() - new Date(a.start_date || 0).getTime());
+    } catch {
+      return [];
+    }
   }
 
   async addMember(member: Member) {

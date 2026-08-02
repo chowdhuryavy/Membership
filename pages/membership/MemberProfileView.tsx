@@ -245,7 +245,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       const [f, mt, history] = await Promise.all([
         db.getFreezes(targetMember.id),
         db.getMassageTypes(outletId),
-        db.getMemberHistory(targetMember.membership_number, outletId),
+        db.getMemberHistory(targetMember.membership_number),
       ]);
       
       const [b, pts, sales] = await Promise.all([
@@ -259,7 +259,13 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       setAllSales(sales);
       setMemberBookings(guestId ? b.filter(booking => booking.guest_id === guestId) : []);
       setMassageTypes(mt);
-      setLifecycleHistory(history);
+      
+      const combinedHistory = Array.isArray(history) ? [...history] : [];
+      if (targetMember && !combinedHistory.some(h => h.id === targetMember.id)) {
+        combinedHistory.push(targetMember);
+      }
+      combinedHistory.sort((a, b) => new Date(b.start_date || 0).getTime() - new Date(a.start_date || 0).getTime());
+      setLifecycleHistory(combinedHistory);
 
       const matchedPts = pts.filter(pt => 
         (targetMember.guest_name && pt.guest_name.toLowerCase() === targetMember.guest_name.toLowerCase()) ||
