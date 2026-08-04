@@ -102,7 +102,7 @@ const PerformanceLeaderboard = ({ staff, bookings }: { staff: Staff[], bookings:
 };
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
   const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [], setPageLoading } = useSettings();
   
