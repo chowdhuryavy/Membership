@@ -113,14 +113,14 @@ const Dashboard = () => {
 
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user || !outlets) return [];
-    if (user.role_id?.toLowerCase() === 'admin') {
+    if (isSuperAdmin || user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin') {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }
     return outlets.filter(o => 
         o.property_id === currentProperty.id && 
         user.allowed_outlets?.includes(o.id)
     );
-  }, [currentProperty, user, outlets]);
+  }, [currentProperty, user, outlets, isSuperAdmin]);
 
   const [stats, setStats] = useState({
     activeMembers: 0,
@@ -719,7 +719,7 @@ const Dashboard = () => {
   const canViewDashboard = user && hasPermission(user.role_id, 'dashboard:view');
   const canViewFinancials = user && hasPermission(user.role_id, 'dashboard:view_financials');
   const canViewInsights = user && hasPermission(user.role_id, 'dashboard:view_insights');
-  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
+  const canSwitchScope = Boolean(user && allowedOutletsInProperty.length > 1);
 
   const kpiData = [
     { title: "Active Portfolio", value: stats.activeMembers, icon: Users, color: "text-emerald-600" },

@@ -52,7 +52,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const userAllowedOutlets = useMemo(() => {
     if (!user) return [];
-    return isSuperAdmin
+    const isAdmin = isSuperAdmin || user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin';
+    return isAdmin
         ? outlets 
         : outlets.filter(o => user.allowed_outlets?.includes(o.id));
   }, [user, outlets, isSuperAdmin]);

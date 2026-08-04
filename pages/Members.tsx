@@ -31,7 +31,7 @@ const Members = () => {
 
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user) return [];
-    if (isSuperAdmin) {
+    if (isSuperAdmin || user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin') {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }
     return outlets.filter(o => 

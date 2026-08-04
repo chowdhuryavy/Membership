@@ -60,7 +60,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
 
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user || !outlets || !Array.isArray(outlets)) return [];
-    if (isSuperAdmin) {
+    if (isSuperAdmin || user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin') {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }
     return outlets.filter(o => 
@@ -85,7 +85,7 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
   const canRenew = user && hasPermission(user.role_id, 'members:renew');
   const canFreeze = user && hasPermission(user.role_id, 'members:freeze');
   const canBulkFreeze = user && hasPermission(user.role_id, 'members:bulk_freeze');
-  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
+  const canSwitchScope = Boolean(user && allowedOutletsInProperty.length > 1);
 
   const handleNewEnrollment = () => {
     // If we have no categories yet, we shouldn't open the form as it will be incomplete

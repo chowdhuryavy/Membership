@@ -876,7 +876,7 @@ const Sales = () => {
 
     const allowedOutletsInProperty = useMemo(() => {
         if (!currentProperty || !user || !outlets) return [];
-        if (isSuperAdmin || user.role_id?.toLowerCase() === 'admin') {
+        if (isSuperAdmin || user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin') {
             return outlets.filter(o => o.property_id === currentProperty.id);
         }
         return outlets.filter(o => 
@@ -885,7 +885,7 @@ const Sales = () => {
         );
     }, [currentProperty, user, outlets, isSuperAdmin]);
 
-    const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
+    const canSwitchScope = Boolean(user && allowedOutletsInProperty.length > 1);
 
     const [activeTab, setActiveTab] = useState<'ledger' | 'inventory' | 'stock'>('ledger');
     const [selectedDate, setSelectedDate] = useState(new Date());

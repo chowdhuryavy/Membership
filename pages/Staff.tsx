@@ -119,7 +119,7 @@ const StaffPage = () => {
 
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user || !outlets) return [];
-    if (isSuperAdmin) {
+    if (isSuperAdmin || user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin') {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }
     return outlets.filter(o => 
@@ -133,7 +133,7 @@ const StaffPage = () => {
   const canManage = user && hasPermission(user.role_id, 'staff:manage');
   const canManageLeaves = user && hasPermission(user.role_id, 'staff:manage_leaves');
   const canManagePortalSettings = user && hasPermission(user.role_id, 'staff:manage_portal_settings');
-  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
+  const canSwitchScope = Boolean(user && allowedOutletsInProperty.length > 1);
 
   const loadStaff = useCallback(async () => {
     if (!currentOutlet || !currentProperty) return;

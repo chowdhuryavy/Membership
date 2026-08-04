@@ -753,14 +753,14 @@ NOTIFY pgrst, 'reload schema';`}
 
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user || !outlets) return [];
-    if (user.role_id?.toLowerCase() === 'admin') {
+    if (isSuperAdmin || user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin') {
         return outlets.filter(o => o.property_id === currentProperty.id);
     }
     return outlets.filter(o => 
         o.property_id === currentProperty.id && 
         user.allowed_outlets?.includes(o.id)
     );
-  }, [currentProperty, user, outlets]);
+  }, [currentProperty, user, outlets, isSuperAdmin]);
 
   const selectedBookingDetails = useMemo(() => {
       if (!selectedBooking) return null;
@@ -781,7 +781,7 @@ NOTIFY pgrst, 'reload schema';`}
   const canManageResources = user && hasPermission(user.role_id, 'bookings:manage_resources');
   
   // NEW: Strict Permission gating for scope switch and deletion
-  const canSwitchScope = user && hasPermission(user.role_id, 'settings:view_properties') && allowedOutletsInProperty.length > 1;
+  const canSwitchScope = Boolean(user && allowedOutletsInProperty.length > 1);
   // Moved 'members' hook to the top of the component
   const canDeleteGuests = user && hasPermission(user.role_id, 'members:delete');
 
