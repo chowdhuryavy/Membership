@@ -119,7 +119,7 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                     </CardHeader>
                 )}
                 <CardContent className="p-0">
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto print:overflow-visible print:w-full">
                         <div id="active-report-content" className={`${isEmbedded ? 'w-full' : 'print-container min-w-max'} bg-white`}>
                             {!isEmbedded && (
                                 <div className="p-8 pb-4 hidden print:block">

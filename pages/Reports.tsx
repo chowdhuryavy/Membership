@@ -40,6 +40,7 @@ import ExpiringMembershipsReport from './ExpiringMembershipsReport';
 import MassageRoomRevenueReport from './MassageRoomRevenueReport';
 import MonthlyRevenueReport from './MonthlyRevenueReport';
 import ActiveMembersReport from './ActiveMembersReport';
+import { useReactToPrint } from "react-to-print";
 import { CustomReportViewer } from '../components/CustomReportViewer';
 import TabLoader from '../components/TabLoader';
 
@@ -124,6 +125,7 @@ const Reports = () => {
   const [activeStaffList, setActiveStaffList] = useState<Staff[]>([]);
   const [showConfig, setShowConfig] = useState(true);
   const reportRef = useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({ contentRef: reportRef });
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<any>(null);
@@ -346,17 +348,27 @@ const Reports = () => {
     setIsGeneratingPDF(true);
     
     try {
+      const start = reportType === 'daily_sales' ? startOfDay(parseISO(dailySalesDate)) : startOfDay(parseISO(reportMonth + '-01'));
+      const cacheKey = `${reportType}_${currentOutlet.id}_${format(start, 'yyyy-MM-dd')}_${incentiveDept}_${selectedMembershipTypeId}_${revenueMode}`;
+      
+      const currentRows = reportType === 'revenue_recognition' ? revenueRows : rows;
+      const cached = reportCache.current[cacheKey];
+      
+      const cachedData = {
+        rows: (cached?.rows && cached.rows.length > 0) ? cached.rows : currentRows,
+        summary: cached?.summary || summary,
+        groupedRows: cached?.groupedRows || (reportType === 'revenue_recognition' ? cached?.groupedRows : undefined)
+      };
+      
       const { jsPDF } = await import('jspdf');
       const autoTable = (await import('jspdf-autotable')).default;
       
-      const reportName = reportType === 'daily_sales' ? 'Daily Sales Audit' : 
-                         reportType === 'members_joined' ? 'Membership Registration Audit' : 
-                         `${incentiveDept} Incentive Audit`;
-                         
+      const reportName = getReportTitle(reportType, incentiveDept);
+                          
       await generateReportPDF({
         jsPDF,
         autoTable,
-        data: { rows: rows, summary: summary },
+        data: cachedData,
         propertyName: currentProperty.name,
         outletName: currentOutlet.name,
         outletId: currentOutlet.id,
@@ -368,7 +380,7 @@ const Reports = () => {
         reportType,
         membershipTypeName: selectedMembershipTypeId === 'all' ? 'All Types' : membershipTypes.find(t => t.id === selectedMembershipTypeId)?.name || 'All Types',
         userName: user?.name || 'Administrator',
-        summary: summary,
+        summary: cachedData.summary || summary,
         signatoryConfig: signatoryConfig
       });
     } catch (error) {
@@ -1021,7 +1033,7 @@ const Reports = () => {
                 )}
             </div>
             <Button variant="outline" onClick={() => setShowConfig(!showConfig)} className={`h-12 px-5 rounded-2xl border-slate-200 ${showConfig ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-inner' : ''}`}><Settings2 className="w-4 h-4 mr-2" /> <span className="text-[10px] font-black uppercase tracking-widest">Layout Config</span></Button>
-            <Button onClick={() => window.print()} className="h-12 px-6 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 transition-all active:scale-95 no-print bg-indigo-600 text-white hover:bg-indigo-700"><Printer className="w-4 h-4 mr-2" /> Print Direct</Button>
+            <Button onClick={handlePrint} className="h-12 px-6 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 transition-all active:scale-95 no-print bg-indigo-600 text-white hover:bg-indigo-700"><Printer className="w-4 h-4 mr-2" /> Print Direct</Button>
             <Button variant="outline" onClick={handleExportPDF} isLoading={isGeneratingPDF} className="h-12 px-8 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] border-slate-200 bg-white hover:bg-slate-50 shadow-sm transition-all active:scale-95"><FileDown className="w-4 h-4 mr-2 text-indigo-600" /> Export PDF</Button>
         </div>
       </div>
@@ -1259,7 +1271,7 @@ const Reports = () => {
                           <TabLoader message="Synchronizing Financial Ledger..." />
                       </div>
                   )}
-                  <div ref={reportRef} className={`print-container p-12 md:p-16 flex flex-col bg-white transition-opacity duration-300 ${loading ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
+                  <div ref={reportRef} className={`print-container p-12 md:p-16 print:p-2 flex flex-col bg-white transition-opacity duration-300 ${loading ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
                       <div className="flex justify-between items-start mb-16">
                           <div className="flex items-center gap-6">
                               {currentProperty?.logo_url && <img src={currentProperty.logo_url} crossOrigin="anonymous" className="h-20 w-auto object-contain" />}
@@ -1418,39 +1430,49 @@ const Reports = () => {
 
       <style>{`
         @media print {
-            body { background: white !important; }
-            .no-print { display: none !important; }
-            #root, main { overflow: visible !important; height: auto !important; position: static !important; }
-            
-            /* Hide everything by default */
-            body * { visibility: hidden; }
-            
-            /* Show the print container and its children */
-            .print-container, .print-container * { 
-                visibility: visible !important; 
+            html, body, #root, main, .print-container, .print-container * {
+                overflow: visible !important;
+                height: auto !important;
+                max-height: none !important;
             }
+            body { 
+                background: white !important; 
+                margin: 0 !important;
+                padding: 0 !important;
+                -webkit-print-color-adjust: exact !important; 
+                print-color-adjust: exact !important; 
+            }
+            .no-print { display: none !important; }
             
-            .print-container { 
-                position: absolute !important; 
-                left: 0 !important; 
-                top: 0 !important; 
+            .print-container {
                 width: 100% !important;
-                height: 100% !important;
                 padding: 0 !important;
                 margin: 0 !important;
                 background: white !important;
-                box-sizing: border-box !important;
+                box-shadow: none !important;
             }
-            
-            /* Preserve colors */
-            * { 
-                -webkit-print-color-adjust: exact !important; 
-                print-color-adjust: exact !important; 
+
+            table {
+                width: 100% !important;
+                page-break-inside: auto !important;
+            }
+
+            tr {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+
+            thead {
+                display: table-header-group !important;
+            }
+
+            tfoot {
+                display: table-footer-group !important;
             }
             
             @page { 
                 size: A4 landscape; 
-                margin: 5mm; 
+                margin: 8mm; 
             }
         }
       `}</style>

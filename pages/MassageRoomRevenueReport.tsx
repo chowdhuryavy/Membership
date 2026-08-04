@@ -92,8 +92,8 @@ const MassageRoomRevenueReport = ({ isEmbedded, embeddedMonth }: MassageRoomReve
   }, [totalsByRoom]);
 
   const content = (
-    <div className={`overflow-x-auto transition-opacity duration-300 ${loading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-      <table className={`w-full text-left border-collapse border-2 border-black ${isEmbedded ? 'text-[9px]' : 'text-sm'}`}>
+    <div className={`overflow-x-auto print:overflow-visible print:w-full transition-opacity duration-300 ${loading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+      <table className={`w-full text-left border-collapse border-2 border-black ${isEmbedded ? 'text-[8px] print:text-[7px]' : 'text-sm'}`}>
         <thead>
           <tr className="bg-slate-950 text-white font-black uppercase tracking-widest">
             <th className="px-4 py-4 border border-black">Date</th>

@@ -67,44 +67,44 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
   if (!data) return null;
 
   const content = (
-    <div className="overflow-x-auto">
-      <table className={`w-full text-left border-collapse border-2 border-black ${isEmbedded ? 'text-[9px]' : 'text-sm'}`}>
+    <div className="overflow-x-auto print:overflow-visible print:w-full">
+      <table className={`w-full text-left border-collapse border-2 border-black ${isEmbedded ? 'text-[8px] print:text-[7px]' : 'text-sm'}`}>
         <thead>
           <tr className="bg-slate-100 text-slate-900 font-black uppercase tracking-widest">
-            <th className="px-4 py-3 border border-black text-center">
+            <th className="px-2 py-3 border border-black text-center">
               MONTH
               <div className="text-[8px] font-black text-indigo-600 mt-1">
                 {revenueMode === 'cash' ? 'CASH BASIS' : 'AMORTIZATION'}
               </div>
             </th>
             {monthNames.map(m => (
-              <th key={m} className="px-4 py-3 border border-black text-center">{m}</th>
+              <th key={m} className="px-2 py-3 border border-black text-center">{m}</th>
             ))}
-            <th className="px-4 py-3 border border-black text-center">Total</th>
+            <th className="px-2 py-3 border border-black text-center">Total</th>
           </tr>
         </thead>
         <tbody>
           {data.rows?.map(row => (
             <tr key={row.category} className="hover:bg-slate-50 transition-colors">
-              <td className="px-4 py-2 border border-black font-black text-slate-900 text-center">{row.category}</td>
+              <td className="px-2 py-2 border border-black font-black text-slate-900 text-center">{row.category}</td>
               {row.values?.map((val, i) => (
-                <td key={i} className="px-4 py-2 border border-black text-right font-bold text-slate-700">
+                <td key={i} className="px-2 py-2 border border-black text-right font-bold text-slate-700">
                   {val > 0 ? formatMoney(val) : ''}
                 </td>
               ))}
-              <td className="px-4 py-2 border border-black text-right font-black text-slate-900 bg-slate-100/50">
+              <td className="px-2 py-2 border border-black text-right font-black text-slate-900 bg-slate-100/50">
                 {formatMoney(row.total)}
               </td>
             </tr>
           ))}
           <tr className="bg-slate-200 font-black">
-            <td className="px-4 py-3 border border-black text-center text-slate-900">Monthly Revenue</td>
+            <td className="px-2 py-3 border border-black text-center text-slate-900">Monthly Revenue</td>
             {data.monthlyTotals?.map((val, i) => (
-              <td key={i} className="px-4 py-3 border border-black text-right text-slate-900">
+              <td key={i} className="px-2 py-3 border border-black text-right text-slate-900">
                 {val > 0 ? formatMoney(val) : '-'}
               </td>
             ))}
-            <td className="px-4 py-3 border border-black text-right text-slate-900">
+            <td className="px-2 py-3 border border-black text-right text-slate-900">
               {formatMoney(data.yearlyTotal)}
             </td>
           </tr>
@@ -112,29 +112,29 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
             <td colSpan={14} className="h-8 border-x-2 border-black bg-white"></td>
           </tr>
           <tr className="bg-slate-100 font-black">
-            <td className="px-4 py-3 border border-black text-center text-slate-900">Monthly Revenue {parseInt(reportMonth.split('-')[0]) - 1}</td>
+            <td className="px-2 py-3 border border-black text-center text-slate-900">Monthly Revenue {parseInt(reportMonth.split('-')[0]) - 1}</td>
             {data.previousYearTotals?.map((val, i) => (
-              <td key={i} className="px-4 py-3 border border-black text-right text-slate-900">
+              <td key={i} className="px-2 py-3 border border-black text-right text-slate-900">
                 {val > 0 ? formatMoney(val) : '-'}
               </td>
             ))}
-            <td className="px-4 py-3 border border-black text-right text-slate-900">
+            <td className="px-2 py-3 border border-black text-right text-slate-900">
               {formatMoney(data.previousYearlyTotal)}
             </td>
           </tr>
           <tr className="bg-white font-black">
-            <td className="px-4 py-3 border border-black text-center text-slate-900">Amount (+ / -)</td>
+            <td className="px-2 py-3 border border-black text-center text-slate-900">Amount (+ / -)</td>
             {data.monthlyTotals?.map((val, i) => {
               const diff = val - (data.previousYearTotals?.[i] || 0);
               const isNegative = diff < 0;
               const formattedDiff = formatMoney(Math.abs(diff));
               return (
-                <td key={i} className={`px-4 py-3 border border-black text-right ${isNegative ? 'text-red-600' : 'text-slate-900'}`}>
+                <td key={i} className={`px-2 py-3 border border-black text-right ${isNegative ? 'text-red-600' : 'text-slate-900'}`}>
                   {diff !== 0 ? (isNegative ? `(${formattedDiff})` : formattedDiff) : '-'}
                 </td>
               );
             })}
-            <td className={`px-4 py-3 border border-black text-right ${data.yearlyTotal - data.previousYearlyTotal < 0 ? 'text-red-600' : 'text-slate-900'}`}>
+            <td className={`px-2 py-3 border border-black text-right ${data.yearlyTotal - data.previousYearlyTotal < 0 ? 'text-red-600' : 'text-slate-900'}`}>
               {(() => {
                 const diff = data.yearlyTotal - data.previousYearlyTotal;
                 const isNegative = diff < 0;
@@ -144,7 +144,7 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
             </td>
           </tr>
           <tr className="bg-white font-black">
-            <td className="px-4 py-3 border border-black text-center text-slate-900">Percentage % (+ / -)</td>
+            <td className="px-2 py-3 border border-black text-center text-slate-900">Percentage % (+ / -)</td>
             {data.monthlyTotals?.map((val, i) => {
               const prev = data.previousYearTotals?.[i] || 0;
               const diff = val - prev;
@@ -154,18 +154,18 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
               } else if (val > 0) {
                 pct = 100;
               } else if (val === 0 && prev === 0) {
-                return <td key={i} className="px-4 py-3 border border-black text-right text-slate-900">-</td>;
+                return <td key={i} className="px-2 py-3 border border-black text-right text-slate-900">-</td>;
               } else {
                 pct = -100;
               }
               const isNegative = pct < 0;
               return (
-                <td key={i} className={`px-4 py-3 border border-black text-right ${isNegative ? 'text-red-600' : 'text-slate-900'}`}>
+                <td key={i} className={`px-2 py-3 border border-black text-right ${isNegative ? 'text-red-600' : 'text-slate-900'}`}>
                   {isNegative ? `(${Math.abs(pct).toFixed(2)}%)` : `${pct.toFixed(2)}%`}
                 </td>
               );
             })}
-            <td className={`px-4 py-3 border border-black text-right ${data.yearlyTotal - data.previousYearlyTotal < 0 ? 'text-red-600' : 'text-slate-900'}`}>
+            <td className={`px-2 py-3 border border-black text-right ${data.yearlyTotal - data.previousYearlyTotal < 0 ? 'text-red-600' : 'text-slate-900'}`}>
               {(() => {
                 const prev = data.previousYearlyTotal;
                 const diff = data.yearlyTotal - prev;

@@ -1527,11 +1527,28 @@ export const generateReportPDF = (options: PDFOptions) => {
   
   doc.setFontSize(7);
   doc.setTextColor(255, 255, 255);
+  let parsedDate: Date;
+  if (date instanceof Date && !isNaN(date.getTime())) {
+    parsedDate = date;
+  } else if (typeof date === 'string' && date.trim()) {
+    const trimmed = date.trim();
+    if (trimmed.length === 7) {
+      parsedDate = parseISO(trimmed + '-01');
+    } else {
+      parsedDate = parseISO(trimmed);
+    }
+  } else {
+    parsedDate = new Date();
+  }
+  if (isNaN(parsedDate.getTime())) {
+    parsedDate = new Date();
+  }
+
   const periodStr = reportType === 'daily_sales' 
-    ? format(date, 'dd MMM yyyy').toUpperCase()
+    ? format(parsedDate, 'dd MMM yyyy').toUpperCase()
     : reportType === 'monthly_revenue'
-    ? format(date, 'yyyy').toUpperCase()
-    : format(date, 'MMM yyyy').toUpperCase();
+    ? format(parsedDate, 'yyyy').toUpperCase()
+    : format(parsedDate, 'MMM yyyy').toUpperCase();
   doc.text(periodStr, boxX + (boxWidth / 2), boxY + 6.5, { align: 'center' });
 
   // Audit Trail Badge (Matching UI)
@@ -1609,10 +1626,20 @@ export const generateReportPDF = (options: PDFOptions) => {
 
   // --- TABLE SECTION ---
   if (isRevenueReport) {
-    // Use grouped data from reportData if available
-    const grouped = data.groupedRows;
+    // Safely retrieve or construct groupedRows
+    let grouped = data?.groupedRows;
+    if (!grouped || typeof grouped !== 'object' || Object.keys(grouped).length === 0) {
+      grouped = (data?.rows || []).reduce((acc: any, row: any) => {
+        const typeKey = row.membership_type_name || 'Membership';
+        const catKey = row.category_name || 'Other';
+        if (!acc[typeKey]) acc[typeKey] = {};
+        if (!acc[typeKey][catKey]) acc[typeKey][catKey] = [];
+        acc[typeKey][catKey].push(row);
+        return acc;
+      }, {});
+    }
 
-    if (data.rows.length === 0) {
+    if (!data?.rows || data.rows.length === 0) {
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139);
       doc.text("No revenue recognition data found for this period.", margin, currentY);
@@ -1628,11 +1655,16 @@ export const generateReportPDF = (options: PDFOptions) => {
       };
       
       Object.entries(grouped).forEach(([type, categories]) => {
-        Object.entries(categories as Record<string, any[]>).forEach(([categoryName, groupRows]) => {
-          const groupRowsArray = [...groupRows].sort((a: any, b: any) => {
-            const dateA = parse(a.start_date, 'dd-MM-yyyy', new Date());
-            const dateB = parse(b.start_date, 'dd-MM-yyyy', new Date());
-            return dateA.getTime() - dateB.getTime();
+        Object.entries((categories || {}) as Record<string, any[]>).forEach(([categoryName, groupRows]) => {
+          const groupRowsArray = [...(groupRows || [])].sort((a: any, b: any) => {
+            const parseDateVal = (s: string) => {
+              if (!s) return 0;
+              if (s.includes('-') && s.split('-')[0].length === 4) {
+                return parseISO(s).getTime() || 0;
+              }
+              return parse(s, 'dd-MM-yyyy', new Date()).getTime() || 0;
+            };
+            return parseDateVal(a.start_date) - parseDateVal(b.start_date);
           });
           
           // Calculate subtotals for this category
@@ -2424,6 +2456,12 @@ export const generateReportPDF = (options: PDFOptions) => {
   doc.text(exportInfo, pageWidth / 2, footerY, { align: 'center' });
 
   doc.text(`© ${new Date().getFullYear()} ${propertyName}. All rights reserved.`, pageWidth - margin, footerY, { align: 'right' });
+
+  // Trigger PDF file download
+  const cleanTitle = (reportTitle || 'Report').replace(/[^a-zA-Z0-9_\-]/g, '_');
+  const dateSuffix = format(new Date(), 'yyyyMMdd_HHmm');
+  const filename = `${cleanTitle}_${dateSuffix}.pdf`;
+  doc.save(filename);
 
   return doc;
 };
