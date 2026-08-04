@@ -1445,14 +1445,17 @@ export const generateReportPDF = (options: PDFOptions) => {
     
     if (skipSymbol) return formatted;
 
+    const symbolToUse = currencySymbol || currencyCode || 'QAR';
+    const codeToUse = currencyCode || 'QAR';
+
     // jsPDF default fonts only support WinAnsiEncoding (mostly Latin-1).
     // Symbols like 'ر.ق' (Qatari Riyal) will render as garbled text (e.g. þÕ.þ-).
     // We check if the currency symbol contains characters outside the safe range.
     // If it does, we fallback to the currency code (e.g. QAR) to ensure the PDF is readable.
-    if (/[^\x00-\xFF\u20AC]/.test(currencySymbol || '')) {
-      return `${currencyCode || ''}\u00A0${formatted}`.trim();
+    if (/[^\x00-\xFF\u20AC]/.test(symbolToUse)) {
+      return `${codeToUse}\u00A0${formatted}`.trim();
     }
-    return `${currencySymbol || '$'}\u00A0${formatted}`;
+    return `${symbolToUse}\u00A0${formatted}`.trim();
   };
 
   // --- HEADER SECTION ---
