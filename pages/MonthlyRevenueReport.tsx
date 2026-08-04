@@ -196,27 +196,34 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
   return (
     <Card className="rounded-none border-slate-200 shadow-2xl overflow-hidden bg-white min-h-[1200px] print:shadow-none print:rounded-none">
       <div className="print-container p-12 md:p-16 flex flex-col bg-white">
-        <div className="flex justify-between items-start mb-16">
-          <div className="flex items-center gap-6">
-            {currentProperty?.logo_url && <img src={currentProperty.logo_url} crossOrigin="anonymous" className="h-20 w-auto object-contain" />}
-            <div className="h-16 w-px bg-slate-200"></div>
-            <div>
-              <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-2">{currentProperty?.name || settings?.name}</h2>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.5em] leading-none">{currentOutlet?.name} &bull; ISO-9001 CERTIFIED</p>
-              <div className="flex items-center gap-2 mt-4 text-indigo-600">
-                <ShieldCheck className="w-4 h-4" />
-                <span className="text-[9px] font-black uppercase tracking-widest">Internal Verification</span>
+        <div className="flex flex-row justify-between items-start gap-4 mb-8 print:mb-4 pb-4 border-b-2 border-slate-900/10 w-full">
+          <div className="flex items-center gap-4 min-w-0 max-w-[60%] print:max-w-[55%]">
+            {currentProperty?.logo_url && (
+              <img 
+                src={currentProperty.logo_url} 
+                crossOrigin="anonymous" 
+                alt="Property Logo"
+                className="h-12 w-auto max-w-[150px] md:max-w-[180px] print:h-10 print:max-w-[120px] object-contain shrink-0" 
+              />
+            )}
+            <div className="h-10 w-px bg-slate-300 shrink-0"></div>
+            <div className="min-w-0 overflow-hidden">
+              <h2 className="text-lg md:text-xl print:text-sm font-black text-slate-900 tracking-tight uppercase leading-tight truncate mb-0.5">{currentProperty?.name || settings?.name}</h2>
+              <p className="text-[9px] md:text-[10px] print:text-[8px] font-black text-slate-500 uppercase tracking-wider leading-none truncate">{currentOutlet?.name} &bull; ISO-9001 CERTIFIED</p>
+              <div className="flex items-center gap-1.5 mt-1 text-indigo-600 print:text-indigo-800">
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                <span className="text-[8px] md:text-[9px] print:text-[7.5px] font-black uppercase tracking-widest">Internal Verification</span>
               </div>
             </div>
           </div>
-          <div className="text-right flex flex-col items-end gap-3">
-            <h3 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">
+          <div className="text-right flex flex-col items-end gap-2 shrink-0 max-w-[40%] print:max-w-[45%]">
+            <h3 className="text-lg md:text-xl print:text-sm font-black text-slate-900 tracking-tight uppercase leading-snug text-right break-words max-w-full">
               MONTHLY REVENUE REPORT
             </h3>
-            <div className="flex items-center gap-4">
-              <div className="bg-slate-950 text-white px-6 py-3 rounded-2xl shadow-2xl">
-                <span className="text-[9px] font-black uppercase opacity-60 block tracking-widest">Month</span>
-                <span className="text-sm font-black uppercase">
+            <div className="flex items-center gap-2">
+              <div className="bg-slate-950 text-white px-4 py-1.5 rounded-xl print:rounded-lg shadow-sm print:shadow-none inline-block text-right">
+                <span className="text-[8px] print:text-[7px] font-black uppercase opacity-70 block tracking-widest leading-none mb-0.5">Month</span>
+                <span className="text-xs md:text-sm print:text-[10px] font-black uppercase leading-none block">
                   {format(parseISO(reportMonth + '-01'), 'MMMM yyyy')}
                 </span>
               </div>
