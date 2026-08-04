@@ -8,6 +8,7 @@ import { RevenueEngine } from '../services/revenueEngine';
 import { format, endOfMonth, differenceInCalendarDays, addDays, startOfDay, isWithinInterval, subDays, parseISO, endOfDay, startOfMonth, addMonths, parse } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
+import { generateReportPDF } from '../src/shared/reportLogic';
 import toast from 'react-hot-toast';
 import { 
   ShieldCheck, 
@@ -31,9 +32,9 @@ import {
   CalendarX,
   LayoutTemplate
 } from 'lucide-react';
-import { getReportData, generateReportPDF, getReportTitle, ReportContext } from '../src/shared/reportLogic';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { getReportData, getReportTitle, ReportContext } from '../src/shared/reportLogic';
+
+
 import html2canvas from 'html2canvas';
 import ExpiringMembershipsReport from './ExpiringMembershipsReport';
 import MassageRoomRevenueReport from './MassageRoomRevenueReport';
@@ -210,7 +211,7 @@ const Reports = () => {
       date: true,
       guest_name: true,
       membership_no: true,
-      reference: false,
+      reference: true,
       check_no: true,
       payment_mode: true,
       item_name: true,
@@ -341,64 +342,40 @@ const Reports = () => {
   };
 
   const handleExportPDF = async () => {
-    if (!currentOutlet || !currentProperty) return;
-    const toastId = toast.loading('Generating PDF report...');
+    if (!currentOutlet || !currentProperty || !settings) return;
+    setIsGeneratingPDF(true);
+    
     try {
-      const startDate = reportType === 'daily_sales' ? startOfDay(parseISO(dailySalesDate)) : startOfDay(parseISO(reportMonth + '-01'));
+      const { jsPDF } = await import('jspdf');
+      const autoTable = (await import('jspdf-autotable')).default;
       
-      const ctx: ReportContext = {
-        supabase,
-        propertyId: currentProperty.id,
-        outletId: currentOutlet.id,
-        reportType: reportType as any,
-        date: startDate,
-        incentiveDept: incentiveDept as any,
-        selectedMembershipTypeId: selectedMembershipTypeId,
-        revenueMode: revenueMode,
-        endMonthIndex: reportType === 'monthly_revenue' ? parseInt(reportMonth.split('-')[1]) - 1 : undefined
-      };
-
-      const reportData = await getReportData(ctx);
-
-      if (!reportData.rows || reportData.rows.length === 0) {
-        toast.error('No data found for the selected period', { id: toastId });
-        return;
-      }
-
-      const reportTitle = getReportTitle(reportType, incentiveDept);
-      const outletName = currentOutlet?.name || 'All Outlets';
-      const currencySymbol = currency?.symbol || '';
-      const currencyCode = currency?.code || '';
-
-      const doc = generateReportPDF({
+      const reportName = reportType === 'daily_sales' ? 'Daily Sales Audit' : 
+                         reportType === 'members_joined' ? 'Membership Registration Audit' : 
+                         `${incentiveDept} Incentive Audit`;
+                         
+      await generateReportPDF({
         jsPDF,
         autoTable,
-        data: reportData,
+        data: { rows: rows, summary: summary },
         propertyName: currentProperty.name,
-        outletName,
+        outletName: currentOutlet.name,
         outletId: currentOutlet.id,
-        currencySymbol,
-        currencyCode,
-        reportTitle,
-        date: startDate,
+        currencySymbol: settings.currency_symbol,
+        currencyCode: settings.currency_code,
+        reportTitle: reportName,
+        date: reportType === 'daily_sales' ? dailySalesDate : reportMonth,
         logoUrl: currentProperty.logo_url,
-        reportType: reportType,
-        membershipTypeName: selectedTypeName,
-        userName: user?.name,
-        summary: reportData.summary,
-        signatoryConfig
+        reportType,
+        membershipTypeName: selectedMembershipTypeId === 'all' ? 'All Types' : membershipTypes.find(t => t.id === selectedMembershipTypeId)?.name || 'All Types',
+        userName: user?.name || 'Administrator',
+        summary: summary,
+        signatoryConfig: signatoryConfig
       });
-
-      const typeSuffix = selectedMembershipTypeId !== 'all' ? `_${selectedTypeName.replace(/\s+/g, '_').toLowerCase()}` : '';
-      const filename = reportType === 'monthly_revenue' 
-        ? `${reportType}_report_${format(startDate, 'yyyy')}${typeSuffix}.pdf`
-        : `${reportType}_report_${format(startDate, 'yyyy-MM-dd')}${typeSuffix}.pdf`;
-      
-      doc.save(filename);
-      toast.success('Report exported successfully', { id: toastId });
     } catch (error) {
-      console.error('PDF Export Error:', error);
-      toast.error('Failed to export PDF report', { id: toastId });
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
     }
   };
 
@@ -414,9 +391,9 @@ const Reports = () => {
       if (!specific) return null;
       
       return {
-        prepared: specific.prepared || 'Accountant',
-        reviewed: specific.reviewed || '',
-        approved: specific.approved || 'General Manager'
+        prepared: specific.prepared?.trim() || 'Accountant',
+        reviewed: specific.reviewed?.trim() || '',
+        approved: specific.approved?.trim() || 'General Manager'
       };
     };
 
@@ -642,13 +619,15 @@ const Reports = () => {
                               (visibleColumns.start_date ? 1 : 0) +
                               (visibleColumns.end_date ? 1 : 0) +
                               (visibleColumns.days ? 1 : 0)
-                          } className="border border-black px-4 py-3 text-left uppercase tracking-[0.2em]">Verified Portfolio Total</td>
+                          } className="border border-black px-4 py-3 text-right uppercase tracking-widest">
+                              Aggregate Portfolio Totals
+                          </td>
                           {visibleColumns.daily_rate && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandDailyRate)}</td>}
                           {visibleColumns.rev_actual && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandActual)}</td>}
                           {visibleColumns.rev_discount && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandDiscount)}</td>}
                           {visibleColumns.net_fees && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandNetFees)}</td>}
-                          {visibleColumns.prev_accrual && <td className="border border-black px-2 py-3 text-right opacity-70">{formatMoney(grandPrevAccrual)}</td>}
-                          {visibleColumns.period_rev && <td className="border border-black px-2 py-3 text-right text-indigo-400">{formatMoney(grandPeriodRev)}</td>}
+                          {visibleColumns.prev_accrual && <td className="border border-black px-2 py-3 text-right">{formatMoney(grandPrevAccrual)}</td>}
+                          {visibleColumns.period_rev && <td className="border border-black px-2 py-3 text-right text-indigo-300">{formatMoney(grandPeriodRev)}</td>}
                           {visibleColumns.deferred && <td className="border border-black px-2 py-3 text-right text-red-400">{formatMoney(grandDeferred)}</td>}
                       </tr>
                   </tbody>
@@ -667,17 +646,18 @@ const Reports = () => {
                             (visibleColumns.guest_name ? 1 : 0) +
                             (isMembersJoined && visibleColumns.membership_no ? 1 : 0) +
                             (visibleColumns.reference ? 1 : 0) +
-                            (visibleColumns.referrer ? 1 : 0) +
+                            (visibleColumns.referrer && incentiveDept !== 'Referral' ? 1 : 0) +
                             (visibleColumns.check_no ? 1 : 0) +
                             (isDailySales && visibleColumns.payment_mode ? 1 : 0) +
                             (visibleColumns.item_name ? 1 : 0) +
-                            (isIncentiveReport && visibleColumns.specialist ? 1 : 0);
+                            (isIncentiveReport && visibleColumns.specialist && incentiveDept !== 'Membership' ? 1 : 0);
 
     const totalColSpan = colSpanForLabel +
                         (visibleColumns.gross_amount ? 1 : 0) +
                         (visibleColumns.disc_percent ? 1 : 0) +
                         (visibleColumns.discount_amt ? 1 : 0) +
                         (visibleColumns.net_revenue ? 1 : 0) +
+                        (isIncentiveReport && incentiveDept === 'Membership' ? 1 : 0) +
                         (visibleColumns.remarks ? 1 : 0) +
                         (isIncentiveReport ? 4 : 0) + // Incentive columns
                         (isIncentiveReport ? (activeStaffList?.length || 0) : 0);
@@ -686,14 +666,20 @@ const Reports = () => {
     let totalActual = 0;
     let totalDiscount = 0;
     let totalNetRev = 0;
+    let totalIncTotal = 0;
+    let totalIncDiscountVal = 0;
     let totalIncNet = 0;
+    let totalReferralAmt = 0;
     const staffTotals: Record<string, number> = {};
 
     rows.forEach(row => {
         totalActual += Number(row.actual_price || 0);
         totalDiscount += Number(row.discount_amount || 0);
         totalNetRev += Number(row.net_revenue || 0);
+        totalIncTotal += Number(row.inc_total || 0);
+        totalIncDiscountVal += Number(row.inc_discount_val || 0);
         totalIncNet += Number(row.inc_net || 0);
+        totalReferralAmt += Number((row as any).referral_amount || 0);
         
         if (row.staff_splits) {
             Object.entries(row.staff_splits).forEach(([staffId, amount]) => {
@@ -702,7 +688,7 @@ const Reports = () => {
         }
     });
 
-    const totals = { totalActual, totalDiscount, totalNetRev, totalIncNet, staffTotals };
+    const totals = { totalActual, totalDiscount, totalNetRev, totalIncTotal, totalIncDiscountVal, totalIncNet, totalReferralAmt, staffTotals };
 
     let specialistLabel = 'Staff';
     if (reportType === 'incentives') {
@@ -722,11 +708,11 @@ const Reports = () => {
                         {visibleColumns.guest_name && <th rowSpan={2} className="border border-black px-2 py-3 min-w-[120px]">Guest / Member</th>}
                         {(isMembersJoined && visibleColumns.membership_no) && <th rowSpan={2} className="border border-black px-2 py-3 w-24">Mem. No</th>}
                         
-                        {visibleColumns.reference && <th rowSpan={2} className="border border-black px-2 py-3 w-24">{isMembersJoined ? 'Category' : 'Duration'}</th>}
                         {visibleColumns.referrer && (incentiveDept !== 'Referral') && <th rowSpan={2} className="border border-black px-2 py-3 w-24">Referrer</th>}
                         {visibleColumns.check_no && <th rowSpan={2} className="border border-black px-2 py-3 w-20">Check No.</th>}
                         {(isDailySales && visibleColumns.payment_mode) && <th rowSpan={2} className="border border-black px-2 py-3 w-24">Payment Mode</th>}
                         {visibleColumns.item_name && <th rowSpan={2} className="border border-black px-2 py-3 min-w-[100px]">Item / Service</th>}
+                        {visibleColumns.reference && <th rowSpan={2} className="border border-black px-2 py-3 w-20">{isMembersJoined ? 'Category' : 'Dur.'}</th>}
                         {(isIncentiveReport && visibleColumns.specialist && incentiveDept !== 'Membership') && <th rowSpan={2} className="border border-black px-2 py-3">{specialistLabel}</th>}
                         
                         {visibleColumns.gross_amount && <th rowSpan={2} className="border border-black px-2 py-3 text-right w-20">Gross Amount</th>}
@@ -794,11 +780,11 @@ const Reports = () => {
                                                         {visibleColumns.guest_name && <td className="border border-black px-2 py-1 font-black text-slate-700">{row.guest_name}</td>}
                                                         {(isMembersJoined && visibleColumns.membership_no) && <td className="border border-black px-2 py-1 text-center font-mono text-xs">{(row as any).membership_no}</td>}
                                                         
-                                                        {visibleColumns.reference && <td className="border border-black px-2 py-1 text-center">{isMembersJoined ? (row as any).category : (row.duration || '-')}</td>}
                                                         {visibleColumns.referrer && <td className="border border-black px-2 py-1 text-center font-bold text-indigo-600">{(row as any).referrer_name || 'N/A'}</td>}
                                                         {visibleColumns.check_no && <td className="border border-black px-2 py-1 text-center text-slate-400">{row.check_no}</td>}
                                                         {(isDailySales && visibleColumns.payment_mode) && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
                                                         {visibleColumns.item_name && <td className="border border-black px-2 py-1">{row.item_name}</td>}
+                                                        {visibleColumns.reference && <td className="border border-black px-2 py-1 text-center">{isMembersJoined ? (row as any).category : (row.duration || '-')}</td>}
                                                         {(isIncentiveReport && visibleColumns.specialist && incentiveDept !== 'Membership') && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
                                                         
                                                         {visibleColumns.gross_amount && <td className="border border-black px-2 py-1 text-right">{formatMoney(row.actual_price)}</td>}
@@ -811,34 +797,48 @@ const Reports = () => {
                                                 ))}
                                                 <tr className="bg-slate-50 font-bold">
                                                     <td colSpan={colSpanForLabel} className="border border-black px-2 py-1 text-left italic text-[8px] pl-10">Subtotal Tier {cat}:</td>
-                                                    <td className="border border-black px-2 py-1 text-right">
-                                                        {formatMoney(groupRows.reduce((sum, r) => sum + (Number(r.actual_price) || 0), 0))}
-                                                    </td>
-                                                    <td className="border border-black px-2 py-1"></td>
-                                                    <td className="border border-black px-2 py-1 text-right">
-                                                        {formatMoney(groupRows.reduce((sum, r) => sum + (Number(r.discount_amount) || 0), 0))}
-                                                    </td>
-                                                    <td className="border border-black px-2 py-1 text-right">
-                                                        {formatMoney(groupRows.reduce((sum, r) => sum + (Number(r.net_revenue) || 0), 0))}
-                                                    </td>
-                                                    <td className="border border-black px-2 py-1"></td>
+                                                    {visibleColumns.gross_amount && <td className="border border-black px-2 py-1 text-right">{formatMoney(groupRows.reduce((sum, r) => sum + (Number(r.actual_price) || 0), 0))}</td>}
+                                                    {visibleColumns.disc_percent && <td className="border border-black px-2 py-1"></td>}
+                                                    {visibleColumns.discount_amt && <td className="border border-black px-2 py-1 text-right">{formatMoney(groupRows.reduce((sum, r) => sum + (Number(r.discount_amount) || 0), 0))}</td>}
+                                                    {visibleColumns.net_revenue && <td className="border border-black px-2 py-1 text-right">{formatMoney(groupRows.reduce((sum, r) => sum + (Number(r.net_revenue) || 0), 0))}</td>}
+                                                    {isIncentiveReport && (
+                                                        <>
+                                                            <td className="border border-black px-2 py-1 text-right">{formatMoney(groupRows.reduce((sum, r) => sum + (Number(r.inc_total) || 0), 0))}</td>
+                                                            <td className="border border-black px-2 py-1"></td>
+                                                            <td className="border border-black px-2 py-1 text-right">{formatMoney(groupRows.reduce((sum, r) => sum + (Number(r.inc_discount_val) || 0), 0))}</td>
+                                                            <td className="border border-black px-2 py-1 text-right font-black">{formatMoney(groupRows.reduce((sum, r) => sum + (Number(r.inc_net) || 0), 0))}</td>
+                                                        </>
+                                                    )}
+                                                    {visibleColumns.remarks && <td className="border border-black px-2 py-1"></td>}
+                                                    {isIncentiveReport && Array.isArray(activeStaffList) && activeStaffList.map(s => (
+                                                        <td key={s.id} className="border border-black px-1 py-1 text-right font-bold">
+                                                            {formatMoney(groupRows.reduce((sum, r) => sum + (Number(r.staff_splits?.[s.id]) || 0), 0))}
+                                                        </td>
+                                                    ))}
                                                 </tr>
                                             </React.Fragment>
                                         ))}
                                         {selectedMembershipTypeId === 'all' && (
                                             <tr className="bg-indigo-50 font-black">
                                                 <td colSpan={colSpanForLabel} className="border border-black px-2 py-1 text-left uppercase text-[9px]">Total Type {type}:</td>
-                                                <td className="border border-black px-2 py-1 text-right">
-                                                    {formatMoney(typeRows.reduce((sum, r) => sum + (Number(r.actual_price) || 0), 0))}
-                                                </td>
-                                                <td className="border border-black px-2 py-1"></td>
-                                                <td className="border border-black px-2 py-1 text-right">
-                                                    {formatMoney(typeRows.reduce((sum, r) => sum + (Number(r.discount_amount) || 0), 0))}
-                                                </td>
-                                                <td className="border border-black px-2 py-1 text-right">
-                                                    {formatMoney(typeRows.reduce((sum, r) => sum + (Number(r.net_revenue) || 0), 0))}
-                                                </td>
-                                                <td className="border border-black px-2 py-1"></td>
+                                                {visibleColumns.gross_amount && <td className="border border-black px-2 py-1 text-right">{formatMoney(typeRows.reduce((sum, r) => sum + (Number(r.actual_price) || 0), 0))}</td>}
+                                                {visibleColumns.disc_percent && <td className="border border-black px-2 py-1"></td>}
+                                                {visibleColumns.discount_amt && <td className="border border-black px-2 py-1 text-right">{formatMoney(typeRows.reduce((sum, r) => sum + (Number(r.discount_amount) || 0), 0))}</td>}
+                                                {visibleColumns.net_revenue && <td className="border border-black px-2 py-1 text-right">{formatMoney(typeRows.reduce((sum, r) => sum + (Number(r.net_revenue) || 0), 0))}</td>}
+                                                {isIncentiveReport && (
+                                                    <>
+                                                        <td className="border border-black px-2 py-1 text-right">{formatMoney(typeRows.reduce((sum, r) => sum + (Number(r.inc_total) || 0), 0))}</td>
+                                                        <td className="border border-black px-2 py-1"></td>
+                                                        <td className="border border-black px-2 py-1 text-right">{formatMoney(typeRows.reduce((sum, r) => sum + (Number(r.inc_discount_val) || 0), 0))}</td>
+                                                        <td className="border border-black px-2 py-1 text-right font-black">{formatMoney(typeRows.reduce((sum, r) => sum + (Number(r.inc_net) || 0), 0))}</td>
+                                                    </>
+                                                )}
+                                                {visibleColumns.remarks && <td className="border border-black px-2 py-1"></td>}
+                                                {isIncentiveReport && Array.isArray(activeStaffList) && activeStaffList.map(s => (
+                                                    <td key={s.id} className="border border-black px-1 py-1 text-right font-bold">
+                                                        {formatMoney(typeRows.reduce((sum, r) => sum + (Number(r.staff_splits?.[s.id]) || 0), 0))}
+                                                    </td>
+                                                ))}
                                             </tr>
                                         )}
                                     </React.Fragment>
@@ -855,11 +855,11 @@ const Reports = () => {
                                         {visibleColumns.guest_name && <td className="border border-black px-2 py-1 font-black text-slate-700">{row.guest_name}</td>}
                                         {(isMembersJoined && visibleColumns.membership_no) && <td className="border border-black px-2 py-1 text-center font-mono text-xs">{(row as any).membership_no}</td>}
                                         
-                                        {visibleColumns.reference && <td className="border border-black px-2 py-1 text-center">{isMembersJoined ? (row as any).category : (row.duration || '-')}</td>}
                                         {visibleColumns.referrer && (incentiveDept !== 'Referral') && <td className="border border-black px-2 py-1 text-center font-bold text-indigo-600">{(row as any).referrer_name || 'N/A'}</td>}
                                         {visibleColumns.check_no && <td className="border border-black px-2 py-1 text-center text-slate-400">{row.check_no}</td>}
                                         {(isDailySales && visibleColumns.payment_mode) && <td className="border border-black px-2 py-1 text-center text-slate-500 font-bold">{row.mode_of_payment}</td>}
                                         {visibleColumns.item_name && <td className="border border-black px-2 py-1">{row.item_name}</td>}
+                                        {visibleColumns.reference && <td className="border border-black px-2 py-1 text-center">{isMembersJoined ? (row as any).category : (row.duration || '-')}</td>}
                                         {(isIncentiveReport && visibleColumns.specialist && incentiveDept !== 'Membership') && <td className="border border-black px-2 py-1 text-center font-bold bg-slate-50 text-indigo-700">{row.therapist_name}</td>}
                                         
                                         {visibleColumns.gross_amount && <td className="border border-black px-2 py-1 text-right">{formatMoney(row.actual_price)}</td>}
@@ -892,26 +892,30 @@ const Reports = () => {
                             </>
                         );
                     })()}
-                    <tr className="bg-slate-900 text-white font-black text-[10px]">
-                        <td colSpan={colSpanForLabel} className="border border-black px-4 py-3 text-right uppercase tracking-widest">Aggregate Portfolio Totals</td>
-                        {visibleColumns.gross_amount && <td className="border border-black px-2 py-3 text-right">{formatMoney(totals.totalActual)}</td>}
-                        {visibleColumns.disc_percent && <td className="border border-black"></td>}
-                        {visibleColumns.discount_amt && <td className="border border-black px-2 py-3 text-right text-indigo-300">{formatMoney(totals.totalDiscount)}</td>}
-                        {visibleColumns.net_revenue && <td className="border border-black px-2 py-3 text-right">{formatMoney(totals.totalNetRev)}</td>}
+                    <tr className="bg-slate-100 font-bold">
+                        <td colSpan={colSpanForLabel} className="border border-black px-4 py-3 text-right uppercase tracking-widest text-slate-500 text-[10px]">Aggregate Portfolio Totals</td>
+                        {visibleColumns.gross_amount && <td className="border border-black px-2 py-3 text-right text-slate-500">{formatMoney(totals.totalActual)}</td>}
+                        {visibleColumns.disc_percent && <td className="border border-black px-2 py-3"></td>}
+                        {visibleColumns.discount_amt && <td className="border border-black px-2 py-3 text-right text-rose-600">{formatMoney(totals.totalDiscount)}</td>}
+                        {visibleColumns.net_revenue && <td className="border border-black px-2 py-3 text-right font-black text-[11px] text-emerald-700">{formatMoney(totals.totalNetRev)}</td>}
                         
+                        {(isIncentiveReport && incentiveDept === 'Membership') && <td className="border border-black px-2 py-3 text-right font-black text-[11px] text-indigo-600 bg-indigo-50/30">{formatMoney(totals.totalReferralAmt)}</td>}
+
                         {isIncentiveReport && (
                             <>
-                                <td colSpan={3} className="border border-black"></td>
-                                <td className="border border-black px-2 py-3 text-right bg-indigo-600 font-bold">{formatMoney(totals.totalIncNet)}</td>
-                                {visibleColumns.remarks && <td className="border border-black"></td>}
+                                <td className="border border-black px-2 py-3 text-right bg-amber-100/50">{formatMoney(totals.totalIncTotal)}</td>
+                                <td className="border border-black px-2 py-3 bg-amber-100/50"></td>
+                                <td className="border border-black px-2 py-3 text-right bg-amber-100/50">{formatMoney(totals.totalIncDiscountVal)}</td>
+                                <td className="border border-black px-2 py-3 text-right font-black text-[11px] text-indigo-900 bg-amber-200/50">{formatMoney(totals.totalIncNet)}</td>
+                                {visibleColumns.remarks && <td className="border border-black px-2 py-3 bg-amber-50"></td>}
                                 {Array.isArray(activeStaffList) && activeStaffList.map(s => (
-                                    <td key={s.id} className="border border-black px-1 py-3 text-right text-indigo-200">
+                                    <td key={s.id} className="border border-black px-1 py-3 text-right text-indigo-900 font-bold bg-indigo-50/50">
                                         {formatMoney(totals.staffTotals[s.id] || 0)}
                                     </td>
                                 ))}
                             </>
                         )}
-                        {!isIncentiveReport && visibleColumns.remarks && <td className="border border-black"></td>}
+                        {!isIncentiveReport && visibleColumns.remarks && <td className="border border-black px-2 py-3 bg-slate-50"></td>}
                     </tr>
                 </tbody>
             </table>
@@ -988,21 +992,7 @@ const Reports = () => {
                         </div>
                     )}
 
-                    {/* Overall Totals */}
-                    <div className="w-full max-w-sm">
-                        <table className="w-full border-collapse text-[10px] border-2 border-black shadow-sm">
-                            <tbody>
-                                <tr className="bg-slate-900 text-white font-black border-t-2 border-black">
-                                    <td className="border border-black px-4 py-3 uppercase tracking-widest">Aggregate Net Revenue</td>
-                                    <td className="border border-black px-4 py-3 text-right">{formatMoney(totals.totalNetRev)}</td>
-                                </tr>
-                                <tr className="bg-indigo-600 text-white font-black border-t-2 border-black">
-                                    <td className="border border-black px-4 py-3 uppercase tracking-widest">Total Incentive Liability</td>
-                                    <td className="border border-black px-4 py-3 text-right">{formatMoney(totals.totalIncNet)}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+
                 </div>
             )}
         </div>
@@ -1031,7 +1021,8 @@ const Reports = () => {
                 )}
             </div>
             <Button variant="outline" onClick={() => setShowConfig(!showConfig)} className={`h-12 px-5 rounded-2xl border-slate-200 ${showConfig ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-inner' : ''}`}><Settings2 className="w-4 h-4 mr-2" /> <span className="text-[10px] font-black uppercase tracking-widest">Layout Config</span></Button>
-            <Button onClick={handleExportPDF} isLoading={isGeneratingPDF} className="h-12 px-8 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 transition-all active:scale-95"><FileDown className="w-4 h-4 mr-2" /> Export Audit</Button>
+            <Button onClick={() => window.print()} className="h-12 px-6 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 transition-all active:scale-95 no-print bg-indigo-600 text-white hover:bg-indigo-700"><Printer className="w-4 h-4 mr-2" /> Print Direct</Button>
+            <Button variant="outline" onClick={handleExportPDF} isLoading={isGeneratingPDF} className="h-12 px-8 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] border-slate-200 bg-white hover:bg-slate-50 shadow-sm transition-all active:scale-95"><FileDown className="w-4 h-4 mr-2 text-indigo-600" /> Export PDF</Button>
         </div>
       </div>
 
@@ -1389,7 +1380,7 @@ const Reports = () => {
                                 )}
                             </div>
 
-                            <div className={`col-span-7 grid ${signatoryConfig.reviewed ? 'grid-cols-3' : 'grid-cols-2'} gap-10 items-end pb-4`}>
+                            <div className={`col-span-7 grid ${signatoryConfig.reviewed?.trim() ? 'grid-cols-3' : 'grid-cols-2'} gap-10 items-end pb-4`}>
                                 <div className="space-y-12">
                                     <div className="h-px bg-black w-full"></div>
                                     <div className="text-center uppercase">
@@ -1397,7 +1388,7 @@ const Reports = () => {
                                         <p className="text-[10px] font-bold text-slate-400 mt-1">{signatoryConfig.prepared}</p>
                                     </div>
                                 </div>
-                                {signatoryConfig.reviewed && (
+                                {signatoryConfig.reviewed?.trim() && (
                                   <div className="space-y-12">
                                       <div className="h-px bg-black w-full"></div>
                                       <div className="text-center uppercase">

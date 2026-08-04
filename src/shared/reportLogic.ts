@@ -1296,7 +1296,9 @@ export const generateCustomReportPDF = (options: {
   const JsPDFConstructor = typeof jsPDF === 'function' ? jsPDF : (jsPDF.jsPDF || jsPDF.default || jsPDF);
   const doc = new JsPDFConstructor({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   
-  const pageWidth = doc.internal.pageSize.getWidth();
+  const rawWidth = doc.internal.pageSize.getWidth();
+  const rawHeight = doc.internal.pageSize.getHeight();
+  const pageWidth = Math.max(rawWidth, rawHeight);
   const margin = 15;
   let currentY = margin;
 
@@ -1364,7 +1366,7 @@ export const generateCustomReportPDF = (options: {
     doc.text("PREPARED BY", margin + (sigWidth * 0), sigY);
     doc.text(signatoryConfig.prepared || '', margin + (sigWidth * 0), sigY + 5);
     
-    if (signatoryConfig.reviewed) {
+    if (signatoryConfig.reviewed?.trim()) {
       doc.text("REVIEWED BY", margin + (sigWidth * 1), sigY);
       doc.text(signatoryConfig.reviewed, margin + (sigWidth * 1), sigY + 5);
     }
@@ -1410,8 +1412,10 @@ export const generateReportPDF = (options: PDFOptions) => {
     format: 'a4'
   });
   
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
+  const rawWidth = doc.internal.pageSize.getWidth();
+  const rawHeight = doc.internal.pageSize.getHeight();
+  const pageWidth = Math.max(rawWidth, rawHeight);
+  const pageHeight = Math.min(rawWidth, rawHeight);
   const margin = 10; // Back to tight but safe margin
   const contentWidth = pageWidth - (margin * 2);
 
@@ -1427,9 +1431,9 @@ export const generateReportPDF = (options: PDFOptions) => {
     // We check if the currency symbol contains characters outside the safe range.
     // If it does, we fallback to the currency code (e.g. QAR) to ensure the PDF is readable.
     if (/[^\x00-\xFF\u20AC]/.test(currencySymbol || '')) {
-      return `${currencyCode || ''} ${formatted}`.trim();
+      return `${currencyCode || ''}\u00A0${formatted}`.trim();
     }
-    return `${currencySymbol || '$'} ${formatted}`;
+    return `${currencySymbol || '$'}\u00A0${formatted}`;
   };
 
   // --- HEADER SECTION ---
@@ -1925,19 +1929,19 @@ export const generateReportPDF = (options: PDFOptions) => {
           { content: 'ITEM / SERVICE', rowSpan: 2 },
           { content: 'DUR.', rowSpan: 2 },
           ...(!isMembershipReport ? [{ content: specialistLabel, rowSpan: 2 }] : []),
-          { content: 'GROSS AMOUNT', rowSpan: 2 },
-          { content: 'DISC %', rowSpan: 2 },
-          { content: 'DISCOUNT AMT', rowSpan: 2 },
-          { content: 'NET REVENUE', rowSpan: 2 },
-          ...(isMembershipReport ? [{ content: 'NET REFERRAL', rowSpan: 2 }] : []),
-          { content: 'INCENTIVE BREAKDOWN', colSpan: 4, styles: { halign: 'center', fillColor: [254, 243, 199], textColor: [15, 23, 42] } },
+          { content: 'GROSS\u00A0AMOUNT', rowSpan: 2 },
+          { content: 'DISC\u00A0%', rowSpan: 2 },
+          { content: 'DISCOUNT\u00A0AMT', rowSpan: 2 },
+          { content: 'NET\u00A0REVENUE', rowSpan: 2 },
+          ...(isMembershipReport && !isReferralReport ? [{ content: 'NET\u00A0REFERRAL', rowSpan: 2 }] : []),
+          { content: 'INCENTIVE\u00A0BREAKDOWN', colSpan: 4, styles: { halign: 'center', fillColor: [254, 243, 199], textColor: [15, 23, 42] } },
           { content: 'REMARKS', rowSpan: 2 },
           ...staffHeaders.map((h: string) => ({ content: h, rowSpan: 2 }))
         ],
         [
           { content: 'Total', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } },
-          { content: 'Disc %', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } },
-          { content: 'Disc. Inc', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } },
+          { content: 'Disc\u00A0%', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } },
+          { content: 'Disc.\u00A0Inc', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } },
           { content: 'Net', styles: { fillColor: [255, 255, 255], textColor: [15, 23, 42] } }
         ]
       ];
@@ -1957,7 +1961,7 @@ export const generateReportPDF = (options: PDFOptions) => {
           r.discount_percent > 0 ? `${r.discount_percent.toFixed(0)}%` : '',
           formatCurrency(r.discount_amount),
           formatCurrency(r.net_revenue),
-          ...(isMembershipReport ? [formatCurrency(r.referral_amount)] : []),
+          ...(isMembershipReport && !isReferralReport ? [formatCurrency(r.referral_amount)] : []),
           formatCurrency(r.inc_total),
           r.inc_discount_percent > 0 ? `${r.inc_discount_percent.toFixed(0)}%` : '',
           formatCurrency(r.inc_discount_val),
@@ -1982,20 +1986,32 @@ export const generateReportPDF = (options: PDFOptions) => {
       const totalActual = data.rows.reduce((sum: number, r: any) => sum + Number(r.actual_price || 0), 0);
       const totalDiscount = data.rows.reduce((sum: number, r: any) => sum + Number(r.discount_amount || 0), 0);
       const totalNetRev = data.rows.reduce((sum: number, r: any) => sum + Number(r.net_revenue || 0), 0);
+      const totalReferralAmt = data.rows.reduce((sum: number, r: any) => sum + Number(r.referral_amount || 0), 0);
       const totalIncTotal = data.rows.reduce((sum: number, r: any) => sum + Number(r.inc_total || 0), 0);
       const totalIncDiscountVal = data.rows.reduce((sum: number, r: any) => sum + Number(r.inc_discount_val || 0), 0);
       const totalIncNet = data.rows.reduce((sum: number, r: any) => sum + Number(r.inc_net || 0), 0);
+
+      const labelColSpan = 1 + // SL.NO.
+        1 + // DATE
+        1 + // GUEST / MEMBER
+        (isMembershipReport && !isReferralReport ? 1 : 0) + // REFERRER
+        1 + // CHECK NO.
+        (outletId === 'all' ? 1 : 0) + // OUTLET
+        1 + // ITEM / SERVICE
+        1 + // DUR.
+        (!isMembershipReport ? 1 : 0); // specialistLabel
 
       callAutoTable(doc, {
         startY: currentY,
         head: head,
         body: body,
         foot: [[
-          { content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: outletId === 'all' ? 8 : 7, styles: { halign: 'right' } },
+          { content: 'AGGREGATE PORTFOLIO TOTALS', colSpan: labelColSpan, styles: { halign: 'right' } },
           { content: formatCurrency(totalActual), styles: { halign: 'right' } },
           { content: '', styles: {} },
           { content: formatCurrency(totalDiscount), styles: { halign: 'right' } },
           { content: formatCurrency(totalNetRev), styles: { halign: 'right' } },
+          ...(isMembershipReport && !isReferralReport ? [{ content: formatCurrency(totalReferralAmt), styles: { halign: 'right' } }] : []),
           { content: formatCurrency(totalIncTotal), styles: { halign: 'right' } },
           { content: '', styles: {} },
           { content: formatCurrency(totalIncDiscountVal), styles: { halign: 'right' } },
@@ -2007,8 +2023,8 @@ export const generateReportPDF = (options: PDFOptions) => {
           fillColor: [15, 23, 42], 
           textColor: [255, 255, 255], 
           fontStyle: 'bold', 
-          fontSize: 5.5, 
-          cellPadding: 1,
+          fontSize: 6, 
+          cellPadding: 2,
           font: 'helvetica'
         },
         theme: 'grid',
@@ -2016,63 +2032,63 @@ export const generateReportPDF = (options: PDFOptions) => {
           fillColor: [15, 23, 42], 
           textColor: [255, 255, 255], 
           fontStyle: 'bold', 
-          fontSize: 5.5, 
+          fontSize: 6, 
           halign: 'center',
           font: 'helvetica'
         },
         styles: { fontSize: 5, cellPadding: 1, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
-        columnStyles: {
-          0: { halign: 'center', cellWidth: 6 },
-          1: { halign: 'center', cellWidth: 12 },
-          2: { fontStyle: 'bold', cellWidth: 18 },
-          // Index 3 is REFERRER (Membership) or CHECK NO. (Others)
-          3: { halign: 'center', cellWidth: 12 },
-          // Index 4 is CHECK NO. (Membership) or OUTLET/ITEM (Others)
-          4: { halign: 'center', cellWidth: 12 },
-          // Index 5 is OUTLET (Membership if all) or ITEM (Others if all) or DUR (Others if single)
-          5: { cellWidth: 15 }, 
-          // Index 6 is ITEM (Membership if all) or DUR (Membership if single) or DUR/EXPERT (Others)
-          6: { cellWidth: 15 },
-          // Index 7 is DUR (Membership if all) or GROSS (Membership if single) or EXPERT/GROSS (Others)
-          7: { cellWidth: 15 },
-          // From index 8/9 onwards we usually hit currency columns
-          8: { halign: 'right', cellWidth: 11 },
-          9: { halign: 'center', cellWidth: 7 },
-          10: { halign: 'right', cellWidth: 11 },
-          11: { halign: 'right', cellWidth: 11 },
-          12: { halign: 'right', cellWidth: 11 },
-          13: { halign: 'center', cellWidth: 7 },
-          14: { halign: 'right', cellWidth: 11 },
-          15: { halign: 'right', fontStyle: 'bold', cellWidth: 12 },
-          16: { fontSize: 4, cellWidth: 15 },
-          ...staffList.reduce((acc: any, _, idx: number) => {
-            acc[17 + idx] = { halign: 'right', cellWidth: 10 };
-            return acc;
-          }, {})
-        },
-        margin: { left: margin, right: margin }
+        margin: { left: margin, right: margin },
+        tableWidth: contentWidth
       });
 
-      // Add Summary Table
-      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      // Add Summary Table (Matching UI Left Box)
+      const finalY = (doc as any).lastAutoTable.finalY + 8;
       
-      const summaryHead = [['STAFF NAME', 'INCENTIVES']];
-      const summaryBody = staffList.map((s: any) => {
-        const total = data.rows.reduce((sum: number, r: any) => sum + (r.staff_splits[s.id] || 0), 0);
-        return [s.name, formatCurrency(total)];
-      });
+      const summaryHead = [['FINANCIAL SUMMARY', 'AMOUNT']];
+      const summaryBody: any[] = [];
       
       summaryBody.push([
-        { content: 'TOTAL', styles: { fontStyle: 'bold', halign: 'center', fillColor: [248, 250, 252] } },
-        { content: formatCurrency(totalIncNet), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 250, 252] } }
+        { content: 'TOTAL INCENTIVE YIELD', styles: { fontStyle: 'bold', fillColor: [254, 243, 199], textColor: [79, 70, 229] } },
+        { content: formatCurrency(totalIncNet), styles: { fontStyle: 'bold', halign: 'right', fillColor: [254, 243, 199], textColor: [79, 70, 229] } }
+      ]);
+
+      if (isReferralReport) {
+        const referralMap: Record<string, number> = {};
+        data.rows.forEach((r: any) => {
+          const name = r.therapist_name || 'Unknown';
+          referralMap[name] = (referralMap[name] || 0) + Number(r.inc_net || 0);
+        });
+        Object.entries(referralMap).forEach(([name, amt]) => {
+          if (amt > 0) {
+            summaryBody.push([
+              { content: `  • ${name}`, styles: { fontStyle: 'italic', textColor: [100, 116, 139] } },
+              { content: formatCurrency(amt), styles: { halign: 'right', textColor: [100, 116, 139] } }
+            ]);
+          }
+        });
+      } else {
+        staffList.forEach((s: any) => {
+          const total = data.rows.reduce((sum: number, r: any) => sum + (r.staff_splits[s.id] || 0), 0);
+          if (total > 0) {
+            summaryBody.push([
+              { content: `  • ${s.name}`, styles: { fontStyle: 'italic', textColor: [100, 116, 139] } },
+              { content: formatCurrency(total), styles: { halign: 'right', textColor: [100, 116, 139] } }
+            ]);
+          }
+        });
+      }
+
+      summaryBody.push([
+        { content: 'PORTFOLIO GROSS REVENUE', styles: { fontStyle: 'bold', fillColor: [255, 255, 255] } },
+        { content: formatCurrency(totalActual), styles: { fontStyle: 'bold', halign: 'right', fillColor: [255, 255, 255] } }
       ]);
       summaryBody.push([
-        { content: 'DISCOUNTED AMOUNT', styles: { fontStyle: 'bold', halign: 'left', fillColor: [238, 242, 255] } },
-        { content: formatCurrency(totalDiscount), styles: { fontStyle: 'bold', halign: 'right', fillColor: [238, 242, 255] } }
+        { content: 'TOTAL REDUCTION / DISCOUNT', styles: { fontStyle: 'bold', fillColor: [255, 255, 255], textColor: [220, 38, 38] } },
+        { content: formatCurrency(totalDiscount), styles: { fontStyle: 'bold', halign: 'right', fillColor: [255, 255, 255], textColor: [220, 38, 38] } }
       ]);
       summaryBody.push([
-        { content: 'NET REVENUE', styles: { fontStyle: 'bold', halign: 'left', fillColor: [219, 234, 254] } },
-        { content: formatCurrency(totalNetRev), styles: { fontStyle: 'bold', halign: 'right', fillColor: [219, 234, 254] } }
+        { content: 'CERTIFIED NET REVENUE', styles: { fontStyle: 'bold', fillColor: [224, 242, 254], textColor: [79, 70, 229] } },
+        { content: formatCurrency(totalNetRev), styles: { fontStyle: 'bold', halign: 'right', fillColor: [224, 242, 254], textColor: [79, 70, 229] } }
       ]);
 
       callAutoTable(doc, {
@@ -2081,19 +2097,20 @@ export const generateReportPDF = (options: PDFOptions) => {
         body: summaryBody,
         theme: 'grid',
         headStyles: { 
-          fillColor: [254, 243, 199], 
-          textColor: [15, 23, 42], 
+          fillColor: [15, 23, 42], 
+          textColor: [255, 255, 255], 
           fontStyle: 'bold', 
-          fontSize: 6, 
+          fontSize: 6.5, 
           halign: 'left',
           font: 'helvetica'
         },
         styles: { fontSize: 6, cellPadding: 2, font: 'helvetica', lineColor: [0, 0, 0], lineWidth: 0.1 },
         columnStyles: {
-          0: { cellWidth: 40 },
-          1: { halign: 'right', cellWidth: 30 }
+          0: { cellWidth: 60 },
+          1: { halign: 'right', cellWidth: 40 }
         },
-        margin: { left: margin }
+        margin: { left: margin },
+        tableWidth: 100
       });
     }
   } else if (reportType === 'monthly_revenue') {
@@ -2333,20 +2350,47 @@ export const generateReportPDF = (options: PDFOptions) => {
   // Render Signatories
   const finalTableY = (doc as any).lastAutoTable?.finalY || currentY + 15;
   if (signatoryConfig) {
-    const sigY = finalTableY + 15;
-    doc.setFontSize(7);
-    doc.setTextColor(15, 23, 42);
+    const hasReviewed = Boolean(signatoryConfig.reviewed?.trim());
     
-    const sigWidth = contentWidth / 3;
+    // Position signatories on right side if reportType === 'incentives', or full width otherwise
+    const isIncentiveReport = reportType === 'incentives';
+    const startX = isIncentiveReport ? margin + 115 : margin;
+    const availableW = isIncentiveReport ? (contentWidth - 115) : contentWidth;
     
-    doc.text("PREPARED BY", margin + (sigWidth * 0), sigY);
-    doc.text(signatoryConfig.prepared, margin + (sigWidth * 0), sigY + 5);
+    // Position vertically: align with bottom area
+    const sigY = Math.max(finalTableY + 18, pageHeight - 25);
     
-    doc.text("REVIEWED BY", margin + (sigWidth * 1), sigY);
-    doc.text(signatoryConfig.reviewed, margin + (sigWidth * 1), sigY + 5);
-    
-    doc.text("APPROVED BY", margin + (sigWidth * 2), sigY);
-    doc.text(signatoryConfig.approved, margin + (sigWidth * 2), sigY + 5);
+    const sigItems = [
+      { label: 'PREPARED BY:', val: signatoryConfig.prepared },
+      ...(hasReviewed ? [{ label: 'REVIEWED BY:', val: signatoryConfig.reviewed }] : []),
+      { label: 'APPROVED BY:', val: signatoryConfig.approved }
+    ];
+
+    const count = sigItems.length;
+    const colWidth = availableW / count;
+
+    sigItems.forEach((item, idx) => {
+      const centerX = startX + (colWidth * idx) + (colWidth / 2);
+      const lineLeft = centerX - 25;
+      const lineRight = centerX + 25;
+      
+      // Draw signature line above text
+      doc.setDrawColor(15, 23, 42);
+      doc.setLineWidth(0.4);
+      doc.line(lineLeft, sigY - 8, lineRight, sigY - 8);
+      
+      // Draw Label
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(item.label, centerX, sigY, { align: 'center' });
+      
+      // Draw Name/Title
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(item.val || '', centerX, sigY + 4, { align: 'center' });
+    });
   }
 
   // --- FOOTER SECTION ---
