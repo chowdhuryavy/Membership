@@ -1328,8 +1328,27 @@ export const generateCustomReportPDF = (options: {
 
   currentY += 20;
 
+  const callAutoTable = (doc: any, options: any) => {
+    if (typeof doc.autoTable === 'function') {
+      try { return doc.autoTable(options); } catch (e) { console.error('DEBUG:', (e as Error).message); }
+    }
+    const plugin = (autoTable as any).default || autoTable;
+    if (typeof plugin === 'function') {
+      try { return plugin(doc, options); } catch (e) {
+        try { plugin(doc); if (typeof doc.autoTable === 'function') return doc.autoTable(options); } catch (e2) {}
+      }
+    }
+    const Constructor = doc.constructor || JsPDFConstructor;
+    if (Constructor && typeof (Constructor as any).autoTable === 'function') {
+      try { return (Constructor as any).autoTable(doc, options); } catch (e) {}
+    }
+    if (typeof plugin === 'function') {
+      try { doc.autoTable = function(opts: any) { return plugin(this, opts); }; return doc.autoTable(options); } catch (e) {}
+    }
+  };
+
   // Table
-  autoTable(doc, {
+  callAutoTable(doc, {
     startY: currentY,
     head: [headers],
     body: body,

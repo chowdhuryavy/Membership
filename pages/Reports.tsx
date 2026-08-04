@@ -920,7 +920,7 @@ const Reports = () => {
                 </tbody>
             </table>
             {isIncentiveReport && (
-                <div className="mt-12 space-y-12">
+                <div className="mt-8 space-y-8">
                     {/* Primary Staff Incentive Summary - Show if there are staff totals or if not a referral report */}
                     {(incentiveDept !== 'Referral' || Object.values(totals.staffTotals).some(v => Number(v) > 0)) && (
                         <div className="w-full max-w-sm">
@@ -1000,7 +1000,7 @@ const Reports = () => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700 pb-20">
+    <div className="space-y-8 animate-in fade-in duration-700 pb-20 print:pb-0">
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-xl no-print">
         <div className="flex items-center gap-6">
             <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-indigo-100"><FileText className="w-7 h-7" /></div>
@@ -1320,7 +1320,7 @@ const Reports = () => {
                       </div>
 
                       {signatoryConfig && (
-                        <div className="mt-16 grid grid-cols-12 gap-10">
+                        <div className="mt-8 grid grid-cols-12 gap-10">
                             <div className="col-span-5">
                                 {(reportType === 'daily_sales' || reportType === 'incentives' || reportType === 'members_joined') && (
                                     <table className="w-full border-collapse border-2 border-black font-black text-[10px]">
@@ -1381,7 +1381,7 @@ const Reports = () => {
                             </div>
 
                             <div className={`col-span-7 grid ${signatoryConfig.reviewed?.trim() ? 'grid-cols-3' : 'grid-cols-2'} gap-10 items-end pb-4`}>
-                                <div className="space-y-12">
+                                <div className="space-y-8">
                                     <div className="h-px bg-black w-full"></div>
                                     <div className="text-center uppercase">
                                         <p className="font-black text-xs text-slate-900">Prepared By:</p>
@@ -1389,7 +1389,7 @@ const Reports = () => {
                                     </div>
                                 </div>
                                 {signatoryConfig.reviewed?.trim() && (
-                                  <div className="space-y-12">
+                                  <div className="space-y-8">
                                       <div className="h-px bg-black w-full"></div>
                                       <div className="text-center uppercase">
                                           <p className="font-black text-xs text-slate-900">Reviewed By:</p>
@@ -1397,7 +1397,7 @@ const Reports = () => {
                                       </div>
                                   </div>
                                 )}
-                                <div className="space-y-12">
+                                <div className="space-y-8">
                                     <div className="h-px bg-black w-full"></div>
                                     <div className="text-center uppercase">
                                         <p className="font-black text-xs text-slate-900">Approved By:</p>
@@ -1408,7 +1408,7 @@ const Reports = () => {
                         </div>
                       )}
 
-                      <div className="mt-12 flex justify-end">
+                      <div className="mt-8 flex justify-end">
                           <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Page 1 of 1 &bull; System ID: {currentOutlet?.id?.substring(0,8)}</span>
                       </div>
                   </div>
@@ -1434,10 +1434,12 @@ const Reports = () => {
                 position: absolute !important; 
                 left: 0 !important; 
                 top: 0 !important; 
-                width: 100% !important; 
+                width: 100% !important;
+                height: 100% !important;
                 padding: 0 !important;
                 margin: 0 !important;
                 background: white !important;
+                box-sizing: border-box !important;
             }
             
             /* Preserve colors */
@@ -1448,7 +1450,7 @@ const Reports = () => {
             
             @page { 
                 size: A4 landscape; 
-                margin: 10mm; 
+                margin: 5mm; 
             }
         }
       `}</style>
