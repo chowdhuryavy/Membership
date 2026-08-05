@@ -1,6 +1,7 @@
 export type Permission = 
   | 'dashboard:view' | 'dashboard:view_financials' | 'dashboard:view_insights'
   | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:bulk_freeze' | 'members:renew' | 'members:print_contract' | 'members:view_history'
+  | 'checkin:view' | 'checkin:manage' | 'checkin:kiosk'
   | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete'
   | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email' | 'users:manage_overrides' | 'users:edit_self'
   | 'staff:view' | 'staff:manage' | 'staff:manage_leaves' | 'staff:manage_portal_settings'
@@ -512,4 +513,23 @@ export interface IncentiveRule {
   disable_shared_incentive?: boolean;
   referral_payee?: 'Staff' | 'Referrer';
   is_active: boolean;
+}
+
+export interface MemberCheckIn {
+  id: string;
+  member_id: string;
+  membership_number: string;
+  guest_name: string;
+  outlet_id: string;
+  property_id?: string;
+  check_in_time: string;
+  check_out_time?: string | null;
+  duration_minutes?: number | null;
+  check_in_method: 'reception_scan' | 'reception_manual' | 'self_kiosk_qr' | 'self_kiosk_number';
+  checked_in_by?: string;
+  notes?: string;
+  status: 'active' | 'completed';
+  membership_status_at_checkin?: string;
+  access_type?: string;
+  created_at?: string;
 }

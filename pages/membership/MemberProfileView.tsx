@@ -18,6 +18,7 @@ import { format, differenceInCalendarDays, parse, isAfter, addDays, isBefore, st
 import { motion, AnimatePresence } from 'motion/react';
 import { MembersAgreement } from '../../components/MembersAgreement';
 import { SignatureModal } from '../../components/SignatureModal';
+import { DigitalMembershipCardModal } from '../../components/DigitalMembershipCardModal';
 
 interface MemberProfileViewProps {
   member: Member;
@@ -58,6 +59,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const [freezeError, setFreezeError] = useState<string | null>(null);
 
   const [showAgreement, setShowAgreement] = useState(false);
+  const [showPassModal, setShowPassModal] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showRevertCancelModal, setShowRevertCancelModal] = useState(false);
@@ -683,6 +685,15 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                       <div className={`mt-6 inline-flex px-6 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm ${isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : effectiveStatus === MemberStatus.FROZEN ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                         <div className={`w-2 h-2 rounded-full mr-2 ${isActive ? 'bg-emerald-500 animate-pulse' : effectiveStatus === MemberStatus.FROZEN ? 'bg-amber-500 animate-pulse' : 'bg-red-500'}`}></div>
                         {effectiveStatus}
+                      </div>
+
+                      <div className="mt-4">
+                        <button
+                          onClick={() => setShowPassModal(true)}
+                          className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+                        >
+                          <Wallet className="w-4 h-4 text-emerald-400" /> Digital Wallet Pass
+                        </button>
                       </div>
                       
                       <div className="mt-10 space-y-3">
@@ -1844,6 +1855,14 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                 </CardContent>
             </Card>
         </div>
+      )}
+
+      {showPassModal && (
+        <DigitalMembershipCardModal
+          member={viewingMember}
+          outletName={currentOutlet?.name}
+          onClose={() => setShowPassModal(false)}
+        />
       )}
     </div>
   );

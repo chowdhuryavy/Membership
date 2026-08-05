@@ -1,6 +1,7 @@
 import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, LogModule, LogSeverity, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, CustomReportConfig, PTMember, PTSession } from '../types';
 import type { Notification } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
+export { supabase, supabaseUrl, supabaseAnonKey };
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format, parse, differenceInCalendarDays } from 'date-fns';
 
@@ -25,6 +26,8 @@ const startOfDay = (date: Date) => {
 };
 
 export const DEFAULT_MEMBER_COLUMNS = 'id, outlet_id, membership_type_id, membership_number, guest_name, category_id, start_date, original_end_date, current_end_date, cancellation_date, actual_rate, discount, net_amount, original_net_amount, daily_rate, check_no, status, created_at, nationality, dob, email, phone, is_married, package_type, access_type, membership_type, spouse_name, spouse_dob, kids, remarks, sales_rep_id, notes, referrer_name, privilege_usage';
+
+export const isSupabaseConfigured = () => !!supabase;
 
 class DatabaseService {
   private static supabaseFailed = false;
@@ -1891,14 +1894,28 @@ class DatabaseService {
   }
 
   async getOutlets(): Promise<Outlet[]> {
+    const defaultOutlets: Outlet[] = [
+      {
+        id: 'outlet-1',
+        property_id: 'prop-1',
+        name: 'Nova Spa & Health Club',
+        logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80'
+      }
+    ];
+
+    const local = localStorage.getItem('company_outlets_cache');
+    let cached: Outlet[] = local ? JSON.parse(local) : defaultOutlets;
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('outlets').select('*');
         if (error) throw error;
-        return (data || []) as Outlet[];
-      }, []);
+        const res = (data && data.length > 0) ? (data as Outlet[]) : cached;
+        localStorage.setItem('company_outlets_cache', JSON.stringify(res));
+        return res;
+      }, cached);
     }
-    return [];
+    return cached;
   }
 
   async addOutlet(outlet: Omit<Outlet, 'id'>) {
@@ -1968,14 +1985,28 @@ class DatabaseService {
   }
 
   async getProperties(): Promise<Property[]> {
+    const defaultProperties: Property[] = [
+      {
+        id: 'prop-1',
+        name: 'Nova Luxury Resort & Spa',
+        address: '123 Health & Spa Boulevard, Luxury District',
+        logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80'
+      }
+    ];
+
+    const local = localStorage.getItem('company_properties_cache');
+    let cached: Property[] = local ? JSON.parse(local) : defaultProperties;
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('properties').select('*');
         if (error) throw error;
-        return (data || []) as Property[];
-      }, []);
+        const res = (data && data.length > 0) ? (data as Property[]) : cached;
+        localStorage.setItem('company_properties_cache', JSON.stringify(res));
+        return res;
+      }, cached);
     }
-    return [];
+    return cached;
   }
 
   async addProperty(prop: Omit<Property, 'id'>) {

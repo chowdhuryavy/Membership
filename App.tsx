@@ -29,11 +29,14 @@ import Logs from './pages/Logs';
 import SettingsPage from './pages/Settings';
 import Profile from './pages/Profile';
 import NotificationsPage from './pages/Notifications';
+import AttendanceCheckIn from './pages/AttendanceCheckIn';
 import MassageScheduling from './massage-scheduling/MassageScheduling'; 
 import Sales from './pages/Sales'; 
+import { PublicMemberPass } from './pages/PublicMemberPass'; 
 import { 
   LayoutDashboard, 
   Users, 
+  QrCode,
   Tag, 
   BarChart3, 
   LogOut, 
@@ -376,6 +379,7 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
     const ALL_NAV_ITEMS = useMemo(() => {
         const items = [
             { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:view' as Permission },
+            { id: 'checkin', to: '/checkin', icon: QrCode, label: 'Facility Check-In', permission: 'members:view' as Permission },
             { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
             { id: 'pt-members', to: '/pt-members', icon: Dumbbell, label: 'PT Members', permission: 'members:view' as Permission },
             { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
@@ -509,6 +513,7 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
     const ALL_NAV_ITEMS = useMemo(() => {
         const items = [
             { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:view' as Permission },
+            { id: 'checkin', to: '/checkin', icon: QrCode, label: 'Facility Check-In', permission: 'members:view' as Permission },
             { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
             { id: 'pt-members', to: '/pt-members', icon: Dumbbell, label: 'PT Members', permission: 'members:view' as Permission },
             { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
@@ -829,8 +834,10 @@ const App = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/staff-login" element={<StaffLogin />} />
           <Route path="/staff-schedule" element={<StaffSchedule />} />
+          <Route path="/pass" element={<PublicMemberPass />} />
           <Route element={<ProtectedLayout />}>
               <Route index element={<Dashboard />} />
+              <Route path="checkin" element={<AttendanceCheckIn />} />
               <Route path="members" element={<Members />} />
               <Route path="pt-members" element={<PTMembers />} />
               <Route path="staff" element={<StaffPage />} />

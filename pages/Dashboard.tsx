@@ -921,7 +921,7 @@ const Dashboard = () => {
                     {breakdownChartData.length > 0 ? (
                         <div className="w-full h-full flex flex-col">
                             <div className="flex-1 min-h-[280px]">
-                                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                     <BarChart data={breakdownChartData} layout="vertical" margin={{ left: -10, right: 40, top: 0, bottom: 0 }}>
                                         <XAxis type="number" hide />
                                         <YAxis dataKey="name" type="category" hide />
@@ -971,7 +971,7 @@ const Dashboard = () => {
                     </div>
                 </CardHeader>
                 <CardContent className="p-8 h-[380px]">
-                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                         <BarChart data={performanceTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                             <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
@@ -1004,7 +1004,7 @@ const Dashboard = () => {
                     </CardHeader>
                     <CardContent className="p-0 h-[260px] flex items-center">
                         <div className="flex-1 h-full">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                 <PieChart>
                                     <Pie data={revenueMix} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                                         {revenueMix.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
@@ -1142,7 +1142,7 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent className="p-0 h-[260px] flex items-center">
                 <div className="flex-1 h-full">
-                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                         <PieChart>
                             <Pie data={membershipTypeMix} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                                 {membershipTypeMix.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
@@ -1173,7 +1173,7 @@ const Dashboard = () => {
                 </h3>
             </CardHeader>
             <CardContent className="p-6 h-[260px]">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart data={membershipTypeMix} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
                         <XAxis type="number" hide />
@@ -1272,7 +1272,7 @@ const Dashboard = () => {
                 </h3>
             </CardHeader>
             <CardContent className="p-6 h-[300px]">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart data={peakHours} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                         <XAxis dataKey="hour" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
@@ -1303,7 +1303,7 @@ const Dashboard = () => {
                              <p className="text-[10px] font-black uppercase">No Revenue Collected</p>
                         </div>
                     ) : (
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                             <PieChart>
                                 <Pie data={[
                                     { name: 'Member', value: stats.memberRevenue, color: '#10b981' },
@@ -1331,7 +1331,7 @@ const Dashboard = () => {
                     </h3>
                 </CardHeader>
                 <CardContent className="p-6 h-[150px]">
-                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                         <BarChart data={[{ name: 'MTD Sales', Gross: stats.grossRevenue, Discount: stats.totalDiscounts, Net: stats.netRevenue }]} layout="vertical" margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
                             <XAxis type="number" tickFormatter={(val) => formatMoney(val).replace(/[^\d.,]/g, '')} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />

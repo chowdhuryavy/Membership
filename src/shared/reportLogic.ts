@@ -1269,7 +1269,7 @@ export interface PDFOptions {
   currencyCode?: string;
   reportTitle: string;
   outletId?: string;
-  date: Date;
+  date: Date | string;
   logoUrl?: string;
   reportType: string;
   membershipTypeName?: string;
