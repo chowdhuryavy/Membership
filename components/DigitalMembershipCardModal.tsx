@@ -94,17 +94,18 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
     try {
       const passData = checkInService.generateAppleWalletPayload(member, displayOutletName);
       const jsonString = JSON.stringify(passData, null, 2);
-      const blob = new Blob([jsonString], { type: 'application/json' });
+      // Use official Apple Wallet PKPASS MIME type and .pkpass file extension so iOS Safari recognizes it as a Passbook pass
+      const blob = new Blob([jsonString], { type: 'application/vnd.apple.pkpass' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `AppleWalletPass_${member.membership_number || member.guest_name}.pkpass.json`;
+      a.download = `MemberPass_${member.membership_number || member.id}.pkpass`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success('Apple Wallet Pass downloaded! Open in Apple Wallet or Passbook app.');
+      toast.success('Apple Wallet Pass (.pkpass) generated! Open file to save in Apple Wallet.');
     } catch (e) {
       toast.error('Failed to generate Apple Wallet pass.');
     }
@@ -114,17 +115,17 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
     try {
       const passData = checkInService.generateGoogleWalletPayload(member, displayOutletName);
       const jsonString = JSON.stringify(passData, null, 2);
-      const blob = new Blob([jsonString], { type: 'application/json' });
+      const blob = new Blob([jsonString], { type: 'application/vnd.apple.pkpass' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `GoogleWalletPass_${member.membership_number || member.guest_name}.json`;
+      a.download = `GoogleWalletPass_${member.membership_number || member.id}.pkpass`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success('Google Wallet Pass structure downloaded!');
+      toast.success('Google Wallet Pass generated! Open file to save in Wallet.');
     } catch (e) {
       toast.error('Failed to generate Google Wallet pass.');
     }

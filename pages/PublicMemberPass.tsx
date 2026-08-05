@@ -151,16 +151,16 @@ export const PublicMemberPass: React.FC = () => {
     try {
       const passData = checkInService.generateAppleWalletPayload(member, propertyName);
       const jsonString = JSON.stringify(passData, null, 2);
-      const blob = new Blob([jsonString], { type: 'application/json' });
+      const blob = new Blob([jsonString], { type: 'application/vnd.apple.pkpass' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `AppleWalletPass_${member.membership_number || member.guest_name}.pkpass.json`;
+      a.download = `MemberPass_${member.membership_number || member.id}.pkpass`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success('Apple Wallet Pass generated! Save to your Apple Wallet.');
+      toast.success('Apple Wallet Pass (.pkpass) generated! Tap open to save in Apple Wallet.');
     } catch (e) {
       toast.error('Failed to generate Apple Wallet pass.');
     }
@@ -171,16 +171,16 @@ export const PublicMemberPass: React.FC = () => {
     try {
       const passData = checkInService.generateGoogleWalletPayload(member, propertyName);
       const jsonString = JSON.stringify(passData, null, 2);
-      const blob = new Blob([jsonString], { type: 'application/json' });
+      const blob = new Blob([jsonString], { type: 'application/vnd.apple.pkpass' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `GoogleWalletPass_${member.membership_number || member.guest_name}.json`;
+      a.download = `GoogleWalletPass_${member.membership_number || member.id}.pkpass`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success('Google Wallet Pass structure downloaded!');
+      toast.success('Google Wallet Pass generated! Open file to save in Wallet.');
     } catch (e) {
       toast.error('Failed to generate Google Wallet pass.');
     }
