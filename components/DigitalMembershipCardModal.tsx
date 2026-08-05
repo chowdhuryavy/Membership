@@ -9,7 +9,7 @@ import { Member } from '../types';
 import { checkInService } from '../services/checkInService';
 import { generatePassToken, getPublicPassUrl } from '../utils/passToken';
 import { useSettings } from '../contexts/SettingsContext';
-import { WalletPassModal } from './WalletPassModal';
+import { detectDeviceOS, createPkpassZipBlob, generateGoogleWalletSaveUrl } from '../services/pkpassService';
 import toast from 'react-hot-toast';
 
 interface DigitalMembershipCardModalProps {
@@ -36,7 +36,6 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   const [logoError, setLogoError] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'scan_qr' | 'view_card'>('scan_qr');
   const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
-  const [walletModalType, setWalletModalType] = useState<'apple' | 'google' | null>(null);
 
   // Token & 5-minute expiration countdown
   const [token, setToken] = useState<string>('');
@@ -92,11 +91,12 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   const isFrozen = member.status === 'Frozen';
   const isActive = member.status === 'Active';
 
-  const triggerActualPkpassDownload = () => {
+  const deviceOS = detectDeviceOS();
+
+  const handleDownloadAppleWallet = async () => {
+    const toastId = toast.loading('Generating Apple Wallet Pass...');
     try {
-      const passData = checkInService.generateAppleWalletPayload(member, displayOutletName);
-      const jsonString = JSON.stringify(passData, null, 2);
-      const blob = new Blob([jsonString], { type: 'application/vnd.apple.pkpass' });
+      const blob = await createPkpassZipBlob(member, displayOutletName || propertyName);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -104,18 +104,40 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+
+      if (deviceOS === 'ios') {
+        toast.success('Apple Wallet Pass (.pkpass) generated! Open file to save in Apple Wallet.', { id: toastId });
+      } else {
+        toast.success('Apple Wallet Pass (.pkpass) downloaded successfully!', { id: toastId });
+      }
     } catch (e) {
-      toast.error('Failed to generate .pkpass file.');
+      console.error(e);
+      toast.error('Failed to generate Apple Wallet pass.', { id: toastId });
     }
   };
 
-  const handleDownloadAppleWallet = () => {
-    setWalletModalType('apple');
-  };
+  const handleDownloadGoogleWallet = async () => {
+    const toastId = toast.loading('Saving to Google Wallet...');
+    try {
+      const saveUrl = generateGoogleWalletSaveUrl(member, displayOutletName || propertyName);
+      window.open(saveUrl, '_blank');
 
-  const handleDownloadGoogleWallet = () => {
-    setWalletModalType('google');
+      const blob = await createPkpassZipBlob(member, displayOutletName || propertyName);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `GoogleWalletPass_${member.membership_number || member.id}.pkpass`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+
+      toast.success('Opening Google Wallet... Save your pass!', { id: toastId });
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to save to Google Wallet.', { id: toastId });
+    }
   };
 
   return (
@@ -486,31 +508,57 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
 
           {/* WALLET INTEGRATION BUTTONS */}
           <div className="space-y-3 pt-3 border-t border-slate-100">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block text-center">
-              Add Digital Pass to Mobile Phone Wallet
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Add Digital Pass to Mobile Phone Wallet
+              </span>
+              {deviceOS !== 'desktop' && (
+                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                  Detected: {deviceOS === 'ios' ? 'Apple iPhone/iOS' : 'Android Mobile'}
+                </span>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Apple Wallet Button */}
               <button
                 onClick={handleDownloadAppleWallet}
-                className="flex items-center justify-center gap-3 px-4 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-slate-800 transition-all border border-slate-800 shadow-md active:scale-[0.98]"
+                className={`flex items-center justify-between px-4 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-slate-800 transition-all border border-slate-800 shadow-md active:scale-[0.98] ${
+                  deviceOS === 'ios' ? 'ring-2 ring-indigo-500 ring-offset-2' : ''
+                }`}
               >
-                <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center">
-                  <AppleWalletIcon />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center">
+                    <AppleWalletIcon />
+                  </div>
+                  <span>Add to Apple Wallet</span>
                 </div>
-                <span>Add to Apple Wallet</span>
+                {deviceOS === 'ios' && (
+                  <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-bold lowercase tracking-normal">
+                    Recommended
+                  </span>
+                )}
               </button>
 
               {/* Google Wallet Button */}
               <button
                 onClick={handleDownloadGoogleWallet}
-                className="flex items-center justify-center gap-3 px-4 py-3 bg-white text-slate-900 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-slate-50 transition-all border border-slate-300 shadow-md active:scale-[0.98]"
+                className={`flex items-center justify-between px-4 py-3 bg-white text-slate-900 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-slate-50 transition-all border border-slate-300 shadow-md active:scale-[0.98] ${
+                  deviceOS === 'android' ? 'ring-2 ring-indigo-500 ring-offset-2' : ''
+                }`}
               >
-                <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center">
-                  <GooglePayIcon />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <GooglePayIcon />
+                  </div>
+                  <span>Add to Google Wallet</span>
                 </div>
-                <span>Add to Google Wallet</span>
+                {deviceOS === 'android' && (
+                  <span className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-700 border border-emerald-500/30 rounded text-[9px] font-bold lowercase tracking-normal">
+                    Recommended
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -533,16 +581,6 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
           </button>
         </div>
       </div>
-
-      <WalletPassModal
-        isOpen={walletModalType !== null}
-        onClose={() => setWalletModalType(null)}
-        walletType={walletModalType || 'apple'}
-        member={member}
-        propertyName={propertyName}
-        passUrl={mobilePassUrl}
-        onDownloadPkpass={triggerActualPkpassDownload}
-      />
     </div>
   );
 };

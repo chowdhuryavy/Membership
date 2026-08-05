@@ -10,7 +10,7 @@ import { decodePassToken, PassTokenData } from '../utils/passToken';
 import { db } from '../services/mockSupabase';
 import { Member } from '../types';
 import { checkInService } from '../services/checkInService';
-import { WalletPassModal } from '../components/WalletPassModal';
+import { detectDeviceOS, createPkpassZipBlob, generateGoogleWalletSaveUrl } from '../services/pkpassService';
 import toast from 'react-hot-toast';
 
 export const PublicMemberPass: React.FC = () => {
@@ -44,7 +44,6 @@ export const PublicMemberPass: React.FC = () => {
   const [logoError, setLogoError] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'front' | 'back'>('front');
-  const [walletModalType, setWalletModalType] = useState<'apple' | 'google' | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -148,12 +147,13 @@ export const PublicMemberPass: React.FC = () => {
     return `${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}`;
   };
 
-  const triggerActualPkpassDownload = () => {
+  const deviceOS = detectDeviceOS();
+
+  const handleDownloadAppleWallet = async () => {
     if (!member) return;
+    const toastId = toast.loading('Generating Apple Wallet Pass...');
     try {
-      const passData = checkInService.generateAppleWalletPayload(member, propertyName);
-      const jsonString = JSON.stringify(passData, null, 2);
-      const blob = new Blob([jsonString], { type: 'application/vnd.apple.pkpass' });
+      const blob = await createPkpassZipBlob(member, propertyName);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -161,18 +161,41 @@ export const PublicMemberPass: React.FC = () => {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+
+      if (deviceOS === 'ios') {
+        toast.success('Apple Wallet Pass (.pkpass) generated! Open file to save in Apple Wallet.', { id: toastId });
+      } else {
+        toast.success('Apple Wallet Pass (.pkpass) downloaded successfully!', { id: toastId });
+      }
     } catch (e) {
-      toast.error('Failed to generate .pkpass file.');
+      console.error(e);
+      toast.error('Failed to generate Apple Wallet pass.', { id: toastId });
     }
   };
 
-  const handleDownloadAppleWallet = () => {
-    setWalletModalType('apple');
-  };
+  const handleDownloadGoogleWallet = async () => {
+    if (!member) return;
+    const toastId = toast.loading('Saving to Google Wallet...');
+    try {
+      const saveUrl = generateGoogleWalletSaveUrl(member, propertyName);
+      window.open(saveUrl, '_blank');
 
-  const handleDownloadGoogleWallet = () => {
-    setWalletModalType('google');
+      const blob = await createPkpassZipBlob(member, propertyName);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `GoogleWalletPass_${member.membership_number || member.id}.pkpass`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+
+      toast.success('Opening Google Wallet... Save your pass!', { id: toastId });
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to save to Google Wallet.', { id: toastId });
+    }
   };
 
   if (isLoading) {
@@ -453,25 +476,51 @@ export const PublicMemberPass: React.FC = () => {
 
         {/* MOBILE WALLET DOWNLOAD BUTTONS */}
         <div className="w-full space-y-3 pt-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block text-center">
-            Save Pass to Mobile Phone Wallet
-          </span>
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block text-center">
+              Save Pass to Mobile Phone Wallet
+            </span>
+            {deviceOS !== 'desktop' && (
+              <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                Detected: {deviceOS === 'ios' ? 'Apple iOS' : 'Android'}
+              </span>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               onClick={handleDownloadAppleWallet}
-              className="flex items-center justify-center gap-3 px-4 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-black text-xs uppercase tracking-wider border border-slate-800 shadow-xl transition-all active:scale-95"
+              className={`flex items-center justify-between gap-3 px-4 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-black text-xs uppercase tracking-wider border border-slate-800 shadow-xl transition-all active:scale-95 ${
+                deviceOS === 'ios' ? 'ring-2 ring-indigo-500 ring-offset-2 ring-offset-slate-950' : ''
+              }`}
             >
-              <AppleWalletIcon />
-              <span>Add to Apple Wallet</span>
+              <div className="flex items-center gap-2.5">
+                <AppleWalletIcon />
+                <span>Apple Wallet</span>
+              </div>
+              {deviceOS === 'ios' && (
+                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-bold lowercase tracking-normal">
+                  Recommended
+                </span>
+              )}
             </button>
 
             <button
               onClick={handleDownloadGoogleWallet}
-              className="flex items-center justify-center gap-3 px-4 py-3.5 bg-white hover:bg-slate-100 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-wider shadow-xl transition-all active:scale-95"
+              className={`flex items-center justify-between gap-3 px-4 py-3.5 bg-white hover:bg-slate-100 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-wider shadow-xl transition-all active:scale-95 ${
+                deviceOS === 'android' ? 'ring-2 ring-indigo-500 ring-offset-2 ring-offset-slate-950' : ''
+              }`}
             >
-              <GooglePayIcon />
-              <span>Add to Google Wallet</span>
+              <div className="flex items-center gap-2.5">
+                <GooglePayIcon />
+                <span>Google Wallet</span>
+              </div>
+              {deviceOS === 'android' && (
+                <span className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-700 border border-emerald-500/30 rounded text-[9px] font-bold lowercase tracking-normal">
+                  Recommended
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -483,18 +532,6 @@ export const PublicMemberPass: React.FC = () => {
           {propertyName} • Digital Wallet Membership
         </p>
       </div>
-
-      {member && (
-        <WalletPassModal
-          isOpen={walletModalType !== null}
-          onClose={() => setWalletModalType(null)}
-          walletType={walletModalType || 'apple'}
-          member={member}
-          propertyName={propertyName}
-          passUrl={window.location.href}
-          onDownloadPkpass={triggerActualPkpassDownload}
-        />
-      )}
     </div>
   );
 };
