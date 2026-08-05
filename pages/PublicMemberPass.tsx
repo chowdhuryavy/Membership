@@ -10,6 +10,7 @@ import { decodePassToken, PassTokenData } from '../utils/passToken';
 import { db } from '../services/mockSupabase';
 import { Member } from '../types';
 import { checkInService } from '../services/checkInService';
+import { WalletPassModal } from '../components/WalletPassModal';
 import toast from 'react-hot-toast';
 
 export const PublicMemberPass: React.FC = () => {
@@ -43,6 +44,7 @@ export const PublicMemberPass: React.FC = () => {
   const [logoError, setLogoError] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'front' | 'back'>('front');
+  const [walletModalType, setWalletModalType] = useState<'apple' | 'google' | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -146,7 +148,7 @@ export const PublicMemberPass: React.FC = () => {
     return `${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}`;
   };
 
-  const handleDownloadAppleWallet = () => {
+  const triggerActualPkpassDownload = () => {
     if (!member) return;
     try {
       const passData = checkInService.generateAppleWalletPayload(member, propertyName);
@@ -160,30 +162,17 @@ export const PublicMemberPass: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success('Apple Wallet Pass (.pkpass) generated! Tap open to save in Apple Wallet.');
     } catch (e) {
-      toast.error('Failed to generate Apple Wallet pass.');
+      toast.error('Failed to generate .pkpass file.');
     }
   };
 
+  const handleDownloadAppleWallet = () => {
+    setWalletModalType('apple');
+  };
+
   const handleDownloadGoogleWallet = () => {
-    if (!member) return;
-    try {
-      const passData = checkInService.generateGoogleWalletPayload(member, propertyName);
-      const jsonString = JSON.stringify(passData, null, 2);
-      const blob = new Blob([jsonString], { type: 'application/vnd.apple.pkpass' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `GoogleWalletPass_${member.membership_number || member.id}.pkpass`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success('Google Wallet Pass generated! Open file to save in Wallet.');
-    } catch (e) {
-      toast.error('Failed to generate Google Wallet pass.');
-    }
+    setWalletModalType('google');
   };
 
   if (isLoading) {
@@ -494,6 +483,18 @@ export const PublicMemberPass: React.FC = () => {
           {propertyName} • Digital Wallet Membership
         </p>
       </div>
+
+      {member && (
+        <WalletPassModal
+          isOpen={walletModalType !== null}
+          onClose={() => setWalletModalType(null)}
+          walletType={walletModalType || 'apple'}
+          member={member}
+          propertyName={propertyName}
+          passUrl={window.location.href}
+          onDownloadPkpass={triggerActualPkpassDownload}
+        />
+      )}
     </div>
   );
 };

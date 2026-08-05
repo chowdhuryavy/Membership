@@ -9,6 +9,7 @@ import { Member } from '../types';
 import { checkInService } from '../services/checkInService';
 import { generatePassToken, getPublicPassUrl } from '../utils/passToken';
 import { useSettings } from '../contexts/SettingsContext';
+import { WalletPassModal } from './WalletPassModal';
 import toast from 'react-hot-toast';
 
 interface DigitalMembershipCardModalProps {
@@ -35,6 +36,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   const [logoError, setLogoError] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'scan_qr' | 'view_card'>('scan_qr');
   const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
+  const [walletModalType, setWalletModalType] = useState<'apple' | 'google' | null>(null);
 
   // Token & 5-minute expiration countdown
   const [token, setToken] = useState<string>('');
@@ -90,11 +92,10 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   const isFrozen = member.status === 'Frozen';
   const isActive = member.status === 'Active';
 
-  const handleDownloadAppleWallet = () => {
+  const triggerActualPkpassDownload = () => {
     try {
       const passData = checkInService.generateAppleWalletPayload(member, displayOutletName);
       const jsonString = JSON.stringify(passData, null, 2);
-      // Use official Apple Wallet PKPASS MIME type and .pkpass file extension so iOS Safari recognizes it as a Passbook pass
       const blob = new Blob([jsonString], { type: 'application/vnd.apple.pkpass' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -104,31 +105,17 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-
-      toast.success('Apple Wallet Pass (.pkpass) generated! Open file to save in Apple Wallet.');
     } catch (e) {
-      toast.error('Failed to generate Apple Wallet pass.');
+      toast.error('Failed to generate .pkpass file.');
     }
   };
 
-  const handleDownloadGoogleWallet = () => {
-    try {
-      const passData = checkInService.generateGoogleWalletPayload(member, displayOutletName);
-      const jsonString = JSON.stringify(passData, null, 2);
-      const blob = new Blob([jsonString], { type: 'application/vnd.apple.pkpass' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `GoogleWalletPass_${member.membership_number || member.id}.pkpass`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+  const handleDownloadAppleWallet = () => {
+    setWalletModalType('apple');
+  };
 
-      toast.success('Google Wallet Pass generated! Open file to save in Wallet.');
-    } catch (e) {
-      toast.error('Failed to generate Google Wallet pass.');
-    }
+  const handleDownloadGoogleWallet = () => {
+    setWalletModalType('google');
   };
 
   return (
@@ -546,6 +533,16 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
           </button>
         </div>
       </div>
+
+      <WalletPassModal
+        isOpen={walletModalType !== null}
+        onClose={() => setWalletModalType(null)}
+        walletType={walletModalType || 'apple'}
+        member={member}
+        propertyName={propertyName}
+        passUrl={mobilePassUrl}
+        onDownloadPkpass={triggerActualPkpassDownload}
+      />
     </div>
   );
 };
