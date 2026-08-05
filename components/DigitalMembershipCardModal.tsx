@@ -31,11 +31,31 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   const propertyName = matchedProperty?.name || currentProperty?.name || settings?.name || 'NOVA LUXURY RESORT & SPA';
   const displayOutletName = propOutletName || matchedOutlet?.name || currentOutlet?.name || 'MAIN HEALTH CLUB';
   const logoUrl = matchedOutlet?.logo_url || matchedProperty?.logo_url || currentProperty?.logo_url || settings?.logo_url || 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80';
-  const propertyAddress = matchedProperty?.address || currentProperty?.address || '123 Health & Wellness Avenue';
+  const propertyAddress = matchedProperty?.address || currentProperty?.address || settings?.address || '123 Health & Wellness Avenue';
+  const propertyPhone = matchedProperty?.phone || currentProperty?.phone || settings?.phone || '+1 (800) 555-CLUB';
 
   const [logoError, setLogoError] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'scan_qr' | 'view_card'>('scan_qr');
   const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
+  const [memberTier, setMemberTier] = useState<string>(member.package_type || 'VIP Member');
+
+  useEffect(() => {
+    const loadCategory = async () => {
+      if (member.category_id) {
+        try {
+          const { db } = await import('../services/mockSupabase');
+          const cats = await db.getCategories();
+          const found = cats.find(c => c.id === member.category_id);
+          if (found) {
+            setMemberTier(found.name);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    };
+    loadCategory();
+  }, [member.category_id, member.package_type]);
 
   // Token & 5-minute expiration countdown
   const [token, setToken] = useState<string>('');
@@ -420,7 +440,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
                             PACKAGE TIER
                           </span>
                           <span className="text-xs font-black text-amber-300 truncate block">
-                            {member.package_type || 'VIP Individual'}
+                            {memberTier}
                           </span>
                         </div>
                       </div>
@@ -491,7 +511,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
                       <p className="text-[11px] text-slate-300 font-medium">
                         {propertyAddress}
                         <br />
-                        Tel: +1 (800) 555-CLUB
+                        Tel: {propertyPhone}
                       </p>
                     </div>
 

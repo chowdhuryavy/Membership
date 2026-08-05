@@ -38,6 +38,7 @@ export const PublicMemberPass: React.FC = () => {
   const [tokenData, setTokenData] = useState<PassTokenData | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
   const [member, setMember] = useState<Member | null>(null);
+  const [memberTier, setMemberTier] = useState<string>('');
   const [property, setProperty] = useState<any>(null);
   const [outlet, setOutlet] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
@@ -82,10 +83,11 @@ export const PublicMemberPass: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [propsRes, settingsRes, outletsRes] = await Promise.all([
+        const [propsRes, settingsRes, outletsRes, categoriesRes] = await Promise.all([
           db.getProperties(),
           db.getSettings(),
-          db.getOutlets()
+          db.getOutlets(),
+          db.getCategories()
         ]);
 
         if (propsRes && propsRes.length > 0) {
@@ -103,6 +105,17 @@ export const PublicMemberPass: React.FC = () => {
 
           if (found) {
             setMember(found);
+            
+            // Resolve member tier from category
+            let tierName = found.package_type || 'VIP Member';
+            if (found.category_id && categoriesRes) {
+               const cat = categoriesRes.find(c => c.id === found.category_id);
+               if (cat) {
+                 tierName = cat.name;
+               }
+            }
+            setMemberTier(tierName);
+
             if (found.outlet_id && outletsRes && outletsRes.length > 0) {
               const matchedOutlet = outletsRes.find(o => o.id === found.outlet_id);
               if (matchedOutlet) {
@@ -124,6 +137,7 @@ export const PublicMemberPass: React.FC = () => {
               package_type: 'VIP Member',
               current_end_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
             } as unknown) as Member);
+            setMemberTier('VIP Member');
           }
         }
       } catch (err) {
@@ -138,7 +152,8 @@ export const PublicMemberPass: React.FC = () => {
 
   const propertyName = property?.name || settings?.name || outlet?.name || 'NOVA SPA & RESORT';
   const logoUrl = outlet?.logo_url || property?.logo_url || settings?.logo_url || 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80';
-  const propertyAddress = property?.address || '123 Health & Spa Avenue';
+  const propertyAddress = property?.address || settings?.address || '123 Health & Spa Avenue';
+  const propertyPhone = property?.phone || settings?.phone || '+1 (800) 555-CLUB';
 
 
   const formatTime = (secs: number) => {
@@ -392,7 +407,7 @@ export const PublicMemberPass: React.FC = () => {
                       PACKAGE TIER
                     </span>
                     <span className="text-xs font-black text-amber-300">
-                      {member?.package_type || 'VIP Individual'}
+                      {memberTier}
                     </span>
                   </div>
                 </div>
@@ -461,7 +476,7 @@ export const PublicMemberPass: React.FC = () => {
                 <p className="text-xs text-slate-300 font-medium">
                   {propertyAddress}
                   <br />
-                  Tel: +1 (800) 555-CLUB
+                  Tel: {propertyPhone}
                 </p>
               </div>
 
