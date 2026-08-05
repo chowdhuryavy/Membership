@@ -38,7 +38,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
   return bytes;
 }
 
-export async function createPkpassZipBlob(member: Member, outletName?: string): Promise<Blob> {
+export async function createPkpassZipBlob(member: Member, outletName?: string, address?: string, phone?: string): Promise<Blob> {
   const zip = new JSZip();
 
   const passJson = {
@@ -89,6 +89,16 @@ export async function createPkpassZipBlob(member: Member, outletName?: string): 
           key: 'terms',
           label: 'TERMS & CONDITIONS',
           value: 'This digital card is personal and non-transferable. Scan at reception/turnstile for entry access.'
+        },
+        {
+          key: 'address',
+          label: 'ADDRESS',
+          value: address || '123 Health & Spa Avenue'
+        },
+        {
+          key: 'phone',
+          label: 'PHONE',
+          value: phone || '+1 (800) 555-CLUB'
         }
       ]
     },

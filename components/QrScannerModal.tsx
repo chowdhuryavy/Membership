@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Camera, QrCode, AlertCircle, Sparkles, CheckCircle2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface QrScannerModalProps {
   onScanSuccess: (code: string) => void;
@@ -18,8 +19,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
   const [manualCode, setManualCode] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
 
   // USB Barcode Scanner Wedge Listener (Listens to fast keypress buffer)
   useEffect(() => {
@@ -55,32 +55,38 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onScanSuccess]);
 
-  // Start Camera Stream
+  // Start Camera Stream with html5-qrcode
   useEffect(() => {
     let isMounted = true;
 
     async function startCamera() {
       try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          if (isMounted) setCameraError('Camera access not supported on this device/browser.');
-          return;
-        }
+        const html5QrCode = new Html5Qrcode('reader');
+        html5QrCodeRef.current = html5QrCode;
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0,
+          },
+          (decodedText) => {
+            if (isMounted) {
+              toast.success(`Scanned: ${decodedText}`);
+              onScanSuccess(decodedText);
+              // Stop immediately after scan success
+              html5QrCode.stop().catch(console.error);
+            }
+          },
+          (errorMessage) => {
+             // parse errors are normal (no qr code found)
+          }
+        );
 
-        if (!isMounted) {
-          stream.getTracks().forEach(track => track.stop());
-          return;
+        if (isMounted) {
+          setCameraActive(true);
         }
-
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play();
-        }
-        setCameraActive(true);
       } catch (err: any) {
         console.warn('Camera access denied or unavailable:', err);
         if (isMounted) setCameraError('Camera stream unavailable. You can enter the Membership # below or use a USB scanner.');
@@ -91,11 +97,11 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
 
     return () => {
       isMounted = false;
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+      if (html5QrCodeRef.current) {
+        html5QrCodeRef.current.stop().catch(console.warn);
       }
     };
-  }, []);
+  }, [onScanSuccess]);
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,39 +140,38 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
 
         {/* Camera Viewfinder Area */}
         <div className="p-6 space-y-5">
-          <div className="relative aspect-video bg-slate-950 rounded-3xl overflow-hidden border-2 border-slate-800 shadow-inner flex items-center justify-center group">
-            {cameraActive ? (
-              <video
-                ref={videoRef}
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="text-center p-6 space-y-3">
+          <div className="relative bg-slate-950 rounded-3xl overflow-hidden border-2 border-slate-800 shadow-inner group min-h-[300px]">
+            <div id="reader" className="w-full h-full object-cover"></div>
+
+            {!cameraActive && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 space-y-3 bg-slate-950 z-10">
                 <Camera className="w-12 h-12 text-slate-600 mx-auto animate-pulse" />
-                <p className="text-xs font-bold text-slate-400 max-w-xs mx-auto">
+                <p className="text-xs font-bold text-slate-400 max-w-xs mx-auto text-center">
                   {cameraError || 'Initializing camera viewfinder...'}
                 </p>
               </div>
             )}
 
             {/* Scanning Laser HUD overlay */}
-            <div className="absolute inset-0 border-2 border-indigo-500/40 pointer-events-none flex items-center justify-center p-8">
-              <div className="w-48 h-48 border-2 border-dashed border-indigo-400 rounded-2xl relative flex items-center justify-center">
-                <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-indigo-500"></div>
-                <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-indigo-500"></div>
-                <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-indigo-500"></div>
-                <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-indigo-500"></div>
-                <div className="w-full h-0.5 bg-red-500/80 shadow-[0_0_12px_rgba(239,68,68,1)] animate-bounce"></div>
-              </div>
-            </div>
+            {cameraActive && (
+              <>
+                <div className="absolute inset-0 border-2 border-indigo-500/40 pointer-events-none flex items-center justify-center p-8 z-10">
+                  <div className="w-48 h-48 border-2 border-dashed border-indigo-400 rounded-2xl relative flex items-center justify-center">
+                    <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-indigo-500"></div>
+                    <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-indigo-500"></div>
+                    <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-indigo-500"></div>
+                    <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-indigo-500"></div>
+                    <div className="w-full h-0.5 bg-red-500/80 shadow-[0_0_12px_rgba(239,68,68,1)] animate-bounce"></div>
+                  </div>
+                </div>
 
-            <div className="absolute bottom-3 left-3 right-3 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center">
-              <span className="text-[10px] font-mono text-indigo-300 font-bold uppercase tracking-wider">
-                Ready for USB Hardware Scanner or Camera QR
-              </span>
-            </div>
+                <div className="absolute bottom-3 left-3 right-3 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-center z-10">
+                  <span className="text-[10px] font-mono text-indigo-300 font-bold uppercase tracking-wider">
+                    Ready for USB Hardware Scanner or Camera QR
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           <p className="text-center text-xs font-bold text-slate-500">

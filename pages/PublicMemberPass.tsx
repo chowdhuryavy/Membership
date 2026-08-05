@@ -168,7 +168,7 @@ export const PublicMemberPass: React.FC = () => {
     if (!member) return;
     const toastId = toast.loading('Generating Apple Wallet Pass...');
     try {
-      const blob = await createPkpassZipBlob(member, propertyName);
+      const blob = await createPkpassZipBlob(member, propertyName, propertyAddress, propertyPhone);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -179,7 +179,7 @@ export const PublicMemberPass: React.FC = () => {
       setTimeout(() => URL.revokeObjectURL(url), 3000);
 
       if (deviceOS === 'ios') {
-        toast.success('Apple Wallet Pass (.pkpass) generated! Open file to save in Apple Wallet.', { id: toastId });
+        toast.success('Apple Wallet Pass generated! Unsigned test pass downloaded.', { id: toastId });
       } else {
         toast.success('Apple Wallet Pass (.pkpass) downloaded successfully!', { id: toastId });
       }
@@ -196,7 +196,7 @@ export const PublicMemberPass: React.FC = () => {
       const saveUrl = generateGoogleWalletSaveUrl(member, propertyName);
       window.open(saveUrl, '_blank');
 
-      const blob = await createPkpassZipBlob(member, propertyName);
+      const blob = await createPkpassZipBlob(member, propertyName, propertyAddress, propertyPhone);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

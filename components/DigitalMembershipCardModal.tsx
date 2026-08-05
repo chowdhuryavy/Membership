@@ -116,7 +116,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   const handleDownloadAppleWallet = async () => {
     const toastId = toast.loading('Generating Apple Wallet Pass...');
     try {
-      const blob = await createPkpassZipBlob(member, displayOutletName || propertyName);
+      const blob = await createPkpassZipBlob(member, displayOutletName || propertyName, propertyAddress, propertyPhone);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -127,7 +127,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
       setTimeout(() => URL.revokeObjectURL(url), 3000);
 
       if (deviceOS === 'ios') {
-        toast.success('Apple Wallet Pass (.pkpass) generated! Open file to save in Apple Wallet.', { id: toastId });
+        toast.success('Apple Wallet Pass generated! Unsigned test pass downloaded.', { id: toastId });
       } else {
         toast.success('Apple Wallet Pass (.pkpass) downloaded successfully!', { id: toastId });
       }
@@ -143,7 +143,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
       const saveUrl = generateGoogleWalletSaveUrl(member, displayOutletName || propertyName);
       window.open(saveUrl, '_blank');
 
-      const blob = await createPkpassZipBlob(member, displayOutletName || propertyName);
+      const blob = await createPkpassZipBlob(member, displayOutletName || propertyName, propertyAddress, propertyPhone);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
