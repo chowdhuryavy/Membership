@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -8,16 +8,32 @@ import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '../comp
 import { 
     User, Dumbbell, Calendar, Search, Plus, Play, CheckCircle, AlertTriangle, 
     History, DollarSign, Clock, FileText, Check, TrendingUp, Mail, Phone, 
-    Award, Sparkles, Filter, Edit3, ShieldCheck, ArrowLeft, ArrowRight, Eye, ChevronRight, Trash2, Printer, X
+    Award, Sparkles, Filter, Edit3, ShieldCheck, ArrowLeft, ArrowRight, Eye, ChevronRight, Trash2, Printer, X,
+    Store, Building2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { SignaturePad } from '../components/SignatureModal';
 
 export default function PTMembers() {
-    const { user } = useAuth();
-    const { currentOutlet, currentProperty, settings, setPageLoading, formatMoney } = useSettings();
+    const { user, isSuperAdmin } = useAuth();
+    const { currentOutlet, currentProperty, settings, setPageLoading, formatMoney, outlets = [] } = useSettings();
     const logoUrl = currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || '';
+    
+    const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
+
+    const allowedOutletsInProperty = useMemo(() => {
+        if (!currentProperty || !user || !outlets) return [];
+        if (isSuperAdmin || user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin') {
+            return outlets.filter(o => o.property_id === currentProperty.id);
+        }
+        return outlets.filter(o => 
+            o.property_id === currentProperty.id && 
+            user.allowed_outlets?.includes(o.id)
+        );
+    }, [currentProperty, user, outlets, isSuperAdmin]);
+
+    const canSwitchScope = Boolean(user && allowedOutletsInProperty.length > 1);
     
     const handleTriggerPrint = () => {
         setTimeout(() => {
@@ -72,8 +88,12 @@ export default function PTMembers() {
             if (selectedMember?.id === targetId) {
                 setSelectedMember(null);
             }
-            if (currentOutlet) {
-                const updatedMembers = await db.getPTMembers(currentOutlet.id);
+            if (currentOutlet && currentProperty) {
+                const isProp = viewScope === 'property';
+                const allowedIds = allowedOutletsInProperty.map(o => o.id);
+                const updatedMembers = isProp 
+                    ? await db.getPTMembers(currentProperty.id, true, undefined, undefined, allowedIds) 
+                    : await db.getPTMembers(currentOutlet.id, false);
                 setPtMembers(updatedMembers);
             }
         } catch (err: any) {
@@ -159,7 +179,11 @@ export default function PTMembers() {
             setDeletingSession(null);
 
             // Reload data
-            const updatedMembers = await db.getPTMembers(currentOutlet!.id);
+            const isProp = viewScope === 'property';
+            const allowedIds = allowedOutletsInProperty.map(o => o.id);
+            const updatedMembers = isProp 
+                ? await db.getPTMembers(currentProperty!.id, true, undefined, undefined, allowedIds) 
+                : await db.getPTMembers(currentOutlet!.id, false);
             setPtMembers(updatedMembers);
 
             const updatedSessions = await db.getPTSessions(activeTargetPkg.id);
@@ -189,12 +213,19 @@ export default function PTMembers() {
         if (!currentOutlet || !currentProperty) return;
         setLoading(true);
         try {
-            const membersData = await db.getPTMembers(currentOutlet.id);
+            const isProperty = viewScope === 'property';
+            const allowedIds = allowedOutletsInProperty.map(o => o.id);
+
+            let membersData: PTMember[] = [];
+            if (isProperty) {
+                membersData = await db.getPTMembers(currentProperty.id, true, undefined, undefined, allowedIds);
+            } else {
+                membersData = await db.getPTMembers(currentOutlet.id, false);
+            }
             setPtMembers(membersData);
             
-            let staffData = [];
-            if (currentOutlet.id === 'all') {
-                const allowedIds = currentProperty.outlets.map(o => o.id);
+            let staffData: Staff[] = [];
+            if (isProperty || currentOutlet.id === 'all') {
                 staffData = await db.getStaff(currentProperty.id, true, allowedIds);
             } else {
                 staffData = await db.getStaff(currentOutlet.id);
@@ -202,7 +233,12 @@ export default function PTMembers() {
             console.log('DEBUG: staffData loaded:', staffData);
             setStaff(staffData);
 
-            const salesData = await db.getSales(currentOutlet.id);
+            let salesData: Sale[] = [];
+            if (isProperty) {
+                salesData = await db.getSales(currentProperty.id, true);
+            } else {
+                salesData = await db.getSales(currentOutlet.id, false);
+            }
             setAllSales(salesData || []);
         } catch (err: any) {
             console.error(err);
@@ -221,7 +257,7 @@ export default function PTMembers() {
         return () => {
             window.removeEventListener('booking_updated', handleBookingUpdate);
         };
-    }, [currentOutlet?.id]);
+    }, [currentOutlet?.id, currentProperty?.id, viewScope]);
 
     const handleUpdateTrainer = async (trainerId: string) => {
         const activeTarget = selectedPackage || selectedMember;
@@ -729,7 +765,30 @@ export default function PTMembers() {
                                     </div>
                                     <div>
                                         <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter text-white">Personal Training Profiles</h1>
-                                        <p className="text-xs font-bold text-indigo-200 uppercase tracking-widest mt-1">Select a client profile below to view details, log sessions & track package history</p>
+                                        <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                                            <p className="text-xs font-bold text-indigo-200 uppercase tracking-widest flex items-center gap-1.5">
+                                                <Store className="w-3.5 h-3.5 text-indigo-300" /> {viewScope === 'property' ? currentProperty?.name : currentOutlet?.name}
+                                            </p>
+                                            {canSwitchScope && (
+                                                <>
+                                                    <div className="h-3 w-px bg-white/20 hidden sm:block"></div>
+                                                    <div className="flex bg-white/10 p-1 rounded-xl border border-white/20 backdrop-blur-md">
+                                                        <button 
+                                                            onClick={() => setViewScope('outlet')} 
+                                                            className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${viewScope === 'outlet' ? 'bg-white text-indigo-950 shadow-md' : 'text-indigo-200 hover:text-white'}`}
+                                                        >
+                                                            <Filter className="w-2.5 h-2.5" /> Outlet
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => setViewScope('property')} 
+                                                            className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${viewScope === 'property' ? 'bg-white text-indigo-950 shadow-md' : 'text-indigo-200 hover:text-white'}`}
+                                                        >
+                                                            <Building2 className="w-2.5 h-2.5" /> Property
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -824,9 +883,17 @@ export default function PTMembers() {
                                                     </div>
                                                 </div>
 
-                                                <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 ${isDone ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' : 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30'}`}>
-                                                    {isDone ? 'Completed' : 'Active'}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    {viewScope === 'property' && (
+                                                        <span className="px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-white/10 border border-white/20 text-indigo-200 flex items-center gap-1 shrink-0">
+                                                            <Store className="w-2.5 h-2.5 text-indigo-300" />
+                                                            {outlets.find(o => o.id === member.outlet_id)?.name || 'Outlet'}
+                                                        </span>
+                                                    )}
+                                                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 ${isDone ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' : 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30'}`}>
+                                                        {isDone ? 'Completed' : 'Active'}
+                                                    </span>
+                                                </div>
                                             </div>
 
                                             {/* Progress Bar */}

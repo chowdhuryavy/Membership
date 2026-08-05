@@ -2178,7 +2178,7 @@ class DatabaseService {
     }
   }
 
-  async getPTMembers(scopeId: string, isProperty: boolean = false, phone?: string, email?: string): Promise<PTMember[]> {
+  async getPTMembers(scopeId: string, isProperty: boolean = false, phone?: string, email?: string, limitToOutletIds?: string[]): Promise<PTMember[]> {
     let supabaseMembers: PTMember[] | null = null;
     let querySuccess = false;
 
@@ -2191,6 +2191,8 @@ class DatabaseService {
             query = query.eq('email', email);
         } else if (!isProperty && scopeId) {
             query = query.eq('outlet_id', scopeId);
+        } else if (isProperty && limitToOutletIds && limitToOutletIds.length > 0) {
+            query = query.in('outlet_id', limitToOutletIds);
         }
         
         const { data, error } = await query.order('created_at', { ascending: false });
@@ -2216,7 +2218,15 @@ class DatabaseService {
       } catch (e) {}
     } else {
       try {
-        allMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]).filter(m => isProperty || !scopeId || m.outlet_id === scopeId);
+        allMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]).filter(m => {
+          if (phone) return m.phone === phone;
+          if (email) return m.email === email;
+          if (isProperty) {
+            if (limitToOutletIds && limitToOutletIds.length > 0) return limitToOutletIds.includes(m.outlet_id);
+            return true;
+          }
+          return !scopeId || m.outlet_id === scopeId;
+        });
       } catch (e) {}
     }
 
@@ -3476,10 +3486,12 @@ class DatabaseService {
   }
 
   async deleteMassageBooking(id: string) {
+    let booking: any = null;
     if (this.isSupabase()) {
       await this.safeCall(async () => {
         // Get booking info to notify therapist before deletion
-        const { data: booking } = await supabase.from('massage_bookings').select('*, guests(name)').eq('id', id).single();
+        const { data: b } = await supabase.from('massage_bookings').select('*, guests(name)').eq('id', id).single();
+        booking = b;
         
         // Also delete any associated sales
         await supabase.from('sales').delete().eq('booking_id', id);
@@ -3500,7 +3512,21 @@ class DatabaseService {
     }
     
     // Trigger local event
-    window.dispatchEvent(new CustomEvent('booking_updated', { detail: {} }));
+    const oid = booking?.outlet_id;
+    window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: oid, action: 'deleted', booking_id: id } }));
+
+    if (this.isSupabase() && oid) {
+      supabase.channel(`massage-bookings-${oid}`).send({
+        type: 'broadcast',
+        event: 'sync',
+        payload: { type: 'booking_deleted', outlet_id: oid, id }
+      });
+      supabase.channel(`staff-schedule-${oid}`).send({
+        type: 'broadcast',
+        event: 'sync',
+        payload: { type: 'booking_deleted', outlet_id: oid, id }
+      });
+    }
   }
 
   async getIncentiveRules(propertyId?: string, outletId?: string): Promise<IncentiveRule[]> {

@@ -419,15 +419,14 @@ const StaffSchedule = () => {
       // Pre-fetch basic info for property when outlet changes
       loadPropertyDetails();
       
-      // Subscribe to real-time updates with specific outlet filter for better performance and reliability on mobile
+      // Subscribe to real-time updates for better performance and reliability
       const channel = supabase.channel(`staff-schedule-${selectedOutletId}`)
         .on(
           'postgres_changes', 
           { 
             event: '*', 
             schema: 'public', 
-            table: 'massage_bookings',
-            filter: `outlet_id=eq.${selectedOutletId}` 
+            table: 'massage_bookings'
           }, 
           (payload) => {
             console.log('Real-time booking update received via DB:', payload.eventType);

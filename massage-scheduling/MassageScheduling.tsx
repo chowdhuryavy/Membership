@@ -804,7 +804,7 @@ NOTIFY pgrst, 'reload schema';`}
       .channel(`massage-bookings-${currentOutlet?.id || 'global'}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'massage_bookings', filter },
+        { event: '*', schema: 'public', table: 'massage_bookings' },
         () => {
           console.log('Real-time booking update received in MassageScheduling');
           loadData();
@@ -842,16 +842,23 @@ NOTIFY pgrst, 'reload schema';`}
         console.log('MassageScheduling subscription status:', status);
       });
 
+    const handleBookingUpdate = () => {
+      console.log('Local booking_updated event received in MassageScheduling');
+      loadData(true);
+    };
+
     const handleVisibilityChange = () => {
       // Only trigger silent refresh when coming back to the tab
       if (document.visibilityState === 'visible') {
         loadData(true);
       }
     };
+    window.addEventListener('booking_updated', handleBookingUpdate);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       supabase.removeChannel(channel);
+      window.removeEventListener('booking_updated', handleBookingUpdate);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [currentOutlet, currentProperty]);
