@@ -182,20 +182,20 @@ export const PublicMemberPass: React.FC = () => {
     if (!member) return;
     const toastId = toast.loading('Connecting to Google Wallet API...');
     try {
-      const response = await fetch('/api/google-wallet/generate-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('generate-google-wallet-pass', {
+        body: {
           memberId: member.id,
           guestName: member.guest_name,
           membershipNumber: member.membership_number
-        })
+        }
       });
 
-      const data = await response.json();
+      if (error) {
+        throw new Error(error.message || 'Failed to connect to Google Wallet API');
+      }
       
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate pass');
+      if (!data || !data.url) {
+        throw new Error(data?.error || 'Failed to generate pass');
       }
 
       toast.success('Opening Google Wallet...', { id: toastId });
