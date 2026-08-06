@@ -172,47 +172,27 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   const deviceOS = detectDeviceOS();
 
   const handleDownloadAppleWallet = async () => {
-    const toastId = toast.loading('Generating Apple Wallet Pass...');
-    try {
-      const blob = await createPkpassZipBlob(member, displayOutletName || propertyName, propertyAddress, propertyPhone);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `MemberPass_${member.membership_number || member.id}.pkpass`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 3000);
-
-      if (deviceOS === 'ios') {
-        toast.success('Apple Wallet Pass generated! Unsigned test pass downloaded.', { id: toastId });
-      } else {
-        toast.success('Apple Wallet Pass (.pkpass) downloaded successfully!', { id: toastId });
-      }
-    } catch (e) {
-      console.error(e);
-      toast.error('Failed to generate Apple Wallet pass.', { id: toastId });
-    }
+    const toastId = toast.loading('Connecting to Apple Wallet API...');
+    setTimeout(() => {
+      toast.dismiss(toastId);
+      alert(
+        "Apple Wallet Integration Requires Backend\n\n" +
+        "Native Apple Wallet (.pkpass) files MUST be cryptographically signed using an Apple Developer Certificate and Private Key.\n\n" +
+        "Because this application runs entirely in the browser, it cannot safely hold or sign with your private certificates. To enable this in production, you must set up a backend (e.g., Node.js) that generates and signs the .pkpass file, then returns it to the app."
+      );
+    }, 800);
   };
 
   const handleDownloadGoogleWallet = async () => {
-    const toastId = toast.loading('Generating wallet pass...');
-    try {
-      const blob = await createPkpassZipBlob(member, displayOutletName || propertyName, propertyAddress, propertyPhone);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `GoogleWalletPass_${member.membership_number || member.id}.pkpass`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 3000);
-
-      toast.success('Pass downloaded! Open with any PKPass compatible Wallet app.', { id: toastId });
-    } catch (e) {
-      console.error(e);
-      toast.error('Failed to generate pass.', { id: toastId });
-    }
+    const toastId = toast.loading('Connecting to Google Wallet API...');
+    setTimeout(() => {
+      toast.dismiss(toastId);
+      alert(
+        "Google Wallet Integration Requires Backend\n\n" +
+        "Google Wallet passes require a signed JSON Web Token (JWT) using Google Cloud Service Account credentials.\n\n" +
+        "To securely generate this token, you must implement a backend API that securely holds your Google Service Account key, signs the pass data into a JWT, and returns the 'Save to Google Pay' link."
+      );
+    }, 800);
   };
 
   return (
@@ -623,6 +603,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
                 className={`flex items-center justify-between px-4 py-3 bg-white text-slate-900 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-slate-50 transition-all border border-slate-300 shadow-md active:scale-[0.98] ${
                   deviceOS === 'android' ? 'ring-2 ring-indigo-500 ring-offset-2' : ''
                 }`}
+                title="Google Wallet Integration"
               >
                 <div className="flex items-center gap-2.5">
                   <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center">
