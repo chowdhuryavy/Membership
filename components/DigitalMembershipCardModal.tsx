@@ -197,7 +197,18 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
         })
       });
 
-      const data = await response.json();
+      let data;
+      const textResponse = await response.text();
+      try {
+        data = JSON.parse(textResponse);
+      } catch (e) {
+        console.error('Non-JSON response from API:', textResponse);
+        throw new Error(
+          response.status === 404 
+            ? 'API endpoint not found. If you are in the Shared App, please click the Share button again to redeploy the server backend.' 
+            : `Server returned an invalid response (Status ${response.status}).`
+        );
+      }
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to generate pass');
