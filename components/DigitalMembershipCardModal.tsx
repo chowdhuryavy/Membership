@@ -196,11 +196,8 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   };
 
   const handleDownloadGoogleWallet = async () => {
-    const toastId = toast.loading('Saving to Google Wallet...');
+    const toastId = toast.loading('Generating wallet pass...');
     try {
-      const saveUrl = generateGoogleWalletSaveUrl(member, displayOutletName || propertyName);
-      window.open(saveUrl, '_blank');
-
       const blob = await createPkpassZipBlob(member, displayOutletName || propertyName, propertyAddress, propertyPhone);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -211,10 +208,10 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 3000);
 
-      toast.success('Opening Google Wallet... Save your pass!', { id: toastId });
+      toast.success('Pass downloaded! Open with any PKPass compatible Wallet app.', { id: toastId });
     } catch (e) {
       console.error(e);
-      toast.error('Failed to save to Google Wallet.', { id: toastId });
+      toast.error('Failed to generate pass.', { id: toastId });
     }
   };
 
