@@ -1758,9 +1758,10 @@ class DatabaseService {
 
   async getSettings(): Promise<CompanySettings> {
     const defaultSettings: CompanySettings = { 
-      name: 'Health Club Management', 
+      name: 'The Torch Doha Health Club', 
       logo_url: 'https://i.imgur.com/oZVRrvo.png', 
-      address: '', 
+      address: 'Aspire Zone, Al Waab Street, Doha, Qatar', 
+      phone: '+974 4446 5600',
       currency_id: 'default' 
     };
     
@@ -1907,7 +1908,9 @@ class DatabaseService {
       {
         id: 'outlet-1',
         property_id: 'prop-1',
-        name: 'Nova Spa & Health Club',
+        name: 'The Torch Health Club',
+        address: 'Aspire Zone, Al Waab Street, Doha, Qatar',
+        phone: '+974 4446 5600',
         logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80'
       }
     ];
@@ -1997,8 +2000,9 @@ class DatabaseService {
     const defaultProperties: Property[] = [
       {
         id: 'prop-1',
-        name: 'Nova Luxury Resort & Spa',
-        address: '123 Health & Spa Boulevard, Luxury District',
+        name: 'The Torch Doha',
+        address: 'Aspire Zone, Al Waab Street, Doha, Qatar',
+        phone: '+974 4446 5600',
         logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80'
       }
     ];

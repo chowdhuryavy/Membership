@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import html2canvas from 'html2canvas';
 import { 
   X, Wallet, Download, Share2, Printer, CheckCircle2, AlertTriangle, 
   Smartphone, Shield, Calendar, QrCode, Sparkles, RefreshCw, Layers, Copy, Clock, ExternalLink,
@@ -28,12 +30,38 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   const matchedOutlet = outlets?.find(o => o.id === member.outlet_id) || currentOutlet || outlets?.[0];
   const matchedProperty = properties?.find(p => p.id === matchedOutlet?.property_id) || currentProperty || properties?.[0];
 
-  const propertyName = matchedProperty?.name || currentProperty?.name || settings?.name || 'NOVA LUXURY RESORT & SPA';
-  const displayOutletName = propOutletName || matchedOutlet?.name || currentOutlet?.name || 'MAIN HEALTH CLUB';
+  const propertyName = matchedProperty?.name || currentProperty?.name || settings?.name || 'THE TORCH DOHA';
+  const displayOutletName = propOutletName || matchedOutlet?.name || currentOutlet?.name || 'HEALTH CLUB';
   const logoUrl = matchedOutlet?.logo_url || matchedProperty?.logo_url || currentProperty?.logo_url || settings?.logo_url || 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80';
-  const propertyAddress = matchedProperty?.address || currentProperty?.address || settings?.address || '123 Health & Wellness Avenue';
-  const propertyPhone = matchedProperty?.phone || currentProperty?.phone || settings?.phone || '+1 (800) 555-CLUB';
+  const propertyAddress = matchedOutlet?.address?.trim() || matchedProperty?.address?.trim() || currentOutlet?.address?.trim() || currentProperty?.address?.trim() || settings?.address?.trim() || 'Aspire Zone, Al Waab Street, Doha, Qatar';
+  const propertyPhone = matchedOutlet?.phone?.trim() || matchedProperty?.phone?.trim() || currentOutlet?.phone?.trim() || currentProperty?.phone?.trim() || settings?.phone?.trim() || '+974 4446 5600';
 
+  const exportCardRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadCardImage = async () => {
+    if (!exportCardRef.current) return;
+    const toastId = toast.loading('Generating pass image (both sides)...');
+    try {
+      const canvas = await html2canvas(exportCardRef.current, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#020617',
+        logging: false,
+      });
+      const image = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = image;
+      a.download = `Membership_Pass_${(member.guest_name || 'Member').replace(/\s+/g, '_')}_${member.membership_number || member.id}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast.success('Double-sided pass image downloaded!', { id: toastId });
+    } catch (err) {
+      console.error('Failed to export pass image:', err);
+      toast.error('Could not export pass image.', { id: toastId });
+    }
+  };
   const [logoError, setLogoError] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'scan_qr' | 'view_card'>('scan_qr');
   const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
@@ -161,7 +189,8 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+    <>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200 no-print">
       <div className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[94vh]">
         {/* Header bar */}
         <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white shrink-0">
@@ -585,23 +614,425 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
-          <button
-            onClick={() => window.print()}
-            className="px-4 py-2 bg-white text-slate-700 hover:text-slate-900 border border-slate-200 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all shadow-sm"
-          >
-            <Printer className="w-3.5 h-3.5" /> Print Pass
-          </button>
+        <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.print()}
+              className="px-4 py-2 bg-white text-slate-800 hover:text-indigo-600 border border-slate-300 hover:border-indigo-300 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all shadow-sm active:scale-95"
+            >
+              <Printer className="w-3.5 h-3.5 text-indigo-600" /> Print Pass
+            </button>
+
+            <button
+              onClick={handleDownloadCardImage}
+              className="px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all shadow-sm active:scale-95"
+            >
+              <Download className="w-3.5 h-3.5 text-amber-400" /> Download Card Image
+            </button>
+          </div>
 
           <button
             onClick={onClose}
-            className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-md"
+            className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-md active:scale-95"
           >
             Done
           </button>
         </div>
       </div>
     </div>
+
+    {/* Dedicated Printable Portal Container */}
+    {createPortal(
+      <div className="hidden print:block print-container-pass">
+        <style>{`
+          @media print {
+            @page {
+              size: A4 portrait;
+              margin: 10mm;
+            }
+            html, body {
+              background: #ffffff !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              overflow: visible !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            #root, .no-print {
+              display: none !important;
+            }
+            .print-container-pass {
+              display: block !important;
+              position: absolute !important;
+              top: 0 !important;
+              left: 0 !important;
+              width: 100% !important;
+              background: #ffffff !important;
+              color: #000000 !important;
+              padding: 10px !important;
+              box-sizing: border-box !important;
+              visibility: visible !important;
+            }
+          }
+        `}</style>
+
+        {/* Printable Document Sheet displaying BOTH SIDES side-by-side */}
+        <div className="bg-slate-950 text-white p-8 rounded-[2.5rem] border-2 border-amber-500/40 max-w-4xl mx-auto space-y-6 shadow-2xl">
+          {/* Document Branding Header */}
+          <div className="flex items-center justify-between pb-4 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              {logoUrl && !logoError ? (
+                <div className="w-12 h-12 rounded-xl bg-white p-1 flex items-center justify-center overflow-hidden border border-white/20 shrink-0">
+                  <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 to-indigo-600 flex items-center justify-center text-white shrink-0">
+                  <Award className="w-6 h-6 text-amber-200" />
+                </div>
+              )}
+              <div>
+                <h2 className="text-base font-black uppercase tracking-wider text-white">
+                  {propertyName}
+                </h2>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-indigo-300">
+                  {displayOutletName} • DIGITAL MEMBERSHIP ACCESS PASS
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] font-mono font-bold text-amber-400 block">
+                MEMBER #{member.membership_number}
+              </span>
+              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest block mt-0.5">
+                STATUS: {member.status}
+              </span>
+            </div>
+          </div>
+
+          {/* Side-by-side Cards Grid */}
+          <div className="grid grid-cols-2 gap-6 items-stretch">
+            {/* FRONT PASS CARD */}
+            <div className="relative rounded-[2.2rem] bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 text-white p-6 shadow-2xl border border-amber-500/30 flex flex-col justify-between overflow-hidden min-h-[440px]">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-amber-400/20 via-indigo-500/10 to-transparent pointer-events-none"></div>
+
+              <div>
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2">
+                    {logoUrl && !logoError && (
+                      <img src={logoUrl} alt="Logo" className="w-7 h-7 object-contain bg-white rounded-lg p-0.5" />
+                    )}
+                    <div>
+                      <h4 className="text-[11px] font-black uppercase tracking-wider text-white">
+                        {propertyName}
+                      </h4>
+                      <span className="text-[8px] font-bold uppercase tracking-widest text-indigo-300 block">
+                        {displayOutletName}
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${
+                    isActive ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30' : 'bg-amber-500/20 text-amber-300 border-amber-400/30'
+                  }`}>
+                    {member.status}
+                  </span>
+                </div>
+
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-black text-base shadow-md border border-white/20 shrink-0">
+                    {member.guest_name ? member.guest_name.slice(0, 2).toUpperCase() : 'ME'}
+                  </div>
+                  <div>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                      MEMBER NAME
+                    </span>
+                    <h3 className="text-base font-black uppercase tracking-tight text-white leading-none">
+                      {member.guest_name}
+                    </h3>
+                    <span className="text-[10px] font-mono font-bold text-amber-300 block mt-0.5">
+                      #{member.membership_number}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mt-3 pt-2.5 border-t border-white/10">
+                  <div>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                      ACCESS PERMIT
+                    </span>
+                    <span className="text-[11px] font-black text-white truncate block">
+                      {member.access_type || 'Pool, Gym & Spa'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                      PACKAGE TIER
+                    </span>
+                    <span className="text-[10px] font-black text-amber-300 block">
+                      {memberTier}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="my-3 flex flex-col items-center justify-center">
+                <div className="p-2.5 bg-white rounded-2xl border-2 border-indigo-500/30 shadow-2xl flex items-center justify-center">
+                  <QRCodeSVG
+                    value={mobilePassUrl}
+                    size={180}
+                    level="M"
+                    includeMargin={true}
+                    fgColor="#000000"
+                    bgColor="#FFFFFF"
+                  />
+                </div>
+                <span className="text-[8px] font-mono text-slate-300 uppercase tracking-widest mt-1.5">
+                  Scan for Entrance Check-In
+                </span>
+              </div>
+
+              <div className="pt-2.5 border-t border-white/10 flex items-center justify-between">
+                <div>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                    VALID UNTIL
+                  </span>
+                  <span className="text-[11px] font-black text-slate-200">
+                    {member.current_end_date || 'N/A'}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                    AUTHENTICITY
+                  </span>
+                  <span className="text-[11px] font-mono font-bold text-emerald-400">
+                    VERIFIED ✓
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* BACK PASS CARD */}
+            <div className="relative rounded-[2.2rem] bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 text-white p-6 shadow-2xl border border-amber-500/30 flex flex-col justify-between overflow-hidden min-h-[440px]">
+              <div>
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/10">
+                  {logoUrl && !logoError && <img src={logoUrl} alt="Logo" className="w-5 h-5 object-contain bg-white rounded p-0.5" />}
+                  <h4 className="text-xs font-black uppercase tracking-wider text-indigo-300">
+                    {propertyName} Rules & Info
+                  </h4>
+                </div>
+                <ul className="text-[10px] text-slate-300 space-y-2 list-disc pl-4 font-medium leading-relaxed">
+                  <li>This card is personal and strictly non-transferable.</li>
+                  <li>Must be scanned at facility self-kiosk or turnstiles upon every entry.</li>
+                  <li>Grants access to authorized facility zones according to membership package.</li>
+                  <li>Report lost or damaged membership passes to reception immediately.</li>
+                </ul>
+              </div>
+
+              <div className="space-y-2 border-t border-white/10 pt-3 mt-4">
+                <h5 className="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <MapPin className="w-3 h-3 text-amber-400" /> LOCATION & CONTACT
+                </h5>
+                <p className="text-[10px] text-slate-300 font-medium leading-normal">
+                  {propertyAddress}
+                  <br />
+                  Tel: {propertyPhone}
+                </p>
+              </div>
+
+              <div className="p-2.5 bg-white/5 rounded-xl border border-white/10 text-center mt-4">
+                <span className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+                  PASS ID: {member.id}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-white/10 text-center">
+            <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+              ELECTRONIC MEMBERSHIP ACCESS PASS • {propertyName} HEALTH CLUB & SPA
+            </p>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+
+    {/* Off-screen Container for Image Export (html2canvas) */}
+    <div className="fixed -top-[9999px] -left-[9999px] pointer-events-none z-[-1]" ref={exportCardRef}>
+      <div className="w-[880px] bg-slate-950 text-white p-8 rounded-[2.5rem] border-2 border-amber-500/40 space-y-6">
+        <div className="flex items-center justify-between pb-4 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            {logoUrl && !logoError ? (
+              <div className="w-12 h-12 rounded-xl bg-white p-1 flex items-center justify-center overflow-hidden border border-white/20 shrink-0">
+                <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+              </div>
+            ) : (
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 to-indigo-600 flex items-center justify-center text-white shrink-0">
+                <Award className="w-6 h-6 text-amber-200" />
+              </div>
+            )}
+            <div>
+              <h2 className="text-base font-black uppercase tracking-wider text-white">
+                {propertyName}
+              </h2>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-indigo-300">
+                {displayOutletName} • DIGITAL MEMBERSHIP ACCESS PASS
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] font-mono font-bold text-amber-400 block">
+              MEMBER #{member.membership_number}
+            </span>
+            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest block mt-0.5">
+              STATUS: {member.status}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-6 items-stretch">
+          {/* FRONT PASS CARD */}
+          <div className="relative rounded-[2.2rem] bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 text-white p-6 shadow-2xl border border-amber-500/30 flex flex-col justify-between overflow-hidden min-h-[440px]">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-amber-400/20 via-indigo-500/10 to-transparent pointer-events-none"></div>
+
+            <div>
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2">
+                  {logoUrl && !logoError && (
+                    <img src={logoUrl} alt="Logo" className="w-7 h-7 object-contain bg-white rounded-lg p-0.5" />
+                  )}
+                  <div>
+                    <h4 className="text-[11px] font-black uppercase tracking-wider text-white">
+                      {propertyName}
+                    </h4>
+                    <span className="text-[8px] font-bold uppercase tracking-widest text-indigo-300 block">
+                      {displayOutletName}
+                    </span>
+                  </div>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${
+                  isActive ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30' : 'bg-amber-500/20 text-amber-300 border-amber-400/30'
+                }`}>
+                  {member.status}
+                </span>
+              </div>
+
+              <div className="mt-3 flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-black text-base shadow-md border border-white/20 shrink-0">
+                  {member.guest_name ? member.guest_name.slice(0, 2).toUpperCase() : 'ME'}
+                </div>
+                <div>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                    MEMBER NAME
+                  </span>
+                  <h3 className="text-base font-black uppercase tracking-tight text-white leading-none">
+                    {member.guest_name}
+                  </h3>
+                  <span className="text-[10px] font-mono font-bold text-amber-300 block mt-0.5">
+                    #{member.membership_number}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mt-3 pt-2.5 border-t border-white/10">
+                <div>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                    ACCESS PERMIT
+                  </span>
+                  <span className="text-[11px] font-black text-white truncate block">
+                    {member.access_type || 'Pool, Gym & Spa'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                    PACKAGE TIER
+                  </span>
+                  <span className="text-[10px] font-black text-amber-300 block">
+                    {memberTier}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="my-3 flex flex-col items-center justify-center">
+              <div className="p-2.5 bg-white rounded-2xl border-2 border-indigo-500/30 shadow-2xl flex items-center justify-center">
+                <QRCodeSVG
+                  value={mobilePassUrl}
+                  size={180}
+                  level="M"
+                  includeMargin={true}
+                  fgColor="#000000"
+                  bgColor="#FFFFFF"
+                />
+              </div>
+              <span className="text-[8px] font-mono text-slate-300 uppercase tracking-widest mt-1.5">
+                Scan for Entrance Check-In
+              </span>
+            </div>
+
+            <div className="pt-2.5 border-t border-white/10 flex items-center justify-between">
+              <div>
+                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                  VALID UNTIL
+                </span>
+                <span className="text-[11px] font-black text-slate-200">
+                  {member.current_end_date || 'N/A'}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                  AUTHENTICITY
+                </span>
+                <span className="text-[11px] font-mono font-bold text-emerald-400">
+                  VERIFIED ✓
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* BACK PASS CARD */}
+          <div className="relative rounded-[2.2rem] bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 text-white p-6 shadow-2xl border border-amber-500/30 flex flex-col justify-between overflow-hidden min-h-[440px]">
+            <div>
+              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/10">
+                {logoUrl && !logoError && <img src={logoUrl} alt="Logo" className="w-5 h-5 object-contain bg-white rounded p-0.5" />}
+                <h4 className="text-xs font-black uppercase tracking-wider text-indigo-300">
+                  {propertyName} Rules & Info
+                </h4>
+              </div>
+              <ul className="text-[10px] text-slate-300 space-y-2 list-disc pl-4 font-medium leading-relaxed">
+                <li>This card is personal and strictly non-transferable.</li>
+                <li>Must be scanned at facility self-kiosk or turnstiles upon every entry.</li>
+                <li>Grants access to authorized facility zones according to membership package.</li>
+                <li>Report lost or damaged membership passes to reception immediately.</li>
+              </ul>
+            </div>
+
+            <div className="space-y-2 border-t border-white/10 pt-3 mt-4">
+              <h5 className="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <MapPin className="w-3 h-3 text-amber-400" /> LOCATION & CONTACT
+              </h5>
+              <p className="text-[10px] text-slate-300 font-medium leading-normal">
+                {propertyAddress}
+                <br />
+                Tel: {propertyPhone}
+              </p>
+            </div>
+
+            <div className="p-2.5 bg-white/5 rounded-xl border border-white/10 text-center mt-4">
+              <span className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+                PASS ID: {member.id}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-3 border-t border-white/10 text-center">
+          <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+            ELECTRONIC MEMBERSHIP ACCESS PASS • {propertyName} HEALTH CLUB & SPA
+          </p>
+        </div>
+      </div>
+    </div>
+    </>
   );
 };
 

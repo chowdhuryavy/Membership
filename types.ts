@@ -58,6 +58,7 @@ export interface Property {
   name: string;
   logo_url: string;
   address: string;
+  phone?: string;
   signatory_config?: Record<string, { prepared?: string, reviewed?: string, approved?: string }>;
 }
 
@@ -66,6 +67,8 @@ export interface Outlet {
   name: string;
   property_id: string;
   logo_url?: string;
+  address?: string;
+  phone?: string;
   signatory_config?: Record<string, { prepared?: string, reviewed?: string, approved?: string }>;
   contract_template?: string; 
   conditions?: string; 
@@ -223,6 +226,7 @@ export interface CompanySettings {
   name: string;
   logo_url: string;
   address: string;
+  phone?: string;
   currency_id: string;
   report_title?: string;
   report_subtitle?: string;

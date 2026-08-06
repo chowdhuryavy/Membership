@@ -150,10 +150,10 @@ export const PublicMemberPass: React.FC = () => {
     fetchData();
   }, [tokenData]);
 
-  const propertyName = property?.name || settings?.name || outlet?.name || 'NOVA SPA & RESORT';
+  const propertyName = property?.name || settings?.name || outlet?.name || 'THE TORCH DOHA';
   const logoUrl = outlet?.logo_url || property?.logo_url || settings?.logo_url || 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80';
-  const propertyAddress = property?.address || settings?.address || '123 Health & Spa Avenue';
-  const propertyPhone = property?.phone || settings?.phone || '+1 (800) 555-CLUB';
+  const propertyAddress = outlet?.address?.trim() || property?.address?.trim() || settings?.address?.trim() || 'Aspire Zone, Al Waab Street, Doha, Qatar';
+  const propertyPhone = outlet?.phone?.trim() || property?.phone?.trim() || settings?.phone?.trim() || '+974 4446 5600';
 
 
   const formatTime = (secs: number) => {

@@ -383,12 +383,16 @@ const SettingsPage = () => {
     name: '', 
     logo_url: '', 
     address: '',
+    phone: '',
     signatory_config: {}
   });
   const [roomForm, setRoomForm] = useState<Omit<MassageRoom, 'id'>>({ property_id: '', outlet_id: '', name: '', number: '', is_active: true });
   const [outletForm, setOutletForm] = useState<Omit<Outlet, 'id'>>({ 
     name: '', 
     property_id: '', 
+    logo_url: '',
+    address: '',
+    phone: '',
     signatory_config: {},
     contract_template: '',
     conditions: '' 
@@ -455,6 +459,7 @@ const SettingsPage = () => {
         name: settings.name || '',
         logo_url: settings.logo_url || '',
         address: settings.address || '',
+        phone: settings.phone || '',
         report_title: settings.report_title || '',
         report_subtitle: settings.report_subtitle || '',
         signatory_config: settings.signatory_config || {},
@@ -981,7 +986,8 @@ const SettingsPage = () => {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                               <Input label="Global Legal Name" value={companyForm.name} onChange={e => setCompanyForm({...companyForm, name: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                               <Input label="Brand Asset URL (Logo)" value={companyForm.logo_url} onChange={e => setCompanyForm({...companyForm, logo_url: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
-                              <div className="md:col-span-2"><Input label="Registry HQ Address" value={companyForm.address} onChange={e => setCompanyForm({...companyForm, address: e.target.value})} className="h-16 rounded-2xl font-bold border-2" /></div>
+                              <Input label="Registry HQ Address" value={companyForm.address} onChange={e => setCompanyForm({...companyForm, address: e.target.value})} className="h-16 rounded-2xl font-bold border-2" placeholder="e.g. Aspire Zone, Al Waab Street, Doha, Qatar" />
+                              <Input label="Global Contact Telephone" value={companyForm.phone || ''} onChange={e => setCompanyForm({...companyForm, phone: e.target.value})} className="h-16 rounded-2xl font-bold border-2" placeholder="e.g. +974 4446 5600" />
                               <Input label="Report Title" value={companyForm.report_title || ''} onChange={e => setCompanyForm({...companyForm, report_title: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                               <Input label="Report Subtitle" value={companyForm.report_subtitle || ''} onChange={e => setCompanyForm({...companyForm, report_subtitle: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                           </div>
@@ -999,7 +1005,7 @@ const SettingsPage = () => {
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-5"><MapPin className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Facility Portfolios</CardTitle></div>
-                          <Button onClick={() => { setEditingId(null); setPropertyForm({name:'', logo_url:'', address:'', signatory_config: {}}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Register Asset</Button>
+                          <Button onClick={() => { setEditingId(null); setPropertyForm({name:'', logo_url:'', address:'', phone:'', signatory_config: {}}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Register Asset</Button>
                       </CardHeader>
                       <CardContent className="p-0">
                           <table className="w-full text-left">
@@ -1007,11 +1013,12 @@ const SettingsPage = () => {
                               <tbody className="divide-y divide-slate-100">{properties.map(p => (
                                   <tr key={p.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="flex items-center gap-4"><div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border">{p.logo_url ? <img src={p.logo_url} className="w-full h-full object-contain p-1" /> : <Building2 className="w-6 h-6 text-slate-300" />}</div><div className="font-black text-slate-900 text-lg uppercase">{p.name}</div></div></td>
-                                      <td className="px-10 py-8 font-bold text-slate-500 text-xs">{p.address}</td>
+                                      <td className="px-10 py-8 font-bold text-slate-500 text-xs"><div>{p.address}</div>{p.phone && <div className="text-[10px] text-slate-400 font-mono mt-0.5">Tel: {p.phone}</div>}</td>
                                       <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(p.id); setPropertyForm({
                                           name: p.name,
                                           logo_url: p.logo_url || '',
                                           address: p.address || '',
+                                          phone: p.phone || '',
                                           signatory_config: p.signatory_config || {}
                                       }); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'property', id:p.id, name:p.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
                                   </tr>
@@ -1025,7 +1032,7 @@ const SettingsPage = () => {
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-5"><Store className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Asset Contexts</CardTitle></div>
-                          <Button onClick={() => { setEditingId(null); setOutletForm({name:'', property_id:'', signatory_config: {}, contract_template: '', conditions:''}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Commission Outlet</Button>
+                          <Button onClick={() => { setEditingId(null); setOutletForm({name:'', property_id:'', logo_url:'', address:'', phone:'', signatory_config: {}, contract_template: '', conditions:''}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Commission Outlet</Button>
                       </CardHeader>
                       <CardContent className="p-0">
                           <table className="w-full text-left">
@@ -1034,11 +1041,14 @@ const SettingsPage = () => {
                                   .filter(o => !currentProperty || o.property_id === currentProperty.id)
                                   .map(o => (
                                   <tr key={o.id} className="hover:bg-indigo-50/20 group">
-                                      <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase">{o.name}</div></td>
+                                      <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase">{o.name}</div>{o.address && <div className="text-[10px] text-slate-400 font-medium">{o.address}</div>}</td>
                                       <td className="px-10 py-8"><span className="bg-indigo-50 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-indigo-600 border border-indigo-100">{properties.find(p=>p.id===o.property_id)?.name || 'Detached'}</span></td>
                                       <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(o.id); setOutletForm({
                                           name: o.name,
                                           property_id: o.property_id,
+                                          logo_url: o.logo_url || '',
+                                          address: o.address || '',
+                                          phone: o.phone || '',
                                           signatory_config: o.signatory_config || {},
                                           contract_template: o.contract_template || '',
                                           conditions: o.conditions || ''
@@ -1730,7 +1740,8 @@ const SettingsPage = () => {
                         <div className="space-y-6">
                             <Input label="Property Name *" value={propertyForm.name} onChange={e => setPropertyForm({...propertyForm, name: e.target.value})} className="h-14 rounded-xl" />
                             <Input label="Brand Asset URL" value={propertyForm.logo_url} onChange={e => setPropertyForm({...propertyForm, logo_url: e.target.value})} className="h-14 rounded-xl" />
-                            <Input label="HQ Physical Address" value={propertyForm.address} onChange={e => setPropertyForm({...propertyForm, address: e.target.value})} className="h-14 rounded-xl" />
+                            <Input label="HQ Physical Address" value={propertyForm.address} onChange={e => setPropertyForm({...propertyForm, address: e.target.value})} className="h-14 rounded-xl" placeholder="e.g. Aspire Zone, Al Waab Street, Doha, Qatar" />
+                            <Input label="Contact Telephone" value={propertyForm.phone || ''} onChange={e => setPropertyForm({...propertyForm, phone: e.target.value})} className="h-14 rounded-xl" placeholder="e.g. +974 4446 5600" />
                             <SignatoryConfig 
                                 labelPrefix="Property"
                                 config={propertyForm.signatory_config}
@@ -1826,6 +1837,8 @@ const SettingsPage = () => {
                         <div className="space-y-6">
                             <Input label="Outlet Name *" value={outletForm.name} onChange={e => setOutletForm({...outletForm, name: e.target.value})} className="h-14 rounded-xl font-bold" />
                             <Select label="Linked Property" options={[{value:'', label:'Select Property...'}, ...properties.map(p=>({value:p.id, label:p.name}))]} value={outletForm.property_id} onChange={e => setOutletForm({...outletForm, property_id: e.target.value})} className="h-14 rounded-xl" />
+                            <Input label="Outlet Physical Address" value={outletForm.address || ''} onChange={e => setOutletForm({...outletForm, address: e.target.value})} className="h-14 rounded-xl" placeholder="Optional override address..." />
+                            <Input label="Outlet Contact Phone" value={outletForm.phone || ''} onChange={e => setOutletForm({...outletForm, phone: e.target.value})} className="h-14 rounded-xl" placeholder="Optional override phone..." />
                             <SignatoryConfig 
                                 labelPrefix="Outlet"
                                 config={outletForm.signatory_config}

@@ -93,12 +93,12 @@ export async function createPkpassZipBlob(member: Member, outletName?: string, a
         {
           key: 'address',
           label: 'ADDRESS',
-          value: address || '123 Health & Spa Avenue'
+          value: address || 'Aspire Zone, Al Waab Street, Doha, Qatar'
         },
         {
           key: 'phone',
           label: 'PHONE',
-          value: phone || '+1 (800) 555-CLUB'
+          value: phone || '+974 4446 5600'
         }
       ]
     },
