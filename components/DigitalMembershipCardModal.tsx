@@ -187,20 +187,20 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   const handleDownloadGoogleWallet = async () => {
     const toastId = toast.loading('Connecting to Google Wallet API...');
     try {
-      const { data, error } = await supabase.functions.invoke('generate-google-wallet-pass', {
-        body: {
+      const response = await fetch('/api/google-wallet/generate-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           memberId: member.id,
           guestName: member.guest_name,
           membershipNumber: member.membership_number
-        }
+        })
       });
 
-      if (error) {
-        throw new Error(error.message || 'Failed to connect to Google Wallet API');
-      }
+      const data = await response.json();
       
-      if (!data || !data.url) {
-        throw new Error(data?.error || 'Failed to generate pass');
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate pass');
       }
 
       toast.success('Opening Google Wallet...', { id: toastId });
