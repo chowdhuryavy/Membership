@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import { 
   X, Wallet, Download, Share2, Printer, CheckCircle2, AlertTriangle, 
   Smartphone, Shield, Calendar, QrCode, Sparkles, RefreshCw, Layers, Copy, Clock, ExternalLink,
@@ -42,16 +42,13 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
     if (!exportCardRef.current) return;
     const toastId = toast.loading('Generating pass image (both sides)...');
     try {
-      const canvas = await html2canvas(exportCardRef.current, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
+      const dataUrl = await toPng(exportCardRef.current, {
+        pixelRatio: 2,
+        cacheBust: true,
         backgroundColor: '#020617',
-        logging: false,
       });
-      const image = canvas.toDataURL('image/png');
       const a = document.createElement('a');
-      a.href = image;
+      a.href = dataUrl;
       a.download = `Membership_Pass_${(member.guest_name || 'Member').replace(/\s+/g, '_')}_${member.membership_number || member.id}.png`;
       document.body.appendChild(a);
       a.click();

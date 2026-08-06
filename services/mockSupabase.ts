@@ -1773,8 +1773,16 @@ class DatabaseService {
       return this.safeCall(async () => {
         const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
         if (data) {
-          localStorage.setItem('company_settings_cache', JSON.stringify(data));
-          return data as CompanySettings;
+          const merged: CompanySettings = {
+            ...current,
+            ...data,
+            phone: data.phone || current.phone || '',
+            address: data.address || current.address || '',
+            name: data.name || current.name || '',
+            logo_url: data.logo_url || current.logo_url || ''
+          };
+          localStorage.setItem('company_settings_cache', JSON.stringify(merged));
+          return merged;
         }
         return current;
       }, current);
@@ -1790,7 +1798,6 @@ class DatabaseService {
       const { error } = await supabase.from('company_settings').upsert({ ...settings, id: 'global' });
       if (error) {
         console.error('Error updating settings in Supabase:', error);
-        // We don't throw here if we have local storage as a valid secondary source
       }
       await this.logAction('UPDATE_SETTINGS', 'Global system configuration mutated.');
     }
@@ -1922,35 +1929,64 @@ class DatabaseService {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('outlets').select('*');
         if (error) throw error;
-        const res = (data && data.length > 0) ? (data as Outlet[]) : cached;
-        localStorage.setItem('company_outlets_cache', JSON.stringify(res));
-        return res;
+        if (data && data.length > 0) {
+          const merged = (data as Outlet[]).map((remote: Outlet) => {
+            const localMatch = cached.find(c => c.id === remote.id);
+            return {
+              ...localMatch,
+              ...remote,
+              phone: remote.phone || localMatch?.phone || '',
+              address: remote.address || localMatch?.address || ''
+            };
+          });
+          localStorage.setItem('company_outlets_cache', JSON.stringify(merged));
+          return merged;
+        }
+        return cached;
       }, cached);
     }
     return cached;
   }
 
   async addOutlet(outlet: Omit<Outlet, 'id'>) {
+    const newOutlet: Outlet = { ...outlet, id: crypto.randomUUID() };
+    const local = localStorage.getItem('company_outlets_cache');
+    let current: Outlet[] = local ? JSON.parse(local) : [];
+    current.push(newOutlet);
+    localStorage.setItem('company_outlets_cache', JSON.stringify(current));
+
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('outlets').insert([{ ...outlet, id: crypto.randomUUID() }]).select();
-        if (error) throw error;
-        await this.logAction('CREATE_OUTLET', `Facility outlet commissioned: ${outlet.name}`);
-        return data;
+      const { data, error } = await supabase.from('outlets').insert([newOutlet]).select();
+      if (error) console.error('Error adding outlet in Supabase:', error);
+      await this.logAction('CREATE_OUTLET', `Facility outlet commissioned: ${outlet.name}`);
+      return data || [newOutlet];
     }
+    return [newOutlet];
   }
 
   async updateOutlet(id: string, updates: Partial<Outlet>) {
+    const local = localStorage.getItem('company_outlets_cache');
+    let current: Outlet[] = local ? JSON.parse(local) : [];
+    current = current.map(o => o.id === id ? { ...o, ...updates } : o);
+    localStorage.setItem('company_outlets_cache', JSON.stringify(current));
+
     if (this.isSupabase()) {
-        const { error } = await supabase.from('outlets').update(updates).eq('id', id);
-        if (error) throw error;
-        await this.logAction('UPDATE_OUTLET', `Outlet modified: ${id}`);
+      const { error } = await supabase.from('outlets').update(updates).eq('id', id);
+      if (error) console.error('Error updating outlet in Supabase:', error);
+      await this.logAction('UPDATE_OUTLET', `Outlet modified: ${id}`);
     }
   }
 
   async deleteOutlet(id: string) {
+    const local = localStorage.getItem('company_outlets_cache');
+    if (local) {
+      let current: Outlet[] = JSON.parse(local);
+      current = current.filter(o => o.id !== id);
+      localStorage.setItem('company_outlets_cache', JSON.stringify(current));
+    }
     if (this.isSupabase()) {
-        await supabase.from('outlets').delete().eq('id', id);
-        await this.logAction('DELETE_OUTLET', `Outlet decommissioned: ${id}`);
+      await supabase.from('outlets').delete().eq('id', id);
+      await this.logAction('DELETE_OUTLET', `Outlet decommissioned: ${id}`);
     }
   }
 
@@ -2014,34 +2050,64 @@ class DatabaseService {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('properties').select('*');
         if (error) throw error;
-        const res = (data && data.length > 0) ? (data as Property[]) : cached;
-        localStorage.setItem('company_properties_cache', JSON.stringify(res));
-        return res;
+        if (data && data.length > 0) {
+          const merged = (data as Property[]).map((remote: Property) => {
+            const localMatch = cached.find(c => c.id === remote.id);
+            return {
+              ...localMatch,
+              ...remote,
+              phone: remote.phone || localMatch?.phone || '',
+              address: remote.address || localMatch?.address || ''
+            };
+          });
+          localStorage.setItem('company_properties_cache', JSON.stringify(merged));
+          return merged;
+        }
+        return cached;
       }, cached);
     }
     return cached;
   }
 
   async addProperty(prop: Omit<Property, 'id'>) {
+    const newProp: Property = { ...prop, id: crypto.randomUUID() };
+    const local = localStorage.getItem('company_properties_cache');
+    let current: Property[] = local ? JSON.parse(local) : [];
+    current.push(newProp);
+    localStorage.setItem('company_properties_cache', JSON.stringify(current));
+
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('properties').insert([{ ...prop, id: crypto.randomUUID() }]).select();
-        if (error) throw error;
-        await this.logAction('CREATE_PROPERTY', `Property asset registered: ${prop.name}`);
-        return data;
+      const { data, error } = await supabase.from('properties').insert([newProp]).select();
+      if (error) console.error('Error adding property in Supabase:', error);
+      await this.logAction('CREATE_PROPERTY', `Property asset registered: ${prop.name}`);
+      return data || [newProp];
     }
+    return [newProp];
   }
 
   async updateProperty(id: string, updates: Partial<Property>) {
+    const local = localStorage.getItem('company_properties_cache');
+    let current: Property[] = local ? JSON.parse(local) : [];
+    current = current.map(p => p.id === id ? { ...p, ...updates } : p);
+    localStorage.setItem('company_properties_cache', JSON.stringify(current));
+
     if (this.isSupabase()) {
-        await supabase.from('properties').update(updates).eq('id', id);
-        await this.logAction('UPDATE_PROPERTY', `Property modified: ${id}`);
+      const { error } = await supabase.from('properties').update(updates).eq('id', id);
+      if (error) console.error('Error updating property in Supabase:', error);
+      await this.logAction('UPDATE_PROPERTY', `Property modified: ${id}`);
     }
   }
 
   async deleteProperty(id: string) {
+    const local = localStorage.getItem('company_properties_cache');
+    if (local) {
+      let current: Property[] = JSON.parse(local);
+      current = current.filter(p => p.id !== id);
+      localStorage.setItem('company_properties_cache', JSON.stringify(current));
+    }
     if (this.isSupabase()) {
-        await supabase.from('properties').delete().eq('id', id);
-        await this.logAction('DELETE_PROPERTY', `Property purged: ${id}`);
+      await supabase.from('properties').delete().eq('id', id);
+      await this.logAction('DELETE_PROPERTY', `Property purged: ${id}`);
     }
   }
 

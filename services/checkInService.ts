@@ -260,14 +260,31 @@ export class CheckInService {
     const monthlyRecords = all.filter(c => c.check_in_time.startsWith(currentMonthStr));
     const activeNow = all.filter(c => c.status === 'active');
 
-    // Peak Hours calculation
+    // Dynamic Peak Hours calculation based on check-in time & facility stay duration
     const hourCounts: { [hour: number]: number } = {};
     all.forEach(c => {
-      const hr = new Date(c.check_in_time).getHours();
-      hourCounts[hr] = (hourCounts[hr] || 0) + 1;
+      const startTime = new Date(c.check_in_time);
+      if (isNaN(startTime.getTime())) return;
+
+      const startHour = startTime.getHours();
+      let endHour = startHour;
+
+      if (c.check_out_time) {
+        const endTime = new Date(c.check_out_time);
+        if (!isNaN(endTime.getTime())) {
+          endHour = endTime.getHours();
+        }
+      } else if (c.status === 'active') {
+        endHour = new Date().getHours();
+      }
+
+      // Increment counts for all hours during which member was present in facility
+      for (let h = startHour; h <= Math.min(23, Math.max(startHour, endHour)); h++) {
+        hourCounts[h] = (hourCounts[h] || 0) + 1;
+      }
     });
 
-    let peakHour = 10;
+    let peakHour = -1;
     let maxCount = 0;
     Object.entries(hourCounts).forEach(([hr, cnt]) => {
       if (cnt > maxCount) {
@@ -288,8 +305,17 @@ export class CheckInService {
       daysInMonthMap[day] = (daysInMonthMap[day] || 0) + 1;
     });
 
-    // Peak hour format string
-    const peakHourFormatted = `${peakHour.toString().padStart(2, '0')}:00 - ${(peakHour + 1).toString().padStart(2, '0')}:00`;
+    // Format peak hour dynamically based on actual occupancy logs
+    let peakHourFormatted = 'No Check-Ins Yet';
+    if (peakHour !== -1 && maxCount > 0) {
+      const formatHr = (h: number) => {
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const displayHr = h % 12 === 0 ? 12 : h % 12;
+        return `${displayHr}:00 ${ampm}`;
+      };
+      const nextHr = (peakHour + 1) % 24;
+      peakHourFormatted = `${formatHr(peakHour)} - ${formatHr(nextHr)}`;
+    }
 
     return {
       activeNowCount: activeNow.length,

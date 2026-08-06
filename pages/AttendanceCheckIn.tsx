@@ -55,7 +55,7 @@ export default function AttendanceCheckIn() {
     todayTotal: 0,
     monthlyTotal: 0,
     avgDurationMins: 0,
-    peakHourFormatted: '10:00 - 11:00',
+    peakHourFormatted: 'Calculating...',
     daysInMonthMap: {},
     hourCounts: {}
   });
