@@ -76,7 +76,13 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
               toast.success(`Scanned: ${decodedText}`);
               onScanSuccess(decodedText);
               // Stop immediately after scan success
-              html5QrCode.stop().catch(console.error);
+              try {
+                if (html5QrCode.isScanning) {
+                  html5QrCode.stop().catch(console.error);
+                }
+              } catch (e) {
+                console.warn(e);
+              }
             }
           },
           (errorMessage) => {
@@ -98,7 +104,15 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
     return () => {
       isMounted = false;
       if (html5QrCodeRef.current) {
-        html5QrCodeRef.current.stop().catch(console.warn);
+        try {
+          if (html5QrCodeRef.current.isScanning) {
+            html5QrCodeRef.current.stop().catch(console.warn);
+          } else {
+            html5QrCodeRef.current.clear();
+          }
+        } catch (e) {
+          console.warn('Error stopping scanner:', e);
+        }
       }
     };
   }, [onScanSuccess]);
