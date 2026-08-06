@@ -31,6 +31,12 @@ async function startServer() {
         });
       }
 
+      if (!/^\d+$/.test(issuerId)) {
+        return res.status(500).json({ 
+          error: `GOOGLE_WALLET_ISSUER_ID must be a numeric value (e.g., 33880000000...). You provided: ${issuerId}. The Merchant ID is NOT the Issuer ID.` 
+        });
+      }
+
       let credentials;
       try {
         credentials = JSON.parse(credentialsJson);
@@ -87,6 +93,7 @@ async function startServer() {
           genericClasses: [
             {
               id: classId,
+              issuerName: 'Health Club',
               classTemplateInfo: {
                 cardTemplateOverride: {
                   cardRowTemplateInfos: [
