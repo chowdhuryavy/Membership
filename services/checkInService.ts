@@ -26,7 +26,7 @@ export class CheckInService {
     scopeId: string, 
     isProperty: boolean = false, 
     limitToOutletIds?: string[],
-    filters?: { date?: string; memberId?: string; status?: 'active' | 'completed' }
+    filters?: { date?: string; memberId?: string; membershipNumber?: string; status?: 'active' | 'completed' }
   ): Promise<MemberCheckIn[]> {
     let checkIns: MemberCheckIn[] = [];
 
@@ -48,8 +48,12 @@ export class CheckInService {
           query = query.eq('status', filters.status);
         }
 
-        if (filters?.memberId) {
+        if (filters?.memberId && filters?.membershipNumber) {
+          query = query.or(`member_id.eq.${filters.memberId},membership_number.eq.${filters.membershipNumber}`);
+        } else if (filters?.memberId) {
           query = query.eq('member_id', filters.memberId);
+        } else if (filters?.membershipNumber) {
+          query = query.eq('membership_number', filters.membershipNumber);
         }
 
         if (filters?.date) {
@@ -80,7 +84,13 @@ export class CheckInService {
       }
 
       if (filters?.status && ci.status !== filters.status) return false;
-      if (filters?.memberId && ci.member_id !== filters.memberId) return false;
+
+      if (filters?.memberId || filters?.membershipNumber) {
+        const matchId = filters.memberId && ci.member_id === filters.memberId;
+        const matchNum = filters.membershipNumber && ci.membership_number?.toLowerCase() === filters.membershipNumber.toLowerCase();
+        if (!matchId && !matchNum) return false;
+      }
+
       if (filters?.date) {
         const checkInDate = ci.check_in_time.split('T')[0];
         if (checkInDate !== filters.date) return false;

@@ -73,24 +73,26 @@ export function parseScannedMemberCode(scannedCode: string, members: any[]): any
   if (!scannedCode || !members || members.length === 0) return undefined;
   const clean = scannedCode.trim();
 
-  // 1. Direct match by membership_number, phone, or id
+  // 1. Direct match by membership_number, phone, or id (or membership_number ignoring leading '#')
+  const cleanNum = clean.replace(/^#/, '').toLowerCase();
   let matched = members.find(
     m => m.membership_number?.toLowerCase() === clean.toLowerCase() ||
+         m.membership_number?.toLowerCase().replace(/^#/, '') === cleanNum ||
          (m.phone && m.phone.includes(clean)) ||
          m.id === clean
   );
   if (matched) return matched;
 
-  // 2. Extract token from URL if scannedCode is a URL or contains token parameter
+  // 2. Extract token from URL if scannedCode contains token or passToken parameter (even inside hash fragment)
   let tokenStr = clean;
-  if (clean.includes('token=')) {
-    try {
-      const urlObj = new URL(clean.startsWith('http') ? clean : `https://dummy.com/${clean}`);
-      const param = urlObj.searchParams.get('token') || urlObj.searchParams.get('passToken');
-      if (param) tokenStr = param;
-    } catch {
-      const match = clean.match(/[?&](?:token|passToken)=([^&#]+)/);
-      if (match) tokenStr = match[1];
+  if (clean.includes('token=') || clean.includes('passToken=')) {
+    const match = clean.match(/(?:token|passToken)=([^&#\s]+)/i);
+    if (match && match[1]) {
+      try {
+        tokenStr = decodeURIComponent(match[1]);
+      } catch {
+        tokenStr = match[1];
+      }
     }
   }
 
@@ -98,10 +100,24 @@ export function parseScannedMemberCode(scannedCode: string, members: any[]): any
   const decoded = decodePassToken(tokenStr);
   if (decoded) {
     matched = members.find(
-      m => m.id === decoded.memberId ||
-           (m.membership_number && m.membership_number.toLowerCase() === decoded.membershipNumber.toLowerCase())
+      m => (decoded.memberId && m.id === decoded.memberId) ||
+           (decoded.membershipNumber && (
+             m.membership_number?.toLowerCase() === decoded.membershipNumber.toLowerCase() ||
+             m.membership_number?.toLowerCase().replace(/^#/, '') === decoded.membershipNumber.toLowerCase().replace(/^#/, '')
+           ))
     );
     if (matched) return matched;
+  }
+
+  // 4. Fallback search: check if scanned code contains member ID or membership number substring
+  const cleanLower = clean.toLowerCase();
+  for (const m of members) {
+    if (
+      (m.id && cleanLower.includes(m.id.toLowerCase())) ||
+      (m.membership_number && cleanLower.includes(m.membership_number.toLowerCase()))
+    ) {
+      return m;
+    }
   }
 
   return undefined;

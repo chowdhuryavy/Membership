@@ -8,12 +8,13 @@ import {
   Shield, UserCheck, CalendarDays, ClipboardList, TrendingUp, History,
   LayoutDashboard, Calendar, Pencil, ArrowRight, AlertCircle, List,
   Milestone, MousePointer, PenTool, Wallet, Tag, FileUp, Download, Printer,
-  ShieldAlert, Sparkles, Minus
+  ShieldAlert, Sparkles, Minus, QrCode
 } from 'lucide-react';
-import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, MassageType, PTMember } from '../../types';
+import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, MassageType, PTMember, MemberCheckIn } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../services/mockSupabase';
+import { checkInService } from '../../services/checkInService';
 import { format, differenceInCalendarDays, parse, isAfter, addDays, isBefore, startOfDay, parseISO } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { MembersAgreement } from '../../components/MembersAgreement';
@@ -34,7 +35,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   member: initialMember, categories, onBack, onEdit, onRenew, onUpdate, onDelete
 }) => {
   const { user, isSuperAdmin } = useAuth();
-  const { formatMoney, currentOutlet, currentProperty, settings, hasPermission, setPageLoading } = useSettings();
+  const { formatMoney, currentOutlet, currentProperty, settings, hasPermission, setPageLoading, outlets } = useSettings();
   
   const [viewingMember, setViewingMember] = useState<Member>(initialMember);
   const [freezes, setFreezes] = useState<Freeze[]>([]);
@@ -52,6 +53,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const [lifecycleHistory, setLifecycleHistory] = useState<Member[]>([]);
   const [ptMembers, setPtMembers] = useState<PTMember[]>([]);
   const [allSales, setAllSales] = useState<any[]>([]);
+  const [memberCheckIns, setMemberCheckIns] = useState<MemberCheckIn[]>([]);
   
   const [showFreezeModal, setShowFreezeModal] = useState(false);
   const [editingFreezeId, setEditingFreezeId] = useState<string | null>(null);
@@ -69,6 +71,9 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const [memberNotes, setMemberNotes] = useState(initialMember.notes || '');
   const [cancelDate, setCancelDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [viewingIdUrl, setViewingIdUrl] = useState<string | null>(null);
+
+  // Attendance History Purchase Filter State
+  const [selectedPurchaseId, setSelectedPurchaseId] = useState<string>('all');
 
   const category = useMemo(() => categories.find(c => c.id === viewingMember.category_id), [categories, viewingMember.category_id]);
   const getEffectiveStatus = (member: Member) => {
@@ -326,6 +331,12 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
 
       setServiceEngagements(engagements);
+      
+      const checkIns = await checkInService.getCheckIns('all', true, undefined, { 
+        memberId: targetMember.id, 
+        membershipNumber: targetMember.membership_number 
+      });
+      setMemberCheckIns(checkIns);
     } catch (err) {
       console.error("Forensics error:", err);
     } finally {
@@ -336,6 +347,28 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   useEffect(() => { 
     loadForensics(viewingMember);
   }, [viewingMember.id, viewingMember.membership_number, currentProperty, currentOutlet]);
+
+  const selectedPurchase = useMemo(() => {
+    if (selectedPurchaseId === 'all') return null;
+    return lifecycleHistory.find(h => h.id === selectedPurchaseId) || null;
+  }, [selectedPurchaseId, lifecycleHistory]);
+
+  const filteredCheckIns = useMemo(() => {
+    if (!selectedPurchase) return memberCheckIns;
+
+    const startIso = selectedPurchase.start_date;
+    const endIso = selectedPurchase.current_end_date || selectedPurchase.end_date;
+
+    if (!startIso) return memberCheckIns;
+
+    const startDate = new Date(startIso + 'T00:00:00');
+    const endDate = endIso ? new Date(endIso + 'T23:59:59') : new Date('2099-12-31');
+
+    return memberCheckIns.filter(ci => {
+      const ciDate = new Date(ci.check_in_time);
+      return ciDate >= startDate && ciDate <= endDate;
+    });
+  }, [memberCheckIns, selectedPurchase]);
 
   const usedFreezeDays = useMemo(() => {
     return freezes.filter(f => !f.is_maintenance).reduce((sum, f) => sum + (f.total_days || 0), 0);
@@ -933,7 +966,10 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                               {Array.isArray(lifecycleHistory) && lifecycleHistory.map(hist => (
                                   <tr 
                                     key={hist.id} 
-                                    onClick={() => setViewingMember(hist)}
+                                    onClick={() => {
+                                      setViewingMember(hist);
+                                      setSelectedPurchaseId(hist.id);
+                                    }}
                                     className={`hover:bg-indigo-50/40 transition-all cursor-pointer group/row ${hist.id === viewingMember.id ? 'bg-indigo-50/60 border-l-4 border-indigo-600' : 'bg-white'}`}
                                   >
                                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1167,6 +1203,103 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                       </CardContent>
                   </Card>
               </div>
+
+              {/* ATTENDANCE HISTORY CARD */}
+              <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl bg-white overflow-hidden flex flex-col min-h-[400px]">
+                  <CardHeader className="bg-slate-50 p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b shrink-0">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center border border-emerald-100 shadow-sm"><QrCode className="w-5 h-5 text-emerald-600" /></div>
+                        <div>
+                            <CardTitle className="text-[11px] font-black uppercase tracking-widest text-slate-900">Facility Attendance History</CardTitle>
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Check-Ins per Purchase Lifecycle</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <select
+                          value={selectedPurchaseId}
+                          onChange={(e) => setSelectedPurchaseId(e.target.value)}
+                          className="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 uppercase tracking-wider"
+                        >
+                          <option value="all">All Purchases ({memberCheckIns.length} Total Visits)</option>
+                          {lifecycleHistory.map(hist => {
+                            const catName = categories.find(c => c.id === hist.category_id)?.name || hist.package_type;
+                            return (
+                              <option key={hist.id} value={hist.id}>
+                                {catName} ({format(parseISO(hist.start_date), 'dd MMM yy')} - {format(parseISO(hist.current_end_date), 'dd MMM yy')})
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">{filteredCheckIns.length} Records</span>
+                      </div>
+                  </CardHeader>
+
+                  {selectedPurchase && (
+                    <div className="px-8 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between text-xs text-emerald-900 font-bold">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>
+                          Showing Attendance for Purchase: <strong className="text-emerald-950 uppercase">{categories.find(c => c.id === selectedPurchase.category_id)?.name || selectedPurchase.package_type}</strong> ({format(parseISO(selectedPurchase.start_date), 'dd MMM yyyy')} - {format(parseISO(selectedPurchase.current_end_date), 'dd MMM yyyy')})
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setSelectedPurchaseId('all')}
+                        className="text-[10px] font-black uppercase text-emerald-700 hover:text-emerald-900 underline shrink-0"
+                      >
+                        Reset Filter
+                      </button>
+                    </div>
+                  )}
+
+                  <CardContent className="p-0 flex-1 overflow-y-auto custom-scrollbar">
+                      <table className="w-full text-left">
+                          <thead className="bg-slate-50 text-[8px] font-black uppercase text-slate-400 tracking-[0.2em] border-b sticky top-0 z-10">
+                              <tr>
+                                  <th className="px-8 py-4">Date & Time</th>
+                                  <th className="px-8 py-4">Method</th>
+                                  <th className="px-8 py-4">Outlet</th>
+                                  <th className="px-8 py-4 text-right">Duration</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                              {forensicsLoading ? (
+                                  <tr><td colSpan={4} className="px-8 py-10 text-center text-slate-400">
+                                      <div className="flex flex-col items-center gap-4 animate-pulse">
+                                          <History className="w-8 h-8 text-slate-200 animate-spin" />
+                                          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Loading Attendance...</p>
+                                      </div>
+                                  </td></tr>
+                              ) : filteredCheckIns.length === 0 ? (
+                                  <tr><td colSpan={4} className="px-8 py-16 text-center">
+                                      <div className="flex flex-col items-center gap-4 opacity-30">
+                                          <QrCode className="w-12 h-12 text-slate-300" />
+                                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No attendance records found for this purchase</p>
+                                      </div>
+                                  </td></tr>
+                              ) : (
+                                  filteredCheckIns.map(ci => (
+                                      <tr key={ci.id} className="hover:bg-emerald-50/20 transition-colors">
+                                          <td className="px-8 py-5">
+                                              <div className="text-[11px] font-black text-slate-900">{format(new Date(ci.check_in_time), 'dd MMM yy, hh:mm a')}</div>
+                                          </td>
+                                          <td className="px-8 py-5">
+                                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2 py-1 bg-slate-100 rounded-lg">
+                                                  {ci.check_in_method.replace(/_/g, ' ')}
+                                              </span>
+                                          </td>
+                                          <td className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                              {outlets.find(o => o.id === ci.outlet_id)?.name || ci.outlet_id}
+                                          </td>
+                                          <td className="px-8 py-5 text-right font-black text-slate-900 text-xs">
+                                              {ci.duration_minutes ? `${ci.duration_minutes} mins` : '-'}
+                                          </td>
+                                      </tr>
+                                  ))
+                              )}
+                          </tbody>
+                      </table>
+                  </CardContent>
+              </Card>
 
               {(viewingMember.package_type === 'Couple' || viewingMember.package_type === 'Double' || viewingMember.package_type === 'Family') && (
                 <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl p-10 bg-white overflow-hidden relative group">

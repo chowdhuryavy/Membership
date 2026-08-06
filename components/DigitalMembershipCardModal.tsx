@@ -439,7 +439,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
                           <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
                             PACKAGE TIER
                           </span>
-                          <span className="text-xs font-black text-amber-300 truncate block">
+                          <span className="text-[11px] font-black text-amber-300 leading-snug block break-words">
                             {memberTier}
                           </span>
                         </div>

@@ -406,7 +406,7 @@ export const PublicMemberPass: React.FC = () => {
                     <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
                       PACKAGE TIER
                     </span>
-                    <span className="text-xs font-black text-amber-300">
+                    <span className="text-[11px] font-black text-amber-300 leading-snug block break-words">
                       {memberTier}
                     </span>
                   </div>
