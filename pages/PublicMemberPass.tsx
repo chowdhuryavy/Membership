@@ -180,14 +180,29 @@ export const PublicMemberPass: React.FC = () => {
   const handleDownloadGoogleWallet = async () => {
     if (!member) return;
     const toastId = toast.loading('Connecting to Google Wallet API...');
-    setTimeout(() => {
-      toast.dismiss(toastId);
-      alert(
-        "Google Wallet Integration Requires Backend\n\n" +
-        "Google Wallet passes require a signed JSON Web Token (JWT) using Google Cloud Service Account credentials.\n\n" +
-        "To securely generate this token, you must implement a backend API that securely holds your Google Service Account key, signs the pass data into a JWT, and returns the 'Save to Google Pay' link."
-      );
-    }, 800);
+    try {
+      const response = await fetch('/api/google-wallet/generate-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memberId: member.id,
+          guestName: member.guest_name,
+          membershipNumber: member.membership_number
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate pass');
+      }
+
+      toast.success('Opening Google Wallet...', { id: toastId });
+      window.open(data.url, '_blank');
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.message || 'Failed to connect to Google Wallet.', { id: toastId, duration: 5000 });
+    }
   };
 
   if (isLoading) {

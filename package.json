@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "tsx server.ts",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "start": "node dist/server.cjs",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "deploy:functions": "npx tsx scripts/sync-report-logic.ts && npx supabase functions deploy admin-reset-user && npx supabase functions deploy dynamic-action && npx supabase functions deploy send-reports && npx supabase functions deploy get-time"
@@ -19,9 +20,12 @@
     "@vitejs/plugin-react": "^5.0.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
     "html5-qrcode": "^2.3.8",
+    "jsonwebtoken": "^9.0.3",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^5.0.7",
     "jszip": "^3.10.1",
@@ -44,7 +48,10 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@typescript-eslint/parser": "^8.65.0",
+    "esbuild": "^0.28.1",
     "eslint-plugin-react-hooks": "^7.1.1"
   }
 }
