@@ -39,7 +39,7 @@ export default function AttendanceCheckIn() {
   const [showScanner, setShowScanner] = useState(false);
   const [showDigitalCard, setShowDigitalCard] = useState<Member | null>(null);
   const [isKioskActive, setIsKioskActive] = useState(false);
-  const [showSqlModal, setShowSqlModal] = useState(false);
+
 
   // Analytics Stats
   const [analytics, setAnalytics] = useState<{
@@ -195,48 +195,7 @@ export default function AttendanceCheckIn() {
     return `${remMins} mins`;
   };
 
-  // SQL Migration text
-  const sqlMigrationCode = `-- Member Check-In & Facility Attendance Table Migration Script
-CREATE TABLE IF NOT EXISTS public.member_check_ins (
-    id TEXT PRIMARY KEY,
-    member_id TEXT,
-    membership_number VARCHAR(100) NOT NULL,
-    guest_name VARCHAR(255) NOT NULL,
-    outlet_id TEXT,
-    property_id TEXT,
-    check_in_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    check_out_time TIMESTAMPTZ NULL,
-    duration_minutes INTEGER NULL,
-    check_in_method VARCHAR(50) NOT NULL DEFAULT 'reception_scan', -- reception_scan, reception_manual, self_kiosk_qr, self_kiosk_number
-    checked_in_by VARCHAR(255) NULL,
-    notes TEXT NULL,
-    status VARCHAR(50) NOT NULL DEFAULT 'active', -- active, completed
-    membership_status_at_checkin VARCHAR(50) NULL,
-    access_type VARCHAR(100) NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
 
--- Performance Indexes
-CREATE INDEX IF NOT EXISTS idx_member_check_ins_outlet ON public.member_check_ins(outlet_id);
-CREATE INDEX IF NOT EXISTS idx_member_check_ins_property ON public.member_check_ins(property_id);
-CREATE INDEX IF NOT EXISTS idx_member_check_ins_status ON public.member_check_ins(status);
-CREATE INDEX IF NOT EXISTS idx_member_check_ins_time ON public.member_check_ins(check_in_time DESC);
-CREATE INDEX IF NOT EXISTS idx_member_check_ins_member ON public.member_check_ins(member_id);
-
--- Enable RLS
-ALTER TABLE public.member_check_ins ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Allow authenticated read on member_check_ins" ON public.member_check_ins;
-DROP POLICY IF EXISTS "Allow authenticated insert on member_check_ins" ON public.member_check_ins;
-DROP POLICY IF EXISTS "Allow authenticated update on member_check_ins" ON public.member_check_ins;
-DROP POLICY IF EXISTS "Allow public read on member_check_ins" ON public.member_check_ins;
-DROP POLICY IF EXISTS "Allow public insert on member_check_ins" ON public.member_check_ins;
-DROP POLICY IF EXISTS "Allow public update on member_check_ins" ON public.member_check_ins;
-
-CREATE POLICY "Allow public read on member_check_ins" ON public.member_check_ins FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on member_check_ins" ON public.member_check_ins FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on member_check_ins" ON public.member_check_ins FOR UPDATE USING (true) WITH CHECK (true);
-`;
 
   if (isKioskActive) {
     return (
@@ -306,12 +265,7 @@ CREATE POLICY "Allow public update on member_check_ins" ON public.member_check_i
               <Maximize2 className="w-4 h-4" /> Launch Kiosk Terminal
             </button>
 
-            <button
-              onClick={() => setShowSqlModal(true)}
-              className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 border border-white/20"
-            >
-              <Database className="w-4 h-4 text-amber-300" /> Supabase SQL
-            </button>
+
           </div>
         </div>
       </div>
@@ -825,46 +779,7 @@ CREATE POLICY "Allow public update on member_check_ins" ON public.member_check_i
       )}
 
       {/* SQL Migration Code Modal */}
-      {showSqlModal && (
-        <div className="fixed inset-0 z-[1200] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl bg-slate-900 text-white rounded-[2rem] border border-slate-800 shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Code className="w-5 h-5 text-amber-400" />
-                <h3 className="text-sm font-black uppercase tracking-tight text-white">
-                  Supabase Database Migration Script
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowSqlModal(false)}
-                className="text-slate-400 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
 
-            <p className="text-xs text-slate-400">
-              Run this SQL script in your Supabase SQL Editor to create the <code className="text-amber-300">member_check_ins</code> table for production database persistence.
-            </p>
-
-            <pre className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto max-h-80 custom-scrollbar">
-              {sqlMigrationCode}
-            </pre>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(sqlMigrationCode);
-                  toast.success('SQL migration script copied to clipboard!');
-                }}
-                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-black text-xs uppercase"
-              >
-                Copy SQL Script
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
