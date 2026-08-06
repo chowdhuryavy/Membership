@@ -354,6 +354,7 @@ const SettingsPage = () => {
 
   const navItems = useMemo(() => [
     { id: 'dashboard', label: 'Dashboard' },
+    { id: 'checkin', label: 'Facility Check-In' },
     { id: 'members', label: 'Members' },
     { id: 'pt-members', label: 'PT Members' },
     { id: 'staff', label: 'Staff Roster' },
@@ -1144,6 +1145,7 @@ const SettingsPage = () => {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                               {[
                                   { id: 'nav_dashboard', label: 'Navigation: Dashboard' },
+                                  { id: 'nav_checkin', label: 'Navigation: Facility Check-In' },
                                   { id: 'nav_members', label: 'Navigation: Members' },
                                   { id: 'nav_settings', label: 'Navigation: Settings' },
                                   { id: 'global_search', label: 'Global Search Overlay' },

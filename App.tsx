@@ -335,6 +335,10 @@ const ProtectedLayout = () => {
             e.preventDefault();
             navigate('/');
         }
+        if (checkShortcut(e, 'nav_checkin')) {
+            e.preventDefault();
+            navigate('/checkin');
+        }
         if (checkShortcut(e, 'nav_members')) {
             e.preventDefault();
             navigate('/members');
@@ -379,7 +383,7 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
     const ALL_NAV_ITEMS = useMemo(() => {
         const items = [
             { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:view' as Permission },
-            { id: 'checkin', to: '/checkin', icon: QrCode, label: 'Facility Check-In', permission: 'members:view' as Permission },
+            { id: 'checkin', to: '/checkin', icon: QrCode, label: 'Facility Check-In', permission: 'checkin:view' as Permission },
             { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
             { id: 'pt-members', to: '/pt-members', icon: Dumbbell, label: 'PT Members', permission: 'members:view' as Permission },
             { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
@@ -513,7 +517,7 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
     const ALL_NAV_ITEMS = useMemo(() => {
         const items = [
             { id: 'dashboard', to: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:view' as Permission },
-            { id: 'checkin', to: '/checkin', icon: QrCode, label: 'Facility Check-In', permission: 'members:view' as Permission },
+            { id: 'checkin', to: '/checkin', icon: QrCode, label: 'Facility Check-In', permission: 'checkin:view' as Permission },
             { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
             { id: 'pt-members', to: '/pt-members', icon: Dumbbell, label: 'PT Members', permission: 'members:view' as Permission },
             { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },

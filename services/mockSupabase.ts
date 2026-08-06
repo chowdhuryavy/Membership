@@ -154,6 +154,15 @@ class DatabaseService {
         ]
       },
       {
+        id: 'checkin',
+        label: 'Facility Check-In',
+        permissions: [
+          { key: 'checkin:view', label: 'View Check-Ins', description: 'Access the check-in and attendance logs.' },
+          { key: 'checkin:manage', label: 'Manage Attendance', description: 'Perform manual check-ins and check-outs.' },
+          { key: 'checkin:kiosk', label: 'Launch Kiosk', description: 'Enable self-service kiosk mode for members.' },
+        ]
+      },
+      {
         id: 'staff',
         label: 'Staff Roster & Operations',
         permissions: [
