@@ -84,7 +84,28 @@ serve(async (req) => {
       origins: [],
       payload: {
         genericClasses: [
-          { id: classId }
+          { 
+            id: classId,
+            classTemplateInfo: {
+              cardTemplateOverride: {
+                cardRowTemplateInfos: [
+                  {
+                    twoItems: {
+                      startItem: {
+                        firstValue: {
+                          fields: [
+                            {
+                              fieldPath: 'object.textModulesData["member_no"]'
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
         ],
         genericObjects: [genericObject]
       }

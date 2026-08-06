@@ -12,6 +12,7 @@ import { Member } from '../types';
 import { checkInService } from '../services/checkInService';
 import { detectDeviceOS, createPkpassZipBlob, generateGoogleWalletSaveUrl } from '../services/pkpassService';
 import toast from 'react-hot-toast';
+import { supabase } from '../services/supabase';
 
 export const PublicMemberPass: React.FC = () => {
   const [searchParams] = useSearchParams();

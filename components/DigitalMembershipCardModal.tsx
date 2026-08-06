@@ -13,6 +13,7 @@ import { generatePassToken, getPublicPassUrl } from '../utils/passToken';
 import { useSettings } from '../contexts/SettingsContext';
 import { detectDeviceOS, createPkpassZipBlob, generateGoogleWalletSaveUrl } from '../services/pkpassService';
 import toast from 'react-hot-toast';
+import { supabase } from '../services/supabase';
 
 interface DigitalMembershipCardModalProps {
   member: Member;
