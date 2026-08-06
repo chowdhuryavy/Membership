@@ -1757,49 +1757,61 @@ class DatabaseService {
   }
 
   async getSettings(): Promise<CompanySettings> {
+    if (this.isSupabase()) {
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
+        if (error) throw error;
+        if (data) {
+          return {
+            name: data.name || '',
+            logo_url: data.logo_url || '',
+            address: data.address || '',
+            phone: data.phone || '',
+            currency_id: data.currency_id || 'default',
+            navigation_order: data.navigation_order || undefined
+          } as CompanySettings;
+        }
+        return {
+          name: '',
+          logo_url: '',
+          address: '',
+          phone: '',
+          currency_id: 'default'
+        };
+      }, {
+        name: '',
+        logo_url: '',
+        address: '',
+        phone: '',
+        currency_id: 'default'
+      });
+    }
+
     const defaultSettings: CompanySettings = { 
       name: 'The Torch Doha Health Club', 
       logo_url: 'https://i.imgur.com/oZVRrvo.png', 
-      address: 'Aspire Zone, Al Waab Street, Doha, Qatar', 
-      phone: '+974 4446 5600',
+      address: '', 
+      phone: '',
       currency_id: 'default' 
     };
     
-    // Always check local storage first for immediate fallback availability
     const local = localStorage.getItem('company_settings_cache');
-    let current = local ? JSON.parse(local) : defaultSettings;
-
-    if (this.isSupabase()) {
-      return this.safeCall(async () => {
-        const { data } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
-        if (data) {
-          const merged: CompanySettings = {
-            ...current,
-            ...data,
-            phone: data.phone || current.phone || '',
-            address: data.address || current.address || '',
-            name: data.name || current.name || '',
-            logo_url: data.logo_url || current.logo_url || ''
-          };
-          localStorage.setItem('company_settings_cache', JSON.stringify(merged));
-          return merged;
-        }
-        return current;
-      }, current);
-    }
-    return current;
+    return local ? JSON.parse(local) : defaultSettings;
   }
 
   async updateSettings(settings: CompanySettings) {
-    // 1. Update localStorage immediately for cross-tab speed
-    localStorage.setItem('company_settings_cache', JSON.stringify(settings));
-
     if (this.isSupabase()) {
-      const { error } = await supabase.from('company_settings').upsert({ ...settings, id: 'global' });
-      if (error) {
-        console.error('Error updating settings in Supabase:', error);
+      let payload: any = { ...settings, id: 'global' };
+      let { error } = await supabase.from('company_settings').upsert(payload);
+      if (error && (error.message?.includes('phone') || error.code === 'PGRST204')) {
+        delete payload.phone;
+        const retry = await supabase.from('company_settings').upsert(payload);
+        error = retry.error;
       }
+      if (error) console.error('Error updating settings in Supabase:', error);
       await this.logAction('UPDATE_SETTINGS', 'Global system configuration mutated.');
+    } else {
+      localStorage.setItem('company_settings_cache', JSON.stringify(settings));
     }
   }
 
@@ -1911,82 +1923,95 @@ class DatabaseService {
   }
 
   async getOutlets(): Promise<Outlet[]> {
+    if (this.isSupabase()) {
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('outlets').select('*');
+        if (error) throw error;
+        if (data) {
+          return (data as any[]).map(remote => ({
+            id: remote.id,
+            property_id: remote.property_id || '',
+            name: remote.name || '',
+            address: remote.address || '',
+            phone: remote.phone || '',
+            logo_url: remote.logo_url || '',
+            signatory_config: remote.signatory_config || {},
+            contract_template: remote.contract_template || '',
+            conditions: remote.conditions || ''
+          })) as Outlet[];
+        }
+        return [];
+      }, []);
+    }
+
     const defaultOutlets: Outlet[] = [
       {
         id: 'outlet-1',
         property_id: 'prop-1',
         name: 'The Torch Health Club',
-        address: 'Aspire Zone, Al Waab Street, Doha, Qatar',
-        phone: '+974 4446 5600',
+        address: '',
+        phone: '',
         logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80'
       }
     ];
 
     const local = localStorage.getItem('company_outlets_cache');
-    let cached: Outlet[] = local ? JSON.parse(local) : defaultOutlets;
-
-    if (this.isSupabase()) {
-      return this.safeCall(async () => {
-        const { data, error } = await supabase.from('outlets').select('*');
-        if (error) throw error;
-        if (data && data.length > 0) {
-          const merged = (data as Outlet[]).map((remote: Outlet) => {
-            const localMatch = cached.find(c => c.id === remote.id);
-            return {
-              ...localMatch,
-              ...remote,
-              phone: remote.phone || localMatch?.phone || '',
-              address: remote.address || localMatch?.address || ''
-            };
-          });
-          localStorage.setItem('company_outlets_cache', JSON.stringify(merged));
-          return merged;
-        }
-        return cached;
-      }, cached);
-    }
-    return cached;
+    return local ? JSON.parse(local) : defaultOutlets;
   }
 
   async addOutlet(outlet: Omit<Outlet, 'id'>) {
-    const newOutlet: Outlet = { ...outlet, id: crypto.randomUUID() };
-    const local = localStorage.getItem('company_outlets_cache');
-    let current: Outlet[] = local ? JSON.parse(local) : [];
-    current.push(newOutlet);
-    localStorage.setItem('company_outlets_cache', JSON.stringify(current));
-
     if (this.isSupabase()) {
-      const { data, error } = await supabase.from('outlets').insert([newOutlet]).select();
+      let newOutlet: any = { ...outlet, id: crypto.randomUUID() };
+      let { data, error } = await supabase.from('outlets').insert([newOutlet]).select();
+      if (error && (error.message?.includes('phone') || error.code === 'PGRST204')) {
+        delete newOutlet.phone;
+        const retry = await supabase.from('outlets').insert([newOutlet]).select();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error) console.error('Error adding outlet in Supabase:', error);
       await this.logAction('CREATE_OUTLET', `Facility outlet commissioned: ${outlet.name}`);
-      return data || [newOutlet];
+      return data || [{ ...outlet, id: newOutlet.id }];
+    } else {
+      const newOutlet: Outlet = { ...outlet, id: crypto.randomUUID() };
+      const local = localStorage.getItem('company_outlets_cache');
+      let current: Outlet[] = local ? JSON.parse(local) : [];
+      current.push(newOutlet);
+      localStorage.setItem('company_outlets_cache', JSON.stringify(current));
+      return [newOutlet];
     }
-    return [newOutlet];
   }
 
   async updateOutlet(id: string, updates: Partial<Outlet>) {
-    const local = localStorage.getItem('company_outlets_cache');
-    let current: Outlet[] = local ? JSON.parse(local) : [];
-    current = current.map(o => o.id === id ? { ...o, ...updates } : o);
-    localStorage.setItem('company_outlets_cache', JSON.stringify(current));
-
     if (this.isSupabase()) {
-      const { error } = await supabase.from('outlets').update(updates).eq('id', id);
+      let patch: any = { ...updates };
+      let { error } = await supabase.from('outlets').update(patch).eq('id', id);
+      if (error && (error.message?.includes('phone') || error.code === 'PGRST204')) {
+        delete patch.phone;
+        const retry = await supabase.from('outlets').update(patch).eq('id', id);
+        error = retry.error;
+      }
       if (error) console.error('Error updating outlet in Supabase:', error);
       await this.logAction('UPDATE_OUTLET', `Outlet modified: ${id}`);
+    } else {
+      const local = localStorage.getItem('company_outlets_cache');
+      let current: Outlet[] = local ? JSON.parse(local) : [];
+      current = current.map(o => o.id === id ? { ...o, ...updates } : o);
+      localStorage.setItem('company_outlets_cache', JSON.stringify(current));
     }
   }
 
   async deleteOutlet(id: string) {
-    const local = localStorage.getItem('company_outlets_cache');
-    if (local) {
-      let current: Outlet[] = JSON.parse(local);
-      current = current.filter(o => o.id !== id);
-      localStorage.setItem('company_outlets_cache', JSON.stringify(current));
-    }
     if (this.isSupabase()) {
       await supabase.from('outlets').delete().eq('id', id);
       await this.logAction('DELETE_OUTLET', `Outlet decommissioned: ${id}`);
+    } else {
+      const local = localStorage.getItem('company_outlets_cache');
+      if (local) {
+        let current: Outlet[] = JSON.parse(local);
+        current = current.filter(o => o.id !== id);
+        localStorage.setItem('company_outlets_cache', JSON.stringify(current));
+      }
     }
   }
 
@@ -2033,81 +2058,91 @@ class DatabaseService {
   }
 
   async getProperties(): Promise<Property[]> {
+    if (this.isSupabase()) {
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('properties').select('*');
+        if (error) throw error;
+        if (data) {
+          return (data as any[]).map(remote => ({
+            id: remote.id,
+            name: remote.name || '',
+            address: remote.address || '',
+            phone: remote.phone || '',
+            logo_url: remote.logo_url || '',
+            signatory_config: remote.signatory_config || {}
+          })) as Property[];
+        }
+        return [];
+      }, []);
+    }
+
     const defaultProperties: Property[] = [
       {
         id: 'prop-1',
         name: 'The Torch Doha',
-        address: 'Aspire Zone, Al Waab Street, Doha, Qatar',
-        phone: '+974 4446 5600',
+        address: '',
+        phone: '',
         logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80'
       }
     ];
 
     const local = localStorage.getItem('company_properties_cache');
-    let cached: Property[] = local ? JSON.parse(local) : defaultProperties;
-
-    if (this.isSupabase()) {
-      return this.safeCall(async () => {
-        const { data, error } = await supabase.from('properties').select('*');
-        if (error) throw error;
-        if (data && data.length > 0) {
-          const merged = (data as Property[]).map((remote: Property) => {
-            const localMatch = cached.find(c => c.id === remote.id);
-            return {
-              ...localMatch,
-              ...remote,
-              phone: remote.phone || localMatch?.phone || '',
-              address: remote.address || localMatch?.address || ''
-            };
-          });
-          localStorage.setItem('company_properties_cache', JSON.stringify(merged));
-          return merged;
-        }
-        return cached;
-      }, cached);
-    }
-    return cached;
+    return local ? JSON.parse(local) : defaultProperties;
   }
 
   async addProperty(prop: Omit<Property, 'id'>) {
-    const newProp: Property = { ...prop, id: crypto.randomUUID() };
-    const local = localStorage.getItem('company_properties_cache');
-    let current: Property[] = local ? JSON.parse(local) : [];
-    current.push(newProp);
-    localStorage.setItem('company_properties_cache', JSON.stringify(current));
-
     if (this.isSupabase()) {
-      const { data, error } = await supabase.from('properties').insert([newProp]).select();
+      let newProp: any = { ...prop, id: crypto.randomUUID() };
+      let { data, error } = await supabase.from('properties').insert([newProp]).select();
+      if (error && (error.message?.includes('phone') || error.code === 'PGRST204')) {
+        delete newProp.phone;
+        const retry = await supabase.from('properties').insert([newProp]).select();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error) console.error('Error adding property in Supabase:', error);
       await this.logAction('CREATE_PROPERTY', `Property asset registered: ${prop.name}`);
-      return data || [newProp];
+      return data || [{ ...prop, id: newProp.id }];
+    } else {
+      const newProp: Property = { ...prop, id: crypto.randomUUID() };
+      const local = localStorage.getItem('company_properties_cache');
+      let current: Property[] = local ? JSON.parse(local) : [];
+      current.push(newProp);
+      localStorage.setItem('company_properties_cache', JSON.stringify(current));
+      return [newProp];
     }
-    return [newProp];
   }
 
   async updateProperty(id: string, updates: Partial<Property>) {
-    const local = localStorage.getItem('company_properties_cache');
-    let current: Property[] = local ? JSON.parse(local) : [];
-    current = current.map(p => p.id === id ? { ...p, ...updates } : p);
-    localStorage.setItem('company_properties_cache', JSON.stringify(current));
-
     if (this.isSupabase()) {
-      const { error } = await supabase.from('properties').update(updates).eq('id', id);
+      let patch: any = { ...updates };
+      let { error } = await supabase.from('properties').update(patch).eq('id', id);
+      if (error && (error.message?.includes('phone') || error.code === 'PGRST204')) {
+        delete patch.phone;
+        const retry = await supabase.from('properties').update(patch).eq('id', id);
+        error = retry.error;
+      }
       if (error) console.error('Error updating property in Supabase:', error);
       await this.logAction('UPDATE_PROPERTY', `Property modified: ${id}`);
+    } else {
+      const local = localStorage.getItem('company_properties_cache');
+      let current: Property[] = local ? JSON.parse(local) : [];
+      current = current.map(p => p.id === id ? { ...p, ...updates } : p);
+      localStorage.setItem('company_properties_cache', JSON.stringify(current));
     }
   }
 
   async deleteProperty(id: string) {
-    const local = localStorage.getItem('company_properties_cache');
-    if (local) {
-      let current: Property[] = JSON.parse(local);
-      current = current.filter(p => p.id !== id);
-      localStorage.setItem('company_properties_cache', JSON.stringify(current));
-    }
     if (this.isSupabase()) {
       await supabase.from('properties').delete().eq('id', id);
       await this.logAction('DELETE_PROPERTY', `Property purged: ${id}`);
+    } else {
+      const local = localStorage.getItem('company_properties_cache');
+      if (local) {
+        let current: Property[] = JSON.parse(local);
+        current = current.filter(p => p.id !== id);
+        localStorage.setItem('company_properties_cache', JSON.stringify(current));
+      }
     }
   }
 

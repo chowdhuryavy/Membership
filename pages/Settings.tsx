@@ -25,6 +25,7 @@ import {
   Award,
   Target,
   MapPin,
+  Phone,
   ClipboardList,
   LayoutTemplate,
   ShieldAlert,
@@ -1009,11 +1010,14 @@ const SettingsPage = () => {
                       </CardHeader>
                       <CardContent className="p-0">
                           <table className="w-full text-left">
-                              <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Asset Brand</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">HQ Location</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
+                              <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Asset Brand</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">HQ Location & Contact Phone</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
                               <tbody className="divide-y divide-slate-100">{properties.map(p => (
                                   <tr key={p.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="flex items-center gap-4"><div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border">{p.logo_url ? <img src={p.logo_url} className="w-full h-full object-contain p-1" /> : <Building2 className="w-6 h-6 text-slate-300" />}</div><div className="font-black text-slate-900 text-lg uppercase">{p.name}</div></div></td>
-                                      <td className="px-10 py-8 font-bold text-slate-500 text-xs"><div>{p.address}</div>{p.phone && <div className="text-[10px] text-slate-400 font-mono mt-0.5">Tel: {p.phone}</div>}</td>
+                                      <td className="px-10 py-8 font-bold text-slate-500 text-xs">
+                                          <div className="text-slate-800 font-semibold flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" /><span>{p.address || <span className="text-slate-400 font-normal italic">No HQ Address</span>}</span></div>
+                                          <div className="text-indigo-600 font-mono text-[11px] mt-1.5 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-indigo-400 shrink-0" /><span>{p.phone || <span className="text-slate-400 font-sans font-normal italic text-[10px]">No Telephone Provided</span>}</span></div>
+                                      </td>
                                       <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(p.id); setPropertyForm({
                                           name: p.name,
                                           logo_url: p.logo_url || '',
@@ -1036,12 +1040,16 @@ const SettingsPage = () => {
                       </CardHeader>
                       <CardContent className="p-0">
                           <table className="w-full text-left">
-                              <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Facility Designation</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Property Link</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
+                              <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Facility Designation & Contact</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Property Link</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
                               <tbody className="divide-y divide-slate-100">{outlets
                                   .filter(o => !currentProperty || o.property_id === currentProperty.id)
                                   .map(o => (
                                   <tr key={o.id} className="hover:bg-indigo-50/20 group">
-                                      <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase">{o.name}</div>{o.address && <div className="text-[10px] text-slate-400 font-medium">{o.address}</div>}</td>
+                                      <td className="px-10 py-8">
+                                          <div className="font-black text-slate-900 text-lg uppercase">{o.name}</div>
+                                          <div className="text-xs text-slate-500 font-medium mt-1 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" /><span>{o.address || <span className="text-slate-400 font-normal italic">No Address</span>}</span></div>
+                                          <div className="text-indigo-600 font-mono text-[11px] mt-1 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-indigo-400 shrink-0" /><span>{o.phone || <span className="text-slate-400 font-sans font-normal italic text-[10px]">No Phone</span>}</span></div>
+                                      </td>
                                       <td className="px-10 py-8"><span className="bg-indigo-50 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-indigo-600 border border-indigo-100">{properties.find(p=>p.id===o.property_id)?.name || 'Detached'}</span></td>
                                       <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(o.id); setOutletForm({
                                           name: o.name,

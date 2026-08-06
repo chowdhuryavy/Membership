@@ -93,12 +93,12 @@ export async function createPkpassZipBlob(member: Member, outletName?: string, a
         {
           key: 'address',
           label: 'ADDRESS',
-          value: address || 'Aspire Zone, Al Waab Street, Doha, Qatar'
+          value: address || ''
         },
         {
           key: 'phone',
           label: 'PHONE',
-          value: phone || '+974 4446 5600'
+          value: phone || ''
         }
       ]
     },

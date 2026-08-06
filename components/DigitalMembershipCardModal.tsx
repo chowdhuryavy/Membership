@@ -33,8 +33,8 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   const propertyName = matchedProperty?.name || currentProperty?.name || settings?.name || 'THE TORCH DOHA';
   const displayOutletName = propOutletName || matchedOutlet?.name || currentOutlet?.name || 'HEALTH CLUB';
   const logoUrl = matchedOutlet?.logo_url || matchedProperty?.logo_url || currentProperty?.logo_url || settings?.logo_url || 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80';
-  const propertyAddress = matchedOutlet?.address?.trim() || matchedProperty?.address?.trim() || currentOutlet?.address?.trim() || currentProperty?.address?.trim() || settings?.address?.trim() || 'Aspire Zone, Al Waab Street, Doha, Qatar';
-  const propertyPhone = matchedOutlet?.phone?.trim() || matchedProperty?.phone?.trim() || currentOutlet?.phone?.trim() || currentProperty?.phone?.trim() || settings?.phone?.trim() || '+974 4446 5600';
+  const propertyAddress = matchedOutlet?.address?.trim() || matchedProperty?.address?.trim() || currentOutlet?.address?.trim() || currentProperty?.address?.trim() || settings?.address?.trim() || '';
+  const propertyPhone = matchedOutlet?.phone?.trim() || matchedProperty?.phone?.trim() || currentOutlet?.phone?.trim() || currentProperty?.phone?.trim() || settings?.phone?.trim() || '';
 
   const exportCardRef = useRef<HTMLDivElement>(null);
 
@@ -42,11 +42,44 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
     if (!exportCardRef.current) return;
     const toastId = toast.loading('Generating pass image (both sides)...');
     try {
-      const dataUrl = await toPng(exportCardRef.current, {
+      const target = exportCardRef.current;
+      const width = target.offsetWidth || 880;
+      const height = target.offsetHeight || 600;
+
+      // First call to warm up image/font embedder if needed
+      await toPng(target, {
         pixelRatio: 2,
         cacheBust: true,
+        width,
+        height,
         backgroundColor: '#020617',
+        style: {
+          position: 'static',
+          top: '0',
+          left: '0',
+          transform: 'none',
+          visibility: 'visible',
+          opacity: '1'
+        }
       });
+
+      // Second call produces complete PNG
+      const dataUrl = await toPng(target, {
+        pixelRatio: 2,
+        cacheBust: true,
+        width,
+        height,
+        backgroundColor: '#020617',
+        style: {
+          position: 'static',
+          top: '0',
+          left: '0',
+          transform: 'none',
+          visibility: 'visible',
+          opacity: '1'
+        }
+      });
+
       const a = document.createElement('a');
       a.href = dataUrl;
       a.download = `Membership_Pass_${(member.guest_name || 'Member').replace(/\s+/g, '_')}_${member.membership_number || member.id}.png`;
@@ -853,8 +886,8 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
       document.body
     )}
 
-    {/* Off-screen Container for Image Export (html2canvas) */}
-    <div className="fixed -top-[9999px] -left-[9999px] pointer-events-none z-[-1]" ref={exportCardRef}>
+    {/* Off-screen Container for Image Export */}
+    <div className="fixed top-0 left-[-9999px] w-[880px] pointer-events-none z-[-9999] opacity-100" ref={exportCardRef}>
       <div className="w-[880px] bg-slate-950 text-white p-8 rounded-[2.5rem] border-2 border-amber-500/40 space-y-6">
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div className="flex items-center gap-3">
