@@ -103,11 +103,14 @@ async function startServer() {
       // Define the Generic Object for this specific member
       const cleanMemberId = String(memberId || '101').replace(/[^a-zA-Z0-9_]/g, '');
       const cleanNum = membershipNumber ? String(membershipNumber).replace(/[^a-zA-Z0-9_]/g, '') : 'card';
-      const objectId = `${issuerId}.mem_${cleanMemberId}_${cleanNum}`;
+      const cleanStatus = String(status || 'Active').replace(/[^a-zA-Z0-9]/g, '');
+      const cleanUntil = String(validUntil || '').replace(/[^a-zA-Z0-9]/g, '');
+      const stateVersion = `${cleanStatus}_${cleanUntil}`;
+      const objectId = `${issuerId}.mem_${cleanMemberId}_${cleanNum}_${stateVersion}`;
       
       const displayTitle = propertyName 
-        ? `${propertyName} - ${outletName || 'NOVA SPA'}` 
-        : (outletName || 'AL AZIZIYAH BOUTIQUE HOTEL');
+        ? `${propertyName}${outletName ? ' - ' + outletName : ''}` 
+        : (outletName ? `AL AZIZIYAH BOUTIQUE HOTEL - ${outletName}` : 'AL AZIZIYAH BOUTIQUE HOTEL - NOVA SPA');
 
       // Ensure logo URL is valid HTTP/HTTPS and usable by Google Wallet API
       let displayLogo = 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=300&q=80';
@@ -115,9 +118,13 @@ async function startServer() {
         displayLogo = logoUrl;
       }
 
+      const isFrozen = String(status || '').toLowerCase() === 'frozen';
+      const isExpired = String(status || '').toLowerCase() === 'expired';
+      const statusEmoji = isFrozen ? '⏸️' : isExpired ? '🔴' : '🟢';
+
       const genericClass = {
         id: classId,
-        issuerName: propertyName || 'Al Aziziyah Boutique Hotel',
+        issuerName: displayTitle,
         reviewStatus: 'UNDER_REVIEW',
         classTemplateInfo: {
           cardTemplateOverride: {
@@ -225,7 +232,7 @@ async function startServer() {
           },
           {
             id: 'card_status',
-            header: '🟢 STATUS',
+            header: `${statusEmoji} STATUS`,
             body: (status || 'Active').toUpperCase()
           }
         ]
