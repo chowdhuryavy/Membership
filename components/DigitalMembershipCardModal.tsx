@@ -193,7 +193,14 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
         body: JSON.stringify({
           memberId: member.id,
           guestName: member.guest_name,
-          membershipNumber: member.membership_number
+          membershipNumber: member.membership_number,
+          propertyName: propertyName,
+          outletName: displayOutletName,
+          logoUrl: logoUrl,
+          packageTier: memberTier || member.package_type || 'VIP Member',
+          accessType: member.access_type || 'Both',
+          validUntil: member.current_end_date || 'N/A',
+          status: member.status || 'Active'
         })
       });
 

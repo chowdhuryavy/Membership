@@ -44,7 +44,18 @@ async function startServer() {
   // Google Wallet API Route
   app.post('/api/google-wallet/generate-link', (req, res) => {
     try {
-      const { memberId, guestName, membershipNumber } = req.body;
+      const { 
+        memberId, 
+        guestName, 
+        membershipNumber,
+        propertyName,
+        outletName,
+        logoUrl,
+        packageTier,
+        accessType,
+        validUntil,
+        status
+      } = req.body;
 
       if (!memberId || !guestName) {
         return res.status(400).json({ error: 'Missing member details' });
@@ -92,26 +103,31 @@ async function startServer() {
       // Define the Generic Object for this specific member
       const objectId = `${issuerId}.${memberId.replace(/[^a-zA-Z0-9]/g, '')}`;
       
+      const displayTitle = propertyName ? `${propertyName} - ${outletName || 'Health Club'}` : (outletName || 'Health Club Member');
+      const displayLogo = (logoUrl && logoUrl.startsWith('http')) 
+        ? logoUrl 
+        : 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80';
+
       const genericObject = {
         id: objectId,
         classId: classId,
         genericType: 'GENERIC_TYPE_UNSPECIFIED',
-        hexBackgroundColor: '#0f172a',
+        hexBackgroundColor: '#090d16',
         logo: {
           sourceUri: {
-            uri: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80'
+            uri: displayLogo
           },
           contentDescription: {
             defaultValue: {
               language: 'en-US',
-              value: 'Health Club Logo'
+              value: `${propertyName || 'Health Club'} Logo`
             }
           }
         },
         cardTitle: {
           defaultValue: {
             language: 'en-US',
-            value: 'Health Club Member'
+            value: displayTitle
           }
         },
         header: {
@@ -120,16 +136,42 @@ async function startServer() {
             value: guestName
           }
         },
+        subheader: {
+          defaultValue: {
+            language: 'en-US',
+            value: `Member #${membershipNumber || memberId}`
+          }
+        },
         barcode: {
           type: 'QR_CODE',
           value: membershipNumber || memberId,
-          alternateText: membershipNumber || memberId
+          alternateText: `#${membershipNumber || memberId}`
         },
         textModulesData: [
           {
             id: 'member_no',
-            header: 'Membership #',
-            body: membershipNumber || memberId
+            header: 'MEMBER #',
+            body: `#${membershipNumber || memberId}`
+          },
+          {
+            id: 'package_tier',
+            header: 'PACKAGE TIER',
+            body: packageTier || 'Membership'
+          },
+          {
+            id: 'access_permit',
+            header: 'ACCESS PERMIT',
+            body: accessType || 'Both'
+          },
+          {
+            id: 'valid_until',
+            header: 'VALID UNTIL',
+            body: validUntil || 'N/A'
+          },
+          {
+            id: 'card_status',
+            header: 'STATUS',
+            body: (status || 'Active').toUpperCase()
           }
         ]
       };
