@@ -156,7 +156,7 @@ async function startServer() {
       const token = jwt.sign(claims, privateKey, { algorithm: 'RS256' });
       
       // Generate the "Save to Google Wallet" URL
-      const saveUrl = `https://pay.google.com/gp/v/save/jwt?jwt=${token}`;
+      const saveUrl = `https://pay.google.com/gp/v/save/${token}`;
 
       res.json({ url: saveUrl });
     } catch (error: any) {

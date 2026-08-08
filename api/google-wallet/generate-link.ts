@@ -143,7 +143,7 @@ export default function handler(req: any, res: any) {
     };
 
     const token = jwt.sign(claims, privateKey, { algorithm: 'RS256' });
-    const saveUrl = `https://pay.google.com/gp/v/save/jwt?jwt=${token}`;
+    const saveUrl = `https://pay.google.com/gp/v/save/${token}`;
 
     res.json({ url: saveUrl });
   } catch (error: any) {
