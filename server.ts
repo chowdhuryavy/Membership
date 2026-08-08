@@ -101,7 +101,9 @@ async function startServer() {
       }
 
       // Define the Generic Object for this specific member
-      const objectId = `${issuerId}.${memberId.replace(/[^a-zA-Z0-9]/g, '')}_${membershipNumber || 'card'}`;
+      const cleanMemberId = String(memberId || '101').replace(/[^a-zA-Z0-9_]/g, '');
+      const cleanNum = membershipNumber ? String(membershipNumber).replace(/[^a-zA-Z0-9_]/g, '') : 'card';
+      const objectId = `${issuerId}.mem_${cleanMemberId}_${cleanNum}`;
       
       const displayTitle = propertyName 
         ? `${propertyName} - ${outletName || 'NOVA SPA'}` 
