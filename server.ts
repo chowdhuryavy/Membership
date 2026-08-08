@@ -92,7 +92,7 @@ async function startServer() {
       }
 
       // Auto-generate a class ID if the user hasn't provided one
-      const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.hotel_spa_member_v7`;
+      const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.hotel_spa_member_v8`;
 
       if (!/^\d+$/.test(issuerId)) {
         return res.status(500).json({ 
@@ -100,17 +100,18 @@ async function startServer() {
         });
       }
 
-      // Define the Generic Object for this specific member
+      const displayTitle = propertyName 
+        ? `${propertyName}${outletName ? ' - ' + outletName : ''}` 
+        : (outletName ? `AL AZIZIYAH BOUTIQUE HOTEL - ${outletName}` : 'AL AZIZIYAH BOUTIQUE HOTEL - NOVA SPA');
+
+      // Define the Generic Object for this specific member with a unique version timestamp
+      // to ensure Google Wallet updates the pass whenever changes occur
       const cleanMemberId = String(memberId || '101').replace(/[^a-zA-Z0-9_]/g, '');
       const cleanNum = membershipNumber ? String(membershipNumber).replace(/[^a-zA-Z0-9_]/g, '') : 'card';
       const cleanStatus = String(status || 'Active').replace(/[^a-zA-Z0-9]/g, '');
       const cleanUntil = String(validUntil || '').replace(/[^a-zA-Z0-9]/g, '');
-      const stateVersion = `${cleanStatus}_${cleanUntil}`;
-      const objectId = `${issuerId}.mem_${cleanMemberId}_${cleanNum}_${stateVersion}`;
-      
-      const displayTitle = propertyName 
-        ? `${propertyName}${outletName ? ' - ' + outletName : ''}` 
-        : (outletName ? `AL AZIZIYAH BOUTIQUE HOTEL - ${outletName}` : 'AL AZIZIYAH BOUTIQUE HOTEL - NOVA SPA');
+      const versionHash = Date.now().toString(36);
+      const objectId = `${issuerId}.mem_${cleanMemberId}_${cleanNum}_${cleanStatus}_${cleanUntil}_${versionHash}`;
 
       // Ensure logo URL is valid HTTP/HTTPS and usable by Google Wallet API
       let displayLogo = 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=300&q=80';
@@ -136,14 +137,14 @@ async function startServer() {
                   startItem: {
                     firstValue: {
                       fields: [
-                        { fieldPath: "object.textModulesData['package_tier']" }
+                        { fieldPath: "object.textModulesData['property_outlet']" }
                       ]
                     }
                   },
                   endItem: {
                     firstValue: {
                       fields: [
-                        { fieldPath: "object.textModulesData['access_permit']" }
+                        { fieldPath: "object.textModulesData['card_status']" }
                       ]
                     }
                   }
@@ -154,14 +155,14 @@ async function startServer() {
                   startItem: {
                     firstValue: {
                       fields: [
-                        { fieldPath: "object.textModulesData['valid_until']" }
+                        { fieldPath: "object.textModulesData['package_tier']" }
                       ]
                     }
                   },
                   endItem: {
                     firstValue: {
                       fields: [
-                        { fieldPath: "object.textModulesData['card_status']" }
+                        { fieldPath: "object.textModulesData['valid_until']" }
                       ]
                     }
                   }
@@ -197,13 +198,13 @@ async function startServer() {
         header: {
           defaultValue: {
             language: 'en-US',
-            value: displayTitle
+            value: guestName
           }
         },
         subheader: {
           defaultValue: {
             language: 'en-US',
-            value: guestName
+            value: `Member #${membershipNumber || memberId}`
           }
         },
         barcode: {
@@ -212,6 +213,11 @@ async function startServer() {
           alternateText: `#${membershipNumber || memberId}`
         },
         textModulesData: [
+          {
+            id: 'property_outlet',
+            header: '🏨 LOCATION / OUTLET',
+            body: displayTitle
+          },
           {
             id: 'member_no',
             header: '🆔 MEMBER #',
