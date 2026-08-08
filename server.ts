@@ -92,7 +92,7 @@ async function startServer() {
       }
 
       // Auto-generate a class ID if the user hasn't provided one
-      const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.health_club_member_class_v1`;
+      const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.hotel_spa_member_v3`;
 
       if (!/^\d+$/.test(issuerId)) {
         return res.status(500).json({ 
@@ -101,18 +101,69 @@ async function startServer() {
       }
 
       // Define the Generic Object for this specific member
-      const objectId = `${issuerId}.${memberId.replace(/[^a-zA-Z0-9]/g, '')}`;
+      const objectId = `${issuerId}.${memberId.replace(/[^a-zA-Z0-9]/g, '')}_${membershipNumber || 'card'}`;
       
-      const displayTitle = propertyName ? `${propertyName} - ${outletName || 'Health Club'}` : (outletName || 'Health Club Member');
+      const displayTitle = propertyName 
+        ? `${propertyName} - ${outletName || 'NOVA SPA'}` 
+        : (outletName || 'AL AZIZIYAH BOUTIQUE HOTEL');
+
       const displayLogo = (logoUrl && logoUrl.startsWith('http')) 
         ? logoUrl 
         : 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80';
+
+      const genericClass = {
+        id: classId,
+        issuerName: propertyName || 'Al Aziziyah Boutique Hotel',
+        reviewStatus: 'UNDER_REVIEW',
+        classTemplateInfo: {
+          cardTemplateOverride: {
+            cardRowTemplateInfos: [
+              {
+                twoItems: {
+                  startItem: {
+                    firstValue: {
+                      fields: [
+                        { fieldPath: "object.textModulesData['package_tier']" }
+                      ]
+                    }
+                  },
+                  endItem: {
+                    firstValue: {
+                      fields: [
+                        { fieldPath: "object.textModulesData['access_permit']" }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                twoItems: {
+                  startItem: {
+                    firstValue: {
+                      fields: [
+                        { fieldPath: "object.textModulesData['valid_until']" }
+                      ]
+                    }
+                  },
+                  endItem: {
+                    firstValue: {
+                      fields: [
+                        { fieldPath: "object.textModulesData['card_status']" }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      };
 
       const genericObject = {
         id: objectId,
         classId: classId,
         genericType: 'GENERIC_TYPE_UNSPECIFIED',
-        hexBackgroundColor: '#090d16',
+        hexBackgroundColor: '#080d1a',
         logo: {
           sourceUri: {
             uri: displayLogo
@@ -156,7 +207,7 @@ async function startServer() {
           {
             id: 'package_tier',
             header: 'PACKAGE TIER',
-            body: packageTier || 'Membership'
+            body: packageTier || '1 Month Couple Pool Membership'
           },
           {
             id: 'access_permit',
@@ -166,7 +217,7 @@ async function startServer() {
           {
             id: 'valid_until',
             header: 'VALID UNTIL',
-            body: validUntil || 'N/A'
+            body: validUntil || '2026-09-04'
           },
           {
             id: 'card_status',
@@ -184,12 +235,7 @@ async function startServer() {
         iat: Math.floor(Date.now() / 1000),
         origins: [],
         payload: {
-          genericClasses: [
-            {
-              id: classId,
-              issuerName: 'Health Club'
-            }
-          ],
+          genericClasses: [genericClass],
           genericObjects: [genericObject]
         }
       };
