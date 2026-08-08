@@ -205,27 +205,27 @@ async function startServer() {
         textModulesData: [
           {
             id: 'member_no',
-            header: 'MEMBER #',
+            header: '🆔 MEMBER #',
             body: `#${membershipNumber || memberId}`
           },
           {
             id: 'package_tier',
-            header: 'PACKAGE TIER',
+            header: '🌟 PACKAGE TIER',
             body: packageTier || '1 Month Couple Pool Membership'
           },
           {
             id: 'access_permit',
-            header: 'ACCESS PERMIT',
+            header: '🔑 ACCESS PERMIT',
             body: accessType || 'Both'
           },
           {
             id: 'valid_until',
-            header: 'VALID UNTIL',
+            header: '📅 VALID UNTIL',
             body: validUntil || '2026-09-04'
           },
           {
             id: 'card_status',
-            header: 'STATUS',
+            header: '🟢 STATUS',
             body: (status || 'Active').toUpperCase()
           }
         ]

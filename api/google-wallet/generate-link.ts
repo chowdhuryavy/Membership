@@ -184,7 +184,7 @@ export default function handler(req: any, res: any) {
       cardTitle: {
         defaultValue: {
           language: 'en-US',
-          value: `✨ ${displayTitle}`
+          value: displayTitle
         }
       },
       header: {
@@ -196,38 +196,38 @@ export default function handler(req: any, res: any) {
       subheader: {
         defaultValue: {
           language: 'en-US',
-          value: `MEMBER ID: #${membershipNumber || memberId}`
+          value: `Member #${membershipNumber || memberId}`
         }
       },
       barcode: {
         type: 'QR_CODE',
         value: membershipNumber || memberId,
-        alternateText: `MEMBER NO. #${membershipNumber || memberId}`
+        alternateText: `#${membershipNumber || memberId}`
       },
       textModulesData: [
         {
           id: 'member_no',
-          header: 'MEMBER #',
+          header: '🆔 MEMBER #',
           body: `#${membershipNumber || memberId}`
         },
         {
           id: 'package_tier',
-          header: 'PACKAGE TIER 🌟',
+          header: '🌟 PACKAGE TIER',
           body: packageTier || '1 Month Couple Pool Membership'
         },
         {
           id: 'access_permit',
-          header: 'ACCESS PERMIT 🔑',
+          header: '🔑 ACCESS PERMIT',
           body: accessType || 'Both'
         },
         {
           id: 'valid_until',
-          header: 'VALID UNTIL 📅',
+          header: '📅 VALID UNTIL',
           body: validUntil || '2026-09-04'
         },
         {
           id: 'card_status',
-          header: 'STATUS 🟢',
+          header: '🟢 STATUS',
           body: (status || 'Active').toUpperCase()
         }
       ]
