@@ -92,7 +92,7 @@ async function startServer() {
       }
 
       // Auto-generate a class ID if the user hasn't provided one
-      const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.hotel_spa_member_v6`;
+      const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.hotel_spa_member_v7`;
 
       if (!/^\d+$/.test(issuerId)) {
         return res.status(500).json({ 
@@ -197,13 +197,13 @@ async function startServer() {
         header: {
           defaultValue: {
             language: 'en-US',
-            value: guestName
+            value: displayTitle
           }
         },
         subheader: {
           defaultValue: {
             language: 'en-US',
-            value: 'Membership Card'
+            value: guestName
           }
         },
         barcode: {
