@@ -98,9 +98,11 @@ export default function handler(req: any, res: any) {
       ? `${propertyName} - ${outletName || 'NOVA SPA'}` 
       : (outletName || 'AL AZIZIYAH BOUTIQUE HOTEL');
 
-    const displayLogo = (logoUrl && logoUrl.startsWith('http')) 
-      ? logoUrl 
-      : 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80';
+    // Ensure logo URL is valid HTTP/HTTPS and usable by Google Wallet API
+    let displayLogo = 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=300&q=80';
+    if (logoUrl && typeof logoUrl === 'string' && (logoUrl.startsWith('http://') || logoUrl.startsWith('https://'))) {
+      displayLogo = logoUrl;
+    }
 
     const genericClass = {
       id: classId,
