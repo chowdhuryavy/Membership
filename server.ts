@@ -3,6 +3,38 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import jwt from 'jsonwebtoken';
 
+function formatPrivateKey(rawKey: string): string {
+  if (!rawKey) return '';
+  let key = rawKey.trim();
+
+  // Strip leading/trailing quotes if present
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1).trim();
+  }
+
+  // Convert literal \n sequences to real linebreaks
+  key = key.replace(/\\n/g, '\n');
+
+  // Format into standard PEM structure if headers are present
+  const headerMatch = key.match(/(-----BEGIN [A-Z ]+-----)/);
+  const footerMatch = key.match(/(-----END [A-Z ]+-----)/);
+
+  if (headerMatch && footerMatch) {
+    const header = headerMatch[1];
+    const footer = footerMatch[1];
+    const startIndex = key.indexOf(header) + header.length;
+    const endIndex = key.indexOf(footer);
+    const rawBody = key.substring(startIndex, endIndex);
+
+    const cleanBody = rawBody.replace(/\s+/g, '');
+    const bodyChunks = cleanBody.match(/.{1,64}/g) || [cleanBody];
+
+    return [header, ...bodyChunks, footer].join('\n') + '\n';
+  }
+
+  return key;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -40,13 +72,12 @@ async function startServer() {
         });
       }
 
-      // Clean and fix private key formatting (quotes, escaped newlines)
-      if (privateKey) {
-        privateKey = privateKey.trim();
-        if ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
-          privateKey = privateKey.slice(1, -1);
-        }
-        privateKey = privateKey.replace(/\\n/g, '\n');
+      // Format and validate private key for RS256 signing
+      privateKey = formatPrivateKey(privateKey);
+      if (!privateKey.includes('-----BEGIN')) {
+        return res.status(500).json({ 
+          error: 'GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY is missing valid RSA PEM headers ("-----BEGIN PRIVATE KEY-----"). Please copy the full private key from your service account credentials.' 
+        });
       }
 
       // Auto-generate a class ID if the user hasn't provided one
