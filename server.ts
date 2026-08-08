@@ -128,17 +128,6 @@ async function startServer() {
         id: classId,
         issuerName: displayTitle,
         reviewStatus: 'UNDER_REVIEW',
-        logo: {
-          sourceUri: {
-            uri: displayLogo
-          },
-          contentDescription: {
-            defaultValue: {
-              language: 'en-US',
-              value: `${propertyName || 'Health Club'} Logo`
-            }
-          }
-        },
         classTemplateInfo: {
           cardTemplateOverride: {
             cardRowTemplateInfos: [
@@ -202,19 +191,19 @@ async function startServer() {
         cardTitle: {
           defaultValue: {
             language: 'en-US',
-            value: 'MEMBERSHIP CARD'
+            value: displayTitle
           }
         },
         header: {
           defaultValue: {
             language: 'en-US',
-            value: displayTitle
+            value: guestName
           }
         },
         subheader: {
           defaultValue: {
             language: 'en-US',
-            value: guestName
+            value: 'Membership Card'
           }
         },
         barcode: {
