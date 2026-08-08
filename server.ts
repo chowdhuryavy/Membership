@@ -19,29 +19,39 @@ async function startServer() {
       }
 
       // Check for environment variables
+      let clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+      let privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
       const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
       const issuerId = process.env.GOOGLE_WALLET_ISSUER_ID;
       
-      // Auto-generate a class ID if the user hasn't provided one
-      const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.health_club_member_class_v1`;
+      if ((!clientEmail || !privateKey) && credentialsJson) {
+        try {
+          const creds = JSON.parse(credentialsJson);
+          clientEmail = creds.client_email;
+          privateKey = creds.private_key;
+        } catch (e) {
+          return res.status(500).json({ error: 'Invalid Google Service Account JSON format.' });
+        }
+      }
 
-      if (!credentialsJson || !issuerId) {
+      if (!clientEmail || !privateKey || !issuerId) {
         return res.status(500).json({ 
-          error: 'Google Wallet credentials (Service Account JSON and Issuer ID) not configured on the server. Please add them in the Settings.' 
+          error: 'Google Wallet credentials (GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY, and GOOGLE_WALLET_ISSUER_ID) not configured on the server. Please check your environment variables.' 
         });
       }
+
+      // Fix escaped newlines in private key if present
+      if (privateKey) {
+        privateKey = privateKey.replace(/\\n/g, '\n');
+      }
+
+      // Auto-generate a class ID if the user hasn't provided one
+      const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.health_club_member_class_v1`;
 
       if (!/^\d+$/.test(issuerId)) {
         return res.status(500).json({ 
           error: `GOOGLE_WALLET_ISSUER_ID must be a numeric value (e.g., 33880000000...). You provided: ${issuerId}. The Merchant ID is NOT the Issuer ID.` 
         });
-      }
-
-      let credentials;
-      try {
-        credentials = JSON.parse(credentialsJson);
-      } catch (e) {
-        return res.status(500).json({ error: 'Invalid Google Service Account JSON format.' });
       }
 
       // Define the Generic Object for this specific member
@@ -85,7 +95,7 @@ async function startServer() {
 
       // Create the JWT claims payload
       const claims = {
-        iss: credentials.client_email,
+        iss: clientEmail,
         aud: 'google',
         typ: 'savetowallet',
         origins: [],
@@ -120,7 +130,7 @@ async function startServer() {
       };
 
       // Sign the JWT with the service account private key
-      const token = jwt.sign(claims, credentials.private_key, { algorithm: 'RS256' });
+      const token = jwt.sign(claims, privateKey, { algorithm: 'RS256' });
       
       // Generate the "Save to Google Wallet" URL
       const saveUrl = `https://pay.google.com/gp/v/save/jwt?jwt=${token}`;
