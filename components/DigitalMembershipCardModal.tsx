@@ -187,6 +187,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   const handleDownloadGoogleWallet = async () => {
     const toastId = toast.loading('Connecting to Google Wallet API...');
     try {
+      const fullLogoUrl = logoUrl ? (logoUrl.startsWith('http') ? logoUrl : `${window.location.origin}${logoUrl.startsWith('/') ? '' : '/'}${logoUrl}`) : '';
       const response = await fetch('/api/google-wallet/generate-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -196,7 +197,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
           membershipNumber: member.membership_number,
           propertyName: propertyName,
           outletName: displayOutletName,
-          logoUrl: logoUrl,
+          logoUrl: fullLogoUrl,
           packageTier: memberTier || member.package_type || 'VIP Member',
           accessType: member.access_type || 'Both',
           validUntil: member.current_end_date || 'N/A',
