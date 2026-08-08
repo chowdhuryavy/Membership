@@ -177,17 +177,6 @@ export default function handler(req: any, res: any) {
           }
         }
       },
-      wideLogo: {
-        sourceUri: {
-          uri: displayLogo
-        },
-        contentDescription: {
-          defaultValue: {
-            language: 'en-US',
-            value: `${propertyName || 'Property'} Wide Logo`
-          }
-        }
-      },
       cardTitle: {
         defaultValue: {
           language: 'en-US',

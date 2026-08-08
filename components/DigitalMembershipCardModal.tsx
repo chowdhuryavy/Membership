@@ -41,7 +41,6 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
     (matchedProperty?.logo_url && !isUnsplashDefault(matchedProperty.logo_url) ? matchedProperty.logo_url : null) ||
     (currentProperty?.logo_url && !isUnsplashDefault(currentProperty.logo_url) ? currentProperty.logo_url : null) ||
     (settings?.logo_url && !isUnsplashDefault(settings.logo_url) ? settings.logo_url : null) ||
-    (properties?.find(p => p.logo_url && !isUnsplashDefault(p.logo_url))?.logo_url || null) ||
     matchedOutlet?.logo_url || matchedProperty?.logo_url || currentProperty?.logo_url || settings?.logo_url || 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80';
   const propertyAddress = matchedOutlet?.address?.trim() || matchedProperty?.address?.trim() || currentOutlet?.address?.trim() || currentProperty?.address?.trim() || settings?.address?.trim() || '';
   const propertyPhone = matchedOutlet?.phone?.trim() || matchedProperty?.phone?.trim() || currentOutlet?.phone?.trim() || currentProperty?.phone?.trim() || settings?.phone?.trim() || '';

@@ -92,7 +92,7 @@ async function startServer() {
       }
 
       // Auto-generate a class ID if the user hasn't provided one
-      const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.hotel_spa_member_v3`;
+      const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.hotel_spa_member_v6`;
 
       if (!/^\d+$/.test(issuerId)) {
         return res.status(500).json({ 
@@ -118,6 +118,8 @@ async function startServer() {
         displayLogo = logoUrl;
       }
 
+      console.log('Generating Google Wallet Link:', { displayTitle, displayLogo, logoUrl });
+
       const isFrozen = String(status || '').toLowerCase() === 'frozen';
       const isExpired = String(status || '').toLowerCase() === 'expired';
       const statusEmoji = isFrozen ? '⏸️' : isExpired ? '🔴' : '🟢';
@@ -126,6 +128,17 @@ async function startServer() {
         id: classId,
         issuerName: displayTitle,
         reviewStatus: 'UNDER_REVIEW',
+        logo: {
+          sourceUri: {
+            uri: displayLogo
+          },
+          contentDescription: {
+            defaultValue: {
+              language: 'en-US',
+              value: `${propertyName || 'Health Club'} Logo`
+            }
+          }
+        },
         classTemplateInfo: {
           cardTemplateOverride: {
             cardRowTemplateInfos: [
@@ -189,19 +202,19 @@ async function startServer() {
         cardTitle: {
           defaultValue: {
             language: 'en-US',
-            value: displayTitle
+            value: 'MEMBERSHIP CARD'
           }
         },
         header: {
           defaultValue: {
             language: 'en-US',
-            value: guestName
+            value: displayTitle
           }
         },
         subheader: {
           defaultValue: {
             language: 'en-US',
-            value: `Member #${membershipNumber || memberId}`
+            value: guestName
           }
         },
         barcode: {
