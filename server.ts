@@ -100,6 +100,12 @@ async function startServer() {
         logo: {
           sourceUri: {
             uri: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80'
+          },
+          contentDescription: {
+            defaultValue: {
+              language: 'en-US',
+              value: 'Health Club Logo'
+            }
           }
         },
         cardTitle: {
@@ -133,6 +139,8 @@ async function startServer() {
         iss: clientEmail,
         aud: 'google',
         typ: 'savetowallet',
+        iat: Math.floor(Date.now() / 1000),
+        origins: [],
         payload: {
           genericClasses: [
             {
