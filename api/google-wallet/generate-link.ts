@@ -33,8 +33,12 @@ export default function handler(req: any, res: any) {
       });
     }
 
-    // Fix escaped newlines in private key if present
+    // Clean and fix private key formatting (quotes, escaped newlines)
     if (privateKey) {
+      privateKey = privateKey.trim();
+      if ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
+        privateKey = privateKey.slice(1, -1);
+      }
       privateKey = privateKey.replace(/\\n/g, '\n');
     }
 
@@ -123,8 +127,8 @@ export default function handler(req: any, res: any) {
     const saveUrl = `https://pay.google.com/gp/v/save/jwt?jwt=${token}`;
 
     res.json({ url: saveUrl });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating Google Wallet link:', error);
-    res.status(500).json({ error: 'Failed to generate pass' });
+    res.status(500).json({ error: error?.message || 'Failed to generate pass' });
   }
 }
