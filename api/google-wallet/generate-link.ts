@@ -104,7 +104,7 @@ export default function handler(req: any, res: any) {
 
     const genericClass = {
       id: classId,
-      issuerName: propertyName || 'Al Aziziyah Boutique Hotel',
+      issuerName: propertyName || 'AL AZIZIYAH BOUTIQUE HOTEL',
       reviewStatus: 'UNDER_REVIEW',
       classTemplateInfo: {
         cardTemplateOverride: {
@@ -154,7 +154,7 @@ export default function handler(req: any, res: any) {
       id: objectId,
       classId: classId,
       genericType: 'GENERIC_TYPE_UNSPECIFIED',
-      hexBackgroundColor: '#080d1a',
+      hexBackgroundColor: '#070c18',
       logo: {
         sourceUri: {
           uri: displayLogo
@@ -162,14 +162,25 @@ export default function handler(req: any, res: any) {
         contentDescription: {
           defaultValue: {
             language: 'en-US',
-            value: `${propertyName || 'Health Club'} Logo`
+            value: `${propertyName || 'Property'} Logo`
+          }
+        }
+      },
+      wideLogo: {
+        sourceUri: {
+          uri: displayLogo
+        },
+        contentDescription: {
+          defaultValue: {
+            language: 'en-US',
+            value: `${propertyName || 'Property'} Wide Logo`
           }
         }
       },
       cardTitle: {
         defaultValue: {
           language: 'en-US',
-          value: displayTitle
+          value: `✨ ${displayTitle}`
         }
       },
       header: {
@@ -181,13 +192,13 @@ export default function handler(req: any, res: any) {
       subheader: {
         defaultValue: {
           language: 'en-US',
-          value: `Member #${membershipNumber || memberId}`
+          value: `MEMBER ID: #${membershipNumber || memberId}`
         }
       },
       barcode: {
         type: 'QR_CODE',
         value: membershipNumber || memberId,
-        alternateText: `#${membershipNumber || memberId}`
+        alternateText: `MEMBER NO. #${membershipNumber || memberId}`
       },
       textModulesData: [
         {
@@ -197,22 +208,22 @@ export default function handler(req: any, res: any) {
         },
         {
           id: 'package_tier',
-          header: 'PACKAGE TIER',
+          header: 'PACKAGE TIER 🌟',
           body: packageTier || '1 Month Couple Pool Membership'
         },
         {
           id: 'access_permit',
-          header: 'ACCESS PERMIT',
+          header: 'ACCESS PERMIT 🔑',
           body: accessType || 'Both'
         },
         {
           id: 'valid_until',
-          header: 'VALID UNTIL',
+          header: 'VALID UNTIL 📅',
           body: validUntil || '2026-09-04'
         },
         {
           id: 'card_status',
-          header: 'STATUS',
+          header: 'STATUS 🟢',
           body: (status || 'Active').toUpperCase()
         }
       ]
