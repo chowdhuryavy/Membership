@@ -1992,7 +1992,10 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
       {showPassModal && (
         <DigitalMembershipCardModal
-          member={viewingMember}
+          member={{
+            ...viewingMember,
+            status: getEffectiveStatus(viewingMember)
+          }}
           outletName={currentOutlet?.name}
           onClose={() => setShowPassModal(false)}
         />
