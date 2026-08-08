@@ -123,31 +123,11 @@ export default function handler(req: any, res: any) {
       iss: clientEmail,
       aud: 'google',
       typ: 'savetowallet',
-      origins: [],
       payload: {
         genericClasses: [
           {
             id: classId,
-            issuerName: 'Health Club',
-            classTemplateInfo: {
-              cardTemplateOverride: {
-                cardRowTemplateInfos: [
-                  {
-                    twoItems: {
-                      startItem: {
-                        firstValue: {
-                          fields: [
-                            {
-                              fieldPath: 'object.textModulesData["member_no"]'
-                            }
-                          ]
-                        }
-                      }
-                    }
-                  }
-                ]
-              }
-            }
+            issuerName: 'Health Club'
           }
         ],
         genericObjects: [genericObject]
