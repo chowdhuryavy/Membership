@@ -2,60 +2,6 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import jwt from 'jsonwebtoken';
-import { JWT } from 'google-auth-library';
-
-async function patchGoogleWalletObject(clientEmail: string, privateKey: string, objectId: string, genericObject: any, genericClass: any) {
-  try {
-    const auth = new JWT({
-      email: clientEmail,
-      key: privateKey,
-      scopes: ['https://www.googleapis.com/auth/wallet_object.issuer'],
-    });
-    const tokenRes = await auth.getAccessToken();
-    const accessToken = tokenRes.token;
-    if (!accessToken) return;
-
-    if (genericClass && genericClass.id) {
-      await fetch(`https://walletobjects.googleapis.com/walletobjects/v1/genericClass/${encodeURIComponent(genericClass.id)}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(genericClass),
-      }).catch(() => {});
-    }
-
-    const patchUrl = `https://walletobjects.googleapis.com/walletobjects/v1/genericObject/${encodeURIComponent(objectId)}`;
-    const patchRes = await fetch(patchUrl, {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(genericObject),
-    });
-
-    if (patchRes.status === 404) {
-      const postUrl = `https://walletobjects.googleapis.com/walletobjects/v1/genericObject`;
-      const postRes = await fetch(postUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(genericObject),
-      });
-      console.log('Google Wallet REST API POST status:', postRes.status);
-    } else if (patchRes.ok) {
-      console.log('Google Wallet REST API PATCH success for:', objectId);
-    } else {
-      console.log('Google Wallet REST API PATCH status:', patchRes.status, await patchRes.text());
-    }
-  } catch (err) {
-    console.warn('Google Wallet REST API patch attempt error (JWT save link will still work):', err);
-  }
-}
 
 function formatPrivateKey(rawKey: string): string {
   if (!rawKey) return '';
@@ -96,7 +42,7 @@ async function startServer() {
   app.use(express.json());
 
   // Google Wallet API Route
-  app.post('/api/google-wallet/generate-link', async (req, res) => {
+  app.post('/api/google-wallet/generate-link', (req, res) => {
     try {
       const { 
         memberId, 
@@ -158,10 +104,14 @@ async function startServer() {
         ? `${propertyName}${outletName ? ' - ' + outletName : ''}` 
         : (outletName ? `AL AZIZIYAH BOUTIQUE HOTEL - ${outletName}` : 'AL AZIZIYAH BOUTIQUE HOTEL - NOVA SPA');
 
-      // Define stable, permanent Generic Object ID for this member pass
+      // Define the Generic Object for this specific member with a unique version timestamp
+      // to ensure Google Wallet updates the pass whenever changes occur
       const cleanMemberId = String(memberId || '101').replace(/[^a-zA-Z0-9_]/g, '');
       const cleanNum = membershipNumber ? String(membershipNumber).replace(/[^a-zA-Z0-9_]/g, '') : 'card';
-      const objectId = `${issuerId}.mem_${cleanMemberId}_${cleanNum}`;
+      const cleanStatus = String(status || 'Active').replace(/[^a-zA-Z0-9]/g, '');
+      const cleanUntil = String(validUntil || '').replace(/[^a-zA-Z0-9]/g, '');
+      const versionHash = Date.now().toString(36);
+      const objectId = `${issuerId}.mem_${cleanMemberId}_${cleanNum}_${cleanStatus}_${cleanUntil}_${versionHash}`;
 
       // Ensure logo URL is valid HTTP/HTTPS and usable by Google Wallet API
       let displayLogo = 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=300&q=80';
@@ -295,9 +245,6 @@ async function startServer() {
           }
         ]
       };
-
-      // Patch the pass directly on Google Wallet REST API if credentials exist
-      await patchGoogleWalletObject(clientEmail, privateKey, objectId, genericObject, genericClass);
 
       // Create the JWT claims payload
       const claims = {
