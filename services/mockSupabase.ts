@@ -1,4 +1,4 @@
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, LogModule, LogSeverity, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, CustomReportConfig, PTMember, PTSession } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, LogModule, LogSeverity, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, CustomReportConfig, PTMember, PTSession, EntranceFeeConsent } from '../types';
 import type { Notification } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 export { supabase, supabaseUrl, supabaseAnonKey };
@@ -2531,6 +2531,76 @@ class DatabaseService {
     }
 
     return allMembers.sort((a,b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  }
+
+  async addEntranceFeeConsent(consent: Omit<EntranceFeeConsent, 'id' | 'created_at'>) {
+    const payload: EntranceFeeConsent = {
+      ...consent,
+      id: crypto.randomUUID(),
+      created_at: new Date().toISOString()
+    };
+
+    try {
+      const existing = JSON.parse(localStorage.getItem('entrance_fee_consents') || '[]') as EntranceFeeConsent[];
+      localStorage.setItem('entrance_fee_consents', JSON.stringify([payload, ...existing]));
+    } catch (e) {}
+
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        const { error } = await supabase.from('entrance_fee_consents').insert([payload]);
+        if (error) {
+          console.warn('Failed to insert into entrance_fee_consents table. Please ensure the table exists.', error.message);
+        }
+      }, async () => {});
+    }
+
+    return payload;
+  }
+
+  async getEntranceFeeConsents(outletId?: string, isPropertyId: boolean = false) {
+    if (this.isSupabase()) {
+      return await this.safeCall(async () => {
+        let query = supabase.from('entrance_fee_consents').select('*').order('created_at', { ascending: false });
+        
+        if (outletId && outletId !== 'all') {
+          if (isPropertyId) {
+            const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', outletId);
+            const oIds = (outlets || []).map(o => o.id);
+            if (oIds.length > 0) query = query.in('outlet_id', oIds);
+          } else {
+            query = query.eq('outlet_id', outletId);
+          }
+        }
+        
+        const { data, error } = await query;
+        if (error) throw error;
+        return data as EntranceFeeConsent[];
+      }, async () => {
+        let items = JSON.parse(localStorage.getItem('entrance_fee_consents') || '[]') as EntranceFeeConsent[];
+        if (outletId && outletId !== 'all') {
+          if (isPropertyId) {
+             const outlets = JSON.parse(localStorage.getItem('membership_outlets') || '[]').filter((o: any) => o.property_id === outletId);
+             const oIds = outlets.map((o: any) => o.id);
+             items = items.filter(i => oIds.includes(i.outlet_id));
+          } else {
+             items = items.filter(i => i.outlet_id === outletId);
+          }
+        }
+        return items;
+      });
+    }
+    
+    let items = JSON.parse(localStorage.getItem('entrance_fee_consents') || '[]') as EntranceFeeConsent[];
+    if (outletId && outletId !== 'all') {
+      if (isPropertyId) {
+         const outlets = JSON.parse(localStorage.getItem('membership_outlets') || '[]').filter((o: any) => o.property_id === outletId);
+         const oIds = outlets.map((o: any) => o.id);
+         items = items.filter(i => oIds.includes(i.outlet_id));
+      } else {
+         items = items.filter(i => i.outlet_id === outletId);
+      }
+    }
+    return items;
   }
 
   async addPTMember(member: Omit<PTMember, 'id' | 'created_at'>) {

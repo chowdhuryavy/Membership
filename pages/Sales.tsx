@@ -38,6 +38,7 @@ import {
   LayoutGrid,
   ClipboardList,
   Edit,
+  FileSignature,
   Activity,
   ArrowDown,
   CalendarDays,
@@ -64,6 +65,8 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay, addDays, isSameDay, subMonths } from 'date-fns';
 import { PTRegistrationModal } from '../components/PTRegistrationModal';
+import { EntranceFeeConsentModal } from '../components/EntranceFeeConsentModal';
+import { EntranceConsentsList } from '../components/EntranceConsentsList';
 
 // Lazy load RetailStockReport
 const RetailStockReport = React.lazy(() => import('./RetailStockReport'));
@@ -887,7 +890,7 @@ const Sales = () => {
 
     const canSwitchScope = Boolean(user && allowedOutletsInProperty.length > 1);
 
-    const [activeTab, setActiveTab] = useState<'ledger' | 'inventory' | 'stock'>('ledger');
+    const [activeTab, setActiveTab] = useState<'ledger' | 'inventory' | 'stock' | 'consents'>('ledger');
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
     
@@ -902,6 +905,7 @@ const Sales = () => {
     const [showForm, setShowForm] = useState(false);
     const [editingSale, setEditingSale] = useState<Sale | null>(null);
     const [showPTRegistration, setShowPTRegistration] = useState<{ guestName: string; saleId?: string; qty: number; itemName?: string; trainerId?: string } | null>(null);
+    const [showEntranceFeeConsent, setShowEntranceFeeConsent] = useState<{ guestName: string; saleId?: string; itemName?: string } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
     const [itemToDelete, setItemToDelete] = useState<{ id: string; type: 'pos' | 'booking' } | null>(null);
@@ -1226,6 +1230,7 @@ const Sales = () => {
                         <button onClick={() => setActiveTab('ledger')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'ledger' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}><ClipboardList className="w-3 h-3" /> Ledger</button>
                         {canViewInventory && <button onClick={() => setActiveTab('inventory')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'inventory' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}><Package className="w-3 h-3" /> Inventory</button>}
                         {canViewInventory && <button onClick={() => setActiveTab('stock')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'stock' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}><TrendingUp className="w-3 h-3" /> Stock</button>}
+                        <button onClick={() => setActiveTab('consents')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'consents' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}><FileSignature className="w-3 h-3" /> Consents</button>
                     </div>
                     {canCreate && (
                         <Button onClick={() => { setEditingSale(null); setShowForm(true); }} className="w-full sm:w-auto rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 ml-auto xl:ml-0">
@@ -1239,6 +1244,8 @@ const Sales = () => {
                 <React.Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>}>
                     <RetailStockReport embeddedViewScope={viewScope} isEmbedded={true} />
                 </React.Suspense>
+            ) : activeTab === 'consents' ? (
+                <EntranceConsentsList propertyId={currentProperty?.id} outletId={viewScope === 'property' ? 'all' : currentOutlet?.id} />
             ) : activeTab === 'ledger' ? (
                 <div className="relative">
                     {loading && unifiedEntries.length === 0 && (
@@ -1421,6 +1428,12 @@ const Sales = () => {
                                         itemName: saleData.item_name,
                                         trainerId: saleData.sold_by_id || (saleData as any).therapist_id || ''
                                     });
+                                } else if (saleData && saleData.category === 'Entrance Fee') {
+                                    setShowEntranceFeeConsent({
+                                        guestName: saleData.guest_name,
+                                        saleId: saleData.id,
+                                        itemName: saleData.item_name
+                                    });
                                 }
                             }} 
                             initialSale={editingSale || undefined} 
@@ -1442,6 +1455,18 @@ const Sales = () => {
                 />
             )}
             
+            {showEntranceFeeConsent && (
+                <EntranceFeeConsentModal
+                    isOpen={true}
+                    onClose={() => setShowEntranceFeeConsent(null)}
+                    onSuccess={() => {
+                        setShowEntranceFeeConsent(null);
+                        toast.success('Entrance Fee Consent saved successfully!');
+                    }}
+                    initialData={showEntranceFeeConsent}
+                />
+            )}
+
             <ConfirmationModal 
                 isOpen={!!itemToDelete} 
                 onClose={() => setItemToDelete(null)} 

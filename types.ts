@@ -394,6 +394,21 @@ export interface Sale {
   session_notes?: string;
 }
 
+export interface EntranceFeeConsent {
+  id: string;
+  outlet_id: string;
+  guest_name: string;
+  phone?: string;
+  email?: string;
+  qid_passport?: string;
+  date: string;
+  sale_id?: string;
+  item_name?: string;
+  guest_signature?: string;
+  notes?: string;
+  created_at: string;
+}
+
 export interface PTSession {
   id: string;
   pt_member_id: string;
