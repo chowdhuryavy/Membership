@@ -12,7 +12,18 @@ serve(async (req) => {
   }
 
   try {
-    const { memberId, guestName, membershipNumber } = await req.json();
+    const {
+      memberId,
+      guestName,
+      membershipNumber,
+      propertyName,
+      outletName,
+      logoUrl,
+      packageTier,
+      accessType,
+      validUntil,
+      status
+    } = await req.json();
 
     if (!memberId || !guestName) {
       return new Response(JSON.stringify({ error: 'Missing member details' }), { 
@@ -38,23 +49,43 @@ serve(async (req) => {
       });
     }
 
-    const classId = Deno.env.get('GOOGLE_WALLET_CLASS_ID') || `${issuerId}.health_club_member_class_v1`;
-    const objectId = `${issuerId}.${memberId.replace(/[^a-zA-Z0-9]/g, '')}`;
+    const classId = Deno.env.get('GOOGLE_WALLET_CLASS_ID') || `${issuerId}.hotel_spa_member_v12`;
+    const cleanMemberId = String(memberId).replace(/[^a-zA-Z0-9_]/g, '');
+    const objectId = `${issuerId}.mem_${cleanMemberId}`;
+
+    const displayTitle = propertyName 
+      ? `${propertyName}${outletName ? ' - ' + outletName : ''}` 
+      : (outletName ? `AL AZIZIYAH BOUTIQUE HOTEL - ${outletName}` : 'AL AZIZIYAH BOUTIQUE HOTEL - NOVA SPA');
+
+    let displayLogo = 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80';
+    if (logoUrl && typeof logoUrl === 'string' && (logoUrl.startsWith('http://') || logoUrl.startsWith('https://'))) {
+      displayLogo = logoUrl;
+    }
+
+    const isFrozen = String(status || '').toLowerCase() === 'frozen';
+    const isExpired = String(status || '').toLowerCase() === 'expired';
+    const statusEmoji = isFrozen ? '⏸️' : isExpired ? '🔴' : '🟢';
 
     const genericObject = {
       id: objectId,
       classId: classId,
       genericType: 'GENERIC_TYPE_UNSPECIFIED',
-      hexBackgroundColor: '#0f172a',
+      hexBackgroundColor: '#080d1a',
       logo: {
         sourceUri: {
-          uri: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80'
+          uri: displayLogo
+        },
+        contentDescription: {
+          defaultValue: {
+            language: 'en-US',
+            value: `${propertyName || 'Health Club'} Logo`
+          }
         }
       },
       cardTitle: {
         defaultValue: {
           language: 'en-US',
-          value: 'Health Club Member'
+          value: displayTitle
         }
       },
       header: {
@@ -63,16 +94,47 @@ serve(async (req) => {
           value: guestName
         }
       },
+      subheader: {
+        defaultValue: {
+          language: 'en-US',
+          value: `Member #${membershipNumber || memberId}`
+        }
+      },
       barcode: {
         type: 'QR_CODE',
-        value: membershipNumber || memberId,
-        alternateText: membershipNumber || memberId
+        value: String(membershipNumber || memberId),
+        alternateText: `#${membershipNumber || memberId}`
       },
       textModulesData: [
         {
+          id: 'property_outlet',
+          header: '🏨 LOCATION / OUTLET',
+          body: displayTitle
+        },
+        {
           id: 'member_no',
-          header: 'Membership #',
-          body: membershipNumber || memberId
+          header: '🆔 MEMBER #',
+          body: `#${membershipNumber || memberId}`
+        },
+        {
+          id: 'package_tier',
+          header: '🌟 PACKAGE TIER',
+          body: packageTier || '1 Month Couple Pool Membership'
+        },
+        {
+          id: 'access_permit',
+          header: '🔑 ACCESS PERMIT',
+          body: accessType || 'Both'
+        },
+        {
+          id: 'valid_until',
+          header: '📅 VALID UNTIL',
+          body: validUntil || 'N/A'
+        },
+        {
+          id: 'card_status',
+          header: `${statusEmoji} STATUS`,
+          body: String(status || 'Active').toUpperCase()
         }
       ]
     };
@@ -86,6 +148,8 @@ serve(async (req) => {
         genericClasses: [
           { 
             id: classId,
+            issuerName: displayTitle,
+            reviewStatus: 'UNDER_REVIEW',
             classTemplateInfo: {
               cardTemplateOverride: {
                 cardRowTemplateInfos: [
@@ -94,9 +158,32 @@ serve(async (req) => {
                       startItem: {
                         firstValue: {
                           fields: [
-                            {
-                              fieldPath: 'object.textModulesData["member_no"]'
-                            }
+                            { fieldPath: 'object.textModulesData["property_outlet"]' }
+                          ]
+                        }
+                      },
+                      endItem: {
+                        firstValue: {
+                          fields: [
+                            { fieldPath: 'object.textModulesData["card_status"]' }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    twoItems: {
+                      startItem: {
+                        firstValue: {
+                          fields: [
+                            { fieldPath: 'object.textModulesData["package_tier"]' }
+                          ]
+                        }
+                      },
+                      endItem: {
+                        firstValue: {
+                          fields: [
+                            { fieldPath: 'object.textModulesData["valid_until"]' }
                           ]
                         }
                       }

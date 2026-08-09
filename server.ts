@@ -127,7 +127,7 @@ async function startServer() {
       }
 
       // Auto-generate a class ID if the user hasn't provided one
-      const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.hotel_spa_member_v8`;
+      const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.hotel_spa_member_v12`;
 
       if (!/^\d+$/.test(issuerId)) {
         return res.status(500).json({ 
