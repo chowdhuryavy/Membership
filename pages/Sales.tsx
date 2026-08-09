@@ -301,13 +301,33 @@ const POSForm = ({
                 payload.created_at = new Date(`${saleData.transaction_date}T12:00:00Z`).toISOString();
             }
 
-            let savedSaleData: any = payload;
+            const catStr = (saleData.category || '').toLowerCase();
+            const itemStr = (saleData.item_name || '').toLowerCase();
+            const isEntranceSale = 
+                catStr === 'entrance fee' || 
+                catStr.includes('entrance') || 
+                catStr.includes('day pass') ||
+                itemStr.includes('entrance') || 
+                itemStr.includes('day pass') || 
+                itemStr.includes('day use') || 
+                itemStr.includes('day-use') || 
+                itemStr.includes('daily pass') || 
+                itemStr.includes('daily use') || 
+                itemStr.includes('pool pass') || 
+                itemStr.includes('gym pass') || 
+                itemStr.includes('guest pass') || 
+                itemStr.includes('ticket');
+
+            let savedSaleData: any = {
+                ...payload,
+                _isEntrance: isEntranceSale
+            };
             if (initialSale) {
                 await (db as any).updateSale(initialSale.id, payload);
-                savedSaleData = { ...payload, id: initialSale.id };
+                savedSaleData = { ...payload, id: initialSale.id, _isEntrance: isEntranceSale };
             } else {
                 const createdSale = await db.addSale(payload as any);
-                if (createdSale) savedSaleData = createdSale;
+                if (createdSale) savedSaleData = { ...createdSale, _isEntrance: isEntranceSale };
             }
             
             // Invalidate cache after successful operation
