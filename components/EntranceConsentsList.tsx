@@ -86,9 +86,14 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                     ` : ''}
 
                     <div class="waiver">
-                        <div class="waiver-title">Waiver and Release of Liability</div>
-                        <p>By signing this form, I acknowledge that the use of the health club facilities, including the pool and gym, involves inherent risks. I voluntarily assume all risks associated with participation in any physical activities or use of the facilities.</p>
-                        <p>I hereby release, waive, and discharge the management, staff, and owners of the property from any and all liability, claims, demands, or causes of action arising out of any injury, loss, or damage that may occur to me or my property during my visit.</p>
+                        <div class="waiver-title">Waiver and Release of Liability Terms</div>
+                        <ol style="margin: 0; padding-left: 18px; space-y: 8px;">
+                            <li style="margin-bottom: 6px;"><strong>Assumption of Inherent Risk:</strong> I acknowledge and understand that the use of health club facilities, including the swimming pool, thermal suites, sauna, steam rooms, gym equipment, and participation in exercise activities, involves inherent risks of physical injury, illness, or property damage. I voluntarily participate and assume full responsibility for all risks.</li>
+                            <li style="margin-bottom: 6px;"><strong>Physical Fitness & Medical Condition:</strong> I declare that I am in good health, physically sound, and suffer from no medical condition, impairment, or illness that would prevent my safe participation or endanger myself or others while utilizing the health club facilities.</li>
+                            <li style="margin-bottom: 6px;"><strong>Compliance with Rules & Safety Regulations:</strong> I agree to strictly abide by all posted health club guidelines, pool depth markers, facility operating hours, proper athletic or swimwear attire policies, and instructions issued by life safety team members and staff.</li>
+                            <li style="margin-bottom: 6px;"><strong>Personal Belongings & Valuables:</strong> I acknowledge that the facility management, property owners, and staff are not responsible or liable for any lost, stolen, misplaced, or damaged personal belongings, money, electronics, or valuables brought onto the premises.</li>
+                            <li style="margin-bottom: 6px;"><strong>Indemnification & Legal Release:</strong> I hereby release, waive, and forever discharge facility management, property owners, officers, and staff from any and all claims, liabilities, demands, losses, or legal causes of action arising out of any injury, loss, or damage occurring during my visit.</li>
+                        </ol>
                     </div>
 
                     <div class="signature-box">

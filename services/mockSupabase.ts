@@ -2562,12 +2562,11 @@ class DatabaseService {
     } catch (e) {}
 
     if (this.isSupabase()) {
-      await this.safeCall(async () => {
-        const { error } = await supabase.from('entrance_fee_consents').insert([payload]);
-        if (error) {
-          console.warn('Failed to insert into entrance_fee_consents table. Please ensure the table exists.', error.message);
-        }
-      });
+      const { error } = await supabase.from('entrance_fee_consents').insert([payload]);
+      if (error) {
+        console.error('Error inserting into entrance_fee_consents table:', error);
+        throw error;
+      }
     }
 
     return payload;

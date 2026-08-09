@@ -1,11 +1,44 @@
 import React, { useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { X, Save, AlertTriangle, Eraser } from 'lucide-react';
+import { X, Save, AlertTriangle, Eraser, Code2, Copy, CheckCircle2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Input, Button } from './ui';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
 import { EntranceFeeConsent } from '../types';
 import SignatureCanvas from 'react-signature-canvas';
+
+const SUPABASE_SQL_SCRIPT = `-- ====================================================================
+-- SUPABASE TABLE SETUP: ENTRANCE FEE & DAY PASS CONSENTS
+-- Run this script in your Supabase SQL Editor (https://app.supabase.com)
+-- ====================================================================
+
+CREATE TABLE IF NOT EXISTS public.entrance_fee_consents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    outlet_id TEXT NOT NULL,
+    guest_name TEXT NOT NULL,
+    phone TEXT,
+    email TEXT,
+    qid_passport TEXT,
+    date DATE NOT NULL,
+    sale_id TEXT,
+    item_name TEXT,
+    guest_signature TEXT,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE public.entrance_fee_consents ENABLE ROW LEVEL SECURITY;
+
+-- Create policy allowing full read/write access
+DROP POLICY IF EXISTS "Allow all on entrance_fee_consents" ON public.entrance_fee_consents;
+CREATE POLICY "Allow all on entrance_fee_consents" ON public.entrance_fee_consents FOR ALL USING (true) WITH CHECK (true);
+
+-- Grant privileges to anon, authenticated, and postgres roles
+GRANT ALL ON TABLE public.entrance_fee_consents TO anon, authenticated, postgres;
+
+-- Notify PostgREST to refresh schema cache immediately
+NOTIFY pgrst, 'reload schema';`;
 
 export const EntranceFeeConsentModal = ({
     isOpen,
@@ -21,6 +54,9 @@ export const EntranceFeeConsentModal = ({
     const { currentOutlet } = useSettings();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [showSqlModal, setShowSqlModal] = useState(false);
+    const [copiedSql, setCopiedSql] = useState(false);
+    const [acceptedWaiver, setAcceptedWaiver] = useState(true);
     const signatureRef = useRef<SignatureCanvas>(null);
 
     const [formData, setFormData] = useState({
@@ -49,6 +85,13 @@ export const EntranceFeeConsentModal = ({
 
     if (!isOpen) return null;
 
+    const copySqlToClipboard = () => {
+        navigator.clipboard.writeText(SUPABASE_SQL_SCRIPT);
+        setCopiedSql(true);
+        toast.success('Supabase SQL script copied to clipboard!');
+        setTimeout(() => setCopiedSql(false), 3000);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.guest_name || !currentOutlet) {
@@ -56,11 +99,16 @@ export const EntranceFeeConsentModal = ({
             return;
         }
 
+        if (!acceptedWaiver) {
+            setError('Please accept the Waiver and Release terms to proceed.');
+            return;
+        }
+
         const isEmptySig = signatureRef.current?.isEmpty();
         const signatureDataUrl = isEmptySig ? '' : signatureRef.current?.getTrimmedCanvas().toDataURL('image/png');
 
         if (isEmptySig) {
-            setError('Please provide a signature.');
+            setError('Please provide a guest signature.');
             return;
         }
 
@@ -84,7 +132,7 @@ export const EntranceFeeConsentModal = ({
         } catch (err: any) {
             const msg = err.message || '';
             if (msg.includes('schema cache') || msg.includes('42P01') || msg.includes('relation "public.entrance_fee_consents" does not exist')) {
-                setError('Database schema/RLS security policy needs updating. Please run the SQL setup script.');
+                setError('Supabase table missing or RLS policy blocked entry. Click "Copy Supabase SQL" below to create the table.');
             } else {
                 setError(msg || 'Failed to register Entrance Fee Consent');
             }
@@ -94,12 +142,25 @@ export const EntranceFeeConsentModal = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto pt-20">
-            <div className="w-full max-w-xl animate-in zoom-in-95 duration-300 my-auto">
-                <Card className="rounded-[2rem] shadow-2xl border-slate-200/60 overflow-hidden bg-white">
+        <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto pt-16 pb-16">
+            <div className="w-full max-w-2xl animate-in zoom-in-95 duration-300 my-auto">
+                <Card className="rounded-[2.5rem] shadow-2xl border-slate-200/60 overflow-hidden bg-white">
                     <CardHeader className="bg-emerald-600 text-white p-6 relative">
-                        <CardTitle className="text-xl font-black uppercase tracking-tight">Entrance Fee Consent</CardTitle>
-                        <p className="text-[9px] font-black text-emerald-200 uppercase tracking-widest mt-1">Guest Waiver and Release</p>
+                        <div className="flex justify-between items-center pr-10">
+                            <div>
+                                <CardTitle className="text-xl font-black uppercase tracking-tight">Entrance Fee Consent</CardTitle>
+                                <p className="text-[9px] font-black text-emerald-200 uppercase tracking-widest mt-1">Guest Facility Waiver & Liability Release</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={copySqlToClipboard}
+                                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-[9px] uppercase tracking-wider flex items-center gap-1.5 transition-colors border border-white/20"
+                                title="Get SQL script for Supabase Database"
+                            >
+                                <Code2 className="w-3.5 h-3.5" />
+                                {copiedSql ? 'SQL Copied!' : 'Supabase SQL'}
+                            </button>
+                        </div>
                         <button onClick={onClose} className="absolute top-5 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"><X className="w-4 h-4" /></button>
                     </CardHeader>
                     
@@ -117,15 +178,81 @@ export const EntranceFeeConsentModal = ({
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <Input label="Date *" type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="h-11 rounded-xl text-xs font-bold" />
-                                <Input label="Internal Notes" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Any additional notes..." className="h-11 rounded-xl text-xs" />
+                                <Input label="Internal Audit Notes" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Pass type or notes..." className="h-11 rounded-xl text-xs" />
                             </div>
 
-                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-[10px] text-slate-600 leading-relaxed max-h-32 overflow-y-auto">
-                                <p className="font-bold mb-2 uppercase text-slate-800">Waiver and Release of Liability</p>
-                                <p>By signing this form, I acknowledge that the use of the health club facilities, including the pool and gym, involves inherent risks. I voluntarily assume all risks associated with participation in any physical activities or use of the facilities.</p>
-                                <p className="mt-2">I hereby release, waive, and discharge the management, staff, and owners of the property from any and all liability, claims, demands, or causes of action arising out of any injury, loss, or damage that may occur to me or my property during my visit.</p>
+                            {/* Detailed 5-Point Waiver and Release of Liability */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-black text-slate-800 uppercase tracking-widest">
+                                        Waiver and Release of Liability Terms
+                                    </label>
+                                    <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100 uppercase">
+                                        Mandatory Guest Agreement
+                                    </span>
+                                </div>
+
+                                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 text-[11px] text-slate-600 leading-relaxed max-h-48 overflow-y-auto space-y-3 shadow-inner">
+                                    <div>
+                                        <p className="font-black text-slate-900 uppercase text-[10px] tracking-wider mb-1">
+                                            1. Assumption of Inherent Risk
+                                        </p>
+                                        <p className="text-slate-600">
+                                            I acknowledge and understand that the use of health club facilities, including the swimming pool, thermal suites, sauna, steam rooms, gym equipment, and participation in exercise activities, involves inherent risks of physical injury, illness, or property damage. I voluntarily participate and assume full responsibility for all risks.
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <p className="font-black text-slate-900 uppercase text-[10px] tracking-wider mb-1">
+                                            2. Physical Fitness & Medical Condition
+                                        </p>
+                                        <p className="text-slate-600">
+                                            I declare that I am in good health, physically sound, and suffer from no medical condition, impairment, or illness that would prevent my safe participation or endanger myself or others while utilizing the health club facilities.
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <p className="font-black text-slate-900 uppercase text-[10px] tracking-wider mb-1">
+                                            3. Compliance with Rules & Safety Regulations
+                                        </p>
+                                        <p className="text-slate-600">
+                                            I agree to strictly abide by all posted health club guidelines, pool depth markers, facility operating hours, proper athletic or swimwear attire policies, and instructions issued by life safety team members and staff.
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <p className="font-black text-slate-900 uppercase text-[10px] tracking-wider mb-1">
+                                            4. Personal Belongings & Valuables
+                                        </p>
+                                        <p className="text-slate-600">
+                                            I acknowledge that the management, property owners, and staff are not responsible or liable for any lost, stolen, misplaced, or damaged personal belongings, money, electronics, or valuables brought onto the facility premises.
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <p className="font-black text-slate-900 uppercase text-[10px] tracking-wider mb-1">
+                                            5. Indemnification & Legal Release
+                                        </p>
+                                        <p className="text-slate-600">
+                                            I hereby release, waive, and forever discharge management, property owners, officers, and staff from any and all claims, liabilities, demands, losses, or legal causes of action arising out of any injury, loss, or damage occurring during my visit.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <label className="flex items-center gap-3 p-3 bg-emerald-50/60 rounded-xl border border-emerald-200/60 cursor-pointer hover:bg-emerald-50 transition-colors">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={acceptedWaiver} 
+                                        onChange={e => setAcceptedWaiver(e.target.checked)}
+                                        className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+                                    />
+                                    <span className="text-[11px] font-bold text-emerald-950">
+                                        I have read, understood, and agree to the 5 Waiver & Release of Liability terms above.
+                                    </span>
+                                </label>
                             </div>
 
+                            {/* Guest Digital Signature */}
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Guest Signature *</label>
@@ -134,10 +261,10 @@ export const EntranceFeeConsentModal = ({
                                         onClick={() => signatureRef.current?.clear()}
                                         className="text-[10px] font-bold text-slate-500 hover:text-emerald-600 flex items-center gap-1 transition-colors"
                                     >
-                                        <Eraser className="w-3 h-3" /> Clear
+                                        <Eraser className="w-3 h-3" /> Clear Signature
                                     </button>
                                 </div>
-                                <div className="bg-white border-2 border-dashed border-slate-200 rounded-2xl overflow-hidden hover:border-emerald-200 transition-colors">
+                                <div className="bg-white border-2 border-dashed border-slate-200 rounded-2xl overflow-hidden hover:border-emerald-300 transition-colors">
                                     <SignatureCanvas 
                                         ref={signatureRef}
                                         penColor="#0f172a"
@@ -147,52 +274,28 @@ export const EntranceFeeConsentModal = ({
                             </div>
 
                             {error && (
-                                <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold p-4 rounded-xl space-y-2 animate-in shake duration-300">
+                                <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold p-4 rounded-xl space-y-3 animate-in shake duration-300">
                                     <div className="flex items-center gap-2">
                                         <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
                                         <span>{error}</span>
                                     </div>
-                                    {(error.includes('Database schema') || error.includes('RLS') || error.includes('row-level security')) && (
-                                        <div className="pt-2 border-t border-rose-200/60">
-                                            <p className="text-[10px] font-medium text-rose-600 mb-2">Execute this SQL in your Supabase SQL Editor to grant permissions and fix table schemas:</p>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    const sql = `CREATE TABLE IF NOT EXISTS public.entrance_fee_consents (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    outlet_id TEXT NOT NULL,
-    guest_name TEXT NOT NULL,
-    phone TEXT,
-    email TEXT,
-    qid_passport TEXT,
-    date DATE NOT NULL,
-    sale_id TEXT,
-    item_name TEXT,
-    guest_signature TEXT,
-    notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-ALTER TABLE public.entrance_fee_consents ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow all on entrance_fee_consents" ON public.entrance_fee_consents;
-CREATE POLICY "Allow all on entrance_fee_consents" ON public.entrance_fee_consents FOR ALL USING (true) WITH CHECK (true);
-GRANT ALL ON TABLE public.entrance_fee_consents TO anon, authenticated, postgres;
-NOTIFY pgrst, 'reload schema';`;
-                                                    navigator.clipboard.writeText(sql);
-                                                    toast.success("SQL Fix copied to clipboard!");
-                                                }}
-                                                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors shadow-sm"
-                                            >
-                                                Copy SQL Fix Script
-                                            </button>
-                                        </div>
-                                    )}
+                                    <div className="pt-2 border-t border-rose-200/60 flex items-center justify-between">
+                                        <p className="text-[10px] font-medium text-rose-600">Run the SQL setup script in your Supabase SQL Editor to enable persistent cloud storage.</p>
+                                        <button
+                                            type="button"
+                                            onClick={copySqlToClipboard}
+                                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors shadow-sm shrink-0 ml-2"
+                                        >
+                                            Copy SQL Fix
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                             
                             <div className="flex gap-3 pt-2">
-                                <button type="button" onClick={onClose} className="flex-1 h-12 rounded-xl font-bold uppercase text-[10px] tracking-widest bg-slate-100 hover:bg-slate-200 transition-colors">Skip</button>
-                                <Button type="submit" disabled={loading} className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-100">
-                                    {loading ? 'Saving...' : 'Save Consent Form'}
+                                <button type="button" onClick={onClose} className="flex-1 h-12 rounded-2xl font-bold uppercase text-[10px] tracking-widest bg-slate-100 hover:bg-slate-200 transition-colors">Skip Form</button>
+                                <Button type="submit" disabled={loading} className="flex-[2] h-12 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-100 text-white">
+                                    {loading ? 'Saving...' : 'Save Consent & Store Record'}
                                 </Button>
                             </div>
                         </form>
@@ -202,3 +305,4 @@ NOTIFY pgrst, 'reload schema';`;
         </div>
     );
 };
+
