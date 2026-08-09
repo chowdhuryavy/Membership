@@ -49,37 +49,49 @@ export const EntranceFeeConsentModal = ({
     isOpen: boolean;
     onClose: () => void;
     onSuccess: (consent: EntranceFeeConsent) => void;
-    initialData: { guestName: string; saleId?: string; itemName?: string };
+    initialData?: (Partial<EntranceFeeConsent> & { guestName?: string }) | null;
 }) => {
     const { currentOutlet } = useSettings();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [showSqlModal, setShowSqlModal] = useState(false);
     const [copiedSql, setCopiedSql] = useState(false);
     const [acceptedWaiver, setAcceptedWaiver] = useState(true);
     const signatureRef = useRef<SignatureCanvas>(null);
 
+    const isEditMode = !!initialData?.id;
+
     const [formData, setFormData] = useState({
-        guest_name: initialData?.guestName || '',
-        phone: '',
-        email: '',
-        qid_passport: '',
-        date: new Date().toISOString().split('T')[0],
-        notes: initialData?.itemName ? `Purchased item: ${initialData.itemName}` : ''
+        guest_name: initialData?.guest_name || initialData?.guestName || '',
+        phone: initialData?.phone || '',
+        email: initialData?.email || '',
+        qid_passport: initialData?.qid_passport || '',
+        date: initialData?.date || new Date().toISOString().split('T')[0],
+        notes: initialData?.notes || (initialData?.item_name ? `Purchased item: ${initialData.item_name}` : '')
     });
 
     React.useEffect(() => {
-        if (isOpen && initialData) {
+        if (isOpen) {
             setFormData({
-                guest_name: initialData.guestName || '',
-                phone: '',
-                email: '',
-                qid_passport: '',
-                date: new Date().toISOString().split('T')[0],
-                notes: initialData.itemName ? `Purchased item: ${initialData.itemName}` : ''
+                guest_name: initialData?.guest_name || initialData?.guestName || '',
+                phone: initialData?.phone || '',
+                email: initialData?.email || '',
+                qid_passport: initialData?.qid_passport || '',
+                date: initialData?.date || new Date().toISOString().split('T')[0],
+                notes: initialData?.notes || (initialData?.item_name ? `Purchased item: ${initialData.item_name}` : '')
             });
             setError('');
-            signatureRef.current?.clear();
+
+            setTimeout(() => {
+                if (initialData?.guest_signature && signatureRef.current) {
+                    try {
+                        signatureRef.current.fromDataURL(initialData.guest_signature);
+                    } catch (e) {
+                        signatureRef.current?.clear();
+                    }
+                } else {
+                    signatureRef.current?.clear();
+                }
+            }, 100);
         }
     }, [isOpen, initialData]);
 
@@ -94,8 +106,9 @@ export const EntranceFeeConsentModal = ({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.guest_name || !currentOutlet) {
-            setError('Please fill all required fields.');
+        const targetOutletId = initialData?.outlet_id || currentOutlet?.id;
+        if (!formData.guest_name || !targetOutletId) {
+            setError('Please fill all required fields (Guest Name & Facility Outlet).');
             return;
         }
 
@@ -105,9 +118,12 @@ export const EntranceFeeConsentModal = ({
         }
 
         const isEmptySig = signatureRef.current?.isEmpty();
-        const signatureDataUrl = isEmptySig ? '' : signatureRef.current?.getTrimmedCanvas().toDataURL('image/png');
+        let signatureDataUrl = isEmptySig ? '' : signatureRef.current?.getTrimmedCanvas().toDataURL('image/png');
 
-        if (isEmptySig) {
+        // Retain existing signature if editing and signature canvas was not altered
+        if (isEmptySig && isEditMode && initialData?.guest_signature) {
+            signatureDataUrl = initialData.guest_signature;
+        } else if (isEmptySig && !isEditMode) {
             setError('Please provide a guest signature.');
             return;
         }
@@ -115,20 +131,32 @@ export const EntranceFeeConsentModal = ({
         setLoading(true);
         try {
             const consentData: Omit<EntranceFeeConsent, 'id' | 'created_at'> = {
-                outlet_id: currentOutlet.id,
+                outlet_id: targetOutletId,
                 guest_name: formData.guest_name,
                 phone: formData.phone,
                 email: formData.email,
                 qid_passport: formData.qid_passport,
                 date: formData.date,
-                sale_id: initialData.saleId,
-                item_name: initialData.itemName,
+                sale_id: initialData?.sale_id || initialData?.saleId,
+                item_name: initialData?.item_name || initialData?.itemName,
                 notes: formData.notes,
                 guest_signature: signatureDataUrl
             };
 
-            const saved = await db.addEntranceFeeConsent(consentData);
-            onSuccess(saved as any); 
+            if (isEditMode && initialData?.id) {
+                await db.updateEntranceFeeConsent(initialData.id, consentData);
+                toast.success('Entrance Fee Consent record updated successfully!');
+                const updatedObj: EntranceFeeConsent = {
+                    ...consentData,
+                    id: initialData.id,
+                    created_at: initialData.created_at || new Date().toISOString()
+                };
+                onSuccess(updatedObj);
+            } else {
+                const saved = await db.addEntranceFeeConsent(consentData);
+                toast.success('Entrance Fee Consent logged successfully!');
+                onSuccess(saved as any); 
+            }
         } catch (err: any) {
             const msg = err.message || '';
             if (msg.includes('schema cache') || msg.includes('42P01') || msg.includes('relation "public.entrance_fee_consents" does not exist')) {
@@ -148,7 +176,7 @@ export const EntranceFeeConsentModal = ({
                     <CardHeader className="bg-emerald-600 text-white p-6 relative">
                         <div className="flex justify-between items-center pr-10">
                             <div>
-                                <CardTitle className="text-xl font-black uppercase tracking-tight">Entrance Fee Consent</CardTitle>
+                                <CardTitle className="text-xl font-black uppercase tracking-tight">{isEditMode ? 'Edit Entrance Fee Consent' : 'Entrance Fee Consent'}</CardTitle>
                                 <p className="text-[9px] font-black text-emerald-200 uppercase tracking-widest mt-1">Guest Facility Waiver & Liability Release</p>
                             </div>
                             <button

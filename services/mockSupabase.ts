@@ -221,6 +221,16 @@ class DatabaseService {
         ]
       },
       {
+        id: 'entrance_fee',
+        label: 'Entrance Fee & Day Pass Consents',
+        permissions: [
+          { key: 'entrance_fee:view', label: 'View Entrance Consents', description: 'Access and search day pass waiver forms.' },
+          { key: 'entrance_fee:create', label: 'Create Consents', description: 'Log new guest entrance fee consent waivers.' },
+          { key: 'entrance_fee:edit', label: 'Edit Consents', description: 'Modify existing entrance fee consent records.' },
+          { key: 'entrance_fee:delete', label: 'Delete Consents', description: 'Remove entrance fee consent records.' },
+        ]
+      },
+      {
         id: 'security',
         label: 'Security & Governance',
         permissions: [
@@ -259,6 +269,7 @@ class DatabaseService {
           { key: 'settings:view_massage_rooms', label: 'Massage Rooms', description: 'Access massage rooms configuration.' },
           { key: 'settings:view_reports_config', label: 'Report Distribution', description: 'Access report distribution settings.' },
           { key: 'settings:view_custom_reports', label: 'Custom Intelligence', description: 'Access custom report builder.' },
+          { key: 'settings:view_entrance_fee', label: 'Entrance Fee Settings', description: 'Access entrance fee consent configuration.' },
           { key: 'settings:manage_visibility', label: 'Feature Visibility', description: 'Control which settings tabs are visible to other admins.' },
           { key: 'settings:manage_global', label: 'Manage Enterprise', description: 'Edit brand and address configuration.' },
           { key: 'settings:manage_properties', label: 'Manage Properties', description: 'Add/Edit/Delete luxury collection properties.' },
@@ -276,6 +287,7 @@ class DatabaseService {
           { key: 'settings:manage_massage_rooms', label: 'Manage Massage Rooms', description: 'Edit massage rooms configuration.' },
           { key: 'settings:manage_reports_config', label: 'Manage Report Distribution', description: 'Edit report distribution settings.' },
           { key: 'settings:manage_custom_reports', label: 'Manage Custom Intelligence', description: 'Edit custom report builder.' },
+          { key: 'settings:manage_entrance_fee', label: 'Manage Entrance Fee', description: 'Edit entrance fee consent settings.' },
         ]
       }
     ];
@@ -2569,7 +2581,44 @@ class DatabaseService {
       }
     }
 
+    await this.logAction('CREATE_ENTRANCE_FEE_CONSENT', `Entrance Fee Consent logged for ${payload.guest_name}`);
     return payload;
+  }
+
+  async updateEntranceFeeConsent(id: string, updates: Partial<EntranceFeeConsent>) {
+    try {
+      const existing = JSON.parse(localStorage.getItem('entrance_fee_consents') || '[]') as EntranceFeeConsent[];
+      const updated = existing.map(item => item.id === id ? { ...item, ...updates } : item);
+      localStorage.setItem('entrance_fee_consents', JSON.stringify(updated));
+    } catch (e) {}
+
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('entrance_fee_consents').update(updates).eq('id', id);
+      if (error) {
+        console.error('Error updating entrance_fee_consents table:', error);
+        throw error;
+      }
+    }
+
+    await this.logAction('UPDATE_ENTRANCE_FEE_CONSENT', `Updated Entrance Fee Consent record for ${updates.guest_name || id}`);
+  }
+
+  async deleteEntranceFeeConsent(id: string) {
+    try {
+      const existing = JSON.parse(localStorage.getItem('entrance_fee_consents') || '[]') as EntranceFeeConsent[];
+      const updated = existing.filter(item => item.id !== id);
+      localStorage.setItem('entrance_fee_consents', JSON.stringify(updated));
+    } catch (e) {}
+
+    if (this.isSupabase()) {
+      const { error } = await supabase.from('entrance_fee_consents').delete().eq('id', id);
+      if (error) {
+        console.error('Error deleting from entrance_fee_consents table:', error);
+        throw error;
+      }
+    }
+
+    await this.logAction('DELETE_ENTRANCE_FEE_CONSENT', `Deleted Entrance Fee Consent record ID: ${id}`);
   }
 
   async getEntranceFeeConsents(outletId?: string, isPropertyId: boolean = false) {

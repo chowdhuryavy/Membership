@@ -56,7 +56,8 @@ CREATE POLICY "Allow public update on member_check_ins"
     WITH CHECK (true);
 
 -- 4. Helper View for Currently Checked-In Facility Members
-CREATE OR REPLACE VIEW public.v_currently_checked_in AS
+CREATE OR REPLACE VIEW public.v_currently_checked_in
+WITH (security_invoker = true) AS
 SELECT 
     ci.id,
     ci.member_id,

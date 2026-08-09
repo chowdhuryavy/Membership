@@ -10,6 +10,8 @@ import { Role, Permission, Currency, CompanySettings, Outlet, Property, Incentiv
 import { BookingSettings } from '../components/BookingSettings';
 import { CustomReportBuilder } from '../components/CustomReportBuilder';
 import { CustomReportViewer } from '../components/CustomReportViewer';
+import { EntranceConsentsList } from '../components/EntranceConsentsList';
+import { EntranceFeeConsentModal } from '../components/EntranceFeeConsentModal';
 import { 
   Trash2, 
   Edit2, 
@@ -50,7 +52,8 @@ import {
   RefreshCcw,
   Key,
   Filter,
-  Mail
+  Mail,
+  Ticket
 } from 'lucide-react';
 
 const PermissionMatrix = ({ 
@@ -155,7 +158,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports' | 'entrance_fee';
 
 const SignatoryConfig = ({
   config = {},
@@ -293,6 +296,7 @@ const SettingsPage = () => {
       { id: 'massage_rooms', label: 'Massage Rooms', visible: hasPermission(user?.role_id || '', 'settings:view_massage_rooms') && !!currentProperty, icon: Store },
       { id: 'reports_config', label: 'Report Distribution', visible: hasPermission(user?.role_id || '', 'settings:view_reports_config'), icon: Mail },
       { id: 'custom_reports', label: 'Custom Intelligence', visible: hasPermission(user?.role_id || '', 'settings:view_custom_reports'), icon: FileText },
+      { id: 'entrance_fee', label: 'Entrance Fee', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_entrance_fee') || hasPermission(user?.role_id || '', 'entrance_fee:view'), icon: Ticket },
     ].filter(t => t.visible);
   }, [user, roles, hasPermission, currentProperty, currentOutlet]);
 
@@ -308,6 +312,7 @@ const SettingsPage = () => {
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const [itemToDelete, setItemToDelete] = useState<{ type: string, id: string, name: string } | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showConsentModal, setShowConsentModal] = useState(false);
   const [isCustomReportModalOpen, setIsCustomReportModalOpen] = useState(false);
   const [massageRooms, setMassageRooms] = useState<MassageRoom[]>([]);
   const [membershipTypes, setMembershipTypes] = useState<MembershipType[]>([]);
@@ -1730,6 +1735,42 @@ const SettingsPage = () => {
                         </div>
                       )}
                     </div>
+                  )}
+                </div>
+              )}
+              {activeTab === 'entrance_fee' && (
+                <div className="space-y-6">
+                  <div className="p-6 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Ticket className="w-5 h-5 text-emerald-600" />
+                        <h3 className="text-sm font-black text-emerald-900 uppercase tracking-widest">Entrance Fee Waiver & Consent Registry</h3>
+                      </div>
+                      <p className="text-xs text-emerald-700 font-medium leading-relaxed">
+                        Manage day pass liability waivers, edit existing entrance consents, delete records, and print official compliance documentation.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => setShowConsentModal(true)}
+                      className="px-6 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-100 shrink-0"
+                    >
+                      <Plus className="w-4 h-4 mr-2" /> Log Consent
+                    </Button>
+                  </div>
+
+                  <EntranceConsentsList 
+                    propertyId={currentProperty?.id} 
+                    outletId={currentOutlet?.id || 'all'} 
+                  />
+
+                  {showConsentModal && (
+                    <EntranceFeeConsentModal
+                      isOpen={true}
+                      onClose={() => setShowConsentModal(false)}
+                      onSuccess={() => {
+                        setShowConsentModal(false);
+                      }}
+                    />
                   )}
                 </div>
               )}
