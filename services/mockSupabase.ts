@@ -338,6 +338,7 @@ class DatabaseService {
 
         members[mIndex] = { ...m, status: finalStatus, current_end_date: newEndDateStr };
         localStorage.setItem('membership_members', JSON.stringify(members));
+        this.syncGoogleWalletPassForMember(memberId, members[mIndex]).catch(e => console.error(e));
         return newEndDateStr;
     }
 
@@ -369,6 +370,7 @@ class DatabaseService {
               : newStatus;
 
           await supabase.from('members').update({ status: finalStatus, current_end_date: newEndDateStr }).eq('id', memberId);
+          this.syncGoogleWalletPassForMember(memberId).catch(e => console.error(e));
           return newEndDateStr;
         }, null);
     } catch (err) { console.error(err); }
@@ -1297,6 +1299,7 @@ class DatabaseService {
       if (mIndex !== -1) {
         members[mIndex].status = MemberStatus.FROZEN;
         localStorage.setItem('membership_members', JSON.stringify(members));
+        await this.syncMemberEndDate(freeze.member_id);
         
         await this.logAction('FREEZE_MEMBER', `Suspended membership locally for ${members[mIndex].guest_name}.`, members[mIndex].outlet_id);
         await this.addNotification({
