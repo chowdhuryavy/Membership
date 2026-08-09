@@ -84,7 +84,7 @@ export default function handler(req: any, res: any) {
       });
     }
 
-    const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.hotel_spa_member_v3`;
+    const classId = process.env.GOOGLE_WALLET_CLASS_ID || `${issuerId}.hotel_spa_member_v12`;
 
     if (!/^\d+$/.test(issuerId)) {
       return res.status(500).json({ 
@@ -93,11 +93,7 @@ export default function handler(req: any, res: any) {
     }
 
     const cleanMemberId = String(memberId || '101').replace(/[^a-zA-Z0-9_]/g, '');
-    const cleanNum = membershipNumber ? String(membershipNumber).replace(/[^a-zA-Z0-9_]/g, '') : 'card';
-    const cleanStatus = String(status || 'Active').replace(/[^a-zA-Z0-9]/g, '');
-    const cleanUntil = String(validUntil || '').replace(/[^a-zA-Z0-9]/g, '');
-    const stateVersion = `${cleanStatus}_${cleanUntil}`;
-    const objectId = `${issuerId}.mem_${cleanMemberId}_${cleanNum}_${stateVersion}`;
+    const objectId = `${issuerId}.mem_${cleanMemberId}`;
     
     const displayTitle = propertyName 
       ? `${propertyName}${outletName ? ' - ' + outletName : ''}` 
