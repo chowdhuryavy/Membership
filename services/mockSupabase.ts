@@ -1122,8 +1122,24 @@ class DatabaseService {
         }
       }
 
-      if (!propertyName) propertyName = 'AL AZIZIYAH BOUTIQUE HOTEL';
-      if (!outletName) outletName = 'NOVA SPA';
+      if (!propertyName) {
+        try {
+          const properties = await this.getProperties();
+          if (properties && properties.length > 0) {
+            propertyName = properties[0].name || '';
+            if (!logoUrl && properties[0].logo_url) logoUrl = properties[0].logo_url;
+          }
+        } catch (e) {}
+      }
+      if (!outletName) {
+        try {
+          const outlets = await this.getOutlets();
+          if (outlets && outlets.length > 0) {
+            outletName = outlets[0].name || '';
+            if (!logoUrl && outlets[0].logo_url) logoUrl = outlets[0].logo_url;
+          }
+        } catch (e) {}
+      }
 
       const fullLogoUrl = logoUrl
         ? (logoUrl.startsWith('http') ? logoUrl : `${window.location.origin}${logoUrl.startsWith('/') ? '' : '/'}${logoUrl}`)
@@ -2551,7 +2567,7 @@ class DatabaseService {
         if (error) {
           console.warn('Failed to insert into entrance_fee_consents table. Please ensure the table exists.', error.message);
         }
-      }, async () => {});
+      });
     }
 
     return payload;

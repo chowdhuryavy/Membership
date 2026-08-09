@@ -137,14 +137,14 @@ async function startServer() {
 
       const displayTitle = propertyName 
         ? `${propertyName}${outletName ? ' - ' + outletName : ''}` 
-        : (outletName ? `AL AZIZIYAH BOUTIQUE HOTEL - ${outletName}` : 'AL AZIZIYAH BOUTIQUE HOTEL - NOVA SPA');
+        : (outletName ? outletName : 'Member Pass');
 
       // Define the Generic Object with deterministic ID mapping per member
       const cleanMemberId = String(memberId || '101').replace(/[^a-zA-Z0-9_]/g, '');
       const objectId = `${issuerId}.mem_${cleanMemberId}`;
 
       // Ensure logo URL is valid HTTP/HTTPS and usable by Google Wallet API
-      let displayLogo = 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=300&q=80';
+      let displayLogo = '';
       if (logoUrl && typeof logoUrl === 'string' && (logoUrl.startsWith('http://') || logoUrl.startsWith('https://'))) {
         displayLogo = logoUrl;
       }
@@ -339,9 +339,9 @@ async function startServer() {
 
       const displayTitle = propertyName
         ? `${propertyName}${outletName ? ' - ' + outletName : ''}`
-        : (outletName ? `AL AZIZIYAH BOUTIQUE HOTEL - ${outletName}` : 'AL AZIZIYAH BOUTIQUE HOTEL - NOVA SPA');
+        : (outletName ? outletName : 'Member Pass');
 
-      let displayLogo = 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=300&q=80';
+      let displayLogo = '';
       if (logoUrl && typeof logoUrl === 'string' && (logoUrl.startsWith('http://') || logoUrl.startsWith('https://'))) {
         displayLogo = logoUrl;
       }
