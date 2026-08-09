@@ -254,7 +254,8 @@ const POSForm = ({
             ...prev,
             item_id: item.id,
             item_name: item.name,
-            unit_price: item.price
+            unit_price: item.price,
+            category: (item.category || prev.category) as SaleCategory
         }));
         setItemSearch(item.name);
         setShowItemSuggestions(false);
@@ -1420,7 +1421,34 @@ const Sales = () => {
                                 cache.invalidate('sales');
                                 cache.invalidate('inventory');
                                 loadData();
-                                if (saleData && saleData.category === 'Personal Training') {
+                                const catLower = (saleData?.category || '').toLowerCase().trim();
+                                const itemLower = (saleData?.item_name || '').toLowerCase().trim();
+                                const remarksLower = (saleData?.remarks || '').toLowerCase().trim();
+
+                                const isPT = catLower === 'personal training' || catLower === 'pt' || itemLower.includes('personal training') || itemLower.includes('pt ');
+                                const isEntrance = 
+                                    catLower === 'entrance fee' || 
+                                    catLower.includes('entrance') || 
+                                    catLower.includes('day pass') ||
+                                    itemLower.includes('entrance') || 
+                                    itemLower.includes('day pass') || 
+                                    itemLower.includes('day use') || 
+                                    itemLower.includes('day-use') ||
+                                    itemLower.includes('daily pass') ||
+                                    itemLower.includes('daily use') ||
+                                    itemLower.includes('pool pass') || 
+                                    itemLower.includes('pool access') ||
+                                    itemLower.includes('gym pass') ||
+                                    itemLower.includes('gym access') ||
+                                    itemLower.includes('guest pass') ||
+                                    itemLower.includes('visitor pass') ||
+                                    itemLower.includes('facility pass') ||
+                                    itemLower.includes('ticket') ||
+                                    remarksLower.includes('entrance') ||
+                                    remarksLower.includes('day pass') ||
+                                    remarksLower.includes('day use');
+
+                                if (saleData && isPT) {
                                     setShowPTRegistration({
                                         guestName: saleData.guest_name,
                                         saleId: saleData.id,
@@ -1428,7 +1456,7 @@ const Sales = () => {
                                         itemName: saleData.item_name,
                                         trainerId: saleData.sold_by_id || (saleData as any).therapist_id || ''
                                     });
-                                } else if (saleData && saleData.category === 'Entrance Fee') {
+                                } else if (saleData && isEntrance) {
                                     setShowEntranceFeeConsent({
                                         guestName: saleData.guest_name,
                                         saleId: saleData.id,

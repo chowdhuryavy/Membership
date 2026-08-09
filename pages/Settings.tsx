@@ -358,6 +358,7 @@ const SettingsPage = () => {
     { id: 'checkin', label: 'Facility Check-In' },
     { id: 'members', label: 'Members' },
     { id: 'pt-members', label: 'PT Members' },
+    { id: 'entrance-fee', label: 'Entrance Fee' },
     { id: 'staff', label: 'Staff Roster' },
     { id: 'bookings', label: 'Booking' },
     { id: 'sales', label: 'Sales & Retail' },

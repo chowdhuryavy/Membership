@@ -19,6 +19,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Members from './pages/Members';
 import PTMembers from './pages/PTMembers';
+import EntranceFee from './pages/EntranceFee';
 import Categories from './pages/Categories';
 import UsersPage from './pages/Users';
 import StaffPage from './pages/Staff'; 
@@ -64,7 +65,8 @@ import {
   CalendarClock, 
   ShoppingBag,
   Contact2,
-  Dumbbell
+  Dumbbell,
+  Ticket
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Permission, Property } from './types';
@@ -386,6 +388,7 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
             { id: 'checkin', to: '/checkin', icon: QrCode, label: 'Facility Check-In', permission: 'checkin:view' as Permission },
             { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
             { id: 'pt-members', to: '/pt-members', icon: Dumbbell, label: 'PT Members', permission: 'members:view' as Permission },
+            { id: 'entrance-fee', to: '/entrance-fee', icon: Ticket, label: 'Entrance Fee', permission: 'sales:view' as Permission },
             { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
             { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
             { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
@@ -402,7 +405,14 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
     }, [currentOutlet]);
 
     const orderedNavItems = useMemo(() => {
-        const order = settings?.navigation_order || [];
+        const rawOrder = settings?.navigation_order || [];
+        const order = [...rawOrder];
+        if (order.length > 0 && !order.includes('entrance-fee')) {
+            const ptIndex = order.indexOf('pt-members');
+            const salesIndex = order.indexOf('sales');
+            const insertPos = ptIndex !== -1 ? ptIndex + 1 : (salesIndex !== -1 ? salesIndex + 1 : order.length);
+            order.splice(insertPos, 0, 'entrance-fee');
+        }
         const sortedItems = order
             .map(id => ALL_NAV_ITEMS.find(item => item.id === id))
             .filter((item): item is typeof ALL_NAV_ITEMS[0] => !!item);
@@ -520,6 +530,7 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
             { id: 'checkin', to: '/checkin', icon: QrCode, label: 'Facility Check-In', permission: 'checkin:view' as Permission },
             { id: 'members', to: '/members', icon: Users, label: 'Members', permission: 'members:view' as Permission },
             { id: 'pt-members', to: '/pt-members', icon: Dumbbell, label: 'PT Members', permission: 'members:view' as Permission },
+            { id: 'entrance-fee', to: '/entrance-fee', icon: Ticket, label: 'Entrance Fee', permission: 'sales:view' as Permission },
             { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
             { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
             { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
@@ -536,7 +547,14 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
     }, [currentOutlet]);
 
     const orderedNavItems = useMemo(() => {
-        const order = settings?.navigation_order || [];
+        const rawOrder = settings?.navigation_order || [];
+        const order = [...rawOrder];
+        if (order.length > 0 && !order.includes('entrance-fee')) {
+            const ptIndex = order.indexOf('pt-members');
+            const salesIndex = order.indexOf('sales');
+            const insertPos = ptIndex !== -1 ? ptIndex + 1 : (salesIndex !== -1 ? salesIndex + 1 : order.length);
+            order.splice(insertPos, 0, 'entrance-fee');
+        }
         const sortedItems = order
             .map(id => ALL_NAV_ITEMS.find(item => item.id === id))
             .filter((item): item is typeof ALL_NAV_ITEMS[0] => !!item);
@@ -844,6 +862,7 @@ const App = () => {
               <Route path="checkin" element={<AttendanceCheckIn />} />
               <Route path="members" element={<Members />} />
               <Route path="pt-members" element={<PTMembers />} />
+              <Route path="entrance-fee" element={<EntranceFee />} />
               <Route path="staff" element={<StaffPage />} />
               <Route path="bookings" element={<MassageScheduling />} />
               <Route path="sales" element={<Sales />} />
