@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent, Input, Button } from './ui';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
 import { EntranceFeeConsent } from '../types';
+import { getBilingualWaiverText } from '../lib/waiverHelper';
 import SignatureCanvas from 'react-signature-canvas';
 
 const SUPABASE_SQL_SCRIPT = `-- ====================================================================
@@ -51,7 +52,8 @@ export const EntranceFeeConsentModal = ({
     onSuccess: (consent: EntranceFeeConsent) => void;
     initialData?: (Partial<EntranceFeeConsent> & { guestName?: string }) | null;
 }) => {
-    const { currentOutlet } = useSettings();
+    const { currentOutlet, currentProperty } = useSettings();
+    const waiver = getBilingualWaiverText(currentOutlet?.name, currentProperty?.name);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [copiedSql, setCopiedSql] = useState(false);
@@ -209,61 +211,56 @@ export const EntranceFeeConsentModal = ({
                                 <Input label="Internal Audit Notes" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Pass type or notes..." className="h-11 rounded-xl text-xs" />
                             </div>
 
-                            {/* Detailed 5-Point Waiver and Release of Liability */}
+                            {/* Detailed Bilingual Waiver and Release of Liability */}
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
                                     <label className="text-[10px] font-black text-slate-800 uppercase tracking-widest">
-                                        Waiver and Release of Liability Terms
+                                        Bilingual Waiver and Release of Liability Terms
                                     </label>
                                     <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100 uppercase">
-                                        Mandatory Guest Agreement
+                                        Mandatory Guest Agreement / اتفاقية إلزامية
                                     </span>
                                 </div>
 
-                                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 text-[11px] text-slate-600 leading-relaxed max-h-48 overflow-y-auto space-y-3 shadow-inner">
-                                    <div>
-                                        <p className="font-black text-slate-900 uppercase text-[10px] tracking-wider mb-1">
-                                            1. Assumption of Inherent Risk
-                                        </p>
-                                        <p className="text-slate-600">
-                                            I acknowledge and understand that the use of health club facilities, including the swimming pool, thermal suites, sauna, steam rooms, gym equipment, and participation in exercise activities, involves inherent risks of physical injury, illness, or property damage. I voluntarily participate and assume full responsibility for all risks.
-                                        </p>
+                                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 text-[11px] text-slate-600 leading-relaxed max-h-56 overflow-y-auto space-y-4 shadow-inner">
+                                    {/* IMPORTANT DISCLAIMER BOX */}
+                                    <div className="p-3.5 bg-amber-50/80 rounded-xl border border-amber-200/80 space-y-2">
+                                        <div>
+                                            <p className="font-black text-amber-900 uppercase text-[10px] tracking-wider">
+                                                IMPORTANT DISCLAIMER:
+                                            </p>
+                                            <p className="text-amber-900/90 text-[10.5px] mt-0.5">
+                                                {waiver.importantDisclaimerEn}
+                                            </p>
+                                        </div>
+                                        <div dir="rtl" className="pt-2 border-t border-amber-200/60 font-sans text-right">
+                                            <p className="font-black text-amber-950 text-[11px]">
+                                                إخلاء مسؤولية هام:
+                                            </p>
+                                            <p className="text-amber-950/90 text-[11px] leading-relaxed mt-0.5">
+                                                {waiver.importantDisclaimerAr}
+                                            </p>
+                                        </div>
                                     </div>
 
-                                    <div>
-                                        <p className="font-black text-slate-900 uppercase text-[10px] tracking-wider mb-1">
-                                            2. Physical Fitness & Medical Condition
+                                    {/* FULL WAIVER TERMS - ENGLISH */}
+                                    <div className="space-y-2 pt-1">
+                                        <p className="font-black text-slate-900 uppercase text-[11px] tracking-wider border-b border-slate-200 pb-1">
+                                            {waiver.waiverTitleEn} — <span className="text-emerald-700">{waiver.waiverSubEn}</span>
                                         </p>
-                                        <p className="text-slate-600">
-                                            I declare that I am in good health, physically sound, and suffer from no medical condition, impairment, or illness that would prevent my safe participation or endanger myself or others while utilizing the health club facilities.
-                                        </p>
+                                        <p className="text-slate-600 text-[10.5px]">{waiver.p1En}</p>
+                                        <p className="text-slate-600 text-[10.5px]">{waiver.p2En}</p>
+                                        <p className="text-slate-600 text-[10.5px] font-medium">{waiver.p3En}</p>
                                     </div>
 
-                                    <div>
-                                        <p className="font-black text-slate-900 uppercase text-[10px] tracking-wider mb-1">
-                                            3. Compliance with Rules & Safety Regulations
+                                    {/* FULL WAIVER TERMS - ARABIC */}
+                                    <div dir="rtl" className="space-y-2 pt-3 border-t border-slate-200 font-sans text-right">
+                                        <p className="font-black text-slate-900 text-[12px] border-b border-slate-200 pb-1">
+                                            {waiver.waiverTitleAr} — <span className="text-emerald-700">{waiver.waiverSubAr}</span>
                                         </p>
-                                        <p className="text-slate-600">
-                                            I agree to strictly abide by all posted health club guidelines, pool depth markers, facility operating hours, proper athletic or swimwear attire policies, and instructions issued by life safety team members and staff.
-                                        </p>
-                                    </div>
-
-                                    <div>
-                                        <p className="font-black text-slate-900 uppercase text-[10px] tracking-wider mb-1">
-                                            4. Personal Belongings & Valuables
-                                        </p>
-                                        <p className="text-slate-600">
-                                            I acknowledge that the management, property owners, and staff are not responsible or liable for any lost, stolen, misplaced, or damaged personal belongings, money, electronics, or valuables brought onto the facility premises.
-                                        </p>
-                                    </div>
-
-                                    <div>
-                                        <p className="font-black text-slate-900 uppercase text-[10px] tracking-wider mb-1">
-                                            5. Indemnification & Legal Release
-                                        </p>
-                                        <p className="text-slate-600">
-                                            I hereby release, waive, and forever discharge management, property owners, officers, and staff from any and all claims, liabilities, demands, losses, or legal causes of action arising out of any injury, loss, or damage occurring during my visit.
-                                        </p>
+                                        <p className="text-slate-700 text-[11px] leading-relaxed">{waiver.p1Ar}</p>
+                                        <p className="text-slate-700 text-[11px] leading-relaxed">{waiver.p2Ar}</p>
+                                        <p className="text-slate-800 text-[11px] font-bold leading-relaxed">{waiver.p3Ar}</p>
                                     </div>
                                 </div>
 
@@ -275,7 +272,7 @@ export const EntranceFeeConsentModal = ({
                                         className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
                                     />
                                     <span className="text-[11px] font-bold text-emerald-950">
-                                        I have read, understood, and agree to the 5 Waiver & Release of Liability terms above.
+                                        I have read, understood, and agree to the Bilingual Waiver & Release terms above. / قرأت وفهمت وأوافق على شروط وإخلاء المسؤولية أعلاه.
                                     </span>
                                 </label>
                             </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
 import { EntranceFeeConsent } from '../types';
+import { getBilingualWaiverText } from '../lib/waiverHelper';
 import { Search, Calendar, FileSignature, Download, Printer, Edit3, Trash2, AlertTriangle, X, History, BarChart3, LayoutGrid, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { EntranceFeeConsentModal } from './EntranceFeeConsentModal';
@@ -85,28 +86,40 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
         const address = matchedOutlet?.address?.trim() || matchedProperty?.address?.trim() || currentOutlet?.address?.trim() || settings?.address?.trim() || '';
         const phone = matchedOutlet?.phone?.trim() || matchedProperty?.phone?.trim() || currentOutlet?.phone?.trim() || settings?.phone?.trim() || '';
 
+        const waiver = getBilingualWaiverText(outletName, propertyName);
+
         printWindow.document.write(`
             <html>
                 <head>
                     <title>Entrance Fee Consent - ${consent.guest_name}</title>
                     <style>
-                        body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; color: #0f172a; max-width: 800px; margin: 0 auto; }
-                        .header-container { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
+                        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 30px; color: #0f172a; max-width: 850px; margin: 0 auto; background: #ffffff; }
+                        .header-container { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 20px; }
                         .header-left { display: flex; align-items: center; gap: 16px; }
-                        .header-logo { max-height: 65px; max-width: 180px; object-fit: contain; }
-                        .header-brand { font-size: 20px; font-weight: 900; text-transform: uppercase; color: #0f172a; letter-spacing: -0.5px; line-height: 1.1; }
+                        .header-logo { max-height: 60px; max-width: 180px; object-fit: contain; }
+                        .header-brand { font-size: 18px; font-weight: 900; text-transform: uppercase; color: #0f172a; letter-spacing: -0.5px; line-height: 1.1; }
                         .header-outlet { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #059669; tracking: 1px; margin-top: 3px; }
                         .header-meta { font-size: 10px; color: #64748b; font-weight: 600; text-align: right; line-height: 1.4; }
-                        .doc-title { color: #059669; font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-                        .subtitle { font-size: 11px; color: #64748b; font-weight: 800; text-transform: uppercase; margin-bottom: 25px; letter-spacing: 1.5px; }
-                        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
-                        .field { margin-bottom: 12px; }
-                        .label { font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
-                        .value { font-size: 13px; font-weight: 600; }
-                        .waiver { background: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; border-radius: 12px; font-size: 11px; line-height: 1.6; margin-bottom: 30px; }
-                        .waiver-title { font-weight: 900; text-transform: uppercase; margin-bottom: 10px; color: #0f172a; font-size: 12px; letter-spacing: 0.5px; }
-                        .signature-box { border-top: 1px solid #cbd5e1; padding-top: 15px; width: 280px; }
-                        .sig-img { max-width: 100%; max-height: 90px; margin-bottom: 8px; }
+                        .doc-title { color: #059669; font-size: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+                        .subtitle { font-size: 10px; color: #64748b; font-weight: 800; text-transform: uppercase; margin-bottom: 20px; letter-spacing: 1.5px; }
+                        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; background: #f8fafc; padding: 14px; border-radius: 12px; border: 1px solid #e2e8f0; }
+                        .field { margin-bottom: 0px; }
+                        .label { font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+                        .value { font-size: 12px; font-weight: 700; color: #0f172a; }
+                        
+                        .disclaimer-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px; margin-bottom: 16px; font-size: 10px; line-height: 1.5; color: #78350f; }
+                        .disclaimer-title-en { font-weight: 900; text-transform: uppercase; color: #92400e; margin-bottom: 3px; font-size: 10px; }
+                        .disclaimer-title-ar { font-weight: 900; color: #78350f; margin-bottom: 3px; font-size: 11px; font-family: system-ui, sans-serif; }
+                        
+                        .waiver-container { background: #fafafa; border: 1px solid #e2e8f0; padding: 16px; border-radius: 12px; font-size: 10px; line-height: 1.55; color: #334155; margin-bottom: 25px; }
+                        .waiver-head-en { font-weight: 900; text-transform: uppercase; color: #0f172a; font-size: 11px; margin-bottom: 6px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
+                        .waiver-head-ar { font-weight: 900; color: #0f172a; font-size: 12px; margin-top: 12px; margin-bottom: 6px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; font-family: system-ui, sans-serif; text-align: right; }
+                        .waiver-p { margin-bottom: 8px; }
+                        .waiver-p-ar { margin-bottom: 8px; text-align: right; font-family: system-ui, sans-serif; font-size: 10.5px; }
+                        
+                        .signature-section { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 20px; }
+                        .signature-box { border-top: 2px solid #94a3b8; padding-top: 10px; width: 280px; }
+                        .sig-img { max-width: 100%; max-height: 80px; margin-bottom: 6px; }
                     </style>
                 </head>
                 <body>
@@ -124,50 +137,68 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                         </div>
                     </div>
 
-                    <div class="doc-title">Entrance Fee Consent</div>
-                    <div class="subtitle">Guest Waiver & Liability Release Form</div>
+                    <div class="doc-title">Entrance Fee Consent / إقرار رسوم الدخول</div>
+                    <div class="subtitle">Guest Waiver & Liability Release Form / نموذج التنازل وإخلاء المسؤولية</div>
                     
                     <div class="grid">
                         <div class="field">
-                            <div class="label">Guest Name</div>
+                            <div class="label">Guest Name / اسم الضيف</div>
                             <div class="value">${consent.guest_name}</div>
                         </div>
                         <div class="field">
-                            <div class="label">Date</div>
+                            <div class="label">Date / التاريخ</div>
                             <div class="value">${format(new Date(consent.date), 'dd MMM yyyy')}</div>
                         </div>
                         <div class="field">
-                            <div class="label">QID / Passport</div>
+                            <div class="label">QID / Passport / البطاقة - الجواز</div>
                             <div class="value">${consent.qid_passport || 'N/A'}</div>
                         </div>
                         <div class="field">
-                            <div class="label">Contact</div>
+                            <div class="label">Contact / الاتصال</div>
                             <div class="value">${consent.phone || ''} ${consent.email ? '- ' + consent.email : ''}</div>
                         </div>
                     </div>
 
                     ${consent.item_name ? `
-                    <div class="field" style="margin-bottom: 20px;">
-                        <div class="label">Access Type / Package</div>
+                    <div style="margin-bottom: 16px; background: #f1f5f9; padding: 10px 14px; border-radius: 8px;">
+                        <div class="label">Access Type or Package / نوع الدخول أو الباقة</div>
                         <div class="value">${consent.item_name}</div>
                     </div>
                     ` : ''}
 
-                    <div class="waiver">
-                        <div class="waiver-title">Waiver and Release of Liability Terms</div>
-                        <ol style="margin: 0; padding-left: 18px;">
-                            <li style="margin-bottom: 6px;"><strong>Assumption of Inherent Risk:</strong> I acknowledge and understand that the use of health club facilities, including the swimming pool, thermal suites, sauna, steam rooms, gym equipment, and participation in exercise activities, involves inherent risks of physical injury, illness, or property damage. I voluntarily participate and assume full responsibility for all risks.</li>
-                            <li style="margin-bottom: 6px;"><strong>Physical Fitness & Medical Condition:</strong> I declare that I am in good health, physically sound, and suffer from no medical condition, impairment, or illness that would prevent my safe participation or endanger myself or others while utilizing the health club facilities.</li>
-                            <li style="margin-bottom: 6px;"><strong>Compliance with Rules & Safety Regulations:</strong> I agree to strictly abide by all posted health club guidelines, pool depth markers, facility operating hours, proper athletic or swimwear attire policies, and instructions issued by life safety team members and staff.</li>
-                            <li style="margin-bottom: 6px;"><strong>Personal Belongings & Valuables:</strong> I acknowledge that the facility management, property owners, and staff are not responsible or liable for any lost, stolen, misplaced, or damaged personal belongings, money, electronics, or valuables brought onto the premises.</li>
-                            <li style="margin-bottom: 6px;"><strong>Indemnification & Legal Release:</strong> I hereby release, waive, and forever discharge facility management, property owners, officers, and staff from any and all claims, liabilities, demands, losses, or legal causes of action arising out of any injury, loss, or damage occurring during my visit.</li>
-                        </ol>
+                    <!-- IMPORTANT DISCLAIMER BOX -->
+                    <div class="disclaimer-box">
+                        <div class="disclaimer-title-en">IMPORTANT DISCLAIMER:</div>
+                        <div class="waiver-p">${waiver.importantDisclaimerEn}</div>
+                        <div dir="rtl" style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #fcd34d;">
+                            <div class="disclaimer-title-ar">إخلاء مسؤولية هام:</div>
+                            <div class="waiver-p-ar">${waiver.importantDisclaimerAr}</div>
+                        </div>
                     </div>
 
-                    <div class="signature-box">
-                        ${consent.guest_signature ? `<img src="${consent.guest_signature}" class="sig-img" alt="Signature" />` : '<div style="height: 90px;"></div>'}
-                        <div class="label">Guest Signature</div>
-                        <div class="value">${consent.guest_name}</div>
+                    <!-- FULL WAIVER & RELEASE -->
+                    <div class="waiver-container">
+                        <div class="waiver-head-en">${waiver.waiverTitleEn} — ${waiver.waiverSubEn}</div>
+                        <div class="waiver-p">${waiver.p1En}</div>
+                        <div class="waiver-p">${waiver.p2En}</div>
+                        <div class="waiver-p" style="font-weight: 600;">${waiver.p3En}</div>
+
+                        <div dir="rtl" class="waiver-head-ar">${waiver.waiverTitleAr} — ${waiver.waiverSubAr}</div>
+                        <div dir="rtl" class="waiver-p-ar">${waiver.p1Ar}</div>
+                        <div dir="rtl" class="waiver-p-ar">${waiver.p2Ar}</div>
+                        <div dir="rtl" class="waiver-p-ar" style="font-weight: 700;">${waiver.p3Ar}</div>
+                    </div>
+
+                    <div class="signature-section">
+                        <div class="signature-box">
+                            ${consent.guest_signature ? `<img src="${consent.guest_signature}" class="sig-img" alt="Signature" />` : '<div style="height: 70px;"></div>'}
+                            <div class="label">Guest Signature / توقيع الضيف</div>
+                            <div class="value">${consent.guest_name}</div>
+                        </div>
+                        <div style="text-align: right; font-size: 10px; color: #64748b; font-weight: 600;">
+                            <div>Signed On: ${format(new Date(consent.created_at || consent.date), 'dd MMM yyyy, HH:mm')}</div>
+                            <div>Outlet: ${outletName}</div>
+                        </div>
                     </div>
                     
                     <script>
