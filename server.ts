@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import jwt from 'jsonwebtoken';
+import { JWT } from 'google-auth-library';
 
 function formatPrivateKey(rawKey: string): string {
   if (!rawKey) return '';
@@ -33,6 +34,40 @@ function formatPrivateKey(rawKey: string): string {
   }
 
   return key;
+}
+
+function getGoogleWalletJwtClient() {
+  let clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  let privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+  const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  const issuerId = process.env.GOOGLE_WALLET_ISSUER_ID;
+
+  if ((!clientEmail || !privateKey) && credentialsJson) {
+    try {
+      const creds = JSON.parse(credentialsJson);
+      clientEmail = creds.client_email;
+      privateKey = creds.private_key;
+    } catch (e) {
+      console.error('[Google Wallet] Invalid GOOGLE_SERVICE_ACCOUNT_JSON:', e);
+    }
+  }
+
+  if (!clientEmail || !privateKey || !issuerId) {
+    return null;
+  }
+
+  privateKey = formatPrivateKey(privateKey);
+  if (!privateKey.includes('-----BEGIN')) {
+    return null;
+  }
+
+  const client = new JWT({
+    email: clientEmail,
+    key: privateKey,
+    scopes: ['https://www.googleapis.com/auth/wallet_object.issuer']
+  });
+
+  return { client, issuerId, clientEmail, privateKey };
 }
 
 async function startServer() {
@@ -104,14 +139,9 @@ async function startServer() {
         ? `${propertyName}${outletName ? ' - ' + outletName : ''}` 
         : (outletName ? `AL AZIZIYAH BOUTIQUE HOTEL - ${outletName}` : 'AL AZIZIYAH BOUTIQUE HOTEL - NOVA SPA');
 
-      // Define the Generic Object for this specific member with a unique version timestamp
-      // to ensure Google Wallet updates the pass whenever changes occur
+      // Define the Generic Object with deterministic ID mapping per member
       const cleanMemberId = String(memberId || '101').replace(/[^a-zA-Z0-9_]/g, '');
-      const cleanNum = membershipNumber ? String(membershipNumber).replace(/[^a-zA-Z0-9_]/g, '') : 'card';
-      const cleanStatus = String(status || 'Active').replace(/[^a-zA-Z0-9]/g, '');
-      const cleanUntil = String(validUntil || '').replace(/[^a-zA-Z0-9]/g, '');
-      const versionHash = Date.now().toString(36);
-      const objectId = `${issuerId}.mem_${cleanMemberId}_${cleanNum}_${cleanStatus}_${cleanUntil}_${versionHash}`;
+      const objectId = `${issuerId}.mem_${cleanMemberId}`;
 
       // Ensure logo URL is valid HTTP/HTTPS and usable by Google Wallet API
       let displayLogo = 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=300&q=80';
@@ -269,6 +299,145 @@ async function startServer() {
     } catch (error: any) {
       console.error('Error generating Google Wallet link:', error);
       res.status(500).json({ error: error?.message || 'Failed to generate pass' });
+    }
+  });
+
+  // Google Wallet Pass Automatic Synchronization Route (PATCH)
+  app.post('/api/google-wallet/sync-pass', async (req, res) => {
+    try {
+      const {
+        memberId,
+        guestName,
+        membershipNumber,
+        propertyName,
+        outletName,
+        logoUrl,
+        packageTier,
+        accessType,
+        validUntil,
+        status
+      } = req.body;
+
+      if (!memberId) {
+        return res.status(400).json({ error: 'Missing memberId' });
+      }
+
+      const auth = getGoogleWalletJwtClient();
+      if (!auth) {
+        console.warn('[Google Wallet Sync] Credentials not fully configured. Skipping pass update.');
+        return res.json({ success: false, reason: 'Credentials not configured' });
+      }
+
+      const { client, issuerId } = auth;
+      const cleanMemberId = String(memberId).replace(/[^a-zA-Z0-9_]/g, '');
+      const objectId = `${issuerId}.mem_${cleanMemberId}`;
+
+      const isFrozen = String(status || '').toLowerCase() === 'frozen';
+      const isExpired = String(status || '').toLowerCase() === 'expired';
+      const isCancelled = String(status || '').toLowerCase() === 'cancelled';
+      const statusEmoji = isFrozen ? '⏸️' : (isExpired || isCancelled) ? '🔴' : '🟢';
+
+      const displayTitle = propertyName
+        ? `${propertyName}${outletName ? ' - ' + outletName : ''}`
+        : (outletName ? `AL AZIZIYAH BOUTIQUE HOTEL - ${outletName}` : 'AL AZIZIYAH BOUTIQUE HOTEL - NOVA SPA');
+
+      let displayLogo = 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=300&q=80';
+      if (logoUrl && typeof logoUrl === 'string' && (logoUrl.startsWith('http://') || logoUrl.startsWith('https://'))) {
+        displayLogo = logoUrl;
+      }
+
+      const patchPayload = {
+        cardTitle: {
+          defaultValue: {
+            language: 'en-US',
+            value: displayTitle
+          }
+        },
+        header: {
+          defaultValue: {
+            language: 'en-US',
+            value: guestName || 'Member'
+          }
+        },
+        subheader: {
+          defaultValue: {
+            language: 'en-US',
+            value: `Member #${membershipNumber || memberId}`
+          }
+        },
+        barcode: {
+          type: 'QR_CODE',
+          value: String(membershipNumber || memberId),
+          alternateText: `#${membershipNumber || memberId}`
+        },
+        logo: {
+          sourceUri: {
+            uri: displayLogo
+          },
+          contentDescription: {
+            defaultValue: {
+              language: 'en-US',
+              value: `${propertyName || 'Health Club'} Logo`
+            }
+          }
+        },
+        textModulesData: [
+          {
+            id: 'property_outlet',
+            header: '🏨 LOCATION / OUTLET',
+            body: displayTitle
+          },
+          {
+            id: 'member_no',
+            header: '🆔 MEMBER #',
+            body: `#${membershipNumber || memberId}`
+          },
+          {
+            id: 'package_tier',
+            header: '🌟 PACKAGE TIER',
+            body: packageTier || '1 Month Couple Pool Membership'
+          },
+          {
+            id: 'access_permit',
+            header: '🔑 ACCESS PERMIT',
+            body: accessType || 'Both'
+          },
+          {
+            id: 'valid_until',
+            header: '📅 VALID UNTIL',
+            body: validUntil || 'N/A'
+          },
+          {
+            id: 'card_status',
+            header: `${statusEmoji} STATUS`,
+            body: String(status || 'Active').toUpperCase()
+          }
+        ]
+      };
+
+      console.log(`[Google Wallet Sync] Sending PATCH to object ${objectId}...`);
+
+      const googleRes = await client.request({
+        url: `https://walletobjects.googleapis.com/walletobjects/v1/genericObject/${objectId}`,
+        method: 'PATCH',
+        data: patchPayload
+      });
+
+      console.log(`[Google Wallet Sync Success] Object ${objectId} updated successfully. Status: ${googleRes.status}`);
+      return res.json({ success: true, objectId, status: googleRes.status });
+
+    } catch (err: any) {
+      const errorStatus = err?.response?.status;
+      const errorData = err?.response?.data || err?.message || err;
+
+      console.error(`[Google Wallet Sync Diagnostic] Automatic Google Wallet pass update for member ${req.body?.memberId} returned status ${errorStatus}:`, errorData);
+
+      return res.json({
+        success: false,
+        objectId: `${process.env.GOOGLE_WALLET_ISSUER_ID}.mem_${String(req.body?.memberId || '').replace(/[^a-zA-Z0-9_]/g, '')}`,
+        status: errorStatus,
+        details: typeof errorData === 'object' ? JSON.stringify(errorData) : String(errorData)
+      });
     }
   });
 

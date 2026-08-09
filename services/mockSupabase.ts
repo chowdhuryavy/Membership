@@ -338,6 +338,7 @@ class DatabaseService {
 
         members[mIndex] = { ...m, status: finalStatus, current_end_date: newEndDateStr };
         localStorage.setItem('membership_members', JSON.stringify(members));
+        this.syncGoogleWalletPassForMember(memberId).catch(e => console.error(e));
         return newEndDateStr;
     }
 
@@ -369,6 +370,7 @@ class DatabaseService {
               : newStatus;
 
           await supabase.from('members').update({ status: finalStatus, current_end_date: newEndDateStr }).eq('id', memberId);
+          this.syncGoogleWalletPassForMember(memberId).catch(e => console.error(e));
           return newEndDateStr;
         }, null);
     } catch (err) { console.error(err); }
@@ -1087,6 +1089,68 @@ class DatabaseService {
     }
   }
 
+  async syncGoogleWalletPassForMember(memberId: string): Promise<void> {
+    try {
+      const member = await this.getMemberById(memberId);
+      if (!member) {
+        console.warn(`[Google Wallet Sync] Member ${memberId} not found.`);
+        return;
+      }
+
+      let outletName = '';
+      let propertyName = '';
+      let logoUrl = '';
+
+      if (member.outlet_id) {
+        try {
+          const outlets = await this.getOutlets();
+          const outlet = outlets.find(o => o.id === member.outlet_id);
+          if (outlet) {
+            outletName = outlet.name || '';
+            propertyName = (outlet as any).property_name || '';
+            logoUrl = outlet.logo_url || '';
+          }
+        } catch (e) {
+          console.warn('[Google Wallet Sync] Could not fetch outlet details:', e);
+        }
+      }
+
+      const fullLogoUrl = logoUrl
+        ? (logoUrl.startsWith('http') ? logoUrl : `${window.location.origin}${logoUrl.startsWith('/') ? '' : '/'}${logoUrl}`)
+        : '';
+
+      const payload = {
+        memberId: member.id,
+        guestName: member.guest_name,
+        membershipNumber: member.membership_number,
+        propertyName: propertyName,
+        outletName: outletName,
+        logoUrl: fullLogoUrl,
+        packageTier: member.package_type || 'VIP Member',
+        accessType: member.access_type || 'Both',
+        validUntil: member.current_end_date || member.original_end_date || 'N/A',
+        status: member.status || 'Active'
+      };
+
+      console.log(`[Google Wallet Auto-Sync Trigger] Syncing pass for ${member.guest_name} (${member.id}) - Status: ${payload.status}, Valid Until: ${payload.validUntil}`);
+
+      const res = await fetch('/api/google-wallet/sync-pass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        console.log(`[Google Wallet Sync Success] Member ${member.guest_name} pass updated on Google servers. Object ID: ${result.objectId}`);
+      } else {
+        console.log(`[Google Wallet Sync Info] Result for member ${member.guest_name}:`, result.details || result.reason || result);
+      }
+    } catch (error: any) {
+      console.error(`[Google Wallet Sync Non-Blocking Exception] Error syncing pass for ${memberId}:`, error?.message || error);
+    }
+  }
+
   async updateMember(id: string, member: Partial<Member>) {
     if (this.isSupabase()) {
       const patch: any = { ...member };
@@ -1127,6 +1191,11 @@ class DatabaseService {
             }
         }
     }
+
+    // Automatically synchronize Google Wallet Pass whenever a member's record is updated
+    this.syncGoogleWalletPassForMember(id).catch(err => {
+      console.error('[Google Wallet Sync] Background sync error:', err);
+    });
   }
 
   async deleteMember(id: string) {
