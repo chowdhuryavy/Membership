@@ -208,11 +208,16 @@ export const GuestEntranceHistoryModal: React.FC<GuestEntranceHistoryModalProps>
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-black text-slate-900 uppercase">
-                          {format(new Date(item.date), 'EEEE, dd MMMM yyyy')}
+                          {format(new Date(item.date), 'EEEE, dd MMMM yyyy')} {item.time ? `• ${item.time}` : ''}
                         </span>
                         {index === 0 && (
                           <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-black text-[9px] uppercase tracking-wider">
                             Latest
+                          </span>
+                        )}
+                        {item.room_number && (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-black text-[9px] uppercase tracking-wider">
+                            Room {item.room_number}
                           </span>
                         )}
                       </div>

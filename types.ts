@@ -403,6 +403,9 @@ export interface EntranceFeeConsent {
   email?: string;
   qid_passport?: string;
   date: string;
+  time?: string;
+  room_number?: string;
+  is_hotel_guest?: boolean;
   sale_id?: string;
   item_name?: string;
   guest_signature?: string;

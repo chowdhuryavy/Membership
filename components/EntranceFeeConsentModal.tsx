@@ -21,12 +21,20 @@ CREATE TABLE IF NOT EXISTS public.entrance_fee_consents (
     email TEXT,
     qid_passport TEXT,
     date DATE NOT NULL,
+    time TEXT,
+    room_number TEXT,
+    is_hotel_guest BOOLEAN DEFAULT FALSE,
     sale_id TEXT,
     item_name TEXT,
     guest_signature TEXT,
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure missing columns exist for existing tables
+ALTER TABLE public.entrance_fee_consents ADD COLUMN IF NOT EXISTS time TEXT;
+ALTER TABLE public.entrance_fee_consents ADD COLUMN IF NOT EXISTS room_number TEXT;
+ALTER TABLE public.entrance_fee_consents ADD COLUMN IF NOT EXISTS is_hotel_guest BOOLEAN DEFAULT FALSE;
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.entrance_fee_consents ENABLE ROW LEVEL SECURITY;
@@ -40,6 +48,13 @@ GRANT ALL ON TABLE public.entrance_fee_consents TO anon, authenticated, postgres
 
 -- Notify PostgREST to refresh schema cache immediately
 NOTIFY pgrst, 'reload schema';`;
+
+const getCurrentFormattedTime = () => {
+    const d = new Date();
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+};
 
 export const EntranceFeeConsentModal = ({
     isOpen,
@@ -68,6 +83,9 @@ export const EntranceFeeConsentModal = ({
         email: initialData?.email || '',
         qid_passport: initialData?.qid_passport || '',
         date: initialData?.date || new Date().toISOString().split('T')[0],
+        time: initialData?.time || getCurrentFormattedTime(),
+        room_number: initialData?.room_number || '',
+        is_hotel_guest: initialData?.is_hotel_guest ?? (!!initialData?.room_number),
         notes: initialData?.notes || (initialData?.item_name ? `Purchased item: ${initialData.item_name}` : '')
     });
 
@@ -79,6 +97,9 @@ export const EntranceFeeConsentModal = ({
                 email: initialData?.email || '',
                 qid_passport: initialData?.qid_passport || '',
                 date: initialData?.date || new Date().toISOString().split('T')[0],
+                time: initialData?.time || getCurrentFormattedTime(),
+                room_number: initialData?.room_number || '',
+                is_hotel_guest: initialData?.is_hotel_guest ?? (!!initialData?.room_number),
                 notes: initialData?.notes || (initialData?.item_name ? `Purchased item: ${initialData.item_name}` : '')
             });
             setError('');
@@ -139,6 +160,9 @@ export const EntranceFeeConsentModal = ({
                 email: formData.email,
                 qid_passport: formData.qid_passport,
                 date: formData.date,
+                time: formData.time,
+                room_number: formData.room_number,
+                is_hotel_guest: formData.is_hotel_guest || !!formData.room_number,
                 sale_id: initialData?.sale_id || initialData?.saleId,
                 item_name: initialData?.item_name || initialData?.itemName,
                 notes: formData.notes,
@@ -208,6 +232,32 @@ export const EntranceFeeConsentModal = ({
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <Input label="Date *" type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="h-11 rounded-xl text-xs font-bold" />
+                                <Input label="Check-In Time" type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="h-11 rounded-xl text-xs font-bold" />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <Input 
+                                        label="Room Number (If Hotel Guest)" 
+                                        value={formData.room_number} 
+                                        onChange={e => setFormData({
+                                            ...formData, 
+                                            room_number: e.target.value,
+                                            is_hotel_guest: !!e.target.value || formData.is_hotel_guest
+                                        })} 
+                                        placeholder="e.g. Room 402..." 
+                                        className="h-11 rounded-xl text-xs font-bold" 
+                                    />
+                                    <label className="flex items-center gap-2 mt-1.5 cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={formData.is_hotel_guest} 
+                                            onChange={e => setFormData({...formData, is_hotel_guest: e.target.checked})} 
+                                            className="w-3.5 h-3.5 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+                                        />
+                                        <span className="text-[10px] font-bold text-slate-600">In-House Hotel Guest Resident</span>
+                                    </label>
+                                </div>
                                 <Input label="Internal Audit Notes" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Pass type or notes..." className="h-11 rounded-xl text-xs" />
                             </div>
 
