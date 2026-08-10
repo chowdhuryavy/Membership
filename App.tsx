@@ -236,7 +236,7 @@ const TopHeader = () => {
     );
 };
 
-const ProtectedLayout = () => {
+const ProtectedLayout = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
   const { user, logout, isLoading: isAuthLoading } = useAuth();
   const location = useLocation();
   const { checkShortcut, isLoading: isSettingsLoading, currentOutlet, outlets, pageLoading } = useSettings();
@@ -298,10 +298,10 @@ const ProtectedLayout = () => {
   // Track if we've successfully finished initial boot at least once
   const initialBootFinished = useRef(false);
   useEffect(() => {
-    if (!combinedLoading && !isAppInitializing) {
+    if (!combinedLoading && !isAuthLoading) {
       initialBootFinished.current = true;
     }
-  }, [combinedLoading, isAppInitializing]);
+  }, [combinedLoading, isAuthLoading]);
 
   useEffect(() => {
     if (!combinedLoading) {
@@ -314,11 +314,11 @@ const ProtectedLayout = () => {
     } else {
       // Re-trigger splash if we are initializing or on a splash-enabled page
       // but ONLY if we haven't finished the initial boot, to avoid getting stuck during reactive updates
-      if (isAppInitializing || (isInitialLoad.current && isSplashPage)) {
+      if (isAuthLoading || (isInitialLoad.current && isSplashPage)) {
         setShowSplash(true);
       }
     }
-  }, [combinedLoading, isSplashPage, isAppInitializing]);
+  }, [combinedLoading, isSplashPage, isAuthLoading]);
   
   useEffect(() => {
     if (user && !combinedLoading) {
@@ -355,7 +355,7 @@ const ProtectedLayout = () => {
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [checkShortcut, navigate]);
 
-  if (!user && !combinedLoading) return <Navigate to="/login" replace />;
+  if (!user && !combinedLoading) return <Navigate to={portalType === 'staff' ? '/staff-login' : '/login'} replace />;
   
   return (
     <>
@@ -866,7 +866,7 @@ const App = () => {
           {portalType === 'staff' ? (
             <>
               <Route path="/staff-login" element={<StaffLogin />} />
-              <Route element={<ProtectedLayout />}>
+              <Route element={<ProtectedLayout portalType="staff" />}>
                 <Route index element={<Dashboard />} />
                 <Route path="checkin" element={<AttendanceCheckIn />} />
                 <Route path="bookings" element={<MassageScheduling />} />
@@ -877,10 +877,8 @@ const App = () => {
             // Admin Portal Routes
             <>
               <Route path="/login" element={<Login />} />
-              <Route path="/staff-login" element={<StaffLogin />} />
-              <Route path="/staff-schedule" element={<StaffSchedule />} />
               <Route path="/pass" element={<PublicMemberPass />} />
-              <Route element={<ProtectedLayout />}>
+              <Route element={<ProtectedLayout portalType="admin" />}>
                 <Route index element={<Dashboard />} />
                 <Route path="checkin" element={<AttendanceCheckIn />} />
                 <Route path="members" element={<Members />} />
