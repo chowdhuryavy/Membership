@@ -175,6 +175,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       .map((m: any) => {
         const mStart = safeParseDate(m.start_date);
         const mEnd = safeParseDate(m.current_end_date);
+        const mCreated = m.created_at ? safeParseDate(m.created_at) : mStart;
         
         const memberFreezes = freezesByMemberId[m.id] || [];
         const prevAccrual = mStart ? RevenueEngine.calculateRevenuePeriod(m, memberFreezes, mStart, subDays(start, 1)) : 0;
@@ -207,15 +208,18 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
           deferred: deferred,
           debug_info: `Total Active Days: ${totalActiveDays}`,
           _mEnd: mEnd, // Internal field for filtering
-          _mStart: mStart // Internal field for filtering
+          _mStart: mStart, // Internal field for filtering
+          _mCreated: mCreated // Internal field for filtering
         };
       })
       .filter((row: any) => {
         // 1. If they expired BEFORE the start of this month, hide them.
         if (row._mEnd && row._mEnd < start) return false;
 
-        // 2. If they joined AFTER the end of this month, hide them.
-        if (row._mStart && row._mStart >= end) return false;
+        // 2. If they were created AFTER the end of this month, hide them.
+        // This allows members who purchased today but start next month to show in this month's report
+        // with 0 revenue and full amount in Deferred.
+        if (row._mCreated && row._mCreated >= end) return false;
 
         // 3. If they have recognized revenue this month (> 0.001), always show.
         if (row.period_rev > 0.001) return true;
@@ -229,7 +233,7 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
       })
       .map((row: any) => {
         // Remove internal filtering fields
-        const { _mEnd, _mStart, ...rest } = row;
+        const { _mEnd, _mStart, _mCreated, ...rest } = row;
         return { ...rest, _mStart }; // Keep _mStart for sorting
       })
       .sort((a: any, b: any) => {
