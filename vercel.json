@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/google-wallet/sync-pass",
+      "destination": "/api/google-wallet/sync-pass.ts"
+    },
+    {
+      "source": "/api/google-wallet/generate-link",
+      "destination": "/api/google-wallet/generate-link.ts"
+    },
+    {
       "source": "/((?!api/.*).*)",
       "destination": "/index.html"
     }

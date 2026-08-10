@@ -208,11 +208,6 @@ export default function handler(req: any, res: any) {
           body: packageTier || '1 Month Couple Pool Membership'
         },
         {
-          id: 'access_permit',
-          header: '🔑 ACCESS PERMIT',
-          body: accessType || 'Both'
-        },
-        {
           id: 'valid_until',
           header: '📅 VALID UNTIL',
           body: validUntil || '2026-09-04'
@@ -232,7 +227,33 @@ export default function handler(req: any, res: any) {
           header: '📍 LOCATION & CONTACT',
           body: 'Aspire Zone, Al Waab Street, Doha\nTel: +974 4446 5600'
         }
-      ]
+      ],
+      messages: [
+        {
+          header: 'THE TORCH DOHA RULES & INFO',
+          body: '• This card is personal and strictly non-transferable.\n• Must be scanned at facility self-kiosk or turnstiles upon every entry.\n• Grants access to authorized facility zones according to membership package.\n• Report lost or damaged membership passes to reception immediately.'
+        },
+        {
+          header: 'LOCATION & CONTACT',
+          body: 'Aspire Zone, Al Waab Street, Doha\nTel: +974 4446 5600'
+        }
+      ],
+      infoModuleData: {
+        labelValueRows: [
+          {
+            columns: [
+              {
+                label: 'RULES & INFO',
+                value: '• Personal & non-transferable\n• Scan at self-kiosk or turnstiles\n• Report lost/damaged passes immediately'
+              },
+              {
+                label: 'LOCATION & CONTACT',
+                value: 'Aspire Zone, Al Waab Street, Doha\nTel: +974 4446 5600'
+              }
+            ]
+          }
+        ]
+      }
     };
 
     const claims = {
