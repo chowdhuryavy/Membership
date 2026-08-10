@@ -407,7 +407,8 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
       doc.setTextColor(71, 85, 105); // slate-600
       doc.text(`Period: ${format(selectedMonth, 'MMMM yyyy')}`, 14, 38);
       doc.text(`Scope: ${viewScope === 'property' ? 'ALL OUTLETS' : (currentOutlet?.name || 'N/A')}`, 14, 43);
-      doc.text(`Generated: ${format(new Date(), 'dd MMM yyyy HH:mm')}`, 14, 48);
+      const user = JSON.parse(localStorage.getItem('membership_session') || '{}');
+      doc.text(`Exported on: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')}${user?.name ? ` by ${user.name}` : ''}`, 14, 48);
 
       // 3. Add Summary Stats
       const statsX = pageWidth - 80;
@@ -529,6 +530,18 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
 
         doc.text("APPROVED BY", margin + (columnWidth * 2), sigY);
         doc.text(signatoryConfig.approved || '', margin + (columnWidth * 2), sigY + 5);
+      }
+
+      // Add Footer on every page
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184);
+        const footerY = doc.internal.pageSize.getHeight() - 10;
+        doc.text(`Page ${i} of ${pageCount}`, 14, footerY);
+        doc.text(`Exported on: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')}${user?.name ? ` by ${user.name}` : ''}`, pageWidth / 2, footerY, { align: 'center' });
+        doc.text(`© ${new Date().getFullYear()} ${currentProperty?.name}. All rights reserved.`, pageWidth - 14, footerY, { align: 'right' });
       }
 
       // 6. Save PDF

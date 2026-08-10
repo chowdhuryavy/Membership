@@ -175,7 +175,7 @@ export const CustomReportViewer: React.FC<CustomReportViewerProps> = ({
       body,
       propertyName: property?.name || 'Management System',
       logoUrl: property?.logo_url,
-      userName: 'Admin',
+      userName: JSON.parse(localStorage.getItem('membership_session') || '{}')?.name || 'Admin',
       filename: `${config.name.toLowerCase().replace(/\s+/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`,
       signatoryConfig: signatoryConfig
     });

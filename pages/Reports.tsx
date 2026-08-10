@@ -1431,8 +1431,16 @@ const Reports = () => {
                         </div>
                       )}
 
-                      <div className="mt-8 flex justify-end">
-                          <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Page 1 of 1 &bull; System ID: {currentOutlet?.id?.substring(0,8)}</span>
+                      <div className="mt-8 flex justify-between items-center border-t border-slate-100 pt-4">
+                          <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">
+                              Page 1 of 1 &bull; System ID: {currentOutlet?.id?.substring(0,8)}
+                          </span>
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                              Exported on: {format(new Date(), 'dd-MMM-yyyy HH:mm:ss')} {user?.name ? ` by ${user.name}` : ''}
+                          </span>
+                          <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">
+                              &copy; {new Date().getFullYear()} {currentProperty?.name}. All rights reserved.
+                          </span>
                       </div>
                   </div>
               </Card>

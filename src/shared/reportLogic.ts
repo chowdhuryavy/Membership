@@ -1406,7 +1406,7 @@ export const generateCustomReportPDF = (options: {
     doc.setTextColor(148, 163, 184);
     const footerY = doc.internal.pageSize.getHeight() - 10;
     doc.text(`Page ${i} of ${pageCount}`, margin, footerY);
-    doc.text(`Exported by ${userName || 'Admin'} on ${format(new Date(), 'dd MMM yyyy HH:mm')}`, pageWidth / 2, footerY, { align: 'center' });
+    doc.text(`Exported on: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')}${userName ? ` by ${userName}` : ''}`, pageWidth / 2, footerY, { align: 'center' });
     doc.text(`© ${new Date().getFullYear()} ${propertyName}`, pageWidth - margin, footerY, { align: 'right' });
   }
 
@@ -2452,17 +2452,21 @@ export const generateReportPDF = (options: PDFOptions) => {
   }
 
   // --- FOOTER SECTION ---
-  const footerY = pageHeight - margin;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(203, 213, 225); // slate-300
-  doc.text(`Page 1 of 1 • System ID: ${Math.random().toString(36).substring(7).toUpperCase()}`, margin, footerY);
-  
-  const exportDateStr = format(new Date(), 'dd-MMM-yyyy');
-  const exportInfo = `Exported on: ${exportDateStr}${userName ? ` by ${userName}` : ''}`;
-  doc.text(exportInfo, pageWidth / 2, footerY, { align: 'center' });
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    const footerY = pageHeight - margin;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(203, 213, 225); // slate-300
+    doc.text(`Page ${i} of ${pageCount} • System ID: ${outletId?.substring(0,8) || 'N/A'}`, margin, footerY);
+    
+    const exportDateStr = format(new Date(), 'dd-MMM-yyyy HH:mm:ss');
+    const exportInfo = `Exported on: ${exportDateStr}${userName ? ` by ${userName}` : ''}`;
+    doc.text(exportInfo, pageWidth / 2, footerY, { align: 'center' });
 
-  doc.text(`© ${new Date().getFullYear()} ${propertyName}. All rights reserved.`, pageWidth - margin, footerY, { align: 'right' });
+    doc.text(`© ${new Date().getFullYear()} ${propertyName}. All rights reserved.`, pageWidth - margin, footerY, { align: 'right' });
+  }
 
   // Trigger PDF file download
   const cleanTitle = (reportTitle || 'Report').replace(/[^a-zA-Z0-9_\-]/g, '_');
