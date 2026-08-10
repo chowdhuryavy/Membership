@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal, Modal } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isSuperAdminRole } from '../contexts/AuthContext';
 import { db } from '../services/mockSupabase';
 import { reportService } from '../services/reportService';
 import { Role, Permission, Currency, CompanySettings, Outlet, Property, IncentiveRule, MassageType, MembershipCategory, PermissionGroup, InventoryItem, MassageRoom, MembershipType, ReportRecipient, CustomReportConfig } from '../types';
@@ -273,32 +273,32 @@ const SettingsPage = () => {
   const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry, currentOutlet, currentProperty } = useSettings();
   const { user, isSuperAdmin } = useAuth();
   const availableTabs = useMemo(() => {
-    const isSuper = isSuperAdmin;
+    const isSuper = isSuperAdmin || isSuperAdminRole(user?.role_id);
     
     return [
-      // Super Admin Only
-      { id: 'company', label: 'Global Scope', visible: hasPermission(user?.role_id || '', 'settings:view_global'), icon: Building2 },
-      { id: 'properties', label: 'Properties', visible: hasPermission(user?.role_id || '', 'settings:view_properties'), icon: MapPin },
-      { id: 'outlets', label: 'Outlets', visible: hasPermission(user?.role_id || '', 'settings:view_outlets'), icon: Store },
-      { id: 'currency', label: 'Currency', visible: hasPermission(user?.role_id || '', 'settings:view_currency'), icon: Globe },
-      { id: 'navigation', label: 'Navigation', visible: hasPermission(user?.role_id || '', 'settings:view_navigation'), icon: ListOrdered },
+      // Super Admin & Permitted Admin tabs
+      { id: 'company', label: 'Global Scope', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_global'), icon: Building2 },
+      { id: 'properties', label: 'Properties', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_properties'), icon: MapPin },
+      { id: 'outlets', label: 'Outlets', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_outlets'), icon: Store },
+      { id: 'currency', label: 'Currency', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_currency'), icon: Globe },
+      { id: 'navigation', label: 'Navigation', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_navigation'), icon: ListOrdered },
       { id: 'functions', label: 'Feature Visibility', visible: isSuper || hasPermission(user?.role_id || '', 'settings:manage_visibility'), icon: ShieldAlert },
-      { id: 'staff_portal', label: 'Staff Portal', visible: hasPermission(user?.role_id || '', 'settings:view_staff_portal'), icon: Users },
-      { id: 'maintenance', label: 'Maintenance', visible: hasPermission(user?.role_id || '', 'settings:view_maintenance'), icon: Zap },
+      { id: 'staff_portal', label: 'Staff Portal', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_staff_portal'), icon: Users },
+      { id: 'maintenance', label: 'Maintenance', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_maintenance'), icon: Zap },
       
       // Accessible to others with permission
-      { id: 'roles', label: 'Roles & Permissions', visible: hasPermission(user?.role_id || '', 'settings:view_roles'), icon: Shield },
-      { id: 'incentives', label: 'Incentives', visible: hasPermission(user?.role_id || '', 'settings:view_incentives') && !!currentOutlet, icon: Award },
-      { id: 'shortcuts', label: 'Shortcuts', visible: hasPermission(user?.role_id || '', 'settings:view_shortcuts'), icon: Keyboard },
-      { id: 'documents', label: 'Audit Templates', visible: hasPermission(user?.role_id || '', 'settings:view_documents'), icon: FileCode },
-      { id: 'booking', label: 'Booking Engine', visible: hasPermission(user?.role_id || '', 'settings:view_booking_engine') && !!currentProperty, icon: Timer },
-      { id: 'membership_types', label: 'Membership Types', visible: hasPermission(user?.role_id || '', 'settings:view_membership_types') && !!currentOutlet, icon: Target },
-      { id: 'massage_rooms', label: 'Massage Rooms', visible: hasPermission(user?.role_id || '', 'settings:view_massage_rooms') && !!currentProperty, icon: Store },
-      { id: 'reports_config', label: 'Report Distribution', visible: hasPermission(user?.role_id || '', 'settings:view_reports_config'), icon: Mail },
-      { id: 'custom_reports', label: 'Custom Intelligence', visible: hasPermission(user?.role_id || '', 'settings:view_custom_reports'), icon: FileText },
+      { id: 'roles', label: 'Roles & Permissions', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_roles'), icon: Shield },
+      { id: 'incentives', label: 'Incentives', visible: (isSuper || hasPermission(user?.role_id || '', 'settings:view_incentives')) && !!currentOutlet, icon: Award },
+      { id: 'shortcuts', label: 'Shortcuts', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_shortcuts'), icon: Keyboard },
+      { id: 'documents', label: 'Audit Templates', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_documents'), icon: FileCode },
+      { id: 'booking', label: 'Booking Engine', visible: (isSuper || hasPermission(user?.role_id || '', 'settings:view_booking_engine')) && !!currentProperty, icon: Timer },
+      { id: 'membership_types', label: 'Membership Types', visible: (isSuper || hasPermission(user?.role_id || '', 'settings:view_membership_types')) && !!currentOutlet, icon: Target },
+      { id: 'massage_rooms', label: 'Massage Rooms', visible: (isSuper || hasPermission(user?.role_id || '', 'settings:view_massage_rooms')) && !!currentProperty, icon: Store },
+      { id: 'reports_config', label: 'Report Distribution', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_reports_config'), icon: Mail },
+      { id: 'custom_reports', label: 'Custom Intelligence', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_custom_reports'), icon: FileText },
       { id: 'entrance_fee', label: 'Entrance Fee', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_entrance_fee') || hasPermission(user?.role_id || '', 'entrance_fee:view'), icon: Ticket },
     ].filter(t => t.visible);
-  }, [user, roles, hasPermission, currentProperty, currentOutlet]);
+  }, [user, roles, hasPermission, currentProperty, currentOutlet, isSuperAdmin]);
 
   const [activeTab, setActiveTab] = useState<TabId>(availableTabs[0]?.id as TabId || 'company');
 
