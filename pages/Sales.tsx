@@ -944,6 +944,8 @@ const Sales = () => {
     const canDelete = user && hasPermission(user.role_id, 'sales:delete');
     const canDeleteBooking = user && hasPermission(user.role_id, 'bookings:delete');
     const canViewInventory = user && hasPermission(user.role_id, 'inventory:view');
+    const isSuper = isSuperAdmin || user?.role_id?.toLowerCase() === 'admin' || user?.role_id?.toLowerCase() === 'system_admin' || user?.role_id?.toLowerCase() === 'super_admin' || user?.role_id?.toLowerCase() === 'owner';
+    const canViewConsents = isSuper || (user && hasPermission(user.role_id, 'entrance_fee:view'));
 
     // 1. Move loadData definition before its usage
     const loadData = useCallback(async (forceRefresh = false) => {
@@ -1251,7 +1253,7 @@ const Sales = () => {
                         <button onClick={() => setActiveTab('ledger')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'ledger' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}><ClipboardList className="w-3 h-3" /> Ledger</button>
                         {canViewInventory && <button onClick={() => setActiveTab('inventory')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'inventory' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}><Package className="w-3 h-3" /> Inventory</button>}
                         {canViewInventory && <button onClick={() => setActiveTab('stock')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'stock' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}><TrendingUp className="w-3 h-3" /> Stock</button>}
-                        <button onClick={() => setActiveTab('consents')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'consents' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}><FileSignature className="w-3 h-3" /> Consents</button>
+                        {canViewConsents && <button onClick={() => setActiveTab('consents')} className={`flex-1 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'consents' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}><FileSignature className="w-3 h-3" /> Consents</button>}
                     </div>
                     {canCreate && (
                         <Button onClick={() => { setEditingSale(null); setShowForm(true); }} className="w-full sm:w-auto rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 ml-auto xl:ml-0">

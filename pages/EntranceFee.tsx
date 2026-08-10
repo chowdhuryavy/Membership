@@ -4,28 +4,48 @@ import { useSettings } from '../contexts/SettingsContext';
 import { EntranceConsentsList } from '../components/EntranceConsentsList';
 import { EntranceFeeConsentModal } from '../components/EntranceFeeConsentModal';
 import { Button } from '../components/ui';
-import { Ticket, Plus, Building2, Store } from 'lucide-react';
+import { Ticket, Plus, Building2, Store, ShieldAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function EntranceFee() {
     const { user, isSuperAdmin } = useAuth();
-    const { currentOutlet, currentProperty, outlets = [] } = useSettings();
+    const { currentOutlet, currentProperty, outlets = [], hasPermission } = useSettings();
     const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
     const [showConsentModal, setShowConsentModal] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
 
+    const isSuper = isSuperAdmin || user?.role_id?.toLowerCase() === 'admin' || user?.role_id?.toLowerCase() === 'system_admin';
+    const canView = isSuper || hasPermission(user?.role_id || '', 'entrance_fee:view');
+    const canCreate = isSuper || hasPermission(user?.role_id || '', 'entrance_fee:create');
+
     const allowedOutletsInProperty = useMemo(() => {
         if (!currentProperty || !user || !outlets) return [];
-        if (isSuperAdmin || user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin') {
+        if (isSuper) {
             return outlets.filter(o => o.property_id === currentProperty.id);
         }
         return outlets.filter(o => 
             o.property_id === currentProperty.id && 
             user.allowed_outlets?.includes(o.id)
         );
-    }, [currentProperty, user, outlets, isSuperAdmin]);
+    }, [currentProperty, user, outlets, isSuper]);
 
     const canSwitchScope = Boolean(user && allowedOutletsInProperty.length > 1);
+
+    if (!canView) {
+        return (
+            <div className="p-6 md:p-10 max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in duration-300">
+                <div className="bg-white border border-slate-200 shadow-sm rounded-3xl p-10 text-center max-w-md space-y-4">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+                        <ShieldAlert className="w-8 h-8" />
+                    </div>
+                    <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Access Restricted</h2>
+                    <p className="text-xs font-semibold text-slate-500 leading-relaxed">
+                        You do not have permission to view or manage Entrance Fee Consents. Please contact your administrator if you need access to this page.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
@@ -72,12 +92,14 @@ export default function EntranceFee() {
                         </div>
                     )}
 
-                    <Button
-                        onClick={() => setShowConsentModal(true)}
-                        className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 bg-indigo-600 hover:bg-indigo-700 text-white"
-                    >
-                        <Plus className="w-4 h-4 mr-2" /> New Consent Form
-                    </Button>
+                    {canCreate && (
+                        <Button
+                            onClick={() => setShowConsentModal(true)}
+                            className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 bg-indigo-600 hover:bg-indigo-700 text-white"
+                        >
+                            <Plus className="w-4 h-4 mr-2" /> New Consent Form
+                        </Button>
+                    )}
                 </div>
             </div>
 

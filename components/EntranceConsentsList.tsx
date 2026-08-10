@@ -3,7 +3,7 @@ import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
 import { EntranceFeeConsent } from '../types';
 import { getBilingualWaiverText } from '../lib/waiverHelper';
-import { Search, Calendar, FileSignature, Download, Printer, Edit3, Trash2, AlertTriangle, X, History, BarChart3, LayoutGrid, Plus } from 'lucide-react';
+import { Search, Calendar, FileSignature, Download, Printer, Edit3, Trash2, AlertTriangle, X, History, BarChart3, LayoutGrid, Plus, ShieldAlert } from 'lucide-react';
 import { format } from 'date-fns';
 import { EntranceFeeConsentModal } from './EntranceFeeConsentModal';
 import { GuestEntranceHistoryModal } from './GuestEntranceHistoryModal';
@@ -22,8 +22,11 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
     const [newConsentGuestData, setNewConsentGuestData] = useState<Partial<EntranceFeeConsent> | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const canEdit = true;
-    const canDelete = true;
+    const isSuper = user?.role_id?.toLowerCase() === 'admin' || user?.role_id?.toLowerCase() === 'system_admin' || user?.role_id?.toLowerCase() === 'super_admin' || user?.role_id?.toLowerCase() === 'owner';
+    const canView = isSuper || hasPermission(user?.role_id || '', 'entrance_fee:view');
+    const canCreate = isSuper || hasPermission(user?.role_id || '', 'entrance_fee:create');
+    const canEdit = isSuper || hasPermission(user?.role_id || '', 'entrance_fee:edit');
+    const canDelete = isSuper || hasPermission(user?.role_id || '', 'entrance_fee:delete');
 
     const loadConsents = async () => {
         setLoading(true);
@@ -216,6 +219,18 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
         printWindow.document.close();
     };
 
+    if (!canView) {
+        return (
+            <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <ShieldAlert className="w-10 h-10 text-amber-500 mx-auto" />
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">Access Restricted</h3>
+                <p className="text-xs font-semibold text-slate-500 max-w-sm mx-auto">
+                    You do not have permission to view Entrance Fee & Day Pass Consents.
+                </p>
+            </div>
+        );
+    }
+
     if (loading) return <div className="p-8 text-center text-slate-400 font-bold text-xs animate-pulse">Loading consents...</div>;
 
     return (
@@ -389,7 +404,7 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                     guestConsent={selectedGuestHistoryConsent}
                     allConsents={consents}
                     onPrint={handlePrint}
-                    onNewConsentForGuest={(g) => {
+                    onNewConsentForGuest={canCreate ? (g) => {
                         setSelectedGuestHistoryConsent(null);
                         setNewConsentGuestData({
                             guest_name: g.guest_name,
@@ -398,7 +413,7 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                             qid_passport: g.qid_passport,
                             outlet_id: g.outlet_id
                         });
-                    }}
+                    } : undefined}
                 />
             )}
 

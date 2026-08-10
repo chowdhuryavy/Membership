@@ -205,15 +205,6 @@ export const EntranceFeeConsentModal = ({
                                 <CardTitle className="text-xl font-black uppercase tracking-tight">{isEditMode ? 'Edit Entrance Fee Consent' : 'Entrance Fee Consent'}</CardTitle>
                                 <p className="text-[9px] font-black text-emerald-200 uppercase tracking-widest mt-1">Guest Facility Waiver & Liability Release</p>
                             </div>
-                            <button
-                                type="button"
-                                onClick={copySqlToClipboard}
-                                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-[9px] uppercase tracking-wider flex items-center gap-1.5 transition-colors border border-white/20"
-                                title="Get SQL script for Supabase Database"
-                            >
-                                <Code2 className="w-3.5 h-3.5" />
-                                {copiedSql ? 'SQL Copied!' : 'Supabase SQL'}
-                            </button>
                         </div>
                         <button onClick={onClose} className="absolute top-5 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"><X className="w-4 h-4" /></button>
                     </CardHeader>
