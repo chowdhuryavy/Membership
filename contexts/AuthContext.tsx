@@ -8,11 +8,9 @@ export const isSuperAdminRole = (roleId: string | undefined | null) => {
     return id === 'super_admin' || 
            id === 'superadmin' || 
            id === 'owner' || 
-           id === 'admin' || 
            id === 'system_admin' || 
            id === 'system_administrator' || 
-           id === 'administrator' ||
-           id === 'manager';
+           id === 'administrator';
 };
 
 export const isSuperAdmin = (user: UserProfile | null) => {

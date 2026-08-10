@@ -196,12 +196,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // 1. SYSTEM SUPERUSER BYPASS
     if (isSuperAdmin) return true;
 
-    // 2. GLOBAL FEATURE CONTROL (Settings tab visibility restriction)
-    if (permission.startsWith('settings:')) {
-        if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
-            if (!settings.restricted_permissions.includes(permission)) {
-                return false;
-            }
+    // 2. GLOBAL FEATURE CONTROL (Global Feature & Settings visibility restriction)
+    if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
+        if (!settings.restricted_permissions.includes(permission)) {
+            return false;
         }
     }
 

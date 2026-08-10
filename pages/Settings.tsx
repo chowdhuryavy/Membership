@@ -1254,7 +1254,7 @@ const SettingsPage = () => {
                               </div>
                           </div>
                           <PermissionMatrix 
-                              registry={permissionRegistry.filter(g => g.id === 'settings')} 
+                              registry={permissionRegistry} 
                               selectedPermissions={(settings?.restricted_permissions || []) as Permission[]} 
                               onChange={async (perms) => {
                                   try {
