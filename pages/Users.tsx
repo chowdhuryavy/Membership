@@ -1,6 +1,5 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import toast from 'react-hot-toast';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, ConfirmationModal } from '../components/ui';
 import { db } from '../services/mockSupabase';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabase';
@@ -98,61 +97,25 @@ const UserDetail = ({
     const isUnlinked = !user.auth_id;
 
     const isSelf = currentUser?.id === user.id;
-    const currentUserRole = roles.find(r => r.id === currentUser?.role_id);
-    const targetUserRole = roles.find(r => r.id === user.role_id);
-
-    const isSuperCurrent = isSuperAdmin || 
-                           currentUser?.role_id?.toLowerCase() === 'admin' || 
-                           currentUser?.role_id?.toLowerCase() === 'system_admin' || 
-                           currentUser?.role_id?.toLowerCase() === 'super_admin' || 
-                           currentUser?.role_id?.toLowerCase() === 'owner' ||
-                           currentUserRole?.name?.toLowerCase().includes('admin') ||
-                           currentUserRole?.name?.toLowerCase().includes('owner') ||
-                           currentUserRole?.name?.toLowerCase().includes('system') ||
-                           currentUserRole?.name?.toLowerCase().includes('manager');
-
-    const isSuperTarget = user.role_id?.toLowerCase() === 'admin' || 
-                          user.role_id?.toLowerCase() === 'system_admin' || 
-                          targetUserRole?.name?.toLowerCase().includes('admin');
-
-    const canEditUserPermission = currentUser && (
-      isSuperCurrent || 
-      hasPermission(currentUser.role_id, 'users:manage_overrides') ||
-      hasPermission(currentUser.role_id, 'users:edit')
-    );
-
-    const canManageOverrides = Boolean(canEditUserPermission && (!isSelf || isSuperCurrent));
+    const canManageOverrides = currentUser && hasPermission(currentUser.role_id, 'users:manage_overrides') && (!isSelf || isSuperAdmin);
     const rolePermissions = roles.find(r => r.id === user.role_id)?.permissions || [];
 
-    const handleToggleOverride = async (key: Permission, currentState: boolean | null, label?: string) => {
-      if (!canManageOverrides) {
-        if (isSelf && !isSuperCurrent) {
-          toast.error("Self-editing restriction: You cannot modify policy overrides on your own profile.");
-        } else {
-          toast.error("Access restricted: You do not have permission to manage policy overrides.");
-        }
-        return;
-      }
+    const handleToggleOverride = async (key: Permission, currentState: boolean | null) => {
+      if (!canManageOverrides) return;
       
-      const pName = label || key;
-      try {
-        if (currentState === null) {
-          await db.savePermissionOverride({ user_id: user.id, permission_key: key, is_granted: true });
-          toast.success(`Granted custom override for ${pName}`);
-        } else if (currentState === true) {
-          await db.savePermissionOverride({ user_id: user.id, permission_key: key, is_granted: false });
-          toast.success(`Denied custom override for ${pName}`);
-        } else {
-          await db.deletePermissionOverride(user.id, key);
-          toast.success(`Reset ${pName} to Role Default`);
-        }
-        onRefresh();
-      } catch (err: any) {
-        console.error("Failed to toggle override:", err);
-        toast.error("Failed to save policy override change.");
+      // Cycle: No Override -> Granted -> Denied -> No Override
+      if (currentState === null) {
+        await db.savePermissionOverride({ user_id: user.id, permission_key: key, is_granted: true });
+      } else if (currentState === true) {
+        await db.savePermissionOverride({ user_id: user.id, permission_key: key, is_granted: false });
+      } else {
+        await db.deletePermissionOverride(user.id, key);
       }
+      onRefresh();
     };
 
+    const isSuperTarget = user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin';
+    const isSuperCurrent = isSuperAdmin;
     const canEditUser = currentUser && hasPermission(currentUser.role_id, 'users:edit');
     const canEditSelf = currentUser && hasPermission(currentUser.role_id, 'users:edit_self');
     const canModifyThisUser = (!isSuperTarget || isSuperCurrent) && canEditUser && (!isSelf || isSuperAdmin || canEditSelf);
@@ -237,13 +200,9 @@ const UserDetail = ({
                             <CardTitle className="text-lg font-black tracking-tight flex items-center gap-3 uppercase">
                                 <ShieldAlert className="w-5 h-5 text-indigo-400" /> Granular Policy Overrides
                             </CardTitle>
-                            {canManageOverrides ? (
-                              <div className="bg-emerald-500/20 text-emerald-300 px-4 py-1.5 rounded-xl border border-emerald-500/30 text-[8px] font-black uppercase tracking-[0.15em] flex items-center gap-2">
-                                <Check className="w-3 h-3" /> Click to Cycle: Default → Grant → Deny
-                              </div>
-                            ) : (
-                              <div className="bg-amber-500/20 text-amber-300 px-4 py-1.5 rounded-xl border border-amber-500/30 text-[8px] font-black uppercase tracking-[0.15em] flex items-center gap-2">
-                                <Lock className="w-3 h-3" /> {isSelf ? 'Self-Editing Restricted' : 'Read-Only'}
+                            {canManageOverrides && (
+                              <div className="bg-white/10 px-4 py-1.5 rounded-xl border border-white/10">
+                                <p className="text-[8px] font-black uppercase tracking-[0.2em] text-indigo-200">Cycle: Default → Grant → Deny</p>
                               </div>
                             )}
                         </CardHeader>
@@ -264,8 +223,8 @@ const UserDetail = ({
                                       return (
                                         <div 
                                           key={p.key} 
-                                          onClick={() => handleToggleOverride(p.key, currentStatus, p.label)}
-                                          className={`p-6 flex items-center justify-between bg-white transition-all ${canManageOverrides ? 'cursor-pointer hover:bg-indigo-50/40 active:scale-[0.99]' : 'opacity-85'}`}
+                                          onClick={() => handleToggleOverride(p.key, currentStatus)}
+                                          className={`p-6 flex items-center justify-between bg-white transition-all ${canManageOverrides ? 'cursor-pointer hover:bg-indigo-50/30' : ''}`}
                                         >
                                           <div className="space-y-1">
                                             <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{p.label}</p>

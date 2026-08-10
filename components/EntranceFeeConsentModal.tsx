@@ -1,11 +1,10 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { X, Save, AlertTriangle, Eraser, Code2, Copy, CheckCircle2, User, Search, UserCheck, Link as LinkIcon, Unlink, DollarSign } from 'lucide-react';
+import { X, Save, AlertTriangle, Eraser, Code2, Copy, CheckCircle2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Input, Button } from './ui';
 import { db } from '../services/mockSupabase';
-import { checkInService } from '../services/checkInService';
 import { useSettings } from '../contexts/SettingsContext';
-import { EntranceFeeConsent, Member } from '../types';
+import { EntranceFeeConsent } from '../types';
 import { getBilingualWaiverText } from '../lib/waiverHelper';
 import SignatureCanvas from 'react-signature-canvas';
 
@@ -27,9 +26,6 @@ CREATE TABLE IF NOT EXISTS public.entrance_fee_consents (
     is_hotel_guest BOOLEAN DEFAULT FALSE,
     sale_id TEXT,
     item_name TEXT,
-    price NUMERIC DEFAULT 0,
-    member_id TEXT,
-    membership_number TEXT,
     guest_signature TEXT,
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -39,9 +35,6 @@ CREATE TABLE IF NOT EXISTS public.entrance_fee_consents (
 ALTER TABLE public.entrance_fee_consents ADD COLUMN IF NOT EXISTS time TEXT;
 ALTER TABLE public.entrance_fee_consents ADD COLUMN IF NOT EXISTS room_number TEXT;
 ALTER TABLE public.entrance_fee_consents ADD COLUMN IF NOT EXISTS is_hotel_guest BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.entrance_fee_consents ADD COLUMN IF NOT EXISTS price NUMERIC DEFAULT 0;
-ALTER TABLE public.entrance_fee_consents ADD COLUMN IF NOT EXISTS member_id TEXT;
-ALTER TABLE public.entrance_fee_consents ADD COLUMN IF NOT EXISTS membership_number TEXT;
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.entrance_fee_consents ENABLE ROW LEVEL SECURITY;
@@ -72,7 +65,7 @@ export const EntranceFeeConsentModal = ({
     isOpen: boolean;
     onClose: () => void;
     onSuccess: (consent: EntranceFeeConsent) => void;
-    initialData?: (Partial<EntranceFeeConsent> & { guestName?: string; saleId?: string; itemName?: string }) | null;
+    initialData?: (Partial<EntranceFeeConsent> & { guestName?: string }) | null;
 }) => {
     const { currentOutlet, currentProperty } = useSettings();
     const waiver = getBilingualWaiverText(currentOutlet?.name, currentProperty?.name);
@@ -81,12 +74,6 @@ export const EntranceFeeConsentModal = ({
     const [copiedSql, setCopiedSql] = useState(false);
     const [acceptedWaiver, setAcceptedWaiver] = useState(true);
     const signatureRef = useRef<SignatureCanvas>(null);
-
-    // Member auto-suggest logic
-    const [allMembers, setAllMembers] = useState<Member[]>([]);
-    const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-    const [memberSearchQuery, setMemberSearchQuery] = useState('');
-    const [showSuggestions, setShowSuggestions] = useState(false);
 
     const isEditMode = !!initialData?.id;
 
@@ -99,21 +86,11 @@ export const EntranceFeeConsentModal = ({
         time: initialData?.time || getCurrentFormattedTime(),
         room_number: initialData?.room_number || '',
         is_hotel_guest: initialData?.is_hotel_guest ?? (!!initialData?.room_number),
-        price: initialData?.price !== undefined ? String(initialData.price) : '',
-        notes: initialData?.notes || (initialData?.item_name || initialData?.itemName ? `Purchased item: ${initialData.item_name || initialData.itemName}` : '')
+        notes: initialData?.notes || (initialData?.item_name ? `Purchased item: ${initialData.item_name}` : '')
     });
 
-    useEffect(() => {
+    React.useEffect(() => {
         if (isOpen) {
-            db.getMembers('all').then(mList => {
-                setAllMembers(mList || []);
-                // If initialData has member_id, find and select
-                if (initialData?.member_id) {
-                    const match = (mList || []).find(m => m.id === initialData.member_id);
-                    if (match) setSelectedMember(match);
-                }
-            }).catch(() => {});
-
             setFormData({
                 guest_name: initialData?.guest_name || initialData?.guestName || '',
                 phone: initialData?.phone || '',
@@ -123,12 +100,9 @@ export const EntranceFeeConsentModal = ({
                 time: initialData?.time || getCurrentFormattedTime(),
                 room_number: initialData?.room_number || '',
                 is_hotel_guest: initialData?.is_hotel_guest ?? (!!initialData?.room_number),
-                price: initialData?.price !== undefined ? String(initialData.price) : '',
-                notes: initialData?.notes || (initialData?.item_name || initialData?.itemName ? `Purchased item: ${initialData.item_name || initialData.itemName}` : '')
+                notes: initialData?.notes || (initialData?.item_name ? `Purchased item: ${initialData.item_name}` : '')
             });
             setError('');
-            setMemberSearchQuery('');
-            setShowSuggestions(false);
 
             setTimeout(() => {
                 if (initialData?.guest_signature && signatureRef.current) {
@@ -141,39 +115,8 @@ export const EntranceFeeConsentModal = ({
                     signatureRef.current?.clear();
                 }
             }, 100);
-        } else {
-            setSelectedMember(null);
         }
     }, [isOpen, initialData]);
-
-    const filteredMembers = useMemo(() => {
-        const query = memberSearchQuery.trim().toLowerCase();
-        if (!query || query.length < 2) return [];
-        return allMembers.filter(m => 
-            m.guest_name.toLowerCase().includes(query) ||
-            (m.phone && m.phone.includes(query)) ||
-            (m.membership_number && m.membership_number.toLowerCase().includes(query))
-        ).slice(0, 6);
-    }, [allMembers, memberSearchQuery]);
-
-    const handleSelectMember = (member: Member) => {
-        setSelectedMember(member);
-        setFormData(prev => ({
-            ...prev,
-            guest_name: member.guest_name,
-            phone: member.phone || prev.phone,
-            email: member.email || prev.email,
-            qid_passport: member.qid_passport || prev.qid_passport
-        }));
-        setMemberSearchQuery('');
-        setShowSuggestions(false);
-        toast.success(`Linked Member: ${member.guest_name} (#${member.membership_number})`);
-    };
-
-    const handleUnlinkMember = () => {
-        setSelectedMember(null);
-        toast.success('Member unlinked from this consent.');
-    };
 
     if (!isOpen) return null;
 
@@ -200,6 +143,7 @@ export const EntranceFeeConsentModal = ({
         const isEmptySig = signatureRef.current?.isEmpty();
         let signatureDataUrl = isEmptySig ? '' : signatureRef.current?.getTrimmedCanvas().toDataURL('image/png');
 
+        // Retain existing signature if editing and signature canvas was not altered
         if (isEmptySig && isEditMode && initialData?.guest_signature) {
             signatureDataUrl = initialData.guest_signature;
         } else if (isEmptySig && !isEditMode) {
@@ -221,40 +165,24 @@ export const EntranceFeeConsentModal = ({
                 is_hotel_guest: formData.is_hotel_guest || !!formData.room_number,
                 sale_id: initialData?.sale_id || initialData?.saleId,
                 item_name: initialData?.item_name || initialData?.itemName,
-                price: formData.price ? Number(formData.price) : (initialData?.price || 0),
-                member_id: selectedMember?.id || initialData?.member_id,
-                membership_number: selectedMember?.membership_number || initialData?.membership_number,
                 notes: formData.notes,
                 guest_signature: signatureDataUrl
             };
 
-            let savedConsent: EntranceFeeConsent;
             if (isEditMode && initialData?.id) {
                 await db.updateEntranceFeeConsent(initialData.id, consentData);
                 toast.success('Entrance Fee Consent record updated successfully!');
-                savedConsent = {
+                const updatedObj: EntranceFeeConsent = {
                     ...consentData,
                     id: initialData.id,
                     created_at: initialData.created_at || new Date().toISOString()
                 };
+                onSuccess(updatedObj);
             } else {
-                savedConsent = (await db.addEntranceFeeConsent(consentData)) as EntranceFeeConsent;
+                const saved = await db.addEntranceFeeConsent(consentData);
                 toast.success('Entrance Fee Consent logged successfully!');
+                onSuccess(saved as any); 
             }
-
-            // Record attendance check-in for linked member
-            const activeMember = selectedMember || (initialData?.member_id ? allMembers.find(m => m.id === initialData.member_id) : null);
-            if (activeMember) {
-                await checkInService.recordEntranceCheckIn(
-                    activeMember,
-                    targetOutletId,
-                    `Day Pass / Entrance Fee Waiver Signed (${consentData.item_name || 'Facility Pass'})`,
-                    formData.date,
-                    formData.time
-                );
-            }
-
-            onSuccess(savedConsent);
         } catch (err: any) {
             const msg = err.message || '';
             if (msg.includes('schema cache') || msg.includes('42P01') || msg.includes('relation "public.entrance_fee_consents" does not exist')) {
@@ -277,95 +205,21 @@ export const EntranceFeeConsentModal = ({
                                 <CardTitle className="text-xl font-black uppercase tracking-tight">{isEditMode ? 'Edit Entrance Fee Consent' : 'Entrance Fee Consent'}</CardTitle>
                                 <p className="text-[9px] font-black text-emerald-200 uppercase tracking-widest mt-1">Guest Facility Waiver & Liability Release</p>
                             </div>
+                            <button
+                                type="button"
+                                onClick={copySqlToClipboard}
+                                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-[9px] uppercase tracking-wider flex items-center gap-1.5 transition-colors border border-white/20"
+                                title="Get SQL script for Supabase Database"
+                            >
+                                <Code2 className="w-3.5 h-3.5" />
+                                {copiedSql ? 'SQL Copied!' : 'Supabase SQL'}
+                            </button>
                         </div>
                         <button onClick={onClose} className="absolute top-5 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"><X className="w-4 h-4" /></button>
                     </CardHeader>
                     
                     <CardContent className="p-8">
                         <form onSubmit={handleSubmit} className="space-y-6">
-                            
-                            {/* Member Link Banner or Search Box */}
-                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                                        <User className="w-3.5 h-3.5 text-emerald-600" />
-                                        Link Existing Member (Optional)
-                                    </label>
-                                    {selectedMember ? (
-                                        <span className="text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                                            <UserCheck className="w-3 h-3" /> Member Linked
-                                        </span>
-                                    ) : (
-                                        <span className="text-[9px] font-medium text-slate-400">
-                                            Search by Name, Phone, or ID
-                                        </span>
-                                    )}
-                                </div>
-
-                                {selectedMember ? (
-                                    <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center">
-                                                {selectedMember.guest_name.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <p className="text-xs font-black text-emerald-950 uppercase">{selectedMember.guest_name}</p>
-                                                <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
-                                                    ID: #{selectedMember.membership_number} {selectedMember.phone ? `| Phone: ${selectedMember.phone}` : ''}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={handleUnlinkMember}
-                                            className="px-2.5 py-1 text-[9px] font-black uppercase text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors flex items-center gap-1"
-                                        >
-                                            <Unlink className="w-3 h-3" /> Unlink
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="relative">
-                                        <div className="relative">
-                                            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-                                            <input
-                                                type="text"
-                                                value={memberSearchQuery}
-                                                onChange={e => {
-                                                    setMemberSearchQuery(e.target.value);
-                                                    setShowSuggestions(true);
-                                                }}
-                                                onFocus={() => setShowSuggestions(true)}
-                                                placeholder="Type phone number or member name for suggestions..."
-                                                className="w-full h-11 pl-9 pr-4 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                                            />
-                                        </div>
-
-                                        {showSuggestions && filteredMembers.length > 0 && (
-                                            <div className="absolute left-0 right-0 top-12 z-50 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto">
-                                                {filteredMembers.map(m => (
-                                                    <button
-                                                        key={m.id}
-                                                        type="button"
-                                                        onClick={() => handleSelectMember(m)}
-                                                        className="w-full text-left p-3 hover:bg-emerald-50 transition-colors border-b border-slate-100 last:border-0 flex items-center justify-between"
-                                                    >
-                                                        <div>
-                                                            <p className="text-xs font-black text-slate-900 uppercase">{m.guest_name}</p>
-                                                            <p className="text-[10px] text-slate-500 font-bold uppercase">
-                                                                #{m.membership_number} {m.phone ? `• ${m.phone}` : ''}
-                                                            </p>
-                                                        </div>
-                                                        <span className="text-[8px] font-black uppercase px-2 py-0.5 bg-slate-100 rounded text-slate-600">
-                                                            Select
-                                                        </span>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <Input label="Guest Name *" value={formData.guest_name} onChange={e => setFormData({...formData, guest_name: e.target.value})} className="h-11 rounded-xl text-xs font-bold" />
                                 <Input label="QID / Passport No." value={formData.qid_passport} onChange={e => setFormData({...formData, qid_passport: e.target.value})} className="h-11 rounded-xl text-xs" />
@@ -376,10 +230,9 @@ export const EntranceFeeConsentModal = ({
                                 <Input label="Email Address" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 rounded-xl text-xs" />
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <Input label="Date *" type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="h-11 rounded-xl text-xs font-bold" />
                                 <Input label="Check-In Time" type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="h-11 rounded-xl text-xs font-bold" />
-                                <Input label="Fee Amount (QAR)" type="number" step="0.01" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="0.00" className="h-11 rounded-xl text-xs font-bold" />
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -527,3 +380,4 @@ export const EntranceFeeConsentModal = ({
         </div>
     );
 };
+

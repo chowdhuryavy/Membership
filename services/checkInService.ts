@@ -174,53 +174,6 @@ export class CheckInService {
     };
   }
 
-  async recordEntranceCheckIn(
-    member: { id: string; membership_number?: string; guest_name: string; status?: string; access_type?: string; outlet_id?: string },
-    outletId: string,
-    notes?: string,
-    checkInDateStr?: string,
-    checkInTimeStr?: string
-  ): Promise<MemberCheckIn> {
-    const targetOutletId = outletId || member.outlet_id || 'main';
-    let checkInIso = new Date().toISOString();
-    if (checkInDateStr) {
-      const timePart = checkInTimeStr || '12:00';
-      checkInIso = new Date(`${checkInDateStr}T${timePart}:00`).toISOString();
-    }
-
-    const newRecord: MemberCheckIn = {
-      id: 'ci_ef_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-      member_id: member.id,
-      membership_number: member.membership_number || '',
-      guest_name: member.guest_name,
-      outlet_id: targetOutletId,
-      check_in_time: checkInIso,
-      check_out_time: checkInIso,
-      duration_minutes: 60,
-      check_in_method: 'reception_manual',
-      checked_in_by: 'Entrance Fee Form',
-      notes: notes || 'Facility Day Pass / Entrance Fee Waiver Signed',
-      status: 'completed',
-      membership_status_at_checkin: (member.status as any) || 'Active',
-      access_type: (member.access_type as any) || 'Both',
-      created_at: new Date().toISOString()
-    };
-
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('member_check_ins').insert([newRecord]);
-      } catch (e) {
-        console.warn('Supabase insert entrance fee checkin error:', e);
-      }
-    }
-
-    const local = this.getLocalCheckIns();
-    local.unshift(newRecord);
-    this.saveLocalCheckIns(local);
-
-    return newRecord;
-  }
-
   async checkOutMember(
     checkInId: string,
     notes?: string

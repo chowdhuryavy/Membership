@@ -255,11 +255,10 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         db.getMemberHistory(targetMember.membership_number),
       ]);
       
-      const [b, pts, sales, entranceConsents] = await Promise.all([
+      const [b, pts, sales] = await Promise.all([
         db.getMassageBookings(propertyId, true, undefined, undefined, guestId),
         db.getPTMembers(propertyId, true, targetMember.phone || undefined, targetMember.email || undefined),
-        db.getSales(propertyId, true, undefined, undefined, guestId),
-        db.getEntranceFeeConsents('all', true).catch(() => [])
+        db.getSales(propertyId, true, undefined, undefined, guestId)
       ]);
 
       setFreezes(f);
@@ -267,13 +266,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
       setAllSales(sales);
       setMemberBookings(guestId ? b.filter(booking => booking.guest_id === guestId) : []);
       setMassageTypes(mt);
-
-      const matchedConsents = (entranceConsents || []).filter(c => 
-        (c.member_id && c.member_id === targetMember.id) ||
-        (c.membership_number && targetMember.membership_number && c.membership_number.toLowerCase() === targetMember.membership_number.toLowerCase()) ||
-        (targetMember.phone && c.phone && c.phone === targetMember.phone) ||
-        (targetMember.guest_name && c.guest_name && c.guest_name.toLowerCase() === targetMember.guest_name.toLowerCase())
-      );
       
       const combinedHistory = Array.isArray(history) ? [...history] : [];
       if (targetMember && !combinedHistory.some(h => h.id === targetMember.id)) {
@@ -334,14 +326,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
           date: s.date || new Date().toISOString(),
           status: 'completed',
           price: 0,
-          discount: 0
-        })),
-        ...matchedConsents.map(c => ({
-          id: c.id,
-          title: `Entrance Fee / Day Pass (${c.item_name || 'Facility Access'})`,
-          date: c.date ? `${c.date}T${c.time || '12:00'}:00` : c.created_at || new Date().toISOString(),
-          status: 'completed',
-          price: Number(c.price || 0),
           discount: 0
         }))
       ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());

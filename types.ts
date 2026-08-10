@@ -1,20 +1,18 @@
 export type Permission = 
-  | 'dashboard:view' | 'dashboard:view_financials' | 'dashboard:view_insights' | 'dashboard:view_analytics'
-  | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:bulk_freeze' | 'members:renew' | 'members:print_contract' | 'members:view_history' | 'members:enroll'
-  | 'pt_members:view' | 'pt_members:create' | 'pt_members:edit' | 'pt_members:delete'
+  | 'dashboard:view' | 'dashboard:view_financials' | 'dashboard:view_insights'
+  | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:bulk_freeze' | 'members:renew' | 'members:print_contract' | 'members:view_history'
   | 'checkin:view' | 'checkin:manage' | 'checkin:kiosk'
   | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete'
   | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email' | 'users:manage_overrides' | 'users:edit_self'
-  | 'staff:view' | 'staff:manage' | 'staff:manage_leaves' | 'staff:manage_portal_settings' | 'staff:view_schedule' | 'staff:manage_schedule'
+  | 'staff:view' | 'staff:manage' | 'staff:manage_leaves' | 'staff:manage_portal_settings'
   | 'settings:view' | 'settings:edit' 
   | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives' | 'settings:manage_visibility' | 'settings:view_staff_portal' | 'settings:view_booking_engine' | 'settings:view_membership_types' | 'settings:view_massage_rooms' | 'settings:view_reports_config' | 'settings:view_custom_reports' | 'settings:view_entrance_fee'
   | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives' | 'settings:manage_staff_portal' | 'settings:manage_booking_engine' | 'settings:manage_membership_types' | 'settings:manage_massage_rooms' | 'settings:manage_reports_config' | 'settings:manage_custom_reports' | 'settings:manage_entrance_fee'
-  | 'reports:view' | 'reports:export' | 'reports:view_financial' | 'reports:view_operational' | 'reports:view_inventory' | 'reports:view_staff' | 'reports:view_massage_room'
+  | 'reports:view' | 'reports:export' | 'reports:view_financial' | 'reports:view_operational' | 'reports:view_inventory' | 'reports:view_staff'
   | 'logs:view' | 'logs:search' | 'logs:filter' | 'logs:clear'
   | 'bookings:view' | 'bookings:create' | 'bookings:edit' | 'bookings:delete' | 'bookings:manage_resources' | 'bookings:view_therapist_schedule'
   | 'sales:view' | 'sales:create' | 'sales:edit' | 'sales:delete' | 'sales:void'
   | 'entrance_fee:view' | 'entrance_fee:create' | 'entrance_fee:edit' | 'entrance_fee:delete'
-  | 'notifications:view' | 'notifications:manage'
   | 'inventory:view' | 'inventory:manage' | 'inventory:adjust_stock'; 
 
 export interface PermissionGroup {
@@ -54,7 +52,6 @@ export interface Role {
   name: string;
   permissions: Permission[];
   is_system?: boolean;
-  description?: string;
 }
 
 export interface Property {
@@ -411,9 +408,6 @@ export interface EntranceFeeConsent {
   is_hotel_guest?: boolean;
   sale_id?: string;
   item_name?: string;
-  price?: number;
-  member_id?: string;
-  membership_number?: string;
   guest_signature?: string;
   notes?: string;
   created_at: string;

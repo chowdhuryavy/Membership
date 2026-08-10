@@ -135,7 +135,6 @@ class DatabaseService {
           { key: 'dashboard:view', label: 'Access Dashboard', description: 'Core entry point for operational overview.' },
           { key: 'dashboard:view_financials', label: 'Financial KPI Insights', description: 'Visibility into revenue recognition and daily accruals.' },
           { key: 'dashboard:view_insights', label: 'AI Strategic Analysis', description: 'Ability to generate Gemini-powered performance reports.' },
-          { key: 'dashboard:view_analytics', label: 'Performance Analytics', description: 'Access interactive charts and trend visualizations.' },
         ]
       },
       {
@@ -152,17 +151,6 @@ class DatabaseService {
           { key: 'members:renew', label: 'Process Renewals', description: 'Ability to trigger re-enrollment logic.' },
           { key: 'members:print_contract', label: 'Legal Documentation', description: 'Generate and print membership agreements.' },
           { key: 'members:view_history', label: 'Audit History', description: 'View historical changes to member records.' },
-          { key: 'members:enroll', label: 'Enrollment Portal', description: 'Access step-by-step member enrollment form.' },
-        ]
-      },
-      {
-        id: 'pt_members',
-        label: 'PT & Personal Training Services',
-        permissions: [
-          { key: 'pt_members:view', label: 'View PT Members', description: 'Access PT and massage client directory.' },
-          { key: 'pt_members:create', label: 'Enroll PT Clients', description: 'Register new PT and spa clients.' },
-          { key: 'pt_members:edit', label: 'Edit PT Packages', description: 'Modify PT sessions, sessions left, and records.' },
-          { key: 'pt_members:delete', label: 'Delete PT Records', description: 'Remove PT records and session logs.' },
         ]
       },
       {
@@ -181,8 +169,6 @@ class DatabaseService {
           { key: 'staff:view', label: 'View Personnel', description: 'Access the facility staff list and profiles.' },
           { key: 'staff:manage', label: 'Control Registry', description: 'Add, edit, or archive staff members.' },
           { key: 'staff:manage_leaves', label: 'Leave Administration', description: 'Manage staff leave records and schedules.' },
-          { key: 'staff:view_schedule', label: 'View Duty Schedule', description: 'View staff shift schedules and rosters.' },
-          { key: 'staff:manage_schedule', label: 'Manage Roster & Shifts', description: 'Create and edit staff shift assignments.' },
           { key: 'staff:manage_portal_settings', label: 'Portal Configuration', description: 'Manage visibility and features for the staff portal.' },
         ]
       },
@@ -232,7 +218,6 @@ class DatabaseService {
           { key: 'reports:view_operational', label: 'Operational Metrics', description: 'View attendance and facility usage reports.' },
           { key: 'reports:view_inventory', label: 'Inventory Reports', description: 'Access stock movement and valuation reports.' },
           { key: 'reports:view_staff', label: 'Staff Performance', description: 'View incentive and productivity reports.' },
-          { key: 'reports:view_massage_room', label: 'Massage Room Reports', description: 'Access room revenue and utilization analytics.' },
         ]
       },
       {
@@ -243,14 +228,6 @@ class DatabaseService {
           { key: 'entrance_fee:create', label: 'Create Consents', description: 'Log new guest entrance fee consent waivers.' },
           { key: 'entrance_fee:edit', label: 'Edit Consents', description: 'Modify existing entrance fee consent records.' },
           { key: 'entrance_fee:delete', label: 'Delete Consents', description: 'Remove entrance fee consent records.' },
-        ]
-      },
-      {
-        id: 'notifications',
-        label: 'System Notifications & Alerts',
-        permissions: [
-          { key: 'notifications:view', label: 'View Notifications', description: 'Access system notification center.' },
-          { key: 'notifications:manage', label: 'Manage Notifications', description: 'Broadcast messages and configure alerts.' },
         ]
       },
       {
@@ -317,48 +294,27 @@ class DatabaseService {
   }
 
   async getPermissionOverrides(userId: string): Promise<UserPermissionOverride[]> {
-    if (this.isSupabase()) {
-      const dbData = await this.safeCall(async () => {
-        const { data } = await supabase.from('user_permission_overrides').select('*').eq('user_id', userId);
-        return (data || []) as UserPermissionOverride[];
-      }, []);
-      if (dbData && dbData.length > 0) return dbData;
-    }
-    try {
-      const local = JSON.parse(localStorage.getItem('membership_permission_overrides') || '[]') as UserPermissionOverride[];
-      return local.filter(o => o.user_id === userId);
-    } catch (e) {
-      return [];
-    }
+    if (!this.isSupabase()) return [];
+    return this.safeCall(async () => {
+      const { data } = await supabase.from('user_permission_overrides').select('*').eq('user_id', userId);
+      return (data || []) as UserPermissionOverride[];
+    }, []);
   }
 
   async savePermissionOverride(override: Omit<UserPermissionOverride, 'id'>) {
-    if (this.isSupabase()) {
-      await this.safeCall(async () => {
-        await supabase.from('user_permission_overrides').upsert([override], { onConflict: 'user_id,permission_key' });
-        await this.logAction('SECURITY_OVERRIDE', `Updated override for ${override.permission_key} on User ID: ${override.user_id}`);
-      }, null);
-    }
-    try {
-      const local = JSON.parse(localStorage.getItem('membership_permission_overrides') || '[]') as UserPermissionOverride[];
-      const filtered = local.filter(o => !(o.user_id === override.user_id && o.permission_key === override.permission_key));
-      filtered.push({ id: `ovr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`, ...override });
-      localStorage.setItem('membership_permission_overrides', JSON.stringify(filtered));
-    } catch (e) {}
+    if (!this.isSupabase()) return;
+    await this.safeCall(async () => {
+      await supabase.from('user_permission_overrides').upsert([override], { onConflict: 'user_id,permission_key' });
+      await this.logAction('SECURITY_OVERRIDE', `Updated override for ${override.permission_key} on User ID: ${override.user_id}`);
+    }, null);
   }
 
   async deletePermissionOverride(userId: string, key: Permission) {
-    if (this.isSupabase()) {
-      await this.safeCall(async () => {
-        await supabase.from('user_permission_overrides').delete().eq('user_id', userId).eq('permission_key', key);
-        await this.logAction('SECURITY_OVERRIDE_PURGE', `Removed override for ${key} on User ID: ${userId}`);
-      }, null);
-    }
-    try {
-      const local = JSON.parse(localStorage.getItem('membership_permission_overrides') || '[]') as UserPermissionOverride[];
-      const filtered = local.filter(o => !(o.user_id === userId && o.permission_key === key));
-      localStorage.setItem('membership_permission_overrides', JSON.stringify(filtered));
-    } catch (e) {}
+    if (!this.isSupabase()) return;
+    await this.safeCall(async () => {
+      await supabase.from('user_permission_overrides').delete().eq('user_id', userId).eq('permission_key', key);
+      await this.logAction('SECURITY_OVERRIDE_PURGE', `Removed override for ${key} on User ID: ${userId}`);
+    }, null);
   }
 
   async syncMemberEndDate(memberId: string) {
@@ -1146,7 +1102,6 @@ class DatabaseService {
   }
 
   async syncGoogleWalletPassForMember(memberId: string, memberData?: Partial<Member>): Promise<void> {
-    if ((window as any).__googleWalletSyncDisabled || window.location.hostname.includes('vercel.app')) return;
     try {
       let member: any = memberData;
       if (!member || !member.id || !member.guest_name) {
@@ -1221,17 +1176,9 @@ class DatabaseService {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-      }).catch(() => {
-        (window as any).__googleWalletSyncDisabled = true;
-        return null;
       });
 
-      if (!res || !res.ok) {
-        if (res?.status === 404 || !res) {
-          (window as any).__googleWalletSyncDisabled = true;
-        }
-        return;
-      }
+      if (!res.ok) return;
 
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) return;
@@ -1928,54 +1875,49 @@ class DatabaseService {
   }
 
   async getSettings(): Promise<CompanySettings> {
-    const defaultSettings: CompanySettings = { 
-      name: 'The Torch Doha Health Club', 
-      logo_url: 'https://i.imgur.com/oZVRrvo.png', 
-      address: '', 
-      phone: '',
-      currency_id: 'default',
-      restricted_permissions: []
-    };
-
-    const cachedLocalStr = localStorage.getItem('company_settings_cache');
-    const cachedLocal: CompanySettings = cachedLocalStr ? JSON.parse(cachedLocalStr) : defaultSettings;
-
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
         if (error) throw error;
         if (data) {
           return {
-            ...cachedLocal,
-            name: data.name || cachedLocal.name || '',
-            logo_url: data.logo_url || cachedLocal.logo_url || '',
-            address: data.address || cachedLocal.address || '',
-            phone: data.phone || cachedLocal.phone || '',
-            currency_id: data.currency_id || cachedLocal.currency_id || 'default',
-            report_title: data.report_title || cachedLocal.report_title || '',
-            report_subtitle: data.report_subtitle || cachedLocal.report_subtitle || '',
-            signatory_config: data.signatory_config || cachedLocal.signatory_config || {},
-            keyboard_shortcuts: data.keyboard_shortcuts || cachedLocal.keyboard_shortcuts || {},
-            contract_template: data.contract_template || cachedLocal.contract_template || '',
-            navigation_order: data.navigation_order || cachedLocal.navigation_order || undefined,
-            restricted_permissions: Array.isArray(data.restricted_permissions) ? data.restricted_permissions : (cachedLocal.restricted_permissions || []),
-            conditions: data.conditions || cachedLocal.conditions || '',
-            staff_portal_settings: data.staff_portal_settings || cachedLocal.staff_portal_settings || {}
+            name: data.name || '',
+            logo_url: data.logo_url || '',
+            address: data.address || '',
+            phone: data.phone || '',
+            currency_id: data.currency_id || 'default',
+            navigation_order: data.navigation_order || undefined
           } as CompanySettings;
         }
-        return cachedLocal;
-      }, () => cachedLocal);
+        return {
+          name: '',
+          logo_url: '',
+          address: '',
+          phone: '',
+          currency_id: 'default'
+        };
+      }, {
+        name: '',
+        logo_url: '',
+        address: '',
+        phone: '',
+        currency_id: 'default'
+      });
     }
 
-    return cachedLocal;
+    const defaultSettings: CompanySettings = { 
+      name: 'The Torch Doha Health Club', 
+      logo_url: 'https://i.imgur.com/oZVRrvo.png', 
+      address: '', 
+      phone: '',
+      currency_id: 'default' 
+    };
+    
+    const local = localStorage.getItem('company_settings_cache');
+    return local ? JSON.parse(local) : defaultSettings;
   }
 
   async updateSettings(settings: CompanySettings) {
-    const existingStr = localStorage.getItem('company_settings_cache');
-    const existing = existingStr ? JSON.parse(existingStr) : {};
-    const merged = { ...existing, ...settings };
-    localStorage.setItem('company_settings_cache', JSON.stringify(merged));
-
     if (this.isSupabase()) {
       let payload: any = { ...settings, id: 'global' };
       let { error } = await supabase.from('company_settings').upsert(payload);
@@ -1986,6 +1928,8 @@ class DatabaseService {
       }
       if (error) console.error('Error updating settings in Supabase:', error);
       await this.logAction('UPDATE_SETTINGS', 'Global system configuration mutated.');
+    } else {
+      localStorage.setItem('company_settings_cache', JSON.stringify(settings));
     }
   }
 
@@ -2063,153 +2007,61 @@ class DatabaseService {
   }
 
   async getRoles(): Promise<Role[]> {
-    const defaultRoles: Role[] = [
-      {
-        id: 'super_admin',
-        name: 'Super Admin',
-        description: 'Full un-restricted administrative access across all properties and settings.',
-        is_system: true,
-        permissions: this.getPermissionRegistry().flatMap(g => g.permissions.map(p => p.key))
-      },
-      {
-        id: 'admin',
-        name: 'Admin',
-        description: 'Full operational administration with configurable permissions.',
-        is_system: true,
-        permissions: this.getPermissionRegistry().flatMap(g => g.permissions.map(p => p.key)).filter(k => k !== 'settings:manage_maintenance' && k !== 'settings:view_maintenance')
-      },
-      {
-        id: 'manager',
-        name: 'Facility Manager',
-        description: 'Operational management for day-to-day facility activities and reporting.',
-        is_system: false,
-        permissions: [
-          'dashboard:view', 'dashboard:view_financials', 'dashboard:view_insights', 'dashboard:view_analytics',
-          'members:view', 'members:create', 'members:edit', 'members:view_contact_info', 'members:freeze', 'members:renew', 'members:print_contract', 'members:view_history', 'members:enroll',
-          'pt_members:view', 'pt_members:create', 'pt_members:edit',
-          'checkin:view', 'checkin:manage', 'checkin:kiosk',
-          'staff:view', 'staff:manage', 'staff:manage_leaves', 'staff:view_schedule', 'staff:manage_schedule',
-          'categories:view', 'categories:create', 'categories:edit',
-          'bookings:view', 'bookings:create', 'bookings:edit', 'bookings:manage_resources', 'bookings:view_therapist_schedule',
-          'sales:view', 'sales:create', 'sales:edit', 'inventory:view', 'inventory:manage', 'inventory:adjust_stock',
-          'reports:view', 'reports:export', 'reports:view_financial', 'reports:view_operational', 'reports:view_inventory', 'reports:view_staff', 'reports:view_massage_room',
-          'entrance_fee:view', 'entrance_fee:create', 'entrance_fee:edit',
-          'notifications:view', 'notifications:manage',
-          'settings:view', 'settings:view_global', 'settings:view_outlets', 'settings:view_currency', 'settings:view_shortcuts', 'settings:view_documents', 'settings:view_staff_portal', 'settings:view_booking_engine', 'settings:view_membership_types', 'settings:view_massage_rooms', 'settings:view_reports_config', 'settings:view_custom_reports', 'settings:view_entrance_fee'
-        ]
-      },
-      {
-        id: 'receptionist',
-        name: 'Front Desk / Reception',
-        description: 'Front desk operations, check-in, bookings, and sales.',
-        is_system: false,
-        permissions: [
-          'dashboard:view',
-          'members:view', 'members:create', 'members:edit', 'members:view_contact_info', 'members:freeze', 'members:renew', 'members:print_contract', 'members:enroll',
-          'pt_members:view', 'pt_members:create',
-          'checkin:view', 'checkin:manage', 'checkin:kiosk',
-          'bookings:view', 'bookings:create', 'bookings:edit', 'bookings:view_therapist_schedule',
-          'sales:view', 'sales:create', 'inventory:view',
-          'entrance_fee:view', 'entrance_fee:create',
-          'notifications:view'
-        ]
-      },
-      {
-        id: 'staff',
-        name: 'Staff / Therapist',
-        description: 'Specialist and instructor role for bookings and check-in.',
-        is_system: false,
-        permissions: [
-          'dashboard:view',
-          'checkin:view',
-          'bookings:view', 'bookings:view_therapist_schedule',
-          'staff:view', 'staff:view_schedule'
-        ]
-      }
-    ];
-
-    const localStr = typeof localStorage !== 'undefined' ? localStorage.getItem('company_roles_cache') : null;
-    const localRoles: Role[] = localStr ? JSON.parse(localStr) : defaultRoles;
-
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('roles').select('*');
         if (error) throw error;
-        if (data && data.length > 0) {
-          const remoteRoles = (data as any[]).map(remote => ({
-            id: remote.id,
-            name: remote.name || '',
-            description: remote.description || '',
-            permissions: Array.isArray(remote.permissions) ? remote.permissions : [],
-            is_system: Boolean(remote.is_system)
-          })) as Role[];
-          if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('company_roles_cache', JSON.stringify(remoteRoles));
-          }
-          return remoteRoles;
-        }
-        return localRoles;
-      }, () => localRoles);
+        return (data || []) as Role[];
+      }, []);
     }
-
-    return localRoles;
+    return [];
   }
 
   async addRole(role: Omit<Role, 'id'>) {
-    const id = role.name.toLowerCase().replace(/\s+/g, '_');
-    const newRole: Role = { ...role, id };
-
-    const localStr = typeof localStorage !== 'undefined' ? localStorage.getItem('company_roles_cache') : null;
-    let current: Role[] = localStr ? JSON.parse(localStr) : await this.getRoles();
-    current.push(newRole);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('company_roles_cache', JSON.stringify(current));
-    }
-
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('roles').insert([newRole]).select();
-        if (error) console.error('Error adding role to Supabase:', error);
+        const { data, error } = await supabase.from('roles').insert([{ ...role, id: role.name.toLowerCase().replace(/\s+/g, '_') }]).select();
+        if (error) throw error;
         await this.logAction('CREATE_ROLE', `Security protocol tier defined: ${role.name}`);
         return data;
     }
   }
 
   async updateRole(id: string, updates: Partial<Role>) {
-    const localStr = typeof localStorage !== 'undefined' ? localStorage.getItem('company_roles_cache') : null;
-    let current: Role[] = localStr ? JSON.parse(localStr) : await this.getRoles();
-    const index = current.findIndex(r => r.id === id);
-    if (index >= 0) {
-      current[index] = { ...current[index], ...updates };
-    } else {
-      current.push({ id, name: id, permissions: [], is_system: false, ...updates } as Role);
-    }
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('company_roles_cache', JSON.stringify(current));
-    }
-
     if (this.isSupabase()) {
-        const { error } = await supabase.from('roles').update(updates).eq('id', id);
-        if (error) console.error('Error updating role in Supabase:', error);
+        await supabase.from('roles').update(updates).eq('id', id);
         await this.logAction('UPDATE_ROLE', `Role modified: ${id}`);
     }
   }
 
   async deleteRole(id: string) {
-    const localStr = typeof localStorage !== 'undefined' ? localStorage.getItem('company_roles_cache') : null;
-    let current: Role[] = localStr ? JSON.parse(localStr) : await this.getRoles();
-    current = current.filter(r => r.id !== id || r.is_system);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('company_roles_cache', JSON.stringify(current));
-    }
-
     if (this.isSupabase()) {
-        const { error } = await supabase.from('roles').delete().eq('id', id).eq('is_system', false);
-        if (error) console.error('Error deleting role in Supabase:', error);
+        await supabase.from('roles').delete().eq('id', id).eq('is_system', false);
         await this.logAction('DELETE_ROLE', `Role purged: ${id}`);
     }
   }
 
   async getOutlets(): Promise<Outlet[]> {
+    if (this.isSupabase()) {
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('outlets').select('*');
+        if (error) throw error;
+        if (data) {
+          return (data as any[]).map(remote => ({
+            id: remote.id,
+            property_id: remote.property_id || '',
+            name: remote.name || '',
+            address: remote.address || '',
+            phone: remote.phone || '',
+            logo_url: remote.logo_url || '',
+            signatory_config: remote.signatory_config || {},
+            contract_template: remote.contract_template || '',
+            conditions: remote.conditions || ''
+          })) as Outlet[];
+        }
+        return [];
+      }, []);
+    }
+
     const defaultOutlets: Outlet[] = [
       {
         id: 'outlet-1',
@@ -2217,45 +2069,12 @@ class DatabaseService {
         name: 'The Torch Health Club',
         address: '',
         phone: '',
-        logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80',
-        booking_enabled: true,
-        booking_start_time: '08:00',
-        booking_end_time: '22:00'
+        logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80'
       }
     ];
 
-    const localStr = localStorage.getItem('company_outlets_cache');
-    const localOutlets: Outlet[] = localStr ? JSON.parse(localStr) : defaultOutlets;
-
-    if (this.isSupabase()) {
-      return this.safeCall(async () => {
-        const { data, error } = await supabase.from('outlets').select('*');
-        if (error) throw error;
-        if (data && data.length > 0) {
-          return (data as any[]).map(remote => {
-            const localMatch = localOutlets.find(l => l.id === remote.id) || {};
-            return {
-              ...localMatch,
-              id: remote.id,
-              property_id: remote.property_id || localMatch.property_id || '',
-              name: remote.name || localMatch.name || '',
-              address: remote.address || localMatch.address || '',
-              phone: remote.phone || localMatch.phone || '',
-              logo_url: remote.logo_url || localMatch.logo_url || '',
-              signatory_config: remote.signatory_config || localMatch.signatory_config || {},
-              contract_template: remote.contract_template || localMatch.contract_template || '',
-              conditions: remote.conditions || localMatch.conditions || '',
-              booking_enabled: remote.booking_enabled ?? localMatch.booking_enabled ?? true,
-              booking_start_time: remote.booking_start_time || localMatch.booking_start_time || '08:00',
-              booking_end_time: remote.booking_end_time || localMatch.booking_end_time || '22:00'
-            } as Outlet;
-          });
-        }
-        return localOutlets;
-      }, () => localOutlets);
-    }
-
-    return localOutlets;
+    const local = localStorage.getItem('company_outlets_cache');
+    return local ? JSON.parse(local) : defaultOutlets;
   }
 
   async addOutlet(outlet: Omit<Outlet, 'id'>) {
@@ -2282,16 +2101,6 @@ class DatabaseService {
   }
 
   async updateOutlet(id: string, updates: Partial<Outlet>) {
-    const local = localStorage.getItem('company_outlets_cache');
-    let current: Outlet[] = local ? JSON.parse(local) : [];
-    const index = current.findIndex(o => o.id === id);
-    if (index >= 0) {
-      current[index] = { ...current[index], ...updates };
-    } else {
-      current.push({ id, property_id: '', name: '', ...updates } as Outlet);
-    }
-    localStorage.setItem('company_outlets_cache', JSON.stringify(current));
-
     if (this.isSupabase()) {
       let patch: any = { ...updates };
       let { error } = await supabase.from('outlets').update(patch).eq('id', id);
@@ -2302,6 +2111,11 @@ class DatabaseService {
       }
       if (error) console.error('Error updating outlet in Supabase:', error);
       await this.logAction('UPDATE_OUTLET', `Outlet modified: ${id}`);
+    } else {
+      const local = localStorage.getItem('company_outlets_cache');
+      let current: Outlet[] = local ? JSON.parse(local) : [];
+      current = current.map(o => o.id === id ? { ...o, ...updates } : o);
+      localStorage.setItem('company_outlets_cache', JSON.stringify(current));
     }
   }
 
@@ -2362,6 +2176,24 @@ class DatabaseService {
   }
 
   async getProperties(): Promise<Property[]> {
+    if (this.isSupabase()) {
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('properties').select('*');
+        if (error) throw error;
+        if (data) {
+          return (data as any[]).map(remote => ({
+            id: remote.id,
+            name: remote.name || '',
+            address: remote.address || '',
+            phone: remote.phone || '',
+            logo_url: remote.logo_url || '',
+            signatory_config: remote.signatory_config || {}
+          })) as Property[];
+        }
+        return [];
+      }, []);
+    }
+
     const defaultProperties: Property[] = [
       {
         id: 'prop-1',
@@ -2372,32 +2204,8 @@ class DatabaseService {
       }
     ];
 
-    const localStr = localStorage.getItem('company_properties_cache');
-    const localProps: Property[] = localStr ? JSON.parse(localStr) : defaultProperties;
-
-    if (this.isSupabase()) {
-      return this.safeCall(async () => {
-        const { data, error } = await supabase.from('properties').select('*');
-        if (error) throw error;
-        if (data && data.length > 0) {
-          return (data as any[]).map(remote => {
-            const localMatch = localProps.find(l => l.id === remote.id) || {};
-            return {
-              ...localMatch,
-              id: remote.id,
-              name: remote.name || localMatch.name || '',
-              address: remote.address || localMatch.address || '',
-              phone: remote.phone || localMatch.phone || '',
-              logo_url: remote.logo_url || localMatch.logo_url || '',
-              signatory_config: remote.signatory_config || localMatch.signatory_config || {}
-            } as Property;
-          });
-        }
-        return localProps;
-      }, () => localProps);
-    }
-
-    return localProps;
+    const local = localStorage.getItem('company_properties_cache');
+    return local ? JSON.parse(local) : defaultProperties;
   }
 
   async addProperty(prop: Omit<Property, 'id'>) {
@@ -2424,16 +2232,6 @@ class DatabaseService {
   }
 
   async updateProperty(id: string, updates: Partial<Property>) {
-    const local = localStorage.getItem('company_properties_cache');
-    let current: Property[] = local ? JSON.parse(local) : [];
-    const index = current.findIndex(p => p.id === id);
-    if (index >= 0) {
-      current[index] = { ...current[index], ...updates };
-    } else {
-      current.push({ id, name: '', ...updates } as Property);
-    }
-    localStorage.setItem('company_properties_cache', JSON.stringify(current));
-
     if (this.isSupabase()) {
       let patch: any = { ...updates };
       let { error } = await supabase.from('properties').update(patch).eq('id', id);
@@ -2444,6 +2242,11 @@ class DatabaseService {
       }
       if (error) console.error('Error updating property in Supabase:', error);
       await this.logAction('UPDATE_PROPERTY', `Property modified: ${id}`);
+    } else {
+      const local = localStorage.getItem('company_properties_cache');
+      let current: Property[] = local ? JSON.parse(local) : [];
+      current = current.map(p => p.id === id ? { ...p, ...updates } : p);
+      localStorage.setItem('company_properties_cache', JSON.stringify(current));
     }
   }
 
