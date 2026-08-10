@@ -68,6 +68,11 @@ const PermissionMatrix = ({
   readOnly?: boolean
 }) => {
   const [expanded, setExpanded] = useState<string[]>([registry[0]?.id]);
+  const [localSelected, setLocalSelected] = useState<Permission[]>(selectedPermissions);
+
+  useEffect(() => {
+    setLocalSelected(selectedPermissions);
+  }, [selectedPermissions]);
 
   const toggleGroup = (id: string) => {
     setExpanded(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -75,12 +80,15 @@ const PermissionMatrix = ({
 
   const togglePermission = (key: Permission) => {
     if (readOnly) return;
-    const isSelected = selectedPermissions.includes(key);
+    const isSelected = localSelected.includes(key);
+    let newSelected;
     if (isSelected) {
-      onChange(selectedPermissions.filter(p => p !== key));
+      newSelected = localSelected.filter(p => p !== key);
     } else {
-      onChange([...selectedPermissions, key]);
+      newSelected = [...localSelected, key];
     }
+    setLocalSelected(newSelected);
+    onChange(newSelected);
   };
 
   const toggleAllInGroup = (groupId: string) => {
@@ -88,15 +96,17 @@ const PermissionMatrix = ({
     const group = registry.find(g => g.id === groupId);
     if (!group) return;
     const keys = group.permissions.map(p => p.key);
-    const allSelected = keys.every(k => selectedPermissions.includes(k));
+    const allSelected = keys.every(k => localSelected.includes(k));
     
+    let newSelected;
     if (allSelected) {
-      onChange(selectedPermissions.filter(p => !keys.includes(p)));
+      newSelected = localSelected.filter(p => !keys.includes(p));
     } else {
-      const newPerms = [...selectedPermissions];
-      keys.forEach(k => { if (!newPerms.includes(k)) newPerms.push(k); });
-      onChange(newPerms);
+      newSelected = [...localSelected];
+      keys.forEach(k => { if (!newSelected.includes(k)) newSelected.push(k); });
     }
+    setLocalSelected(newSelected);
+    onChange(newSelected);
   };
 
   return (
@@ -104,7 +114,7 @@ const PermissionMatrix = ({
       {registry.map(group => {
         const isExpanded = expanded.includes(group.id);
         const groupKeys = group.permissions.map(p => p.key);
-        const selectedCount = groupKeys.filter(k => selectedPermissions.includes(k)).length;
+        const selectedCount = groupKeys.filter(k => localSelected.includes(k)).length;
         const allSelected = selectedCount === groupKeys.length;
 
         return (
@@ -132,7 +142,7 @@ const PermissionMatrix = ({
             {isExpanded && (
               <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 animate-in slide-in-from-top-2 duration-300">
                 {group.permissions.map(p => {
-                  const isSelected = selectedPermissions.includes(p.key);
+                  const isSelected = localSelected.includes(p.key);
                   return (
                     <div 
                       key={p.key} 
