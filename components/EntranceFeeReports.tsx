@@ -188,9 +188,6 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
 
   // Print Summary Report
   const printReport = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
     const isDaily = reportType === 'daily';
     const title = isDaily 
       ? `Daily Entrance Fee Report - ${format(parseISO(selectedDate), 'dd MMMM yyyy')}`
@@ -200,13 +197,25 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
     const signedCount = isDaily ? dailyStats.signed : monthlyStats.signed;
     const list = isDaily ? dailyConsents : monthlyConsents;
 
-    printWindow.document.write(`
+    // Create a hidden iframe for printing
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+    
+    const doc = iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(`
       <html>
         <head>
           <title>${title}</title>
           <style>
-            body { font-family: system-ui, -apple-system, sans-serif; padding: 30px; color: #0f172a; max-width: 900px; margin: 0 auto; }
+            @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+            body { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; padding: 30px; margin: 0 auto; max-width: 1000px; }
             .header { border-bottom: 2px solid #059669; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+            .logo-section { display: flex; align-items: center; gap: 15px; }
+            .logo { width: 60px; height: 60px; object-fit: contain; }
             .title { font-size: 20px; font-weight: 900; text-transform: uppercase; color: #0f172a; }
             .meta { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; }
             .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
@@ -218,13 +227,20 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
             td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-weight: 600; }
             tr:nth-child(even) { background: #f8fafc; }
             .footer { margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 10px; display: flex; justify-content: space-between; align-items: center; font-size: 9px; font-weight: 800; color: #94a3b8; text-transform: uppercase; tracking: 0.1em; }
+            @media print {
+              body { padding: 0; }
+              .header { margin-top: 0; }
+            }
           </style>
         </head>
         <body>
           <div class="header">
-            <div>
-              <div class="title">${title}</div>
-              <div class="meta">${currentProperty?.name || ''} ${currentOutlet?.name ? ' - ' + currentOutlet.name : ''}</div>
+            <div class="logo-section">
+              ${currentProperty?.logo_url ? `<img src="${currentProperty.logo_url}" class="logo" />` : ''}
+              <div>
+                <div class="title">${title}</div>
+                <div class="meta">${currentProperty?.name || ''} ${currentOutlet?.name ? ' - ' + currentOutlet.name : ''}</div>
+              </div>
             </div>
             <div class="meta" style="text-align: right;">
               <div>Exported on: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')}</div>
@@ -283,18 +299,19 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
 
           <script>
             window.onload = () => {
+              window.focus();
               window.print();
-              window.onafterprint = () => window.close();
-              // Fallback for browsers that don't support onafterprint or if it fires too early
-              setTimeout(() => {
-                if (!window.closed) window.close();
-              }, 500);
             };
           </script>
         </body>
       </html>
     `);
-    printWindow.document.close();
+    doc.close();
+
+    // Clean up after a short delay
+    setTimeout(() => {
+      document.body.removeChild(iframe);
+    }, 1000);
   };
 
   return (

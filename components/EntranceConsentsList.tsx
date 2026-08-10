@@ -69,9 +69,8 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
     const isUnsplashDefault = (url?: string) => !url || url.includes('images.unsplash.com/photo-1540555700478-4be289fbecef');
 
     const handlePrint = (consent: EntranceFeeConsent) => {
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) return;
-
+        const title = `Entrance Fee Consent - ${consent.guest_name}`;
+        
         // Resolve outlet and property details for this specific consent
         const matchedOutlet = outlets?.find(o => o.id === consent.outlet_id) || currentOutlet || outlets?.[0];
         const matchedProperty = properties?.find(p => p.id === matchedOutlet?.property_id) || currentProperty || properties?.[0];
@@ -79,25 +78,28 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
         const propertyName = matchedProperty?.name || currentProperty?.name || settings?.name || '';
         const outletName = matchedOutlet?.name || currentOutlet?.name || '';
 
-        const rawLogo = 
-            (matchedOutlet?.logo_url && !isUnsplashDefault(matchedOutlet.logo_url) ? matchedOutlet.logo_url : null) ||
-            (matchedProperty?.logo_url && !isUnsplashDefault(matchedProperty.logo_url) ? matchedProperty.logo_url : null) ||
-            (currentProperty?.logo_url && !isUnsplashDefault(currentProperty.logo_url) ? currentProperty.logo_url : null) ||
-            (settings?.logo_url && !isUnsplashDefault(settings.logo_url) ? settings.logo_url : null) ||
-            matchedOutlet?.logo_url || matchedProperty?.logo_url || currentProperty?.logo_url || settings?.logo_url || '';
-
-        const logoUrl = isUnsplashDefault(rawLogo) ? '' : rawLogo;
+        const logoUrl = currentProperty?.logo_url || matchedProperty?.logo_url || matchedOutlet?.logo_url || settings?.logo_url || '';
         const address = matchedOutlet?.address?.trim() || matchedProperty?.address?.trim() || currentOutlet?.address?.trim() || settings?.address?.trim() || '';
         const phone = matchedOutlet?.phone?.trim() || matchedProperty?.phone?.trim() || currentOutlet?.phone?.trim() || settings?.phone?.trim() || '';
 
         const waiver = getBilingualWaiverText(outletName, propertyName);
 
-        printWindow.document.write(`
+        // Create a hidden iframe for printing
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        
+        const doc = iframe.contentWindow?.document;
+        if (!doc) return;
+
+        doc.open();
+        doc.write(`
             <html>
                 <head>
-                    <title>Entrance Fee Consent - ${consent.guest_name}</title>
+                    <title>${title}</title>
                     <style>
-                        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 30px; color: #0f172a; max-width: 850px; margin: 0 auto; background: #ffffff; }
+                        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+                        body { font-family: 'Plus Jakarta Sans', sans-serif; padding: 40px; color: #0f172a; max-width: 850px; margin: 0 auto; background: #ffffff; line-height: 1.5; }
                         .header-container { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 20px; }
                         .header-left { display: flex; align-items: center; gap: 16px; }
                         .header-logo { max-height: 60px; max-width: 180px; object-fit: contain; }
@@ -110,20 +112,21 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                         .field { margin-bottom: 0px; }
                         .label { font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
                         .value { font-size: 12px; font-weight: 700; color: #0f172a; }
-                        
                         .disclaimer-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px; margin-bottom: 16px; font-size: 10px; line-height: 1.5; color: #78350f; }
                         .disclaimer-title-en { font-weight: 900; text-transform: uppercase; color: #92400e; margin-bottom: 3px; font-size: 10px; }
                         .disclaimer-title-ar { font-weight: 900; color: #78350f; margin-bottom: 3px; font-size: 11px; font-family: system-ui, sans-serif; }
-                        
                         .waiver-container { background: #fafafa; border: 1px solid #e2e8f0; padding: 16px; border-radius: 12px; font-size: 10px; line-height: 1.55; color: #334155; margin-bottom: 25px; }
                         .waiver-head-en { font-weight: 900; text-transform: uppercase; color: #0f172a; font-size: 11px; margin-bottom: 6px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
                         .waiver-head-ar { font-weight: 900; color: #0f172a; font-size: 12px; margin-top: 12px; margin-bottom: 6px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; font-family: system-ui, sans-serif; text-align: right; }
                         .waiver-p { margin-bottom: 8px; }
                         .waiver-p-ar { margin-bottom: 8px; text-align: right; font-family: system-ui, sans-serif; font-size: 10.5px; }
-                        
                         .signature-section { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 20px; }
                         .signature-box { border-top: 2px solid #94a3b8; padding-top: 10px; width: 280px; }
                         .sig-img { max-width: 100%; max-height: 80px; margin-bottom: 6px; }
+                        @media print {
+                            body { padding: 0; }
+                            .header-container { margin-top: 0; }
+                        }
                     </style>
                 </head>
                 <body>
@@ -174,7 +177,6 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                     </div>
                     ` : ''}
 
-                    <!-- IMPORTANT DISCLAIMER BOX -->
                     <div class="disclaimer-box">
                         <div class="disclaimer-title-en">IMPORTANT DISCLAIMER:</div>
                         <div class="waiver-p">${waiver.importantDisclaimerEn}</div>
@@ -184,7 +186,6 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                         </div>
                     </div>
 
-                    <!-- FULL WAIVER & RELEASE -->
                     <div class="waiver-container">
                         <div class="waiver-head-en">${waiver.waiverTitleEn} — ${waiver.waiverSubEn}</div>
                         <div class="waiver-p">${waiver.p1En}</div>
@@ -205,25 +206,26 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                         </div>
                         <div style="text-align: right; font-size: 9px; color: #64748b; font-weight: 700; text-transform: uppercase; tracking: 0.5px;">
                             <div>Signed On: ${format(new Date(consent.created_at || consent.date), 'dd MMM yyyy, HH:mm')}</div>
-                            <div>Exported on: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')} ${JSON.parse(localStorage.getItem('membership_session') || '{}')?.name ? `by ${JSON.parse(localStorage.getItem('membership_session') || '{}').name}` : ''}</div>
+                            <div>Exported on: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')} ${user?.name ? `by ${user.name}` : ''}</div>
                             <div>Outlet: ${outletName}</div>
                         </div>
                     </div>
                     
                     <script>
                         window.onload = () => {
+                            window.focus();
                             window.print();
-                            window.onafterprint = () => window.close();
-                            // Fallback for browsers that don't support onafterprint
-                            setTimeout(() => {
-                                if (!window.closed) window.close();
-                            }, 500);
                         };
                     </script>
                 </body>
             </html>
         `);
-        printWindow.document.close();
+        doc.close();
+
+        // Clean up
+        setTimeout(() => {
+            document.body.removeChild(iframe);
+        }, 1000);
     };
 
     if (loading) return <div className="p-8 text-center text-slate-400 font-bold text-xs animate-pulse">Loading consents...</div>;

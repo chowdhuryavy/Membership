@@ -71,7 +71,6 @@ export const EntranceFeeConsentModal = ({
     const waiver = getBilingualWaiverText(currentOutlet?.name, currentProperty?.name);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [copiedSql, setCopiedSql] = useState(false);
     const [acceptedWaiver, setAcceptedWaiver] = useState(true);
     const signatureRef = useRef<SignatureCanvas>(null);
 
@@ -120,13 +119,6 @@ export const EntranceFeeConsentModal = ({
 
     if (!isOpen) return null;
 
-    const copySqlToClipboard = () => {
-        navigator.clipboard.writeText(SUPABASE_SQL_SCRIPT);
-        setCopiedSql(true);
-        toast.success('Supabase SQL script copied to clipboard!');
-        setTimeout(() => setCopiedSql(false), 3000);
-    };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const targetOutletId = initialData?.outlet_id || currentOutlet?.id;
@@ -163,8 +155,8 @@ export const EntranceFeeConsentModal = ({
                 time: formData.time,
                 room_number: formData.room_number,
                 is_hotel_guest: formData.is_hotel_guest || !!formData.room_number,
-                sale_id: initialData?.sale_id || initialData?.saleId,
-                item_name: initialData?.item_name || initialData?.itemName,
+                sale_id: initialData?.sale_id,
+                item_name: initialData?.item_name,
                 notes: formData.notes,
                 guest_signature: signatureDataUrl
             };
@@ -185,11 +177,7 @@ export const EntranceFeeConsentModal = ({
             }
         } catch (err: any) {
             const msg = err.message || '';
-            if (msg.includes('schema cache') || msg.includes('42P01') || msg.includes('relation "public.entrance_fee_consents" does not exist')) {
-                setError('Supabase table missing or RLS policy blocked entry. Click "Copy Supabase SQL" below to create the table.');
-            } else {
-                setError(msg || 'Failed to register Entrance Fee Consent');
-            }
+            setError(msg || 'Failed to register Entrance Fee Consent');
         } finally {
             setLoading(false);
         }
@@ -205,15 +193,6 @@ export const EntranceFeeConsentModal = ({
                                 <CardTitle className="text-xl font-black uppercase tracking-tight">{isEditMode ? 'Edit Entrance Fee Consent' : 'Entrance Fee Consent'}</CardTitle>
                                 <p className="text-[9px] font-black text-emerald-200 uppercase tracking-widest mt-1">Guest Facility Waiver & Liability Release</p>
                             </div>
-                            <button
-                                type="button"
-                                onClick={copySqlToClipboard}
-                                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-[9px] uppercase tracking-wider flex items-center gap-1.5 transition-colors border border-white/20"
-                                title="Get SQL script for Supabase Database"
-                            >
-                                <Code2 className="w-3.5 h-3.5" />
-                                {copiedSql ? 'SQL Copied!' : 'Supabase SQL'}
-                            </button>
                         </div>
                         <button onClick={onClose} className="absolute top-5 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"><X className="w-4 h-4" /></button>
                     </CardHeader>
@@ -353,16 +332,6 @@ export const EntranceFeeConsentModal = ({
                                     <div className="flex items-center gap-2">
                                         <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
                                         <span>{error}</span>
-                                    </div>
-                                    <div className="pt-2 border-t border-rose-200/60 flex items-center justify-between">
-                                        <p className="text-[10px] font-medium text-rose-600">Run the SQL setup script in your Supabase SQL Editor to enable persistent cloud storage.</p>
-                                        <button
-                                            type="button"
-                                            onClick={copySqlToClipboard}
-                                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors shadow-sm shrink-0 ml-2"
-                                        >
-                                            Copy SQL Fix
-                                        </button>
                                     </div>
                                 </div>
                             )}
