@@ -14,7 +14,13 @@ export const ReportAuditFooter: React.FC<ReportAuditFooterProps> = ({ isEmbedded
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: `
+        @page {
+          margin: 0;
+        }
         @media print {
+          body {
+            padding: 1.5cm !important;
+          }
           .print-audit-footer {
             display: flex !important;
             position: relative;
@@ -24,7 +30,7 @@ export const ReportAuditFooter: React.FC<ReportAuditFooterProps> = ({ isEmbedded
           .print-page-number-only {
             display: block !important;
             position: fixed;
-            bottom: 30px;
+            bottom: 1cm;
             left: 50%;
             transform: translateX(-50%);
             font-size: 8px;

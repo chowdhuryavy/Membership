@@ -234,16 +234,16 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
             .audit-footer { margin-top: 50px; border-top: 2px solid #f1f5f9; padding-top: 15px; display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; }
             
             @page {
-              margin: 1.5cm;
+              margin: 0;
             }
             @media print {
-              body { padding: 0; }
+              body { padding: 1.5cm; }
               .header { margin-top: 0; }
               .page-number-float {
                 display: block !important;
                 position: fixed;
-                bottom: 10px;
-                right: 0;
+                bottom: 1cm;
+                right: 1.5cm;
                 font-size: 9px;
                 font-weight: 900;
                 color: #cbd5e1;

@@ -123,14 +123,17 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                         .signature-section { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 20px; }
                         .signature-box { border-top: 2px solid #94a3b8; padding-top: 10px; width: 280px; }
                         .sig-img { max-width: 100%; max-height: 80px; margin-bottom: 6px; }
+                        @page {
+                            margin: 0;
+                        }
                         @media print {
-                            body { padding: 0; }
+                            body { padding: 1.5cm; }
                             .header-container { margin-top: 0; }
                             .page-number-float {
                                 display: block !important;
                                 position: fixed;
-                                bottom: 20px;
-                                right: 0;
+                                bottom: 1cm;
+                                right: 1.5cm;
                                 font-size: 8px;
                                 font-weight: 900;
                                 color: #cbd5e1;
