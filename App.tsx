@@ -832,18 +832,27 @@ const SecurityConsoleLog = () => {
 };
 
 const App = () => {
+  const [portalType, setPortalType] = useState<'admin' | 'staff' | null>(null);
+
+  useEffect(() => {
+    const hostname = window.location.hostname;
+    if (hostname.includes('hcm-staff')) {
+      setPortalType('staff');
+    } else {
+      setPortalType('admin');
+    }
+  }, []);
+
   // Scheduler effect
   useEffect(() => {
-    // Run once on mount
     schedulerService.processScheduledReports();
-
-    // Then run every minute
     const interval = setInterval(() => {
       schedulerService.processScheduledReports();
     }, 60000);
-
     return () => clearInterval(interval);
   }, []);
+
+  if (!portalType) return null;
 
   return (
     <ErrorBoundary>
@@ -853,29 +862,45 @@ const App = () => {
       <UserActivityTracker />
       <Router>
         <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/staff-login" element={<StaffLogin />} />
-          <Route path="/staff-schedule" element={<StaffSchedule />} />
-          <Route path="/pass" element={<PublicMemberPass />} />
-          <Route element={<ProtectedLayout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="checkin" element={<AttendanceCheckIn />} />
-              <Route path="members" element={<Members />} />
-              <Route path="pt-members" element={<PTMembers />} />
-              <Route path="entrance-fee" element={<EntranceFee />} />
-              <Route path="staff" element={<StaffPage />} />
-              <Route path="bookings" element={<MassageScheduling />} />
-              <Route path="sales" element={<Sales />} />
-              <Route path="sales/stock-report" element={<RetailStockReport />} />
-              <Route path="categories" element={<Categories />} />
-              <Route path="users" element={<UsersPage />} />
-              <Route path="reports" element={<Reports />} />
-              <Route path="logs" element={<Logs />} />
-              <Route path="settings" element={<SettingsPage />} />
-              <Route path="profile" element={<Profile />} />
-              <Route path="notifications" element={<NotificationsPage />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Staff Portal Routes */}
+          {portalType === 'staff' ? (
+            <>
+              <Route path="/staff-login" element={<StaffLogin />} />
+              <Route element={<ProtectedLayout />}>
+                <Route index element={<Dashboard />} />
+                <Route path="checkin" element={<AttendanceCheckIn />} />
+                <Route path="bookings" element={<MassageScheduling />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/staff-login" replace />} />
+            </>
+          ) : (
+            // Admin Portal Routes
+            <>
+              <Route path="/login" element={<Login />} />
+              <Route path="/staff-login" element={<StaffLogin />} />
+              <Route path="/staff-schedule" element={<StaffSchedule />} />
+              <Route path="/pass" element={<PublicMemberPass />} />
+              <Route element={<ProtectedLayout />}>
+                <Route index element={<Dashboard />} />
+                <Route path="checkin" element={<AttendanceCheckIn />} />
+                <Route path="members" element={<Members />} />
+                <Route path="pt-members" element={<PTMembers />} />
+                <Route path="entrance-fee" element={<EntranceFee />} />
+                <Route path="staff" element={<StaffPage />} />
+                <Route path="bookings" element={<MassageScheduling />} />
+                <Route path="sales" element={<Sales />} />
+                <Route path="sales/stock-report" element={<RetailStockReport />} />
+                <Route path="categories" element={<Categories />} />
+                <Route path="users" element={<UsersPage />} />
+                <Route path="reports" element={<Reports />} />
+                <Route path="logs" element={<Logs />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route path="profile" element={<Profile />} />
+                <Route path="notifications" element={<NotificationsPage />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </>
+          )}
         </Routes>
       </Router>
     </ErrorBoundary>
