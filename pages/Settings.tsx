@@ -68,26 +68,22 @@ const PermissionMatrix = ({
   readOnly?: boolean
 }) => {
   const [expanded, setExpanded] = useState<string[]>([registry[0]?.id]);
-  const [localSelected, setLocalSelected] = useState<Permission[]>(selectedPermissions);
-
-  useEffect(() => {
-    setLocalSelected(selectedPermissions);
-  }, [selectedPermissions]);
-
+  
+  
   const toggleGroup = (id: string) => {
     setExpanded(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
   const togglePermission = (key: Permission) => {
     if (readOnly) return;
-    const isSelected = localSelected.includes(key);
+    const isSelected = selectedPermissions.includes(key);
     let newSelected;
     if (isSelected) {
-      newSelected = localSelected.filter(p => p !== key);
+      newSelected = selectedPermissions.filter(p => p !== key);
     } else {
-      newSelected = [...localSelected, key];
+      newSelected = [...selectedPermissions, key];
     }
-    setLocalSelected(newSelected);
+    
     onChange(newSelected);
   };
 
@@ -96,16 +92,16 @@ const PermissionMatrix = ({
     const group = registry.find(g => g.id === groupId);
     if (!group) return;
     const keys = group.permissions.map(p => p.key);
-    const allSelected = keys.every(k => localSelected.includes(k));
+    const allSelected = keys.every(k => selectedPermissions.includes(k));
     
     let newSelected;
     if (allSelected) {
-      newSelected = localSelected.filter(p => !keys.includes(p));
+      newSelected = selectedPermissions.filter(p => !keys.includes(p));
     } else {
-      newSelected = [...localSelected];
+      newSelected = [...selectedPermissions];
       keys.forEach(k => { if (!newSelected.includes(k)) newSelected.push(k); });
     }
-    setLocalSelected(newSelected);
+    
     onChange(newSelected);
   };
 
@@ -114,7 +110,7 @@ const PermissionMatrix = ({
       {registry.map(group => {
         const isExpanded = expanded.includes(group.id);
         const groupKeys = group.permissions.map(p => p.key);
-        const selectedCount = groupKeys.filter(k => localSelected.includes(k)).length;
+        const selectedCount = groupKeys.filter(k => selectedPermissions.includes(k)).length;
         const allSelected = selectedCount === groupKeys.length;
 
         return (
@@ -142,7 +138,7 @@ const PermissionMatrix = ({
             {isExpanded && (
               <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 animate-in slide-in-from-top-2 duration-300">
                 {group.permissions.map(p => {
-                  const isSelected = localSelected.includes(p.key);
+                  const isSelected = selectedPermissions.includes(p.key);
                   return (
                     <div 
                       key={p.key} 
@@ -168,7 +164,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports' | 'entrance_fee';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports' | 'entrance_fee' | 'staff_portal';
 
 const SignatoryConfig = ({
   config = {},
@@ -627,7 +623,7 @@ const SettingsPage = () => {
     
     // Protect System Administrator role
     const isSuperUser = isSuperAdmin;
-    if ((roleForm.id === 'admin' || roleForm.name === 'System Administrator') && !isSuperUser) {
+    if ((editingId === 'admin' || roleForm.name === 'System Administrator') && !isSuperUser) {
          showStatus('Unauthorized: Only Super Admin can modify System Administrator role.', 'error');
          return;
     }

@@ -506,7 +506,7 @@ NOTIFY pgrst, 'reload schema';`}
                             <ChevronRight className="w-4 h-4" />
                           </button>
                           <Button 
-                            onClick={loadIncentives} 
+                            onClick={() => loadIncentives()} 
                             disabled={incentiveLoading} 
                             size="sm" 
                             variant="secondary" 

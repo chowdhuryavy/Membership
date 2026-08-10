@@ -408,10 +408,10 @@ export default function PTMembers() {
         const matchingSales = allSales.filter(s => 
             (member.sale_id && s.id === member.sale_id) || 
             (s.guest_name && s.guest_name.toLowerCase() === member.guest_name.toLowerCase()) ||
-            (member.phone && s.phone && s.phone === member.phone) ||
-            (member.email && s.email && s.email.toLowerCase() === member.email.toLowerCase())
+            (member.phone && (s as any).phone && (s as any).phone === member.phone) ||
+            (member.email && (s as any).email && (s as any).email.toLowerCase() === member.email.toLowerCase())
         );
-        let revenue = matchingSales.reduce((sum, s) => sum + (s.net_amount || s.total_amount || 0), 0);
+        let revenue = matchingSales.reduce((sum, s) => sum + (s.net_amount || (s as any).total_amount || 0), 0);
         if (revenue === 0 && selectedMember?.id === member.id && selectedMemberSale?.net_amount) {
             revenue = selectedMemberSale.net_amount;
         }
@@ -421,11 +421,11 @@ export default function PTMembers() {
     const getMembershipRevenueForMember = (member: PTMember) => {
         const matchingSales = allSales.filter(s => 
             ((s.guest_name && s.guest_name.toLowerCase() === member.guest_name.toLowerCase()) ||
-             (member.phone && s.phone && s.phone === member.phone) ||
-             (member.email && s.email && s.email.toLowerCase() === member.email.toLowerCase())) &&
+             (member.phone && (s as any).phone && (s as any).phone === member.phone) ||
+             (member.email && (s as any).email && (s as any).email.toLowerCase() === member.email.toLowerCase())) &&
             s.category !== 'Personal Training' && (!member.sale_id || s.id !== member.sale_id)
         );
-        return matchingSales.reduce((sum, s) => sum + (s.net_amount || s.total_amount || 0), 0);
+        return matchingSales.reduce((sum, s) => sum + (s.net_amount || (s as any).total_amount || 0), 0);
     };
 
     // Filtered PT Members directory

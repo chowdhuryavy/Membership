@@ -357,7 +357,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
     if (!selectedPurchase) return memberCheckIns;
 
     const startIso = selectedPurchase.start_date;
-    const endIso = selectedPurchase.current_end_date || selectedPurchase.end_date;
+    const endIso = selectedPurchase.current_end_date || (selectedPurchase as any).end_date;
 
     if (!startIso) return memberCheckIns;
 
@@ -486,7 +486,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const [isLoading, setLoading] = useState(false);
 
   const handleEditFreeze = (f: any) => {
-      const isBulk = f.batch_id || f.maintenance_batch_id;
+      const isBulk = f.batch_id || (f as any).maintenance_batch_id;
       if (isBulk) {
           toast.error("This is a bulk suspension. Please edit it from the Bulk History modal to ensure consistency across all members.");
           return;
@@ -498,7 +498,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   };
 
   const handleDeleteFreeze = async (f: any) => {
-      const isBulk = f.batch_id || f.maintenance_batch_id;
+      const isBulk = f.batch_id || (f as any).maintenance_batch_id;
       if (isBulk) {
           setBulkFreezeToDelete(f);
       } else {
@@ -1016,7 +1016,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                             </div>
                           </div>
                           {canFreeze && effectiveStatus !== MemberStatus.EXPIRED && (
-                            <Button onClick={() => { setEditingFreezeId(null); setFreezeForm({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '' }); setFreezeError(null); setShowFreezeModal(true); }} size="sm" variant="secondary" className="rounded-xl font-black uppercase text-[9px] tracking-widest h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white border-none transition-all active:scale-95 shadow-lg shadow-indigo-900/40">
+                            <Button onClick={() => { setEditingFreezeId(null); setFreezeForm({ start_date: format(new Date(), 'yyyy-MM-dd'), end_date: '', reason: '' }); setFreezeError(null); setShowFreezeModal(true); }} size="sm" variant="secondary" className="rounded-xl font-black uppercase text-[9px] tracking-widest h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white border-none transition-all active:scale-95 shadow-lg shadow-indigo-900/40">
                                 <Plus className="w-3.5 h-3.5 mr-1.5" /> Apply Freeze
                             </Button>
                           )}
@@ -1105,7 +1105,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                                           <tr key={f.id} className="hover:bg-amber-50/20 transition-colors group">
                                               <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">
                                                   {format(parseISO(f.start_date), 'dd MMM yyyy')}
-                                                  {(f.batch_id || f.maintenance_batch_id) && <span className="ml-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[7px] uppercase tracking-widest">Bulk</span>}
+                                                  {(f.batch_id || (f as any).maintenance_batch_id) && <span className="ml-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[7px] uppercase tracking-widest">Bulk</span>}
                                                   {f.reason && <div className="text-[8px] font-bold text-slate-400 mt-1 truncate max-w-[120px]">{f.reason}</div>}
                                               </td>
                                               <td className="px-6 py-5 text-[11px] font-black text-slate-700 whitespace-nowrap">{format(parseISO(f.end_date), 'dd MMM yyyy')}</td>

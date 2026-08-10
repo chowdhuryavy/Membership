@@ -209,6 +209,7 @@ const Members = () => {
           }
           membershipTypes={membershipTypes}
           selectedTypeId={selectedTypeId}
+          onTypeChange={setSelectedTypeId}
           staff={staffList}
           allMembers={members}
           onCancel={() => setView('list')}

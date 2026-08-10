@@ -227,7 +227,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     return false;
-  }, [roles, user, isSuperAdmin]);
+  }, [roles, user, isSuperAdmin, settings]);
 
   const checkShortcut = useCallback((e: KeyboardEvent, actionId: string): boolean => {
     const defaults: Record<string, string> = {

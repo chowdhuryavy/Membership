@@ -337,7 +337,7 @@ const StaffSchedule = () => {
   const triggeredRemindersRef = useRef<Set<string>>(new Set());
   const [triggeredReminders, setTriggeredReminders] = useState<Set<string>>(() => {
     const saved = localStorage.getItem('triggered_reminders');
-    const initialSet = saved ? new Set(JSON.parse(saved)) : new Set();
+    const initialSet = saved ? new Set<string>(JSON.parse(saved)) : new Set<string>();
     triggeredRemindersRef.current = initialSet;
     return initialSet;
   });
@@ -387,7 +387,7 @@ const StaffSchedule = () => {
     
     if (Array.isArray(staff.outlet_ids) && staff.outlet_ids.length > 0) {
       ids = staff.outlet_ids;
-    } else if (typeof staff.outlet_ids === 'string' && staff.outlet_ids.trim().length > 0) {
+    } else if (typeof (staff as any).outlet_ids === 'string' && ((staff as any).outlet_ids as string).trim().length > 0) {
       ids = (staff.outlet_ids as string).split(',').map(s => s.trim());
     } else if (Array.isArray((staff as any).staff_working_outlets)) {
       ids = (staff as any).staff_working_outlets;

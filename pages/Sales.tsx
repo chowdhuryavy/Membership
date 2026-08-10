@@ -1070,7 +1070,7 @@ const Sales = () => {
                     const saleDate = format(new Date(payload.new.created_at), 'yyyy-MM-dd');
                     
                     if (saleDate === dateStr) {
-                        setSales(prev => [payload.new, ...prev].slice(0, 100));
+                        setSales(prev => [payload.new as Sale, ...prev].slice(0, 100));
                     }
                     // Invalidate cache for future loads
                     cache.invalidate('sales');
@@ -1085,7 +1085,7 @@ const Sales = () => {
                     filter: `outlet_id=eq.${currentOutlet.id}`
                 },
                 (payload) => {
-                    setSales(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
+                    setSales(prev => prev.map(s => s.id === payload.new.id ? payload.new as Sale : s));
                     cache.invalidate('sales');
                 }
             )
