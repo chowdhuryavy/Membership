@@ -1123,6 +1123,7 @@ class DatabaseService {
   }
 
   async syncGoogleWalletPassForMember(memberId: string, memberData?: Partial<Member>): Promise<void> {
+    if ((window as any).__googleWalletSyncDisabled) return;
     try {
       let member: any = memberData;
       if (!member || !member.id || !member.guest_name) {
@@ -1197,9 +1198,17 @@ class DatabaseService {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
+      }).catch(() => {
+        (window as any).__googleWalletSyncDisabled = true;
+        return null;
       });
 
-      if (!res.ok) return;
+      if (!res || !res.ok) {
+        if (res?.status === 404 || !res) {
+          (window as any).__googleWalletSyncDisabled = true;
+        }
+        return;
+      }
 
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) return;

@@ -181,6 +181,16 @@ export default async function handler(req: any, res: any) {
           id: 'card_status',
           header: `${statusEmoji} STATUS`,
           body: String(status || 'Active').toUpperCase()
+        },
+        {
+          id: 'rules_info',
+          header: '📋 RULES & INFO',
+          body: '• This card is personal and strictly non-transferable.\n• Must be scanned at facility self-kiosk or turnstiles upon every entry.\n• Grants access to authorized facility zones according to membership package.\n• Report lost or damaged membership passes to reception immediately.'
+        },
+        {
+          id: 'location_contact',
+          header: '📍 LOCATION & CONTACT',
+          body: 'Aspire Zone, Al Waab Street, Doha\nTel: +974 4446 5600'
         }
       ]
     };
