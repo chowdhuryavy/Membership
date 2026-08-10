@@ -219,10 +219,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     // Default admin role fallback if role template not yet found in roles list
-    if (normalizedRoleId === 'admin' || normalizedRoleId === 'system_admin') {
-        if (permission === 'settings:manage_maintenance' || permission === 'settings:view_maintenance' || permission === 'settings:manage_roles') {
-            return false;
-        }
+    if (normalizedRoleId === 'admin' || normalizedRoleId === 'system_admin' || normalizedRoleId === 'super_admin' || normalizedRoleId === 'owner' || normalizedRoleId === 'manager') {
         return true;
     }
 

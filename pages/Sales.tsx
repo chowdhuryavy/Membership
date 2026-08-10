@@ -62,7 +62,7 @@ import {
 import { db } from '../services/mockSupabase';
 import { Sale, Guest, SaleCategory, InventoryItem, MassageBooking, MassageType, UserProfile, Staff } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isSuperAdminRole } from '../contexts/AuthContext';
 import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay, addDays, isSameDay, subMonths } from 'date-fns';
 import { PTRegistrationModal } from '../components/PTRegistrationModal';
 import { EntranceFeeConsentModal } from '../components/EntranceFeeConsentModal';
@@ -944,7 +944,7 @@ const Sales = () => {
     const canDelete = user && hasPermission(user.role_id, 'sales:delete');
     const canDeleteBooking = user && hasPermission(user.role_id, 'bookings:delete');
     const canViewInventory = user && hasPermission(user.role_id, 'inventory:view');
-    const isSuper = isSuperAdmin;
+    const isSuper = isSuperAdmin || isSuperAdminRole(user?.role_id);
     const canViewConsents = isSuper || (user && hasPermission(user.role_id, 'entrance_fee:view'));
 
     // 1. Move loadData definition before its usage

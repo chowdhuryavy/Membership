@@ -7,7 +7,12 @@ export const isSuperAdminRole = (roleId: string | undefined | null) => {
     const id = roleId?.toLowerCase()?.trim();
     return id === 'super_admin' || 
            id === 'superadmin' || 
-           id === 'owner';
+           id === 'owner' || 
+           id === 'admin' || 
+           id === 'system_admin' || 
+           id === 'system_administrator' || 
+           id === 'administrator' ||
+           id === 'manager';
 };
 
 export const isSuperAdmin = (user: UserProfile | null) => {
