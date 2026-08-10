@@ -294,27 +294,48 @@ class DatabaseService {
   }
 
   async getPermissionOverrides(userId: string): Promise<UserPermissionOverride[]> {
-    if (!this.isSupabase()) return [];
-    return this.safeCall(async () => {
-      const { data } = await supabase.from('user_permission_overrides').select('*').eq('user_id', userId);
-      return (data || []) as UserPermissionOverride[];
-    }, []);
+    if (this.isSupabase()) {
+      const dbData = await this.safeCall(async () => {
+        const { data } = await supabase.from('user_permission_overrides').select('*').eq('user_id', userId);
+        return (data || []) as UserPermissionOverride[];
+      }, []);
+      if (dbData && dbData.length > 0) return dbData;
+    }
+    try {
+      const local = JSON.parse(localStorage.getItem('membership_permission_overrides') || '[]') as UserPermissionOverride[];
+      return local.filter(o => o.user_id === userId);
+    } catch (e) {
+      return [];
+    }
   }
 
   async savePermissionOverride(override: Omit<UserPermissionOverride, 'id'>) {
-    if (!this.isSupabase()) return;
-    await this.safeCall(async () => {
-      await supabase.from('user_permission_overrides').upsert([override], { onConflict: 'user_id,permission_key' });
-      await this.logAction('SECURITY_OVERRIDE', `Updated override for ${override.permission_key} on User ID: ${override.user_id}`);
-    }, null);
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        await supabase.from('user_permission_overrides').upsert([override], { onConflict: 'user_id,permission_key' });
+        await this.logAction('SECURITY_OVERRIDE', `Updated override for ${override.permission_key} on User ID: ${override.user_id}`);
+      }, null);
+    }
+    try {
+      const local = JSON.parse(localStorage.getItem('membership_permission_overrides') || '[]') as UserPermissionOverride[];
+      const filtered = local.filter(o => !(o.user_id === override.user_id && o.permission_key === override.permission_key));
+      filtered.push({ id: `ovr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`, ...override });
+      localStorage.setItem('membership_permission_overrides', JSON.stringify(filtered));
+    } catch (e) {}
   }
 
   async deletePermissionOverride(userId: string, key: Permission) {
-    if (!this.isSupabase()) return;
-    await this.safeCall(async () => {
-      await supabase.from('user_permission_overrides').delete().eq('user_id', userId).eq('permission_key', key);
-      await this.logAction('SECURITY_OVERRIDE_PURGE', `Removed override for ${key} on User ID: ${userId}`);
-    }, null);
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        await supabase.from('user_permission_overrides').delete().eq('user_id', userId).eq('permission_key', key);
+        await this.logAction('SECURITY_OVERRIDE_PURGE', `Removed override for ${key} on User ID: ${userId}`);
+      }, null);
+    }
+    try {
+      const local = JSON.parse(localStorage.getItem('membership_permission_overrides') || '[]') as UserPermissionOverride[];
+      const filtered = local.filter(o => !(o.user_id === userId && o.permission_key === key));
+      localStorage.setItem('membership_permission_overrides', JSON.stringify(filtered));
+    } catch (e) {}
   }
 
   async syncMemberEndDate(memberId: string) {
