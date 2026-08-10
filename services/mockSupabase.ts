@@ -1905,52 +1905,6 @@ class DatabaseService {
   }
 
   async getSettings(): Promise<CompanySettings> {
-    if (this.isSupabase()) {
-      return this.safeCall(async () => {
-        const { data, error } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
-        if (error) throw error;
-        if (data) {
-          const cachedLocal = localStorage.getItem('company_settings_cache');
-          const parsedLocal = cachedLocal ? JSON.parse(cachedLocal) : {};
-          return {
-            name: data.name || parsedLocal.name || '',
-            logo_url: data.logo_url || parsedLocal.logo_url || '',
-            address: data.address || parsedLocal.address || '',
-            phone: data.phone || parsedLocal.phone || '',
-            currency_id: data.currency_id || parsedLocal.currency_id || 'default',
-            report_title: data.report_title || parsedLocal.report_title || '',
-            report_subtitle: data.report_subtitle || parsedLocal.report_subtitle || '',
-            signatory_config: data.signatory_config || parsedLocal.signatory_config || {},
-            keyboard_shortcuts: data.keyboard_shortcuts || parsedLocal.keyboard_shortcuts || {},
-            contract_template: data.contract_template || parsedLocal.contract_template || '',
-            navigation_order: data.navigation_order || parsedLocal.navigation_order || undefined,
-            restricted_permissions: data.restricted_permissions || parsedLocal.restricted_permissions || [],
-            conditions: data.conditions || parsedLocal.conditions || '',
-            staff_portal_settings: data.staff_portal_settings || parsedLocal.staff_portal_settings || {}
-          } as CompanySettings;
-        }
-        const cachedLocal = localStorage.getItem('company_settings_cache');
-        return cachedLocal ? JSON.parse(cachedLocal) : {
-          name: '',
-          logo_url: '',
-          address: '',
-          phone: '',
-          currency_id: 'default',
-          restricted_permissions: []
-        };
-      }, () => {
-        const cachedLocal = localStorage.getItem('company_settings_cache');
-        return cachedLocal ? JSON.parse(cachedLocal) : {
-          name: '',
-          logo_url: '',
-          address: '',
-          phone: '',
-          currency_id: 'default',
-          restricted_permissions: []
-        };
-      });
-    }
-
     const defaultSettings: CompanySettings = { 
       name: 'The Torch Doha Health Club', 
       logo_url: 'https://i.imgur.com/oZVRrvo.png', 
@@ -1959,13 +1913,46 @@ class DatabaseService {
       currency_id: 'default',
       restricted_permissions: []
     };
-    
-    const local = localStorage.getItem('company_settings_cache');
-    return local ? JSON.parse(local) : defaultSettings;
+
+    const cachedLocalStr = localStorage.getItem('company_settings_cache');
+    const cachedLocal: CompanySettings = cachedLocalStr ? JSON.parse(cachedLocalStr) : defaultSettings;
+
+    if (this.isSupabase()) {
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
+        if (error) throw error;
+        if (data) {
+          return {
+            ...cachedLocal,
+            name: data.name || cachedLocal.name || '',
+            logo_url: data.logo_url || cachedLocal.logo_url || '',
+            address: data.address || cachedLocal.address || '',
+            phone: data.phone || cachedLocal.phone || '',
+            currency_id: data.currency_id || cachedLocal.currency_id || 'default',
+            report_title: data.report_title || cachedLocal.report_title || '',
+            report_subtitle: data.report_subtitle || cachedLocal.report_subtitle || '',
+            signatory_config: data.signatory_config || cachedLocal.signatory_config || {},
+            keyboard_shortcuts: data.keyboard_shortcuts || cachedLocal.keyboard_shortcuts || {},
+            contract_template: data.contract_template || cachedLocal.contract_template || '',
+            navigation_order: data.navigation_order || cachedLocal.navigation_order || undefined,
+            restricted_permissions: Array.isArray(data.restricted_permissions) ? data.restricted_permissions : (cachedLocal.restricted_permissions || []),
+            conditions: data.conditions || cachedLocal.conditions || '',
+            staff_portal_settings: data.staff_portal_settings || cachedLocal.staff_portal_settings || {}
+          } as CompanySettings;
+        }
+        return cachedLocal;
+      }, () => cachedLocal);
+    }
+
+    return cachedLocal;
   }
 
   async updateSettings(settings: CompanySettings) {
-    localStorage.setItem('company_settings_cache', JSON.stringify(settings));
+    const existingStr = localStorage.getItem('company_settings_cache');
+    const existing = existingStr ? JSON.parse(existingStr) : {};
+    const merged = { ...existing, ...settings };
+    localStorage.setItem('company_settings_cache', JSON.stringify(merged));
+
     if (this.isSupabase()) {
       let payload: any = { ...settings, id: 'global' };
       let { error } = await supabase.from('company_settings').upsert(payload);
@@ -2087,27 +2074,6 @@ class DatabaseService {
   }
 
   async getOutlets(): Promise<Outlet[]> {
-    if (this.isSupabase()) {
-      return this.safeCall(async () => {
-        const { data, error } = await supabase.from('outlets').select('*');
-        if (error) throw error;
-        if (data) {
-          return (data as any[]).map(remote => ({
-            id: remote.id,
-            property_id: remote.property_id || '',
-            name: remote.name || '',
-            address: remote.address || '',
-            phone: remote.phone || '',
-            logo_url: remote.logo_url || '',
-            signatory_config: remote.signatory_config || {},
-            contract_template: remote.contract_template || '',
-            conditions: remote.conditions || ''
-          })) as Outlet[];
-        }
-        return [];
-      }, []);
-    }
-
     const defaultOutlets: Outlet[] = [
       {
         id: 'outlet-1',
@@ -2115,12 +2081,45 @@ class DatabaseService {
         name: 'The Torch Health Club',
         address: '',
         phone: '',
-        logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80'
+        logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80',
+        booking_enabled: true,
+        booking_start_time: '08:00',
+        booking_end_time: '22:00'
       }
     ];
 
-    const local = localStorage.getItem('company_outlets_cache');
-    return local ? JSON.parse(local) : defaultOutlets;
+    const localStr = localStorage.getItem('company_outlets_cache');
+    const localOutlets: Outlet[] = localStr ? JSON.parse(localStr) : defaultOutlets;
+
+    if (this.isSupabase()) {
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('outlets').select('*');
+        if (error) throw error;
+        if (data && data.length > 0) {
+          return (data as any[]).map(remote => {
+            const localMatch = localOutlets.find(l => l.id === remote.id) || {};
+            return {
+              ...localMatch,
+              id: remote.id,
+              property_id: remote.property_id || localMatch.property_id || '',
+              name: remote.name || localMatch.name || '',
+              address: remote.address || localMatch.address || '',
+              phone: remote.phone || localMatch.phone || '',
+              logo_url: remote.logo_url || localMatch.logo_url || '',
+              signatory_config: remote.signatory_config || localMatch.signatory_config || {},
+              contract_template: remote.contract_template || localMatch.contract_template || '',
+              conditions: remote.conditions || localMatch.conditions || '',
+              booking_enabled: remote.booking_enabled ?? localMatch.booking_enabled ?? true,
+              booking_start_time: remote.booking_start_time || localMatch.booking_start_time || '08:00',
+              booking_end_time: remote.booking_end_time || localMatch.booking_end_time || '22:00'
+            } as Outlet;
+          });
+        }
+        return localOutlets;
+      }, () => localOutlets);
+    }
+
+    return localOutlets;
   }
 
   async addOutlet(outlet: Omit<Outlet, 'id'>) {
@@ -2147,6 +2146,16 @@ class DatabaseService {
   }
 
   async updateOutlet(id: string, updates: Partial<Outlet>) {
+    const local = localStorage.getItem('company_outlets_cache');
+    let current: Outlet[] = local ? JSON.parse(local) : [];
+    const index = current.findIndex(o => o.id === id);
+    if (index >= 0) {
+      current[index] = { ...current[index], ...updates };
+    } else {
+      current.push({ id, property_id: '', name: '', ...updates } as Outlet);
+    }
+    localStorage.setItem('company_outlets_cache', JSON.stringify(current));
+
     if (this.isSupabase()) {
       let patch: any = { ...updates };
       let { error } = await supabase.from('outlets').update(patch).eq('id', id);
@@ -2157,11 +2166,6 @@ class DatabaseService {
       }
       if (error) console.error('Error updating outlet in Supabase:', error);
       await this.logAction('UPDATE_OUTLET', `Outlet modified: ${id}`);
-    } else {
-      const local = localStorage.getItem('company_outlets_cache');
-      let current: Outlet[] = local ? JSON.parse(local) : [];
-      current = current.map(o => o.id === id ? { ...o, ...updates } : o);
-      localStorage.setItem('company_outlets_cache', JSON.stringify(current));
     }
   }
 
@@ -2222,24 +2226,6 @@ class DatabaseService {
   }
 
   async getProperties(): Promise<Property[]> {
-    if (this.isSupabase()) {
-      return this.safeCall(async () => {
-        const { data, error } = await supabase.from('properties').select('*');
-        if (error) throw error;
-        if (data) {
-          return (data as any[]).map(remote => ({
-            id: remote.id,
-            name: remote.name || '',
-            address: remote.address || '',
-            phone: remote.phone || '',
-            logo_url: remote.logo_url || '',
-            signatory_config: remote.signatory_config || {}
-          })) as Property[];
-        }
-        return [];
-      }, []);
-    }
-
     const defaultProperties: Property[] = [
       {
         id: 'prop-1',
@@ -2250,8 +2236,32 @@ class DatabaseService {
       }
     ];
 
-    const local = localStorage.getItem('company_properties_cache');
-    return local ? JSON.parse(local) : defaultProperties;
+    const localStr = localStorage.getItem('company_properties_cache');
+    const localProps: Property[] = localStr ? JSON.parse(localStr) : defaultProperties;
+
+    if (this.isSupabase()) {
+      return this.safeCall(async () => {
+        const { data, error } = await supabase.from('properties').select('*');
+        if (error) throw error;
+        if (data && data.length > 0) {
+          return (data as any[]).map(remote => {
+            const localMatch = localProps.find(l => l.id === remote.id) || {};
+            return {
+              ...localMatch,
+              id: remote.id,
+              name: remote.name || localMatch.name || '',
+              address: remote.address || localMatch.address || '',
+              phone: remote.phone || localMatch.phone || '',
+              logo_url: remote.logo_url || localMatch.logo_url || '',
+              signatory_config: remote.signatory_config || localMatch.signatory_config || {}
+            } as Property;
+          });
+        }
+        return localProps;
+      }, () => localProps);
+    }
+
+    return localProps;
   }
 
   async addProperty(prop: Omit<Property, 'id'>) {
@@ -2278,6 +2288,16 @@ class DatabaseService {
   }
 
   async updateProperty(id: string, updates: Partial<Property>) {
+    const local = localStorage.getItem('company_properties_cache');
+    let current: Property[] = local ? JSON.parse(local) : [];
+    const index = current.findIndex(p => p.id === id);
+    if (index >= 0) {
+      current[index] = { ...current[index], ...updates };
+    } else {
+      current.push({ id, name: '', ...updates } as Property);
+    }
+    localStorage.setItem('company_properties_cache', JSON.stringify(current));
+
     if (this.isSupabase()) {
       let patch: any = { ...updates };
       let { error } = await supabase.from('properties').update(patch).eq('id', id);
@@ -2288,11 +2308,6 @@ class DatabaseService {
       }
       if (error) console.error('Error updating property in Supabase:', error);
       await this.logAction('UPDATE_PROPERTY', `Property modified: ${id}`);
-    } else {
-      const local = localStorage.getItem('company_properties_cache');
-      let current: Property[] = local ? JSON.parse(local) : [];
-      current = current.map(p => p.id === id ? { ...p, ...updates } : p);
-      localStorage.setItem('company_properties_cache', JSON.stringify(current));
     }
   }
 

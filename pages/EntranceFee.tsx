@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isSuperAdminRole } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { EntranceConsentsList } from '../components/EntranceConsentsList';
 import { EntranceFeeConsentModal } from '../components/EntranceFeeConsentModal';
@@ -14,8 +14,8 @@ export default function EntranceFee() {
     const [showConsentModal, setShowConsentModal] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
 
-    const isSuper = isSuperAdmin || user?.role_id?.toLowerCase() === 'admin' || user?.role_id?.toLowerCase() === 'system_admin';
-    const canView = isSuper || hasPermission(user?.role_id || '', 'entrance_fee:view');
+    const isSuper = isSuperAdmin || isSuperAdminRole(user?.role_id);
+    const canView = isSuper || hasPermission(user?.role_id || '', 'entrance_fee:view') || hasPermission(user?.role_id || '', 'settings:view_entrance_fee');
     const canCreate = isSuper || hasPermission(user?.role_id || '', 'entrance_fee:create');
 
     const allowedOutletsInProperty = useMemo(() => {
