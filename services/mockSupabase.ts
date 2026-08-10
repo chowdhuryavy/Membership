@@ -1880,14 +1880,7 @@ class DatabaseService {
         const { data, error } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
         if (error) throw error;
         if (data) {
-          return {
-            name: data.name || '',
-            logo_url: data.logo_url || '',
-            address: data.address || '',
-            phone: data.phone || '',
-            currency_id: data.currency_id || 'default',
-            navigation_order: data.navigation_order || undefined
-          } as CompanySettings;
+          return data as CompanySettings;
         }
         return {
           name: '',
@@ -1895,14 +1888,14 @@ class DatabaseService {
           address: '',
           phone: '',
           currency_id: 'default'
-        };
+        } as CompanySettings;
       }, {
         name: '',
         logo_url: '',
         address: '',
         phone: '',
         currency_id: 'default'
-      });
+      } as CompanySettings);
     }
 
     const defaultSettings: CompanySettings = { 
