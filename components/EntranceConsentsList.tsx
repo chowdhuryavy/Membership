@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
 import { EntranceFeeConsent } from '../types';
 import { getBilingualWaiverText } from '../lib/waiverHelper';
 import { Search, Calendar, FileSignature, Download, Printer, Edit3, Trash2, AlertTriangle, X, History, BarChart3, LayoutGrid, Plus, ShieldAlert } from 'lucide-react';
@@ -11,7 +12,8 @@ import { EntranceFeeReports } from './EntranceFeeReports';
 import toast from 'react-hot-toast';
 
 export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: string, outletId?: string }) => {
-    const { currentProperty, currentOutlet, properties, outlets, settings, hasPermission, user } = useSettings();
+    const { user, isSuperAdmin } = useAuth();
+    const { currentProperty, currentOutlet, properties, outlets, settings, hasPermission } = useSettings();
     const [consents, setConsents] = useState<EntranceFeeConsent[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -22,7 +24,7 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
     const [newConsentGuestData, setNewConsentGuestData] = useState<Partial<EntranceFeeConsent> | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const isSuper = user?.role_id?.toLowerCase() === 'admin' || user?.role_id?.toLowerCase() === 'system_admin' || user?.role_id?.toLowerCase() === 'super_admin' || user?.role_id?.toLowerCase() === 'owner';
+    const isSuper = isSuperAdmin || user?.role_id?.toLowerCase() === 'super_admin' || user?.role_id?.toLowerCase() === 'owner';
     const canView = isSuper || hasPermission(user?.role_id || '', 'entrance_fee:view');
     const canCreate = isSuper || hasPermission(user?.role_id || '', 'entrance_fee:create');
     const canEdit = isSuper || hasPermission(user?.role_id || '', 'entrance_fee:edit');

@@ -1123,7 +1123,7 @@ class DatabaseService {
   }
 
   async syncGoogleWalletPassForMember(memberId: string, memberData?: Partial<Member>): Promise<void> {
-    if ((window as any).__googleWalletSyncDisabled) return;
+    if ((window as any).__googleWalletSyncDisabled || window.location.hostname.includes('vercel.app')) return;
     try {
       let member: any = memberData;
       if (!member || !member.id || !member.guest_name) {
@@ -1910,28 +1910,44 @@ class DatabaseService {
         const { data, error } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
         if (error) throw error;
         if (data) {
+          const cachedLocal = localStorage.getItem('company_settings_cache');
+          const parsedLocal = cachedLocal ? JSON.parse(cachedLocal) : {};
           return {
-            name: data.name || '',
-            logo_url: data.logo_url || '',
-            address: data.address || '',
-            phone: data.phone || '',
-            currency_id: data.currency_id || 'default',
-            navigation_order: data.navigation_order || undefined
+            name: data.name || parsedLocal.name || '',
+            logo_url: data.logo_url || parsedLocal.logo_url || '',
+            address: data.address || parsedLocal.address || '',
+            phone: data.phone || parsedLocal.phone || '',
+            currency_id: data.currency_id || parsedLocal.currency_id || 'default',
+            report_title: data.report_title || parsedLocal.report_title || '',
+            report_subtitle: data.report_subtitle || parsedLocal.report_subtitle || '',
+            signatory_config: data.signatory_config || parsedLocal.signatory_config || {},
+            keyboard_shortcuts: data.keyboard_shortcuts || parsedLocal.keyboard_shortcuts || {},
+            contract_template: data.contract_template || parsedLocal.contract_template || '',
+            navigation_order: data.navigation_order || parsedLocal.navigation_order || undefined,
+            restricted_permissions: data.restricted_permissions || parsedLocal.restricted_permissions || [],
+            conditions: data.conditions || parsedLocal.conditions || '',
+            staff_portal_settings: data.staff_portal_settings || parsedLocal.staff_portal_settings || {}
           } as CompanySettings;
         }
-        return {
+        const cachedLocal = localStorage.getItem('company_settings_cache');
+        return cachedLocal ? JSON.parse(cachedLocal) : {
           name: '',
           logo_url: '',
           address: '',
           phone: '',
-          currency_id: 'default'
+          currency_id: 'default',
+          restricted_permissions: []
         };
-      }, {
-        name: '',
-        logo_url: '',
-        address: '',
-        phone: '',
-        currency_id: 'default'
+      }, () => {
+        const cachedLocal = localStorage.getItem('company_settings_cache');
+        return cachedLocal ? JSON.parse(cachedLocal) : {
+          name: '',
+          logo_url: '',
+          address: '',
+          phone: '',
+          currency_id: 'default',
+          restricted_permissions: []
+        };
       });
     }
 
@@ -1940,7 +1956,8 @@ class DatabaseService {
       logo_url: 'https://i.imgur.com/oZVRrvo.png', 
       address: '', 
       phone: '',
-      currency_id: 'default' 
+      currency_id: 'default',
+      restricted_permissions: []
     };
     
     const local = localStorage.getItem('company_settings_cache');
@@ -1948,6 +1965,7 @@ class DatabaseService {
   }
 
   async updateSettings(settings: CompanySettings) {
+    localStorage.setItem('company_settings_cache', JSON.stringify(settings));
     if (this.isSupabase()) {
       let payload: any = { ...settings, id: 'global' };
       let { error } = await supabase.from('company_settings').upsert(payload);
@@ -1958,8 +1976,6 @@ class DatabaseService {
       }
       if (error) console.error('Error updating settings in Supabase:', error);
       await this.logAction('UPDATE_SETTINGS', 'Global system configuration mutated.');
-    } else {
-      localStorage.setItem('company_settings_cache', JSON.stringify(settings));
     }
   }
 

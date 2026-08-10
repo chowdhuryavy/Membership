@@ -5,6 +5,8 @@ import { useAuth } from './AuthContext';
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 interface SettingsContextType {
+  user: UserProfile | null;
+  isSuperAdmin: boolean;
   settings: CompanySettings | null;
   currency: Currency | null;
   roles: Role[];
@@ -192,42 +194,37 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const normalizedRoleId = userRoleId.toLowerCase();
     
     // 1. SYSTEM SUPERUSER BYPASS
-    // Super Admins (Admins/Owners) always have full system clearance.
     if (isSuperAdmin) return true;
 
-    // 2. GLOBAL FEATURE CONTROL (Refined Logic)
-    if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
-        // Module-Scoped Restriction: ONLY APPLES TO 'settings' GROUP
-        // This prevents other admins from accessing global configurations like Properties or Outlets
-        // unless explicitly granted via "Feature Visibility"
-        if (permission.startsWith('settings:')) {
+    // 2. GLOBAL FEATURE CONTROL (Settings tab visibility restriction)
+    if (permission.startsWith('settings:')) {
+        if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
             if (!settings.restricted_permissions.includes(permission)) {
                 return false;
             }
         }
     }
 
-    // 1.5. LEGACY ADMIN BYPASS
-    // Restore the ability for the 'admin' role to have all permissions by default.
-    if (normalizedRoleId === 'admin' || normalizedRoleId === 'system_admin') return true;
-
-    // 2. USER-SPECIFIC OVERRIDES (High Priority)
+    // 3. USER-SPECIFIC OVERRIDES (High Priority)
     const targetUser = (userId === user?.id || !userId) ? user : null;
     if (targetUser?.overrides) {
         const override = targetUser.overrides.find(o => o.permission_key === permission);
         if (override !== undefined) return override.is_granted;
     }
 
-    // 3. ROLE-BASED DEFINITIONS
+    // 4. ROLE-BASED DEFINITIONS
     const role = roles.find(r => r.id.toLowerCase() === normalizedRoleId || r.name.toLowerCase() === normalizedRoleId);
-    
-    // If the role is found in the database, use its permissions strictly.
     if (role) {
         return role.permissions.includes(permission);
     }
 
+    // Default admin role fallback if no custom role defined in DB
+    if (normalizedRoleId === 'admin' || normalizedRoleId === 'system_admin') {
+        return true;
+    }
+
     return false;
-  }, [roles, user, isSuperAdmin]);
+  }, [roles, user, isSuperAdmin, settings]);
 
   const checkShortcut = useCallback((e: KeyboardEvent, actionId: string): boolean => {
     const defaults: Record<string, string> = {
@@ -274,6 +271,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [settings]);
 
   const settingsContextValue = useMemo(() => ({ 
+    user,
+    isSuperAdmin,
     settings, 
     currency, 
     roles, 
@@ -292,7 +291,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     pageLoading,
     setPageLoading,
     permissionRegistry
-  }), [settings, currency, roles, currencies, outlets, userAllowedOutlets, properties, currentOutlet, currentProperty, setCurrentOutlet, refreshSettings, formatMoney, hasPermission, checkShortcut, isLoading, pageLoading, setPageLoading, permissionRegistry]);
+  }), [user, isSuperAdmin, settings, currency, roles, currencies, outlets, userAllowedOutlets, properties, currentOutlet, currentProperty, setCurrentOutlet, refreshSettings, formatMoney, hasPermission, checkShortcut, isLoading, pageLoading, setPageLoading, permissionRegistry]);
 
   return (
     <SettingsContext.Provider value={settingsContextValue}>

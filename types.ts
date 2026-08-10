@@ -408,6 +408,9 @@ export interface EntranceFeeConsent {
   is_hotel_guest?: boolean;
   sale_id?: string;
   item_name?: string;
+  price?: number;
+  member_id?: string;
+  membership_number?: string;
   guest_signature?: string;
   notes?: string;
   created_at: string;
