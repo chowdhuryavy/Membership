@@ -135,6 +135,7 @@ class DatabaseService {
           { key: 'dashboard:view', label: 'Access Dashboard', description: 'Core entry point for operational overview.' },
           { key: 'dashboard:view_financials', label: 'Financial KPI Insights', description: 'Visibility into revenue recognition and daily accruals.' },
           { key: 'dashboard:view_insights', label: 'AI Strategic Analysis', description: 'Ability to generate Gemini-powered performance reports.' },
+          { key: 'dashboard:view_analytics', label: 'Performance Analytics', description: 'Access interactive charts and trend visualizations.' },
         ]
       },
       {
@@ -151,6 +152,17 @@ class DatabaseService {
           { key: 'members:renew', label: 'Process Renewals', description: 'Ability to trigger re-enrollment logic.' },
           { key: 'members:print_contract', label: 'Legal Documentation', description: 'Generate and print membership agreements.' },
           { key: 'members:view_history', label: 'Audit History', description: 'View historical changes to member records.' },
+          { key: 'members:enroll', label: 'Enrollment Portal', description: 'Access step-by-step member enrollment form.' },
+        ]
+      },
+      {
+        id: 'pt_members',
+        label: 'PT & Personal Training Services',
+        permissions: [
+          { key: 'pt_members:view', label: 'View PT Members', description: 'Access PT and massage client directory.' },
+          { key: 'pt_members:create', label: 'Enroll PT Clients', description: 'Register new PT and spa clients.' },
+          { key: 'pt_members:edit', label: 'Edit PT Packages', description: 'Modify PT sessions, sessions left, and records.' },
+          { key: 'pt_members:delete', label: 'Delete PT Records', description: 'Remove PT records and session logs.' },
         ]
       },
       {
@@ -169,6 +181,8 @@ class DatabaseService {
           { key: 'staff:view', label: 'View Personnel', description: 'Access the facility staff list and profiles.' },
           { key: 'staff:manage', label: 'Control Registry', description: 'Add, edit, or archive staff members.' },
           { key: 'staff:manage_leaves', label: 'Leave Administration', description: 'Manage staff leave records and schedules.' },
+          { key: 'staff:view_schedule', label: 'View Duty Schedule', description: 'View staff shift schedules and rosters.' },
+          { key: 'staff:manage_schedule', label: 'Manage Roster & Shifts', description: 'Create and edit staff shift assignments.' },
           { key: 'staff:manage_portal_settings', label: 'Portal Configuration', description: 'Manage visibility and features for the staff portal.' },
         ]
       },
@@ -218,6 +232,7 @@ class DatabaseService {
           { key: 'reports:view_operational', label: 'Operational Metrics', description: 'View attendance and facility usage reports.' },
           { key: 'reports:view_inventory', label: 'Inventory Reports', description: 'Access stock movement and valuation reports.' },
           { key: 'reports:view_staff', label: 'Staff Performance', description: 'View incentive and productivity reports.' },
+          { key: 'reports:view_massage_room', label: 'Massage Room Reports', description: 'Access room revenue and utilization analytics.' },
         ]
       },
       {
@@ -228,6 +243,14 @@ class DatabaseService {
           { key: 'entrance_fee:create', label: 'Create Consents', description: 'Log new guest entrance fee consent waivers.' },
           { key: 'entrance_fee:edit', label: 'Edit Consents', description: 'Modify existing entrance fee consent records.' },
           { key: 'entrance_fee:delete', label: 'Delete Consents', description: 'Remove entrance fee consent records.' },
+        ]
+      },
+      {
+        id: 'notifications',
+        label: 'System Notifications & Alerts',
+        permissions: [
+          { key: 'notifications:view', label: 'View Notifications', description: 'Access system notification center.' },
+          { key: 'notifications:manage', label: 'Manage Notifications', description: 'Broadcast messages and configure alerts.' },
         ]
       },
       {
@@ -2040,35 +2063,148 @@ class DatabaseService {
   }
 
   async getRoles(): Promise<Role[]> {
+    const defaultRoles: Role[] = [
+      {
+        id: 'super_admin',
+        name: 'Super Admin',
+        description: 'Full un-restricted administrative access across all properties and settings.',
+        is_system: true,
+        permissions: this.getPermissionRegistry().flatMap(g => g.permissions.map(p => p.key))
+      },
+      {
+        id: 'admin',
+        name: 'Admin',
+        description: 'Full operational administration with configurable permissions.',
+        is_system: true,
+        permissions: this.getPermissionRegistry().flatMap(g => g.permissions.map(p => p.key)).filter(k => k !== 'settings:manage_maintenance' && k !== 'settings:view_maintenance')
+      },
+      {
+        id: 'manager',
+        name: 'Facility Manager',
+        description: 'Operational management for day-to-day facility activities and reporting.',
+        is_system: false,
+        permissions: [
+          'dashboard:view', 'dashboard:view_financials', 'dashboard:view_insights', 'dashboard:view_analytics',
+          'members:view', 'members:create', 'members:edit', 'members:view_contact_info', 'members:freeze', 'members:renew', 'members:print_contract', 'members:view_history', 'members:enroll',
+          'pt_members:view', 'pt_members:create', 'pt_members:edit',
+          'checkin:view', 'checkin:manage', 'checkin:kiosk',
+          'staff:view', 'staff:manage', 'staff:manage_leaves', 'staff:view_schedule', 'staff:manage_schedule',
+          'categories:view', 'categories:create', 'categories:edit',
+          'bookings:view', 'bookings:create', 'bookings:edit', 'bookings:manage_resources', 'bookings:view_therapist_schedule',
+          'sales:view', 'sales:create', 'sales:edit', 'inventory:view', 'inventory:manage', 'inventory:adjust_stock',
+          'reports:view', 'reports:export', 'reports:view_financial', 'reports:view_operational', 'reports:view_inventory', 'reports:view_staff', 'reports:view_massage_room',
+          'entrance_fee:view', 'entrance_fee:create', 'entrance_fee:edit',
+          'notifications:view', 'notifications:manage',
+          'settings:view', 'settings:view_global', 'settings:view_outlets', 'settings:view_currency', 'settings:view_shortcuts', 'settings:view_documents', 'settings:view_staff_portal', 'settings:view_booking_engine', 'settings:view_membership_types', 'settings:view_massage_rooms', 'settings:view_reports_config', 'settings:view_custom_reports', 'settings:view_entrance_fee'
+        ]
+      },
+      {
+        id: 'receptionist',
+        name: 'Front Desk / Reception',
+        description: 'Front desk operations, check-in, bookings, and sales.',
+        is_system: false,
+        permissions: [
+          'dashboard:view',
+          'members:view', 'members:create', 'members:edit', 'members:view_contact_info', 'members:freeze', 'members:renew', 'members:print_contract', 'members:enroll',
+          'pt_members:view', 'pt_members:create',
+          'checkin:view', 'checkin:manage', 'checkin:kiosk',
+          'bookings:view', 'bookings:create', 'bookings:edit', 'bookings:view_therapist_schedule',
+          'sales:view', 'sales:create', 'inventory:view',
+          'entrance_fee:view', 'entrance_fee:create',
+          'notifications:view'
+        ]
+      },
+      {
+        id: 'staff',
+        name: 'Staff / Therapist',
+        description: 'Specialist and instructor role for bookings and check-in.',
+        is_system: false,
+        permissions: [
+          'dashboard:view',
+          'checkin:view',
+          'bookings:view', 'bookings:view_therapist_schedule',
+          'staff:view', 'staff:view_schedule'
+        ]
+      }
+    ];
+
+    const localStr = typeof localStorage !== 'undefined' ? localStorage.getItem('company_roles_cache') : null;
+    const localRoles: Role[] = localStr ? JSON.parse(localStr) : defaultRoles;
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('roles').select('*');
         if (error) throw error;
-        return (data || []) as Role[];
-      }, []);
+        if (data && data.length > 0) {
+          const remoteRoles = (data as any[]).map(remote => ({
+            id: remote.id,
+            name: remote.name || '',
+            description: remote.description || '',
+            permissions: Array.isArray(remote.permissions) ? remote.permissions : [],
+            is_system: Boolean(remote.is_system)
+          })) as Role[];
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('company_roles_cache', JSON.stringify(remoteRoles));
+          }
+          return remoteRoles;
+        }
+        return localRoles;
+      }, () => localRoles);
     }
-    return [];
+
+    return localRoles;
   }
 
   async addRole(role: Omit<Role, 'id'>) {
+    const id = role.name.toLowerCase().replace(/\s+/g, '_');
+    const newRole: Role = { ...role, id };
+
+    const localStr = typeof localStorage !== 'undefined' ? localStorage.getItem('company_roles_cache') : null;
+    let current: Role[] = localStr ? JSON.parse(localStr) : await this.getRoles();
+    current.push(newRole);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('company_roles_cache', JSON.stringify(current));
+    }
+
     if (this.isSupabase()) {
-        const { data, error } = await supabase.from('roles').insert([{ ...role, id: role.name.toLowerCase().replace(/\s+/g, '_') }]).select();
-        if (error) throw error;
+        const { data, error } = await supabase.from('roles').insert([newRole]).select();
+        if (error) console.error('Error adding role to Supabase:', error);
         await this.logAction('CREATE_ROLE', `Security protocol tier defined: ${role.name}`);
         return data;
     }
   }
 
   async updateRole(id: string, updates: Partial<Role>) {
+    const localStr = typeof localStorage !== 'undefined' ? localStorage.getItem('company_roles_cache') : null;
+    let current: Role[] = localStr ? JSON.parse(localStr) : await this.getRoles();
+    const index = current.findIndex(r => r.id === id);
+    if (index >= 0) {
+      current[index] = { ...current[index], ...updates };
+    } else {
+      current.push({ id, name: id, permissions: [], is_system: false, ...updates } as Role);
+    }
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('company_roles_cache', JSON.stringify(current));
+    }
+
     if (this.isSupabase()) {
-        await supabase.from('roles').update(updates).eq('id', id);
+        const { error } = await supabase.from('roles').update(updates).eq('id', id);
+        if (error) console.error('Error updating role in Supabase:', error);
         await this.logAction('UPDATE_ROLE', `Role modified: ${id}`);
     }
   }
 
   async deleteRole(id: string) {
+    const localStr = typeof localStorage !== 'undefined' ? localStorage.getItem('company_roles_cache') : null;
+    let current: Role[] = localStr ? JSON.parse(localStr) : await this.getRoles();
+    current = current.filter(r => r.id !== id || r.is_system);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('company_roles_cache', JSON.stringify(current));
+    }
+
     if (this.isSupabase()) {
-        await supabase.from('roles').delete().eq('id', id).eq('is_system', false);
+        const { error } = await supabase.from('roles').delete().eq('id', id).eq('is_system', false);
+        if (error) console.error('Error deleting role in Supabase:', error);
         await this.logAction('DELETE_ROLE', `Role purged: ${id}`);
     }
   }

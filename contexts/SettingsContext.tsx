@@ -218,8 +218,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return role.permissions.includes(permission);
     }
 
-    // Default admin role fallback if no custom role defined in DB
+    // Default admin role fallback if role template not yet found in roles list
     if (normalizedRoleId === 'admin' || normalizedRoleId === 'system_admin') {
+        if (permission === 'settings:manage_maintenance' || permission === 'settings:view_maintenance' || permission === 'settings:manage_roles') {
+            return false;
+        }
         return true;
     }
 

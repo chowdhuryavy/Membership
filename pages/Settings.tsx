@@ -617,7 +617,7 @@ const SettingsPage = () => {
     
     // Protect System Administrator role
     const isSuperUser = isSuperAdmin;
-    if ((roleForm.id === 'admin' || roleForm.name === 'System Administrator') && !isSuperUser) {
+    if ((editingId === 'admin' || roleForm.name === 'System Administrator') && !isSuperUser) {
          showStatus('Unauthorized: Only Super Admin can modify System Administrator role.', 'error');
          return;
     }

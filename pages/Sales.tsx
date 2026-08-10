@@ -944,7 +944,7 @@ const Sales = () => {
     const canDelete = user && hasPermission(user.role_id, 'sales:delete');
     const canDeleteBooking = user && hasPermission(user.role_id, 'bookings:delete');
     const canViewInventory = user && hasPermission(user.role_id, 'inventory:view');
-    const isSuper = isSuperAdmin || user?.role_id?.toLowerCase() === 'admin' || user?.role_id?.toLowerCase() === 'system_admin' || user?.role_id?.toLowerCase() === 'super_admin' || user?.role_id?.toLowerCase() === 'owner';
+    const isSuper = isSuperAdmin;
     const canViewConsents = isSuper || (user && hasPermission(user.role_id, 'entrance_fee:view'));
 
     // 1. Move loadData definition before its usage
