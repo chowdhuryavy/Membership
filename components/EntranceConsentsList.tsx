@@ -126,10 +126,25 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                         @media print {
                             body { padding: 0; }
                             .header-container { margin-top: 0; }
+                            .page-number-float {
+                                display: block !important;
+                                position: fixed;
+                                bottom: 20px;
+                                right: 0;
+                                font-size: 8px;
+                                font-weight: 900;
+                                color: #cbd5e1;
+                                text-transform: uppercase;
+                            }
+                            .page-number-float:after {
+                                content: "Page " counter(page);
+                            }
                         }
+                        .page-number-float { display: none; }
                     </style>
                 </head>
                 <body>
+                    <div class="page-number-float"></div>
                     <div class="header-container">
                         <div class="header-left">
                             ${logoUrl ? `<img src="${logoUrl}" class="header-logo" alt="Logo" />` : ''}

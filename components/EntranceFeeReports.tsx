@@ -199,7 +199,12 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
 
     // Create a hidden iframe for printing
     const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
     document.body.appendChild(iframe);
     
     const doc = iframe.contentWindow?.document;
@@ -212,25 +217,42 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
           <title>${title}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-            body { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; padding: 30px; margin: 0 auto; max-width: 1000px; }
-            .header { border-bottom: 2px solid #059669; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-            .logo-section { display: flex; align-items: center; gap: 15px; }
-            .logo { width: 60px; height: 60px; object-fit: contain; }
-            .title { font-size: 20px; font-weight: 900; text-transform: uppercase; color: #0f172a; }
-            .meta { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; }
-            .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
-            .stat-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 10px; }
-            .stat-label { font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; }
-            .stat-val { font-size: 18px; font-weight: 900; color: #059669; margin-top: 4px; }
-            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 15px; }
-            th { background: #0f172a; color: #ffffff; text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
-            td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-weight: 600; }
+            body { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; padding: 40px; margin: 0 auto; max-width: 1000px; line-height: 1.5; }
+            .header { border-bottom: 2px solid #059669; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+            .logo-section { display: flex; align-items: center; gap: 20px; }
+            .logo { width: 70px; height: 70px; object-fit: contain; }
+            .title { font-size: 22px; font-weight: 900; text-transform: uppercase; color: #0f172a; tracking: -0.02em; }
+            .meta { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+            .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
+            .stat-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 12px; }
+            .stat-label { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 4px; }
+            .stat-val { font-size: 20px; font-weight: 900; color: #059669; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 20px; }
+            th { background: #0f172a; color: #ffffff; text-align: left; padding: 12px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+            td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; font-weight: 600; color: #334155; }
             tr:nth-child(even) { background: #f8fafc; }
-            .footer { margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 10px; display: flex; justify-content: space-between; align-items: center; font-size: 9px; font-weight: 800; color: #94a3b8; text-transform: uppercase; tracking: 0.1em; }
+            .audit-footer { margin-top: 50px; border-top: 2px solid #f1f5f9; padding-top: 15px; display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; }
+            
+            @page {
+              margin: 1.5cm;
+            }
             @media print {
               body { padding: 0; }
               .header { margin-top: 0; }
+              .page-number-float {
+                display: block !important;
+                position: fixed;
+                bottom: 10px;
+                right: 0;
+                font-size: 9px;
+                font-weight: 900;
+                color: #cbd5e1;
+              }
+              .page-number-float:after {
+                content: "PAGE " counter(page);
+              }
             }
+            .page-number-float { display: none; }
           </style>
         </head>
         <body>
@@ -243,8 +265,8 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
               </div>
             </div>
             <div class="meta" style="text-align: right;">
-              <div>Exported on: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')}</div>
-              <div>By: ${JSON.parse(localStorage.getItem('membership_session') || '{}')?.name || 'Admin'}</div>
+              <div>EXPORTED ON: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')}</div>
+              <div>BY: ${JSON.parse(localStorage.getItem('membership_session') || '{}')?.name || 'Admin'}</div>
             </div>
           </div>
 
@@ -263,7 +285,7 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
             </div>
             <div class="stat-card">
               <div class="stat-label">${isDaily ? 'Top Package' : 'Peak Day'}</div>
-              <div class="stat-val" style="font-size:12px;">${isDaily ? dailyStats.topPackage : (monthlyStats.peakDay !== 'N/A' ? format(parseISO(monthlyStats.peakDay), 'dd MMM') : 'N/A')}</div>
+              <div class="stat-val" style="font-size:13px;">${isDaily ? dailyStats.topPackage : (monthlyStats.peakDay !== 'N/A' ? format(parseISO(monthlyStats.peakDay), 'dd MMM') : 'N/A')}</div>
             </div>
           </div>
 
@@ -286,16 +308,18 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
                   <td>${c.guest_name}</td>
                   <td>${c.qid_passport || 'N/A'}</td>
                   <td>${c.item_name || 'Standard Entrance'}</td>
-                  <td>${c.guest_signature ? 'Yes' : 'No'}</td>
+                  <td>${c.guest_signature ? 'YES' : 'NO'}</td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
 
-          <div class="footer">
-            <span>Page 1 of 1 &bull; System ID: ${currentOutlet?.id?.substring(0,8) || 'N/A'}</span>
-            <span>&copy; ${new Date().getFullYear()} ${currentProperty?.name}. All rights reserved.</span>
+          <div class="audit-footer">
+            <span>SYSTEM ID: ${currentOutlet?.id?.substring(0,8) || 'N/A'}</span>
+            <span>&copy; ${new Date().getFullYear()} ${currentProperty?.name}. ALL RIGHTS RESERVED.</span>
           </div>
+
+          <div class="page-number-float"></div>
 
           <script>
             window.onload = () => {
@@ -308,10 +332,10 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
     `);
     doc.close();
 
-    // Clean up after a short delay
+    // Clean up
     setTimeout(() => {
       document.body.removeChild(iframe);
-    }, 1000);
+    }, 2000);
   };
 
   return (

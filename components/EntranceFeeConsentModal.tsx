@@ -1,53 +1,12 @@
 import React, { useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { X, Save, AlertTriangle, Eraser, Code2, Copy, CheckCircle2 } from 'lucide-react';
+import { X, Save, AlertTriangle, Eraser, CheckCircle2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Input, Button } from './ui';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
 import { EntranceFeeConsent } from '../types';
 import { getBilingualWaiverText } from '../lib/waiverHelper';
 import SignatureCanvas from 'react-signature-canvas';
-
-const SUPABASE_SQL_SCRIPT = `-- ====================================================================
--- SUPABASE TABLE SETUP: ENTRANCE FEE & DAY PASS CONSENTS
--- Run this script in your Supabase SQL Editor (https://app.supabase.com)
--- ====================================================================
-
-CREATE TABLE IF NOT EXISTS public.entrance_fee_consents (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    outlet_id TEXT NOT NULL,
-    guest_name TEXT NOT NULL,
-    phone TEXT,
-    email TEXT,
-    qid_passport TEXT,
-    date DATE NOT NULL,
-    time TEXT,
-    room_number TEXT,
-    is_hotel_guest BOOLEAN DEFAULT FALSE,
-    sale_id TEXT,
-    item_name TEXT,
-    guest_signature TEXT,
-    notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Ensure missing columns exist for existing tables
-ALTER TABLE public.entrance_fee_consents ADD COLUMN IF NOT EXISTS time TEXT;
-ALTER TABLE public.entrance_fee_consents ADD COLUMN IF NOT EXISTS room_number TEXT;
-ALTER TABLE public.entrance_fee_consents ADD COLUMN IF NOT EXISTS is_hotel_guest BOOLEAN DEFAULT FALSE;
-
--- Enable Row Level Security (RLS)
-ALTER TABLE public.entrance_fee_consents ENABLE ROW LEVEL SECURITY;
-
--- Create policy allowing full read/write access
-DROP POLICY IF EXISTS "Allow all on entrance_fee_consents" ON public.entrance_fee_consents;
-CREATE POLICY "Allow all on entrance_fee_consents" ON public.entrance_fee_consents FOR ALL USING (true) WITH CHECK (true);
-
--- Grant privileges to anon, authenticated, and postgres roles
-GRANT ALL ON TABLE public.entrance_fee_consents TO anon, authenticated, postgres;
-
--- Notify PostgREST to refresh schema cache immediately
-NOTIFY pgrst, 'reload schema';`;
 
 const getCurrentFormattedTime = () => {
     const d = new Date();

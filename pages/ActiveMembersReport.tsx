@@ -124,9 +124,16 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                         <div id="active-report-content" className={`${isEmbedded ? 'w-full' : 'print-container min-w-max'} bg-white`}>
                             {!isEmbedded && (
                                 <div className="p-8 pb-4 hidden print:block">
-                                    <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Active Members Report</h2>
-                                    <p className="text-sm text-slate-500 font-medium">Date: {format(new Date(), 'dd MMMM yyyy')}</p>
-                                    <p className="text-sm text-slate-500 font-medium">Property: {currentProperty?.name} | Outlet: {currentOutlet?.name}</p>
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div>
+                                            <h2 className="text-2xl font-black uppercase tracking-tighter mb-1">Active Members Report</h2>
+                                            <p className="text-sm text-slate-500 font-bold uppercase tracking-wider">Property: {currentProperty?.name} | Outlet: {currentOutlet?.name}</p>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Exported on: {format(new Date(), 'dd MMMM yyyy HH:mm')}</p>
+                                        </div>
+                                        {currentProperty?.logo_url && (
+                                            <img src={currentProperty.logo_url} className="h-16 w-auto object-contain" alt="Property Logo" />
+                                        )}
+                                    </div>
                                 </div>
                             )}
                             <table className={`w-full text-left border-collapse border-2 border-black ${isEmbedded ? 'text-[9px]' : ''}`}>
