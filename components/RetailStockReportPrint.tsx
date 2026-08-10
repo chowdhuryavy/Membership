@@ -1,5 +1,6 @@
 import React from 'react';
 import { format } from 'date-fns';
+import { ReportAuditFooter } from './ReportAuditFooter';
 import { Building2 } from 'lucide-react';
 
 interface ItemStockSummary {
@@ -262,19 +263,7 @@ const RetailStockReportPrint = React.forwardRef<HTMLDivElement, Props>(({
             </div>
         </div>
       )}
-
-      {/* Footer Audit Trail */}
-      <div className="mt-12 flex justify-between items-center border-t border-slate-100 pt-6">
-          <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">
-              Page 1 of 1 &bull; System ID: {currentOutlet?.id?.substring(0,8) || 'N/A'}
-          </span>
-          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-              Exported on: {format(new Date(), 'dd-MMM-yyyy HH:mm:ss')} {JSON.parse(localStorage.getItem('membership_session') || '{}')?.name ? ` by ${JSON.parse(localStorage.getItem('membership_session') || '{}')?.name}` : ''}
-          </span>
-          <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">
-              &copy; {new Date().getFullYear()} {currentProperty?.name}. All rights reserved.
-          </span>
-      </div>
+      <ReportAuditFooter />
     </div>
   );
 });

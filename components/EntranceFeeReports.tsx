@@ -217,6 +217,7 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
             th { background: #0f172a; color: #ffffff; text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
             td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-weight: 600; }
             tr:nth-child(even) { background: #f8fafc; }
+            .footer { margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 10px; display: flex; justify-content: space-between; align-items: center; font-size: 9px; font-weight: 800; color: #94a3b8; text-transform: uppercase; tracking: 0.1em; }
           </style>
         </head>
         <body>
@@ -225,7 +226,10 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
               <div class="title">${title}</div>
               <div class="meta">${currentProperty?.name || ''} ${currentOutlet?.name ? ' - ' + currentOutlet.name : ''}</div>
             </div>
-            <div class="meta">Printed: ${format(new Date(), 'dd MMM yyyy HH:mm')}</div>
+            <div class="meta" style="text-align: right;">
+              <div>Exported on: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')}</div>
+              <div>By: ${JSON.parse(localStorage.getItem('membership_session') || '{}')?.name || 'Admin'}</div>
+            </div>
           </div>
 
           <div class="stats-grid">
@@ -272,8 +276,20 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
             </tbody>
           </table>
 
+          <div class="footer">
+            <span>Page 1 of 1 &bull; System ID: ${currentOutlet?.id?.substring(0,8) || 'N/A'}</span>
+            <span>&copy; ${new Date().getFullYear()} ${currentProperty?.name}. All rights reserved.</span>
+          </div>
+
           <script>
-            window.onload = () => window.print();
+            window.onload = () => {
+              window.print();
+              window.onafterprint = () => window.close();
+              // Fallback for browsers that don't support onafterprint or if it fires too early
+              setTimeout(() => {
+                if (!window.closed) window.close();
+              }, 500);
+            };
           </script>
         </body>
       </html>

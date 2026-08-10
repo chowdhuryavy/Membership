@@ -7,6 +7,7 @@ import { format, parseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { UserCheck, FileDown, Filter } from 'lucide-react';
 import TabLoader from '../components/TabLoader';
+import { ReportAuditFooter } from '../components/ReportAuditFooter';
 
 interface ActiveMembersReportProps {
     isEmbedded?: boolean;
@@ -219,6 +220,7 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                                     </tfoot>
                                 )}
                             </table>
+                            <ReportAuditFooter isEmbedded={isEmbedded} />
                         </div>
                     </div>
                 </CardContent>

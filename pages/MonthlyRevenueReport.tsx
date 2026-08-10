@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
 import { getMonthlyRevenueData, MonthlyRevenueData } from '../src/shared/monthlyRevenueReportLogic';
 import { Building2, ShieldCheck, Loader2 } from 'lucide-react';
+import { ReportAuditFooter } from '../components/ReportAuditFooter';
 import { supabase } from '../services/supabase';
 import TabLoader from '../components/TabLoader';
 
@@ -186,6 +187,7 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
           </tr>
         </tbody>
       </table>
+      <ReportAuditFooter isEmbedded={isEmbedded} />
     </div>
   );
 

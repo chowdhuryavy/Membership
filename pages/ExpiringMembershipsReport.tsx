@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { CalendarX, FileDown, Search, Filter } from 'lucide-react';
 import TabLoader from '../components/TabLoader';
+import { ReportAuditFooter } from '../components/ReportAuditFooter';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -245,6 +246,7 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth, s
                                     </tfoot>
                                 )}
                             </table>
+                            <ReportAuditFooter isEmbedded={isEmbedded} />
                         </div>
                     </div>
                 </CardContent>

@@ -5,6 +5,7 @@ import { MassageBooking, MassageRoom } from '../types';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { Building2 } from 'lucide-react';
+import { ReportAuditFooter } from '../components/ReportAuditFooter';
 
 import TabLoader from '../components/TabLoader';
 
@@ -153,6 +154,7 @@ const MassageRoomRevenueReport = ({ isEmbedded, embeddedMonth }: MassageRoomReve
           </tfoot>
         )}
       </table>
+      <ReportAuditFooter isEmbedded={isEmbedded} />
     </div>
   );
 

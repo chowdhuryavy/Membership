@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
 import { EntranceFeeConsent } from '../types';
 import { getBilingualWaiverText } from '../lib/waiverHelper';
 import { Search, Calendar, FileSignature, Download, Printer, Edit3, Trash2, AlertTriangle, X, History, BarChart3, LayoutGrid, Plus } from 'lucide-react';
@@ -11,7 +12,8 @@ import { EntranceFeeReports } from './EntranceFeeReports';
 import toast from 'react-hot-toast';
 
 export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: string, outletId?: string }) => {
-    const { currentProperty, currentOutlet, properties, outlets, settings, hasPermission, user } = useSettings();
+    const { currentProperty, currentOutlet, properties, outlets, settings, hasPermission } = useSettings();
+    const { user } = useAuth();
     const [consents, setConsents] = useState<EntranceFeeConsent[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -201,14 +203,22 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                             <div class="label">Guest Signature / توقيع الضيف</div>
                             <div class="value">${consent.guest_name}</div>
                         </div>
-                        <div style="text-align: right; font-size: 10px; color: #64748b; font-weight: 600;">
+                        <div style="text-align: right; font-size: 9px; color: #64748b; font-weight: 700; text-transform: uppercase; tracking: 0.5px;">
                             <div>Signed On: ${format(new Date(consent.created_at || consent.date), 'dd MMM yyyy, HH:mm')}</div>
+                            <div>Exported on: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')} ${JSON.parse(localStorage.getItem('membership_session') || '{}')?.name ? `by ${JSON.parse(localStorage.getItem('membership_session') || '{}').name}` : ''}</div>
                             <div>Outlet: ${outletName}</div>
                         </div>
                     </div>
                     
                     <script>
-                        window.onload = () => window.print();
+                        window.onload = () => {
+                            window.print();
+                            window.onafterprint = () => window.close();
+                            // Fallback for browsers that don't support onafterprint
+                            setTimeout(() => {
+                                if (!window.closed) window.close();
+                            }, 500);
+                        };
                     </script>
                 </body>
             </html>
