@@ -26,6 +26,7 @@ interface AuthContextType {
   register: (email: string, password: string, name: string) => Promise<string | null>;
   changePassword: (currentPass: string, newPass: string) => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
+  setManualUser: (user: UserProfile) => void;
   refreshUser: () => Promise<void>;
   logout: () => void;
   isLoading: boolean;
@@ -156,18 +157,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       saveSession(updatedUser);
   };
 
+  const setManualUser = (userData: UserProfile) => {
+      setUser(userData);
+      saveSession(userData);
+  };
+
   const authContextValue = useMemo(() => ({ 
     user, 
     login, 
     register, 
     changePassword, 
     updateProfile, 
+    setManualUser,
     refreshUser, 
     logout, 
     isLoading, 
     isSuperAdmin: isSuperAdminState, 
     checkIsSuperAdmin 
-  }), [user, login, register, changePassword, updateProfile, refreshUser, logout, isLoading, isSuperAdminState, checkIsSuperAdmin]);
+  }), [user, login, register, changePassword, updateProfile, setManualUser, refreshUser, logout, isLoading, isSuperAdminState, checkIsSuperAdmin]);
 
   return (
     <AuthContext.Provider value={authContextValue}>

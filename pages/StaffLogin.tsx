@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
 import { LogIn, ShieldAlert, UserCircle2, ArrowRight, Sparkles, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { Button, Input } from '../components/ui';
 
@@ -13,6 +14,7 @@ const StaffLogin = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { settings } = useSettings();
+  const { setManualUser } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +27,7 @@ const StaffLogin = () => {
         // Store staff session
         localStorage.setItem('staff_session', JSON.stringify(staff));
         
-        // Also store as membership_session so AuthContext recognizes it
+        // Prepare user profile for AuthContext
         const staffProfile = {
             id: staff.id,
             email: staff.email,
@@ -34,8 +36,8 @@ const StaffLogin = () => {
             allowed_outlets: staff.outlet_ids || [],
             is_active: true
         };
-        localStorage.setItem('membership_session', JSON.stringify(staffProfile));
-
+        
+        setManualUser(staffProfile as any);
         navigate('/dashboard');
       } else {
         setError('Invalid employee number or password, or access denied.');
