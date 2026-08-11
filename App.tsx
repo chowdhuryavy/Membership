@@ -832,16 +832,10 @@ const SecurityConsoleLog = () => {
 };
 
 const App = () => {
-  const [portalType, setPortalType] = useState<'admin' | 'staff' | null>(null);
-
-  useEffect(() => {
+  const [portalType] = useState<'admin' | 'staff'>(() => {
     const hostname = window.location.hostname;
-    if (hostname.includes('hcm-staff')) {
-      setPortalType('staff');
-    } else {
-      setPortalType('admin');
-    }
-  }, []);
+    return hostname.includes('hcm-staff') ? 'staff' : 'admin';
+  });
 
   // Scheduler effect
   useEffect(() => {
@@ -851,8 +845,6 @@ const App = () => {
     }, 60000);
     return () => clearInterval(interval);
   }, []);
-
-  if (!portalType) return null;
 
   return (
     <ErrorBoundary>
