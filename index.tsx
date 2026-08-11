@@ -22,4 +22,10 @@ root.render(
   </React.StrictMode>
 );
 
-// Removed Service Worker registration to resolve navigation fetch failures
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(registrations) {
+    for(let registration of registrations) {
+      registration.unregister();
+    }
+  });
+}
