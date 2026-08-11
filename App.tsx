@@ -344,10 +344,11 @@ const ProtectedLayout = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
   }, [checkShortcut, navigate]);
 
   if (!user && !combinedLoading) {
-    if (location.pathname === '/') {
+    const loginPath = portalType === 'staff' ? '/staff-login' : '/login';
+    if (location.pathname === '/' || location.pathname === loginPath) {
         return portalType === 'staff' ? <StaffLogin /> : <Login />;
     }
-    return <Navigate to={portalType === 'staff' ? '/staff-login' : '/login'} replace />;
+    return <Navigate to={loginPath} replace />;
   }
   
   return (
@@ -849,6 +850,7 @@ const App = () => {
                 <Route index element={<Dashboard />} />
                 <Route path="checkin" element={<AttendanceCheckIn />} />
                 <Route path="bookings" element={<MassageScheduling />} />
+                <Route path="staff-schedule" element={<StaffSchedule />} />
               </Route>
               <Route path="*" element={<Navigate to="/staff-login" replace />} />
             </>
