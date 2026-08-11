@@ -24,7 +24,7 @@ const StaffLogin = () => {
       if (staff) {
         // Store staff session
         localStorage.setItem('staff_session', JSON.stringify(staff));
-        navigate('/');
+        navigate('/dashboard');
       } else {
         setError('Invalid employee number or password, or access denied.');
       }

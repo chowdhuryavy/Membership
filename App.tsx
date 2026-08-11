@@ -845,22 +845,24 @@ const App = () => {
           {/* Staff Portal Routes */}
           {portalType === 'staff' ? (
             <>
+              <Route path="/" element={<StaffLogin />} />
               <Route path="/staff-login" element={<StaffLogin />} />
               <Route element={<ProtectedLayout portalType="staff" />}>
-                <Route index element={<Dashboard />} />
+                <Route path="dashboard" element={<Dashboard />} />
                 <Route path="checkin" element={<AttendanceCheckIn />} />
                 <Route path="bookings" element={<MassageScheduling />} />
                 <Route path="staff-schedule" element={<StaffSchedule />} />
               </Route>
-              <Route path="*" element={<Navigate to="/staff-login" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </>
           ) : (
             // Admin Portal Routes
             <>
+              <Route path="/" element={<Login />} />
               <Route path="/login" element={<Login />} />
               <Route path="/pass" element={<PublicMemberPass />} />
               <Route element={<ProtectedLayout portalType="admin" />}>
-                <Route index element={<Dashboard />} />
+                <Route path="dashboard" element={<Dashboard />} />
                 <Route path="checkin" element={<AttendanceCheckIn />} />
                 <Route path="members" element={<Members />} />
                 <Route path="pt-members" element={<PTMembers />} />

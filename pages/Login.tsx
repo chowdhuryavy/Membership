@@ -42,7 +42,7 @@ const Login = () => {
     } else {
       const session = JSON.parse(localStorage.getItem('membership_session') || sessionStorage.getItem('membership_session') || '{}');
       db.logAction('AUTH_LOGIN', `User session authenticated for: ${session.name || email} (${email.toLowerCase()}) at ${new Date().toLocaleString()}`);
-      navigate('/');
+      navigate('/dashboard');
     }
   };
 
@@ -56,7 +56,7 @@ const Login = () => {
           await changePassword(password, newPassword);
           db.logAction('AUTH_SECURITY_UPDATE', `Credential migration completed for: ${email.toLowerCase()}`);
           setMustChangePassword(false);
-          navigate('/');
+          navigate('/dashboard');
       } catch (err: any) {
           setError(err.message || "Failed to update security credentials.");
       } finally {
