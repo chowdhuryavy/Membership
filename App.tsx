@@ -271,18 +271,6 @@ const ProtectedLayout = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
   // Track route changes to reset initial load state for splash pages
   const lastPathname = useRef(location.pathname);
   useEffect(() => {
-    console.log('App loading state detail:', { 
-        isAuthLoading, 
-        isSettingsLoading, 
-        user: !!user, 
-        outlets: outlets.length, 
-        currentOutlet: !!currentOutlet, 
-        isSplashPage, 
-        isInitialLoad: isInitialLoad.current, 
-        pageLoading,
-        isAppInitializing
-    });
-
     if (location.pathname !== lastPathname.current) {
       if (isSplashPage) {
         isInitialLoad.current = true;
@@ -355,7 +343,12 @@ const ProtectedLayout = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [checkShortcut, navigate]);
 
-  if (!user && !combinedLoading) return <Navigate to={portalType === 'staff' ? '/staff-login' : '/login'} replace />;
+  if (!user && !combinedLoading) {
+    if (location.pathname === '/') {
+        return portalType === 'staff' ? <StaffLogin /> : <Login />;
+    }
+    return <Navigate to={portalType === 'staff' ? '/staff-login' : '/login'} replace />;
+  }
   
   return (
     <>
@@ -684,7 +677,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 }
 
-const DynamicHead = () => {
+const DynamicHead = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
   const { settings } = useSettings();
 
   useEffect(() => {
@@ -747,36 +740,30 @@ const DynamicHead = () => {
   useEffect(() => {
     if (!settings) return;
 
-    const updateManifest = () => {
-      const isStaff = window.location.hash.includes('staff') || window.location.search.includes('portal=staff');
-      const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
-      
-      if (manifestLink) {
-        // Use static manifest files for iPhone compatibility
-        const manifestPath = isStaff ? '/manifest-staff.json' : '/manifest.json';
-        manifestLink.setAttribute('href', window.location.origin + manifestPath);
+    const isStaff = portalType === 'staff';
+    const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
+    
+    if (manifestLink) {
+      // Use static manifest files for iPhone compatibility
+      const manifestPath = isStaff ? '/manifest-staff.json' : '/manifest.json';
+      manifestLink.setAttribute('href', window.location.origin + manifestPath);
+    }
+
+    // Update iOS-specific meta tags dynamically
+    const updateMeta = (name: string, content: string) => {
+      let meta = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = name;
+        document.head.appendChild(meta);
       }
-
-      // Update iOS-specific meta tags dynamically
-      const updateMeta = (name: string, content: string) => {
-        let meta = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
-        if (!meta) {
-          meta = document.createElement('meta');
-          meta.name = name;
-          document.head.appendChild(meta);
-        }
-        meta.content = content;
-      };
-
-      const portalName = isStaff ? "Staff Portal" : (settings.name || "Health Club");
-      updateMeta('apple-mobile-web-app-title', portalName);
-      updateMeta('application-name', portalName);
+      meta.content = content;
     };
 
-    updateManifest();
-    window.addEventListener('hashchange', updateManifest);
-    return () => window.removeEventListener('hashchange', updateManifest);
-  }, [settings]);
+    const portalName = isStaff ? "Staff Portal" : (settings.name || "Health Club");
+    updateMeta('apple-mobile-web-app-title', portalName);
+    updateMeta('application-name', portalName);
+  }, [settings, portalType]);
 
   return null;
 };
@@ -848,7 +835,7 @@ const App = () => {
 
   return (
     <ErrorBoundary>
-      <DynamicHead />
+      <DynamicHead portalType={portalType} />
       <SecurityConsoleLog />
       <Toaster position="top-right" />
       <UserActivityTracker />
