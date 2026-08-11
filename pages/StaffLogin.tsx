@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
-import { useAuth } from '../contexts/AuthContext';
 import { LogIn, ShieldAlert, UserCircle2, ArrowRight, Sparkles, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { Button, Input } from '../components/ui';
 
@@ -14,7 +13,6 @@ const StaffLogin = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { settings } = useSettings();
-  const { setManualUser } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,19 +24,7 @@ const StaffLogin = () => {
       if (staff) {
         // Store staff session
         localStorage.setItem('staff_session', JSON.stringify(staff));
-        
-        // Prepare user profile for AuthContext
-        const staffProfile = {
-            id: staff.id,
-            email: staff.email,
-            name: staff.name,
-            role_id: staff.role || 'staff',
-            allowed_outlets: staff.outlet_ids || [],
-            is_active: true
-        };
-        
-        setManualUser(staffProfile as any);
-        navigate('/dashboard');
+        navigate('/staff-schedule');
       } else {
         setError('Invalid employee number or password, or access denied.');
       }
@@ -53,7 +39,21 @@ const StaffLogin = () => {
 
   useEffect(() => {
     localStorage.setItem('preferred_portal', 'staff');
-  }, []);
+    
+    // Check for existing session and redirect if valid
+    const sessionStr = localStorage.getItem('staff_session');
+    if (sessionStr) {
+      try {
+        const session = JSON.parse(sessionStr);
+        if (session && session.id) {
+          navigate('/staff-schedule');
+        }
+      } catch (e) {
+        console.error("Invalid session found, clearing...");
+        localStorage.removeItem('staff_session');
+      }
+    }
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#fcfdfe] selection:bg-indigo-100">
@@ -99,6 +99,16 @@ const StaffLogin = () => {
         </div>
 
         <div className="p-8 sm:p-12 lg:p-16 flex flex-col justify-start pt-10 md:pt-16 bg-white relative">
+          {/* Admin Portal Link Icon */}
+          <button 
+            onClick={() => navigate('/login')}
+            className="hidden md:flex absolute top-8 right-8 px-4 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all group items-center gap-2 shadow-sm"
+            title="Admin Portal"
+          >
+            <span className="text-[10px] font-black uppercase tracking-widest">Admin Portal</span>
+            <ShieldCheck className="w-5 h-5 group-hover:scale-110 transition-transform" />
+          </button>
+
           <div className="mb-6 flex flex-col items-center text-center">
             {settings?.logo_url ? (
               <img 

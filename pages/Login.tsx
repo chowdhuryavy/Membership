@@ -42,7 +42,7 @@ const Login = () => {
     } else {
       const session = JSON.parse(localStorage.getItem('membership_session') || sessionStorage.getItem('membership_session') || '{}');
       db.logAction('AUTH_LOGIN', `User session authenticated for: ${session.name || email} (${email.toLowerCase()}) at ${new Date().toLocaleString()}`);
-      navigate('/dashboard');
+      navigate('/');
     }
   };
 
@@ -56,7 +56,7 @@ const Login = () => {
           await changePassword(password, newPassword);
           db.logAction('AUTH_SECURITY_UPDATE', `Credential migration completed for: ${email.toLowerCase()}`);
           setMustChangePassword(false);
-          navigate('/dashboard');
+          navigate('/');
       } catch (err: any) {
           setError(err.message || "Failed to update security credentials.");
       } finally {
@@ -108,6 +108,17 @@ const Login = () => {
         </div>
 
         <div className="flex flex-col justify-start p-8 md:p-12 lg:p-16 pt-10 md:pt-16 bg-white relative">
+          {/* Staff Portal Link Icon */}
+          <button 
+            type="button"
+            onClick={() => navigate('/staff-login')}
+            className="absolute top-8 right-8 px-4 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all group flex items-center gap-2 shadow-sm"
+            title="Staff Portal"
+          >
+            <span className="text-[10px] font-black uppercase tracking-widest hidden sm:block">Staff Portal</span>
+            <UserCircle2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+          </button>
+          
           <div className="mb-6 flex flex-col items-center text-center">
              {settings?.logo_url ? (
                <img 

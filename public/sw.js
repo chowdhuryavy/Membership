@@ -12,6 +12,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
+      // Use all instead of allSettled to ensure crucial assets are cached
       return Promise.all(
         ASSETS_TO_CACHE.map(url => cache.add(url))
       );
@@ -38,10 +39,63 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch event - DISABLED pending debugging
+// Fetch event - Network First for navigation, Cache First for others
 self.addEventListener('fetch', (event) => {
-  // Pass through all requests
-  return;
+  // Ignore non-http(s) requests (like chrome-extension, data:, etc.)
+  if (!event.request.url.startsWith('http')) return;
+
+  // Navigation requests: Try Network First
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          // Important/optional: Only cache navigation if successful and http/https
+          if (response.status === 200 && event.request.url.startsWith('http')) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+                // DON'T always overwrite index.html, but okay to cache the navigation request
+                cache.put(event.request, responseClone);
+            });
+          }
+          return response;
+        })
+        .catch(() => {
+          // If network fails, serve index.html from cache
+          return caches.match('/index.html');
+        })
+    );
+    return;
+  }
+  
+  // Non-GET requests: Just fetch
+  if (event.request.method !== 'GET') {
+      return event.respondWith(fetch(event.request));
+  }
+
+  // Other GET assets: Try Cache First, fallback to Network
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      if (response) return response;
+      
+      return fetch(event.request).then((networkResponse) => {
+        // Handle opaque responses (e.g. cross-origin)
+        if (!networkResponse || networkResponse.status !== 200) {
+          return networkResponse;
+        }
+        
+        // Only cache basic responses from http/https schemes
+        const isHttp = event.request.url.startsWith('http');
+        if (networkResponse.type === 'basic' && isHttp) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+          });
+        }
+        
+        return networkResponse;
+      });
+    })
+  );
 });
 
 // Push notification handling
@@ -52,6 +106,7 @@ self.addEventListener('push', (event) => {
     try {
       data = event.data.json();
     } catch (e) {
+      // text() might be empty, use safe fallback
       const text = event.data.text();
       data = { title: 'Health Club', body: text || 'New notification' };
     }
@@ -73,9 +128,11 @@ self.addEventListener('push', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Check if any client (tab/window) is currently focused
       const isFocused = windowClients.some(client => client.focused);
       if (isFocused) {
-        console.log('[SW] App is focused.');
+        console.log('[SW] App is focused. Still showing push notification for testing.');
+        // return; // Commented out to ensure notifications show during testing
       }
       return self.registration.showNotification(data.title || 'Health Club', options);
     })
@@ -87,18 +144,21 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
   const data = event.notification.data || {};
-  const urlToOpen = new URL(data.url || '/notifications', self.location.origin).href;
+  // Fix: HashRouter requires /#/ path to avoid 404 on PWA navigation
+  const urlToOpen = new URL(data.url || '/#/notifications', self.location.origin).href;
   
   event.waitUntil(
     clients.matchAll({
       type: 'window',
       includeUncontrolled: true
     }).then((windowClients) => {
+      // If a window is already open at this URL, focus it
       for (const client of windowClients) {
         if (client.url === urlToOpen && 'focus' in client) {
           return client.focus();
         }
       }
+      // Otherwise, open a new window
       if (clients.openWindow) {
         return clients.openWindow(urlToOpen);
       }

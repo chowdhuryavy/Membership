@@ -63,8 +63,27 @@
     <!-- Web App Manifest -->
     <link rel="manifest" id="pwa-manifest" href="/manifest.json" />
     
-    <!-- Handle chunk load errors (common in SPAs when a new version is deployed) -->
+    
     <script>
+      // Handle clean URL redirect for staff-login
+      const urlParams = new URLSearchParams(window.location.search);
+      const isStaffPath = window.location.pathname === '/staff-login' || window.location.pathname.endsWith('/staff-login');
+      const isStaffPortalParam = urlParams.get('portal') === 'staff';
+      
+      if (isStaffPath || isStaffPortalParam) {
+        // Swap manifest for Staff Portal (Critical for iPhone)
+        const manifestLink = document.getElementById('pwa-manifest');
+        if (manifestLink) {
+          manifestLink.setAttribute('href', '/manifest-staff.json');
+        }
+        
+        // Only redirect if we are not already on the hash route
+        if (!window.location.hash.includes('/staff-login')) {
+          window.location.replace(window.location.origin + '/#/staff-login' + (window.location.search || ''));
+        }
+      }
+
+      // Handle chunk load errors (common in SPAs when a new version is deployed)
       window.addEventListener('error', (e) => {
         if (e.message && (e.message.includes('chunk') || e.message.includes('Loading chunk'))) {
           console.warn('Chunk load error detected, reloading...', e);
@@ -73,8 +92,8 @@
       }, true);
     </script>
 </head>
-<body>
+  <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
-</body>
+  </body>
 </html>

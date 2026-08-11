@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, Component, ErrorInfo, ReactNode } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { 
-  BrowserRouter as Router, 
+  HashRouter as Router, 
   Routes, 
   Route, 
   Link, 
@@ -236,16 +236,13 @@ const TopHeader = () => {
     );
 };
 
-const ProtectedLayout = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
+const ProtectedLayout = () => {
   const { user, logout, isLoading: isAuthLoading } = useAuth();
   const location = useLocation();
   const { checkShortcut, isLoading: isSettingsLoading, currentOutlet, outlets, pageLoading } = useSettings();
   const [showSplash, setShowSplash] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const navigate = useNavigate();
-
-  const hasStaffSession = !!localStorage.getItem('staff_session');
-  const isAuthenticated = portalType === 'staff' ? (!!user || hasStaffSession) : !!user;
 
   const isInitialLoad = useRef(true);
   const splashPaths = useMemo(() => [
@@ -274,6 +271,18 @@ const ProtectedLayout = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
   // Track route changes to reset initial load state for splash pages
   const lastPathname = useRef(location.pathname);
   useEffect(() => {
+    console.log('App loading state detail:', { 
+        isAuthLoading, 
+        isSettingsLoading, 
+        user: !!user, 
+        outlets: outlets.length, 
+        currentOutlet: !!currentOutlet, 
+        isSplashPage, 
+        isInitialLoad: isInitialLoad.current, 
+        pageLoading,
+        isAppInitializing
+    });
+
     if (location.pathname !== lastPathname.current) {
       if (isSplashPage) {
         isInitialLoad.current = true;
@@ -289,10 +298,10 @@ const ProtectedLayout = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
   // Track if we've successfully finished initial boot at least once
   const initialBootFinished = useRef(false);
   useEffect(() => {
-    if (!combinedLoading && !isAuthLoading) {
+    if (!combinedLoading && !isAppInitializing) {
       initialBootFinished.current = true;
     }
-  }, [combinedLoading, isAuthLoading]);
+  }, [combinedLoading, isAppInitializing]);
 
   useEffect(() => {
     if (!combinedLoading) {
@@ -305,11 +314,11 @@ const ProtectedLayout = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
     } else {
       // Re-trigger splash if we are initializing or on a splash-enabled page
       // but ONLY if we haven't finished the initial boot, to avoid getting stuck during reactive updates
-      if (isAuthLoading || (isInitialLoad.current && isSplashPage)) {
+      if (isAppInitializing || (isInitialLoad.current && isSplashPage)) {
         setShowSplash(true);
       }
     }
-  }, [combinedLoading, isSplashPage, isAuthLoading]);
+  }, [combinedLoading, isSplashPage, isAppInitializing]);
   
   useEffect(() => {
     if (user && !combinedLoading) {
@@ -346,19 +355,13 @@ const ProtectedLayout = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [checkShortcut, navigate]);
 
-  if (!isAuthenticated && !combinedLoading) {
-    const loginPath = portalType === 'staff' ? '/staff-login' : '/login';
-    if (location.pathname === '/' || location.pathname === loginPath) {
-        return portalType === 'staff' ? <StaffLogin /> : <Login />;
-    }
-    return <Navigate to={loginPath} replace />;
-  }
+  if (!user && !combinedLoading) return <Navigate to="/login" replace />;
   
   return (
     <>
       {!showSplash && <TopLoader />}
       {showSplash && <SplashLoading />}
-      {isAuthenticated && (
+      {user && (
         <div className={`flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible transition-opacity duration-1000 ${showSplash ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
           <Sidebar onLogout={handleLogout} isCollapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
           <div className="flex-1 flex flex-col min-w-0 relative overflow-y-auto custom-scrollbar print:overflow-visible print:block">
@@ -681,7 +684,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 }
 
-const DynamicHead = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
+const DynamicHead = () => {
   const { settings } = useSettings();
 
   useEffect(() => {
@@ -744,30 +747,36 @@ const DynamicHead = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
   useEffect(() => {
     if (!settings) return;
 
-    const isStaff = portalType === 'staff';
-    const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
-    
-    if (manifestLink) {
-      // Use static manifest files for iPhone compatibility
-      const manifestPath = isStaff ? '/manifest-staff.json' : '/manifest.json';
-      manifestLink.setAttribute('href', window.location.origin + manifestPath);
-    }
-
-    // Update iOS-specific meta tags dynamically
-    const updateMeta = (name: string, content: string) => {
-      let meta = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
-      if (!meta) {
-        meta = document.createElement('meta');
-        meta.name = name;
-        document.head.appendChild(meta);
+    const updateManifest = () => {
+      const isStaff = window.location.hash.includes('staff') || window.location.search.includes('portal=staff');
+      const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
+      
+      if (manifestLink) {
+        // Use static manifest files for iPhone compatibility
+        const manifestPath = isStaff ? '/manifest-staff.json' : '/manifest.json';
+        manifestLink.setAttribute('href', window.location.origin + manifestPath);
       }
-      meta.content = content;
+
+      // Update iOS-specific meta tags dynamically
+      const updateMeta = (name: string, content: string) => {
+        let meta = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.name = name;
+          document.head.appendChild(meta);
+        }
+        meta.content = content;
+      };
+
+      const portalName = isStaff ? "Staff Portal" : (settings.name || "Health Club");
+      updateMeta('apple-mobile-web-app-title', portalName);
+      updateMeta('application-name', portalName);
     };
 
-    const portalName = isStaff ? "Staff Portal" : (settings.name || "Health Club");
-    updateMeta('apple-mobile-web-app-title', portalName);
-    updateMeta('application-name', portalName);
-  }, [settings, portalType]);
+    updateManifest();
+    window.addEventListener('hashchange', updateManifest);
+    return () => window.removeEventListener('hashchange', updateManifest);
+  }, [settings]);
 
   return null;
 };
@@ -823,68 +832,50 @@ const SecurityConsoleLog = () => {
 };
 
 const App = () => {
-  const [portalType] = useState<'admin' | 'staff'>(() => {
-    const hostname = window.location.hostname;
-    return hostname.includes('hcm-staff') ? 'staff' : 'admin';
-  });
-
   // Scheduler effect
   useEffect(() => {
+    // Run once on mount
     schedulerService.processScheduledReports();
+
+    // Then run every minute
     const interval = setInterval(() => {
       schedulerService.processScheduledReports();
     }, 60000);
+
     return () => clearInterval(interval);
   }, []);
 
   return (
     <ErrorBoundary>
-      <DynamicHead portalType={portalType} />
+      <DynamicHead />
       <SecurityConsoleLog />
       <Toaster position="top-right" />
       <UserActivityTracker />
       <Router>
         <Routes>
-          {/* Staff Portal Routes */}
-          {portalType === 'staff' ? (
-            <>
-              <Route path="/" element={<StaffLogin />} />
-              <Route path="/staff-login" element={<StaffLogin />} />
-              <Route element={<ProtectedLayout portalType="staff" />}>
-                <Route path="dashboard" element={<Dashboard />} />
-                <Route path="checkin" element={<AttendanceCheckIn />} />
-                <Route path="bookings" element={<MassageScheduling />} />
-                <Route path="staff-schedule" element={<StaffSchedule />} />
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </>
-          ) : (
-            // Admin Portal Routes
-            <>
-              <Route path="/" element={<Login />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/pass" element={<PublicMemberPass />} />
-              <Route element={<ProtectedLayout portalType="admin" />}>
-                <Route path="dashboard" element={<Dashboard />} />
-                <Route path="checkin" element={<AttendanceCheckIn />} />
-                <Route path="members" element={<Members />} />
-                <Route path="pt-members" element={<PTMembers />} />
-                <Route path="entrance-fee" element={<EntranceFee />} />
-                <Route path="staff" element={<StaffPage />} />
-                <Route path="bookings" element={<MassageScheduling />} />
-                <Route path="sales" element={<Sales />} />
-                <Route path="sales/stock-report" element={<RetailStockReport />} />
-                <Route path="categories" element={<Categories />} />
-                <Route path="users" element={<UsersPage />} />
-                <Route path="reports" element={<Reports />} />
-                <Route path="logs" element={<Logs />} />
-                <Route path="settings" element={<SettingsPage />} />
-                <Route path="profile" element={<Profile />} />
-                <Route path="notifications" element={<NotificationsPage />} />
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </>
-          )}
+          <Route path="/login" element={<Login />} />
+          <Route path="/staff-login" element={<StaffLogin />} />
+          <Route path="/staff-schedule" element={<StaffSchedule />} />
+          <Route path="/pass" element={<PublicMemberPass />} />
+          <Route element={<ProtectedLayout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="checkin" element={<AttendanceCheckIn />} />
+              <Route path="members" element={<Members />} />
+              <Route path="pt-members" element={<PTMembers />} />
+              <Route path="entrance-fee" element={<EntranceFee />} />
+              <Route path="staff" element={<StaffPage />} />
+              <Route path="bookings" element={<MassageScheduling />} />
+              <Route path="sales" element={<Sales />} />
+              <Route path="sales/stock-report" element={<RetailStockReport />} />
+              <Route path="categories" element={<Categories />} />
+              <Route path="users" element={<UsersPage />} />
+              <Route path="reports" element={<Reports />} />
+              <Route path="logs" element={<Logs />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="notifications" element={<NotificationsPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
     </ErrorBoundary>
