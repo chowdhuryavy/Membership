@@ -24,6 +24,18 @@ const StaffLogin = () => {
       if (staff) {
         // Store staff session
         localStorage.setItem('staff_session', JSON.stringify(staff));
+        
+        // Also store as membership_session so AuthContext recognizes it
+        const staffProfile = {
+            id: staff.id,
+            email: staff.email,
+            name: staff.name,
+            role_id: staff.role || 'staff',
+            allowed_outlets: staff.outlet_ids || [],
+            is_active: true
+        };
+        localStorage.setItem('membership_session', JSON.stringify(staffProfile));
+
         navigate('/dashboard');
       } else {
         setError('Invalid employee number or password, or access denied.');

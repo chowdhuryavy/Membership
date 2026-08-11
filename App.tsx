@@ -244,6 +244,9 @@ const ProtectedLayout = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const navigate = useNavigate();
 
+  const hasStaffSession = !!localStorage.getItem('staff_session');
+  const isAuthenticated = portalType === 'staff' ? (!!user || hasStaffSession) : !!user;
+
   const isInitialLoad = useRef(true);
   const splashPaths = useMemo(() => [
     '/', 
@@ -343,7 +346,7 @@ const ProtectedLayout = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [checkShortcut, navigate]);
 
-  if (!user && !combinedLoading) {
+  if (!isAuthenticated && !combinedLoading) {
     const loginPath = portalType === 'staff' ? '/staff-login' : '/login';
     if (location.pathname === '/' || location.pathname === loginPath) {
         return portalType === 'staff' ? <StaffLogin /> : <Login />;
@@ -355,7 +358,7 @@ const ProtectedLayout = ({ portalType }: { portalType: 'admin' | 'staff' }) => {
     <>
       {!showSplash && <TopLoader />}
       {showSplash && <SplashLoading />}
-      {user && (
+      {isAuthenticated && (
         <div className={`flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible transition-opacity duration-1000 ${showSplash ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
           <Sidebar onLogout={handleLogout} isCollapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
           <div className="flex-1 flex flex-col min-w-0 relative overflow-y-auto custom-scrollbar print:overflow-visible print:block">
