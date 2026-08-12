@@ -22,10 +22,16 @@ export const SignatureCapturePage = () => {
 
     const property = properties.find(p => p.id === currentOutlet?.property_id);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (signatureRef.current && signatureId) {
             const dataUrl = signatureRef.current.toDataURL();
-            localStorage.setItem(`sig_${signatureId}`, dataUrl);
+            
+            await fetch(`/api/temp-signature/${signatureId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dataUrl })
+            });
+
             setSaved(true);
         }
     };

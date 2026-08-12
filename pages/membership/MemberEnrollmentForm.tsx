@@ -24,7 +24,7 @@ const memberSchema = z.object({
   membership_number: z.string().min(1, "ID required"),
   guest_name: z.string().min(2, "Name required"),
   membership_type_id: z.string().optional().nullable(),
-  category_id: z.string().optional().nullable(),
+  category_id: z.string().min(1, "Membership tier required"),
   start_date: z.string().min(1, "Start date required"),
   discount: z.union([z.string(), z.number()]).transform((v) => Number(v) || 0),
   check_no: z.string().optional().nullable(),
@@ -86,15 +86,21 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
   useEffect(() => {
     if (showSignatureModal && signatureMethod === 'qr' && signatureIdRef.current) {
-        const interval = setInterval(() => {
-            const sig = localStorage.getItem(`sig_${signatureIdRef.current}`);
-            if (sig) {
-                setSignature(sig);
-                setShowSignatureModal(false);
-                setSignatureMethod(null);
-                localStorage.removeItem(`sig_${signatureIdRef.current}`);
-                clearInterval(interval);
-                if (pendingSubmitData) processSubmit(pendingSubmitData);
+        const interval = setInterval(async () => {
+            try {
+                const response = await fetch(`/api/temp-signature/${signatureIdRef.current}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.signature) {
+                        setSignature(data.signature);
+                        setShowSignatureModal(false);
+                        setSignatureMethod(null);
+                        clearInterval(interval);
+                        if (pendingSubmitData) processSubmit(pendingSubmitData);
+                    }
+                }
+            } catch (e) {
+                console.error("Polling error:", e);
             }
         }, 1000);
         return () => clearInterval(interval);

@@ -74,7 +74,28 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  const tempSignatures = new Map<string, string>();
+
   app.use(express.json());
+
+  // API: Temporary Signature Cache
+  app.post('/api/temp-signature/:id', (req, res) => {
+    const { id } = req.params;
+    const { dataUrl } = req.body;
+    tempSignatures.set(id, dataUrl);
+    res.json({ success: true });
+  });
+
+  app.get('/api/temp-signature/:id', (req, res) => {
+    const { id } = req.params;
+    const signature = tempSignatures.get(id);
+    if (signature) {
+      res.json({ signature });
+      tempSignatures.delete(id);
+    } else {
+      res.status(404).json({ error: 'Not found' });
+    }
+  });
 
   // Google Wallet API Route
   app.post('/api/google-wallet/generate-link', (req, res) => {
