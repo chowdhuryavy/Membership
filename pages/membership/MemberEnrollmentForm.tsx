@@ -69,7 +69,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   existingMember, isEditing, isRenewal, categories, membershipTypes, selectedTypeId, onTypeChange, staff, allMembers, onCancel, onSuccess
 }) => {
   const { user, isSuperAdmin } = useAuth();
-  const { currentOutlet, formatMoney, setPageLoading, currency } = useSettings();
+  const { currentOutlet, currentProperty, settings, formatMoney, setPageLoading, currency } = useSettings();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [matchedMembers, setMatchedMembers] = useState<Member[]>([]);
@@ -92,58 +92,25 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
               .on(
                   'postgres_changes',
                   {
-                      event: 'INSERT',
+                      event: '*',
                       schema: 'public',
                       table: 'notifications',
-                      filter: `title=eq.SIG_SYNC:${signatureIdRef.current}`
+                      filter: `id=eq.${signatureIdRef.current}`
                   },
-                  (payload) => {
+                  (payload: any) => {
+                      const record = payload.new || payload.old;
+                      if (!record?.message) return;
                       try {
-                          const syncData = JSON.parse(payload.new.message);
+                          const syncData = JSON.parse(record.message);
                           if (syncData.signature) setSignature(syncData.signature);
                           if (syncData.confirmed) {
                               setShowSignatureModal(false);
                               setSignatureMethod(null);
-                              // Cleanup notification
-                              supabase
-                                  .from('notifications')
-                                  .delete()
-                                  .eq('id', payload.new.id)
-                                  .then(() => {
-                                      if (pendingSubmitData) onFinalSubmit(pendingSubmitData, syncData.signature);
-                                  });
+                              supabase.from('notifications').delete().eq('id', record.id);
+                              if (pendingSubmitData) onFinalSubmit(pendingSubmitData, syncData.signature);
                           }
                       } catch (e) {
-                          console.error("Real-time parse error:", e);
-                      }
-                  }
-              )
-              .on(
-                  'postgres_changes',
-                  {
-                      event: 'UPDATE',
-                      schema: 'public',
-                      table: 'notifications',
-                      filter: `title=eq.SIG_SYNC:${signatureIdRef.current}`
-                  },
-                  (payload) => {
-                      try {
-                          const syncData = JSON.parse(payload.new.message);
-                          if (syncData.signature) setSignature(syncData.signature);
-                          if (syncData.confirmed) {
-                              setShowSignatureModal(false);
-                              setSignatureMethod(null);
-                              // Cleanup notification
-                              supabase
-                                  .from('notifications')
-                                  .delete()
-                                  .eq('id', payload.new.id)
-                                  .then(() => {
-                                      if (pendingSubmitData) onFinalSubmit(pendingSubmitData, syncData.signature);
-                                  });
-                          }
-                      } catch (e) {
-                          console.error("Real-time update parse error:", e);
+                          console.error("Sync parse error:", e);
                       }
                   }
               )
@@ -158,14 +125,14 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                       .eq('title', `SIG_SYNC:${signatureIdRef.current}`)
                       .maybeSingle();
 
-                  if (data?.message) {
-                      const syncData = JSON.parse(data.message);
+                  if ((data as any)?.message) {
+                      const syncData = JSON.parse((data as any).message);
                       if (syncData.signature) setSignature(syncData.signature);
                       if (syncData.confirmed) {
                           setShowSignatureModal(false);
                           setSignatureMethod(null);
                           clearInterval(interval);
-                          await supabase.from('notifications').delete().eq('id', data.id);
+                          await supabase.from('notifications').delete().eq('id', (data as any).id);
                           if (pendingSubmitData) onFinalSubmit(pendingSubmitData, syncData.signature);
                       }
                   }
@@ -204,9 +171,14 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         
         const baseUrl = window.location.origin;
         const queryParams = new URLSearchParams({
+            id: id,
             name: name,
             tier: tier,
-            price: price.toString()
+            price: price.toString(),
+            property: currentProperty?.name || '',
+            outlet: currentOutlet?.name || '',
+            outlet_id: currentOutlet?.id || '',
+            logo: settings?.logo_url || ''
         }).toString();
         
         // Use HashRouter format #/signature/...
@@ -1049,10 +1021,21 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                 {signature && (
                                     <Button 
                                         type="button"
-                                        onClick={() => {
+                                        onClick={async () => {
                                             // Staff can also force confirm if signature is visible
                                             setShowSignatureModal(false);
                                             setSignatureMethod(null);
+                                            
+                                            // Signal to guest device before cleanup
+                                            if (signatureIdRef.current) {
+                                                await supabase.from('notifications').update({
+                                                    message: JSON.stringify({ completed_by_staff: true })
+                                                }).eq('id', signatureIdRef.current);
+                                                
+                                                await new Promise(r => setTimeout(r, 500));
+                                                await supabase.from('notifications').delete().eq('id', signatureIdRef.current);
+                                            }
+
                                             if (pendingSubmitData) {
                                                 onFinalSubmit(pendingSubmitData, signature);
                                             }

@@ -6,11 +6,10 @@ import { useParams } from 'react-router-dom';
 import { useSettings } from '../contexts/SettingsContext';
 import { Button } from '../components/ui';
 import { CheckCircle2 } from 'lucide-react';
-import { supabase } from '../services/supabase';
+import { supabase } from '../services/mockSupabase';
 
 export const SignatureCapturePage: React.FC = () => {
     const { signatureId } = useParams<{ signatureId: string }>();
-    const { currentOutlet, settings, currentProperty } = useSettings();
     const signatureRef = useRef<SignatureCanvas>(null);
     const [saved, setSaved] = useState(false);
     const [expired, setExpired] = useState(false);
@@ -22,12 +21,21 @@ export const SignatureCapturePage: React.FC = () => {
         const searchPart = window.location.search;
         const hashPart = window.location.hash;
         let params = new URLSearchParams();
-        if (searchPart) params = new URLSearchParams(searchPart);
+        
+        // Handle standard search params
+        if (searchPart) {
+            const searchParams = new URLSearchParams(searchPart);
+            searchParams.forEach((value, key) => params.set(key, value));
+        }
+        
+        // Handle hash-based query params (for HashRouter)
         if (hashPart.includes('?')) {
             const hashQuery = hashPart.split('?')[1];
             const hashParams = new URLSearchParams(hashQuery);
             hashParams.forEach((value, key) => params.set(key, value));
         }
+        
+        // Fallback for cases where params might be elsewhere in the URL
         if (!params.has('name') && fullUrl.includes('?')) {
             const fallbackQuery = fullUrl.substring(fullUrl.indexOf('?') + 1);
             const fallbackParams = new URLSearchParams(fallbackQuery);
@@ -40,21 +48,62 @@ export const SignatureCapturePage: React.FC = () => {
     const guestName = searchParams.get('name') || 'Guest';
     const tier = searchParams.get('tier') || 'Standard';
     const price = searchParams.get('price') || '0';
+    const propertyName = searchParams.get('property') || 'Health Club';
+    const outletName = searchParams.get('outlet') || 'Main Outlet';
+    const outletId = searchParams.get('outlet_id') || '';
+    const logoUrl = searchParams.get('logo') || '';
 
     useEffect(() => {
-        const checkStatus = async () => {
-            if (!signatureId) return;
-            try {
-                // If the notification doesn't exist at all on mount, it might have been cleaned up/expired
-                // but we wait for the first save to create it
-                setLoading(false);
-            } catch (err) {
-                console.error('Error checking status:', err);
-                setLoading(false);
+        if (!signatureId) return;
+
+        // Listen for staff confirmation or record changes
+        const channel = supabase
+            .channel(`guest_sync:${signatureId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*', // Listen to all events
+                    schema: 'public',
+                    table: 'notifications',
+                    filter: `id=eq.${signatureId}`
+                },
+                (payload) => {
+                    if (payload.eventType === 'DELETE') {
+                        setSaved(true);
+                        toast.success('Agreement Finalized!');
+                    } else if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+                        try {
+                            const syncData = JSON.parse(payload.new.message);
+                            if (syncData.completed_by_staff) {
+                                setSaved(true);
+                            }
+                        } catch (e) {}
+                    }
+                }
+            )
+            .subscribe();
+
+        // Check status on mount
+        const initCheck = async () => {
+            const { data } = await supabase
+                .from('notifications')
+                .select('id, message')
+                .eq('id', signatureId)
+                .maybeSingle();
+            
+            if (data?.message) {
+                try {
+                    const syncData = JSON.parse(data.message);
+                    if (syncData.completed_by_staff) setSaved(true);
+                } catch (e) {}
             }
+            setLoading(false);
         };
-        checkStatus();
-        signatureRef.current?.clear();
+        initCheck();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [signatureId]);
 
     const handleSave = async (confirmed: boolean = false) => {
@@ -87,7 +136,7 @@ export const SignatureCapturePage: React.FC = () => {
                     title: `SIG_SYNC:${signatureId}`,
                     message: JSON.stringify(syncData),
                     type: 'info',
-                    outlet_id: currentOutlet?.id,
+                    outlet_id: outletId || null,
                     user_id: '00000000-0000-0000-0000-000000000000'
                 });
 
@@ -161,68 +210,72 @@ export const SignatureCapturePage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-            <header className="bg-white border-b border-slate-200 p-4 sticky top-0 z-20">
-                <div className="max-w-md mx-auto flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        {settings?.logo_url ? (
-                            <img src={settings.logo_url} alt="Logo" className="h-10 w-10 object-contain rounded-lg" />
+            <header className="bg-white border-b border-slate-200 p-6 sticky top-0 z-20">
+                <div className="max-w-md mx-auto flex flex-col items-center gap-4">
+                    <div className="flex flex-col items-center text-center">
+                        {logoUrl ? (
+                            <img src={logoUrl} alt="Logo" className="h-16 w-16 object-contain rounded-2xl mb-4 shadow-sm" />
                         ) : (
-                            <div className="h-10 w-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-black">
-                                {settings?.name?.[0] || 'H'}
+                            <div className="h-16 w-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-2xl mb-4 shadow-lg shadow-indigo-100">
+                                {propertyName[0] || 'H'}
                             </div>
                         )}
-                        <div>
-                            <h1 className="text-sm font-black text-slate-900 leading-tight uppercase tracking-tight">
-                                {currentProperty?.name || settings?.name || 'Health Club'}
-                            </h1>
-                            <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider">
-                                {currentOutlet?.name || 'Main Outlet'}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Guest</p>
-                        <p className="text-xs font-black text-slate-900 truncate max-w-[120px]">{guestName}</p>
+                        <h1 className="text-xl font-black text-slate-900 leading-tight uppercase tracking-tight">
+                            {propertyName}
+                        </h1>
+                        <p className="text-xs text-indigo-600 font-bold uppercase tracking-[0.2em] mt-1">
+                            {outletName}
+                        </p>
                     </div>
                 </div>
             </header>
 
-            <main className="flex-1 max-w-md mx-auto w-full p-4 flex flex-col gap-6 overflow-y-auto">
-                {/* Enrollment Summary */}
-                <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-                    <h2 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Enrollment Details</h2>
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm font-bold text-slate-500">Selected Tier</span>
-                            <span className="text-sm font-black text-slate-900">{tier}</span>
+            <main className="flex-1 max-w-md mx-auto w-full p-6 flex flex-col gap-6 overflow-y-auto">
+                {/* Guest Profile Section */}
+                <div className="text-center bg-indigo-600 rounded-[2.5rem] p-8 text-white shadow-xl shadow-indigo-100 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-2 opacity-80">Welcome Guest</p>
+                    <h2 className="text-3xl font-black tracking-tight mb-1">{guestName}</h2>
+                    <div className="h-px w-12 bg-white/30 mx-auto my-4" />
+                    <div className="flex items-center justify-center gap-6">
+                        <div className="text-center">
+                            <p className="text-[10px] font-bold uppercase opacity-60 tracking-widest">Tier</p>
+                            <p className="text-sm font-black">{tier}</p>
                         </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm font-bold text-slate-500">Membership Rate</span>
-                            <span className="text-sm font-black text-indigo-600">{price}</span>
+                        <div className="w-px h-8 bg-white/20" />
+                        <div className="text-center">
+                            <p className="text-[10px] font-bold uppercase opacity-60 tracking-widest">Rate</p>
+                            <p className="text-sm font-black">AED {price}</p>
                         </div>
                     </div>
                 </div>
 
                 {/* Signature Pad */}
-                <div className="flex-1 flex flex-col gap-3 min-h-[350px]">
-                    <div className="flex items-center justify-between px-1">
-                        <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest">Sign Below</h2>
+                <div className="flex-1 flex flex-col gap-4 min-h-[400px]">
+                    <div className="flex items-center justify-between px-2">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                            <h2 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em]">Live Signature Area</h2>
+                        </div>
                         <button 
                             onClick={handleClear}
-                            className="text-[10px] font-black text-slate-400 uppercase hover:text-red-500 transition-colors"
+                            className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-colors"
                         >
-                            Clear Pad
+                            Reset Canvas
                         </button>
                     </div>
                     
-                    <div className="flex-1 bg-white border-2 border-slate-200 rounded-[2.5rem] overflow-hidden relative shadow-inner flex flex-col">
+                    <div className="flex-1 bg-white border-2 border-slate-200 rounded-[3rem] overflow-hidden relative shadow-inner flex flex-col group transition-all focus-within:border-indigo-300">
                         <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:32px_32px] opacity-20 pointer-events-none" />
-                        <div className="absolute bottom-16 left-8 right-8 h-px bg-slate-300 pointer-events-none" />
+                        <div className="absolute bottom-16 left-12 right-12 h-px bg-slate-300 pointer-events-none" />
+                        <div className="absolute bottom-6 left-0 right-0 text-center pointer-events-none">
+                            <span className="text-[10px] text-slate-300 font-black uppercase tracking-[0.4em]">Sign on the line above</span>
+                        </div>
                         
                         <SignatureCanvas
                             ref={signatureRef}
                             canvasProps={{
-                                className: 'flex-1 w-full h-full cursor-crosshair touch-none',
+                                className: 'flex-1 w-full h-full cursor-crosshair touch-none relative z-10',
                                 style: { minHeight: '300px' }
                             }}
                             onBegin={startLiveSync}
@@ -234,16 +287,17 @@ export const SignatureCapturePage: React.FC = () => {
                 </div>
             </main>
 
-            <footer className="p-6 bg-white border-t border-slate-100 shadow-[0_-8px_30px_-10px_rgba(0,0,0,0.05)] sticky bottom-0">
+            <footer className="p-8 bg-white border-t border-slate-100 shadow-[0_-15px_40px_-15px_rgba(0,0,0,0.05)] sticky bottom-0 z-20">
                 <div className="max-w-md mx-auto">
                     <Button 
                         onClick={() => handleSave(true)}
-                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-7 rounded-2xl text-base shadow-xl shadow-indigo-100 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-8 rounded-[2rem] text-lg shadow-2xl shadow-indigo-100 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
                     >
-                        Confirm & Submit Signature
+                        Confirm Agreement
+                        <CheckCircle2 className="w-6 h-6" />
                     </Button>
-                    <p className="text-[10px] text-slate-400 font-bold text-center mt-4 leading-relaxed uppercase tracking-tight">
-                        By signing, you agree to the membership terms and conditions
+                    <p className="text-[10px] text-slate-400 font-bold text-center mt-6 leading-relaxed uppercase tracking-[0.1em]">
+                        Digital agreement session • Encrypted & Secure
                     </p>
                 </div>
             </footer>
