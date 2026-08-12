@@ -136,7 +136,8 @@ export default function AttendanceCheckIn() {
         method,
         user?.name || 'Reception Staff',
         'Desk Entry',
-        currentOutlet?.id
+        currentOutlet?.id,
+        currentProperty?.id || currentOutlet?.property_id
       );
 
       if (res.success) {

@@ -115,9 +115,27 @@ export class CheckInService {
     method: MemberCheckIn['check_in_method'],
     checkedInBy?: string,
     notes?: string,
-    outletId?: string
+    outletId?: string,
+    propertyId?: string
   ): Promise<{ success: boolean; checkIn?: MemberCheckIn; message: string }> {
     const targetOutletId = outletId || member.outlet_id || 'main';
+
+    let targetPropertyId = propertyId || (member as any).property_id;
+
+    if (!targetPropertyId && targetOutletId && isSupabaseConfigured()) {
+      try {
+        const { data: outletData } = await supabase
+          .from('outlets')
+          .select('property_id')
+          .eq('id', targetOutletId)
+          .maybeSingle();
+        if (outletData?.property_id) {
+          targetPropertyId = outletData.property_id;
+        }
+      } catch (e) {
+        console.warn('Could not resolve property_id for outlet:', e);
+      }
+    }
     
     // First verify if member is already checked in
     const activeCheckIns = await this.getCheckIns(targetOutletId, false, undefined, { 
@@ -139,6 +157,7 @@ export class CheckInService {
       membership_number: member.membership_number,
       guest_name: member.guest_name,
       outlet_id: targetOutletId,
+      property_id: targetPropertyId || undefined,
       check_in_time: new Date().toISOString(),
       check_out_time: null,
       duration_minutes: null,

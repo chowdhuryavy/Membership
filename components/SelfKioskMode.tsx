@@ -161,7 +161,8 @@ export const SelfKioskMode: React.FC<SelfKioskModeProps> = ({
           'self_kiosk_qr',
           'Self-Service Kiosk',
           'Kiosk Entry',
-          outletId
+          outletId,
+          propertyId
         );
 
         if (res.success) {
