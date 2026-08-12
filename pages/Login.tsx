@@ -68,10 +68,20 @@ const Login = () => {
 
   useEffect(() => {
     localStorage.setItem('preferred_portal', 'admin');
-    if (window.location.hostname.toLowerCase().includes('hcm-staff')) {
-      navigate('/staff-login', { replace: true });
+    const host = window.location.hostname.toLowerCase();
+    if (host.includes('hcm-staff')) {
+      window.location.href = 'https://hcm-staff.perfection.my/#/staff-login';
     }
   }, [navigate]);
+
+  const handleStaffPortalClick = () => {
+    const host = window.location.hostname.toLowerCase();
+    if (host.includes('perfection.my')) {
+      window.location.href = 'https://hcm-staff.perfection.my/#/staff-login';
+    } else {
+      navigate('/staff-login');
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#fcfdfe] selection:bg-indigo-100">
@@ -114,7 +124,7 @@ const Login = () => {
           {/* Staff Portal Link Icon */}
           <button 
             type="button"
-            onClick={() => navigate('/staff-login')}
+            onClick={handleStaffPortalClick}
             className="absolute top-8 right-8 px-4 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all group flex items-center gap-2 shadow-sm"
             title="Staff Portal"
           >
