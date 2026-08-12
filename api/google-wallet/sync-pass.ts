@@ -92,7 +92,7 @@ export default async function handler(req: any, res: any) {
     const auth = getGoogleWalletJwtClient();
     if (!auth) {
       console.warn('[Google Wallet Sync] Credentials not fully configured. Skipping pass update.');
-      return res.status(500).json({ 
+      return res.status(200).json({ 
         success: false, 
         error: 'Google Wallet service account credentials are not configured on server environment.' 
       });
@@ -202,7 +202,9 @@ export default async function handler(req: any, res: any) {
 
     console.error(`[Google Wallet Sync Error] Pass sync failed for member ${req.body?.memberId}:`, errorData);
 
-    return res.status(errorStatus < 600 ? errorStatus : 500).json({
+    // Always return HTTP 200 to prevent browser console errors for expected 404s
+    // (A 404 just means the user hasn't added the pass to their wallet yet)
+    return res.status(200).json({
       success: false,
       objectId: `${process.env.GOOGLE_WALLET_ISSUER_ID}.mem_${String(req.body?.memberId || '').replace(/[^a-zA-Z0-9_]/g, '')}`,
       status: errorStatus,

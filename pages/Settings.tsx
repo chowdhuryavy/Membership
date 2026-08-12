@@ -721,8 +721,14 @@ const SettingsPage = () => {
   const handleReportRecipientSubmit = async () => {
     setIsSaving(true);
     try {
-      if (editingId) await db.updateReportRecipient(editingId, reportRecipientForm);
-      else await db.addReportRecipient(reportRecipientForm);
+      const sanitizedPayload = {
+        ...reportRecipientForm,
+        send_time: (reportRecipientForm.send_time && reportRecipientForm.send_time !== 'Instant' && /^\d{2}:\d{2}/.test(reportRecipientForm.send_time))
+          ? reportRecipientForm.send_time
+          : '00:00'
+      };
+      if (editingId) await db.updateReportRecipient(editingId, sanitizedPayload);
+      else await db.addReportRecipient(sanitizedPayload);
       await loadData();
       setShowForm(false);
       showStatus('Report recipient configuration updated.');
@@ -1533,7 +1539,7 @@ const SettingsPage = () => {
                                       property_id: properties[0]?.id || '',
                                       outlet_id: 'all',
                                       report_type: 'member_purchased',
-                                      send_time: 'Instant',
+                                      send_time: '00:00',
                                       report_date_type: 'today',
                                       incentive_dept: 'All',
                                       selected_membership_type_id: 'all',
@@ -2099,7 +2105,14 @@ const SettingsPage = () => {
                                         {value:'member_purchased', label:'Member Addition / Purchase Alert (Instant)'}
                                     ]} 
                                     value={reportRecipientForm.report_type} 
-                                    onChange={e => setReportRecipientForm({...reportRecipientForm, report_type: e.target.value as any})} 
+                                    onChange={e => {
+                                        const typeVal = e.target.value as any;
+                                        setReportRecipientForm({
+                                            ...reportRecipientForm, 
+                                            report_type: typeVal,
+                                            send_time: typeVal === 'member_purchased' ? '00:00' : (reportRecipientForm.send_time === 'Instant' || !reportRecipientForm.send_time ? '08:00' : reportRecipientForm.send_time)
+                                        });
+                                    }} 
                                     className="h-14 rounded-xl border-2" 
                                 />
                             </div>
@@ -2160,25 +2173,35 @@ const SettingsPage = () => {
                                 />
                             )}
                             
-                            <div className="space-y-1.5">
-                                <Input 
-                                    label="Scheduled Dispatch Time *" 
-                                    type="time"
-                                    value={reportRecipientForm.send_time} 
-                                    onChange={e => setReportRecipientForm({...reportRecipientForm, send_time: e.target.value})} 
-                                    className="h-14 rounded-xl font-black border-2" 
-                                />
-                                {isSuperAdmin && reportRecipientForm.property_id && (
-                                    <button 
-                                        type="button"
-                                        onClick={handleApplyTimeToAllInProperty}
-                                        disabled={isSaving}
-                                        className="text-[8px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors flex items-center gap-1 ml-1"
-                                    >
-                                        <RefreshCcw className="w-2.5 h-2.5" /> Apply to All in Property
-                                    </button>
-                                )}
-                            </div>
+                            {reportRecipientForm.report_type === 'member_purchased' ? (
+                                <div className="p-4 bg-indigo-50/80 border-2 border-indigo-200/80 rounded-xl flex items-center justify-between">
+                                    <div>
+                                        <div className="text-[10px] font-black uppercase text-indigo-900 tracking-wider">Dispatch Timing</div>
+                                        <div className="text-xs font-bold text-indigo-700 mt-0.5">⚡ Instant Alert (Dispatched immediately upon member purchase)</div>
+                                    </div>
+                                    <span className="text-[10px] font-black bg-indigo-600 text-white px-2.5 py-1 rounded-md uppercase shrink-0">Real-Time</span>
+                                </div>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    <Input 
+                                        label="Scheduled Dispatch Time *" 
+                                        type="time"
+                                        value={(reportRecipientForm.send_time && reportRecipientForm.send_time !== 'Instant') ? reportRecipientForm.send_time : '08:00'} 
+                                        onChange={e => setReportRecipientForm({...reportRecipientForm, send_time: e.target.value})} 
+                                        className="h-14 rounded-xl font-black border-2" 
+                                    />
+                                    {isSuperAdmin && reportRecipientForm.property_id && (
+                                        <button 
+                                            type="button"
+                                            onClick={handleApplyTimeToAllInProperty}
+                                            disabled={isSaving}
+                                            className="text-[8px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors flex items-center gap-1 ml-1"
+                                        >
+                                            <RefreshCcw className="w-2.5 h-2.5" /> Apply to All in Property
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                             <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 h-14">
                                 <input 
                                     type="checkbox" 

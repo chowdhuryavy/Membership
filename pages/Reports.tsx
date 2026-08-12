@@ -349,49 +349,66 @@ const Reports = () => {
     }
   };
 
+  const generatePDFFromView = async () => {
+    if (!reportRef.current) {
+      throw new Error('Report view element is not ready.');
+    }
+
+    const element = reportRef.current;
+
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      windowWidth: element.scrollWidth,
+      windowHeight: element.scrollHeight
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = await import('jspdf');
+
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+
+    const imgWidth = pdfWidth;
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+    heightLeft -= pdfHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= pdfHeight;
+    }
+
+    return pdf;
+  };
+
   const handleExportPDF = async () => {
     if (!currentOutlet || !currentProperty || !settings) return;
     setIsGeneratingPDF(true);
     
     try {
-      const start = reportType === 'daily_sales' ? startOfDay(parseISO(dailySalesDate)) : startOfDay(parseISO(reportMonth + '-01'));
-      const cacheKey = `${reportType}_${currentOutlet.id}_${format(start, 'yyyy-MM-dd')}_${incentiveDept}_${selectedMembershipTypeId}_${revenueMode}`;
-      
-      const currentRows = reportType === 'revenue_recognition' ? revenueRows : rows;
-      const cached = reportCache.current[cacheKey];
-      
-      const cachedData = {
-        rows: (cached?.rows && cached.rows.length > 0) ? cached.rows : currentRows,
-        summary: cached?.summary || summary,
-        groupedRows: cached?.groupedRows || (reportType === 'revenue_recognition' ? cached?.groupedRows : undefined)
-      };
-      
-      const { jsPDF } = await import('jspdf');
-      const autoTable = (await import('jspdf-autotable')).default;
-      
-      const reportName = getReportTitle(reportType, incentiveDept);
-                          
-      await generateReportPDF({
-        jsPDF,
-        autoTable,
-        data: cachedData,
-        propertyName: currentProperty.name,
-        outletName: currentOutlet.name,
-        outletId: currentOutlet.id,
-        currencySymbol: currency?.symbol || 'QAR',
-        currencyCode: currency?.code || 'QAR',
-        reportTitle: reportName,
-        date: reportType === 'daily_sales' ? dailySalesDate : reportMonth,
-        logoUrl: currentProperty.logo_url,
-        reportType,
-        membershipTypeName: selectedMembershipTypeId === 'all' ? 'All Types' : membershipTypes.find(t => t.id === selectedMembershipTypeId)?.name || 'All Types',
-        userName: user?.name || 'Administrator',
-        summary: cachedData.summary || summary,
-        signatoryConfig: signatoryConfig
-      });
-    } catch (error) {
+      const pdf = await generatePDFFromView();
+      const reportName = getReportTitle(reportType, incentiveDept).replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const filename = `${reportName}_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
+      pdf.save(filename);
+      toast.success('PDF successfully exported!');
+    } catch (error: any) {
       console.error('Error generating PDF:', error);
-      alert('Failed to generate PDF. Please try again.');
+      toast.error('Failed to generate PDF: ' + (error.message || 'Unknown error'));
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -420,41 +437,9 @@ const Reports = () => {
 
     setIsSendingEmail(true);
     try {
-      const start = reportType === 'daily_sales' ? startOfDay(parseISO(dailySalesDate)) : startOfDay(parseISO(reportMonth + '-01'));
-      const cacheKey = `${reportType}_${currentOutlet.id}_${format(start, 'yyyy-MM-dd')}_${incentiveDept}_${selectedMembershipTypeId}_${revenueMode}`;
-      const currentRows = reportType === 'revenue_recognition' ? revenueRows : rows;
-      const cached = reportCache.current[cacheKey];
-
-      const cachedData = {
-        rows: (cached?.rows && cached.rows.length > 0) ? cached.rows : currentRows,
-        summary: cached?.summary || summary,
-        groupedRows: cached?.groupedRows || (reportType === 'revenue_recognition' ? cached?.groupedRows : undefined)
-      };
-
-      const { jsPDF } = await import('jspdf');
-      const autoTable = (await import('jspdf-autotable')).default;
       const reportName = getReportTitle(reportType, incentiveDept);
-
-      const pdfDoc = await generateReportPDF({
-        jsPDF,
-        autoTable,
-        data: cachedData,
-        propertyName: currentProperty.name,
-        outletName: currentOutlet.name,
-        outletId: currentOutlet.id,
-        currencySymbol: currency?.symbol || 'QAR',
-        currencyCode: currency?.code || 'QAR',
-        reportTitle: reportName,
-        date: reportType === 'daily_sales' ? dailySalesDate : reportMonth,
-        logoUrl: currentProperty.logo_url,
-        reportType,
-        membershipTypeName: selectedMembershipTypeId === 'all' ? 'All Types' : membershipTypes.find(t => t.id === selectedMembershipTypeId)?.name || 'All Types',
-        userName: user?.name || 'Administrator',
-        summary: cachedData.summary || summary,
-        signatoryConfig: signatoryConfig
-      });
-
-      const pdfBase64 = pdfDoc.output('datauristring').split(',')[1];
+      const pdf = await generatePDFFromView();
+      const pdfBase64 = pdf.output('datauristring').split(',')[1];
 
       await emailService.sendReportEmail(
         emailRecipientsInput,

@@ -3978,8 +3978,13 @@ class DatabaseService {
   }
 
   async addReportRecipient(recipient: Omit<ReportRecipient, 'id' | 'created_at'>) {
+    const sendTime = (recipient.send_time && recipient.send_time !== 'Instant' && /^\d{2}:\d{2}/.test(recipient.send_time))
+      ? recipient.send_time
+      : '00:00';
+
     const newRecipient = {
       ...recipient,
+      send_time: sendTime,
       id: this.generateUUID(),
       created_at: new Date().toISOString()
     };
@@ -4009,14 +4014,19 @@ class DatabaseService {
   }
 
   async updateReportRecipient(id: string, updates: Partial<ReportRecipient>) {
+    const cleanUpdates = { ...updates };
+    if (cleanUpdates.send_time && (cleanUpdates.send_time === 'Instant' || !/^\d{2}:\d{2}/.test(cleanUpdates.send_time))) {
+      cleanUpdates.send_time = '00:00';
+    }
+
     if (this.isSupabase()) {
-      const { error } = await supabase.from('report_recipients').update(updates).eq('id', id);
+      const { error } = await supabase.from('report_recipients').update(cleanUpdates).eq('id', id);
       if (error) throw error;
     } else {
       const recipients = await this.getReportRecipients();
       const index = recipients.findIndex(r => r.id === id);
       if (index !== -1) {
-        recipients[index] = { ...recipients[index], ...updates };
+        recipients[index] = { ...recipients[index], ...cleanUpdates };
         localStorage.setItem('membership_report_recipients', JSON.stringify(recipients));
       }
     }
