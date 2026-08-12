@@ -78,17 +78,20 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
   const signatureRef = useRef<SignatureCanvas>(null);
-  const [showQrModal, setShowQrModal] = useState(false);
+  const [signatureMethod, setSignatureMethod] = useState<'pad' | 'qr' | null>(null);
   const [qrUrl, setQrUrl] = useState('');
   const signatureIdRef = useRef<string | null>(null);
+  const [isQrScanned, setIsQrScanned] = useState(false);
+  const [isGuestSigning, setIsGuestSigning] = useState(false);
 
   useEffect(() => {
-    if (showQrModal && signatureIdRef.current) {
+    if (showSignatureModal && signatureMethod === 'qr' && signatureIdRef.current) {
         const interval = setInterval(() => {
             const sig = localStorage.getItem(`sig_${signatureIdRef.current}`);
             if (sig) {
                 setSignature(sig);
-                setShowQrModal(false);
+                setShowSignatureModal(false);
+                setSignatureMethod(null);
                 localStorage.removeItem(`sig_${signatureIdRef.current}`);
                 clearInterval(interval);
                 if (pendingSubmitData) processSubmit(pendingSubmitData);
@@ -96,7 +99,26 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         }, 1000);
         return () => clearInterval(interval);
     }
-  }, [showQrModal, pendingSubmitData]);
+  }, [showSignatureModal, signatureMethod, pendingSubmitData]);
+
+  const initiateSignature = (data: MemberFormValues) => {
+    setPendingSubmitData(data);
+    setShowSignatureModal(true);
+    setSignatureMethod(null);
+  };
+
+  const handleSignatureMethodSelect = (method: 'pad' | 'qr') => {
+    setSignatureMethod(method);
+    if (method === 'qr') {
+        const id = crypto.randomUUID();
+        signatureIdRef.current = id;
+        setQrUrl(`${window.location.origin}/#/signature/${id}`);
+        setShowQrModal(true);
+        setShowSignatureModal(false);
+    } else {
+        setShowQrModal(false);
+    }
+  };
 
   const handleSignatureSave = () => {
     if (signatureRef.current) {
@@ -328,11 +350,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
   const onFormSubmit = async (data: MemberFormValues) => {
     if (!signature) {
-        const id = crypto.randomUUID();
-        signatureIdRef.current = id;
-        setQrUrl(`${window.location.origin}/#/signature/${id}`);
-        setShowQrModal(true);
-        setPendingSubmitData(data);
+        initiateSignature(data);
         return;
     }
 
@@ -877,20 +895,47 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         </div>
         </form>
 
-        {showQrModal && (
+        {showSignatureModal && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-                <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-300 ring-1 ring-black/5 p-8 flex flex-col items-center">
-                    <h3 className="text-lg font-black text-slate-900 mb-4 uppercase tracking-widest">Guest Signature</h3>
-                    <p className="text-xs text-slate-500 font-bold mb-6 text-center">Scan QR with tablet to sign</p>
-                    <div className="bg-white p-4 border border-slate-100 rounded-2xl shadow-sm mb-6">
-                        <QRCodeCanvas value={qrUrl} size={250} />
-                    </div>
-                    <button 
-                        onClick={() => { setShowQrModal(false); setPendingSubmitData(null); }}
-                        className="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600"
-                    >
-                        Cancel
-                    </button>
+                <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full overflow-hidden p-8 flex flex-col items-center">
+                    {!signatureMethod ? (
+                        <>
+                            <h3 className="text-lg font-black text-slate-900 mb-6 uppercase tracking-widest">Select Method</h3>
+                            <div className="flex flex-col gap-4 w-full">
+                                <Button onClick={() => handleSignatureMethodSelect('pad')} className="h-14 rounded-xl">Signature Pad</Button>
+                                <Button onClick={() => handleSignatureMethodSelect('qr')} className="h-14 rounded-xl">QR Code</Button>
+                                <Button variant="outline" onClick={() => {setShowSignatureModal(false); setPendingSubmitData(null);}} className="h-14 rounded-xl">Cancel</Button>
+                            </div>
+                        </>
+                    ) : signatureMethod === 'pad' ? (
+                        <>
+                            <h3 className="text-lg font-black text-slate-900 mb-4 uppercase tracking-widest">Sign Below</h3>
+                            <div className="border-2 border-slate-200 rounded-2xl mb-6 bg-slate-50 w-full">
+                                <SignatureCanvas 
+                                    ref={signatureRef}
+                                    canvasProps={{ width: 300, height: 150, className: 'w-full h-36' }} 
+                                />
+                            </div>
+                            <div className="flex gap-2 w-full">
+                                <Button onClick={handleSignatureClear} variant="outline" className="flex-1 rounded-xl">Clear</Button>
+                                <Button onClick={handleSignatureSave} className="flex-1 rounded-xl bg-indigo-600">Confirm</Button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <h3 className="text-lg font-black text-slate-900 mb-4 uppercase tracking-widest">Guest Signature</h3>
+                            <p className="text-xs text-slate-500 font-bold mb-6 text-center">Scan QR with tablet to sign</p>
+                            <div className="bg-white p-4 border border-slate-100 rounded-2xl shadow-sm mb-6">
+                                <QRCodeCanvas value={qrUrl} size={250} />
+                            </div>
+                            <button 
+                                onClick={() => { setShowSignatureModal(false); setPendingSubmitData(null); setSignatureMethod(null); }}
+                                className="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600"
+                            >
+                                Cancel
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
         )}
