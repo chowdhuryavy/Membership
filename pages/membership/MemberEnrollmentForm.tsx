@@ -945,24 +945,53 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         </>
                     ) : (
                         <>
-                            <h3 className="text-lg font-black text-slate-900 mb-4 uppercase tracking-widest">Guest Signature</h3>
-                            <p className="text-xs text-slate-500 font-bold mb-6 text-center">Scan QR with tablet to sign</p>
-                            <div className="bg-white p-4 border border-slate-100 rounded-3xl shadow-sm mb-6 flex items-center justify-center">
-                                {qrUrl && (
+                            <h3 className="text-lg font-black text-slate-900 mb-2 uppercase tracking-widest">
+                                {signature ? 'Live Preview' : 'Guest Signature'}
+                            </h3>
+                            <p className="text-[10px] text-slate-500 font-bold mb-4 text-center uppercase tracking-tighter">
+                                {signature ? 'Guest is signing now...' : 'Scan QR with tablet to sign'}
+                            </p>
+                            <div className="bg-white p-4 border border-slate-100 rounded-3xl shadow-sm mb-6 flex items-center justify-center min-h-[270px] w-full">
+                                {signature ? (
+                                    <div className="w-full flex flex-col items-center">
+                                        <img src={signature} alt="Live Signature" className="max-h-48 object-contain border border-slate-50 rounded-xl" />
+                                        <p className="text-[10px] text-indigo-500 font-black mt-4 animate-pulse">WAITING FOR GUEST TO CONFIRM...</p>
+                                    </div>
+                                ) : qrUrl ? (
                                     <QRCodeSVG 
                                         value={qrUrl} 
                                         size={240} 
                                         level="H" 
                                         includeMargin={true}
                                     />
+                                ) : (
+                                    <div className="w-60 h-60 bg-slate-50 animate-pulse rounded-xl" />
                                 )}
                             </div>
-                            <button 
-                                onClick={() => { setShowSignatureModal(false); setPendingSubmitData(null); setSignatureMethod(null); }}
-                                className="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600"
-                            >
-                                Cancel
-                            </button>
+                            <div className="flex flex-col items-center gap-4 w-full">
+                                {signature && (
+                                    <Button 
+                                        onClick={() => {
+                                            // Staff can also force confirm if signature is visible
+                                            setShowSignatureModal(false);
+                                            setSignatureMethod(null);
+                                            if (pendingSubmitData) {
+                                                const finalData = { ...pendingSubmitData, signature_data: signature };
+                                                onSubmit(finalData);
+                                            }
+                                        }}
+                                        className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12"
+                                    >
+                                        Staff Confirm Signature
+                                    </Button>
+                                )}
+                                <button 
+                                    onClick={() => { setShowSignatureModal(false); setPendingSubmitData(null); setSignatureMethod(null); setSignature(null); }}
+                                    className="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
                         </>
                     )}
                 </div>
