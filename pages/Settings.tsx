@@ -749,10 +749,18 @@ const SettingsPage = () => {
 
       showStatus(`Dispatching test report intelligence to ${recipient.email}...`);
       
-      await db.sendTestReport(recipient.id);
+      const reportEvent = new CustomEvent('TRIGGER_REPORT_DISPATCH', {
+        detail: {
+          recipient,
+          property,
+          outlet,
+          date: new Date(),
+          isManual: true
+        }
+      });
+      window.dispatchEvent(reportEvent);
       
-      showStatus(`Test report intelligence successfully dispatched to ${recipient.email}.`);
-      
+      showStatus('');
     } catch (e: any) {
       showStatus(e.message, 'error');
     }
@@ -1519,40 +1527,6 @@ const SettingsPage = () => {
 
               {activeTab === 'reports_config' && (
                   <div className="space-y-6">
-                      <div className="p-8 rounded-[2.5rem] bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 border border-indigo-800/40">
-                          <div className="flex items-center gap-5">
-                              <div className="w-14 h-14 rounded-2xl bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
-                                  <User className="w-7 h-7" />
-                              </div>
-                              <div>
-                                  <h3 className="text-lg font-black uppercase tracking-tight text-white">Automated Member Purchase Email Dispatch</h3>
-                                  <p className="text-xs font-medium text-indigo-200/80 mt-1 max-w-2xl leading-relaxed">
-                                      Whenever a new member joins or purchases a membership, automated confirmation emails containing full member details (Name, Membership #, Start/End Dates, Amount) and signed terms are automatically sent to configured emails and the member.
-                                  </p>
-                              </div>
-                          </div>
-                          <Button 
-                              onClick={() => {
-                                  setEditingId(null);
-                                  setReportRecipientForm({
-                                      email: '',
-                                      property_id: properties[0]?.id || '',
-                                      outlet_id: 'all',
-                                      report_type: 'member_purchased',
-                                      send_time: '00:00',
-                                      report_date_type: 'today',
-                                      incentive_dept: 'All',
-                                      selected_membership_type_id: 'all',
-                                      is_active: true
-                                  });
-                                  setShowForm(true);
-                              }}
-                              className="h-12 px-6 rounded-xl font-black text-xs uppercase bg-indigo-500 hover:bg-indigo-400 text-white shrink-0 shadow-lg shadow-indigo-500/20"
-                          >
-                              <Plus className="w-4 h-4 mr-2" /> Add Member Alert Recipient
-                          </Button>
-                      </div>
-
                       <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-5">

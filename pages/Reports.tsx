@@ -100,13 +100,23 @@ interface RevenueRow {
     daily_rate: number;
 }
 
-const Reports = () => {
+export interface AutoDispatchConfig {
+  recipient: any;
+  property: any;
+  outlet: any;
+  date: Date;
+  isManual?: boolean;
+}
+
+const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConfig }) => {
   const { user } = useAuth();
   const { settings, currency, currentOutlet, currentProperty, formatMoney, hasPermission, setPageLoading } = useSettings();
-  const [reportType, setReportType] = useState<ReportType>('revenue_recognition');
-  const [incentiveDept, setIncentiveDept] = useState<'Massage' | 'Membership' | 'Personal Training' | 'Sale' | 'Referral'>('Massage');
-  const [reportMonth, setReportMonth] = useState(format(new Date(), 'yyyy-MM'));
-  const [dailySalesDate, setDailySalesDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const activeOutlet = autoDispatchConfig ? autoDispatchConfig.outlet : currentOutlet;
+  const activeProperty = autoDispatchConfig ? autoDispatchConfig.property : currentProperty;
+  const [reportType, setReportType] = useState<ReportType>(autoDispatchConfig?.recipient?.report_type || 'revenue_recognition');
+  const [incentiveDept, setIncentiveDept] = useState<'Massage' | 'Membership' | 'Personal Training' | 'Sale' | 'Referral'>(autoDispatchConfig?.recipient?.incentive_dept || 'Massage');
+  const [reportMonth, setReportMonth] = useState(format(autoDispatchConfig?.date || new Date(), 'yyyy-MM'));
+  const [dailySalesDate, setDailySalesDate] = useState(format(autoDispatchConfig?.date || new Date(), 'yyyy-MM-dd'));
   const [selectedCustomReportId, setSelectedCustomReportId] = useState<string | null>(null);
   const [customReports, setCustomReports] = useState<CustomReportConfig[]>([]);
   const isInitialLoad = useRef(true);
@@ -175,22 +185,22 @@ const Reports = () => {
 
   useEffect(() => {
     setSelectedMembershipTypeId('all');
-  }, [currentOutlet]);
+  }, [activeOutlet]);
 
   useEffect(() => {
-    if (currentOutlet && currentProperty && canView) {
+    if (activeOutlet && activeProperty && canView) {
       loadData();
       loadMembershipTypes();
     }
-  }, [reportMonth, reportType, incentiveDept, selectedMembershipTypeId, currentOutlet, currentProperty, canView, revenueMode]);
+  }, [reportMonth, reportType, incentiveDept, selectedMembershipTypeId, activeOutlet, activeProperty, canView, revenueMode]);
 
   const loadMembershipTypes = async () => {
-    if (!currentOutlet) return;
+    if (!activeOutlet) return;
     try {
       const { data, error } = await supabase
         .from('membership_types')
         .select('*')
-        .eq('outlet_id', currentOutlet.id)
+        .eq('outlet_id', activeOutlet.id)
         .order('name');
       if (error) throw error;
       setMembershipTypes(data || []);
@@ -283,12 +293,12 @@ const Reports = () => {
   };
 
   const loadData = async () => {
-    if (!currentOutlet || !currentProperty) return;
+    if (!activeOutlet || !activeProperty) return;
     
     const start = reportType === 'daily_sales' ? startOfDay(parseISO(dailySalesDate)) : startOfDay(parseISO(reportMonth + '-01'));
     
     // Create cache key
-    const cacheKey = `${reportType}_${currentOutlet.id}_${format(start, 'yyyy-MM-dd')}_${incentiveDept}_${selectedMembershipTypeId}_${revenueMode}`;
+    const cacheKey = `${reportType}_${activeOutlet.id}_${format(start, 'yyyy-MM-dd')}_${incentiveDept}_${selectedMembershipTypeId}_${revenueMode}`;
     
     if (reportCache.current[cacheKey]) {
       const cached = reportCache.current[cacheKey];
@@ -312,8 +322,8 @@ const Reports = () => {
     try {
       const ctx: ReportContext = {
         supabase,
-        propertyId: currentProperty.id,
-        outletId: currentOutlet.id,
+        propertyId: activeProperty.id,
+        outletId: activeOutlet.id,
         reportType: reportType as any,
         date: start,
         incentiveDept: incentiveDept as any,
@@ -397,7 +407,7 @@ const Reports = () => {
   };
 
   const handleExportPDF = async () => {
-    if (!currentOutlet || !currentProperty || !settings) return;
+    if (!activeOutlet || !activeProperty || !settings) return;
     setIsGeneratingPDF(true);
     
     try {
@@ -415,10 +425,10 @@ const Reports = () => {
   };
 
   const handleOpenEmailModal = async () => {
-    if (!currentOutlet || !currentProperty) return;
+    if (!activeOutlet || !activeProperty) return;
     try {
       const recipients = await db.getReportRecipients();
-      const matching = recipients.filter(r => r.is_active && (r.outlet_id === 'all' || r.outlet_id === currentOutlet.id));
+      const matching = recipients.filter(r => r.is_active && (r.outlet_id === 'all' || r.outlet_id === activeOutlet.id));
       let initialEmails = matching.flatMap(r => r.email.split(',').map(e => e.trim())).filter(Boolean);
       initialEmails = Array.from(new Set(initialEmails));
       setEmailRecipientsInput(initialEmails.length > 0 ? initialEmails.join(', ') : (user?.email || ''));
@@ -428,12 +438,51 @@ const Reports = () => {
     setIsEmailModalOpen(true);
   };
 
+  const hasDispatched = useRef(false);
+  useEffect(() => {
+    if (autoDispatchConfig && !loading && !hasDispatched.current && activeProperty) {
+      hasDispatched.current = true;
+      const executeDispatch = async () => {
+         setIsGeneratingPDF(true);
+         try {
+           // Allow charts and tables to finish rendering
+           await new Promise(r => setTimeout(r, 2500));
+           const reportName = getReportTitle(reportType, incentiveDept);
+           const pdf = await generatePDFFromView();
+           const pdfBase64 = pdf.output('datauristring').split(',')[1];
+           
+           await emailService.sendReportEmail(
+             autoDispatchConfig.recipient.email,
+             reportName,
+             activeProperty.name,
+             activeOutlet === 'all' ? 'All Facilities' : activeOutlet.name,
+             pdfBase64,
+             `Automated dispatch for ${format(autoDispatchConfig.date, 'MMM dd, yyyy')}`
+           );
+           
+           if (autoDispatchConfig.isManual) {
+             toast.success('Report intelligence effectively dispatched.');
+           }
+         } catch (e) {
+           console.error(e);
+           if (autoDispatchConfig.isManual) {
+             toast.error('Failed to dispatch report intelligence.');
+           }
+         } finally {
+           setIsGeneratingPDF(false);
+           window.dispatchEvent(new CustomEvent('REPORT_DISPATCH_COMPLETE'));
+         }
+      };
+      executeDispatch();
+    }
+  }, [loading, autoDispatchConfig, activeProperty, reportType, incentiveDept]);
+
   const handleSendEmail = async () => {
     if (!emailRecipientsInput.trim()) {
       toast.error('Please enter at least one recipient email address.');
       return;
     }
-    if (!currentOutlet || !currentProperty || !settings) return;
+    if (!activeOutlet || !activeProperty || !settings) return;
 
     setIsSendingEmail(true);
     try {
@@ -444,8 +493,8 @@ const Reports = () => {
       await emailService.sendReportEmail(
         emailRecipientsInput,
         reportName,
-        currentProperty.name,
-        currentOutlet.name,
+        activeProperty.name,
+        activeOutlet.name,
         pdfBase64,
         `Report Period: ${reportType === 'daily_sales' ? dailySalesDate : reportMonth}`
       );
@@ -461,7 +510,7 @@ const Reports = () => {
   };
 
   const signatoryConfig = useMemo(() => {
-    if (!currentOutlet || !currentProperty || !settings) return null;
+    if (!activeOutlet || !activeProperty || !settings) return null;
 
     // Helper to resolve config with specific and default fallbacks
     const resolveConfig = (config: any, type: string) => {
@@ -479,17 +528,17 @@ const Reports = () => {
     };
 
     // Hierarchy: Outlet Specific -> Outlet Default -> Property Specific -> Property Default -> Global Specific -> Global Default
-    const outletRes = resolveConfig(currentOutlet.signatory_config, reportType);
+    const outletRes = resolveConfig(activeOutlet.signatory_config, reportType);
     if (outletRes) return outletRes;
 
-    const propertyRes = resolveConfig(currentProperty.signatory_config, reportType);
+    const propertyRes = resolveConfig(activeProperty.signatory_config, reportType);
     if (propertyRes) return propertyRes;
 
     const globalRes = resolveConfig(settings.signatory_config, reportType);
     if (globalRes) return globalRes;
 
     return null;
-  }, [currentOutlet, currentProperty, settings, reportType]);
+  }, [activeOutlet, activeProperty, settings, reportType]);
 
   if (!canView) {
       return (
@@ -1344,9 +1393,9 @@ const Reports = () => {
                   <div ref={reportRef} className={`print-container p-12 md:p-16 print:p-2 flex flex-col bg-white transition-opacity duration-300 ${loading ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
                       <div className="flex flex-row justify-between items-start gap-4 mb-8 print:mb-4 pb-4 border-b-2 border-slate-900/10 w-full">
                           <div className="flex items-center gap-4 min-w-0 max-w-[60%] print:max-w-[55%]">
-                              {currentProperty?.logo_url && (
+                              {activeProperty?.logo_url && (
                                   <img 
-                                      src={currentProperty.logo_url} 
+                                      src={activeProperty.logo_url} 
                                       crossOrigin="anonymous" 
                                       alt="Property Logo"
                                       className="h-12 w-auto max-w-[150px] md:max-w-[180px] print:h-10 print:max-w-[120px] object-contain shrink-0" 
@@ -1355,10 +1404,10 @@ const Reports = () => {
                               <div className="h-10 w-px bg-slate-300 shrink-0"></div>
                               <div className="min-w-0 overflow-hidden">
                                   <h2 className="text-lg md:text-xl print:text-sm font-black text-slate-900 tracking-tight uppercase leading-tight truncate mb-0.5">
-                                      {currentProperty?.name || settings?.name}
+                                      {activeProperty?.name || settings?.name}
                                   </h2>
                                   <p className="text-[9px] md:text-[10px] print:text-[8px] font-black text-slate-500 uppercase tracking-wider leading-none truncate">
-                                      {currentOutlet?.name} &bull; ISO-9001 CERTIFIED
+                                      {activeOutlet?.name} &bull; ISO-9001 CERTIFIED
                                   </p>
                                   <div className="flex items-center gap-1.5 mt-1 text-indigo-600 print:text-indigo-800">
                                       <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
@@ -1503,13 +1552,13 @@ const Reports = () => {
 
                       <div className="mt-8 flex justify-between items-center border-t border-slate-100 pt-4">
                           <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">
-                              Page 1 of 1 &bull; System ID: {currentOutlet?.id?.substring(0,8)}
+                              Page 1 of 1 &bull; System ID: {activeOutlet?.id?.substring(0,8)}
                           </span>
                           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
                               Exported on: {format(new Date(), 'dd-MMM-yyyy HH:mm:ss')} {user?.name ? ` by ${user.name}` : ''}
                           </span>
                           <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">
-                              &copy; {new Date().getFullYear()} {currentProperty?.name}. All rights reserved.
+                              &copy; {new Date().getFullYear()} {activeProperty?.name}. All rights reserved.
                           </span>
                       </div>
                   </div>

@@ -15,6 +15,7 @@ import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { NotificationBell } from './components/NotificationBell';
 import { schedulerService } from './services/emailService';
+import { HeadlessReportDispatcher } from './components/HeadlessReportDispatcher';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Members from './pages/Members';
@@ -852,6 +853,7 @@ const App = () => {
       <Toaster position="top-right" />
       <UserActivityTracker />
       <Router>
+        <HeadlessReportDispatcher />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/staff-login" element={<StaffLogin />} />
