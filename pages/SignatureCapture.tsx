@@ -8,7 +8,11 @@ import { CheckCircle2, RotateCcw } from 'lucide-react';
 
 export const SignatureCapturePage = () => {
     const { signatureId } = useParams<{ signatureId: string }>();
-    const searchParams = new URLSearchParams(window.location.search);
+    
+    // Parse query parameters from the hash part of the URL (SPA routing)
+    const hashQueryString = window.location.hash.split('?')[1] || '';
+    const searchParams = new URLSearchParams(hashQueryString);
+    
     const guestName = searchParams.get('name') || 'Guest';
     const tier = searchParams.get('tier') || 'Standard';
     const price = searchParams.get('price') || '0';
@@ -27,22 +31,23 @@ export const SignatureCapturePage = () => {
 
     const property = properties.find(p => p.id === currentOutlet?.property_id);
 
-    const handleSave = async () => {
+    const handleSave = async (confirmed = false) => {
         if (signatureRef.current && signatureId) {
             const dataUrl = signatureRef.current.toDataURL();
             
             await fetch(`/api/temp-signature/${signatureId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ dataUrl })
+                body: JSON.stringify({ dataUrl, confirmed })
             });
 
-            setSaved(true);
+            if (confirmed) setSaved(true);
         }
     };
 
     const handleClear = () => {
         signatureRef.current?.clear();
+        handleSave(false); // Send clear to desktop too
     };
 
     if (saved) {
@@ -80,6 +85,7 @@ export const SignatureCapturePage = () => {
                     <SignatureCanvas 
                         ref={signatureRef}
                         canvasProps={{ width: 450, height: 200, className: 'w-full h-48' }} 
+                        onEnd={() => handleSave(false)}
                     />
                 </div>
 
@@ -87,7 +93,7 @@ export const SignatureCapturePage = () => {
                     <Button onClick={handleClear} variant="outline" className="flex-1 rounded-xl">
                         <RotateCcw className="w-4 h-4 mr-2" /> Clear
                     </Button>
-                    <Button onClick={handleSave} className="flex-1 rounded-xl bg-indigo-600 hover:bg-indigo-700">
+                    <Button onClick={() => handleSave(true)} className="flex-1 rounded-xl bg-indigo-600 hover:bg-indigo-700">
                         Confirm Signature
                     </Button>
                 </div>

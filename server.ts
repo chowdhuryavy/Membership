@@ -74,24 +74,26 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  const tempSignatures = new Map<string, string>();
+  const tempSignatures = new Map<string, { signature: string, confirmed: boolean }>();
 
   app.use(express.json());
 
   // API: Temporary Signature Cache
   app.post('/api/temp-signature/:id', (req, res) => {
     const { id } = req.params;
-    const { dataUrl } = req.body;
-    tempSignatures.set(id, dataUrl);
+    const { dataUrl, confirmed } = req.body;
+    tempSignatures.set(id, { signature: dataUrl, confirmed: !!confirmed });
     res.json({ success: true });
   });
 
   app.get('/api/temp-signature/:id', (req, res) => {
     const { id } = req.params;
-    const signature = tempSignatures.get(id);
-    if (signature) {
-      res.json({ signature });
-      tempSignatures.delete(id);
+    const data = tempSignatures.get(id);
+    if (data) {
+      res.json(data);
+      if (data.confirmed) {
+        tempSignatures.delete(id);
+      }
     } else {
       res.status(404).json({ error: 'Not found' });
     }

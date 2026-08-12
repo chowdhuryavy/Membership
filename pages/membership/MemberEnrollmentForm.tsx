@@ -90,9 +90,11 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
             try {
                 const response = await fetch(`/api/temp-signature/${signatureIdRef.current}`);
                 if (response.ok) {
-                    const data = await response.json();
+                    const data = await response.json(); // { signature, confirmed }
                     if (data.signature) {
                         setSignature(data.signature);
+                    }
+                    if (data.confirmed) {
                         setShowSignatureModal(false);
                         setSignatureMethod(null);
                         clearInterval(interval);
