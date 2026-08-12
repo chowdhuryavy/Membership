@@ -196,8 +196,8 @@ const MonthlyRevenueReport = ({ isEmbedded, embeddedMonth, revenueMode, data: ex
   }
 
   return (
-    <Card className="rounded-none border-slate-200 shadow-2xl overflow-hidden bg-white min-h-[1200px] print:shadow-none print:rounded-none">
-      <div className="print-container p-12 md:p-16 flex flex-col bg-white">
+    <Card className="rounded-none border-slate-200 shadow-2xl overflow-hidden bg-white print:shadow-none print:rounded-none">
+      <div className="print-container p-8 md:p-10 flex flex-col bg-white w-full overflow-visible">
         <div className="flex flex-row justify-between items-start gap-4 mb-8 print:mb-4 pb-4 border-b-2 border-slate-900/10 w-full">
           <div className="flex items-center gap-4 min-w-0 max-w-[60%] print:max-w-[55%]">
             {currentProperty?.logo_url && (

@@ -25,7 +25,7 @@ export const HeadlessReportDispatcher = () => {
   if (!activeTask) return null;
 
   return (
-    <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '1200px', opacity: 0.01, pointerEvents: 'none', zIndex: -9999 }}>
+    <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '1400px', overflow: 'visible', opacity: 0.01, pointerEvents: 'none', zIndex: -9999 }}>
       {/* We pass the autoDispatchConfig directly to Reports, which will handle overriding context and rendering, then sending the email! */}
       <Reports autoDispatchConfig={activeTask} />
     </div>

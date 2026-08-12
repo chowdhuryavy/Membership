@@ -366,6 +366,15 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
 
     const element = reportRef.current;
 
+    // Temporarily apply full-width expansion and visible overflow so tables never get cropped horizontally
+    const originalWidth = element.style.width;
+    const originalMinHeight = element.style.minHeight;
+    const originalOverflow = element.style.overflow;
+
+    element.style.width = 'max-content';
+    element.style.minWidth = '100%';
+    element.style.overflow = 'visible';
+
     const dataUrl = await toPng(element, {
       quality: 0.95,
       backgroundColor: '#ffffff',
@@ -379,6 +388,11 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
         return true;
       }
     });
+
+    // Restore original styles
+    element.style.width = originalWidth;
+    element.style.minHeight = originalMinHeight;
+    element.style.overflow = originalOverflow;
 
     const img = new Image();
     img.src = dataUrl;
@@ -399,19 +413,28 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
     const pdfHeight = pdf.internal.pageSize.getHeight();
 
     const imgWidth = pdfWidth;
-    const imgHeight = (img.height * pdfWidth) / img.width;
+    let imgHeight = (img.height * pdfWidth) / img.width;
 
-    let heightLeft = imgHeight;
-    let position = 0;
+    // If total image height is slightly larger than 1 page (up to 1.35x page height),
+    // scale down proportionally so the whole report fits cleanly on 1 single page!
+    if (imgHeight > pdfHeight && imgHeight <= pdfHeight * 1.35) {
+      const scaleFactor = (pdfHeight - 8) / imgHeight;
+      const fitWidth = pdfWidth * scaleFactor;
+      const xOffset = (pdfWidth - fitWidth) / 2;
+      pdf.addImage(dataUrl, 'PNG', xOffset, 4, fitWidth, pdfHeight - 8, undefined, 'FAST');
+    } else {
+      let heightLeft = imgHeight;
+      let position = 0;
 
-    pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-    heightLeft -= pdfHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
       pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
       heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+        heightLeft -= pdfHeight;
+      }
     }
 
     return pdf;
@@ -1399,13 +1422,13 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
           )}
 
           <div className={`${showConfig ? 'lg:col-span-9' : 'lg:col-span-12'} transition-all duration-700 relative`}>
-              <Card className="rounded-none border-slate-200 shadow-2xl overflow-hidden bg-white min-h-[1200px] print:shadow-none print:rounded-none relative">
+              <Card className="rounded-none border-slate-200 shadow-2xl overflow-hidden bg-white print:shadow-none print:rounded-none relative">
                   {loading && (
                       <div className="absolute inset-0 z-[10] flex items-center justify-center bg-white/60 backdrop-blur-[2px] no-print">
                           <TabLoader message="Synchronizing Financial Ledger..." />
                       </div>
                   )}
-                  <div ref={reportRef} className={`print-container p-12 md:p-16 print:p-2 flex flex-col bg-white transition-opacity duration-300 ${loading ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
+                  <div ref={reportRef} className={`print-container p-8 md:p-10 print:p-2 flex flex-col bg-white transition-opacity duration-300 w-full overflow-visible ${loading ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
                       <div className="flex flex-row justify-between items-start gap-4 mb-8 print:mb-4 pb-4 border-b-2 border-slate-900/10 w-full">
                           <div className="flex items-center gap-4 min-w-0 max-w-[60%] print:max-w-[55%]">
                               {activeProperty?.logo_url && (
@@ -1570,7 +1593,7 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
                               Page 1 of 1 &bull; System ID: {activeOutlet?.id?.substring(0,8)}
                           </span>
                           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                              Exported on: {format(new Date(), 'dd-MMM-yyyy HH:mm:ss')} {user?.name ? ` by ${user.name}` : ''}
+                              Exported on: {format(new Date(), 'dd-MMM-yyyy HH:mm:ss')} by {autoDispatchConfig || isSendingEmail ? 'SYSTEM AUTOMATED' : (user?.name || 'SYSTEM AUTOMATED')}
                           </span>
                           <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">
                               &copy; {new Date().getFullYear()} {activeProperty?.name}. All rights reserved.
