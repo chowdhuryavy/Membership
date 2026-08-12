@@ -115,16 +115,7 @@ const StaffLogin = () => {
 
         <div className="p-8 sm:p-12 lg:p-16 flex flex-col justify-start pt-10 md:pt-16 bg-white relative">
           {/* Admin Portal Link Icon */}
-          <button 
-            type="button"
-            onClick={handleAdminPortalClick}
-            className="hidden md:flex absolute top-8 right-8 px-4 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all group items-center gap-2 shadow-sm"
-            title="Admin Portal"
-          >
-            <span className="text-[10px] font-black uppercase tracking-widest">Admin Portal</span>
-            <ShieldCheck className="w-5 h-5 group-hover:scale-110 transition-transform" />
-          </button>
-
+          
           <div className="mb-6 flex flex-col items-center text-center">
             {settings?.logo_url ? (
               <img 

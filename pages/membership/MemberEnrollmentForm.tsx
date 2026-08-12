@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import SignatureCanvas from 'react-signature-canvas';
 import toast from 'react-hot-toast';
 import { useForm, SubmitHandler, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -73,6 +74,9 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   const [matchedMembers, setMatchedMembers] = useState<Member[]>([]);
   const [showIncentivePrompt, setShowIncentivePrompt] = useState(false);
   const [pendingSubmitData, setPendingSubmitData] = useState<MemberFormValues | null>(null);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [signature, setSignature] = useState<string | null>(null);
+  const signatureRef = useRef<SignatureCanvas>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
     const file = e.target.files?.[0];
