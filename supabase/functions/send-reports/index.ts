@@ -104,13 +104,32 @@ serve(async (req) => {
       }
 
       console.log(`DEBUG: Sending direct email via Resend to ${emails.join(', ')} (from: ${fromEmail})`);
-      const { data: emailRes, error: emailError } = await resend.emails.send({
+      let emailRes: any;
+      let emailError: any;
+
+      const resendResult = await resend.emails.send({
         from: `${appName} <${fromEmail}>`,
         to: emails,
         subject,
         html,
         attachments: attachments || []
       });
+
+      emailRes = resendResult.data;
+      emailError = resendResult.error;
+
+      if (emailError && fromEmail !== 'onboarding@resend.dev') {
+        console.warn('DEBUG: Direct email error from Resend with primary fromEmail:', emailError, 'Retrying with onboarding@resend.dev...');
+        const retryResult = await resend.emails.send({
+          from: `${appName} <onboarding@resend.dev>`,
+          to: emails,
+          subject,
+          html,
+          attachments: attachments || []
+        });
+        emailRes = retryResult.data;
+        emailError = retryResult.error;
+      }
 
       if (emailError) {
         console.error('DEBUG: Direct email error from Resend:', emailError);

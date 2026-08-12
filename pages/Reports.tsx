@@ -462,7 +462,7 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
            const pdf = await generatePDFFromView();
            const pdfBase64 = pdf.output('datauristring').split(',')[1];
            
-           await emailService.sendReportEmail(
+           const dispatchRes = await emailService.sendReportEmail(
              autoDispatchConfig.recipient.email,
              reportName,
              activeProperty.name,
@@ -472,7 +472,11 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
            );
            
            if (autoDispatchConfig.isManual) {
-             toast.success('Report intelligence effectively dispatched.');
+             if (dispatchRes && dispatchRes.success) {
+               toast.success('Report intelligence effectively dispatched.');
+             } else {
+               toast.error('Failed to dispatch report: ' + (dispatchRes?.error || 'Email sending failed'));
+             }
            }
          } catch (e) {
            console.error(e);

@@ -377,13 +377,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         if (isUpdate) await db.updateMember(existingMember!.id, payload);
         else await db.addMember(payload);
 
-        // Dispatch purchase confirmation email in background
-        if (!isUpdate || isRenewal) {
-            emailService.sendMemberPurchaseEmail(payload).catch(err => {
-                console.error('[Purchase Email Error]', err);
-            });
-            toast.success('Member agreement saved and email notification dispatched.');
-        }
+        toast.success('Member agreement saved and email notification dispatched.');
 
         setTimeout(() => {
             setPageLoading(false);

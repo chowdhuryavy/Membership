@@ -2,6 +2,9 @@ import { reportService } from './reportService';
 import { db } from './mockSupabase';
 import { supabase } from './supabase';
 import { format, parseISO } from 'date-fns';
+import { generateMemberAgreementPdfBase64 } from './memberAgreementPdfService';
+
+const recentlySentMembersSet = new Set<string>();
 
 export const emailService = {
   async sendEmail(to: string | string[], subject: string, html: string, attachments: { filename: string; content: string }[] = []) {
@@ -108,13 +111,22 @@ export const emailService = {
       </html>
     `;
 
+    let lastResult: any = { success: false, error: 'No emails sent' };
     for (const recipient of toList) {
-      await this.sendEmail(recipient, subject, html, [{ filename, content: pdfBase64 }]);
+      lastResult = await this.sendEmail(recipient, subject, html, [{ filename, content: pdfBase64 }]);
     }
-    return { success: true, count: toList.length };
+    return lastResult;
   },
 
   async sendMemberPurchaseEmail(member: any) {
+    const memberKey = `${member?.id || ''}_${member?.membership_number || ''}_${member?.guest_name || ''}`;
+    if (recentlySentMembersSet.has(memberKey)) {
+      console.log(`[Email Service] Skipping duplicate sendMemberPurchaseEmail call for key: ${memberKey}`);
+      return;
+    }
+    recentlySentMembersSet.add(memberKey);
+    setTimeout(() => recentlySentMembersSet.delete(memberKey), 10000);
+
     console.log('[Email Service] sendMemberPurchaseEmail triggered for member:', member?.id || member?.guest_name);
     try {
       const properties = await db.getProperties();
@@ -149,43 +161,72 @@ export const emailService = {
         return;
       }
 
-      const contractTemplate = outlet?.contract_template || (property as any)?.contract_template || (settings as any)?.contract_template || 'Standard Health Club Membership Agreement';
-      const termsConditions = outlet?.conditions || (property as any)?.conditions || (settings as any)?.conditions || 'All club rules and regulations apply.';
+      // Generate Member Agreement PDF Attachment
+      let pdfBase64 = '';
+      try {
+        pdfBase64 = await generateMemberAgreementPdfBase64(member, outlet, property, settings);
+      } catch (pdfErr) {
+        console.error('[Email Service] Error generating Member Agreement PDF base64:', pdfErr);
+      }
+
+      const rawContractTemplate = outlet?.contract_template || (property as any)?.contract_template || (settings as any)?.contract_template || 'Standard Health Club Membership Agreement';
+      const rawTermsConditions = outlet?.conditions || (property as any)?.conditions || (settings as any)?.conditions || 'All club rules and regulations apply.';
+
+      // Replace template placeholders if present
+      const cleanContract = rawContractTemplate
+        .replace(/\{\{guest_name\}\}/g, member.guest_name || 'Member')
+        .replace(/\{\{membership_number\}\}/g, member.membership_number || '')
+        .replace(/\{\{start_date\}\}/g, member.start_date || '')
+        .replace(/\{\{end_date\}\}/g, member.current_end_date || member.original_end_date || '');
+
+      const cleanTerms = rawTermsConditions
+        .replace(/\{\{guest_name\}\}/g, member.guest_name || 'Member')
+        .replace(/\{\{membership_number\}\}/g, member.membership_number || '');
 
       const startDateFormatted = member.start_date ? format(parseISO(member.start_date), 'dd MMM yyyy') : 'N/A';
       const endDateFormatted = (member.current_end_date || member.original_end_date) ? format(parseISO(member.current_end_date || member.original_end_date), 'dd MMM yyyy') : 'N/A';
 
       const subject = `Membership Purchase Confirmed - ${member.guest_name} (${member.membership_number})`;
+      
       const html = `
         <!DOCTYPE html>
         <html>
         <head>
+          <meta charset="utf-8">
           <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 20px; line-height: 1.5; }
-            .container { max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 24px; padding: 40px; border: 1px solid #e2e8f0; }
-            .badge { display: inline-block; background: #dcfce7; color: #166534; font-size: 10px; font-weight: 800; text-transform: uppercase; padding: 4px 12px; border-radius: 999px; letter-spacing: 0.1em; margin-bottom: 12px; }
-            .header { border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 24px; }
-            .title { font-size: 24px; font-weight: 900; color: #0f172a; margin: 0; text-transform: uppercase; }
-            .subtitle { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-top: 4px; }
-            .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #f8fafc; padding: 24px; border-radius: 16px; border: 1px solid #e2e8f0; margin: 24px 0; }
-            .detail-item { font-size: 12px; }
-            .detail-label { font-size: 9px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 24px; line-height: 1.6; }
+            .container { max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 20px; padding: 36px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
+            .badge { display: inline-block; background: #dcfce7; color: #15803d; font-size: 11px; font-weight: 800; text-transform: uppercase; padding: 6px 14px; border-radius: 9999px; letter-spacing: 0.08em; margin-bottom: 16px; }
+            .header { border-bottom: 2px solid #0f172a; padding-bottom: 18px; margin-bottom: 24px; }
+            .title { font-size: 24px; font-weight: 900; color: #0f172a; margin: 0; text-transform: uppercase; letter-spacing: -0.02em; }
+            .subtitle { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+            .attachment-banner { background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 14px 18px; margin: 20px 0; font-size: 13px; color: #1e40af; display: flex; align-items: center; }
+            .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #f8fafc; padding: 22px; border-radius: 16px; border: 1px solid #e2e8f0; margin: 24px 0; }
+            .detail-item { font-size: 13px; }
+            .detail-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; }
             .detail-value { font-size: 14px; font-weight: 800; color: #0f172a; margin-top: 2px; }
-            .amount-box { background: #1e1b4b; color: #ffffff; padding: 20px; border-radius: 16px; text-align: center; margin: 24px 0; }
-            .amount-val { font-size: 28px; font-weight: 900; color: #818cf8; }
-            .agreement-box { background: #fafafa; border: 1px solid #e5e5e5; padding: 20px; border-radius: 12px; font-size: 11px; color: #404040; margin-top: 24px; white-space: pre-wrap; }
-            .footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px; }
+            .amount-box { background: #0f172a; color: #ffffff; padding: 22px; border-radius: 16px; text-align: center; margin: 24px 0; }
+            .amount-val { font-size: 30px; font-weight: 900; color: #818cf8; letter-spacing: -0.02em; }
+            .agreement-box { background: #fafafa; border: 1px solid #e2e8f0; padding: 18px; border-radius: 12px; font-size: 12px; color: #334155; margin-top: 20px; white-space: pre-wrap; line-height: 1.5; }
+            .footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 18px; }
           </style>
         </head>
         <body>
           <div class="container">
-            <div class="badge">Purchase Confirmed</div>
+            <div class="badge">✓ Enrollment Confirmed</div>
             <div class="header">
-              <h1 class="title">${property?.name || 'TTH Club'}</h1>
-              <div class="subtitle">${outlet?.name || 'Main Facility'} &bull; Membership Enrollment</div>
+              <h1 class="title">${property?.name || 'THE TORCH DOHA'}</h1>
+              <div class="subtitle">${outlet?.name || 'TORCH CLUB'} &bull; Official Membership Enrollment</div>
             </div>
 
-            <p>A new membership agreement has been completed and registered in the system:</p>
+            <p style="font-size: 15px; margin-bottom: 8px;"><strong>Dear ${member.guest_name},</strong></p>
+            <p style="font-size: 14px; color: #334155; margin-top: 0;">Welcome to <strong>${property?.name || 'THE TORCH DOHA'}</strong>! Your membership agreement has been completed and registered in our system.</p>
+
+            ${pdfBase64 ? `
+            <div class="attachment-banner">
+              <strong>📄 Official Document Attached:</strong> Your signed <strong>Membership Agreement & Facility Rules PDF</strong> is attached to this email (<code>Membership_Agreement_${member.membership_number}.pdf</code>).
+            </div>
+            ` : ''}
 
             <div class="details-grid">
               <div class="detail-item">
@@ -201,46 +242,48 @@ export const emailService = {
                 <div class="detail-value">${member.package_type || 'Single'} (${member.access_type || 'Both'})</div>
               </div>
               <div class="detail-item">
-                <div class="detail-label">Membership Type</div>
+                <div class="detail-label">Enrollment Type</div>
                 <div class="detail-value">${member.membership_type || 'New'}</div>
               </div>
               <div class="detail-item">
-                <div class="detail-label">Start Date</div>
+                <div class="detail-label">Commencement Date</div>
                 <div class="detail-value">${startDateFormatted}</div>
               </div>
               <div class="detail-item">
-                <div class="detail-label">End Date (Validity)</div>
+                <div class="detail-label">Expiry Date (Validity)</div>
                 <div class="detail-value">${endDateFormatted}</div>
               </div>
             </div>
 
             <div class="amount-box">
-              <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #a5b4fc;">Total Amount Paid</div>
-              <div class="amount-val">${symbol} ${(member.net_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-              <div style="font-size: 11px; color: #cbd5e1; margin-top: 4px;">Check / Ref: ${member.check_no || 'Direct Purchase'}</div>
+              <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #a5b4fc; letter-spacing: 0.1em;">Total Contribution Paid</div>
+              <div class="amount-val">${symbol} ${(member.net_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+              <div style="font-size: 11px; color: #cbd5e1; margin-top: 4px;">Payment Ref: ${member.check_no || 'Direct Registration'}</div>
             </div>
 
-            <div style="font-weight: 800; font-size: 12px; text-transform: uppercase; color: #0f172a; margin-top: 24px;">Signed Membership Agreement & Terms</div>
+            <div style="font-weight: 800; font-size: 12px; text-transform: uppercase; color: #0f172a; margin-top: 24px;">Terms & Conditions Summary</div>
             <div class="agreement-box">
-<strong>AGREEMENT TERMS:</strong>
-${contractTemplate}
-
-<strong>CONDITIONS & RULES:</strong>
-${termsConditions}
+${cleanTerms}
             </div>
 
             <div class="footer">
-              TTH Health Club Management System &bull; Verified Member Enrollment Dispatch
+              ${property?.name || 'THE TORCH DOHA'} &bull; ${outlet?.name || 'TORCH CLUB'}<br/>
+              Verified Member Enrollment System &bull; Confidential
             </div>
           </div>
         </body>
         </html>
       `;
 
+      const attachments = pdfBase64 ? [{
+        filename: `Membership_Agreement_${member.membership_number || 'Record'}.pdf`,
+        content: pdfBase64
+      }] : [];
+
       for (const email of targetEmails) {
-        await this.sendEmail(email, subject, html);
+        await this.sendEmail(email, subject, html, attachments);
       }
-      console.log(`[Email Service] Member purchase notification email sent to: ${targetEmails.join(', ')}`);
+      console.log(`[Email Service] Member purchase notification email sent to: ${targetEmails.join(', ')} with ${attachments.length} attachments.`);
     } catch (err) {
       console.error('[Email Service] Error sending member purchase email:', err);
     }
