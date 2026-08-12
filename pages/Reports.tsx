@@ -375,18 +375,24 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
       windowHeight: element.scrollHeight,
       onclone: (clonedDoc) => {
         // Fix html2canvas unsupported color function crash with Tailwind v4 (oklab/oklch)
-        const styles = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
-        styles.forEach((style) => {
-          if (style.textContent) {
-            style.textContent = style.textContent
-              .replace(/okl(?:ab|ch)\([^;}]+\)/gi, '#0f172a');
+        const styleElements = Array.from(clonedDoc.querySelectorAll('style'));
+        styleElements.forEach((styleEl) => {
+          if (styleEl.textContent && (styleEl.textContent.includes('oklab') || styleEl.textContent.includes('oklch'))) {
+            const sanitized = styleEl.textContent.replace(/okl(?:ab|ch)\([\s\S]*?\)/gi, '#0f172a');
+            const newStyle = clonedDoc.createElement('style');
+            newStyle.textContent = sanitized;
+            if (styleEl.parentNode) {
+              styleEl.parentNode.replaceChild(newStyle, styleEl);
+            }
           }
         });
+
+        // Clean inline styles on all elements
         const elements = clonedDoc.querySelectorAll('*');
         elements.forEach((el) => {
           const styleAttr = el.getAttribute('style');
           if (styleAttr && (styleAttr.includes('oklab') || styleAttr.includes('oklch'))) {
-            el.setAttribute('style', styleAttr.replace(/okl(?:ab|ch)\([^;}]+\)/gi, '#0f172a'));
+            el.setAttribute('style', styleAttr.replace(/okl(?:ab|ch)\([\s\S]*?\)/gi, '#0f172a'));
           }
         });
       }

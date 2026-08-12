@@ -760,11 +760,9 @@ const SettingsPage = () => {
       });
       window.dispatchEvent(reportEvent);
       
-      showStatus('');
-      toast.success(`Report generation and email dispatch initiated for ${recipient.email}`);
+      showStatus(`Report generation and email dispatch initiated for ${recipient.email}...`);
     } catch (e: any) {
-      showStatus(e.message, 'error');
-      toast.error(e.message || 'Failed to send test report');
+      showStatus(e.message || 'Failed to send test report', 'error');
     }
   };
 
