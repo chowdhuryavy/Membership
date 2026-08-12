@@ -59,6 +59,10 @@ export const SignatureCapturePage: React.FC = () => {
 
     const handleSave = async (confirmed: boolean = false) => {
         if (!signatureId || !signatureRef.current) return;
+        
+        // Don't send empty signatures if not confirmed
+        if (signatureRef.current.isEmpty() && !confirmed) return;
+        
         const dataUrl = signatureRef.current.toDataURL();
         
         try {
@@ -70,24 +74,70 @@ export const SignatureCapturePage: React.FC = () => {
             };
 
             // Use upsert to Supabase notifications as our "live bridge"
+            // We use the same ID to keep the record unique for this session
             const { error } = await supabase
                 .from('notifications')
                 .upsert({
-                    id: signatureId, // Use signatureId as UUID if it is one, or it will auto-generate
+                    id: signatureId, 
                     title: `SIG_SYNC:${signatureId}`,
                     message: JSON.stringify(syncData),
                     type: 'info',
                     outlet_id: currentOutlet?.id,
-                    user_id: '00000000-0000-0000-0000-000000000000' // System ID
+                    user_id: '00000000-0000-0000-0000-000000000000'
                 });
 
             if (error) throw error;
             if (confirmed) setSaved(true);
         } catch (err) {
             console.error('Error syncing signature:', err);
-            toast.error('Sync failed. Please try again.');
+            // Only show toast on confirmed save failure
+            if (confirmed) toast.error('Sync failed. Please try again.');
         }
     };
+
+    // Real-time Stroke Sync: Listen to drawing events
+    useEffect(() => {
+        let interval: NodeJS.Timeout | null = null;
+        let lastDataUrl = '';
+
+        const startSync = () => {
+            if (interval) clearInterval(interval);
+            interval = setInterval(() => {
+                if (signatureRef.current) {
+                    const current = signatureRef.current.toDataURL();
+                    if (current !== lastDataUrl) {
+                        lastDataUrl = current;
+                        handleSave(false);
+                    }
+                }
+            }, 200);
+        };
+
+        const stopSync = () => {
+            if (interval) {
+                clearInterval(interval);
+                interval = null;
+            }
+            // Send one last update on lift
+            handleSave(false);
+        };
+
+        const canvas = document.querySelector('canvas');
+        if (canvas) {
+            canvas.addEventListener('pointerdown', startSync);
+            canvas.addEventListener('pointerup', stopSync);
+            canvas.addEventListener('pointerleave', stopSync);
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+            if (canvas) {
+                canvas.removeEventListener('pointerdown', startSync);
+                canvas.removeEventListener('pointerup', stopSync);
+                canvas.removeEventListener('pointerleave', stopSync);
+            }
+        };
+    }, [signatureId, guestName, currentOutlet]);
 
     const handleClear = () => {
         signatureRef.current?.clear();
@@ -190,7 +240,14 @@ export const SignatureCapturePage: React.FC = () => {
                                 ref={signatureRef}
                                 canvasProps={{
                                     className: 'w-full h-full relative z-10',
-                                    style: { width: '100%', height: '100%' }
+                                    style: { width: '100%', height: '100%' },
+                                    onPointerMove: () => {
+                                        // Optional: we can add more frequent updates here if needed
+                                        // but the 200ms interval in useEffect is more reliable
+                                    }
+                                }}
+                                onBegin={() => {
+                                    // Managed by useEffect interval for consistency
                                 }}
                                 onEnd={() => handleSave(false)}
                                 backgroundColor="rgba(0,0,0,0)"

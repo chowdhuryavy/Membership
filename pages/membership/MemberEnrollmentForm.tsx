@@ -110,7 +110,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                   .delete()
                                   .eq('id', payload.new.id)
                                   .then(() => {
-                                      if (pendingSubmitData) processSubmit(pendingSubmitData, syncData.signature);
+                                      if (pendingSubmitData) onFinalSubmit(pendingSubmitData, syncData.signature);
                                   });
                           }
                       } catch (e) {
@@ -139,7 +139,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                   .delete()
                                   .eq('id', payload.new.id)
                                   .then(() => {
-                                      if (pendingSubmitData) processSubmit(pendingSubmitData, syncData.signature);
+                                      if (pendingSubmitData) onFinalSubmit(pendingSubmitData, syncData.signature);
                                   });
                           }
                       } catch (e) {
@@ -166,7 +166,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                           setSignatureMethod(null);
                           clearInterval(interval);
                           await supabase.from('notifications').delete().eq('id', data.id);
-                          if (pendingSubmitData) processSubmit(pendingSubmitData, syncData.signature);
+                          if (pendingSubmitData) onFinalSubmit(pendingSubmitData, syncData.signature);
                       }
                   }
               } catch (e) {
@@ -221,7 +221,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         setShowSignatureModal(false);
         setSignatureMethod(null);
         if (pendingSubmitData) {
-            processSubmit(pendingSubmitData, dataUrl);
+            onFinalSubmit(pendingSubmitData, dataUrl);
         }
     }
   };
@@ -434,7 +434,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     if (pendingSubmitData) {
         const newData = { ...pendingSubmitData, calculate_referral_incentive: calculateIncentive };
         setPendingSubmitData(null);
-        await processSubmit(newData);
+        await onFinalSubmit(newData);
     }
   };
 
@@ -458,10 +458,10 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         setShowIncentivePrompt(true);
         return;
     }
-    await processSubmit(data);
+    await onFinalSubmit(data);
   };
 
-  const processSubmit = async (data: MemberFormValues, signatureOverride?: string) => {
+  const onFinalSubmit = async (data: MemberFormValues, signatureOverride?: string) => {
     if (data.referrer_name && data.referrer_name.trim().length > 0) {
       if (data.calculate_referral_incentive) {
         toast.custom((t) => (
@@ -1048,24 +1048,26 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                             <div className="flex flex-col items-center gap-4 w-full">
                                 {signature && (
                                     <Button 
+                                        type="button"
                                         onClick={() => {
                                             // Staff can also force confirm if signature is visible
                                             setShowSignatureModal(false);
                                             setSignatureMethod(null);
                                             if (pendingSubmitData) {
-                                                processSubmit(pendingSubmitData, signature);
+                                                onFinalSubmit(pendingSubmitData, signature);
                                             }
                                         }}
-                                        className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12"
+                                        className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12 shadow-lg shadow-indigo-100 transition-all active:scale-95"
                                     >
                                         Staff Confirm Signature
                                     </Button>
                                 )}
                                 <button 
+                                    type="button"
                                     onClick={() => { setShowSignatureModal(false); setPendingSubmitData(null); setSignatureMethod(null); setSignature(null); }}
-                                    className="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600"
+                                    className="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
                                 >
-                                    Cancel
+                                    Cancel & Reset
                                 </button>
                             </div>
                         </>
