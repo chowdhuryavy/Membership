@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { toPng } from 'html-to-image';
 import { format } from 'date-fns';
 
 const parseISO = (dateString?: string) => {
@@ -13,19 +13,50 @@ const parseISO = (dateString?: string) => {
 };
 
 const GYM_RULES = [
-  "1. Only registered members and authorized visitors are allowed entry. (يسمح بالدخول فقط للأعضاء المسجلين والزوار المعتمدين)",
-  "2. No person below 18 years old is allowed to use the facility without supervision.",
-  "3. Members should consult a doctor before starting a new fitness routine.",
-  "4. Proper athletic attire and non-marking footwear are required at all times.",
-  "5. Follow equipment instructions and report any equipment malfunctions to staff immediately.",
-  "6. Use lockers for personal items. The club is not responsible for lost or stolen items.",
-  "7. Re-rack weights and return equipment to designated areas after use.",
-  "8. Do not drop dumbbells, barbells, or heavy weight plates.",
-  "9. Photography and videography require prior management approval.",
-  "10. Smoking, alcohol, and prohibited substances are strictly forbidden.",
-  "11. Outside food and beverages are not allowed inside the facility.",
-  "12. Violations of facility policies may result in suspension or termination of membership."
+  { en: "Only registered members and authorized visitors are allowed entry.", ar: "يسمح بالدخول فقط للأعضاء المسجلين والزوار المعتمدين." },
+  { en: "No person below 18 years old is allowed to use the facility.", ar: "لا يسمح لأي شخص يقل عمره عن 18 عامًا باستخدام المرفق." },
+  { en: "Members should consult a doctor before starting a new fitness routine.", ar: "يجب على الأعضاء استشارة الطبيب قبل البدء في روتين لياقة بدنية جديد." },
+  { en: "If you suffer from medical conditions or are taking medications, please consult your doctor and inform the club staff before using the gym.", ar: "إذا كنت تعاني من حالات طبية أو تتناول أدوية، يرجى استشارة طبيبك وإبلاغ موظفي النادي قبل استخدام الصالة الرياضية." },
+  { en: "Pregnant women must consult their healthcare provider before exercising; a liability waiver may be required.", ar: "يجب على النساء الحوامل استشارة مقدم الرعاية الصحية قبل ممارسة الرياضة؛ قد يُطلب التنازل عن المسؤولية." },
+  { en: "Proper athletic attire and non-marking footwear are required at all times.", ar: "مطلوب ارتداء ملابس رياضية مناسبة وأحذية لا تترك أثرًا في جميع الأوقات." },
+  { en: "Follow equipment instructions and report malfunctions.", ar: "اتبع تعليمات المعدات وأبلغ عن الأعطال." },
+  { en: "Use the gym at your own risk and be responsible for your own safety.", ar: "استخدم الصالة الرياضية على مسؤوليتك الخاصة وكن مسؤولاً عن سلامتك." },
+  { en: "Use lockers for personal items. The gym is not responsible for losses.", ar: "استخدم الخزائن للأغراض الشخصية. الصالة الرياضية ليست مسؤولة عن الخسائر." },
+  { en: "Daily lockers must be emptied before closing.", ar: "يجب إفراغ الخزائن اليومية قبل الإغلاق." },
+  { en: "Re-rack weights after use.", ar: "أعد الأوزان إلى مكانها بعد الاستخدام." },
+  { en: "Do not drop dumbbells or barbells.", ar: "لا تسقط الدمبل أو الأثقال." },
+  { en: "Chalk or talcum powder is strictly prohibited.", ar: "يمنع منعاً باتاً استخدام الطباشير أو بودرة التلك." },
+  { en: "Ask staff or another member for assistance with heavy lifting.", ar: "اطلب المساعدة من الموظفين أو عضو آخر عند رفع الأثقال." },
+  { en: "Only approved trainers may offer personal training.", ar: "يُسمح فقط للمدربين المعتمدين بتقديم التدريب الشخصي." },
+  { en: "No loud music or phone calls in gym areas.", ar: "لا يسمح بالموسيقى الصاخبة أو المكالمات الهاتفية في مناطق الصالة الرياضية." },
+  { en: "Photography and videography require prior approval.", ar: "التصوير الفوتوغرافي وتصوير الفيديو يتطلب موافقة مسبقة." },
+  { en: "Harassment, intimidation, or inappropriate behavior is not tolerated.", ar: "لن يتم التسامح مع التحرش أو الترهيب أو السلوك غير اللائق." },
+  { en: "Smoking and alcohol are strictly prohibited.", ar: "يمنع منعاً باتاً التدخين والكحول." },
+  { en: "Do not exercise under the influence of alcohol.", ar: "لا تمارس الرياضة تحت تأثير الكحول." },
+  { en: "No outside food or beverages allowed.", ar: "لا يسمح بإدخال الأطعمة أو المشروبات من الخارج." },
+  { en: "No glass containers allowed.", ar: "لا يسمح بالأوعية الزجاجية." },
+  { en: "Pets are not allowed in gym areas.", ar: "لا يسمح باصطحاب الحيوانات الأليفة في مناطق الصالة الرياضية." },
+  { en: "Lost items will be held at reception for a limited time.", ar: "سيتم الاحتفاظ بالأشياء المفقودة في الاستقبال لفترة محدودة." },
+  { en: "Report any injuries or health issues immediately.", ar: "أبلغ عن أي إصابات أو مشاكل صحية على الفور." },
+  { en: "Staff are trained in first aid; AEDs are available.", ar: "الموظفون مدربون على الإسعافات الأولية؛ تتوفر أجهزة تنظيم ضربات القلب." },
+  { en: "Memberships must be renewed on time; cancellation policies apply.", ar: "يجب تجديد العضويات في الوقت المحدد؛ تطبق سياسات الإلغاء." },
+  { en: "Guests are allowed only with prior approval.", ar: "يسمح للضيوف فقط بموافقة مسبقة." },
+  { en: "Violations may result in warning, suspension, or termination.", ar: "قد تؤدي الانتهاكات إلى التحذير أو التعليق أو الإنهاء." },
+  { en: "The club is not liable for injury, death, or loss related to gym use.", ar: "النادي غير مسؤول عن الإصابة أو الوفاة أو الخسارة المتعلقة باستخدام الصالة الرياضية." },
+  { en: "In case of emergency, contact club staff immediately.", ar: "في حالة الطوارئ، اتصل بموظفي النادي على الفور." }
 ];
+
+async function waitForImages(element: HTMLElement): Promise<void> {
+  const images = Array.from(element.querySelectorAll('img'));
+  const promises = images.map(img => {
+    if (img.complete) return Promise.resolve();
+    return new Promise<void>(resolve => {
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+    });
+  });
+  await Promise.all(promises);
+}
 
 export async function generateMemberAgreementPdfBase64(
   member: any,
@@ -33,285 +64,406 @@ export async function generateMemberAgreementPdfBase64(
   property: any,
   settings: any
 ): Promise<string> {
+  if (typeof document !== 'undefined') {
+    try {
+      const propertyName = (property?.name || settings?.company_name || 'AL AZIZIYAH BOUTIQUE HOTEL').toUpperCase();
+      const outletName = (outlet?.name || 'NOVA SPA').toUpperCase();
+      const logoUrl = property?.logo_url || settings?.logo_url || '';
+      
+      const startDateStr = member.start_date ? format(parseISO(member.start_date), 'dd MMM yyyy') : '---';
+      const endDateStr = (member.current_end_date || member.original_end_date)
+        ? format(parseISO(member.current_end_date || member.original_end_date), 'dd MMM yyyy')
+        : '---';
+      const dobStr = member.dob ? format(parseISO(member.dob), 'dd MMM yyyy') : '---';
+      const netAmountStr = `QAR ${(member.net_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+      const isNew = member.membership_type === 'New';
+      const isRenew = member.membership_type === 'Renew';
+      const isPool = member.access_type === 'Pool' || member.access_type === 'Both';
+      const isSpa = member.access_type === 'Spa' || member.access_type === 'Both';
+
+      const renderContainer = document.createElement('div');
+      renderContainer.style.position = 'absolute';
+      renderContainer.style.left = '-9999px';
+      renderContainer.style.top = '0';
+      renderContainer.style.width = '800px';
+      renderContainer.style.backgroundColor = '#ffffff';
+      renderContainer.style.zIndex = '-9999';
+
+      const renderCheckbox = (checked: boolean, labelEn: string, labelAr: string) => `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 16px; height: 16px; border: 2px solid black; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; background: ${checked ? '#000' : 'transparent'}; color: ${checked ? '#fff' : '#000'}; shrink: 0;">
+            ${checked ? '✓' : ''}
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; font-size: 9px; font-weight: bold; color: black; text-transform: uppercase;">
+            <span>${labelEn}</span>
+            <span dir="rtl" style="font-family: 'Amiri', 'Traditional Arabic', serif;">${labelAr}</span>
+          </div>
+        </div>
+      `;
+
+      let familySectionHtml = '';
+      if (member.package_type === 'Couple' || member.package_type === 'Double' || member.package_type === 'Family') {
+        const spouseDobStr = member.spouse_dob ? format(parseISO(member.spouse_dob), 'dd MMM yyyy') : '---';
+        let kidsHtml = '';
+        if (member.kids && Array.isArray(member.kids) && member.kids.length > 0) {
+          kidsHtml = member.kids.map((kid: any, i: number) => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: #f8fafc; border-radius: 8px; border: 1px solid #f1f5f9; margin-top: 4px;">
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-size: 10px; font-weight: 900; text-transform: uppercase;">Dependent ${i + 1}: ${kid.name || 'N/A'}</span>
+              </div>
+              <div style="display: flex; flex-direction: column; text-align: right;">
+                <span style="font-size: 9px; font-weight: bold; color: #94a3b8; text-transform: uppercase;">DOB: ${kid.dob ? format(parseISO(kid.dob), 'dd MMM yyyy') : '---'}</span>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        familySectionHtml = `
+          <div style="margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid black; padding-bottom: 4px; margin-bottom: 8px;">
+              <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; margin: 0;">
+                ${(member.package_type === 'Couple' || member.package_type === 'Double') ? 'Partner Details' : 'Family Manifest'}
+              </h3>
+              <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">
+                ${(member.package_type === 'Couple' || member.package_type === 'Double') ? 'بيانات الشريكين' : 'بيانات العائلة'}
+              </h3>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 12px; border: 1px solid #f1f5f9; border-radius: 12px;">
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                  <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin: 0;">Spouse Name</p>
+                  <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">اسم الزوج/الزوجة</p>
+                </div>
+                <p style="font-size: 12px; font-weight: 900; text-transform: uppercase; margin: 2px 0 0 0;">${member.spouse_name || 'Not Declared'}</p>
+              </div>
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                  <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin: 0;">Date of Birth</p>
+                  <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">تاريخ الميلاد</p>
+                </div>
+                <p style="font-size: 12px; font-weight: 900; margin: 2px 0 0 0;">${spouseDobStr}</p>
+              </div>
+            </div>
+            ${kidsHtml}
+          </div>
+        `;
+      }
+
+      renderContainer.innerHTML = `
+        <!-- Page 1 -->
+        <div id="pdf-page-1" style="width: 800px; min-height: 1130px; height: 1130px; background: #ffffff; padding: 48px; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <!-- Header -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 4px solid black; padding-bottom: 16px;">
+              <div style="flex: 1;">
+                <h1 style="font-size: 24px; font-weight: 900; tracking: -0.05em; text-transform: uppercase; color: black; margin: 0 0 4px 0;">${propertyName}</h1>
+                <h2 style="font-size: 11px; font-weight: 900; color: #64748b; text-transform: uppercase; letter-spacing: 0.3em; margin: 0;">${outletName}</h2>
+                <div style="margin-top: 12px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: black; color: white; border-radius: 4px; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em;">
+                  <span>🛡️ Certified Member Record</span>
+                  <span style="font-family: 'Amiri', serif;" dir="rtl">سجل عضو معتمد</span>
+                </div>
+              </div>
+              <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 12px;">
+                ${logoUrl ? `<img src="${logoUrl}" alt="Logo" style="height: 60px; width: auto; object-fit: contain;" />` : ''}
+                <div style="text-align: right;">
+                  <div style="display: flex; justify-content: flex-end; align-items: center; gap: 6px;">
+                    <p style="font-size: 10px; font-weight: 900; letter-spacing: 0.1em; margin: 0;">Membership No..</p>
+                    <p style="font-size: 10px; font-weight: 900; letter-spacing: 0.1em; font-family: 'Amiri', serif; margin: 0;" dir="rtl">الرقم التسلسلي</p>
+                  </div>
+                  <p style="font-size: 22px; font-weight: 900; letter-spacing: 0.1em; color: #4f46e5; margin: 2px 0 0 0;">${member.membership_number || '---'}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2-Column Info -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 24px;">
+              <!-- Left: Member Identity -->
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid black; padding-bottom: 4px;">
+                  <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; margin: 0;">Member Identity</h3>
+                  <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">هوية العضو</h3>
+                </div>
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                    <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin: 0;">Legal Name</p>
+                    <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">الاسم القانوني</p>
+                  </div>
+                  <p style="font-size: 14px; font-weight: 900; text-transform: uppercase; margin: 2px 0 0 0;">${member.guest_name || '---'}</p>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                      <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin: 0;">Nationality</p>
+                      <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">الجنسية</p>
+                    </div>
+                    <p style="font-size: 11px; font-weight: 900; text-transform: uppercase; margin: 2px 0 0 0;">${member.nationality || '---'}</p>
+                  </div>
+                  <div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                      <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin: 0;">Date of Birth</p>
+                      <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">تاريخ الميلاد</p>
+                    </div>
+                    <p style="font-size: 11px; font-weight: 900; text-transform: uppercase; margin: 2px 0 0 0;">${dobStr}</p>
+                  </div>
+                </div>
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                    <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin: 0;">Contact Information</p>
+                    <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">معلومات الاتصال</p>
+                  </div>
+                  <p style="font-size: 11px; font-weight: 900; margin: 2px 0 0 0;">${member.email || '---'}</p>
+                  <p style="font-size: 11px; font-weight: 900; margin: 2px 0 0 0;">${member.phone || '---'}</p>
+                </div>
+              </div>
+
+              <!-- Right: Enrollment Logic -->
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid black; padding-bottom: 4px;">
+                  <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; margin: 0;">Enrollment Logic</h3>
+                  <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">تفاصيل التسجيل</h3>
+                </div>
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                    <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin: 0;">Tier Designation</p>
+                    <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">نوع العضوية</p>
+                  </div>
+                  <p style="font-size: 14px; font-weight: 900; text-transform: uppercase; color: #4f46e5; margin: 2px 0 0 0;">${member.category_name || member.package_type || 'Custom Membership'}</p>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                      <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin: 0;">Commencement</p>
+                      <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">تاريخ البدء</p>
+                    </div>
+                    <p style="font-size: 11px; font-weight: 900; text-transform: uppercase; margin: 2px 0 0 0;">${startDateStr}</p>
+                  </div>
+                  <div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                      <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin: 0;">Expiry Date</p>
+                      <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">تاريخ الانتهاء</p>
+                    </div>
+                    <p style="font-size: 11px; font-weight: 900; text-transform: uppercase; margin: 2px 0 0 0;">${endDateStr}</p>
+                  </div>
+                </div>
+                <div style="padding-top: 8px; border-top: 1px dashed #e2e8f0;">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                    <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin: 0;">Referral Name</p>
+                    <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">اسم المرجع</p>
+                  </div>
+                  <p style="font-size: 11px; font-weight: 900; text-transform: uppercase; margin: 2px 0 0 0;">${member.referrer_name || 'Self / Direct'}</p>
+                </div>
+                <div style="padding-top: 8px; border-top: 1px dashed #e2e8f0;">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                    <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin: 0;">Total Contribution</p>
+                    <p style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase; font-family: 'Amiri', serif; margin: 0;" dir="rtl">إجمالي المبلغ</p>
+                  </div>
+                  <p style="font-size: 18px; font-weight: 900; margin: 2px 0 0 0;">${netAmountStr}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Checkbox Panel -->
+            <div style="background: #f8fafc; padding: 12px 16px; border-radius: 12px; border: 1px solid #f1f5f9; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                ${renderCheckbox(isNew, "New Enrollment", "طلب جديد")}
+                ${renderCheckbox(isRenew, "Renewal", "تجديد")}
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                ${renderCheckbox(isPool, "Pool Access", "حمام السباحة")}
+                ${renderCheckbox(isSpa, "Spa Facilities", "نادي السبا")}
+              </div>
+            </div>
+
+            ${familySectionHtml}
+
+            <!-- Conditions of Enrollment -->
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 4px solid black;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <h4 style="font-size: 11px; font-weight: 900; text-transform: uppercase; text-decoration: underline; margin: 0;">Conditions of Enrollment</h4>
+                  <p style="font-size: 9px; line-height: 1.5; text-align: justify; margin: 0; color: #1e293b;">
+                    Membership is non-transferable and non-refundable. All facility rules must be strictly adhered to. The management reserves the right to suspend or terminate membership for breach of protocols. Members must present their ID upon entry.
+                  </p>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px;" dir="rtl">
+                  <h4 style="font-size: 11px; font-weight: 900; text-transform: uppercase; text-decoration: underline; font-family: 'Amiri', serif; margin: 0;">شروط العضوية</h4>
+                  <p style="font-size: 9px; line-height: 1.5; text-align: justify; font-family: 'Amiri', serif; margin: 0; color: #1e293b;">
+                    العضوية غير قابلة للتحويل وغير قابلة للاسترداد. يجب الالتزام الصارم بجميع قواعد المنشأة. تحتفظ الإدارة بالحق في تعليق أو إنهاء العضوية بسبب خرق البروتوكولات. يجب على الأعضاء تقديم هويتهم عند الدخول.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Signatures -->
+            <div style="margin-top: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 48px;">
+              <div style="display: flex; flex-direction: column; justify-content: flex-end; height: 80px;">
+                ${member.member_signature ? `<img src="${member.member_signature}" alt="Member Signature" style="height: 50px; object-fit: contain; margin-bottom: 6px; align-self: flex-start;" />` : ''}
+                <div style="border-top: 1px solid black; padding-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 11px; font-weight: 900; text-transform: uppercase;">Member Signature</span>
+                  <span style="font-size: 11px; font-weight: 900; text-transform: uppercase; font-family: 'Amiri', serif;" dir="rtl">توقيع العضو</span>
+                </div>
+              </div>
+              <div style="display: flex; flex-direction: column; justify-content: flex-end; height: 80px;">
+                ${member.staff_signature ? `<img src="${member.staff_signature}" alt="Staff Signature" style="height: 50px; object-fit: contain; margin-bottom: 6px; align-self: flex-start;" />` : ''}
+                <div style="border-top: 1px solid black; padding-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 11px; font-weight: 900; text-transform: uppercase;">Authorized Officer</span>
+                  <span style="font-size: 11px; font-weight: 900; text-transform: uppercase; font-family: 'Amiri', serif;" dir="rtl">المسؤول المعتمد</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 24px; text-align: center;">
+            <p style="font-size: 9px; font-weight: bold; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.3em; margin: 0;">THIS IS A DIGITALLY GENERATED LEGAL INSTRUMENT &bull; SYSTEM ID: ${String(member.id || 'RECORD').substring(0,8)}</p>
+          </div>
+        </div>
+
+        <!-- Page 2 -->
+        <div id="pdf-page-2" style="width: 800px; min-height: 1130px; height: 1130px; background: #ffffff; padding: 48px; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <div style="text-align: center; margin-bottom: 20px;">
+              <h3 style="font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 2px solid black; display: inline-block; padding-bottom: 4px; margin: 0;">Gymnasium Rules & Regulations</h3>
+              <h3 style="font-size: 15px; font-weight: bold; margin-top: 4px; font-family: 'Amiri', serif;" dir="rtl">القواعد و اللوائح الخاصة بصالة الألعاب الرياضية</h3>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 9px; font-weight: 500; line-height: 1.4; margin-bottom: 20px;">
+              ${GYM_RULES.map((rule, idx) => `
+                <div style="display: flex; gap: 12px; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px;">
+                  <span style="font-weight: 900; width: 20px;">${idx + 1}.</span>
+                  <span style="flex: 1; text-align: left;">${rule.en}</span>
+                  <span style="flex: 1; text-align: right; font-family: 'Amiri', serif;" dir="rtl">${rule.ar}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div style="margin-top: auto; padding-top: 16px; border-top: 2px solid black;">
+            <div style="display: flex; justify-content: space-between; padding: 0 8px;">
+              <div style="width: 280px; display: flex; flex-direction: column; justify-content: flex-end; height: 70px;">
+                ${member.member_signature ? `<img src="${member.member_signature}" alt="Member Signature" style="height: 40px; object-fit: contain; margin-bottom: 4px; align-self: flex-start;" />` : ''}
+                <div style="border-top: 1px solid black; padding-top: 4px; font-size: 11px; display: flex; justify-content: space-between;">
+                  <span style="font-weight: bold;">Member Signature</span>
+                  <span style="font-weight: bold; font-family: 'Amiri', serif;" dir="rtl">توقيع العضو :</span>
+                </div>
+              </div>
+              <div style="width: 280px; display: flex; flex-direction: column; justify-content: flex-end; height: 70px;">
+                <div style="border-top: 1px solid black; padding-top: 4px; font-size: 11px; display: flex; justify-content: space-between;">
+                  <span style="font-weight: bold;">Date</span>
+                  <span style="font-weight: bold; font-family: 'Amiri', serif;" dir="rtl">التاريخ : ${format(new Date(), 'dd MMM yyyy')}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(renderContainer);
+      await waitForImages(renderContainer);
+      await new Promise(r => setTimeout(r, 100));
+
+      const page1El = renderContainer.querySelector('#pdf-page-1') as HTMLElement;
+      const page2El = renderContainer.querySelector('#pdf-page-2') as HTMLElement;
+
+      const dataUrl1 = await toPng(page1El, {
+        quality: 0.95,
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+        pixelRatio: 2,
+        skipFonts: true,
+      });
+
+      const dataUrl2 = await toPng(page2El, {
+        quality: 0.95,
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+        pixelRatio: 2,
+        skipFonts: true,
+      });
+
+      document.body.removeChild(renderContainer);
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      pdf.addImage(dataUrl1, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      pdf.addPage();
+      pdf.addImage(dataUrl2, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+
+      const dataUri = pdf.output('datauristring');
+      return dataUri.split(',')[1];
+    } catch (err) {
+      console.error('[MemberAgreementPdfService] Error generating high-res DOM PDF, falling back to jsPDF:', err);
+    }
+  }
+
+  // Fallback programmatic jsPDF builder
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
     format: 'a4'
   });
 
-  const propertyName = (property?.name || settings?.company_name || 'THE TORCH DOHA').toUpperCase();
-  const outletName = (outlet?.name || 'TORCH CLUB').toUpperCase();
-  const currencySymbol = 'QAR';
+  const propertyName = (property?.name || settings?.company_name || 'AL AZIZIYAH BOUTIQUE HOTEL').toUpperCase();
+  const outletName = (outlet?.name || 'NOVA SPA').toUpperCase();
 
-  // Colors
-  const primaryColor: [number, number, number] = [15, 23, 42]; // #0f172a slate-900
-  const accentColor: [number, number, number] = [79, 70, 229]; // #4f46e5 indigo-600
-  const grayText: [number, number, number] = [100, 116, 139]; // #64748b slate-500
-  const lightBg: [number, number, number] = [248, 250, 252]; // #f8fafc slate-50
-
-  // Header Banner Line
-  doc.setLineWidth(1);
-  doc.setDrawColor(...primaryColor);
-  doc.line(15, 36, 195, 36);
-
-  // Property Title & Outlet
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(22);
-  doc.setTextColor(...primaryColor);
+  doc.setFontSize(20);
   doc.text(propertyName, 15, 20);
-
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...grayText);
-  doc.text(`${outletName}  |  CERTIFIED MEMBER ENROLLMENT RECORD`, 15, 27);
-
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text('OFFICIAL MEMBERSHIP AGREEMENT & LEGAL INSTRUMENT', 15, 32);
-
-  // Membership Number Card (Top Right)
-  doc.setFillColor(...lightBg);
-  doc.roundedRect(130, 10, 65, 22, 2, 2, 'F');
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(130, 10, 65, 22, 2, 2, 'S');
-
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...grayText);
-  doc.text('MEMBERSHIP NO.', 135, 16);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`${outletName} - MEMBERSHIP AGREEMENT LEDGER`, 15, 27);
 
   doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...accentColor);
-  doc.text(String(member.membership_number || 'N/A'), 135, 26);
-
-  // Section 1: Member Identity & Package
-  let y = 43;
-  doc.setFillColor(...primaryColor);
-  doc.rect(15, y, 180, 7, 'F');
-  doc.setFontSize(9);
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.text('1. MEMBER IDENTITY & ENROLLMENT PARTICULARS', 18, y + 5);
-
-  y += 9;
-
-  const startDateFormatted = member.start_date ? format(parseISO(member.start_date), 'dd MMM yyyy') : 'N/A';
-  const endDateFormatted = (member.current_end_date || member.original_end_date)
-    ? format(parseISO(member.current_end_date || member.original_end_date), 'dd MMM yyyy')
-    : 'N/A';
-  const dobFormatted = member.dob ? format(parseISO(member.dob), 'dd MMM yyyy') : 'N/A';
-
-  autoTable(doc, {
-    startY: y,
-    margin: { left: 15, right: 15 },
-    theme: 'plain',
-    styles: { fontSize: 8.5, cellPadding: 2.5, textColor: [15, 23, 42] },
-    columnStyles: {
-      0: { fontStyle: 'bold', textColor: [100, 116, 139], cellWidth: 38 },
-      1: { fontStyle: 'bold', cellWidth: 52 },
-      2: { fontStyle: 'bold', textColor: [100, 116, 139], cellWidth: 38 },
-      3: { fontStyle: 'bold', cellWidth: 52 },
-    },
-    body: [
-      ['Member Name:', member.guest_name || 'N/A', 'Package & Access:', `${member.package_type || 'Single'} (${member.access_type || 'Both'})`],
-      ['Email Address:', member.email || 'N/A', 'Enrollment Type:', member.membership_type || 'New'],
-      ['Phone Number:', member.phone || 'N/A', 'Commencement:', startDateFormatted],
-      ['Nationality:', member.nationality || 'N/A', 'Expiry Date:', endDateFormatted],
-      ['Date of Birth:', dobFormatted, 'Referral:', member.referrer_name || 'Direct Purchase'],
-    ]
-  });
-
-  y = (doc as any).lastAutoTable.finalY + 6;
-
-  // Amount Paid Card
-  doc.setFillColor(30, 27, 75); // #1e1b4b indigo-950
-  doc.roundedRect(15, y, 180, 20, 3, 3, 'F');
-
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(165, 180, 252);
-  doc.text('TOTAL CONTRIBUTION PAID', 20, y + 6);
-
-  const safeNet = (member.net_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  doc.setFontSize(15);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  doc.text(`${currencySymbol} ${safeNet}`, 20, y + 15);
-
-  doc.setFontSize(8.5);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(203, 213, 225);
-  doc.text(`Payment Ref: ${member.check_no || 'Direct Purchase / Card'}`, 115, y + 15);
-
-  y += 26;
-
-  // Family / Dependents Section (if applicable)
-  if (member.package_type === 'Couple' || member.package_type === 'Double' || member.package_type === 'Family') {
-    doc.setFillColor(...primaryColor);
-    doc.rect(15, y, 180, 6, 'F');
-    doc.setFontSize(8.5);
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.text('FAMILY & DEPENDENT MANIFEST', 18, y + 4.5);
-    y += 8;
-
-    const familyRows: any[] = [];
-    if (member.spouse_name) {
-      familyRows.push(['Spouse / Partner', member.spouse_name, member.spouse_dob ? format(parseISO(member.spouse_dob), 'dd MMM yyyy') : 'N/A']);
-    }
-    if (member.kids && Array.isArray(member.kids) && member.kids.length > 0) {
-      member.kids.forEach((k: any, i: number) => {
-        familyRows.push([`Dependent ${i + 1}`, k.name || 'N/A', k.dob ? format(parseISO(k.dob), 'dd MMM yyyy') : 'N/A']);
-      });
-    }
-
-    if (familyRows.length > 0) {
-      autoTable(doc, {
-        startY: y,
-        margin: { left: 15, right: 15 },
-        theme: 'striped',
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [51, 65, 85], textColor: [255, 255, 255], fontStyle: 'bold' },
-        head: [['Role / Relation', 'Full Name', 'Date of Birth']],
-        body: familyRows
-      });
-      y = (doc as any).lastAutoTable.finalY + 6;
-    }
-  }
-
-  // Section 2: Terms & Conditions
-  doc.setFillColor(...primaryColor);
-  doc.rect(15, y, 180, 6, 'F');
-  doc.setFontSize(8.5);
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.text('2. TERMS & CONDITIONS OF ENROLLMENT', 18, y + 4.5);
-
-  y += 9;
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(51, 65, 85);
-
-  const termsList = [
-    "1. Non-Refundable & Non-Transferable: Membership fees paid are strictly non-refundable and non-transferable under any circumstances.",
-    "2. Compliance with Rules: Members agree to abide by all club guidelines, facility regulations, and instructions issued by management.",
-    "3. Health Declaration: Members certify that they are physically fit to participate in physical exercise and use facility amenities.",
-    "4. Liability Disclaimer: The management accepts no responsibility for injuries, illness, or loss of personal property on club premises.",
-    "5. Access Credentials: Members must present valid membership credentials upon every facility visit to gain entry."
-  ];
-
-  termsList.forEach(term => {
-    doc.text(term, 17, y);
-    y += 4.5;
-  });
-
-  y += 4;
-
-  // Signatures
-  doc.setLineWidth(0.4);
-  doc.setDrawColor(203, 213, 225);
-
-  const sigBoxY = y;
-  
-  // Member Signature box
-  if (member.member_signature && typeof member.member_signature === 'string' && member.member_signature.startsWith('data:image')) {
-    try {
-      doc.addImage(member.member_signature, 'PNG', 20, sigBoxY, 40, 14);
-    } catch (e) {
-      console.warn('Failed to render member signature image into PDF', e);
-    }
-  }
-  doc.line(20, sigBoxY + 15, 85, sigBoxY + 15);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...primaryColor);
-  doc.text('Member Signature (توقيع العضو)', 20, sigBoxY + 20);
-
-  // Staff Signature box
-  if (member.staff_signature && typeof member.staff_signature === 'string' && member.staff_signature.startsWith('data:image')) {
-    try {
-      doc.addImage(member.staff_signature, 'PNG', 125, sigBoxY, 40, 14);
-    } catch (e) {
-      console.warn('Failed to render staff signature image into PDF', e);
-    }
-  }
-  doc.line(125, sigBoxY + 15, 190, sigBoxY + 15);
-  doc.text('Authorized Officer (المسؤول المعتمد)', 125, sigBoxY + 20);
-
-  // Footer for Page 1
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(148, 163, 184);
-  doc.text(
-    `System ID: ${member.id ? String(member.id).substring(0, 8) : 'RECORD'} • Page 1 of 2 • Verified Member Enrollment Document`,
-    105,
-    285,
-    { align: 'center' }
-  );
-
-  // Page 2: Rules & Regulations
-  doc.addPage();
-
-  // Page 2 Header
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.setTextColor(...primaryColor);
-  doc.text('GYMNASIUM & HEALTH CLUB RULES', 105, 18, { align: 'center' });
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...grayText);
-  doc.text('GENERAL TERMS & OPERATIONAL PROTOCOLS', 105, 24, { align: 'center' });
+  doc.setTextColor(79, 70, 229);
+  doc.text(`MEMBERSHIP NO: ${member.membership_number || 'N/A'}`, 140, 20);
 
   doc.setLineWidth(0.8);
-  doc.setDrawColor(...primaryColor);
-  doc.line(15, 28, 195, 28);
+  doc.setDrawColor(15, 23, 42);
+  doc.line(15, 32, 195, 32);
 
-  let py = 35;
+  let y = 42;
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`Legal Name: ${member.guest_name || 'N/A'}`, 15, y);
+  doc.text(`Tier: ${member.category_name || member.package_type || 'Custom'}`, 110, y);
+
+  y += 7;
+  doc.text(`Contact: ${member.email || 'N/A'} / ${member.phone || 'N/A'}`, 15, y);
+  doc.text(`Type: ${member.membership_type || 'New'} (${member.access_type || 'Both'})`, 110, y);
+
+  y += 7;
+  doc.text(`Commencement: ${member.start_date ? format(parseISO(member.start_date), 'dd MMM yyyy') : 'N/A'}`, 15, y);
+  doc.text(`Expiry Date: ${member.current_end_date ? format(parseISO(member.current_end_date), 'dd MMM yyyy') : 'N/A'}`, 110, y);
+
+  y += 10;
+  doc.setFontSize(12);
+  doc.text(`Total Contribution: QAR ${(member.net_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 15, y);
+
+  y += 20;
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(30, 41, 59);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`System ID: ${member.id ? String(member.id).substring(0, 8) : 'RECORD'} • Page 1 of 2`, 105, 280, { align: 'center' });
 
-  GYM_RULES.forEach((rule) => {
-    const splitLines = doc.splitTextToSize(rule, 175);
-    doc.text(splitLines, 17, py);
-    py += splitLines.length * 4.5 + 2;
+  doc.addPage();
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+  doc.text('GYMNASIUM RULES & REGULATIONS', 105, 20, { align: 'center' });
+  doc.line(15, 25, 195, 25);
+
+  let ry = 35;
+  doc.setFontSize(8);
+  GYM_RULES.forEach((rule, idx) => {
+    doc.text(`${idx + 1}. ${rule.en}`, 15, ry);
+    ry += 6;
   });
 
-  py += 8;
-  doc.setFillColor(...lightBg);
-  doc.roundedRect(15, py, 180, 24, 2, 2, 'F');
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(15, py, 180, 24, 2, 2, 'S');
-
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...primaryColor);
-  doc.text('ACKNOWLEDGEMENT', 20, py + 6);
-
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(71, 85, 105);
-  doc.text(
-    'By registering for membership at ' + propertyName + ', the member acknowledges receipt and acceptance of all facility rules, health disclosures, and terms listed in this document.',
-    20,
-    py + 12,
-    { maxWidth: 170 }
-  );
-
-  // Footer for Page 2
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(148, 163, 184);
-  doc.text(
-    `System ID: ${member.id ? String(member.id).substring(0, 8) : 'RECORD'} • Page 2 of 2 • ${propertyName}`,
-    105,
-    285,
-    { align: 'center' }
-  );
-
-  // Return base64 string
   const dataUri = doc.output('datauristring');
   return dataUri.split(',')[1];
 }
