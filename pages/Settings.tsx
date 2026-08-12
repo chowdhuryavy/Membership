@@ -1582,7 +1582,7 @@ const SettingsPage = () => {
                                                           ))}
                                                       </div>
                                                       <div className="text-[10px] font-bold text-slate-400 uppercase mt-1">
-                                                          {recipient.report_type === 'member_purchased' ? 'Member Purchase Notification' : recipient.report_type.replace(/_/g, ' ')}
+                                                          {recipient.report_type === 'members_joined' ? 'Member Purchase Notification' : recipient.report_type.replace(/_/g, ' ')}
                                                           {recipient.report_type === 'incentives' && (
                                                               <span className="ml-1 text-indigo-600 font-black">
                                                                   ({recipient.incentive_dept === 'All' || !recipient.incentive_dept ? 'All Departments' : recipient.incentive_dept})
@@ -2076,7 +2076,7 @@ const SettingsPage = () => {
                                         {value:'retail_stock', label:'Retail & Inventory Stock Report (Monthly)'},
                                         {value:'entrance_fee', label:'Entrance Fee & Guest Visitor Ledger (Monthly)'},
                                         {value:'attendance_checkin', label:'Member Attendance & Check-In Log (Daily)'},
-                                        {value:'member_purchased', label:'Member Addition / Purchase Alert (Instant)'}
+                                        {value:'members_joined', label:'Member Addition / Purchase Alert (Instant)'}
                                     ]} 
                                     value={reportRecipientForm.report_type} 
                                     onChange={e => {
@@ -2084,7 +2084,7 @@ const SettingsPage = () => {
                                         setReportRecipientForm({
                                             ...reportRecipientForm, 
                                             report_type: typeVal,
-                                            send_time: typeVal === 'member_purchased' ? '00:00' : (reportRecipientForm.send_time === 'Instant' || !reportRecipientForm.send_time ? '08:00' : reportRecipientForm.send_time)
+                                            send_time: typeVal === 'members_joined' ? '00:00' : (reportRecipientForm.send_time === 'Instant' || !reportRecipientForm.send_time ? '08:00' : reportRecipientForm.send_time)
                                         });
                                     }} 
                                     className="h-14 rounded-xl border-2" 
@@ -2147,7 +2147,7 @@ const SettingsPage = () => {
                                 />
                             )}
                             
-                            {reportRecipientForm.report_type === 'member_purchased' ? (
+                            {reportRecipientForm.report_type === 'members_joined' ? (
                                 <div className="p-4 bg-indigo-50/80 border-2 border-indigo-200/80 rounded-xl flex items-center justify-between">
                                     <div>
                                         <div className="text-[10px] font-black uppercase text-indigo-900 tracking-wider">Dispatch Timing</div>

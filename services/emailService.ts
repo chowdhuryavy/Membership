@@ -82,9 +82,9 @@ export const emailService = {
       const currency = (settings && currencies.find(c => c.id === settings.currency_id)) || currencies[0];
       const symbol = currency?.symbol || 'QAR';
 
-      // Find recipients configured for member_purchased, or all active recipients for outlet
+      // Find recipients configured for members_joined, or all active recipients for outlet
       let targetEmails: string[] = [];
-      const purchasedRecipients = recipients.filter(r => r.is_active && r.report_type === 'member_purchased' && (r.outlet_id === 'all' || r.outlet_id === member.outlet_id));
+      const purchasedRecipients = recipients.filter(r => r.is_active && r.report_type === 'members_joined' && (r.outlet_id === 'all' || r.outlet_id === member.outlet_id));
       
       if (purchasedRecipients.length > 0) {
         targetEmails = purchasedRecipients.flatMap(r => r.email.split(',').map(e => e.trim()));
