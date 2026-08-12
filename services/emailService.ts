@@ -10,6 +10,25 @@ export const emailService = {
     console.log(`[Email Service] Subject: ${subject}`);
     console.log(`[Email Service] Attachments: ${attachments.length}`);
 
+    // Method 1: Call Express server API endpoint
+    try {
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, subject, html, attachments })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          console.log('[Email Service] Email successfully sent via Express /api/send-email:', data.id);
+          return { success: true, messageId: data.id };
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[Email Service] Express /api/send-email unreachable or failed, trying Supabase Edge Function fallback...', apiErr);
+    }
+
+    // Method 2: Fallback to Supabase Edge Function
     try {
       if (supabase) {
         const { data, error } = await supabase.functions.invoke('send-reports', {
@@ -23,25 +42,18 @@ export const emailService = {
           }
         });
 
-        if (error) {
-          console.error('[Email Service] Error invoking send-reports Edge Function:', error);
-          return { success: false, error: error.message };
+        if (!error && data && data.success !== false) {
+          console.log('[Email Service] Email successfully sent via Resend Edge Function:', data?.id);
+          return { success: true, messageId: data?.id || Math.random().toString(36).substring(7) };
+        } else {
+          console.error('[Email Service] Edge Function returned error:', error || data?.error);
         }
-
-        if (data && data.success === false) {
-          console.error('[Email Service] Edge Function returned error:', data.error);
-          return { success: false, error: data.error };
-        }
-
-        console.log('[Email Service] Email successfully sent via Resend Edge Function:', data?.id);
-        return { success: true, messageId: data?.id || Math.random().toString(36).substring(7) };
       }
     } catch (err: any) {
       console.error('[Email Service] Exception sending email via Edge Function:', err);
     }
 
-    // Fallback response for dev/offline mode
-    return { success: true, messageId: Math.random().toString(36).substring(7) };
+    return { success: false, error: 'Failed to send email via both Express server and Supabase Edge Function.' };
   },
 
   async sendReportEmail(

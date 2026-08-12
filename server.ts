@@ -441,6 +441,83 @@ async function startServer() {
     }
   });
 
+  // Resend Direct Email Endpoint
+  app.post('/api/send-email', async (req, res) => {
+    try {
+      const { to, subject, html, attachments } = req.body;
+      const resendApiKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
+
+      if (!resendApiKey) {
+        console.warn('[Express /api/send-email] RESEND_API_KEY not configured on server.');
+        return res.status(500).json({ success: false, error: 'RESEND_API_KEY not configured on server.' });
+      }
+
+      const rawToList = Array.isArray(to) ? to : [to];
+      const emails = rawToList
+        .flatMap((e: string) => (typeof e === 'string' ? e.split(',') : [e]))
+        .map((e: string) => (typeof e === 'string' ? e.trim() : ''))
+        .filter(Boolean);
+
+      if (emails.length === 0) {
+        return res.status(400).json({ success: false, error: 'No recipient email addresses provided' });
+      }
+
+      const fromEmail = process.env.EMAIL_FROM || 'noreply@perfection.my';
+      const appName = 'Health Club Management';
+
+      console.log(`[Express /api/send-email] Dispatching email to ${emails.join(', ')} (from: ${fromEmail})...`);
+
+      // Attempt 1: Send via Resend REST API using configured fromEmail
+      let resendResponse = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: `${appName} <${fromEmail}>`,
+          to: emails,
+          subject,
+          html,
+          attachments: attachments || []
+        })
+      });
+
+      let resendResult: any = await resendResponse.json();
+
+      // If domain is unverified or first attempt failed, retry with onboarding@resend.dev
+      if (!resendResponse.ok && fromEmail !== 'onboarding@resend.dev') {
+        console.warn(`[Express /api/send-email] First attempt with ${fromEmail} failed:`, resendResult, '. Retrying with onboarding@resend.dev...');
+        resendResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: `${appName} <onboarding@resend.dev>`,
+            to: emails,
+            subject,
+            html,
+            attachments: attachments || []
+          })
+        });
+        resendResult = await resendResponse.json();
+      }
+
+      if (!resendResponse.ok) {
+        console.error('[Express /api/send-email] Resend API Error:', resendResult);
+        return res.status(resendResponse.status).json({ success: false, error: resendResult.message || JSON.stringify(resendResult) });
+      }
+
+      console.log('[Express /api/send-email] Email delivered successfully. ID:', resendResult.id);
+      return res.json({ success: true, id: resendResult.id });
+    } catch (err: any) {
+      console.error('[Express /api/send-email] Exception:', err);
+      return res.status(500).json({ success: false, error: err?.message || String(err) });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

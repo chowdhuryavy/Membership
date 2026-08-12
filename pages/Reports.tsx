@@ -38,7 +38,7 @@ import { getReportData, getReportTitle, ReportContext } from '../src/shared/repo
 import { emailService } from '../services/emailService';
 
 
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import ExpiringMembershipsReport from './ExpiringMembershipsReport';
 import MassageRoomRevenueReport from './MassageRoomRevenueReport';
 import MonthlyRevenueReport from './MonthlyRevenueReport';
@@ -366,79 +366,55 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
 
     const element = reportRef.current;
 
-    // Temporarily replace oklab / oklch color declarations in live stylesheets to prevent html2canvas parser crash
-    const restoredStyles: { el: HTMLStyleElement; original: string }[] = [];
-    const styleElements = Array.from(document.querySelectorAll('style'));
-
-    for (const styleEl of styleElements) {
-      if (styleEl.textContent && (styleEl.textContent.includes('oklab') || styleEl.textContent.includes('oklch'))) {
-        restoredStyles.push({ el: styleEl, original: styleEl.textContent });
-        styleEl.textContent = styleEl.textContent
-          .replace(/oklab\([^)]*\)/gi, '#0f172a')
-          .replace(/oklch\([^)]*\)/gi, '#0f172a');
-      }
-    }
-
-    try {
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight,
-        onclone: (clonedDoc) => {
-          // Clean inline styles on cloned elements
-          const elements = clonedDoc.querySelectorAll('*');
-          elements.forEach((el) => {
-            const styleAttr = el.getAttribute('style');
-            if (styleAttr && (styleAttr.includes('oklab') || styleAttr.includes('oklch'))) {
-              el.setAttribute(
-                'style',
-                styleAttr
-                  .replace(/oklab\([^)]*\)/gi, '#0f172a')
-                  .replace(/oklch\([^)]*\)/gi, '#0f172a')
-              );
-            }
-          });
+    const dataUrl = await toPng(element, {
+      quality: 0.95,
+      backgroundColor: '#ffffff',
+      cacheBust: true,
+      pixelRatio: 2,
+      skipFonts: true,
+      filter: (node) => {
+        if (node instanceof HTMLElement && node.classList.contains('no-print')) {
+          return false;
         }
-      });
+        return true;
+      }
+    });
 
-      const imgData = canvas.toDataURL('image/png');
-      const { jsPDF } = await import('jspdf');
+    const img = new Image();
+    img.src = dataUrl;
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+    });
 
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
+    const { jsPDF } = await import('jspdf');
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
 
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
 
-      let heightLeft = imgHeight;
-      let position = 0;
+    const imgWidth = pdfWidth;
+    const imgHeight = (img.height * pdfWidth) / img.width;
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+    heightLeft -= pdfHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
       heightLeft -= pdfHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-        heightLeft -= pdfHeight;
-      }
-
-      return pdf;
-    } finally {
-      // Restore original style contents
-      for (const { el, original } of restoredStyles) {
-        el.textContent = original;
-      }
     }
+
+    return pdf;
   };
 
   const handleExportPDF = async () => {
