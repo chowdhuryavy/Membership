@@ -120,12 +120,24 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     if (method === 'qr') {
         const id = crypto.randomUUID();
         signatureIdRef.current = id;
-        const name = watch('guest_name');
-        const categoryId = watch('category_id');
+        
+        // Use getValues to ensure we have the most current data snapshot
+        const formValues = getValues();
+        const name = formValues.guest_name || 'Guest';
+        const categoryId = formValues.category_id;
+        
         const cat = sortedCategories.find(c => c.id === categoryId);
         const tier = cat?.name || 'Standard';
         const price = cat?.base_rate || 0;
-        setQrUrl(`${window.location.origin}/#/signature/${id}?name=${encodeURIComponent(name || 'Guest')}&tier=${encodeURIComponent(tier)}&price=${encodeURIComponent(price)}`);
+        
+        const baseUrl = window.location.origin;
+        const queryParams = new URLSearchParams({
+            name: name,
+            tier: tier,
+            price: price.toString()
+        }).toString();
+        
+        setQrUrl(`${baseUrl}/#/signature/${id}?${queryParams}`);
     }
   };
 

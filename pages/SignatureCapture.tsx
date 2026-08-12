@@ -10,8 +10,22 @@ export const SignatureCapturePage = () => {
     const { signatureId } = useParams<{ signatureId: string }>();
     
     // Parse query parameters from the hash part of the URL (SPA routing)
-    const hashQueryString = window.location.hash.split('?')[1] || '';
-    const searchParams = new URLSearchParams(hashQueryString);
+    // We try multiple ways to get the query string to be robust across browsers
+    const getParams = () => {
+        const hash = window.location.hash;
+        const search = window.location.search;
+        
+        let queryString = '';
+        if (hash.includes('?')) {
+            queryString = hash.split('?')[1];
+        } else if (search) {
+            queryString = search.startsWith('?') ? search.substring(1) : search;
+        }
+        
+        return new URLSearchParams(queryString);
+    };
+
+    const searchParams = getParams();
     
     const guestName = searchParams.get('name') || 'Guest';
     const tier = searchParams.get('tier') || 'Standard';

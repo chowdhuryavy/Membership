@@ -95,7 +95,8 @@ async function startServer() {
         tempSignatures.delete(id);
       }
     } else {
-      res.status(404).json({ error: 'Not found' });
+      // Return 200 with empty data instead of 404 to avoid console error noise
+      res.json({ signature: null, confirmed: false });
     }
   });
 
