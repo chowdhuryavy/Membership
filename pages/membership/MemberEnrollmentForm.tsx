@@ -178,7 +178,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
             property: currentProperty?.name || '',
             outlet: currentOutlet?.name || '',
             outlet_id: currentOutlet?.id || '',
-            logo: settings?.logo_url || ''
+            logo: currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || ''
         }).toString();
         
         // Use HashRouter format #/signature/...
