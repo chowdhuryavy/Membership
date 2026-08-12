@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
+import { QRCodeCanvas } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { useForm, SubmitHandler, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -77,6 +78,25 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
   const signatureRef = useRef<SignatureCanvas>(null);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrUrl, setQrUrl] = useState('');
+  const signatureIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (showQrModal && signatureIdRef.current) {
+        const interval = setInterval(() => {
+            const sig = localStorage.getItem(`sig_${signatureIdRef.current}`);
+            if (sig) {
+                setSignature(sig);
+                setShowQrModal(false);
+                localStorage.removeItem(`sig_${signatureIdRef.current}`);
+                clearInterval(interval);
+                if (pendingSubmitData) processSubmit(pendingSubmitData);
+            }
+        }, 1000);
+        return () => clearInterval(interval);
+    }
+  }, [showQrModal, pendingSubmitData]);
 
   const handleSignatureSave = () => {
     if (signatureRef.current) {
@@ -308,7 +328,10 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
   const onFormSubmit = async (data: MemberFormValues) => {
     if (!signature) {
-        setShowSignatureModal(true);
+        const id = crypto.randomUUID();
+        signatureIdRef.current = id;
+        setQrUrl(`${window.location.origin}/#/signature/${id}`);
+        setShowQrModal(true);
         setPendingSubmitData(data);
         return;
     }
@@ -854,6 +877,23 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         </div>
         </form>
 
+        {showQrModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-300 ring-1 ring-black/5 p-8 flex flex-col items-center">
+                    <h3 className="text-lg font-black text-slate-900 mb-4 uppercase tracking-widest">Guest Signature</h3>
+                    <p className="text-xs text-slate-500 font-bold mb-6 text-center">Scan QR with tablet to sign</p>
+                    <div className="bg-white p-4 border border-slate-100 rounded-2xl shadow-sm mb-6">
+                        <QRCodeCanvas value={qrUrl} size={250} />
+                    </div>
+                    <button 
+                        onClick={() => { setShowQrModal(false); setPendingSubmitData(null); }}
+                        className="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        )}
         {showIncentivePrompt && pendingSubmitData && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
               <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-300 ring-1 ring-black/5">

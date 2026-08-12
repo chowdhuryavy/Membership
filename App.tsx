@@ -16,6 +16,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { NotificationBell } from './components/NotificationBell';
 import { schedulerService } from './services/emailService';
 import { HeadlessReportDispatcher } from './components/HeadlessReportDispatcher';
+import { SignatureCapturePage } from './pages/SignatureCapture';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Members from './pages/Members';
@@ -862,6 +863,7 @@ const App = () => {
           <Route path="/staff-login" element={<StaffLogin />} />
           <Route path="/staff-schedule" element={<StaffSchedule />} />
           <Route path="/pass" element={<PublicMemberPass />} />
+          <Route path="/signature/:signatureId" element={<SignatureCapturePage />} />
           <Route element={<ProtectedLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="checkin" element={<AttendanceCheckIn />} />

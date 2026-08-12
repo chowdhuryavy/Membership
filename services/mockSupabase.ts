@@ -4275,8 +4275,14 @@ class DatabaseService {
               notification.message
           ).catch(err => console.error(`[Push] Trigger failure for ${notification.user_id}:`, err));
         } else {
-          // Unassigned/Global notification: Do not broadcast push to general staff devices
-          console.log(`[Push] Unassigned/Global notification created: "${notification.title}". Skipping general staff push broadcast.`);
+          // Unassigned/Global notification: Broadcast push to staff devices if important
+          console.log(`[Push] Unassigned/Global notification created: "${notification.title}". Type: ${notification.type}`);
+          if (notification.type === 'error' || notification.type === 'warning') {
+              console.log(`[Push] Broadcasting important global notification: "${notification.title}"`);
+              await this.triggerGlobalPush({ ...dbNotification, id: 'global-placeholder' } as any);
+          } else {
+              console.log(`[Push] Skipping general staff push broadcast for info notification.`);
+          }
         }
       } catch (e) {
         console.error('[Push] Fatal error in addNotification sequence:', e);
