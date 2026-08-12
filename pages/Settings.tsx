@@ -351,6 +351,31 @@ const SettingsPage = () => {
     return propertyOutlets.filter(o => user?.allowed_outlets?.includes(o.id));
   }, [outlets, reportRecipientForm.property_id, user, isSuperAdmin]);
 
+  const [activeReportProperty, setActiveReportProperty] = useState<string>('');
+  const [activeReportOutlet, setActiveReportOutlet] = useState<string>('all');
+
+  useEffect(() => {
+    if (filteredProperties.length > 0 && (!activeReportProperty || !filteredProperties.some(p => p.id === activeReportProperty))) {
+      setActiveReportProperty(filteredProperties[0].id);
+    }
+  }, [filteredProperties, activeReportProperty]);
+
+  const activeReportOutlets = useMemo(() => {
+    if (!activeReportProperty) return [];
+    const propertyOutlets = outlets.filter(o => o.property_id === activeReportProperty);
+    if (isSuperAdmin) return propertyOutlets;
+    return propertyOutlets.filter(o => user?.allowed_outlets?.includes(o.id));
+  }, [outlets, activeReportProperty, user, isSuperAdmin]);
+
+  const filteredReportRecipients = useMemo(() => {
+    return reportRecipients.filter(recipient => {
+      const matchesProperty = recipient.property_id === activeReportProperty;
+      if (!matchesProperty) return false;
+      if (activeReportOutlet === 'all') return true;
+      return recipient.outlet_id === activeReportOutlet || recipient.outlet_id === 'all';
+    });
+  }, [reportRecipients, activeReportProperty, activeReportOutlet]);
+
   useEffect(() => {
     if (currentOutlet) {
       db.getMassageRooms(currentOutlet.id).then(setMassageRooms);
@@ -1527,19 +1552,22 @@ const SettingsPage = () => {
 
               {activeTab === 'reports_config' && (
                   <div className="space-y-6">
-                      <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                      <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white min-h-[600px] flex flex-col">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-5">
                               <Mail className="w-8 h-8 text-indigo-600" />
-                              <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Report Distribution</CardTitle>
+                              <div>
+                                  <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Report Distribution</CardTitle>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Automated distribution schedules separated by property & outlet</p>
+                              </div>
                           </div>
                           <Button 
                               onClick={() => { 
                                   setEditingId(null); 
                                   setReportRecipientForm({ 
                                       email: '', 
-                                      property_id: '', 
-                                      outlet_id: 'all', 
+                                      property_id: activeReportProperty || filteredProperties[0]?.id || '', 
+                                      outlet_id: activeReportOutlet || 'all', 
                                       report_type: 'revenue_recognition', 
                                       send_time: '08:00',
                                       report_date_type: 'today',
@@ -1549,112 +1577,193 @@ const SettingsPage = () => {
                                   }); 
                                   setShowForm(true); 
                               }} 
-                              className="h-14 px-8 rounded-2xl font-black text-xs uppercase"
+                              className="h-14 px-8 rounded-2xl font-black text-xs uppercase shadow-lg shadow-indigo-100"
                           >
                               <Plus className="w-4 h-4 mr-2" /> Authorize Recipient
                           </Button>
                       </CardHeader>
-                      <CardContent className="p-0">
-                          <table className="w-full text-left">
-                              <thead className="bg-slate-50 border-b">
-                                  <tr>
-                                      <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Recipient</th>
-                                      <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Context</th>
-                                      <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Schedule</th>
-                                       <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Last Sent</th>
-                                      <th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th>
-                                  </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100">
-                                  {reportRecipients.map(recipient => (
-                                      <tr key={recipient.id} className="hover:bg-indigo-50/20 group">
-                                          <td className="px-10 py-8">
-                                              <div className="flex items-center gap-4">
-                                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${recipient.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
-                                                      <Mail className="w-5 h-5" />
-                                                  </div>
-                                                  <div>
-                                                      <div className="flex flex-wrap gap-1 max-w-xs">
-                                                          {recipient.email.split(',').map((email, i) => (
-                                                              <span key={i} className="text-[9px] font-black bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md border border-indigo-100 uppercase">
-                                                                  {email.trim()}
-                                                              </span>
-                                                          ))}
+                      <CardContent className="p-0 flex-1 flex flex-col">
+                          {/* Property Level Tabs */}
+                          {filteredProperties.length > 0 && (
+                              <div className="flex border-b border-slate-200 overflow-x-auto bg-white">
+                                  {filteredProperties.map(prop => {
+                                      const propRecipientsCount = reportRecipients.filter(r => r.property_id === prop.id).length;
+                                      return (
+                                          <button 
+                                              key={prop.id} 
+                                              onClick={() => { 
+                                                  setActiveReportProperty(prop.id); 
+                                                  setActiveReportOutlet('all'); 
+                                              }} 
+                                              className={`px-8 py-4 font-black text-[10px] uppercase tracking-widest transition-colors flex items-center gap-2 whitespace-nowrap ${activeReportProperty === prop.id ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/20' : 'text-slate-400 hover:text-slate-600'}`}
+                                          >
+                                              <Building2 className="w-3.5 h-3.5" />
+                                              {prop.name}
+                                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${activeReportProperty === prop.id ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                  {propRecipientsCount}
+                                              </span>
+                                          </button>
+                                      );
+                                  })}
+                              </div>
+                          )}
+
+                          {/* Outlet Level Tabs */}
+                          {activeReportProperty && (
+                              <div className="flex border-b border-slate-200 bg-slate-50/80 overflow-x-auto">
+                                  <button 
+                                      onClick={() => setActiveReportOutlet('all')} 
+                                      className={`px-8 py-3 font-black text-[9px] uppercase tracking-widest transition-colors flex items-center gap-2 whitespace-nowrap ${activeReportOutlet === 'all' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-400 hover:text-slate-600'}`}
+                                  >
+                                      <Globe className="w-3.5 h-3.5" />
+                                      All Facilities (Property Wide)
+                                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-black ${activeReportOutlet === 'all' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200/60 text-slate-500'}`}>
+                                          {reportRecipients.filter(r => r.property_id === activeReportProperty).length}
+                                      </span>
+                                  </button>
+                                  {activeReportOutlets.map(outlet => {
+                                      const outletRecipientsCount = reportRecipients.filter(r => r.property_id === activeReportProperty && (r.outlet_id === outlet.id || r.outlet_id === 'all')).length;
+                                      return (
+                                          <button 
+                                              key={outlet.id} 
+                                              onClick={() => setActiveReportOutlet(outlet.id)} 
+                                              className={`px-8 py-3 font-black text-[9px] uppercase tracking-widest transition-colors flex items-center gap-2 whitespace-nowrap ${activeReportOutlet === outlet.id ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-400 hover:text-slate-600'}`}
+                                          >
+                                              <Store className="w-3.5 h-3.5" />
+                                              {outlet.name}
+                                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-black ${activeReportOutlet === outlet.id ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200/60 text-slate-500'}`}>
+                                                  {outletRecipientsCount}
+                                              </span>
+                                          </button>
+                                      );
+                                  })}
+                              </div>
+                          )}
+
+                          {/* Recipient Table */}
+                          <div className="flex-1">
+                              <table className="w-full text-left">
+                                  <thead className="bg-slate-50 border-b border-slate-100">
+                                      <tr>
+                                          <th className="px-10 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Recipient</th>
+                                          <th className="px-10 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Facility Scope</th>
+                                          <th className="px-10 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Schedule</th>
+                                          <th className="px-10 py-5 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                      {filteredReportRecipients.map(recipient => (
+                                          <tr key={recipient.id} className="hover:bg-indigo-50/20 transition-colors group">
+                                              <td className="px-10 py-6">
+                                                  <div className="flex items-center gap-4">
+                                                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${recipient.is_active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-100 text-slate-400'}`}>
+                                                          <Mail className="w-5 h-5" />
                                                       </div>
-                                                      <div className="text-[10px] font-bold text-slate-400 uppercase mt-1">
-                                                          {recipient.report_type === 'members_joined' ? 'Member Purchase Notification' : recipient.report_type.replace(/_/g, ' ')}
-                                                          {recipient.report_type === 'incentives' && (
-                                                              <span className="ml-1 text-indigo-600 font-black">
-                                                                  ({recipient.incentive_dept === 'All' || !recipient.incentive_dept ? 'All Departments' : recipient.incentive_dept})
-                                                              </span>
+                                                      <div>
+                                                          <div className="flex flex-wrap gap-1 max-w-sm">
+                                                              {recipient.email.split(',').map((email, i) => (
+                                                                  <span key={i} className="text-[9px] font-black bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md border border-indigo-100/80 uppercase">
+                                                                      {email.trim()}
+                                                                  </span>
+                                                              ))}
+                                                          </div>
+                                                          <div className="text-[10px] font-bold text-slate-400 uppercase mt-1.5 flex items-center gap-2">
+                                                              <span>{recipient.report_type === 'members_joined' ? 'Member Purchase Notification' : recipient.report_type.replace(/_/g, ' ')}</span>
+                                                              {recipient.report_type === 'incentives' && (
+                                                                  <span className="text-indigo-600 font-black bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 text-[8px]">
+                                                                      ({recipient.incentive_dept === 'All' || !recipient.incentive_dept ? 'All Departments' : recipient.incentive_dept})
+                                                                  </span>
+                                                              )}
+                                                          </div>
+                                                      </div>
+                                                  </div>
+                                              </td>
+                                              <td className="px-10 py-6">
+                                                  <div className="space-y-1">
+                                                      <div className="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+                                                          <Building2 className="w-3 h-3 text-slate-400" />
+                                                          {properties.find(p => p.id === recipient.property_id)?.name || 'Unknown Property'}
+                                                      </div>
+                                                      <div className="text-[10px] font-bold text-indigo-600 uppercase flex items-center gap-1.5">
+                                                          <Store className="w-3 h-3 text-indigo-400" />
+                                                          {recipient.outlet_id === 'all' ? (
+                                                              <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-100 font-black text-[9px]">All Facilities (Consolidated)</span>
+                                                          ) : (
+                                                              outlets.find(o => o.id === recipient.outlet_id)?.name || 'Unknown Outlet'
                                                           )}
                                                       </div>
                                                   </div>
-                                              </div>
-                                          </td>
-                                          <td className="px-10 py-8">
-                                              <div className="space-y-1">
-                                                  <div className="text-xs font-black text-slate-700 uppercase">{properties.find(p => p.id === recipient.property_id)?.name || 'Unknown'}</div>
-                                                  <div className="text-[10px] font-bold text-slate-400 uppercase">{recipient.outlet_id === 'all' ? 'All Facilities' : outlets.find(o => o.id === recipient.outlet_id)?.name || 'Unknown'}</div>
-                                              </div>
-                                          </td>
-                                          <td className="px-10 py-8">
-                                              <div className="flex items-center gap-2 text-indigo-600 font-black text-sm">
-                                                  <Clock className="w-4 h-4" />
-                                                  {recipient.send_time}
-                                              </div>
-                                          </td>
-                                          <td className="px-10 py-8 text-right">
-                                              <div className="flex justify-end gap-2">
-                                                  <button 
-                                                      onClick={() => handleSendTestReport(recipient)}
-                                                      className="p-2 text-slate-400 hover:text-indigo-600"
-                                                      title="Send Test Report"
-                                                  >
-                                                      <Zap className="w-4 h-4" />
-                                                  </button>
-                                                  <button 
-                                                      onClick={() => {
-                                                          setEditingId(recipient.id);
-                                                          setReportRecipientForm({
-                                                              email: recipient.email,
-                                                              property_id: recipient.property_id,
-                                                              outlet_id: recipient.outlet_id,
-                                                              report_type: recipient.report_type,
-                                                              send_time: recipient.send_time,
-                                                              report_date_type: recipient.report_date_type || 'today',
-                                                              incentive_dept: recipient.incentive_dept || 'Massage',
-                                                              selected_membership_type_id: recipient.selected_membership_type_id || 'all',
-                                                              is_active: recipient.is_active
-                                                          });
-                                                          setShowForm(true);
-                                                      }}
-                                                      className="p-2 text-slate-400 hover:text-indigo-600"
-                                                  >
-                                                      <Edit2 className="w-4 h-4" />
-                                                  </button>
-                                                  <button 
-                                                      onClick={() => setItemToDelete({ id: recipient.id, type: 'report_recipient', name: recipient.email })}
-                                                      className="p-2 text-slate-400 hover:text-red-500"
-                                                  >
-                                                      <Trash2 className="w-4 h-4" />
-                                                  </button>
-                                              </div>
-                                          </td>
-                                      </tr>
-                                  ))}
-                                  {reportRecipients.length === 0 && (
-                                      <tr>
-                                          <td colSpan={4} className="px-10 py-20 text-center">
-                                              <div className="flex flex-col items-center gap-3">
-                                                  <Mail className="w-12 h-12 text-slate-200" />
-                                                  <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No report settings defined</p>
-                                              </div>
-                                          </td>
-                                      </tr>
-                                  )}
-                              </tbody>
-                          </table>
+                                              </td>
+                                              <td className="px-10 py-6">
+                                                  {recipient.report_type === 'members_joined' ? (
+                                                      <div className="inline-flex items-center gap-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg font-black text-[10px] uppercase">
+                                                          <Zap className="w-3 h-3 text-emerald-600" />
+                                                          Instant Alert
+                                                      </div>
+                                                  ) : (
+                                                      <div className="flex items-center gap-2 text-indigo-600 font-black text-sm">
+                                                          <Clock className="w-4 h-4 text-indigo-500" />
+                                                          {recipient.send_time}
+                                                      </div>
+                                                  )}
+                                              </td>
+                                              <td className="px-10 py-6 text-right">
+                                                  <div className="flex justify-end gap-2">
+                                                      <button 
+                                                          onClick={() => handleSendTestReport(recipient)}
+                                                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                          title="Send Test Report"
+                                                      >
+                                                          <Zap className="w-4 h-4" />
+                                                      </button>
+                                                      <button 
+                                                          onClick={() => {
+                                                              setEditingId(recipient.id);
+                                                              setReportRecipientForm({
+                                                                  email: recipient.email,
+                                                                  property_id: recipient.property_id,
+                                                                  outlet_id: recipient.outlet_id,
+                                                                  report_type: recipient.report_type,
+                                                                  send_time: recipient.send_time,
+                                                                  report_date_type: recipient.report_date_type || 'today',
+                                                                  incentive_dept: recipient.incentive_dept || 'Massage',
+                                                                  selected_membership_type_id: recipient.selected_membership_type_id || 'all',
+                                                                  is_active: recipient.is_active
+                                                              });
+                                                              setShowForm(true);
+                                                          }}
+                                                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                      >
+                                                          <Edit2 className="w-4 h-4" />
+                                                      </button>
+                                                      <button 
+                                                          onClick={() => setItemToDelete({ id: recipient.id, type: 'report_recipient', name: recipient.email })}
+                                                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                      >
+                                                          <Trash2 className="w-4 h-4" />
+                                                      </button>
+                                                  </div>
+                                              </td>
+                                          </tr>
+                                      ))}
+                                      {filteredReportRecipients.length === 0 && (
+                                          <tr>
+                                              <td colSpan={4} className="px-10 py-20 text-center">
+                                                  <div className="flex flex-col items-center gap-3">
+                                                      <Mail className="w-12 h-12 text-slate-200" />
+                                                      <p className="text-sm font-black text-slate-400 uppercase tracking-widest">
+                                                          No report settings defined for this property / facility
+                                                      </p>
+                                                      <p className="text-xs text-slate-400 font-medium">
+                                                          Click "Authorize Recipient" to configure email report distribution for {properties.find(p => p.id === activeReportProperty)?.name || 'this property'}.
+                                                      </p>
+                                                  </div>
+                                              </td>
+                                          </tr>
+                                      )}
+                                  </tbody>
+                              </table>
+                          </div>
                       </CardContent>
                   </Card>
                   </div>

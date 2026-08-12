@@ -13,25 +13,7 @@ export const emailService = {
     console.log(`[Email Service] Subject: ${subject}`);
     console.log(`[Email Service] Attachments: ${attachments.length}`);
 
-    // Method 1: Call Express server API endpoint
-    try {
-      const res = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, subject, html, attachments })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          console.log('[Email Service] Email successfully sent via Express /api/send-email:', data.id);
-          return { success: true, messageId: data.id };
-        }
-      }
-    } catch (apiErr) {
-      console.warn('[Email Service] Express /api/send-email unreachable or failed, trying Supabase Edge Function fallback...', apiErr);
-    }
-
-    // Method 2: Fallback to Supabase Edge Function
+    // Primary Method: Send via Supabase Edge Function directly if available
     try {
       if (supabase) {
         const { data, error } = await supabase.functions.invoke('send-reports', {
@@ -49,14 +31,32 @@ export const emailService = {
           console.log('[Email Service] Email successfully sent via Resend Edge Function:', data?.id);
           return { success: true, messageId: data?.id || Math.random().toString(36).substring(7) };
         } else {
-          console.error('[Email Service] Edge Function returned error:', error || data?.error);
+          console.warn('[Email Service] Edge Function returned error, trying local Express fallback...', error || data?.error);
         }
       }
     } catch (err: any) {
-      console.error('[Email Service] Exception sending email via Edge Function:', err);
+      console.warn('[Email Service] Exception sending email via Edge Function, trying Express server fallback...', err);
     }
 
-    return { success: false, error: 'Failed to send email via both Express server and Supabase Edge Function.' };
+    // Fallback Method: Call Express server API endpoint
+    try {
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, subject, html, attachments })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          console.log('[Email Service] Email successfully sent via Express /api/send-email:', data.id);
+          return { success: true, messageId: data.id };
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[Email Service] Express /api/send-email unreachable or failed:', apiErr);
+    }
+
+    return { success: false, error: 'Failed to send email via both Supabase Edge Function and Express server.' };
   },
 
   async sendReportEmail(
@@ -140,14 +140,14 @@ export const emailService = {
       const currency = (settings && currencies.find(c => c.id === settings.currency_id)) || currencies[0];
       const symbol = currency?.symbol || 'QAR';
 
-      // Find recipients configured for members_joined, or all active recipients for outlet
+      // Find recipients configured for members_joined, or all active recipients for property and outlet
       let targetEmails: string[] = [];
-      const purchasedRecipients = recipients.filter(r => r.is_active && r.report_type === 'members_joined' && (r.outlet_id === 'all' || r.outlet_id === member.outlet_id));
+      const purchasedRecipients = recipients.filter(r => r.is_active && r.report_type === 'members_joined' && (!r.property_id || r.property_id === property?.id) && (r.outlet_id === 'all' || r.outlet_id === member.outlet_id));
       
       if (purchasedRecipients.length > 0) {
         targetEmails = purchasedRecipients.flatMap(r => r.email.split(',').map(e => e.trim()));
       } else {
-        const activeRecipients = recipients.filter(r => r.is_active && (r.outlet_id === 'all' || r.outlet_id === member.outlet_id));
+        const activeRecipients = recipients.filter(r => r.is_active && (!r.property_id || r.property_id === property?.id) && (r.outlet_id === 'all' || r.outlet_id === member.outlet_id));
         targetEmails = activeRecipients.flatMap(r => r.email.split(',').map(e => e.trim()));
       }
 
@@ -217,12 +217,6 @@ export const emailService = {
 
             <p style="font-size: 15px; margin-bottom: 8px;"><strong>Dear Admin,</strong></p>
             <p style="font-size: 14px; color: #334155; margin-top: 0;">A new membership purchase has been completed and registered in the system for <strong>${property?.name || 'THE TORCH DOHA'}</strong> (${outlet?.name || 'TORCH CLUB'}). Below are the member enrollment details and attached agreement.</p>
-
-            ${pdfBase64 ? `
-            <div class="attachment-banner">
-              <strong>📄 Official Document Attached:</strong> Your signed <strong>Membership Agreement & Facility Rules PDF</strong> is attached to this email (<code>Membership_Agreement_${member.membership_number}.pdf</code>).
-            </div>
-            ` : ''}
 
             <div class="details-grid">
               <div class="detail-item">
