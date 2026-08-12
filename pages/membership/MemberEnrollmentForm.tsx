@@ -114,9 +114,6 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         signatureIdRef.current = id;
         const name = watch('guest_name');
         setQrUrl(`${window.location.origin}/#/signature/${id}?name=${encodeURIComponent(name || 'Guest')}`);
-        setShowSignatureModal(false);
-    } else {
-        // No QR modal used anymore
     }
   };
 
@@ -939,6 +936,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 </div>
             </div>
         )}
+
         {showIncentivePrompt && pendingSubmitData && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
               <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-300 ring-1 ring-black/5">
@@ -969,23 +967,6 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                   </div>
               </div>
           </div>
-        )}
-
-        {showSignatureModal && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-                <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-300 ring-1 ring-black/5">
-                    <div className="p-8">
-                        <h3 className="text-xl font-black text-slate-900 mb-6 tracking-tight">Member Signature Required</h3>
-                        <div className="border-2 border-slate-200 rounded-2xl bg-slate-50 mb-6">
-                            <SignatureCanvas ref={signatureRef} canvasProps={{ className: 'sigCanvas w-full h-48' }} />
-                        </div>
-                        <div className="flex gap-4">
-                            <button type="button" onClick={handleSignatureClear} className="flex-1 h-14 rounded-[1.2rem] bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[11px] hover:bg-slate-200 transition-all">Clear</button>
-                            <button type="button" onClick={handleSignatureSave} className="flex-1 h-14 rounded-[1.2rem] bg-indigo-600 text-white font-black uppercase tracking-widest text-[11px] hover:bg-indigo-700 transition-all">Confirm Signature</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
         )}
     </Card>
   );
