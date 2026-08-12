@@ -60,7 +60,13 @@ export const SignatureCapturePage: React.FC = () => {
     const handleSave = async (confirmed: boolean = false) => {
         if (!signatureId || !signatureRef.current) return;
         
-        // Don't send empty signatures if not confirmed
+        // Validation: Don't allow submission if empty
+        if (confirmed && signatureRef.current.isEmpty()) {
+            toast.error('Please sign before submitting.');
+            return;
+        }
+
+        // Don't sync empty signatures during live drawing
         if (signatureRef.current.isEmpty() && !confirmed) return;
         
         const dataUrl = signatureRef.current.toDataURL();
@@ -74,7 +80,6 @@ export const SignatureCapturePage: React.FC = () => {
             };
 
             // Use upsert to Supabase notifications as our "live bridge"
-            // We use the same ID to keep the record unique for this session
             const { error } = await supabase
                 .from('notifications')
                 .upsert({
@@ -90,54 +95,41 @@ export const SignatureCapturePage: React.FC = () => {
             if (confirmed) setSaved(true);
         } catch (err) {
             console.error('Error syncing signature:', err);
-            // Only show toast on confirmed save failure
-            if (confirmed) toast.error('Sync failed. Please try again.');
+            if (confirmed) toast.error('Submission failed. Please try again.');
         }
     };
 
-    // Real-time Stroke Sync: Listen to drawing events
-    useEffect(() => {
-        let interval: NodeJS.Timeout | null = null;
-        let lastDataUrl = '';
+    // Real-time Stroke Sync: Optimized interval management
+    const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const lastSyncedUrlRef = useRef<string>('');
 
-        const startSync = () => {
-            if (interval) clearInterval(interval);
-            interval = setInterval(() => {
-                if (signatureRef.current) {
-                    const current = signatureRef.current.toDataURL();
-                    if (current !== lastDataUrl) {
-                        lastDataUrl = current;
-                        handleSave(false);
-                    }
+    const startLiveSync = () => {
+        if (syncIntervalRef.current) return;
+        syncIntervalRef.current = setInterval(() => {
+            if (signatureRef.current) {
+                const current = signatureRef.current.toDataURL();
+                if (current !== lastSyncedUrlRef.current) {
+                    lastSyncedUrlRef.current = current;
+                    handleSave(false);
                 }
-            }, 200);
-        };
-
-        const stopSync = () => {
-            if (interval) {
-                clearInterval(interval);
-                interval = null;
             }
-            // Send one last update on lift
-            handleSave(false);
-        };
+        }, 300);
+    };
 
-        const canvas = document.querySelector('canvas');
-        if (canvas) {
-            canvas.addEventListener('pointerdown', startSync);
-            canvas.addEventListener('pointerup', stopSync);
-            canvas.addEventListener('pointerleave', stopSync);
+    const stopLiveSync = () => {
+        if (syncIntervalRef.current) {
+            clearInterval(syncIntervalRef.current);
+            syncIntervalRef.current = null;
         }
+        // Final sync on lift
+        handleSave(false);
+    };
 
+    useEffect(() => {
         return () => {
-            if (interval) clearInterval(interval);
-            if (canvas) {
-                canvas.removeEventListener('pointerdown', startSync);
-                canvas.removeEventListener('pointerup', stopSync);
-                canvas.removeEventListener('pointerleave', stopSync);
-            }
+            if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
         };
-    }, [signatureId, guestName, currentOutlet]);
+    }, []);
 
     const handleClear = () => {
         signatureRef.current?.clear();
@@ -176,12 +168,12 @@ export const SignatureCapturePage: React.FC = () => {
                             <img src={settings.logo_url} alt="Logo" className="h-10 w-10 object-contain rounded-lg" />
                         ) : (
                             <div className="h-10 w-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-black">
-                                {settings?.company_name?.[0] || 'H'}
+                                {settings?.name?.[0] || 'H'}
                             </div>
                         )}
                         <div>
                             <h1 className="text-sm font-black text-slate-900 leading-tight uppercase tracking-tight">
-                                {currentProperty?.name || settings?.company_name || 'Health Club'}
+                                {currentProperty?.name || settings?.name || 'Health Club'}
                             </h1>
                             <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider">
                                 {currentOutlet?.name || 'Main Outlet'}
@@ -223,17 +215,18 @@ export const SignatureCapturePage: React.FC = () => {
                         </button>
                     </div>
                     
-                    <div className="flex-1 bg-white border-2 border-slate-200 rounded-[2.5rem] overflow-hidden relative shadow-inner">
+                    <div className="flex-1 bg-white border-2 border-slate-200 rounded-[2.5rem] overflow-hidden relative shadow-inner flex flex-col">
                         <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:32px_32px] opacity-20 pointer-events-none" />
                         <div className="absolute bottom-16 left-8 right-8 h-px bg-slate-300 pointer-events-none" />
                         
                         <SignatureCanvas
                             ref={signatureRef}
                             canvasProps={{
-                                className: 'w-full h-full relative z-10 cursor-crosshair',
-                                style: { width: '100%', height: '100%' }
+                                className: 'flex-1 w-full h-full cursor-crosshair touch-none',
+                                style: { minHeight: '300px' }
                             }}
-                            onEnd={() => handleSave(false)}
+                            onBegin={startLiveSync}
+                            onEnd={stopLiveSync}
                             backgroundColor="rgba(0,0,0,0)"
                             penColor="#000000"
                         />
