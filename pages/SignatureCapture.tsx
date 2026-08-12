@@ -118,62 +118,102 @@ export const SignatureCapturePage: React.FC = () => {
     }
 
     return (
-        <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
-            <header className="p-6 bg-white border-b border-slate-100 flex items-center justify-between shadow-sm">
-                <div>
-                    <h1 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Guest Enrollment</h1>
-                    <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mt-1">Live Signature Bridge</p>
+        <div className="flex flex-col h-screen bg-white overflow-hidden font-sans">
+            <header className="p-6 bg-slate-900 text-white flex items-center justify-between shadow-xl z-10">
+                <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center font-black text-lg shadow-lg shadow-indigo-500/20">
+                        {guestName.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                        <h1 className="text-lg font-black uppercase tracking-tight leading-none">Agreement Signing</h1>
+                        <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mt-1">Digital Identity Verification</p>
+                    </div>
                 </div>
-                <div className="text-right">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">Staff Reference</p>
-                    <p className="text-xs font-black text-slate-600 truncate max-w-[120px]">{signatureId?.slice(0, 8)}...</p>
+                <div className="text-right hidden sm:block">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Session Token</p>
+                    <p className="text-xs font-mono text-slate-400">{signatureId?.slice(0, 8)}</p>
                 </div>
             </header>
 
-            <main className="flex-1 p-4 md:p-8 flex flex-col gap-6 overflow-y-auto">
-                <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {[
-                        { label: 'Guest Name', value: guestName },
-                        { label: 'Membership Tier', value: tier },
-                        { label: 'Base Rate', value: price }
-                    ].map((info, i) => (
-                        <div key={i} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">{info.label}</p>
-                            <p className="text-sm font-black text-slate-900 truncate">{info.value}</p>
-                        </div>
-                    ))}
-                </section>
+            <main className="flex-1 flex flex-col bg-slate-50 relative">
+                {/* Status Bar */}
+                <div className="bg-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.2em] py-2 text-center shadow-md z-10">
+                    Live connection active • Encrypted
+                </div>
 
-                <section className="flex-1 flex flex-col gap-4">
-                    <div className="flex items-center justify-between px-2">
-                        <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest">Sign Below</h2>
-                        <button onClick={handleClear} className="text-[10px] font-black text-indigo-600 uppercase hover:text-indigo-700">Clear Canvas</button>
+                <div className="flex-1 flex flex-col p-4 sm:p-8 gap-6 overflow-y-auto">
+                    {/* Guest Context Card */}
+                    <div className="bg-white rounded-[2rem] p-6 shadow-xl shadow-slate-200/60 border border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6">
+                        <div className="flex-1 w-full">
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">Member Name</p>
+                            <h2 className="text-2xl font-black text-slate-900 tracking-tight">{guestName}</h2>
+                        </div>
+                        <div className="h-px sm:h-12 w-full sm:w-px bg-slate-100" />
+                        <div className="flex-1 w-full">
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">Selected Tier</p>
+                            <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+                                <h3 className="text-lg font-black text-slate-900 tracking-tight">{tier}</h3>
+                            </div>
+                        </div>
+                        <div className="h-px sm:h-12 w-full sm:w-px bg-slate-100" />
+                        <div className="flex-1 w-full">
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">Monthly Rate</p>
+                            <h3 className="text-lg font-black text-slate-900 tracking-tight">{price}</h3>
+                        </div>
                     </div>
-                    
-                    <div className="flex-1 bg-white border-2 border-dashed border-slate-200 rounded-3xl overflow-hidden relative min-h-[300px]">
-                        <SignatureCanvas
-                            ref={signatureRef}
-                            canvasProps={{
-                                className: 'w-full h-full cursor-crosshair',
-                                style: { width: '100%', height: '100%' }
-                            }}
-                            onEnd={() => handleSave(false)}
-                            backgroundColor="rgba(255,255,255,0)"
-                        />
+
+                    {/* Signature Area */}
+                    <div className="flex-1 flex flex-col gap-4 min-h-[400px]">
+                        <div className="flex items-center justify-between px-2">
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-slate-900 rounded-lg flex items-center justify-center">
+                                    <span className="text-[10px] font-black text-white italic">S</span>
+                                </div>
+                                <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest">Legal Signature Pad</h2>
+                            </div>
+                            <button 
+                                onClick={handleClear} 
+                                className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors border-b border-transparent hover:border-indigo-600"
+                            >
+                                Reset Canvas
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 bg-white rounded-[2.5rem] shadow-2xl shadow-slate-200 border border-slate-100 overflow-hidden relative cursor-crosshair group">
+                            <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:24px_24px] opacity-30 pointer-events-none" />
+                            <div className="absolute bottom-12 left-8 right-8 h-px bg-slate-200 pointer-events-none" />
+                            <div className="absolute bottom-6 left-0 right-0 text-center pointer-events-none">
+                                <span className="text-[10px] text-slate-300 font-black uppercase tracking-[0.3em]">Sign on the line above</span>
+                            </div>
+                            <SignatureCanvas
+                                ref={signatureRef}
+                                canvasProps={{
+                                    className: 'w-full h-full relative z-10',
+                                    style: { width: '100%', height: '100%' }
+                                }}
+                                onEnd={() => handleSave(false)}
+                                backgroundColor="rgba(0,0,0,0)"
+                                penColor="#0f172a"
+                            />
+                        </div>
                     </div>
-                </section>
+                </div>
             </main>
 
-            <footer className="p-6 bg-white border-t border-slate-100 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.05)]">
-                <Button 
-                    onClick={() => handleSave(true)}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-6 rounded-2xl text-base shadow-lg shadow-indigo-200 active:scale-[0.98] transition-all"
-                >
-                    Confirm Signature
-                </Button>
-                <p className="text-[10px] text-slate-400 font-bold text-center mt-4 uppercase tracking-tighter">
-                    By clicking confirm, you agree to the membership terms shown on the staff monitor
-                </p>
+            <footer className="p-6 bg-white border-t border-slate-100 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] z-10">
+                <div className="max-w-2xl mx-auto flex flex-col gap-4">
+                    <Button 
+                        onClick={() => handleSave(true)}
+                        className="w-full bg-slate-900 hover:bg-indigo-600 text-white font-black py-8 rounded-[1.5rem] text-lg shadow-2xl shadow-indigo-200 active:scale-[0.98] transition-all flex items-center justify-center gap-3 group"
+                    >
+                        <span>Confirm & Submit Signature</span>
+                        <CheckCircle2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    </Button>
+                    <p className="text-[10px] text-slate-400 font-bold text-center leading-relaxed max-w-sm mx-auto">
+                        I hereby certify that I am the individual named above and that the signature applied represents my legal acceptance of the membership terms.
+                    </p>
+                </div>
             </footer>
         </div>
     );

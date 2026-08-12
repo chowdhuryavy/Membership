@@ -85,45 +85,100 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   const [isGuestSigning, setIsGuestSigning] = useState(false);
 
   useEffect(() => {
-    if (showSignatureModal && signatureMethod === 'qr' && signatureIdRef.current) {
-        const interval = setInterval(async () => {
-            try {
-                // Poll Supabase notifications for the signature sync message
-                const { data, error } = await supabase
-                    .from('notifications')
-                    .select('message')
-                    .eq('title', `SIG_SYNC:${signatureIdRef.current}`)
-                    .maybeSingle();
+      if (showSignatureModal && signatureMethod === 'qr' && signatureIdRef.current) {
+          // Use Real-time subscription for instant preview
+          const channel = supabase
+              .channel(`sig_sync:${signatureIdRef.current}`)
+              .on(
+                  'postgres_changes',
+                  {
+                      event: 'INSERT',
+                      schema: 'public',
+                      table: 'notifications',
+                      filter: `title=eq.SIG_SYNC:${signatureIdRef.current}`
+                  },
+                  (payload) => {
+                      try {
+                          const syncData = JSON.parse(payload.new.message);
+                          if (syncData.signature) setSignature(syncData.signature);
+                          if (syncData.confirmed) {
+                              setShowSignatureModal(false);
+                              setSignatureMethod(null);
+                              // Cleanup notification
+                              supabase
+                                  .from('notifications')
+                                  .delete()
+                                  .eq('id', payload.new.id)
+                                  .then(() => {
+                                      if (pendingSubmitData) processSubmit(pendingSubmitData, syncData.signature);
+                                  });
+                          }
+                      } catch (e) {
+                          console.error("Real-time parse error:", e);
+                      }
+                  }
+              )
+              .on(
+                  'postgres_changes',
+                  {
+                      event: 'UPDATE',
+                      schema: 'public',
+                      table: 'notifications',
+                      filter: `title=eq.SIG_SYNC:${signatureIdRef.current}`
+                  },
+                  (payload) => {
+                      try {
+                          const syncData = JSON.parse(payload.new.message);
+                          if (syncData.signature) setSignature(syncData.signature);
+                          if (syncData.confirmed) {
+                              setShowSignatureModal(false);
+                              setSignatureMethod(null);
+                              // Cleanup notification
+                              supabase
+                                  .from('notifications')
+                                  .delete()
+                                  .eq('id', payload.new.id)
+                                  .then(() => {
+                                      if (pendingSubmitData) processSubmit(pendingSubmitData, syncData.signature);
+                                  });
+                          }
+                      } catch (e) {
+                          console.error("Real-time update parse error:", e);
+                      }
+                  }
+              )
+              .subscribe();
 
-                if (data && data.message) {
-                    try {
-                        const syncData = JSON.parse(data.message);
-                        if (syncData.signature) {
-                            setSignature(syncData.signature);
-                        }
-                        if (syncData.confirmed) {
-                            setShowSignatureModal(false);
-                            setSignatureMethod(null);
-                            clearInterval(interval);
-                            
-                            // Cleanup: delete the notification bridge
-                            await supabase
-                                .from('notifications')
-                                .delete()
-                                .eq('title', `SIG_SYNC:${signatureIdRef.current}`);
+          // Fallback polling for environments where real-time might be restricted
+          const interval = setInterval(async () => {
+              try {
+                  const { data } = await supabase
+                      .from('notifications')
+                      .select('message, id')
+                      .eq('title', `SIG_SYNC:${signatureIdRef.current}`)
+                      .maybeSingle();
 
-                            if (pendingSubmitData) processSubmit(pendingSubmitData);
-                        }
-                    } catch (parseErr) {
-                        console.error("Parse error:", parseErr);
-                    }
-                }
-            } catch (e) {
-                console.error("Supabase Polling error:", e);
-            }
-        }, 1500);
-        return () => clearInterval(interval);
-    }
+                  if (data?.message) {
+                      const syncData = JSON.parse(data.message);
+                      if (syncData.signature) setSignature(syncData.signature);
+                      if (syncData.confirmed) {
+                          setShowSignatureModal(false);
+                          setSignatureMethod(null);
+                          clearInterval(interval);
+                          await supabase.from('notifications').delete().eq('id', data.id);
+                          if (pendingSubmitData) processSubmit(pendingSubmitData, syncData.signature);
+                      }
+                  }
+              } catch (e) {
+                  console.error("Polling error:", e);
+              }
+          }, 2500);
+
+          return () => {
+              clearInterval(interval);
+              supabase.removeChannel(channel);
+          };
+      }
   }, [showSignatureModal, signatureMethod, pendingSubmitData]);
 
   const initiateSignature = (data: MemberFormValues) => {
@@ -161,8 +216,13 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
   const handleSignatureSave = () => {
     if (signatureRef.current) {
-        setSignature(signatureRef.current.toDataURL());
+        const dataUrl = signatureRef.current.toDataURL();
+        setSignature(dataUrl);
         setShowSignatureModal(false);
+        setSignatureMethod(null);
+        if (pendingSubmitData) {
+            processSubmit(pendingSubmitData, dataUrl);
+        }
     }
   };
 
@@ -401,7 +461,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     await processSubmit(data);
   };
 
-  const processSubmit = async (data: MemberFormValues) => {
+  const processSubmit = async (data: MemberFormValues, signatureOverride?: string) => {
     if (data.referrer_name && data.referrer_name.trim().length > 0) {
       if (data.calculate_referral_incentive) {
         toast.custom((t) => (
@@ -473,7 +533,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       original_net_amount: netAmount,
       daily_rate: recognition.daily,
       status: MemberStatus.ACTIVE,
-      member_signature: signature
+      member_signature: signatureOverride || signature
     } as Member;
 
     try {
@@ -993,8 +1053,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                             setShowSignatureModal(false);
                                             setSignatureMethod(null);
                                             if (pendingSubmitData) {
-                                                const finalData = { ...pendingSubmitData, signature_data: signature };
-                                                onSubmit(finalData);
+                                                processSubmit(pendingSubmitData, signature);
                                             }
                                         }}
                                         className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12"
