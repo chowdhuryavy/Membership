@@ -84,7 +84,7 @@ serve(async (req) => {
     // Fetch company settings
     const { data: settings } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle()
     const appName = settings?.name || settings?.report_title || 'Health Club Management'
-    const fromEmail = Deno.env.get('EMAIL_FROM') || 'noreply@saavargroup.com'
+    const fromEmail = Deno.env.get('EMAIL_FROM') || 'noreply@perfection.my'
 
     // Handle direct email dispatches (e.g., member purchase notifications, direct reports)
     if (body.directEmail) {
