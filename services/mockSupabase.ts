@@ -1099,6 +1099,15 @@ class DatabaseService {
         required_permission: 'reports:view'
       });
     }
+
+    // Automatically trigger member purchase email notification
+    import('./emailService').then(({ emailService }) => {
+      emailService.sendMemberPurchaseEmail(member).catch(err => {
+        console.error('[Automatic Member Purchase Email Error]:', err);
+      });
+    }).catch(err => {
+      console.error('[Email Service Dynamic Import Error]:', err);
+    });
   }
 
   async syncGoogleWalletPassForMember(memberId: string, memberData?: Partial<Member>): Promise<void> {

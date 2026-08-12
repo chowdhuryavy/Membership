@@ -37,10 +37,25 @@ export interface ReportRecipient {
   email: string; // Can be comma-separated list
   property_id: string;
   outlet_id: string; // 'all' for all outlets in property
-  report_type: 'revenue_recognition' | 'daily_sales' | 'incentives' | 'members_joined' | 'expiring_memberships' | 'massage_room_revenue' | 'daily_revenue' | 'monthly_summary' | 'monthly_revenue';
+  report_type: 
+    | 'revenue_recognition' 
+    | 'daily_sales' 
+    | 'daily_revenue' 
+    | 'monthly_summary' 
+    | 'monthly_revenue' 
+    | 'incentives' 
+    | 'members_joined' 
+    | 'expiring_memberships' 
+    | 'active_members' 
+    | 'massage_room_revenue' 
+    | 'pt_members' 
+    | 'retail_stock' 
+    | 'entrance_fee' 
+    | 'attendance_checkin' 
+    | 'member_purchased';
   send_time: string; // HH:mm format
   report_date_type?: 'today' | 'yesterday'; // For daily reports
-  incentive_dept?: 'Massage' | 'Membership' | 'Personal Training';
+  incentive_dept?: 'Massage' | 'Membership' | 'Personal Training' | 'Sale' | 'Referral' | 'All';
   selected_membership_type_id?: string | 'all';
   revenue_mode?: 'cash' | 'accrual';
   is_active: boolean;

@@ -11,6 +11,7 @@ import {
   CheckCircle2, Command, ChevronDown, Receipt, List, UserPlus
 } from 'lucide-react';
 import { db } from '../../services/mockSupabase';
+import { emailService } from '../../services/emailService';
 import { useAuth } from '../../contexts/AuthContext';
 import { Member, MembershipCategory, MemberStatus, Staff, MembershipType } from '../../types';
 import { RevenueEngine } from '../../services/revenueEngine';
@@ -375,6 +376,15 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     try {
         if (isUpdate) await db.updateMember(existingMember!.id, payload);
         else await db.addMember(payload);
+
+        // Dispatch purchase confirmation email in background
+        if (!isUpdate || isRenewal) {
+            emailService.sendMemberPurchaseEmail(payload).catch(err => {
+                console.error('[Purchase Email Error]', err);
+            });
+            toast.success('Member agreement saved and email notification dispatched.');
+        }
+
         setTimeout(() => {
             setPageLoading(false);
             onSuccess();

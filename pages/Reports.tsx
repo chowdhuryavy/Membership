@@ -30,9 +30,12 @@ import {
   CreditCard,
   Building2,
   CalendarX,
-  LayoutTemplate
+  LayoutTemplate,
+  Mail,
+  X
 } from 'lucide-react';
 import { getReportData, getReportTitle, ReportContext } from '../src/shared/reportLogic';
+import { emailService } from '../services/emailService';
 
 
 import html2canvas from 'html2canvas';
@@ -127,6 +130,9 @@ const Reports = () => {
   const reportRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({ contentRef: reportRef });
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailRecipientsInput, setEmailRecipientsInput] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<any>(null);
   const supabase = supabaseClient;
@@ -388,6 +394,84 @@ const Reports = () => {
       alert('Failed to generate PDF. Please try again.');
     } finally {
       setIsGeneratingPDF(false);
+    }
+  };
+
+  const handleOpenEmailModal = async () => {
+    if (!currentOutlet || !currentProperty) return;
+    try {
+      const recipients = await db.getReportRecipients();
+      const matching = recipients.filter(r => r.is_active && (r.outlet_id === 'all' || r.outlet_id === currentOutlet.id));
+      let initialEmails = matching.flatMap(r => r.email.split(',').map(e => e.trim())).filter(Boolean);
+      initialEmails = Array.from(new Set(initialEmails));
+      setEmailRecipientsInput(initialEmails.length > 0 ? initialEmails.join(', ') : (user?.email || ''));
+    } catch (e) {
+      setEmailRecipientsInput(user?.email || '');
+    }
+    setIsEmailModalOpen(true);
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailRecipientsInput.trim()) {
+      toast.error('Please enter at least one recipient email address.');
+      return;
+    }
+    if (!currentOutlet || !currentProperty || !settings) return;
+
+    setIsSendingEmail(true);
+    try {
+      const start = reportType === 'daily_sales' ? startOfDay(parseISO(dailySalesDate)) : startOfDay(parseISO(reportMonth + '-01'));
+      const cacheKey = `${reportType}_${currentOutlet.id}_${format(start, 'yyyy-MM-dd')}_${incentiveDept}_${selectedMembershipTypeId}_${revenueMode}`;
+      const currentRows = reportType === 'revenue_recognition' ? revenueRows : rows;
+      const cached = reportCache.current[cacheKey];
+
+      const cachedData = {
+        rows: (cached?.rows && cached.rows.length > 0) ? cached.rows : currentRows,
+        summary: cached?.summary || summary,
+        groupedRows: cached?.groupedRows || (reportType === 'revenue_recognition' ? cached?.groupedRows : undefined)
+      };
+
+      const { jsPDF } = await import('jspdf');
+      const autoTable = (await import('jspdf-autotable')).default;
+      const reportName = getReportTitle(reportType, incentiveDept);
+
+      const pdfDoc = await generateReportPDF({
+        jsPDF,
+        autoTable,
+        data: cachedData,
+        propertyName: currentProperty.name,
+        outletName: currentOutlet.name,
+        outletId: currentOutlet.id,
+        currencySymbol: currency?.symbol || 'QAR',
+        currencyCode: currency?.code || 'QAR',
+        reportTitle: reportName,
+        date: reportType === 'daily_sales' ? dailySalesDate : reportMonth,
+        logoUrl: currentProperty.logo_url,
+        reportType,
+        membershipTypeName: selectedMembershipTypeId === 'all' ? 'All Types' : membershipTypes.find(t => t.id === selectedMembershipTypeId)?.name || 'All Types',
+        userName: user?.name || 'Administrator',
+        summary: cachedData.summary || summary,
+        signatoryConfig: signatoryConfig
+      });
+
+      const pdfBase64 = pdfDoc.output('datauristring').split(',')[1];
+
+      await emailService.sendReportEmail(
+        emailRecipientsInput,
+        reportName,
+        currentProperty.name,
+        currentOutlet.name,
+        pdfBase64,
+        `Report Period: ${reportType === 'daily_sales' ? dailySalesDate : reportMonth}`
+      );
+
+      toast.success(`Report successfully emailed to: ${emailRecipientsInput}`);
+      setIsEmailModalOpen(false);
+    } catch (err: any) {
+      console.error('Error sending report email:', err);
+      toast.error('Failed to send email: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsSendingEmail(false);
     }
   };
 
@@ -861,7 +945,7 @@ const Reports = () => {
                         return (
                             <>
                                 {Array.isArray(rows) && rows.map((row, idx) => (
-                                    <tr key={row.id || idx} className="hover:bg-slate-50 transition-colors">
+                                    <tr key={(row as any).id || idx} className="hover:bg-slate-50 transition-colors">
                                         {visibleColumns.sl_no && <td className="border border-black px-2 py-1 text-center font-bold">{row.sl_no}</td>}
                                         {visibleColumns.date && <td className="border border-black px-2 py-1 text-center whitespace-nowrap">{row.date}</td>}
                                         {visibleColumns.guest_name && <td className="border border-black px-2 py-1 font-black text-slate-700">{row.guest_name}</td>}
@@ -1035,6 +1119,7 @@ const Reports = () => {
             <Button variant="outline" onClick={() => setShowConfig(!showConfig)} className={`h-12 px-5 rounded-2xl border-slate-200 ${showConfig ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-inner' : ''}`}><Settings2 className="w-4 h-4 mr-2" /> <span className="text-[10px] font-black uppercase tracking-widest">Layout Config</span></Button>
             <Button onClick={handlePrint} className="h-12 px-6 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 transition-all active:scale-95 no-print bg-indigo-600 text-white hover:bg-indigo-700"><Printer className="w-4 h-4 mr-2" /> Print Direct</Button>
             <Button variant="outline" onClick={handleExportPDF} isLoading={isGeneratingPDF} className="h-12 px-8 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] border-slate-200 bg-white hover:bg-slate-50 shadow-sm transition-all active:scale-95"><FileDown className="w-4 h-4 mr-2 text-indigo-600" /> Export PDF</Button>
+            <Button variant="outline" onClick={handleOpenEmailModal} className="h-12 px-6 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 shadow-sm transition-all active:scale-95 no-print"><Mail className="w-4 h-4 mr-2 text-indigo-600" /> Send Email</Button>
         </div>
       </div>
 
@@ -1446,6 +1531,49 @@ const Reports = () => {
               </Card>
           </div>
       </div>
+
+      {isEmailModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-8 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Email Report Dispatch</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{getReportTitle(reportType, incentiveDept)}</p>
+                </div>
+              </div>
+              <button onClick={() => setIsEmailModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest block mb-2">Recipient Email Addresses (Comma separated)</label>
+                <textarea
+                  value={emailRecipientsInput}
+                  onChange={e => setEmailRecipientsInput(e.target.value)}
+                  className="w-full h-28 p-4 rounded-2xl border-2 border-slate-200 text-xs font-mono focus:border-indigo-600 focus:outline-none"
+                  placeholder="e.g. manager@hotel.com, finance@hotel.com"
+                />
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-2">
+                  The generated PDF audit ledger will be attached automatically to the dispatch.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <Button variant="outline" onClick={() => setIsEmailModalOpen(false)} className="h-12 px-6 rounded-xl font-black text-xs uppercase">Cancel</Button>
+                <Button onClick={handleSendEmail} isLoading={isSendingEmail} className="h-12 px-8 rounded-xl font-black text-xs uppercase bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-100">
+                  <Mail className="w-4 h-4 mr-2" /> Dispatch Email
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @media print {

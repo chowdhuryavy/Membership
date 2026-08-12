@@ -1512,7 +1512,42 @@ const SettingsPage = () => {
               )}
 
               {activeTab === 'reports_config' && (
-                  <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                  <div className="space-y-6">
+                      <div className="p-8 rounded-[2.5rem] bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 border border-indigo-800/40">
+                          <div className="flex items-center gap-5">
+                              <div className="w-14 h-14 rounded-2xl bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
+                                  <User className="w-7 h-7" />
+                              </div>
+                              <div>
+                                  <h3 className="text-lg font-black uppercase tracking-tight text-white">Automated Member Purchase Email Dispatch</h3>
+                                  <p className="text-xs font-medium text-indigo-200/80 mt-1 max-w-2xl leading-relaxed">
+                                      Whenever a new member joins or purchases a membership, automated confirmation emails containing full member details (Name, Membership #, Start/End Dates, Amount) and signed terms are automatically sent to configured emails and the member.
+                                  </p>
+                              </div>
+                          </div>
+                          <Button 
+                              onClick={() => {
+                                  setEditingId(null);
+                                  setReportRecipientForm({
+                                      email: '',
+                                      property_id: properties[0]?.id || '',
+                                      outlet_id: 'all',
+                                      report_type: 'member_purchased',
+                                      send_time: 'Instant',
+                                      report_date_type: 'today',
+                                      incentive_dept: 'All',
+                                      selected_membership_type_id: 'all',
+                                      is_active: true
+                                  });
+                                  setShowForm(true);
+                              }}
+                              className="h-12 px-6 rounded-xl font-black text-xs uppercase bg-indigo-500 hover:bg-indigo-400 text-white shrink-0 shadow-lg shadow-indigo-500/20"
+                          >
+                              <Plus className="w-4 h-4 mr-2" /> Add Member Alert Recipient
+                          </Button>
+                      </div>
+
+                      <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-5">
                               <Mail className="w-8 h-8 text-indigo-600" />
@@ -1566,7 +1601,14 @@ const SettingsPage = () => {
                                                               </span>
                                                           ))}
                                                       </div>
-                                                      <div className="text-[10px] font-bold text-slate-400 uppercase mt-1">{recipient.report_type.replace('_', ' ')}</div>
+                                                      <div className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                                                          {recipient.report_type === 'member_purchased' ? 'Member Purchase Notification' : recipient.report_type.replace(/_/g, ' ')}
+                                                          {recipient.report_type === 'incentives' && (
+                                                              <span className="ml-1 text-indigo-600 font-black">
+                                                                  ({recipient.incentive_dept === 'All' || !recipient.incentive_dept ? 'All Departments' : recipient.incentive_dept})
+                                                              </span>
+                                                          )}
+                                                      </div>
                                                   </div>
                                               </div>
                                           </td>
@@ -1635,6 +1677,7 @@ const SettingsPage = () => {
                           </table>
                       </CardContent>
                   </Card>
+                  </div>
               )}
               {activeTab === 'custom_reports' && (
                 <div className="space-y-6">
@@ -2040,12 +2083,20 @@ const SettingsPage = () => {
                                     label="Strategic Report Type *" 
                                     options={[
                                         {value:'revenue_recognition', label:'Revenue Recognition (Monthly)'},
-                                        {value:'incentives', label:'Incentive Audit (Monthly)'},
+                                        {value:'incentives', label:'Incentive Audit Report (Monthly)'},
                                         {value:'daily_sales', label:'Daily Sales Ledger (Daily)'},
-                                        {value:'members_joined', label:'Members Joined (Monthly)'},
-                                        {value:'expiring_memberships', label:'Expiring Memberships (Monthly)'},
+                                        {value:'daily_revenue', label:'Daily Revenue Summary (Daily)'},
+                                        {value:'monthly_summary', label:'Monthly Performance Summary (Monthly)'},
+                                        {value:'monthly_revenue', label:'Monthly Revenue Report (Monthly)'},
+                                        {value:'members_joined', label:'Members Joined / Acquisition Log (Monthly)'},
+                                        {value:'expiring_memberships', label:'Expiring Memberships Audit (Monthly)'},
+                                        {value:'active_members', label:'Active Members Audit (Monthly)'},
                                         {value:'massage_room_revenue', label:'Massage Room Revenue (Monthly)'},
-                                        {value:'monthly_revenue', label:'Monthly Revenue Report (Monthly)'}
+                                        {value:'pt_members', label:'Personal Training (PT) Members & Sessions (Monthly)'},
+                                        {value:'retail_stock', label:'Retail & Inventory Stock Report (Monthly)'},
+                                        {value:'entrance_fee', label:'Entrance Fee & Guest Visitor Ledger (Monthly)'},
+                                        {value:'attendance_checkin', label:'Member Attendance & Check-In Log (Daily)'},
+                                        {value:'member_purchased', label:'Member Addition / Purchase Alert (Instant)'}
                                     ]} 
                                     value={reportRecipientForm.report_type} 
                                     onChange={e => setReportRecipientForm({...reportRecipientForm, report_type: e.target.value as any})} 
@@ -2057,11 +2108,14 @@ const SettingsPage = () => {
                                 <Select 
                                     label="Reward Department *" 
                                     options={[
+                                        {value:'All', label:'All Departments (Complete Incentive Report)'},
                                         {value:'Massage', label:'Massage'},
                                         {value:'Membership', label:'Membership'},
-                                        {value:'Personal Training', label:'Personal Training'}
+                                        {value:'Personal Training', label:'Personal Training'},
+                                        {value:'Sale', label:'Sale'},
+                                        {value:'Referral', label:'Referral'}
                                     ]} 
-                                    value={reportRecipientForm.incentive_dept || 'Massage'} 
+                                    value={reportRecipientForm.incentive_dept || 'All'} 
                                     onChange={e => setReportRecipientForm({...reportRecipientForm, incentive_dept: e.target.value as any})} 
                                     className="h-14 rounded-xl border-2" 
                                 />
