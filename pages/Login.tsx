@@ -68,7 +68,10 @@ const Login = () => {
 
   useEffect(() => {
     localStorage.setItem('preferred_portal', 'admin');
-  }, []);
+    if (window.location.hostname.toLowerCase().includes('hcm-staff')) {
+      navigate('/staff-login', { replace: true });
+    }
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#fcfdfe] selection:bg-indigo-100">

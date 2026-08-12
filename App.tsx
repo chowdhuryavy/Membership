@@ -356,7 +356,10 @@ const ProtectedLayout = () => {
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [checkShortcut, navigate]);
 
-  if (!user && !combinedLoading) return <Navigate to="/login" replace />;
+  if (!user && !combinedLoading) {
+    const isStaffDomain = window.location.hostname.toLowerCase().includes('hcm-staff');
+    return <Navigate to={isStaffDomain ? "/staff-login" : "/login"} replace />;
+  }
   
   return (
     <>
