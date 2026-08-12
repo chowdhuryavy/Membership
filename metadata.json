@@ -1,6 +1,6 @@
 {
   "name": "Health Club Management",
-  "description": "A high-performance membership management system with automated revenue recognition, freeze logic handling, and AI-powered financial insights.",
+  "description": "A high-performance membership management system with automated revenue recognition, freeze logic handling.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -6,6 +6,24 @@ import { AuthProvider } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 
+// Handle browser extension / message channel asynchronous response rejections gracefully
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason;
+  const message = typeof reason === 'string'
+    ? reason
+    : (reason?.message || reason?.toString() || '');
+
+  if (
+    message.includes('A listener indicated an asynchronous response by returning true') ||
+    message.includes('message channel closed before a response was received') ||
+    message.includes('The message port closed before a response was received') ||
+    message.includes('ResizeObserver loop completed with undelivered notifications')
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+});
+
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Failed to find the root element');
 
@@ -25,9 +43,10 @@ root.render(
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then(registration => {
-      console.log('ServiceWorker registration successful with scope: ', registration.scope);
-    }, err => {
-      console.log('ServiceWorker registration failed: ', err);
+      // Service worker registered
+    }).catch(() => {
+      // Ignore service worker registration errors
     });
   });
 }
+
