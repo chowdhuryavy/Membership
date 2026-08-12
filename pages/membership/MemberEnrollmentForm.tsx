@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
-import { QRCodeCanvas } from 'qrcode.react';
+import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { useForm, SubmitHandler, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -179,7 +179,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     return format(today, 'yyyy-MM-dd');
   };
 
-  const { register, handleSubmit, watch, setValue, reset, control, formState: { errors } } = useForm<MemberFormValues>({
+  const { register, handleSubmit, watch, setValue, reset, control, getValues, formState: { errors } } = useForm<MemberFormValues>({
     resolver: zodResolver(memberSchema as any),
     defaultValues: (existingMember) ? {
         ...existingMember,
@@ -947,13 +947,15 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         <>
                             <h3 className="text-lg font-black text-slate-900 mb-4 uppercase tracking-widest">Guest Signature</h3>
                             <p className="text-xs text-slate-500 font-bold mb-6 text-center">Scan QR with tablet to sign</p>
-                            <div className="bg-white p-2 border-4 border-slate-50 rounded-3xl shadow-inner mb-6 flex items-center justify-center">
-                                <QRCodeCanvas 
-                                    value={qrUrl} 
-                                    size={240} 
-                                    level="M" 
-                                    marginSize={4}
-                                />
+                            <div className="bg-white p-4 border border-slate-100 rounded-3xl shadow-sm mb-6 flex items-center justify-center">
+                                {qrUrl && (
+                                    <QRCodeSVG 
+                                        value={qrUrl} 
+                                        size={240} 
+                                        level="H" 
+                                        includeMargin={true}
+                                    />
+                                )}
                             </div>
                             <button 
                                 onClick={() => { setShowSignatureModal(false); setPendingSubmitData(null); setSignatureMethod(null); }}
