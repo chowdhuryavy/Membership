@@ -119,7 +119,11 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         const id = crypto.randomUUID();
         signatureIdRef.current = id;
         const name = watch('guest_name');
-        setQrUrl(`${window.location.origin}/#/signature/${id}?name=${encodeURIComponent(name || 'Guest')}`);
+        const categoryId = watch('category_id');
+        const cat = sortedCategories.find(c => c.id === categoryId);
+        const tier = cat?.name || 'Standard';
+        const price = cat?.base_rate || 0;
+        setQrUrl(`${window.location.origin}/#/signature/${id}?name=${encodeURIComponent(name || 'Guest')}&tier=${encodeURIComponent(tier)}&price=${encodeURIComponent(price)}`);
     }
   };
 

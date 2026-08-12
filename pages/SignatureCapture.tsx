@@ -10,11 +10,16 @@ export const SignatureCapturePage = () => {
     const { signatureId } = useParams<{ signatureId: string }>();
     const searchParams = new URLSearchParams(window.location.search);
     const guestName = searchParams.get('name') || 'Guest';
-    const { currentOutlet, properties } = useSettings();
+    const tier = searchParams.get('tier') || 'Standard';
+    const price = searchParams.get('price') || '0';
+
+    const { currentOutlet, properties, formatMoney } = useSettings();
     const signatureRef = useRef<SignatureCanvas>(null);
     const [saved, setSaved] = useState(false);
 
     useEffect(() => {
+        // Clear existing signature data when the component mounts
+        signatureRef.current?.clear();
         if (signatureId) {
             localStorage.removeItem(`sig_${signatureId}`);
         }
@@ -66,8 +71,10 @@ export const SignatureCapturePage = () => {
                     </div>
                 </div>
                 
-                <h1 className="text-xl font-black text-slate-900 mb-2">Welcome, {guestName}!</h1>
-                <p className="text-sm font-bold text-slate-500 mb-6">Please sign below to complete your enrollment.</p>
+                <h1 className="text-xl font-black text-slate-900 mb-1">Welcome, {guestName}!</h1>
+                <p className="text-sm font-bold text-slate-500 mb-6">
+                    Enrollment for <span className="text-indigo-600">{tier}</span> tier — <span className="text-emerald-600">{formatMoney(Number(price))}</span>
+                </p>
 
                 <div className="border-2 border-slate-200 rounded-2xl mb-6 bg-slate-50">
                     <SignatureCanvas 
