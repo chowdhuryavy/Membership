@@ -50,8 +50,26 @@ export const SignatureCapturePage = () => {
     const { currentOutlet, properties, formatMoney } = useSettings();
     const signatureRef = useRef<SignatureCanvas>(null);
     const [saved, setSaved] = useState(false);
+    const [expired, setExpired] = useState(false);
 
     useEffect(() => {
+        const checkStatus = async () => {
+            if (signatureId) {
+                try {
+                    const response = await fetch(`/api/temp-signature/${signatureId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.expired) {
+                            setExpired(true);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error checking status:', err);
+                }
+            }
+        };
+        checkStatus();
+        
         // Clear existing signature data when the component mounts
         signatureRef.current?.clear();
         if (signatureId) {
@@ -80,14 +98,20 @@ export const SignatureCapturePage = () => {
         handleSave(false); // Send clear to desktop too
     };
 
-    if (saved) {
+    if (expired || saved) {
         return (
             <div className="flex flex-col items-center justify-center h-screen bg-slate-50 p-8">
                 <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
                     <CheckCircle2 className="w-10 h-10 text-emerald-600" />
                 </div>
-                <h1 className="text-2xl font-black text-slate-900 mb-2">Signature Captured</h1>
-                <p className="text-slate-500 font-bold mb-8">Your signature has been saved successfully.</p>
+                <h1 className="text-2xl font-black text-slate-900 mb-2">
+                    {expired ? 'Session Expired' : 'Signature Captured'}
+                </h1>
+                <p className="text-slate-500 font-bold mb-8 text-center max-w-xs">
+                    {expired 
+                        ? 'This signature link has already been used or has expired.' 
+                        : 'Your signature has been saved successfully.'}
+                </p>
                 <Button onClick={() => window.close()} className="bg-indigo-600 hover:bg-indigo-700 px-8 py-4 rounded-xl">
                     Close Tab
                 </Button>

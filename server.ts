@@ -75,12 +75,16 @@ async function startServer() {
   const PORT = 3000;
 
   const tempSignatures = new Map<string, { signature: string, confirmed: boolean }>();
+  const expiredSessions = new Set<string>();
 
   app.use(express.json());
 
   // API: Temporary Signature Cache
   app.post('/api/temp-signature/:id', (req, res) => {
     const { id } = req.params;
+    if (expiredSessions.has(id)) {
+      return res.status(410).json({ error: 'Session expired' });
+    }
     const { dataUrl, confirmed } = req.body;
     tempSignatures.set(id, { signature: dataUrl, confirmed: !!confirmed });
     res.json({ success: true });
@@ -88,11 +92,19 @@ async function startServer() {
 
   app.get('/api/temp-signature/:id', (req, res) => {
     const { id } = req.params;
+    
+    if (expiredSessions.has(id)) {
+      return res.json({ expired: true });
+    }
+
     const data = tempSignatures.get(id);
     if (data) {
       res.json(data);
       if (data.confirmed) {
         tempSignatures.delete(id);
+        expiredSessions.add(id);
+        // Clean up expired sessions set after 30 minutes
+        setTimeout(() => expiredSessions.delete(id), 30 * 60 * 1000);
       }
     } else {
       // Return 200 with empty data instead of 404 to avoid console error noise
