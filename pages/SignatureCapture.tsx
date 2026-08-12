@@ -1,102 +1,102 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
 import SignatureCanvas from 'react-signature-canvas';
-import { db } from '../services/mockSupabase';
+import { QRCodeSVG } from 'qrcode.react';
+import toast from 'react-hot-toast';
+import { useParams } from 'react-router-dom';
 import { useSettings } from '../contexts/SettingsContext';
 import { Button } from '../components/ui';
-import { CheckCircle2, RotateCcw } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
+import { supabase } from '../services/supabase';
 
-export const SignatureCapturePage = () => {
+export const SignatureCapturePage: React.FC = () => {
     const { signatureId } = useParams<{ signatureId: string }>();
-    
-    // Parse query parameters from the hash part of the URL (SPA routing)
-    // We try multiple ways to get the query string to be robust across browsers
+    const { currentOutlet } = useSettings();
+    const signatureRef = useRef<SignatureCanvas>(null);
+    const [saved, setSaved] = useState(false);
+    const [expired, setExpired] = useState(false);
+    const [loading, setLoading] = useState(true);
+
+    // Parse query parameters
     const getParams = () => {
-        // Aggressively search for parameters in both search and hash
         const fullUrl = window.location.href;
         const searchPart = window.location.search;
         const hashPart = window.location.hash;
-        
         let params = new URLSearchParams();
-        
-        // Try standard search first
-        if (searchPart) {
-            params = new URLSearchParams(searchPart);
-        }
-        
-        // If hash contains query params, they take precedence for SPA
+        if (searchPart) params = new URLSearchParams(searchPart);
         if (hashPart.includes('?')) {
             const hashQuery = hashPart.split('?')[1];
             const hashParams = new URLSearchParams(hashQuery);
             hashParams.forEach((value, key) => params.set(key, value));
         }
-        
-        // Fallback: search the entire URL string if params are still missing
         if (!params.has('name') && fullUrl.includes('?')) {
             const fallbackQuery = fullUrl.substring(fullUrl.indexOf('?') + 1);
             const fallbackParams = new URLSearchParams(fallbackQuery);
             fallbackParams.forEach((value, key) => params.set(key, value));
         }
-        
         return params;
     };
 
     const searchParams = getParams();
-    
     const guestName = searchParams.get('name') || 'Guest';
     const tier = searchParams.get('tier') || 'Standard';
     const price = searchParams.get('price') || '0';
 
-    const { currentOutlet, properties, formatMoney } = useSettings();
-    const signatureRef = useRef<SignatureCanvas>(null);
-    const [saved, setSaved] = useState(false);
-    const [expired, setExpired] = useState(false);
-
     useEffect(() => {
         const checkStatus = async () => {
-            if (signatureId) {
-                try {
-                    const response = await fetch(`/api/temp-signature/${signatureId}`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data.expired) {
-                            setExpired(true);
-                        }
-                    }
-                } catch (err) {
-                    console.error('Error checking status:', err);
-                }
+            if (!signatureId) return;
+            try {
+                // If the notification doesn't exist at all on mount, it might have been cleaned up/expired
+                // but we wait for the first save to create it
+                setLoading(false);
+            } catch (err) {
+                console.error('Error checking status:', err);
+                setLoading(false);
             }
         };
         checkStatus();
-        
-        // Clear existing signature data when the component mounts
         signatureRef.current?.clear();
-        if (signatureId) {
-            localStorage.removeItem(`sig_${signatureId}`);
-        }
     }, [signatureId]);
 
-    const property = properties.find(p => p.id === currentOutlet?.property_id);
+    const handleSave = async (confirmed: boolean = false) => {
+        if (!signatureId || !signatureRef.current) return;
+        const dataUrl = signatureRef.current.toDataURL();
+        
+        try {
+            const syncData = {
+                signature: dataUrl,
+                confirmed,
+                guestName,
+                timestamp: new Date().toISOString()
+            };
 
-    const handleSave = async (confirmed = false) => {
-        if (signatureRef.current && signatureId) {
-            const dataUrl = signatureRef.current.toDataURL();
-            
-            await fetch(`/api/temp-signature/${signatureId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ dataUrl, confirmed })
-            });
+            // Use upsert to Supabase notifications as our "live bridge"
+            const { error } = await supabase
+                .from('notifications')
+                .upsert({
+                    id: signatureId, // Use signatureId as UUID if it is one, or it will auto-generate
+                    title: `SIG_SYNC:${signatureId}`,
+                    message: JSON.stringify(syncData),
+                    type: 'info',
+                    outlet_id: currentOutlet?.id,
+                    user_id: '00000000-0000-0000-0000-000000000000' // System ID
+                });
 
+            if (error) throw error;
             if (confirmed) setSaved(true);
+        } catch (err) {
+            console.error('Error syncing signature:', err);
+            toast.error('Sync failed. Please try again.');
         }
     };
 
     const handleClear = () => {
         signatureRef.current?.clear();
-        handleSave(false); // Send clear to desktop too
+        handleSave(false);
     };
+
+    if (loading) {
+        return <div className="flex items-center justify-center h-screen bg-slate-50">Loading...</div>;
+    }
 
     if (expired || saved) {
         return (
@@ -105,12 +105,10 @@ export const SignatureCapturePage = () => {
                     <CheckCircle2 className="w-10 h-10 text-emerald-600" />
                 </div>
                 <h1 className="text-2xl font-black text-slate-900 mb-2">
-                    {expired ? 'Session Expired' : 'Signature Captured'}
+                    {saved ? 'Signature Captured' : 'Session Expired'}
                 </h1>
                 <p className="text-slate-500 font-bold mb-8 text-center max-w-xs">
-                    {expired 
-                        ? 'This signature link has already been used or has expired.' 
-                        : 'Your signature has been saved successfully.'}
+                    {saved ? 'Your signature has been saved successfully.' : 'This signature link has already been used or has expired.'}
                 </p>
                 <Button onClick={() => window.close()} className="bg-indigo-600 hover:bg-indigo-700 px-8 py-4 rounded-xl">
                     Close Tab
@@ -120,38 +118,63 @@ export const SignatureCapturePage = () => {
     }
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-4">
-            <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl p-8 border border-slate-100">
-                <div className="flex items-center gap-4 mb-8">
-                    {property?.logo_url && <img src={property.logo_url} alt="Logo" className="w-12 h-12 object-contain" />}
-                    <div>
-                        <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">{property?.name}</h2>
-                        <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">{currentOutlet?.name}</p>
+        <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
+            <header className="p-6 bg-white border-b border-slate-100 flex items-center justify-between shadow-sm">
+                <div>
+                    <h1 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Guest Enrollment</h1>
+                    <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mt-1">Live Signature Bridge</p>
+                </div>
+                <div className="text-right">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Staff Reference</p>
+                    <p className="text-xs font-black text-slate-600 truncate max-w-[120px]">{signatureId?.slice(0, 8)}...</p>
+                </div>
+            </header>
+
+            <main className="flex-1 p-4 md:p-8 flex flex-col gap-6 overflow-y-auto">
+                <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                        { label: 'Guest Name', value: guestName },
+                        { label: 'Membership Tier', value: tier },
+                        { label: 'Base Rate', value: price }
+                    ].map((info, i) => (
+                        <div key={i} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">{info.label}</p>
+                            <p className="text-sm font-black text-slate-900 truncate">{info.value}</p>
+                        </div>
+                    ))}
+                </section>
+
+                <section className="flex-1 flex flex-col gap-4">
+                    <div className="flex items-center justify-between px-2">
+                        <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest">Sign Below</h2>
+                        <button onClick={handleClear} className="text-[10px] font-black text-indigo-600 uppercase hover:text-indigo-700">Clear Canvas</button>
                     </div>
-                </div>
-                
-                <h1 className="text-xl font-black text-slate-900 mb-1">Welcome, {guestName}!</h1>
-                <p className="text-sm font-bold text-slate-500 mb-6">
-                    Enrollment for <span className="text-indigo-600">{tier}</span> tier — <span className="text-emerald-600">{formatMoney(Number(price))}</span>
+                    
+                    <div className="flex-1 bg-white border-2 border-dashed border-slate-200 rounded-3xl overflow-hidden relative min-h-[300px]">
+                        <SignatureCanvas
+                            ref={signatureRef}
+                            canvasProps={{
+                                className: 'w-full h-full cursor-crosshair',
+                                style: { width: '100%', height: '100%' }
+                            }}
+                            onEnd={() => handleSave(false)}
+                            backgroundColor="rgba(255,255,255,0)"
+                        />
+                    </div>
+                </section>
+            </main>
+
+            <footer className="p-6 bg-white border-t border-slate-100 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.05)]">
+                <Button 
+                    onClick={() => handleSave(true)}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-6 rounded-2xl text-base shadow-lg shadow-indigo-200 active:scale-[0.98] transition-all"
+                >
+                    Confirm Signature
+                </Button>
+                <p className="text-[10px] text-slate-400 font-bold text-center mt-4 uppercase tracking-tighter">
+                    By clicking confirm, you agree to the membership terms shown on the staff monitor
                 </p>
-
-                <div className="border-2 border-slate-200 rounded-2xl mb-6 bg-slate-50">
-                    <SignatureCanvas 
-                        ref={signatureRef}
-                        canvasProps={{ width: 450, height: 200, className: 'w-full h-48' }} 
-                        onEnd={() => handleSave(false)}
-                    />
-                </div>
-
-                <div className="flex gap-4">
-                    <Button onClick={handleClear} variant="outline" className="flex-1 rounded-xl">
-                        <RotateCcw className="w-4 h-4 mr-2" /> Clear
-                    </Button>
-                    <Button onClick={() => handleSave(true)} className="flex-1 rounded-xl bg-indigo-600 hover:bg-indigo-700">
-                        Confirm Signature
-                    </Button>
-                </div>
-            </div>
+            </footer>
         </div>
     );
 };

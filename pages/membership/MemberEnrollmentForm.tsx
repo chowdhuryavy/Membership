@@ -12,7 +12,7 @@ import {
   Calendar, Zap, Mail, Phone, Globe,
   CheckCircle2, Command, ChevronDown, Receipt, List, UserPlus
 } from 'lucide-react';
-import { db } from '../../services/mockSupabase';
+import { db, supabase } from '../../services/mockSupabase';
 import { emailService } from '../../services/emailService';
 import { useAuth } from '../../contexts/AuthContext';
 import { Member, MembershipCategory, MemberStatus, Staff, MembershipType } from '../../types';
@@ -88,23 +88,40 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     if (showSignatureModal && signatureMethod === 'qr' && signatureIdRef.current) {
         const interval = setInterval(async () => {
             try {
-                const response = await fetch(`/api/temp-signature/${signatureIdRef.current}`);
-                if (response.ok) {
-                    const data = await response.json(); // { signature, confirmed }
-                    if (data.signature) {
-                        setSignature(data.signature);
-                    }
-                    if (data.confirmed) {
-                        setShowSignatureModal(false);
-                        setSignatureMethod(null);
-                        clearInterval(interval);
-                        if (pendingSubmitData) processSubmit(pendingSubmitData);
+                // Poll Supabase notifications for the signature sync message
+                const { data, error } = await supabase
+                    .from('notifications')
+                    .select('message')
+                    .eq('title', `SIG_SYNC:${signatureIdRef.current}`)
+                    .maybeSingle();
+
+                if (data && data.message) {
+                    try {
+                        const syncData = JSON.parse(data.message);
+                        if (syncData.signature) {
+                            setSignature(syncData.signature);
+                        }
+                        if (syncData.confirmed) {
+                            setShowSignatureModal(false);
+                            setSignatureMethod(null);
+                            clearInterval(interval);
+                            
+                            // Cleanup: delete the notification bridge
+                            await supabase
+                                .from('notifications')
+                                .delete()
+                                .eq('title', `SIG_SYNC:${signatureIdRef.current}`);
+
+                            if (pendingSubmitData) processSubmit(pendingSubmitData);
+                        }
+                    } catch (parseErr) {
+                        console.error("Parse error:", parseErr);
                     }
                 }
             } catch (e) {
-                console.error("Polling error:", e);
+                console.error("Supabase Polling error:", e);
             }
-        }, 1000);
+        }, 1500);
         return () => clearInterval(interval);
     }
   }, [showSignatureModal, signatureMethod, pendingSubmitData]);
