@@ -448,8 +448,8 @@ async function startServer() {
       const resendApiKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
 
       if (!resendApiKey) {
-        console.warn('[Express /api/send-email] RESEND_API_KEY not configured on server.');
-        return res.status(500).json({ success: false, error: 'RESEND_API_KEY not configured on server.' });
+        console.warn('[Express /api/send-email] RESEND_API_KEY not configured on server. Triggering Edge Function fallback.');
+        return res.json({ success: false, fallback: true, error: 'RESEND_API_KEY not configured on Express server.' });
       }
 
       const rawToList = Array.isArray(to) ? to : [to];

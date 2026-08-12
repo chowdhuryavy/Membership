@@ -151,10 +151,6 @@ export const emailService = {
         targetEmails = activeRecipients.flatMap(r => r.email.split(',').map(e => e.trim()));
       }
 
-      if (member.email && member.email.trim() && !targetEmails.includes(member.email.trim())) {
-        targetEmails.push(member.email.trim());
-      }
-
       targetEmails = Array.from(new Set(targetEmails.filter(Boolean)));
       if (targetEmails.length === 0) {
         console.log('[Email Service] No recipient emails found for member purchase notification.');
@@ -219,8 +215,8 @@ export const emailService = {
               <div class="subtitle">${outlet?.name || 'TORCH CLUB'} &bull; Official Membership Enrollment</div>
             </div>
 
-            <p style="font-size: 15px; margin-bottom: 8px;"><strong>Dear ${member.guest_name},</strong></p>
-            <p style="font-size: 14px; color: #334155; margin-top: 0;">Welcome to <strong>${property?.name || 'THE TORCH DOHA'}</strong>! Your membership agreement has been completed and registered in our system.</p>
+            <p style="font-size: 15px; margin-bottom: 8px;"><strong>Dear Admin,</strong></p>
+            <p style="font-size: 14px; color: #334155; margin-top: 0;">A new membership purchase has been completed and registered in the system for <strong>${property?.name || 'THE TORCH DOHA'}</strong> (${outlet?.name || 'TORCH CLUB'}). Below are the member enrollment details and attached agreement.</p>
 
             ${pdfBase64 ? `
             <div class="attachment-banner">
@@ -261,10 +257,12 @@ export const emailService = {
               <div style="font-size: 11px; color: #cbd5e1; margin-top: 4px;">Payment Ref: ${member.check_no || 'Direct Registration'}</div>
             </div>
 
+            ${cleanTerms && !pdfBase64 ? `
             <div style="font-weight: 800; font-size: 12px; text-transform: uppercase; color: #0f172a; margin-top: 24px;">Terms & Conditions Summary</div>
             <div class="agreement-box">
 ${cleanTerms}
             </div>
+            ` : ''}
 
             <div class="footer">
               ${property?.name || 'THE TORCH DOHA'} &bull; ${outlet?.name || 'TORCH CLUB'}<br/>
