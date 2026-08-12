@@ -137,6 +137,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
             price: price.toString()
         }).toString();
         
+        // Use HashRouter format #/signature/...
         setQrUrl(`${baseUrl}/#/signature/${id}?${queryParams}`);
     }
   };
@@ -946,8 +947,13 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                         <>
                             <h3 className="text-lg font-black text-slate-900 mb-4 uppercase tracking-widest">Guest Signature</h3>
                             <p className="text-xs text-slate-500 font-bold mb-6 text-center">Scan QR with tablet to sign</p>
-                            <div className="bg-white p-4 border border-slate-100 rounded-2xl shadow-sm mb-6">
-                                <QRCodeCanvas value={qrUrl} size={250} />
+                            <div className="bg-white p-2 border-4 border-slate-50 rounded-3xl shadow-inner mb-6 flex items-center justify-center">
+                                <QRCodeCanvas 
+                                    value={qrUrl} 
+                                    size={240} 
+                                    level="M" 
+                                    marginSize={4}
+                                />
                             </div>
                             <button 
                                 onClick={() => { setShowSignatureModal(false); setPendingSubmitData(null); setSignatureMethod(null); }}
