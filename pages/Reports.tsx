@@ -372,7 +372,24 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
       logging: false,
       backgroundColor: '#ffffff',
       windowWidth: element.scrollWidth,
-      windowHeight: element.scrollHeight
+      windowHeight: element.scrollHeight,
+      onclone: (clonedDoc) => {
+        // Fix html2canvas unsupported color function crash with Tailwind v4 (oklab/oklch)
+        const styles = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
+        styles.forEach((style) => {
+          if (style.textContent) {
+            style.textContent = style.textContent
+              .replace(/okl(?:ab|ch)\([^;}]+\)/gi, '#0f172a');
+          }
+        });
+        const elements = clonedDoc.querySelectorAll('*');
+        elements.forEach((el) => {
+          const styleAttr = el.getAttribute('style');
+          if (styleAttr && (styleAttr.includes('oklab') || styleAttr.includes('oklch'))) {
+            el.setAttribute('style', styleAttr.replace(/okl(?:ab|ch)\([^;}]+\)/gi, '#0f172a'));
+          }
+        });
+      }
     });
 
     const imgData = canvas.toDataURL('image/png');

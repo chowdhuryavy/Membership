@@ -86,6 +86,47 @@ serve(async (req) => {
     const appName = settings?.name || settings?.report_title || 'Health Club Management'
     const fromEmail = Deno.env.get('EMAIL_FROM') || 'noreply@saavargroup.com'
 
+    // Handle direct email dispatches (e.g., member purchase notifications, direct reports)
+    if (body.directEmail) {
+      console.log(`DEBUG: Processing directEmail request`);
+      const { to, subject, html, attachments } = body.directEmail;
+      const rawToList = Array.isArray(to) ? to : [to];
+      const emails = rawToList
+        .flatMap((e: string) => (typeof e === 'string' ? e.split(',') : [e]))
+        .map((e: string) => (typeof e === 'string' ? e.trim() : ''))
+        .filter(Boolean);
+
+      if (emails.length === 0) {
+        return new Response(JSON.stringify({ success: false, error: 'No recipient email addresses provided' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400
+        });
+      }
+
+      console.log(`DEBUG: Sending direct email via Resend to ${emails.join(', ')} (from: ${fromEmail})`);
+      const { data: emailRes, error: emailError } = await resend.emails.send({
+        from: `${appName} <${fromEmail}>`,
+        to: emails,
+        subject,
+        html,
+        attachments: attachments || []
+      });
+
+      if (emailError) {
+        console.error('DEBUG: Direct email error from Resend:', emailError);
+        return new Response(JSON.stringify({ success: false, error: emailError.message || JSON.stringify(emailError) }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400
+        });
+      }
+
+      console.log(`DEBUG: Direct email sent successfully to ${emails.join(', ')}. Resend ID: ${emailRes?.id}`);
+      return new Response(JSON.stringify({ success: true, id: emailRes?.id }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      });
+    }
+
     // Fetch recipients
     let recipientsQuery = supabase.from('report_recipients').select('*').eq('is_active', true)
     

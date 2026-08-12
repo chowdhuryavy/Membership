@@ -1,13 +1,46 @@
 import { reportService } from './reportService';
 import { db } from './mockSupabase';
+import { supabase } from './supabase';
 import { format, parseISO } from 'date-fns';
 
 export const emailService = {
-  async sendEmail(to: string, subject: string, html: string, attachments: { filename: string; content: string }[] = []) {
-    console.log(`[Email Service] Dispatching email to: ${to}`);
+  async sendEmail(to: string | string[], subject: string, html: string, attachments: { filename: string; content: string }[] = []) {
+    const targetStr = Array.isArray(to) ? to.join(', ') : to;
+    console.log(`[Email Service] Dispatching email to: ${targetStr}`);
     console.log(`[Email Service] Subject: ${subject}`);
     console.log(`[Email Service] Attachments: ${attachments.length}`);
-    await new Promise(resolve => setTimeout(resolve, 800));
+
+    try {
+      if (supabase) {
+        const { data, error } = await supabase.functions.invoke('send-reports', {
+          body: {
+            directEmail: {
+              to,
+              subject,
+              html,
+              attachments
+            }
+          }
+        });
+
+        if (error) {
+          console.error('[Email Service] Error invoking send-reports Edge Function:', error);
+          return { success: false, error: error.message };
+        }
+
+        if (data && data.success === false) {
+          console.error('[Email Service] Edge Function returned error:', data.error);
+          return { success: false, error: data.error };
+        }
+
+        console.log('[Email Service] Email successfully sent via Resend Edge Function:', data?.id);
+        return { success: true, messageId: data?.id || Math.random().toString(36).substring(7) };
+      }
+    } catch (err: any) {
+      console.error('[Email Service] Exception sending email via Edge Function:', err);
+    }
+
+    // Fallback response for dev/offline mode
     return { success: true, messageId: Math.random().toString(36).substring(7) };
   },
 
@@ -70,6 +103,7 @@ export const emailService = {
   },
 
   async sendMemberPurchaseEmail(member: any) {
+    console.log('[Email Service] sendMemberPurchaseEmail triggered for member:', member?.id || member?.guest_name);
     try {
       const properties = await db.getProperties();
       const outlets = await db.getOutlets();

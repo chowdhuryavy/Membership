@@ -748,6 +748,15 @@ const SettingsPage = () => {
       if (!outlet) throw new Error('Facility context not found.');
 
       showStatus(`Dispatching test report intelligence to ${recipient.email}...`);
+
+      try {
+        await db.sendTestReport(recipient.id);
+        showStatus(`Test report dispatched via Resend to ${recipient.email}`, 'success');
+        toast.success(`Test report dispatched successfully to ${recipient.email}`);
+        return;
+      } catch (err: any) {
+        console.warn('Backend sendTestReport Edge Function failed, using client dispatch fallback:', err);
+      }
       
       const reportEvent = new CustomEvent('TRIGGER_REPORT_DISPATCH', {
         detail: {
@@ -763,6 +772,7 @@ const SettingsPage = () => {
       showStatus('');
     } catch (e: any) {
       showStatus(e.message, 'error');
+      toast.error(e.message || 'Failed to send test report');
     }
   };
 
