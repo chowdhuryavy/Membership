@@ -112,11 +112,11 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     if (method === 'qr') {
         const id = crypto.randomUUID();
         signatureIdRef.current = id;
-        setQrUrl(`${window.location.origin}/#/signature/${id}`);
-        setShowQrModal(true);
+        const name = watch('guest_name');
+        setQrUrl(`${window.location.origin}/#/signature/${id}?name=${encodeURIComponent(name || 'Guest')}`);
         setShowSignatureModal(false);
     } else {
-        setShowQrModal(false);
+        // No QR modal used anymore
     }
   };
 

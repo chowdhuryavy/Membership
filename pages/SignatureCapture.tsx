@@ -8,10 +8,17 @@ import { CheckCircle2, RotateCcw } from 'lucide-react';
 
 export const SignatureCapturePage = () => {
     const { signatureId } = useParams<{ signatureId: string }>();
+    const searchParams = new URLSearchParams(window.location.search);
+    const guestName = searchParams.get('name') || 'Guest';
     const { currentOutlet, properties } = useSettings();
-    const [signature, setSignature] = useState<string | null>(null);
     const signatureRef = useRef<SignatureCanvas>(null);
     const [saved, setSaved] = useState(false);
+
+    useEffect(() => {
+        if (signatureId) {
+            localStorage.removeItem(`sig_${signatureId}`);
+        }
+    }, [signatureId]);
 
     const property = properties.find(p => p.id === currentOutlet?.property_id);
 
@@ -34,7 +41,10 @@ export const SignatureCapturePage = () => {
                     <CheckCircle2 className="w-10 h-10 text-emerald-600" />
                 </div>
                 <h1 className="text-2xl font-black text-slate-900 mb-2">Signature Captured</h1>
-                <p className="text-slate-500 font-bold">You may now close this page.</p>
+                <p className="text-slate-500 font-bold mb-8">Your signature has been saved successfully.</p>
+                <Button onClick={() => window.close()} className="bg-indigo-600 hover:bg-indigo-700 px-8 py-4 rounded-xl">
+                    Close Tab
+                </Button>
             </div>
         );
     }
@@ -50,7 +60,7 @@ export const SignatureCapturePage = () => {
                     </div>
                 </div>
                 
-                <h1 className="text-xl font-black text-slate-900 mb-2">Welcome!</h1>
+                <h1 className="text-xl font-black text-slate-900 mb-2">Welcome, {guestName}!</h1>
                 <p className="text-sm font-bold text-slate-500 mb-6">Please sign below to complete your enrollment.</p>
 
                 <div className="border-2 border-slate-200 rounded-2xl mb-6 bg-slate-50">
