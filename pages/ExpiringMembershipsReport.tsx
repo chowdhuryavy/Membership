@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button } from '../components/ui';
 import { supabase } from '../services/supabase';
 import { Member, MembershipCategory, MemberStatus } from '../types';
@@ -11,6 +11,8 @@ import TabLoader from '../components/TabLoader';
 import { ReportAuditFooter } from '../components/ReportAuditFooter';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
+import toast from 'react-hot-toast';
 
 interface ExpiringMembershipsReportProps {
     isEmbedded?: boolean;
@@ -95,12 +97,65 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth, s
         }, {} as Record<string, Record<string, Member[]>>);
     }, [expiringMembers, membershipTypes, categories]);
 
+    const reportRef = useRef<HTMLDivElement>(null);
+
     const sortedGroupedEntries = useMemo(() => {
         return Object.entries(groupedMembers).sort(([a], [b]) => a.localeCompare(b));
     }, [groupedMembers]);
 
-    const handleExportPDF = () => {
-        window.print();
+    const handleExportPDF = async () => {
+        const element = reportRef.current || document.getElementById('expiring-report-content');
+        if (!element) return;
+        
+        setIsGeneratingPDF(true);
+        try {
+            const dataUrl = await toPng(element, {
+                quality: 0.95,
+                backgroundColor: '#ffffff',
+                cacheBust: true,
+                pixelRatio: 2,
+                skipFonts: true,
+            });
+
+            const img = new Image();
+            img.src = dataUrl;
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+            });
+
+            const pdf = new jsPDF({
+                orientation: 'landscape',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = pdfWidth;
+            const imgHeight = (img.height * pdfWidth) / img.width;
+
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+            heightLeft -= pdfHeight;
+
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+                heightLeft -= pdfHeight;
+            }
+
+            pdf.save(`Expiring_Memberships_${reportMonth}.pdf`);
+            toast.success('Expiring Memberships Report exported as PDF successfully!');
+        } catch (err: any) {
+            console.error('PDF generation error:', err);
+            toast.error('Failed to generate PDF: ' + (err.message || 'Unknown error'));
+        } finally {
+            setIsGeneratingPDF(false);
+        }
     };
 
     // Removing full page spinner to prevent UI jumping
@@ -153,7 +208,7 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth, s
                 )}
                 <CardContent className="p-0">
                     <div className="overflow-x-auto print:overflow-visible print:w-full">
-                        <div id="expiring-report-content" className={`${isEmbedded ? 'w-full' : 'print-container min-w-max'} bg-white`}>
+                        <div id="expiring-report-content" ref={reportRef} className={`${isEmbedded ? 'w-full' : 'print-container min-w-max'} bg-white`}>
                             {!isEmbedded && (
                                 <div className="p-8 pb-4 hidden print:block">
                                     <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Expiring Memberships Report</h2>

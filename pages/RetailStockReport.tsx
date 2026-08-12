@@ -24,6 +24,8 @@ import { Sale, InventoryItem, InventoryLog } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
+import toast from 'react-hot-toast';
 import RetailStockReportPrint from '../components/RetailStockReportPrint';
 
 interface ItemStockSummary {
@@ -349,206 +351,56 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
   };
 
   const handleDownloadPDF = async () => {
-    if (isExporting) return;
+    if (isExporting || !printRef.current) return;
     setIsExporting(true);
     try {
-      const doc = new jsPDF('l', 'mm', 'a4');
-      const pageWidth = doc.internal.pageSize.getWidth();
-      let logoAdded = false;
-      
-      // 0. Add Logo if available
-      if (currentProperty?.logo_url) {
-        try {
-          const logoUrl = currentProperty.logo_url;
-          let base64Logo = '';
-          
-          try {
-            // Try direct load first (best for CORS-enabled hosts)
-            base64Logo = await loadImageAsBase64(logoUrl);
-          } catch (e) {
-            console.warn("Direct logo load failed, trying proxies", e);
-            // Fallback to proxy 1: allorigins
-            try {
-              const proxyUrl1 = `https://api.allorigins.win/raw?url=${encodeURIComponent(logoUrl)}`;
-              base64Logo = await loadImageAsBase64(proxyUrl1);
-            } catch (proxyErr1) {
-              console.warn("Proxy 1 failed, trying Proxy 2", proxyErr1);
-              // Fallback to proxy 2: corsproxy.io
-              try {
-                const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(logoUrl)}`;
-                base64Logo = await loadImageAsBase64(proxyUrl2);
-              } catch (proxyErr2) {
-                console.warn("All logo load attempts failed", proxyErr2);
-              }
-            }
-          }
-          
-          if (base64Logo) {
-            doc.addImage(base64Logo, 'PNG', 14, 10, 20, 20);
-            logoAdded = true;
-          }
-        } catch (logoErr) {
-          console.warn("Could not load logo for PDF", logoErr);
-        }
-      }
-
-      // 1. Add Header Info
-      doc.setFontSize(20);
-      doc.setTextColor(15, 23, 42); // slate-900
-      const headerX = logoAdded ? 40 : 14;
-      doc.text(currentProperty?.name?.toUpperCase() || 'PROPERTY NAME', headerX, 20);
-      
-      doc.setFontSize(12);
-      doc.setTextColor(100, 116, 139); // slate-500
-      doc.text('RETAIL STOCK LEDGER', headerX, 28);
-      
-      // 2. Add Meta Info Box
-      doc.setFontSize(9);
-      doc.setTextColor(71, 85, 105); // slate-600
-      doc.text(`Period: ${format(selectedMonth, 'MMMM yyyy')}`, 14, 38);
-      doc.text(`Scope: ${viewScope === 'property' ? 'ALL OUTLETS' : (currentOutlet?.name || 'N/A')}`, 14, 43);
-      const printUser = JSON.parse(localStorage.getItem('membership_session') || '{}');
-      doc.text(`Exported on: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')}${printUser?.name ? ` by ${printUser.name}` : ''}`, 14, 48);
-
-      // 3. Add Summary Stats
-      const statsX = pageWidth - 80;
-      doc.setFontSize(10);
-      doc.text(`Total Revenue: ${formatMoneyForPDF(summary.totalRevenue)}`, statsX, 38);
-      doc.text(`Asset Value: ${formatMoneyForPDF(summary.totalStockValue)}`, statsX, 43);
-      doc.text(`Units Sold: ${summary.totalItemsSold}`, statsX, 48);
-
-      // 4. Generate Table Data
-      const tableRows: any[] = [];
-      
-      // Determine grouping for PDF
-      const pdfGrouping = viewScope === 'property' 
-        ? reportData.reduce((acc, item) => {
-            const key = item.outletName || 'Unknown Outlet';
-            if (!acc[key]) acc[key] = [];
-            acc[key].push(item);
-            return acc;
-          }, {} as Record<string, ItemStockSummary[]>)
-        : groupedData;
-
-      Object.entries(pdfGrouping).forEach(([groupName, items]) => {
-        // Group Header Row
-        tableRows.push([
-          { content: groupName.toUpperCase(), colSpan: 10, styles: { fillColor: [248, 250, 252], textColor: [79, 70, 229], fontStyle: 'bold' } }
-        ]);
-        
-        (items as ItemStockSummary[]).forEach(item => {
-          tableRows.push([
-            item.itemName,
-            formatMoneyForPDF(item.unitPrice),
-            item.openingStock,
-            item.restocked || '-',
-            item.sold || '-',
-            formatMoneyForPDF(item.salesRevenue),
-            item.adjustments || '-',
-            item.closingStock,
-            formatMoneyForPDF(item.closingValue),
-            item.status
-          ]);
-        });
+      const element = printRef.current;
+      const dataUrl = await toPng(element, {
+        quality: 0.95,
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+        pixelRatio: 2,
+        skipFonts: true,
       });
 
-      // Grand Total Row
-      tableRows.push([
-        { content: 'GRAND TOTAL', colSpan: 2, styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' } },
-        { content: reportData.reduce((sum, i) => sum + i.openingStock, 0).toString(), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
-        { content: summary.totalRestocked.toString(), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
-        { content: summary.totalItemsSold.toString(), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
-        { content: formatMoneyForPDF(summary.totalRevenue), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
-        { content: '', styles: { fillColor: [15, 23, 42] } },
-        { content: reportData.reduce((sum, i) => sum + i.closingStock, 0).toString(), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
-        { content: formatMoneyForPDF(summary.totalStockValue), styles: { fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
-        { content: '', styles: { fillColor: [15, 23, 42] } }
-      ]);
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
 
-      // 5. Render Table
-      const tableConfig: any = {
-        startY: 55,
-        head: [['Item Description', 'Price', 'Open', 'Restock', 'Sold', 'Revenue', 'Adj', 'Close', 'Value', 'Status']],
-        body: tableRows,
-        theme: 'grid',
-        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
-        columnStyles: {
-          1: { halign: 'right' },
-          2: { halign: 'center' },
-          3: { halign: 'center' },
-          4: { halign: 'center' },
-          5: { halign: 'right' },
-          6: { halign: 'center' },
-          7: { halign: 'center' },
-          8: { halign: 'right' },
-          9: { halign: 'center' }
-        },
-        styles: { fontSize: 8, cellPadding: 3 },
-        didParseCell: (data: any) => {
-          if (data.section === 'body' && data.column.index === 9) {
-            const status = data.cell.raw;
-            if (status === 'Low') data.cell.styles.textColor = [220, 38, 38];
-            if (status === 'Good') data.cell.styles.textColor = [5, 150, 105];
-          }
-        }
-      };
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
 
-      try {
-        const actualAutoTable = typeof autoTable === 'function' ? autoTable : ((autoTable as any).default || autoTable);
-        
-        if (typeof (doc as any).autoTable === 'function') {
-          (doc as any).autoTable(tableConfig);
-        } else if (typeof actualAutoTable === 'function') {
-          actualAutoTable(doc, tableConfig);
-        } else {
-          throw new Error("autoTable not found on doc or as standalone function");
-        }
-      } catch (tableErr) {
-        console.error("autoTable call failed", tableErr);
-        throw tableErr;
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (img.height * pdfWidth) / img.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+        heightLeft -= pdfHeight;
       }
 
-      // Add Signatories
-      if (signatoryConfig) {
-        const finalY = (doc as any).lastAutoTable?.finalY || 55;
-        const sigY = finalY + 20;
-
-        doc.setFontSize(7);
-        doc.setTextColor(15, 23, 42); // slate-900
-
-        const margin = 14;
-        const contentWidth = pageWidth - (margin * 2);
-        const columnWidth = contentWidth / 3;
-
-        doc.text("PREPARED BY", margin + (columnWidth * 0), sigY);
-        doc.text(signatoryConfig.prepared || '', margin + (columnWidth * 0), sigY + 5);
-
-        if (signatoryConfig.reviewed) {
-          doc.text("REVIEWED BY", margin + (columnWidth * 1), sigY);
-          doc.text(signatoryConfig.reviewed, margin + (columnWidth * 1), sigY + 5);
-        }
-
-        doc.text("APPROVED BY", margin + (columnWidth * 2), sigY);
-        doc.text(signatoryConfig.approved || '', margin + (columnWidth * 2), sigY + 5);
-      }
-
-      // Add Footer on every page
-      const pageCount = (doc as any).internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(7);
-        doc.setTextColor(148, 163, 184);
-        const footerY = doc.internal.pageSize.getHeight() - 10;
-        doc.text(`Page ${i} of ${pageCount}`, 14, footerY);
-        doc.text(`Exported on: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')}${printUser?.name ? ` by ${printUser.name}` : ''}`, pageWidth / 2, footerY, { align: 'center' });
-        doc.text(`© ${new Date().getFullYear()} ${currentProperty?.name}. All rights reserved.`, pageWidth - 14, footerY, { align: 'right' });
-      }
-
-      // 6. Save PDF
-      doc.save(`Retail_Stock_Ledger_${format(selectedMonth, 'yyyy-MM')}.pdf`);
-    } catch (err) {
-      console.error("PDF generation failed", err);
-      setErrorMsg("Failed to generate PDF automatically. Please try using the Print option directly from your browser.");
+      const filename = `Retail_Stock_Ledger_${format(selectedMonth, 'yyyy_MM')}.pdf`;
+      pdf.save(filename);
+      toast.success('Retail Stock Report exported as PDF successfully!');
+    } catch (err: any) {
+      console.error('PDF generation failed', err);
+      toast.error('Failed to generate PDF: ' + (err.message || 'Unknown error'));
     } finally {
       setIsExporting(false);
     }
