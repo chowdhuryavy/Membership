@@ -78,6 +78,18 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   const [signature, setSignature] = useState<string | null>(null);
   const signatureRef = useRef<SignatureCanvas>(null);
 
+  const handleSignatureSave = () => {
+    if (signatureRef.current) {
+        setSignature(signatureRef.current.toDataURL());
+        setShowSignatureModal(false);
+    }
+  };
+
+  const handleSignatureClear = () => {
+    signatureRef.current?.clear();
+    setSignature(null);
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -295,6 +307,12 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   };
 
   const onFormSubmit = async (data: MemberFormValues) => {
+    if (!signature) {
+        setShowSignatureModal(true);
+        setPendingSubmitData(data);
+        return;
+    }
+
     if (data.referrer_name && data.referrer_name.trim().length > 0 && !data.calculate_referral_incentive) {
         setPendingSubmitData(data);
         setShowIncentivePrompt(true);
@@ -374,7 +392,8 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
       net_amount: netAmount,
       original_net_amount: netAmount,
       daily_rate: recognition.daily,
-      status: MemberStatus.ACTIVE
+      status: MemberStatus.ACTIVE,
+      member_signature: signature
     } as Member;
 
     try {
@@ -833,41 +852,57 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 {isRenewal ? 'Commit Renewal' : isEditing ? 'Save Profile Changes' : 'Confirm Enrollment'} <Command className="w-4 h-4 opacity-50" />
             </Button>
         </div>
-      </form>
+        </form>
 
-      {showIncentivePrompt && pendingSubmitData && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-300 ring-1 ring-black/5">
-                <div className="p-8">
-                    <div className="w-14 h-14 bg-indigo-50 rounded-[1.2rem] flex items-center justify-center mb-5 text-indigo-600">
-                        <UserPlus className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-xl font-black text-slate-900 mb-2 tracking-tight">Process Incentive?</h3>
-                    <p className="text-[13px] text-slate-500 font-medium leading-relaxed mb-8">
-                      You entered <strong className="text-slate-900">"{pendingSubmitData.referrer_name}"</strong> as a referral, but did not enable the incentive calculation flag. Would you like to process incentives for this referral?
-                    </p>
-                    <div className="flex flex-col gap-3">
-                        <button 
-                          type="button"
-                          onClick={() => handleIncentiveChoice(true)}
-                          className="w-full h-14 rounded-[1.2rem] bg-indigo-600 text-white font-black uppercase tracking-widest text-[11px] hover:bg-indigo-700 transition-all shadow-[0_15px_30px_-10px_rgba(79,70,229,0.4)] hover:scale-[1.02] active:scale-95"
-                        >
-                          Yes, Process Incentive
-                        </button>
-                        <button 
-                          type="button"
-                          onClick={() => handleIncentiveChoice(false)}
-                          className="w-full h-14 rounded-[1.2rem] bg-slate-50 border border-slate-200 text-slate-600 font-black uppercase tracking-widest text-[11px] hover:bg-slate-100 transition-all active:scale-95"
-                        >
-                          No, Skip Incentive
-                        </button>
+        {showIncentivePrompt && pendingSubmitData && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-300 ring-1 ring-black/5">
+                  <div className="p-8">
+                      <div className="w-14 h-14 bg-indigo-50 rounded-[1.2rem] flex items-center justify-center mb-5 text-indigo-600">
+                          <UserPlus className="w-6 h-6" />
+                      </div>
+                      <h3 className="text-xl font-black text-slate-900 mb-2 tracking-tight">Process Incentive?</h3>
+                      <p className="text-[13px] text-slate-500 font-medium leading-relaxed mb-8">
+                        You entered <strong className="text-slate-900">"{pendingSubmitData.referrer_name}"</strong> as a referral, but did not enable the incentive calculation flag. Would you like to process incentives for this referral?
+                      </p>
+                      <div className="flex flex-col gap-3">
+                          <button 
+                            type="button"
+                            onClick={() => handleIncentiveChoice(true)}
+                            className="w-full h-14 rounded-[1.2rem] bg-indigo-600 text-white font-black uppercase tracking-widest text-[11px] hover:bg-indigo-700 transition-all shadow-[0_15px_30px_-10px_rgba(79,70,229,0.4)] hover:scale-[1.02] active:scale-95"
+                          >
+                            Yes, Process Incentive
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => handleIncentiveChoice(false)}
+                            className="w-full h-14 rounded-[1.2rem] bg-slate-50 border border-slate-200 text-slate-600 font-black uppercase tracking-widest text-[11px] hover:bg-slate-100 transition-all active:scale-95"
+                          >
+                            No, Skip Incentive
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+        )}
+
+        {showSignatureModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-300 ring-1 ring-black/5">
+                    <div className="p-8">
+                        <h3 className="text-xl font-black text-slate-900 mb-6 tracking-tight">Member Signature Required</h3>
+                        <div className="border-2 border-slate-200 rounded-2xl bg-slate-50 mb-6">
+                            <SignatureCanvas ref={signatureRef} canvasProps={{ className: 'sigCanvas w-full h-48' }} />
+                        </div>
+                        <div className="flex gap-4">
+                            <button type="button" onClick={handleSignatureClear} className="flex-1 h-14 rounded-[1.2rem] bg-slate-100 text-slate-600 font-black uppercase tracking-widest text-[11px] hover:bg-slate-200 transition-all">Clear</button>
+                            <button type="button" onClick={handleSignatureSave} className="flex-1 h-14 rounded-[1.2rem] bg-indigo-600 text-white font-black uppercase tracking-widest text-[11px] hover:bg-indigo-700 transition-all">Confirm Signature</button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-      )}
+        )}
     </Card>
   );
 };
-
 export default MemberEnrollmentForm;
