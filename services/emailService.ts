@@ -63,8 +63,8 @@ export function buildBoxedEmailHtml(params: {
     : params.bannerType === 'info' ? '#0369a1'
     : '#166534';
 
-  const defaultBannerText = params.bannerType === 'warning' ? 'MEMBERSHIP FREEZE ACTION LOGGED'
-    : params.bannerType === 'alert' ? 'TRANSACTION VOID ACTION LOGGED'
+  const defaultBannerText = params.bannerType === 'warning' ? 'MEMBERSHIP FREEZE LOGGED'
+    : params.bannerType === 'alert' ? 'TRANSACTION VOID LOGGED'
     : params.bannerType === 'info' ? 'SYSTEM INFORMATION DISPATCH'
     : 'MEMBERSHIP ENROLLMENT CONFIRMED';
 
@@ -76,10 +76,10 @@ export function buildBoxedEmailHtml(params: {
 
   const dataRowsHtml = params.dataFields.map((f, i) => `
     <tr>
-      <td style="padding: 10px 12px 10px 0; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; width: 42%; vertical-align: top; text-align: left; ${i < params.dataFields.length - 1 ? 'border-bottom: 1px solid #e2e8f0;' : ''}">
+      <td style="padding: 10px 12px 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; width: 42%; vertical-align: top; text-align: left; ${i < params.dataFields.length - 1 ? 'border-bottom: 1px solid #e2e8f0;' : ''}">
         ${f.label}
       </td>
-      <td style="padding: 10px 0; font-size: 13px; font-weight: 700; color: #0f172a; vertical-align: top; text-align: left; ${i < params.dataFields.length - 1 ? 'border-bottom: 1px solid #e2e8f0;' : ''}">
+      <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: bold; color: #0f172a; vertical-align: top; text-align: left; ${i < params.dataFields.length - 1 ? 'border-bottom: 1px solid #e2e8f0;' : ''}">
         ${f.value || 'N/A'}
       </td>
     </tr>
@@ -91,22 +91,30 @@ export function buildBoxedEmailHtml(params: {
         : params.amountBox.amount)
     : '';
 
-  const amountHtml = params.amountBox ? `
-    <div style="background-color: #0f172a; border-radius: 8px; padding: 18px 24px; text-align: center; margin: 20px 0 10px 0;">
-      <div style="font-size: 10px; font-weight: 700; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">
-        ${params.amountBox.label}
-      </div>
-      <div style="font-size: 26px; font-weight: 900; color: #ffffff; margin: 2px 0;">
-        ${amountValueFormatted}${params.amountBox.currency ? ` ${params.amountBox.currency}` : ''}
-      </div>
-      ${params.amountBox.subtext ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">${params.amountBox.subtext}</div>` : ''}
-    </div>
+  const amountTableHtml = params.amountBox ? `
+    <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 20px 0 10px 0;">
+      <tr>
+        <td bgcolor="#0f172a" align="center" style="background-color: #0f172a; border-radius: 8px; padding: 18px 24px; text-align: center;">
+          <div style="font-family: Arial, Helvetica, sans-serif; font-size: 10px; font-weight: bold; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">
+            ${params.amountBox.label}
+          </div>
+          <div style="font-family: Arial, Helvetica, sans-serif; font-size: 26px; font-weight: bold; color: #ffffff; margin: 2px 0;">
+            ${amountValueFormatted}${params.amountBox.currency ? ` ${params.amountBox.currency}` : ''}
+          </div>
+          ${params.amountBox.subtext ? `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #94a3b8; margin-top: 4px;">${params.amountBox.subtext}</div>` : ''}
+        </td>
+      </tr>
+    </table>
   ` : '';
 
-  const calloutHtml = params.calloutBox ? `
-    <div style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px 16px; margin: 16px 0; font-size: 13px; color: #0369a1; font-weight: 500;">
-      ${params.calloutBox}
-    </div>
+  const calloutTableHtml = params.calloutBox ? `
+    <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 16px 0;">
+      <tr>
+        <td bgcolor="#f0f9ff" style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px 16px; font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #0369a1; font-weight: 500;">
+          ${params.calloutBox}
+        </td>
+      </tr>
+    </table>
   ` : '';
 
   // Avoid untrusted external image hosts (imgur, ui-avatars) that cause Microsoft Defender to convert emails to plain text
@@ -121,31 +129,27 @@ export function buildBoxedEmailHtml(params: {
 
   const timeStr = params.timestamp || format(new Date(), 'HH:mm:ss dd/MM/yyyy');
 
-  return `<!DOCTYPE html>
-<html>
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${propName} Dispatch</title>
-  <style>
-    body { margin: 0; padding: 0; background-color: #f1f5f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-font-smoothing: antialiased; }
-    table { border-collapse: collapse; }
-  </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
-  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 30px 10px; width: 100%;">
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: Arial, Helvetica, sans-serif; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;">
+  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; table-layout: fixed; padding: 24px 10px;">
     <tr>
       <td align="center">
         <!--[if (gte mso 9)|(IE)]>
-        <table width="600" align="center" border="0" cellspacing="0" cellpadding="0">
-          <tr>
-            <td>
+        <table align="center" border="0" cellspacing="0" cellpadding="0" width="600">
+        <tr>
+        <td align="center" valign="top" width="600">
         <![endif]-->
-        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; width: 100%; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
           
           <!-- TOP BANNER -->
           <tr>
-            <td style="background-color: ${bannerBg}; color: ${bannerColor}; padding: 10px 20px; font-weight: 800; font-size: 11px; text-transform: uppercase; text-align: left; letter-spacing: 0.05em;">
+            <td bgcolor="${bannerBg}" style="background-color: ${bannerBg}; color: ${bannerColor}; padding: 12px 24px; font-family: Arial, Helvetica, sans-serif; font-weight: bold; font-size: 11px; text-transform: uppercase; text-align: left; letter-spacing: 0.05em;">
               ${banner}
             </td>
           </tr>
@@ -154,34 +158,40 @@ export function buildBoxedEmailHtml(params: {
           <tr>
             <td style="padding: 24px 30px 16px 30px; text-align: left;">
               ${logoHtml}
-              <h1 style="font-size: 22px; font-weight: 900; color: #0f172a; margin: 0; text-transform: uppercase; letter-spacing: -0.01em;">${propName}</h1>
-              <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 4px;">${outlet} &bull; ${sub}</div>
-              <div style="height: 2px; background-color: #0f172a; margin-top: 16px; width: 100%;"></div>
+              <h1 style="margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 22px; font-weight: bold; color: #0f172a; text-transform: uppercase; letter-spacing: -0.01em;">${propName}</h1>
+              <div style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 4px;">${outlet} &bull; ${sub}</div>
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 16px;">
+                <tr><td height="2" bgcolor="#0f172a" style="background-color: #0f172a; font-size: 1px; line-height: 1px;">&nbsp;</td></tr>
+              </table>
             </td>
           </tr>
 
           <!-- CONTENT BODY -->
           <tr>
-            <td style="padding: 0 30px 24px 30px; color: #334155; font-size: 14px; line-height: 1.6;">
-              ${greeting ? `<p style="margin: 0 0 12px 0; font-weight: 700; color: #0f172a;">${greeting}</p>` : ''}
-              ${params.introParagraph ? `<p style="margin: 0 0 16px 0; color: #475569; font-size: 13px;">${params.introParagraph}</p>` : ''}
-              ${calloutHtml}
+            <td style="padding: 0 30px 24px 30px; font-family: Arial, Helvetica, sans-serif; color: #334155; font-size: 14px; line-height: 1.6;">
+              ${greeting ? `<p style="margin: 0 0 12px 0; font-family: Arial, Helvetica, sans-serif; font-weight: bold; color: #0f172a;">${greeting}</p>` : ''}
+              ${params.introParagraph ? `<p style="margin: 0 0 16px 0; font-family: Arial, Helvetica, sans-serif; color: #475569; font-size: 13px; line-height: 1.5;">${params.introParagraph}</p>` : ''}
+              ${calloutTableHtml}
 
-              <!-- SHADED DATA BOX -->
-              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; margin: 16px 0;">
-                <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
-                  ${dataRowsHtml}
-                </table>
-              </div>
+              <!-- SHADED DATA CONTAINER TABLE -->
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 16px 0;">
+                <tr>
+                  <td bgcolor="#f8fafc" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px;">
+                    <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+                      ${dataRowsHtml}
+                    </table>
+                  </td>
+                </tr>
+              </table>
 
-              ${amountHtml}
+              ${amountTableHtml}
             </td>
           </tr>
 
           <!-- FOOTER -->
           <tr>
-            <td style="background-color: #ffffff; padding: 20px 30px 24px 30px; text-align: center; border-top: 1px solid #f1f5f9; color: #94a3b8; font-size: 11px; line-height: 1.5;">
-              <div style="font-weight: 600; color: #64748b;">${propName} &bull; ${outlet}</div>
+            <td bgcolor="#ffffff" style="background-color: #ffffff; padding: 20px 30px 24px 30px; text-align: center; border-top: 1px solid #f1f5f9; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.5; color: #94a3b8;">
+              <div style="font-weight: bold; color: #64748b;">${propName} &bull; ${outlet}</div>
               <div style="font-size: 10px; color: #94a3b8; margin-top: 2px;">Verified Member Enrollment System &bull; Confidential</div>
               <div style="font-size: 10px; font-style: italic; color: #cbd5e1; margin-top: 8px;">Audit recorded at: ${timeStr}</div>
             </td>
@@ -189,8 +199,8 @@ export function buildBoxedEmailHtml(params: {
 
         </table>
         <!--[if (gte mso 9)|(IE)]>
-            </td>
-          </tr>
+        </td>
+        </tr>
         </table>
         <![endif]-->
       </td>

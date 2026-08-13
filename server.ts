@@ -470,6 +470,22 @@ async function startServer() {
       const fromEmail = process.env.EMAIL_FROM || 'noreply@perfection.my';
       const appName = 'Health Club Management';
 
+      const text = (html || '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<tr[^>]*>/gi, '\n')
+        .replace(/<td[^>]*>/gi, '  ')
+        .replace(/<p[^>]*>/gi, '\n\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&bull;/g, '•')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/\n\s*\n\s*\n/g, '\n\n')
+        .trim();
+
       console.log(`[Express /api/send-email] Dispatching email to ${emails.join(', ')} (from: ${fromEmail})...`);
 
       const deliveryResults = await Promise.allSettled(
@@ -486,6 +502,7 @@ async function startServer() {
               to: [recipientEmail],
               subject,
               html,
+              text,
               attachments: attachments || []
             })
           });
@@ -506,6 +523,7 @@ async function startServer() {
                 to: [recipientEmail],
                 subject,
                 html,
+                text,
                 attachments: attachments || []
               })
             });
