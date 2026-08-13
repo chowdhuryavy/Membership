@@ -566,8 +566,18 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         if (isUpdate) await db.updateMember(existingMember!.id, payload);
         else await db.addMember(payload);
 
-        // Trigger Instant Email Alert for New Member Join
+        // Trigger Full Purchase Email with Agreement PDF
         const cat = categories.find(c => c.id === payload.category_id);
+        emailService.sendMemberPurchaseEmail({
+            ...payload,
+            category_name: cat?.name || 'Standard Tier'
+        }).then(() => {
+            console.log('[Enrollment Email] Purchase notification email dispatched.');
+        }).catch(err => {
+            console.warn('[Enrollment Email] Purchase notification failed:', err);
+        });
+
+        // Trigger Instant Email Alert for New Member Join
         reportService.sendInstantAlert('members_joined', {
             member_name: payload.guest_name,
             category_name: cat?.name || 'Standard Tier',
@@ -579,7 +589,6 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         }).then(result => {
             if (result && !result.success) {
                 console.warn('[Enrollment Alert] Email dispatch failed:', result.error);
-                toast.error('Enrollment saved, but email notification failed. Check API configuration.');
             }
         });
 

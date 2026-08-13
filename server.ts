@@ -472,61 +472,77 @@ async function startServer() {
 
       console.log(`[Express /api/send-email] Dispatching email to ${emails.join(', ')} (from: ${fromEmail})...`);
 
-      // Attempt 1: Send via Resend REST API using configured fromEmail
-      let resendResponse = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: `${appName} <${fromEmail}>`,
-          to: emails,
-          subject,
-          html,
-          attachments: attachments || []
-        })
-      });
-
-      let resendResult: any = await resendResponse.json();
-
-      // If domain is unverified or first attempt failed, retry with onboarding@resend.dev
-      if (!resendResponse.ok && fromEmail !== 'onboarding@resend.dev') {
-        console.warn(`[Express /api/send-email] First attempt with ${fromEmail} failed:`, resendResult, '. Retrying with onboarding@resend.dev...');
-        resendResponse = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${resendApiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            from: `${appName} <onboarding@resend.dev>`,
-            to: emails,
-            subject,
-            html,
-            attachments: attachments || []
-          })
-        });
-        resendResult = await resendResponse.json();
-      }
-
-      if (!resendResponse.ok) {
-        const errorMessage = resendResult.message || JSON.stringify(resendResult);
-        console.error('[Express /api/send-email] Resend API Error:', resendResult);
-        
-        if (resendResponse.status === 401) {
-          return res.status(401).json({ 
-            success: false, 
-            error: 'Invalid Resend API Key. Please verify your RESEND_API_KEY in environment variables.',
-            invalidKey: true
+      const deliveryResults = await Promise.allSettled(
+        emails.map(async (recipientEmail) => {
+          // Attempt 1: Send via configured fromEmail
+          let resp = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${resendApiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              from: `${appName} <${fromEmail}>`,
+              to: [recipientEmail],
+              subject,
+              html,
+              attachments: attachments || []
+            })
           });
-        }
-        
-        return res.status(resendResponse.status).json({ success: false, error: errorMessage });
-      }
 
-      console.log('[Express /api/send-email] Email delivered successfully. ID:', resendResult.id);
-      return res.json({ success: true, id: resendResult.id });
+          let result: any = await resp.json().catch(() => ({}));
+
+          // Fallback to onboarding@resend.dev if domain unverified
+          if (!resp.ok && fromEmail !== 'onboarding@resend.dev') {
+            console.warn(`[Express /api/send-email] First attempt for ${recipientEmail} with ${fromEmail} failed:`, result, '. Retrying with onboarding@resend.dev...');
+            resp = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${resendApiKey}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                from: `${appName} <onboarding@resend.dev>`,
+                to: [recipientEmail],
+                subject,
+                html,
+                attachments: attachments || []
+              })
+            });
+            result = await resp.json().catch(() => ({}));
+          }
+
+          if (!resp.ok) {
+            const msg = result.message || JSON.stringify(result);
+            throw new Error(`[${recipientEmail}] ${msg}`);
+          }
+
+          return { email: recipientEmail, id: result.id };
+        })
+      );
+
+      const successful = deliveryResults
+        .filter((r): r is PromiseFulfilledResult<{ email: string; id: string }> => r.status === 'fulfilled')
+        .map(r => r.value);
+
+      const failed = deliveryResults
+        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+        .map(r => r.reason?.message || 'Unknown error');
+
+      console.log(`[Express /api/send-email] Dispatch summary: ${successful.length} delivered, ${failed.length} failed.`, { successful, failed });
+
+      if (successful.length > 0) {
+        return res.json({
+          success: true,
+          id: successful[0].id,
+          deliveredTo: successful.map(s => s.email),
+          failedCount: failed.length,
+          errors: failed.length > 0 ? failed : undefined
+        });
+      } else {
+        const errorMsg = failed.join('; ') || 'Failed to deliver email to recipients';
+        return res.status(400).json({ success: false, error: errorMsg });
+      }
     } catch (err: any) {
       console.error('[Express /api/send-email] Exception:', err);
       return res.status(500).json({ success: false, error: err?.message || String(err) });

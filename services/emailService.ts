@@ -5,12 +5,203 @@ import { generateMemberAgreementPdfBase64 } from './memberAgreementPdfService';
 
 const recentlySentMembersSet = new Set<string>();
 
+export function resolveLogoUrl(
+  outlet?: { logo_url?: string; name?: string } | null,
+  property?: { logo_url?: string; name?: string } | null,
+  settings?: { logo_url?: string } | null
+): string {
+  const candidates = [
+    outlet?.logo_url,
+    property?.logo_url,
+    settings?.logo_url
+  ];
+
+  for (const rawUrl of candidates) {
+    if (rawUrl && typeof rawUrl === 'string' && rawUrl.trim()) {
+      const clean = rawUrl.trim();
+      if (clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('data:image/')) {
+        return clean;
+      }
+      if (typeof window !== 'undefined' && window.location?.origin) {
+        return `${window.location.origin}${clean.startsWith('/') ? '' : '/'}${clean}`;
+      }
+      return clean;
+    }
+  }
+
+  const displayName = outlet?.name || property?.name || 'TTH';
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0f172a&color=ffffff&size=200&format=png&bold=true`;
+}
+
+export function buildBoxedEmailHtml(params: {
+  bannerType?: 'success' | 'warning' | 'alert' | 'info';
+  bannerText?: string;
+  logoUrl?: string;
+  propertyName: string;
+  outletName?: string;
+  subtitle?: string;
+  greeting?: string;
+  introParagraph?: string;
+  calloutBox?: string;
+  dataFields: Array<{ label: string; value: string }>;
+  amountBox?: {
+    label: string;
+    amount: string | number;
+    currency?: string;
+    subtext?: string;
+  };
+  footerText?: string;
+  timestamp?: string;
+}): string {
+  const bannerBg = params.bannerType === 'warning' ? '#fef3c7'
+    : params.bannerType === 'alert' ? '#fee2e2'
+    : params.bannerType === 'info' ? '#e0f2fe'
+    : '#dcfce7';
+
+  const bannerColor = params.bannerType === 'warning' ? '#92400e'
+    : params.bannerType === 'alert' ? '#991b1b'
+    : params.bannerType === 'info' ? '#0369a1'
+    : '#166534';
+
+  const defaultBannerText = params.bannerType === 'warning' ? '⚠️ MEMBERSHIP FREEZE ACTION LOGGED'
+    : params.bannerType === 'alert' ? '❌ TRANSACTION VOID ACTION LOGGED'
+    : params.bannerType === 'info' ? 'ℹ️ SYSTEM INFORMATION DISPATCH'
+    : '✓ ENROLLMENT CONFIRMED';
+
+  const banner = params.bannerText || defaultBannerText;
+  const propName = params.propertyName || 'The Torch Doha';
+  const outlet = params.outletName || 'Torch Club';
+  const sub = params.subtitle || 'OFFICIAL MEMBERSHIP ENROLLMENT';
+  const greeting = params.greeting !== undefined ? params.greeting : 'Dear Admin,';
+
+  const dataRowsHtml = params.dataFields.map((f, i) => `
+    <tr>
+      <td style="padding: 10px 12px 10px 0; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; width: 42%; vertical-align: top; text-align: left; ${i < params.dataFields.length - 1 ? 'border-bottom: 1px solid #e2e8f0;' : ''}">
+        ${f.label}
+      </td>
+      <td style="padding: 10px 0; font-size: 13px; font-weight: 700; color: #0f172a; vertical-align: top; text-align: left; ${i < params.dataFields.length - 1 ? 'border-bottom: 1px solid #e2e8f0;' : ''}">
+        ${f.value || 'N/A'}
+      </td>
+    </tr>
+  `).join('');
+
+  const amountValueFormatted = params.amountBox
+    ? (typeof params.amountBox.amount === 'number'
+        ? params.amountBox.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : params.amountBox.amount)
+    : '';
+
+  const amountHtml = params.amountBox ? `
+    <div style="background-color: #0f172a; border-radius: 8px; padding: 18px 24px; text-align: center; margin: 20px 0 10px 0;">
+      <div style="font-size: 10px; font-weight: 700; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">
+        ${params.amountBox.label}
+      </div>
+      <div style="font-size: 26px; font-weight: 900; color: #ffffff; margin: 2px 0;">
+        ${amountValueFormatted}${params.amountBox.currency ? ` ${params.amountBox.currency}` : ''}
+      </div>
+      ${params.amountBox.subtext ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">${params.amountBox.subtext}</div>` : ''}
+    </div>
+  ` : '';
+
+  const calloutHtml = params.calloutBox ? `
+    <div style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px 16px; margin: 16px 0; font-size: 13px; color: #0369a1; font-weight: 500;">
+      ${params.calloutBox}
+    </div>
+  ` : '';
+
+  const logoHtml = params.logoUrl ? `
+    <img src="${params.logoUrl}" width="140" style="max-width: 140px; max-height: 70px; margin-bottom: 12px; object-fit: contain; display: block;" alt="${propName}" />
+  ` : '';
+
+  const timeStr = params.timestamp || format(new Date(), 'HH:mm:ss dd/MM/yyyy');
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${propName} Dispatch</title>
+  <style>
+    body { margin: 0; padding: 0; background-color: #f1f5f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-font-smoothing: antialiased; }
+    table { border-collapse: collapse; }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 30px 10px; width: 100%;">
+    <tr>
+      <td align="center">
+        <!--[if (gte mso 9)|(IE)]>
+        <table width="600" align="center" border="0" cellspacing="0" cellpadding="0">
+          <tr>
+            <td>
+        <![endif]-->
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; width: 100%; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+          
+          <!-- TOP BANNER -->
+          <tr>
+            <td style="background-color: ${bannerBg}; color: ${bannerColor}; padding: 10px 20px; font-weight: 800; font-size: 11px; text-transform: uppercase; text-align: left; letter-spacing: 0.05em;">
+              ${banner}
+            </td>
+          </tr>
+
+          <!-- HEADER -->
+          <tr>
+            <td style="padding: 24px 30px 16px 30px; text-align: left;">
+              ${logoHtml}
+              <h1 style="font-size: 22px; font-weight: 900; color: #0f172a; margin: 0; text-transform: uppercase; letter-spacing: -0.01em;">${propName}</h1>
+              <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 4px;">${outlet} &bull; ${sub}</div>
+              <div style="height: 2px; background-color: #0f172a; margin-top: 16px; width: 100%;"></div>
+            </td>
+          </tr>
+
+          <!-- CONTENT BODY -->
+          <tr>
+            <td style="padding: 0 30px 24px 30px; color: #334155; font-size: 14px; line-height: 1.6;">
+              ${greeting ? `<p style="margin: 0 0 12px 0; font-weight: 700; color: #0f172a;">${greeting}</p>` : ''}
+              ${params.introParagraph ? `<p style="margin: 0 0 16px 0; color: #475569; font-size: 13px;">${params.introParagraph}</p>` : ''}
+              ${calloutHtml}
+
+              <!-- SHADED DATA BOX -->
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; margin: 16px 0;">
+                <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+                  ${dataRowsHtml}
+                </table>
+              </div>
+
+              ${amountHtml}
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="background-color: #ffffff; padding: 20px 30px 24px 30px; text-align: center; border-top: 1px solid #f1f5f9; color: #94a3b8; font-size: 11px; line-height: 1.5;">
+              <div style="font-weight: 600; color: #64748b;">${propName} &bull; ${outlet}</div>
+              <div style="font-size: 10px; color: #94a3b8; margin-top: 2px;">Verified Member Enrollment System &bull; Confidential</div>
+              <div style="font-size: 10px; font-style: italic; color: #cbd5e1; margin-top: 8px;">Audit recorded at: ${timeStr}</div>
+            </td>
+          </tr>
+
+        </table>
+        <!--[if (gte mso 9)|(IE)]>
+            </td>
+          </tr>
+        </table>
+        <![endif]-->
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export const emailService = {
   async sendEmail(to: string | string[], subject: string, html: string, attachments: { filename: string; content: string }[] = []) {
     const targetStr = Array.isArray(to) ? to.join(', ') : to;
     console.log(`[Email Service] Dispatching email to: ${targetStr}`);
     console.log(`[Email Service] Subject: ${subject}`);
     console.log(`[Email Service] Attachments: ${attachments.length}`);
+
+    let lastErrorMessage = '';
 
     // Primary Method: Send via Supabase Edge Function directly if available
     try {
@@ -30,10 +221,12 @@ export const emailService = {
           console.log('[Email Service] Email successfully sent via Resend Edge Function:', data?.id);
           return { success: true, messageId: data?.id || Math.random().toString(36).substring(7) };
         } else {
-          console.warn('[Email Service] Edge Function returned error, trying local Express fallback...', error || data?.error);
+          lastErrorMessage = error?.message || data?.error || 'Edge Function error';
+          console.warn('[Email Service] Edge Function returned error, trying local Express fallback...', lastErrorMessage);
         }
       }
     } catch (err: any) {
+      lastErrorMessage = err?.message || String(err);
       console.warn('[Email Service] Exception sending email via Edge Function, trying Express server fallback...', err);
     }
 
@@ -45,25 +238,20 @@ export const emailService = {
         body: JSON.stringify({ to, subject, html, attachments })
       });
       
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          console.log('[Email Service] Email successfully sent via Express /api/send-email:', data.id);
-          return { success: true, messageId: data.id };
-        }
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        console.error(`[Email Service] Express API failed with status ${res.status}:`, errorData.error || res.statusText);
-        
-        if (res.status === 401) {
-          console.warn('[Email Service] 401 Unauthorized: This usually means RESEND_API_KEY is missing from your environment variables.');
-        }
-      }
-    } catch (apiErr) {
-      console.warn('[Email Service] Express /api/send-email unreachable or failed:', apiErr);
-    }
+      const data = await res.json().catch(() => ({}));
 
-    return { success: false, error: 'Failed to send email via both Supabase Edge Function and Express server.' };
+      if (res.ok && data.success) {
+        console.log('[Email Service] Email successfully sent via Express /api/send-email:', data.id);
+        return { success: true, messageId: data.id };
+      } else {
+        const errorReason = data.error || `Server API failed with status ${res.status}`;
+        console.error(`[Email Service] Express API failed with status ${res.status}:`, errorReason);
+        return { success: false, error: errorReason };
+      }
+    } catch (apiErr: any) {
+      console.warn('[Email Service] Express /api/send-email unreachable or failed:', apiErr);
+      return { success: false, error: apiErr?.message || lastErrorMessage || 'Failed to dispatch email' };
+    }
   },
 
   async sendReportEmail(
@@ -86,14 +274,14 @@ export const emailService = {
       <html>
       <head>
         <style>
-          body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background-color: #f1f5f9; color: #1e293b; margin: 0; padding: 40px 20px; line-height: 1.6; }
-          .container { max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 24px; padding: 48px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f1f5f9; color: #1e293b; margin: 0; padding: 40px 10px; line-height: 1.6; }
+          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 40px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
           .badge { display: inline-block; background: #e0e7ff; color: #4338ca; font-size: 10px; font-weight: 800; text-transform: uppercase; padding: 6px 14px; border-radius: 999px; letter-spacing: 0.1em; margin-bottom: 24px; }
           .header { border-bottom: 2px solid #f1f5f9; padding-bottom: 24px; margin-bottom: 32px; text-align: left; }
-          .title { font-size: 26px; font-weight: 900; text-transform: uppercase; color: #0f172a; margin: 0; letter-spacing: -0.025em; }
+          .title { font-size: 24px; font-weight: 900; text-transform: uppercase; color: #0f172a; margin: 0; letter-spacing: -0.025em; }
           .subtitle { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.15em; margin-top: 8px; }
           .content { font-size: 14px; color: #475569; }
-          .meta { background: #f8fafc; padding: 24px; border-radius: 16px; margin: 24px 0; font-size: 13px; border: 1px solid #f1f5f9; }
+          .meta { background: #f8fafc; padding: 24px; border-radius: 12px; margin: 24px 0; font-size: 13px; border: 1px solid #f1f5f9; }
           .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 24px; }
         </style>
       </head>
@@ -159,6 +347,8 @@ export const emailService = {
       }
 
       targetEmails = Array.from(new Set(targetEmails.filter(Boolean)));
+      console.log(`[Email Service] Targeted recipients for purchase: ${targetEmails.length}`, targetEmails);
+      
       if (targetEmails.length === 0) {
         console.log('[Email Service] No recipient emails found for member purchase notification.');
         return;
@@ -191,88 +381,34 @@ export const emailService = {
 
       const subject = `Membership Purchase Confirmed - ${member.guest_name} (${member.membership_number})`;
       
-      const html = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 24px; line-height: 1.6; }
-            .container { max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 20px; padding: 36px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
-            .badge { display: inline-block; background: #dcfce7; color: #15803d; font-size: 11px; font-weight: 800; text-transform: uppercase; padding: 6px 14px; border-radius: 9999px; letter-spacing: 0.08em; margin-bottom: 16px; }
-            .header { border-bottom: 2px solid #0f172a; padding-bottom: 18px; margin-bottom: 24px; }
-            .title { font-size: 24px; font-weight: 900; color: #0f172a; margin: 0; text-transform: uppercase; letter-spacing: -0.02em; }
-            .subtitle { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
-            .attachment-banner { background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 14px 18px; margin: 20px 0; font-size: 13px; color: #1e40af; display: flex; align-items: center; }
-            .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #f8fafc; padding: 22px; border-radius: 16px; border: 1px solid #e2e8f0; margin: 24px 0; }
-            .detail-item { font-size: 13px; }
-            .detail-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; }
-            .detail-value { font-size: 14px; font-weight: 800; color: #0f172a; margin-top: 2px; }
-            .amount-box { background: #0f172a; color: #ffffff; padding: 22px; border-radius: 16px; text-align: center; margin: 24px 0; }
-            .amount-val { font-size: 30px; font-weight: 900; color: #818cf8; letter-spacing: -0.02em; }
-            .agreement-box { background: #fafafa; border: 1px solid #e2e8f0; padding: 18px; border-radius: 12px; font-size: 12px; color: #334155; margin-top: 20px; white-space: pre-wrap; line-height: 1.5; }
-            .footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 18px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="badge">✓ Enrollment Confirmed</div>
-            <div class="header">
-              <h1 class="title">${property?.name || 'THE TORCH DOHA'}</h1>
-              <div class="subtitle">${outlet?.name || 'TORCH CLUB'} &bull; Official Membership Enrollment</div>
-            </div>
+      const logoUrl = resolveLogoUrl(outlet, property, settings);
 
-            <p style="font-size: 15px; margin-bottom: 8px;"><strong>Dear Admin,</strong></p>
-            <p style="font-size: 14px; color: #334155; margin-top: 0;">A new membership purchase has been completed and registered in the system for <strong>${property?.name || 'THE TORCH DOHA'}</strong> (${outlet?.name || 'TORCH CLUB'}). Below are the member enrollment details and attached agreement.</p>
-
-            <div class="details-grid">
-              <div class="detail-item">
-                <div class="detail-label">Member Name</div>
-                <div class="detail-value">${member.guest_name}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Membership Number</div>
-                <div class="detail-value">${member.membership_number}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Package & Access</div>
-                <div class="detail-value">${member.package_type || 'Single'} (${member.access_type || 'Both'})</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Enrollment Type</div>
-                <div class="detail-value">${member.membership_type || 'New'}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Commencement Date</div>
-                <div class="detail-value">${startDateFormatted}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Expiry Date (Validity)</div>
-                <div class="detail-value">${endDateFormatted}</div>
-              </div>
-            </div>
-
-            <div class="amount-box">
-              <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #a5b4fc; letter-spacing: 0.1em;">Total Contribution Paid</div>
-              <div class="amount-val">${symbol} ${(member.net_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-              <div style="font-size: 11px; color: #cbd5e1; margin-top: 4px;">Payment Ref: ${member.check_no || 'Direct Registration'}</div>
-            </div>
-
-            ${cleanTerms && !pdfBase64 ? `
-            <div style="font-weight: 800; font-size: 12px; text-transform: uppercase; color: #0f172a; margin-top: 24px;">Terms & Conditions Summary</div>
-            <div class="agreement-box">
-${cleanTerms}
-            </div>
-            ` : ''}
-
-            <div class="footer">
-              ${property?.name || 'THE TORCH DOHA'} &bull; ${outlet?.name || 'TORCH CLUB'}<br/>
-              Verified Member Enrollment System &bull; Confidential
-            </div>
-          </div>
-        </body>
-        </html>
-      `;
+      const html = buildBoxedEmailHtml({
+        bannerType: 'success',
+        bannerText: '✓ ENROLLMENT CONFIRMED',
+        logoUrl,
+        propertyName: property?.name || 'The Torch Doha',
+        outletName: outlet?.name || 'Torch Club',
+        subtitle: 'OFFICIAL MEMBERSHIP ENROLLMENT',
+        greeting: 'Dear Admin,',
+        introParagraph: `A new membership purchase has been completed and registered in the system for <strong>${property?.name || 'The Torch Doha'}</strong> (${outlet?.name || 'Torch Club'}). Below are the member enrollment details and attached agreement.`,
+        calloutBox: pdfBase64 ? `📄 <strong>Official Document Attached:</strong> Your signed Membership Agreement & Facility Rules PDF is attached to this email (Membership_Agreement_${member.membership_number || 'Record'}.pdf).` : undefined,
+        dataFields: [
+          { label: 'MEMBER NAME', value: member.guest_name || 'N/A' },
+          { label: 'MEMBERSHIP NUMBER', value: member.membership_number || 'N/A' },
+          { label: 'PACKAGE & ACCESS', value: `${member.package_type || 'Single'} (${member.access_type || 'Both'})` },
+          { label: 'ENROLLMENT TYPE', value: member.membership_type || 'New' },
+          { label: 'COMMENCEMENT DATE', value: startDateFormatted },
+          { label: 'EXPIRY DATE (VALIDITY)', value: endDateFormatted }
+        ],
+        amountBox: {
+          label: 'TOTAL CONTRIBUTION PAID',
+          amount: (member.net_amount || 0),
+          currency: symbol,
+          subtext: `Payment Ref: ${member.check_no || 'Direct Registration'}`
+        },
+        timestamp: format(new Date(), 'HH:mm:ss dd/MM/yyyy')
+      });
 
       const attachments = pdfBase64 ? [{
         filename: `Membership_Agreement_${member.membership_number || 'Record'}.pdf`,

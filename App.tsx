@@ -684,7 +684,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
         </div>
       );
     }
-    // @ts-expect-error React types issue
     return this.props.children;
   }
 }
