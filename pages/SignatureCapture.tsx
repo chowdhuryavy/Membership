@@ -5,8 +5,9 @@ import toast from 'react-hot-toast';
 import { useParams } from 'react-router-dom';
 import { useSettings } from '../contexts/SettingsContext';
 import { Button } from '../components/ui';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, X, FileText } from 'lucide-react';
 import { supabase } from '../services/mockSupabase';
+import { GYM_RULES } from '../services/memberAgreementPdfService';
 
 export const SignatureCapturePage: React.FC = () => {
     const { signatureId } = useParams<{ signatureId: string }>();
@@ -14,6 +15,8 @@ export const SignatureCapturePage: React.FC = () => {
     const [saved, setSaved] = useState(false);
     const [expired, setExpired] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [acceptedTerms, setAcceptedTerms] = useState(true);
+    const [showTermsModal, setShowTermsModal] = useState(false);
 
     // Parse query parameters
     const getParams = () => {
@@ -109,6 +112,12 @@ export const SignatureCapturePage: React.FC = () => {
     const handleSave = async (confirmed: boolean = false) => {
         if (!signatureId || !signatureRef.current) return;
         
+        // Validation: Don't allow submission if terms not accepted
+        if (confirmed && !acceptedTerms) {
+            toast.error('Please accept the Terms and Conditions.');
+            return;
+        }
+
         // Validation: Don't allow submission if empty
         if (confirmed && signatureRef.current.isEmpty()) {
             toast.error('Please sign before submitting.');
@@ -250,6 +259,36 @@ export const SignatureCapturePage: React.FC = () => {
                     </div>
                 </div>
 
+                {/* Terms and Conditions Section */}
+                <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col gap-4">
+                    <div className="flex items-start gap-3">
+                        <div className="relative flex items-center pt-1">
+                            <input
+                                id="terms"
+                                type="checkbox"
+                                checked={acceptedTerms}
+                                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                                className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer"
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <label htmlFor="terms" className="text-sm font-bold text-slate-700 cursor-pointer select-none">
+                                I accept the <span className="text-indigo-600">Terms and Conditions</span> of membership.
+                            </label>
+                            <p className="text-[10px] text-slate-400 font-medium mt-1 uppercase tracking-tight">
+                                Required for enrollment completion
+                            </p>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => setShowTermsModal(true)}
+                        className="flex items-center justify-center gap-2 w-full py-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-widest transition-all"
+                    >
+                        <FileText className="w-4 h-4" />
+                        View Terms (EN/AR)
+                    </button>
+                </div>
+
                 {/* Signature Pad */}
                 <div className="flex-1 flex flex-col gap-4 min-h-[400px]">
                     <div className="flex items-center justify-between px-2">
@@ -291,7 +330,12 @@ export const SignatureCapturePage: React.FC = () => {
                 <div className="max-w-md mx-auto">
                     <Button 
                         onClick={() => handleSave(true)}
-                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-8 rounded-[2rem] text-lg shadow-2xl shadow-indigo-100 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+                        disabled={!acceptedTerms}
+                        className={`w-full font-black py-8 rounded-[2rem] text-lg shadow-2xl active:scale-[0.98] transition-all flex items-center justify-center gap-3 ${
+                            acceptedTerms 
+                            ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100' 
+                            : 'bg-slate-100 text-slate-400 shadow-none cursor-not-allowed opacity-50'
+                        }`}
                     >
                         Confirm Agreement
                         <CheckCircle2 className="w-6 h-6" />
@@ -301,6 +345,56 @@ export const SignatureCapturePage: React.FC = () => {
                     </p>
                 </div>
             </footer>
+
+            {/* Terms and Conditions Modal */}
+            {showTermsModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">Rules & Regulations</h3>
+                                <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mt-1" dir="rtl">القواعد و اللوائح</p>
+                            </div>
+                            <button 
+                                onClick={() => setShowTermsModal(false)}
+                                className="p-2 hover:bg-white rounded-xl transition-colors text-slate-400 hover:text-slate-900 shadow-sm"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                            {GYM_RULES.map((rule, idx) => (
+                                <div key={idx} className="flex gap-4 items-start border-b border-slate-50 pb-6 last:border-0">
+                                    <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 w-6 h-6 rounded-lg flex items-center justify-center shrink-0">
+                                        {idx + 1}
+                                    </span>
+                                    <div className="flex-1 space-y-2">
+                                        <p className="text-sm font-bold text-slate-700 leading-relaxed text-left">
+                                            {rule.en}
+                                        </p>
+                                        <p className="text-sm font-black text-slate-500 leading-relaxed text-right font-serif" dir="rtl">
+                                            {rule.ar}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        
+                        <div className="p-6 border-t border-slate-100 bg-white">
+                            <Button 
+                                onClick={() => {
+                                    setAcceptedTerms(true);
+                                    setShowTermsModal(false);
+                                }}
+                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl shadow-lg shadow-indigo-100"
+                            >
+                                I Understand & Accept
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

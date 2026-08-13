@@ -12,7 +12,7 @@ const parseISO = (dateString?: string) => {
   }
 };
 
-const GYM_RULES = [
+export const GYM_RULES = [
   { en: "Only registered members and authorized visitors are allowed entry.", ar: "يسمح بالدخول فقط للأعضاء المسجلين والزوار المعتمدين." },
   { en: "No person below 18 years old is allowed to use the facility.", ar: "لا يسمح لأي شخص يقل عمره عن 18 عامًا باستخدام المرفق." },
   { en: "Members should consult a doctor before starting a new fitness routine.", ar: "يجب على الأعضاء استشارة الطبيب قبل البدء في روتين لياقة بدنية جديد." },
