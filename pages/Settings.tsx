@@ -774,16 +774,57 @@ const SettingsPage = () => {
 
       showStatus(`Dispatching test report intelligence to ${recipient.email}...`);
       
-      const reportEvent = new CustomEvent('TRIGGER_REPORT_DISPATCH', {
-        detail: {
-          recipient,
-          property,
-          outlet,
-          date: new Date(),
-          isManual: true
+      // Handle instant alerts directly via reportService
+      if (['members_joined', 'member_freeze', 'sale_void'].includes(recipient.report_type)) {
+        let testData = {};
+        
+        if (recipient.report_type === 'member_freeze') {
+          testData = {
+            member_name: 'Test Member',
+            membership_number: 'MEM-TEST-001',
+            membership_tier: 'Premium Test Tier',
+            phone: '+974 5555 1234',
+            start_date: new Date().toISOString(),
+            end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            total_days: 30,
+            reason: 'System Verification Test',
+            staff_name: 'Test Administrator'
+          };
+        } else if (recipient.report_type === 'sale_void') {
+          testData = {
+            receipt_number: 'REC-TEST-999',
+            amount: 150.00,
+            currency: 'USD',
+            staff_name: 'Test Administrator',
+            void_reason: 'System Verification Test'
+          };
+        } else if (recipient.report_type === 'members_joined') {
+          testData = {
+            member_name: 'Test New Member',
+            category_name: 'Standard Test Tier',
+            amount: 500.00,
+            currency: 'USD',
+            staff_name: 'Test Sales Rep'
+          };
         }
-      });
-      window.dispatchEvent(reportEvent);
+
+        await reportService.sendInstantAlert(
+          recipient.report_type as any,
+          testData,
+          recipient
+        );
+      } else {
+        const reportEvent = new CustomEvent('TRIGGER_REPORT_DISPATCH', {
+          detail: {
+            recipient,
+            property,
+            outlet,
+            date: new Date(),
+            isManual: true
+          }
+        });
+        window.dispatchEvent(reportEvent);
+      }
       
       showStatus(`Report generation and email dispatch initiated for ${recipient.email}...`);
     } catch (e: any) {

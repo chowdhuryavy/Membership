@@ -479,6 +479,8 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         reportService.sendInstantAlert('member_freeze', {
             member_name: viewingMember.guest_name,
             membership_number: viewingMember.membership_number,
+            membership_tier: category?.name,
+            phone: viewingMember.phone,
             start_date: freezeForm.start_date,
             end_date: freezeForm.end_date,
             total_days: validation.impact.days,

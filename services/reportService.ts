@@ -162,7 +162,7 @@ export const reportService = {
     return doc;
   },
 
-  async sendInstantAlert(type: 'member_freeze' | 'sale_void' | 'members_joined', data: any) {
+  async sendInstantAlert(type: 'member_freeze' | 'sale_void' | 'members_joined', data: any, forcedRecipient?: ReportRecipient) {
     try {
         const [recipients, settings, properties, outlets] = await Promise.all([
             db.getReportRecipients(),
@@ -171,13 +171,15 @@ export const reportService = {
             db.getOutlets()
         ]);
 
-        const filteredRecipients = recipients.filter(r => r.report_type === type);
+        const filteredRecipients = forcedRecipient ? [forcedRecipient] : recipients.filter(r => r.report_type === type);
         if (filteredRecipients.length === 0) return;
 
         for (const recipient of filteredRecipients) {
-            // Check scope
-            if (recipient.property_id && data.property_id && recipient.property_id !== data.property_id) continue;
-            if (recipient.outlet_id && recipient.outlet_id !== 'all' && data.outlet_id && recipient.outlet_id !== data.outlet_id) continue;
+            // Check scope if not forced
+            if (!forcedRecipient) {
+                if (recipient.property_id && data.property_id && recipient.property_id !== data.property_id) continue;
+                if (recipient.outlet_id && recipient.outlet_id !== 'all' && data.outlet_id && recipient.outlet_id !== data.outlet_id) continue;
+            }
 
             const property = properties.find(p => p.id === (data.property_id || recipient.property_id)) || properties[0];
             const logoUrl = property?.logo_url || settings?.logo_url || 'https://picsum.photos/seed/tth/200/200';
@@ -186,7 +188,8 @@ export const reportService = {
             let html = '';
 
             if (type === 'member_freeze') {
-                subject = `⚠️ Membership Freeze Alert: ${data.member_name}`;
+                const outlet = outlets.find(o => o.id === data.outlet_id);
+                subject = `⚠️ Member Freeze Alert: ${data.member_name} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = `
                     <!DOCTYPE html>
                     <html>
@@ -204,7 +207,7 @@ export const reportService = {
                             .info-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin: 20px 0; }
                             .info-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; width: 40%; }
                             .info-value { font-size: 13px; font-weight: 700; color: #0f172a; text-align: right; }
-                            .footer { text-align: center; margin-top: 32px; font-size: 10px; color: #94a3b8; }
+                            .footer { text-align: center; margin-top: 32px; font-size: 10px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; }
                             .alert-banner { background: #fff1f2; color: #9f1239; padding: 12px; border-radius: 12px; text-align: center; font-weight: 800; font-size: 11px; text-transform: uppercase; margin-bottom: 24px; }
                         </style>
                     </head>
@@ -214,17 +217,23 @@ export const reportService = {
                                 <div class="header">
                                     <img src="${logoUrl}" class="logo" />
                                     <h1 class="title">${property?.name || 'Security Alert'}</h1>
-                                    <div class="subtitle">Operational Exception Logged</div>
+                                    <div class="subtitle">${outlet?.name || ''} &bull; Operational Exception Logged</div>
                                 </div>
                                 
                                 <div class="alert-banner">⚠️ Membership Frozen Action Detected</div>
+                                <div style="font-size: 16px; font-weight: 800; color: #0f172a; margin-bottom: 8px; text-align: center;">Guest Detail: ${data.member_name}</div>
+                                <div style="font-size: 12px; color: #64748b; margin-bottom: 24px; text-align: center;">#${data.membership_number}</div>
 
                                 <div class="content">
-                                    <p>The system has logged a manual membership freeze. Please review the details below to ensure operational compliance.</p>
+                                    <p>The system has logged a manual membership freeze for the guest specified above. Please review the forensic details below.</p>
                                     
                                     <table class="info-table">
+                                        <tr><td class="info-label">Property context</td><td class="info-value">${property?.name}</td></tr>
+                                        <tr><td class="info-label">Facility context</td><td class="info-value">${outlet?.name}</td></tr>
                                         <tr><td class="info-label">Member Name</td><td class="info-value">${data.member_name}</td></tr>
                                         <tr><td class="info-label">Member ID</td><td class="info-value">#${data.membership_number}</td></tr>
+                                        <tr><td class="info-label">Membership Tier</td><td class="info-value">${data.membership_tier || 'N/A'}</td></tr>
+                                        <tr><td class="info-label">Contact Phone</td><td class="info-value">${data.phone || 'N/A'}</td></tr>
                                         <tr><td class="info-label">Freeze Period</td><td class="info-value">${format(new Date(data.start_date), 'dd MMM')} - ${format(new Date(data.end_date), 'dd MMM yyyy')}</td></tr>
                                         <tr><td class="info-label">Total Duration</td><td class="info-value">${data.total_days} Days</td></tr>
                                         <tr><td class="info-label">Reason Provided</td><td class="info-value">${data.reason || 'Not specified'}</td></tr>
@@ -232,14 +241,12 @@ export const reportService = {
                                     </table>
 
                                     <p style="font-size: 12px; font-style: italic; color: #94a3b8; margin-top: 24px;">
-                                        Action occurred at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}
+                                        Audit recorded at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}
                                     </p>
                                 </div>
                                 
-                                <div class="divider"></div>
-                                
                                 <div class="footer">
-                                    <p>© ${new Date().getFullYear()} ${property?.name}. All rights reserved.</p>
+                                    ${property?.name || ''} &bull; Internal Intelligence Dispatch
                                 </div>
                             </div>
                         </div>
@@ -247,7 +254,8 @@ export const reportService = {
                     </html>
                 `;
             } else if (type === 'sale_void') {
-                subject = `❌ Transaction Void Alert: Sale #${data.receipt_no}`;
+                const outlet = outlets.find(o => o.id === data.outlet_id);
+                subject = `❌ Transaction Void Alert: Sale #${data.receipt_no} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = `
                     <!DOCTYPE html>
                     <html>
@@ -265,7 +273,7 @@ export const reportService = {
                             .info-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin: 20px 0; }
                             .info-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; width: 40%; }
                             .info-value { font-size: 13px; font-weight: 700; color: #0f172a; text-align: right; }
-                            .footer { text-align: center; margin-top: 32px; font-size: 10px; color: #94a3b8; }
+                            .footer { text-align: center; margin-top: 32px; font-size: 10px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; }
                             .void-banner { background: #fee2e2; color: #b91c1c; padding: 12px; border-radius: 12px; text-align: center; font-weight: 800; font-size: 11px; text-transform: uppercase; margin-bottom: 24px; }
                         </style>
                     </head>
@@ -275,7 +283,7 @@ export const reportService = {
                                 <div class="header">
                                     <img src="${logoUrl}" class="logo" />
                                     <h1 class="title">${property?.name || 'Financial Alert'}</h1>
-                                    <div class="subtitle">Transaction Revocation Logged</div>
+                                    <div class="subtitle">${outlet?.name || ''} &bull; Transaction Revocation Logged</div>
                                 </div>
                                 
                                 <div class="void-banner">❌ Transaction Void Action Detected</div>
@@ -284,6 +292,8 @@ export const reportService = {
                                     <p>A finalized transaction has been voided. Please investigate the transaction record to confirm validity.</p>
                                     
                                     <table class="info-table">
+                                        <tr><td class="info-label">Property context</td><td class="info-value">${property?.name}</td></tr>
+                                        <tr><td class="info-label">Facility context</td><td class="info-value">${outlet?.name}</td></tr>
                                         <tr><td class="info-label">Receipt Number</td><td class="info-value">#${data.receipt_no}</td></tr>
                                         <tr><td class="info-label">Customer Name</td><td class="info-value">${data.guest_name}</td></tr>
                                         <tr><td class="info-label">Original Amount</td><td class="info-value">${data.currency} ${data.amount}</td></tr>
@@ -292,14 +302,12 @@ export const reportService = {
                                     </table>
 
                                     <p style="font-size: 12px; font-style: italic; color: #94a3b8; margin-top: 24px;">
-                                        Void occurred at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}
+                                        Audit recorded at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}
                                     </p>
                                 </div>
                                 
-                                <div class="divider"></div>
-                                
                                 <div class="footer">
-                                    <p>© ${new Date().getFullYear()} ${property?.name}. All rights reserved.</p>
+                                    ${property?.name || ''} &bull; Internal Intelligence Dispatch
                                 </div>
                             </div>
                         </div>
@@ -307,7 +315,8 @@ export const reportService = {
                     </html>
                 `;
             } else if (type === 'members_joined') {
-                subject = `🎉 New Membership Enrollment: ${data.member_name}`;
+                const outlet = outlets.find(o => o.id === data.outlet_id);
+                subject = `🎉 New Enrollment: ${data.member_name} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = `
                     <!DOCTYPE html>
                     <html>
@@ -325,7 +334,7 @@ export const reportService = {
                             .info-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin: 20px 0; }
                             .info-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; width: 40%; }
                             .info-value { font-size: 13px; font-weight: 700; color: #0f172a; text-align: right; }
-                            .footer { text-align: center; margin-top: 32px; font-size: 10px; color: #94a3b8; }
+                            .footer { text-align: center; margin-top: 32px; font-size: 10px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; }
                             .success-banner { background: #dcfce7; color: #166534; padding: 12px; border-radius: 12px; text-align: center; font-weight: 800; font-size: 11px; text-transform: uppercase; margin-bottom: 24px; }
                         </style>
                     </head>
@@ -335,7 +344,7 @@ export const reportService = {
                                 <div class="header">
                                     <img src="${logoUrl}" class="logo" />
                                     <h1 class="title">${property?.name || 'Growth Update'}</h1>
-                                    <div class="subtitle">Membership Acquisition Successful</div>
+                                    <div class="subtitle">${outlet?.name || ''} &bull; Membership Acquisition Successful</div>
                                 </div>
                                 
                                 <div class="success-banner">🎉 New Member Acquisition Logged</div>
@@ -344,6 +353,8 @@ export const reportService = {
                                     <p>A new membership contract has been finalized. Welcome our newest member to the community.</p>
                                     
                                     <table class="info-table">
+                                        <tr><td class="info-label">Property context</td><td class="info-value">${property?.name}</td></tr>
+                                        <tr><td class="info-label">Facility context</td><td class="info-value">${outlet?.name}</td></tr>
                                         <tr><td class="info-label">Member Name</td><td class="info-value">${data.member_name}</td></tr>
                                         <tr><td class="info-label">Membership Tier</td><td class="info-value">${data.category_name}</td></tr>
                                         <tr><td class="info-label">Investment Amount</td><td class="info-value">${data.currency} ${data.amount}</td></tr>
@@ -351,14 +362,12 @@ export const reportService = {
                                     </table>
 
                                     <p style="font-size: 12px; font-style: italic; color: #94a3b8; margin-top: 24px;">
-                                        Acquisition occurred at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}
+                                        Audit recorded at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}
                                     </p>
                                 </div>
                                 
-                                <div class="divider"></div>
-                                
                                 <div class="footer">
-                                    <p>© ${new Date().getFullYear()} ${property?.name}. All rights reserved.</p>
+                                    ${property?.name || ''} &bull; Internal Intelligence Dispatch
                                 </div>
                             </div>
                         </div>

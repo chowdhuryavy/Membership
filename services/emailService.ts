@@ -104,7 +104,7 @@ export const emailService = {
             <p>The detailed intelligence ledger is attached to this email as a PDF document for your records and review.</p>
           </div>
           <div class="footer">
-            TTH Health Club Management System &bull; Confidential Audit Trail
+            ${propertyName} &bull; Internal Intelligence Dispatch
           </div>
         </div>
       </body>
