@@ -778,9 +778,6 @@ const SettingsPage = () => {
       if (['members_joined', 'member_freeze', 'sale_void'].includes(recipient.report_type)) {
         let testData = {};
         
-        const propId = recipient.property_id || property?.id;
-        const outId = recipient.outlet_id || outlet?.id;
-
         if (recipient.report_type === 'member_freeze') {
           testData = {
             member_name: 'Test Member',
@@ -791,31 +788,23 @@ const SettingsPage = () => {
             end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             total_days: 30,
             reason: 'System Verification Test',
-            staff_name: 'Test Administrator',
-            property_id: propId,
-            outlet_id: outId
+            staff_name: 'Test Administrator'
           };
         } else if (recipient.report_type === 'sale_void') {
           testData = {
-            receipt_no: 'REC-TEST-999',
             receipt_number: 'REC-TEST-999',
-            guest_name: 'Test Walk-In Guest',
             amount: 150.00,
-            currency: 'QAR',
+            currency: 'USD',
             staff_name: 'Test Administrator',
-            void_reason: 'System Verification Test',
-            property_id: propId,
-            outlet_id: outId
+            void_reason: 'System Verification Test'
           };
         } else if (recipient.report_type === 'members_joined') {
           testData = {
             member_name: 'Test New Member',
             category_name: 'Standard Test Tier',
             amount: 500.00,
-            currency: 'QAR',
-            staff_name: 'Test Sales Rep',
-            property_id: propId,
-            outlet_id: outId
+            currency: 'USD',
+            staff_name: 'Test Sales Rep'
           };
         }
 
