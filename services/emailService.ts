@@ -5,12 +5,42 @@ import { generateMemberAgreementPdfBase64 } from './memberAgreementPdfService';
 
 const recentlySentMembersSet = new Set<string>();
 
+export function resolveLogoUrl(
+  outlet?: { logo_url?: string; name?: string } | null,
+  property?: { logo_url?: string; name?: string } | null,
+  settings?: { logo_url?: string } | null
+): string {
+  const candidates = [
+    outlet?.logo_url,
+    property?.logo_url,
+    settings?.logo_url
+  ];
+
+  for (const rawUrl of candidates) {
+    if (rawUrl && typeof rawUrl === 'string' && rawUrl.trim()) {
+      const clean = rawUrl.trim();
+      if (clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('data:image/')) {
+        return clean;
+      }
+      if (typeof window !== 'undefined' && window.location?.origin) {
+        return `${window.location.origin}${clean.startsWith('/') ? '' : '/'}${clean}`;
+      }
+      return clean;
+    }
+  }
+
+  const displayName = outlet?.name || property?.name || 'TTH';
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0f172a&color=ffffff&size=200&format=png&bold=true`;
+}
+
 export const emailService = {
   async sendEmail(to: string | string[], subject: string, html: string, attachments: { filename: string; content: string }[] = []) {
     const targetStr = Array.isArray(to) ? to.join(', ') : to;
     console.log(`[Email Service] Dispatching email to: ${targetStr}`);
     console.log(`[Email Service] Subject: ${subject}`);
     console.log(`[Email Service] Attachments: ${attachments.length}`);
+
+    let lastErrorMessage = '';
 
     // Primary Method: Send via Supabase Edge Function directly if available
     try {
@@ -30,10 +60,12 @@ export const emailService = {
           console.log('[Email Service] Email successfully sent via Resend Edge Function:', data?.id);
           return { success: true, messageId: data?.id || Math.random().toString(36).substring(7) };
         } else {
-          console.warn('[Email Service] Edge Function returned error, trying local Express fallback...', error || data?.error);
+          lastErrorMessage = error?.message || data?.error || 'Edge Function error';
+          console.warn('[Email Service] Edge Function returned error, trying local Express fallback...', lastErrorMessage);
         }
       }
     } catch (err: any) {
+      lastErrorMessage = err?.message || String(err);
       console.warn('[Email Service] Exception sending email via Edge Function, trying Express server fallback...', err);
     }
 
@@ -45,25 +77,20 @@ export const emailService = {
         body: JSON.stringify({ to, subject, html, attachments })
       });
       
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          console.log('[Email Service] Email successfully sent via Express /api/send-email:', data.id);
-          return { success: true, messageId: data.id };
-        }
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        console.error(`[Email Service] Express API failed with status ${res.status}:`, errorData.error || res.statusText);
-        
-        if (res.status === 401) {
-          console.warn('[Email Service] 401 Unauthorized: This usually means RESEND_API_KEY is missing from your environment variables.');
-        }
-      }
-    } catch (apiErr) {
-      console.warn('[Email Service] Express /api/send-email unreachable or failed:', apiErr);
-    }
+      const data = await res.json().catch(() => ({}));
 
-    return { success: false, error: 'Failed to send email via both Supabase Edge Function and Express server.' };
+      if (res.ok && data.success) {
+        console.log('[Email Service] Email successfully sent via Express /api/send-email:', data.id);
+        return { success: true, messageId: data.id };
+      } else {
+        const errorReason = data.error || `Server API failed with status ${res.status}`;
+        console.error(`[Email Service] Express API failed with status ${res.status}:`, errorReason);
+        return { success: false, error: errorReason };
+      }
+    } catch (apiErr: any) {
+      console.warn('[Email Service] Express /api/send-email unreachable or failed:', apiErr);
+      return { success: false, error: apiErr?.message || lastErrorMessage || 'Failed to dispatch email' };
+    }
   },
 
   async sendReportEmail(
@@ -193,7 +220,7 @@ export const emailService = {
 
       const subject = `Membership Purchase Confirmed - ${member.guest_name} (${member.membership_number})`;
       
-      const logoUrl = property?.logo_url || settings?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(property?.name || 'TTH')}&background=0f172a&color=fff&size=128&format=png`;
+      const logoUrl = resolveLogoUrl(outlet, property, settings);
 
       const html = `
         <!DOCTYPE html>

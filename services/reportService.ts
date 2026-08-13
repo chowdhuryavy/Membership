@@ -5,6 +5,45 @@ import { db } from './mockSupabase';
 import { Property, Outlet, MemberStatus, ReportRecipient } from '../types';
 import { emailService } from './emailService';
 
+export function resolveLogoUrl(
+  outlet?: { logo_url?: string; name?: string } | null,
+  property?: { logo_url?: string; name?: string } | null,
+  settings?: { logo_url?: string } | null
+): string {
+  const candidates = [
+    outlet?.logo_url,
+    property?.logo_url,
+    settings?.logo_url
+  ];
+
+  for (const rawUrl of candidates) {
+    if (rawUrl && typeof rawUrl === 'string' && rawUrl.trim()) {
+      const clean = rawUrl.trim();
+      if (clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('data:image/')) {
+        return clean;
+      }
+      if (typeof window !== 'undefined' && window.location?.origin) {
+        return `${window.location.origin}${clean.startsWith('/') ? '' : '/'}${clean}`;
+      }
+      return clean;
+    }
+  }
+
+  const displayName = outlet?.name || property?.name || 'TTH';
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0f172a&color=ffffff&size=200&format=png&bold=true`;
+}
+
+function safeFormatDate(dateVal: any, formatStr: string = 'dd MMM yyyy'): string {
+  if (!dateVal) return 'N/A';
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal);
+    return format(d, formatStr);
+  } catch {
+    return String(dateVal);
+  }
+}
+
 export const reportService = {
   async fetchRevenueData(propertyId: string, outletId: string | 'all', date: Date = new Date()) {
     const start = startOfDay(date);
@@ -172,8 +211,7 @@ export const reportService = {
             const property = properties.find(p => p.id === (data.property_id || recipient.property_id)) || properties[0];
             const outlet = outlets.find(o => o.id === (data.outlet_id || recipient.outlet_id));
             
-            // Robust logo selection with better fallback (PNG for better Outlook support)
-            const logoUrl = property?.logo_url || settings?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(property?.name || 'TTH')}&background=0f172a&color=fff&size=128&format=png`;
+            const logoUrl = resolveLogoUrl(outlet, property, settings);
             
             let subject = '';
             let html = '';
@@ -198,7 +236,7 @@ export const reportService = {
             `;
 
             if (type === 'member_freeze') {
-                subject = `⚠️ Member Freeze Alert: ${data.member_name} - ${property?.name || ''} (${outlet?.name || ''})`;
+                subject = `⚠️ Member Freeze Alert: ${data.member_name || 'Member'} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = `
                     <!DOCTYPE html>
                     <html>
@@ -207,28 +245,28 @@ export const reportService = {
                         <div class="container">
                             <div class="card">
                                 <div class="header">
-                                    <img src="${logoUrl}" width="180" style="max-width: 180px; max-height: 80px; margin-bottom: 16px; object-fit: contain; display: block; margin-left: auto; margin-right: auto;" alt="${property?.name}" />
+                                    <img src="${logoUrl}" width="180" style="max-width: 180px; max-height: 80px; margin-bottom: 16px; object-fit: contain; display: block; margin-left: auto; margin-right: auto;" alt="${property?.name || 'Logo'}" />
                                     <h1 class="title">${property?.name || 'Operational Alert'}</h1>
                                     <div class="subtitle">${outlet?.name || ''} &bull; Internal Intelligence Log</div>
                                 </div>
                                 <div class="alert-banner">⚠️ Membership Freeze Action Detected</div>
                                 <div class="content">
                                     <div class="guest-summary">
-                                        <div class="guest-name">${data.member_name}</div>
-                                        <div style="font-size: 13px; color: #64748b;">Account Reference: #${data.membership_number}</div>
+                                        <div class="guest-name">${data.member_name || 'Member'}</div>
+                                        <div style="font-size: 13px; color: #64748b;">Account Reference: #${data.membership_number || 'N/A'}</div>
                                     </div>
                                     <p style="font-size: 14px; color: #64748b; margin-bottom: 24px; text-align: center;">This automated dispatch confirms a manual membership freeze has been processed. Detailed audit logs are provided below.</p>
                                     <table class="info-table">
-                                        <tr class="info-row"><td class="info-label">Property</td><td class="info-value">${property?.name}</td></tr>
-                                        <tr class="info-row"><td class="info-label">Facility</td><td class="info-value">${outlet?.name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Property</td><td class="info-value">${property?.name || 'N/A'}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Facility</td><td class="info-value">${outlet?.name || 'N/A'}</td></tr>
                                         <tr class="info-row"><td class="info-label">Membership Tier</td><td class="info-value">${data.membership_tier || 'N/A'}</td></tr>
                                         <tr class="info-row"><td class="info-label">Contact Phone</td><td class="info-value">${data.phone || 'N/A'}</td></tr>
-                                        <tr class="info-row"><td class="info-label">Freeze Period</td><td class="info-value">${format(new Date(data.start_date), 'dd MMM')} - ${format(new Date(data.end_date), 'dd MMM yyyy')}</td></tr>
-                                        <tr class="info-row"><td class="info-label">Total Duration</td><td class="info-value">${data.total_days} Days</td></tr>
+                                        <tr class="info-row"><td class="info-label">Freeze Period</td><td class="info-value">${safeFormatDate(data.start_date, 'dd MMM')} - ${safeFormatDate(data.end_date, 'dd MMM yyyy')}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Total Duration</td><td class="info-value">${data.total_days || 0} Days</td></tr>
                                         <tr class="info-row"><td class="info-label">Reason</td><td class="info-value">${data.reason || 'Not specified'}</td></tr>
-                                        <tr class="info-row"><td class="info-label">Authorized By</td><td class="info-value">${data.staff_name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Authorized By</td><td class="info-value">${data.staff_name || 'System'}</td></tr>
                                     </table>
-                                    <span class="timestamp">Audit recorded at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}</span>
+                                    <span class="timestamp">Audit recorded at: ${safeFormatDate(new Date(), 'HH:mm:ss dd/MM/yyyy')}</span>
                                 </div>
                                 <div class="footer">${property?.name || ''} &bull; Internal Intelligence Dispatch</div>
                             </div>
@@ -237,7 +275,8 @@ export const reportService = {
                     </html>
                 `;
             } else if (type === 'sale_void') {
-                subject = `❌ Transaction Void Alert: Sale #${data.receipt_no} - ${property?.name || ''} (${outlet?.name || ''})`;
+                const receiptId = data.receipt_no || data.receipt_number || 'N/A';
+                subject = `❌ Transaction Void Alert: Sale #${receiptId} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = `
                     <!DOCTYPE html>
                     <html>
@@ -246,7 +285,7 @@ export const reportService = {
                         <div class="container">
                             <div class="card">
                                 <div class="header">
-                                    <img src="${logoUrl}" width="180" style="max-width: 180px; max-height: 80px; margin-bottom: 16px; object-fit: contain; display: block; margin-left: auto; margin-right: auto;" alt="${property?.name}" />
+                                    <img src="${logoUrl}" width="180" style="max-width: 180px; max-height: 80px; margin-bottom: 16px; object-fit: contain; display: block; margin-left: auto; margin-right: auto;" alt="${property?.name || 'Logo'}" />
                                     <h1 class="title">${property?.name || 'Financial Alert'}</h1>
                                     <div class="subtitle">${outlet?.name || ''} &bull; Internal Audit Log</div>
                                 </div>
@@ -254,17 +293,17 @@ export const reportService = {
                                 <div class="content">
                                     <div class="summary-box">
                                         <div style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.05em;">Voided Portfolio Value</div>
-                                        <div class="summary-value">${data.currency} ${data.amount}</div>
+                                        <div class="summary-value">${data.currency || 'QAR'} ${data.amount || 0}</div>
                                     </div>
                                     <table class="info-table">
-                                        <tr class="info-row"><td class="info-label">Property</td><td class="info-value">${property?.name}</td></tr>
-                                        <tr class="info-row"><td class="info-label">Facility</td><td class="info-value">${outlet?.name}</td></tr>
-                                        <tr class="info-row"><td class="info-label">Receipt Reference</td><td class="info-value">#${data.receipt_no}</td></tr>
-                                        <tr class="info-row"><td class="info-label">Customer Profile</td><td class="info-value">${data.guest_name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Property</td><td class="info-value">${property?.name || 'N/A'}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Facility</td><td class="info-value">${outlet?.name || 'N/A'}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Receipt Reference</td><td class="info-value">#${receiptId}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Customer Profile</td><td class="info-value">${data.guest_name || 'Walk-in Guest'}</td></tr>
                                         <tr class="info-row"><td class="info-label">Void Justification</td><td class="info-value">${data.void_reason || 'Not specified'}</td></tr>
-                                        <tr class="info-row"><td class="info-label">Authorized By</td><td class="info-value">${data.staff_name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Authorized By</td><td class="info-value">${data.staff_name || 'System'}</td></tr>
                                     </table>
-                                    <span class="timestamp">Audit recorded at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}</span>
+                                    <span class="timestamp">Audit recorded at: ${safeFormatDate(new Date(), 'HH:mm:ss dd/MM/yyyy')}</span>
                                 </div>
                                 <div class="footer">${property?.name || ''} &bull; Internal Intelligence Dispatch</div>
                             </div>
@@ -273,7 +312,7 @@ export const reportService = {
                     </html>
                 `;
             } else if (type === 'members_joined') {
-                subject = `🎉 New Enrollment: ${data.member_name} - ${property?.name || ''} (${outlet?.name || ''})`;
+                subject = `🎉 New Enrollment: ${data.member_name || 'New Member'} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = `
                     <!DOCTYPE html>
                     <html>
@@ -282,24 +321,24 @@ export const reportService = {
                         <div class="container">
                             <div class="card">
                                 <div class="header">
-                                    <img src="${logoUrl}" width="180" style="max-width: 180px; max-height: 80px; margin-bottom: 16px; object-fit: contain; display: block; margin-left: auto; margin-right: auto;" alt="${property?.name}" />
+                                    <img src="${logoUrl}" width="180" style="max-width: 180px; max-height: 80px; margin-bottom: 16px; object-fit: contain; display: block; margin-left: auto; margin-right: auto;" alt="${property?.name || 'Logo'}" />
                                     <h1 class="title">${property?.name || 'Growth Update'}</h1>
                                     <div class="subtitle">${outlet?.name || ''} &bull; Membership Acquisition Successful</div>
                                 </div>
                                 <div class="success-banner">🎉 New Member Enrollment Verified</div>
                                 <div class="content">
                                     <div class="welcome-box">
-                                        <div class="welcome-name">${data.member_name}</div>
+                                        <div class="welcome-name">${data.member_name || 'New Member'}</div>
                                         <div style="font-size: 13px; color: #059669; font-weight: 600;">Strategic Relationship Established</div>
                                     </div>
                                     <table class="info-table">
-                                        <tr class="info-row"><td class="info-label">Property</td><td class="info-value">${property?.name}</td></tr>
-                                        <tr class="info-row"><td class="info-label">Facility</td><td class="info-value">${outlet?.name}</td></tr>
-                                        <tr class="info-row"><td class="info-label">Membership Tier</td><td class="info-value">${data.category_name}</td></tr>
-                                        <tr class="info-row"><td class="info-label">Strategic Investment</td><td class="info-value">${data.currency} ${data.amount}</td></tr>
-                                        <tr class="info-row"><td class="info-label">Sales Representative</td><td class="info-value">${data.staff_name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Property</td><td class="info-value">${property?.name || 'N/A'}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Facility</td><td class="info-value">${outlet?.name || 'N/A'}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Membership Tier</td><td class="info-value">${data.category_name || 'N/A'}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Strategic Investment</td><td class="info-value">${data.currency || 'QAR'} ${data.amount || 0}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Sales Representative</td><td class="info-value">${data.staff_name || 'System'}</td></tr>
                                     </table>
-                                    <span class="timestamp">Audit recorded at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}</span>
+                                    <span class="timestamp">Audit recorded at: ${safeFormatDate(new Date(), 'HH:mm:ss dd/MM/yyyy')}</span>
                                 </div>
                                 <div class="footer">${property?.name || ''} &bull; Internal Intelligence Dispatch</div>
                             </div>
@@ -335,7 +374,7 @@ export const reportService = {
       db.getSettings()
     ]);
 
-    const logoUrl = property.logo_url || settings?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(property.name)}&background=0f172a&color=fff&size=128&format=png`;
+    const logoUrl = resolveLogoUrl(outlet === 'all' ? null : outlet, property, settings);
     const defaultCurrency = (settings && currencies.find(c => c.id === settings.currency_id)) || currencies.find(c => c.is_default) || currencies[0];
     const currencySymbol = defaultCurrency?.symbol || '';
     const totalRevenue = revenueData.reduce((sum, item) => sum + item.amount, 0);
