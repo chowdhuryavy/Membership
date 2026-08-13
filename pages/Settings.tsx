@@ -2258,11 +2258,11 @@ const SettingsPage = () => {
                                 />
                             )}
                             
-                            {reportRecipientForm.report_type === 'members_joined' ? (
+                            {['members_joined', 'member_freeze', 'sale_void'].includes(reportRecipientForm.report_type) ? (
                                 <div className="p-4 bg-indigo-50/80 border-2 border-indigo-200/80 rounded-xl flex items-center justify-between">
                                     <div>
                                         <div className="text-[10px] font-black uppercase text-indigo-900 tracking-wider">Dispatch Timing</div>
-                                        <div className="text-xs font-bold text-indigo-700 mt-0.5">⚡ Instant Alert (Dispatched immediately upon member purchase)</div>
+                                        <div className="text-xs font-bold text-indigo-700 mt-0.5">⚡ Instant Alert (Dispatched immediately upon event occurrence)</div>
                                     </div>
                                     <span className="text-[10px] font-black bg-indigo-600 text-white px-2.5 py-1 rounded-md uppercase shrink-0">Real-Time</span>
                                 </div>
