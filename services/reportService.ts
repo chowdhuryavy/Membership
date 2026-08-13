@@ -236,14 +236,14 @@ export const reportService = {
             `;
 
             if (type === 'member_freeze') {
-                subject = `⚠️ Member Freeze Alert: ${data.member_name || 'Member'} - ${property?.name || ''} (${outlet?.name || ''})`;
+                subject = `Member Freeze Notice: ${data.member_name || 'Member'} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = buildBoxedEmailHtml({
                     bannerType: 'warning',
-                    bannerText: '⚠️ MEMBERSHIP FREEZE ACTION LOGGED',
+                    bannerText: 'MEMBERSHIP FREEZE LOGGED',
                     logoUrl,
                     propertyName: property?.name || 'The Torch Doha',
                     outletName: outlet?.name || 'Torch Club',
-                    subtitle: 'INTERNAL INTELLIGENCE AUDIT',
+                    subtitle: 'MANAGEMENT NOTIFICATION',
                     greeting: 'Dear Admin,',
                     introParagraph: `This automated dispatch confirms a manual membership freeze has been processed for <strong>${data.member_name || 'Member'}</strong> at ${property?.name || 'the facility'}. Detailed audit logs are provided below.`,
                     dataFields: [
@@ -262,14 +262,14 @@ export const reportService = {
                 });
             } else if (type === 'sale_void') {
                 const receiptId = data.receipt_no || data.receipt_number || 'N/A';
-                subject = `❌ Transaction Void Alert: Sale #${receiptId} - ${property?.name || ''} (${outlet?.name || ''})`;
+                subject = `Transaction Void Record: Sale #${receiptId} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = buildBoxedEmailHtml({
                     bannerType: 'alert',
-                    bannerText: '❌ TRANSACTION VOID ACTION LOGGED',
+                    bannerText: 'TRANSACTION VOID LOGGED',
                     logoUrl,
                     propertyName: property?.name || 'The Torch Doha',
                     outletName: outlet?.name || 'Torch Club',
-                    subtitle: 'INTERNAL AUDIT LOG',
+                    subtitle: 'MANAGEMENT AUDIT LOG',
                     greeting: 'Dear Admin,',
                     introParagraph: `A transaction void event has been recorded for receipt <strong>#${receiptId}</strong> at ${property?.name || 'the facility'}. Audit parameters are detailed below.`,
                     dataFields: [
@@ -289,10 +289,10 @@ export const reportService = {
                     timestamp: safeFormatDate(new Date(), 'HH:mm:ss dd/MM/yyyy')
                 });
             } else if (type === 'members_joined') {
-                subject = `🎉 New Member Enrollment: ${data.member_name || 'New Member'} - ${property?.name || ''} (${outlet?.name || ''})`;
+                subject = `New Member Enrollment: ${data.member_name || 'New Member'} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = buildBoxedEmailHtml({
                     bannerType: 'success',
-                    bannerText: '✓ ENROLLMENT CONFIRMED',
+                    bannerText: 'ENROLLMENT CONFIRMED',
                     logoUrl,
                     propertyName: property?.name || 'The Torch Doha',
                     outletName: outlet?.name || 'Torch Club',

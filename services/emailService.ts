@@ -63,10 +63,10 @@ export function buildBoxedEmailHtml(params: {
     : params.bannerType === 'info' ? '#0369a1'
     : '#166534';
 
-  const defaultBannerText = params.bannerType === 'warning' ? '⚠️ MEMBERSHIP FREEZE ACTION LOGGED'
-    : params.bannerType === 'alert' ? '❌ TRANSACTION VOID ACTION LOGGED'
-    : params.bannerType === 'info' ? 'ℹ️ SYSTEM INFORMATION DISPATCH'
-    : '✓ ENROLLMENT CONFIRMED';
+  const defaultBannerText = params.bannerType === 'warning' ? 'MEMBERSHIP FREEZE ACTION LOGGED'
+    : params.bannerType === 'alert' ? 'TRANSACTION VOID ACTION LOGGED'
+    : params.bannerType === 'info' ? 'SYSTEM INFORMATION DISPATCH'
+    : 'MEMBERSHIP ENROLLMENT CONFIRMED';
 
   const banner = params.bannerText || defaultBannerText;
   const propName = params.propertyName || 'The Torch Doha';
@@ -109,7 +109,13 @@ export function buildBoxedEmailHtml(params: {
     </div>
   ` : '';
 
-  const logoHtml = params.logoUrl ? `
+  // Avoid untrusted external image hosts (imgur, ui-avatars) that cause Microsoft Defender to convert emails to plain text
+  const isSuspiciousImageHost = !params.logoUrl ||
+    params.logoUrl.includes('ui-avatars.com') ||
+    params.logoUrl.includes('imgur.com') ||
+    params.logoUrl.includes('placeholder.com');
+
+  const logoHtml = !isSuspiciousImageHost ? `
     <img src="${params.logoUrl}" width="140" style="max-width: 140px; max-height: 70px; margin-bottom: 12px; object-fit: contain; display: block;" alt="${propName}" />
   ` : '';
 
@@ -385,7 +391,7 @@ export const emailService = {
 
       const html = buildBoxedEmailHtml({
         bannerType: 'success',
-        bannerText: '✓ ENROLLMENT CONFIRMED',
+        bannerText: 'MEMBERSHIP ENROLLMENT CONFIRMED',
         logoUrl,
         propertyName: property?.name || 'The Torch Doha',
         outletName: outlet?.name || 'Torch Club',
