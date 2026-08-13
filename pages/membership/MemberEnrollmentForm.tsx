@@ -184,6 +184,18 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         
         // Use HashRouter format #/signature/...
         setQrUrl(`${baseUrl}/#/signature/${id}?${queryParams}`);
+
+        // Create initial sync record so guest device can find it
+        supabase.from('notifications').insert({
+            id: id,
+            title: `SIG_SYNC:${id}`,
+            message: JSON.stringify({ status: 'pending' }),
+            type: 'info',
+            outlet_id: currentOutlet?.id || null,
+            user_id: '00000000-0000-0000-0000-000000000000'
+        }).then(({ error }) => {
+            if (error) console.error("Error creating sync record:", error);
+        });
     }
   };
 

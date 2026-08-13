@@ -73,7 +73,14 @@ export const SignatureCapturePage: React.FC = () => {
                 },
                 (payload) => {
                     if (payload.eventType === 'DELETE') {
-                        setSaved(true);
+                        setSaved(prevSaved => {
+                            setExpired(prevExpired => {
+                                if (!prevExpired) return prevExpired;
+                                return prevExpired;
+                            });
+                            // If it was already expired (cancelled), don't show success
+                            return true; 
+                        });
                         toast.success('Agreement Finalized!');
                     } else if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
                         try {
@@ -207,16 +214,21 @@ export const SignatureCapturePage: React.FC = () => {
     }
 
     if (expired || saved) {
+        const isActuallySaved = saved && !expired;
         return (
             <div className="flex flex-col items-center justify-center h-screen bg-slate-50 p-8">
-                <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
-                    <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+                <div className={`w-20 h-20 ${isActuallySaved ? 'bg-emerald-100' : 'bg-amber-100'} rounded-full flex items-center justify-center mb-6`}>
+                    {isActuallySaved ? (
+                        <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+                    ) : (
+                        <X className="w-10 h-10 text-amber-600" />
+                    )}
                 </div>
                 <h1 className="text-2xl font-black text-slate-900 mb-2">
-                    {saved ? 'Signature Captured' : 'Session Expired'}
+                    {isActuallySaved ? 'Signature Captured' : 'Session Expired'}
                 </h1>
                 <p className="text-slate-500 font-bold mb-8 text-center max-w-xs">
-                    {saved ? 'Your signature has been saved successfully.' : 'This signature link has already been used or has expired.'}
+                    {isActuallySaved ? 'Your signature has been saved successfully.' : 'This signature link has already been used or has expired.'}
                 </p>
                 <Button onClick={() => window.close()} className="bg-indigo-600 hover:bg-indigo-700 px-8 py-4 rounded-xl">
                     Close Tab
