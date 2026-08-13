@@ -448,8 +448,12 @@ async function startServer() {
       const resendApiKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
 
       if (!resendApiKey) {
-        console.warn('[Express /api/send-email] RESEND_API_KEY not configured on server. Triggering Edge Function fallback.');
-        return res.json({ success: false, fallback: true, error: 'RESEND_API_KEY not configured on Express server.' });
+        console.warn('[Express /api/send-email] RESEND_API_KEY not configured on server.');
+        return res.status(401).json({ 
+          success: false, 
+          error: 'RESEND_API_KEY is missing. Please configure it in your environment variables.',
+          configRequired: true 
+        });
       }
 
       const rawToList = Array.isArray(to) ? to : [to];
@@ -506,8 +510,18 @@ async function startServer() {
       }
 
       if (!resendResponse.ok) {
+        const errorMessage = resendResult.message || JSON.stringify(resendResult);
         console.error('[Express /api/send-email] Resend API Error:', resendResult);
-        return res.status(resendResponse.status).json({ success: false, error: resendResult.message || JSON.stringify(resendResult) });
+        
+        if (resendResponse.status === 401) {
+          return res.status(401).json({ 
+            success: false, 
+            error: 'Invalid Resend API Key. Please verify your RESEND_API_KEY in environment variables.',
+            invalidKey: true
+          });
+        }
+        
+        return res.status(resendResponse.status).json({ success: false, error: errorMessage });
       }
 
       console.log('[Express /api/send-email] Email delivered successfully. ID:', resendResult.id);

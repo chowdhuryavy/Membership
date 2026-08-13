@@ -371,6 +371,7 @@ export async function generateMemberAgreementPdfBase64(
         cacheBust: true,
         pixelRatio: 2,
         skipFonts: true,
+        includeQueryParams: true,
       });
 
       const dataUrl2 = await toPng(page2El, {
@@ -379,6 +380,7 @@ export async function generateMemberAgreementPdfBase64(
         cacheBust: true,
         pixelRatio: 2,
         skipFonts: true,
+        includeQueryParams: true,
       });
 
       document.body.removeChild(renderContainer);
@@ -399,7 +401,12 @@ export async function generateMemberAgreementPdfBase64(
       const dataUri = pdf.output('datauristring');
       return dataUri.split(',')[1];
     } catch (err) {
-      console.error('[MemberAgreementPdfService] Error generating high-res DOM PDF, falling back to jsPDF:', err);
+      console.error('[MemberAgreementPdfService] High-res DOM PDF generation failed.', {
+        error: err,
+        type: err instanceof Error ? 'Error Object' : typeof err,
+        message: (err as any)?.message || 'No message'
+      });
+      console.warn('[MemberAgreementPdfService] Falling back to programmatic jsPDF generator...');
     }
   }
 
