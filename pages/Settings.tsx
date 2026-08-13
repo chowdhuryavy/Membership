@@ -2185,7 +2185,9 @@ const SettingsPage = () => {
                                         {value:'retail_stock', label:'Retail & Inventory Stock Report (Monthly)'},
                                         {value:'entrance_fee', label:'Entrance Fee & Guest Visitor Ledger (Monthly)'},
                                         {value:'attendance_checkin', label:'Member Attendance & Check-In Log (Daily)'},
-                                        {value:'members_joined', label:'Member Addition / Purchase Alert (Instant)'}
+                                        {value:'members_joined', label:'Member Addition / Purchase Alert (Instant)'},
+                                        {value:'member_freeze', label:'Member Membership Freeze Alert (Instant)'},
+                                        {value:'sale_void', label:'Transaction Void Alert (Instant)'}
                                     ]} 
                                     value={reportRecipientForm.report_type} 
                                     onChange={e => {
@@ -2193,7 +2195,7 @@ const SettingsPage = () => {
                                         setReportRecipientForm({
                                             ...reportRecipientForm, 
                                             report_type: typeVal,
-                                            send_time: typeVal === 'members_joined' ? '00:00' : (reportRecipientForm.send_time === 'Instant' || !reportRecipientForm.send_time ? '08:00' : reportRecipientForm.send_time)
+                                            send_time: ['members_joined', 'member_freeze', 'sale_void'].includes(typeVal) ? '00:00' : (reportRecipientForm.send_time === 'Instant' || !reportRecipientForm.send_time ? '08:00' : reportRecipientForm.send_time)
                                         });
                                     }} 
                                     className="h-14 rounded-xl border-2" 

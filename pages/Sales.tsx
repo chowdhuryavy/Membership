@@ -60,6 +60,7 @@ import {
   Printer
 } from 'lucide-react';
 import { db } from '../services/mockSupabase';
+import { reportService } from '../services/reportService';
 import { Sale, Guest, SaleCategory, InventoryItem, MassageBooking, MassageType, UserProfile, Staff } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -895,7 +896,7 @@ export const InventoryManager = ({
 
 const Sales = () => {
     const { user } = useAuth();
-    const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [], setPageLoading } = useSettings();
+    const { currentOutlet, currentProperty, formatMoney, hasPermission, outlets = [], setPageLoading, currency } = useSettings();
     const { isSuperAdmin } = useAuth();
 
     const allowedOutletsInProperty = useMemo(() => {
@@ -1521,8 +1522,23 @@ const Sales = () => {
                 onConfirm={async () => { 
                     if (itemToDelete) { 
                         if (itemToDelete.type === 'pos' && canVoid) {
+                            const saleToVoid = sales.find(s => s.id === itemToDelete.id);
                             await db.deleteSale(itemToDelete.id); 
                             cache.invalidate('sales');
+                            
+                            if (saleToVoid) {
+                                // Trigger Instant Email Alert for Sale Void
+                                reportService.sendInstantAlert('sale_void', {
+                                    receipt_no: saleToVoid.id.substring(0, 8).toUpperCase(),
+                                    guest_name: saleToVoid.guest_name || 'Walk-in Guest',
+                                    amount: saleToVoid.net_amount,
+                                    currency: currency?.code || 'AED',
+                                    void_reason: 'Administrative Void', // Reversal of revenue event
+                                    staff_name: user?.name || 'System Administrator',
+                                    property_id: currentProperty?.id,
+                                    outlet_id: saleToVoid.outlet_id
+                                });
+                            }
                         } else if (itemToDelete.type === 'booking' && canDeleteBooking) {
                             await db.updateMassageBookingStatus(itemToDelete.id, 'confirmed');
                             cache.invalidate('bookings');

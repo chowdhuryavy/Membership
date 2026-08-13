@@ -14,6 +14,7 @@ import { Member, MembershipCategory, Freeze, MemberStatus, MassageBooking, Massa
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../services/mockSupabase';
+import { reportService } from '../../services/reportService';
 import { checkInService } from '../../services/checkInService';
 import { format, differenceInCalendarDays, parse, isAfter, addDays, isBefore, startOfDay, parseISO } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
@@ -473,6 +474,20 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                 outlet_id: viewingMember.outlet_id
             });
         }
+
+        // Trigger Instant Email Alert for Member Freeze
+        reportService.sendInstantAlert('member_freeze', {
+            member_name: viewingMember.guest_name,
+            membership_number: viewingMember.membership_number,
+            start_date: freezeForm.start_date,
+            end_date: freezeForm.end_date,
+            total_days: validation.impact.days,
+            reason: freezeForm.reason,
+            staff_name: user?.name || 'System Administrator',
+            property_id: currentProperty?.id,
+            outlet_id: viewingMember.outlet_id
+        });
+
         setShowFreezeModal(false);
         setEditingFreezeId(null);
         onUpdate();

@@ -13,6 +13,7 @@ import {
   CheckCircle2, Command, ChevronDown, Receipt, List, UserPlus
 } from 'lucide-react';
 import { db, supabase } from '../../services/mockSupabase';
+import { reportService } from '../../services/reportService';
 import { emailService } from '../../services/emailService';
 import { useAuth } from '../../contexts/AuthContext';
 import { Member, MembershipCategory, MemberStatus, Staff, MembershipType } from '../../types';
@@ -557,6 +558,18 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     try {
         if (isUpdate) await db.updateMember(existingMember!.id, payload);
         else await db.addMember(payload);
+
+        // Trigger Instant Email Alert for New Member Join
+        const cat = categories.find(c => c.id === payload.category_id);
+        reportService.sendInstantAlert('members_joined', {
+            member_name: payload.guest_name,
+            category_name: cat?.name || 'Standard Tier',
+            amount: payload.net_amount,
+            currency: currency?.code || 'AED',
+            staff_name: user?.name || 'System Administrator',
+            property_id: currentProperty?.id,
+            outlet_id: payload.outlet_id
+        });
 
         toast.success('Member agreement saved and email notification dispatched.');
 
