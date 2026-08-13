@@ -1668,7 +1668,12 @@ const SettingsPage = () => {
                                                               ))}
                                                           </div>
                                                           <div className="text-[10px] font-bold text-slate-400 uppercase mt-1.5 flex items-center gap-2">
-                                                              <span>{recipient.report_type === 'members_joined' ? 'Member Purchase Notification' : recipient.report_type.replace(/_/g, ' ')}</span>
+                                                              <span>{
+                                                                   recipient.report_type === 'members_joined' ? 'Member Purchase Notification' : 
+                                                                   recipient.report_type === 'member_freeze' ? 'Member Membership Freeze Alert' :
+                                                                   recipient.report_type === 'sale_void' ? 'Transaction Void Alert' :
+                                                                   recipient.report_type.replace(/_/g, ' ')
+                                                               }</span>
                                                               {recipient.report_type === 'incentives' && (
                                                                   <span className="text-indigo-600 font-black bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 text-[8px]">
                                                                       ({recipient.incentive_dept === 'All' || !recipient.incentive_dept ? 'All Departments' : recipient.incentive_dept})
@@ -1695,7 +1700,7 @@ const SettingsPage = () => {
                                                   </div>
                                               </td>
                                               <td className="px-10 py-6">
-                                                  {recipient.report_type === 'members_joined' ? (
+                                                  {['members_joined', 'member_freeze', 'sale_void'].includes(recipient.report_type) ? (
                                                       <div className="inline-flex items-center gap-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg font-black text-[10px] uppercase">
                                                           <Zap className="w-3 h-3 text-emerald-600" />
                                                           Instant Alert
