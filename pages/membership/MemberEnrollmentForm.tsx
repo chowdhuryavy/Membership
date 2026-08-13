@@ -178,6 +178,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
             property: currentProperty?.name || '',
             outlet: currentOutlet?.name || '',
             outlet_id: currentOutlet?.id || '',
+            currency: currency?.toString() || 'AED',
             logo: currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || ''
         }).toString();
         
@@ -421,6 +422,28 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     } else {
         setSubmitError("Please fill all required fields correctly.");
     }
+  };
+
+  const closeSignatureModal = async () => {
+    if (signatureIdRef.current) {
+        try {
+            await supabase.from('notifications').update({
+                message: JSON.stringify({ cancelled: true })
+            }).eq('id', signatureIdRef.current);
+            
+            // Short delay to allow signal to reach guest
+            await new Promise(r => setTimeout(r, 500));
+            await supabase.from('notifications').delete().eq('id', signatureIdRef.current);
+        } catch (error) {
+            console.error('Error sending cancellation signal:', error);
+        }
+    }
+    
+    setShowSignatureModal(false); 
+    setPendingSubmitData(null); 
+    setSignatureMethod(null); 
+    setSignature(null);
+    signatureIdRef.current = null;
   };
 
   const onFormSubmit = async (data: MemberFormValues) => {
@@ -1053,7 +1076,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                 )}
                                 <button 
                                     type="button"
-                                    onClick={() => { setShowSignatureModal(false); setPendingSubmitData(null); setSignatureMethod(null); setSignature(null); }}
+                                    onClick={closeSignatureModal}
                                     className="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
                                 >
                                     Cancel & Reset

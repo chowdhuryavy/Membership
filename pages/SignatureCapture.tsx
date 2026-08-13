@@ -54,6 +54,7 @@ export const SignatureCapturePage: React.FC = () => {
     const propertyName = searchParams.get('property') || 'Health Club';
     const outletName = searchParams.get('outlet') || 'Main Outlet';
     const outletId = searchParams.get('outlet_id') || '';
+    const currency = searchParams.get('currency') || 'AED';
     const logoUrl = searchParams.get('logo') || '';
 
     useEffect(() => {
@@ -79,6 +80,9 @@ export const SignatureCapturePage: React.FC = () => {
                             const syncData = JSON.parse(payload.new.message);
                             if (syncData.completed_by_staff) {
                                 setSaved(true);
+                            } else if (syncData.cancelled) {
+                                setExpired(true);
+                                toast.error('Session Cancelled by Staff');
                             }
                         } catch (e) {}
                     }
@@ -98,7 +102,11 @@ export const SignatureCapturePage: React.FC = () => {
                 try {
                     const syncData = JSON.parse(data.message);
                     if (syncData.completed_by_staff) setSaved(true);
+                    if (syncData.cancelled) setExpired(true);
                 } catch (e) {}
+            } else if (!data) {
+                // If record doesn't exist, it's either completed or invalid
+                setExpired(true);
             }
             setLoading(false);
         };
@@ -254,7 +262,7 @@ export const SignatureCapturePage: React.FC = () => {
                         <div className="w-px h-8 bg-white/20" />
                         <div className="text-center">
                             <p className="text-[10px] font-bold uppercase opacity-60 tracking-widest">Rate</p>
-                            <p className="text-sm font-black">AED {price}</p>
+                            <p className="text-sm font-black">{currency} {price}</p>
                         </div>
                     </div>
                 </div>
