@@ -2,7 +2,8 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, startOfDay } from 'date-fns';
 import { db } from './mockSupabase';
-import { Property, Outlet, MemberStatus } from '../types';
+import { Property, Outlet, MemberStatus, ReportRecipient } from '../types';
+import { emailService } from './emailService';
 
 export const reportService = {
   async fetchRevenueData(propertyId: string, outletId: string | 'all', date: Date = new Date()) {
@@ -172,8 +173,12 @@ export const reportService = {
         ]);
 
         const filteredRecipients = forcedRecipient ? [forcedRecipient] : recipients.filter(r => r.report_type === type);
-        if (filteredRecipients.length === 0) return;
+        if (filteredRecipients.length === 0) {
+            console.log(`[ReportService] No recipients found for ${type}`);
+            return { success: false, error: 'No recipients' };
+        }
 
+        const results = [];
         for (const recipient of filteredRecipients) {
             // Check scope if not forced
             if (!forcedRecipient) {
@@ -182,13 +187,13 @@ export const reportService = {
             }
 
             const property = properties.find(p => p.id === (data.property_id || recipient.property_id)) || properties[0];
+            const outlet = outlets.find(o => o.id === (data.outlet_id || recipient.outlet_id));
             const logoUrl = property?.logo_url || settings?.logo_url || 'https://picsum.photos/seed/tth/200/200';
             
             let subject = '';
             let html = '';
 
             if (type === 'member_freeze') {
-                const outlet = outlets.find(o => o.id === data.outlet_id);
                 subject = `⚠️ Member Freeze Alert: ${data.member_name} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = `
                     <!DOCTYPE html>
@@ -377,38 +382,18 @@ export const reportService = {
             }
 
             if (subject && html) {
-                const response = await fetch('/api/send-email', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        to: recipient.email,
-                        subject,
-                        html
-                    })
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    // Fallback to Edge Function if Express server is missing key or returning 401
-                    if (result.fallback || response.status === 401) {
-                        console.warn('[ReportService] Express API failed/missing key, falling back to Edge Function for instant alert');
-                        // @ts-ignore - access to supabase from mockSupabase export might be needed
-                        const { supabase: supabaseClient } = await import('./mockSupabase');
-                        await supabaseClient.functions.invoke('send-reports', {
-                            body: { 
-                                type: 'direct_email',
-                                to: recipient.email,
-                                subject,
-                                html
-                            }
-                        });
-                    }
-                }
+                const result = await emailService.sendEmail(
+                    recipient.email,
+                    subject,
+                    html
+                );
+                results.push({ email: recipient.email, ...result });
             }
         }
+        return { success: results.length > 0 ? results.every(r => r.success) : false, results };
     } catch (e) {
         console.error("Instant alert dispatch failed", e);
+        return { success: false, error: e };
     }
   },
 

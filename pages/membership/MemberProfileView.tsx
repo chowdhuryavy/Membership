@@ -488,6 +488,11 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             staff_name: user?.name || 'System Administrator',
             property_id: currentProperty?.id,
             outlet_id: viewingMember.outlet_id
+        }).then(result => {
+            if (result && !result.success) {
+                console.warn('[Freeze Alert] Email dispatch failed:', result.error);
+                toast.error('Member frozen, but email alert failed to dispatch. Check API configuration.');
+            }
         });
 
         setShowFreezeModal(false);

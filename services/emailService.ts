@@ -1,4 +1,3 @@
-import { reportService } from './reportService';
 import { db } from './mockSupabase';
 import { supabase } from './supabase';
 import { format, parseISO } from 'date-fns';
@@ -45,11 +44,19 @@ export const emailService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to, subject, html, attachments })
       });
+      
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
           console.log('[Email Service] Email successfully sent via Express /api/send-email:', data.id);
           return { success: true, messageId: data.id };
+        }
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        console.error(`[Email Service] Express API failed with status ${res.status}:`, errorData.error || res.statusText);
+        
+        if (res.status === 401) {
+          console.warn('[Email Service] 401 Unauthorized: This usually means RESEND_API_KEY is missing from your environment variables.');
         }
       }
     } catch (apiErr) {

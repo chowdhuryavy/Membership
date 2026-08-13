@@ -576,9 +576,14 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
             staff_name: user?.name || 'System Administrator',
             property_id: currentProperty?.id,
             outlet_id: payload.outlet_id
+        }).then(result => {
+            if (result && !result.success) {
+                console.warn('[Enrollment Alert] Email dispatch failed:', result.error);
+                toast.error('Enrollment saved, but email notification failed. Check API configuration.');
+            }
         });
 
-        toast.success('Member agreement saved and email notification dispatched.');
+        toast.success('Member agreement saved.');
 
         setTimeout(() => {
             setPageLoading(false);

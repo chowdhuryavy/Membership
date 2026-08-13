@@ -808,11 +808,15 @@ const SettingsPage = () => {
           };
         }
 
-        await reportService.sendInstantAlert(
+        const result = await reportService.sendInstantAlert(
           recipient.report_type as any,
           testData,
           recipient
         );
+
+        if (result && !result.success) {
+          throw new Error(typeof result.error === 'string' ? result.error : 'Dispatch failed');
+        }
       } else {
         const reportEvent = new CustomEvent('TRIGGER_REPORT_DISPATCH', {
           detail: {
