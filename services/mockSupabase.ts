@@ -357,10 +357,14 @@ class DatabaseService {
     try {
         return await this.safeCall(async () => {
           const [{ data: m }, { data: freezes }] = await Promise.all([
-            supabase.from('members').select('id, original_end_date, status').eq('id', memberId).single(),
+            supabase.from('members').select('id, original_end_date, status').eq('id', memberId).maybeSingle(),
             supabase.from('freezes').select('total_days, start_date, end_date').eq('member_id', memberId)
           ]);
-          if (!m || m.status === MemberStatus.TENTATIVE) return null;
+          if (!m) {
+            console.warn(`[SyncEndDate] Member ${memberId} not found in database.`);
+            return null;
+          }
+          if (m.status === MemberStatus.TENTATIVE) return null;
 
           const totalDeferred = (freezes || []).reduce((sum, f) => sum + (Number(f.total_days) || 0), 0);
           const baselineDate = startOfDay(parseISO(m.original_end_date));
@@ -1220,14 +1224,16 @@ class DatabaseService {
       await this.logAction('UPDATE_MEMBER', `Updated member profile: ${patch.guest_name || id}. Modified fields: [${changedFields}]`, patch.outlet_id);
       
       if (patch.status === MemberStatus.CANCELLED) {
-        const { data: m } = await supabase.from('members').select('guest_name, membership_number, outlet_id').eq('id', id).single();
-        await this.addNotification({
-          title: 'Membership Cancelled',
-          message: `${m?.guest_name || 'A member'} has cancelled their membership.`,
-          type: 'error',
-          outlet_id: m?.outlet_id,
-          required_permission: 'reports:view'
-        });
+        const { data: m } = await supabase.from('members').select('guest_name, membership_number, outlet_id').eq('id', id).maybeSingle();
+        if (m) {
+          await this.addNotification({
+            title: 'Membership Cancelled',
+            message: `${m.guest_name} has cancelled their membership.`,
+            type: 'error',
+            outlet_id: m.outlet_id,
+            required_permission: 'reports:view'
+          });
+        }
       }
     } else {
         // Local Mode Fallback
@@ -1257,7 +1263,7 @@ class DatabaseService {
 
   async deleteMember(id: string) {
     if (this.isSupabase()) {
-      const { data: memberData } = await supabase.from('members').select('guest_name, membership_number, outlet_id').eq('id', id).single();
+      const { data: memberData } = await supabase.from('members').select('guest_name, membership_number, outlet_id').eq('id', id).maybeSingle();
       const { error } = await supabase.from('members').delete().eq('id', id);
       if (error) throw error;
       await this.logAction('DELETE_MEMBER', `Deleted member record ID: ${id}`);
@@ -1312,19 +1318,21 @@ class DatabaseService {
       const newEndDate = await this.syncMemberEndDate(freeze.member_id);
       
       // Fetch member name for better logging
-      const { data: member } = await supabase.from('members').select('guest_name, membership_number, outlet_id').eq('id', freeze.member_id).single();
+      const { data: member } = await supabase.from('members').select('guest_name, membership_number, outlet_id').eq('id', freeze.member_id).maybeSingle();
       const memberName = member?.guest_name || 'Unknown Member';
       const memberId = member?.membership_number || freeze.member_id;
       
       await this.logAction('FREEZE_MEMBER', `Account suspended: ${memberName}. Membership extended to ${newEndDate}`, member?.outlet_id);
       
-      await this.addNotification({
-        title: 'Membership Suspended',
-        message: `${memberName} has been suspended for ${freeze.total_days} days.`,
-        type: 'warning',
-        outlet_id: member?.outlet_id,
-        required_permission: 'reports:view'
-      });
+      if (member) {
+        await this.addNotification({
+          title: 'Membership Suspended',
+          message: `${memberName} has been suspended for ${freeze.total_days} days.`,
+          type: 'warning',
+          outlet_id: member.outlet_id,
+          required_permission: 'reports:view'
+        });
+      }
     } else {
       const freezes = JSON.parse(localStorage.getItem('membership_freezes') || '[]');
       const data = { ...freeze, id: freeze.id || this.generateUUID() };
@@ -1353,7 +1361,7 @@ class DatabaseService {
     if (this.isSupabase()) {
         await supabase.from('freezes').update(updates).eq('id', id);
         // Find the member ID associated with this freeze
-        const { data } = await supabase.from('freezes').select('member_id').eq('id', id).single();
+        const { data } = await supabase.from('freezes').select('member_id').eq('id', id).maybeSingle();
         if (data?.member_id) {
             await this.syncMemberEndDate(data.member_id);
             await this.logAction('UPDATE_FREEZE', `Account suspension modified for member ID: ${data.member_id}`);
@@ -1367,7 +1375,7 @@ class DatabaseService {
         const newEndDate = await this.syncMemberEndDate(memberId);
         
         // Fetch member name for better logging
-        const { data: member } = await supabase.from('members').select('guest_name').eq('id', memberId).single();
+        const { data: member } = await supabase.from('members').select('guest_name').eq('id', memberId).maybeSingle();
         const memberName = member?.guest_name || 'Unknown Member';
 
         await this.logAction('DELETE_FREEZE', `Suspension revoked for ${memberName}. Membership reduced to ${newEndDate}`);

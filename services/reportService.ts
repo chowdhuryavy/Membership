@@ -368,7 +368,7 @@ export const reportService = {
             }
 
             if (subject && html) {
-                await fetch('/api/send-email', {
+                const response = await fetch('/api/send-email', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -377,6 +377,25 @@ export const reportService = {
                         html
                     })
                 });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    // Fallback to Edge Function if Express server is missing key or returning 401
+                    if (result.fallback || response.status === 401) {
+                        console.warn('[ReportService] Express API failed/missing key, falling back to Edge Function for instant alert');
+                        // @ts-ignore - access to supabase from mockSupabase export might be needed
+                        const { supabase: supabaseClient } = await import('./mockSupabase');
+                        await supabaseClient.functions.invoke('send-reports', {
+                            body: { 
+                                type: 'direct_email',
+                                to: recipient.email,
+                                subject,
+                                html
+                            }
+                        });
+                    }
+                }
             }
         }
     } catch (e) {

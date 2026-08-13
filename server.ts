@@ -448,10 +448,11 @@ async function startServer() {
       const resendApiKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
 
       if (!resendApiKey) {
-        console.warn('[Express /api/send-email] RESEND_API_KEY not configured on server.');
+        console.warn('[Express /api/send-email] RESEND_API_KEY not configured on server. Returning 401 for diagnostic visibility.');
         return res.status(401).json({ 
           success: false, 
-          error: 'RESEND_API_KEY is missing. Please configure it in your environment variables.',
+          fallback: true,
+          error: 'RESEND_API_KEY is missing from environment. Please add it to your project settings.',
           configRequired: true 
         });
       }
