@@ -52,6 +52,8 @@ export interface ReportRecipient {
     | 'retail_stock' 
     | 'entrance_fee' 
     | 'attendance_checkin' 
+    | 'member_freeze'
+    | 'sale_void'
    ;
   send_time: string; // HH:mm format
   report_date_type?: 'today' | 'yesterday'; // For daily reports

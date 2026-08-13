@@ -10,7 +10,7 @@ import {
   X, User, ShieldCheck, RotateCcw, Plus, Layers,
   Coins, Heart, AlertTriangle, RefreshCcw,
   Calendar, Zap, Mail, Phone, Globe,
-  CheckCircle2, Command, ChevronDown, Receipt, List, UserPlus
+  CheckCircle2, Command, ChevronDown, Receipt, List, UserPlus, ArrowRight
 } from 'lucide-react';
 import { db, supabase } from '../../services/mockSupabase';
 import { reportService } from '../../services/reportService';
@@ -202,6 +202,13 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         }).then(({ error }) => {
             if (error) console.error("Error creating sync record:", error);
         });
+    }
+  };
+
+  const handleSkipSignature = async () => {
+    if (pendingSubmitData) {
+        await onFinalSubmit(pendingSubmitData, 'BYPASSED'); 
+        setShowSignatureModal(false);
     }
   };
 
@@ -1035,6 +1042,14 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                 <Button onClick={() => handleSignatureMethodSelect('pad')} className="h-14 rounded-xl">Signature Pad</Button>
                                 <Button onClick={() => handleSignatureMethodSelect('qr')} className="h-14 rounded-xl">QR Code</Button>
                                 <Button variant="outline" onClick={() => {setShowSignatureModal(false); setPendingSubmitData(null);}} className="h-14 rounded-xl">Cancel</Button>
+                                
+                                <Button 
+                                    variant="ghost" 
+                                    onClick={handleSkipSignature} 
+                                    className="h-10 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-600 hidden md:flex items-center justify-center gap-2 mt-2"
+                                >
+                                    Skip Signature (Desktop) <ArrowRight className="w-3 h-3" />
+                                </Button>
                             </div>
                         </>
                     ) : signatureMethod === 'pad' ? (
