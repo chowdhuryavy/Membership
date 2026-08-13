@@ -69,7 +69,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   existingMember, isEditing, isRenewal, categories, membershipTypes, selectedTypeId, onTypeChange, staff, allMembers, onCancel, onSuccess
 }) => {
   const { user, isSuperAdmin } = useAuth();
-  const { currentOutlet, currentProperty, settings, formatMoney, setPageLoading, currency } = useSettings();
+  const { currentOutlet, currentProperty, settings, formatMoney, setPageLoading, currency, currencies } = useSettings();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [matchedMembers, setMatchedMembers] = useState<Member[]>([]);
@@ -170,6 +170,10 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         const price = cat?.base_rate || 0;
         
         const baseUrl = window.location.origin;
+        const activeCurrency = currency || 
+                               (currentProperty && currencies.find(c => c.property_id === currentProperty.id)) || 
+                               { code: 'AED', symbol: 'AED' };
+
         const queryParams = new URLSearchParams({
             id: id,
             name: name,
@@ -178,7 +182,8 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
             property: currentProperty?.name || '',
             outlet: currentOutlet?.name || '',
             outlet_id: currentOutlet?.id || '',
-            currency: currency?.toString() || 'AED',
+            currency: activeCurrency.code || 'AED',
+            symbol: activeCurrency.symbol || '',
             logo: currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || ''
         }).toString();
         

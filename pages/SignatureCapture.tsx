@@ -55,6 +55,7 @@ export const SignatureCapturePage: React.FC = () => {
     const outletName = searchParams.get('outlet') || 'Main Outlet';
     const outletId = searchParams.get('outlet_id') || '';
     const currency = searchParams.get('currency') || 'AED';
+    const currencySymbol = searchParams.get('symbol') || currency;
     const logoUrl = searchParams.get('logo') || '';
 
     useEffect(() => {
@@ -274,7 +275,7 @@ export const SignatureCapturePage: React.FC = () => {
                         <div className="w-px h-8 bg-white/20" />
                         <div className="text-center">
                             <p className="text-[10px] font-bold uppercase opacity-60 tracking-widest">Rate</p>
-                            <p className="text-sm font-black">{currency} {price}</p>
+                            <p className="text-sm font-black">{currencySymbol} {price}</p>
                         </div>
                     </div>
                 </div>
