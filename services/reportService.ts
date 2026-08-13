@@ -236,27 +236,27 @@ export const reportService = {
             `;
 
             if (type === 'member_freeze') {
-                subject = `Member Freeze Notice: ${data.member_name || 'Member'} - ${property?.name || ''} (${outlet?.name || ''})`;
+                subject = `Membership Freeze Notice: ${data.member_name || 'Member'} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = buildBoxedEmailHtml({
-                    bannerType: 'warning',
-                    bannerText: 'MEMBERSHIP FREEZE LOGGED',
+                    bannerType: 'info',
+                    bannerText: 'MEMBERSHIP FREEZE NOTICE',
                     logoUrl,
                     propertyName: property?.name || 'The Torch Doha',
                     outletName: outlet?.name || 'Torch Club',
-                    subtitle: 'MANAGEMENT NOTIFICATION',
+                    subtitle: 'MEMBERSHIP STATUS UPDATE',
                     greeting: 'Dear Admin,',
-                    introParagraph: `This automated dispatch confirms a manual membership freeze has been processed for <strong>${data.member_name || 'Member'}</strong> at ${property?.name || 'the facility'}. Detailed audit logs are provided below.`,
+                    introParagraph: `This notification confirms that a membership freeze has been recorded for <strong>${data.member_name || 'Member'}</strong> at ${property?.name || 'the facility'}. Details of the request are outlined below.`,
                     dataFields: [
                         { label: 'MEMBER NAME', value: data.member_name || 'Member' },
-                        { label: 'ACCOUNT REFERENCE', value: `#${data.membership_number || 'N/A'}` },
+                        { label: 'MEMBER ID', value: `#${data.membership_number || 'N/A'}` },
                         { label: 'PROPERTY', value: property?.name || 'N/A' },
                         { label: 'FACILITY', value: outlet?.name || 'N/A' },
                         { label: 'MEMBERSHIP TIER', value: data.membership_tier || 'N/A' },
-                        { label: 'CONTACT PHONE', value: data.phone || 'N/A' },
-                        { label: 'FREEZE PERIOD', value: `${safeFormatDate(data.start_date, 'dd MMM yyyy')} - ${safeFormatDate(data.end_date, 'dd MMM yyyy')}` },
+                        { label: 'PHONE', value: data.phone || 'N/A' },
+                        { label: 'FREEZE DATES', value: `${safeFormatDate(data.start_date, 'dd MMM yyyy')} - ${safeFormatDate(data.end_date, 'dd MMM yyyy')}` },
                         { label: 'TOTAL DURATION', value: `${data.total_days || 0} Days` },
-                        { label: 'JUSTIFICATION / REASON', value: data.reason || 'Not specified' },
-                        { label: 'AUTHORIZED BY', value: data.staff_name || 'System' }
+                        { label: 'REASON', value: data.reason || 'Not specified' },
+                        { label: 'PROCESSED BY', value: data.staff_name || 'System' }
                     ],
                     timestamp: safeFormatDate(new Date(), 'HH:mm:ss dd/MM/yyyy')
                 });

@@ -467,7 +467,7 @@ async function startServer() {
         return res.status(400).json({ success: false, error: 'No recipient email addresses provided' });
       }
 
-      const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+      const fromEmail = process.env.EMAIL_FROM || 'noreply@perfection.my';
       const appName = 'Health Club Management';
 
       const text = (html || '')
