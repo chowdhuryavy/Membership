@@ -191,83 +191,81 @@ export const emailService = {
 
       const subject = `Membership Purchase Confirmed - ${member.guest_name} (${member.membership_number})`;
       
+      const logoUrl = property?.logo_url || settings?.logo_url || 'https://api.dicebear.com/7.x/initials/svg?seed=TTH';
+
       const html = `
         <!DOCTYPE html>
         <html>
         <head>
           <meta charset="utf-8">
           <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 24px; line-height: 1.6; }
-            .container { max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 20px; padding: 36px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
-            .badge { display: inline-block; background: #dcfce7; color: #15803d; font-size: 11px; font-weight: 800; text-transform: uppercase; padding: 6px 14px; border-radius: 9999px; letter-spacing: 0.08em; margin-bottom: 16px; }
-            .header { border-bottom: 2px solid #0f172a; padding-bottom: 18px; margin-bottom: 24px; }
-            .title { font-size: 24px; font-weight: 900; color: #0f172a; margin: 0; text-transform: uppercase; letter-spacing: -0.02em; }
-            .subtitle { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
-            .attachment-banner { background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 14px 18px; margin: 20px 0; font-size: 13px; color: #1e40af; display: flex; align-items: center; }
-            .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #f8fafc; padding: 22px; border-radius: 16px; border: 1px solid #e2e8f0; margin: 24px 0; }
-            .detail-item { font-size: 13px; }
-            .detail-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; }
-            .detail-value { font-size: 14px; font-weight: 800; color: #0f172a; margin-top: 2px; }
-            .amount-box { background: #0f172a; color: #ffffff; padding: 22px; border-radius: 16px; text-align: center; margin: 24px 0; }
-            .amount-val { font-size: 30px; font-weight: 900; color: #818cf8; letter-spacing: -0.02em; }
-            .agreement-box { background: #fafafa; border: 1px solid #e2e8f0; padding: 18px; border-radius: 12px; font-size: 12px; color: #334155; margin-top: 20px; white-space: pre-wrap; line-height: 1.5; }
-            .footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 18px; }
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #334155; margin: 0; padding: 0; background-color: #f1f5f9; }
+            .container { max-width: 600px; margin: 0 auto; padding: 40px 10px; }
+            .card { background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border: 1px solid #e2e8f0; }
+            .header { background-color: #ffffff; padding: 32px 40px 24px; text-align: center; border-bottom: 1px solid #f1f5f9; }
+            .logo { max-width: 160px; max-height: 80px; margin-bottom: 16px; object-fit: contain; }
+            .title { font-size: 18px; font-weight: 700; color: #0f172a; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
+            .subtitle { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 6px; }
+            
+            .success-banner { background-color: #dcfce7; color: #166534; padding: 10px 20px; font-weight: 700; font-size: 12px; text-transform: uppercase; text-align: center; letter-spacing: 0.05em; }
+            
+            .content { padding: 32px 40px; }
+            .welcome-box { text-align: center; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px dashed #dcfce7; }
+            .welcome-name { font-size: 22px; font-weight: 800; color: #0f172a; margin-bottom: 4px; }
+            
+            .info-table { width: 100%; border-collapse: collapse; margin: 24px 0; }
+            .info-row { border-bottom: 1px solid #f8fafc; }
+            .info-row:last-child { border-bottom: none; }
+            .info-label { padding: 12px 0; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; width: 35%; vertical-align: top; text-align: left; }
+            .info-value { padding: 12px 0; font-size: 14px; font-weight: 600; color: #334155; text-align: right; }
+            
+            .amount-box { background: #0f172a; color: #ffffff; padding: 24px; border-radius: 12px; text-align: center; margin: 24px 0; }
+            .amount-val { font-size: 28px; font-weight: 900; color: #818cf8; }
+            
+            .footer { background-color: #f8fafc; padding: 24px 40px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; }
+            .timestamp { font-size: 10px; font-style: italic; color: #cbd5e1; margin-top: 16px; display: block; }
           </style>
         </head>
         <body>
           <div class="container">
-            <div class="badge">✓ Enrollment Confirmed</div>
-            <div class="header">
-              <h1 class="title">${property?.name || 'THE TORCH DOHA'}</h1>
-              <div class="subtitle">${outlet?.name || 'TORCH CLUB'} &bull; Official Membership Enrollment</div>
-            </div>
+            <div class="card">
+              <div class="header">
+                <img src="${logoUrl}" class="logo" alt="${property?.name}" />
+                <h1 class="title">${property?.name || 'Operational Insight'}</h1>
+                <div class="subtitle">${outlet?.name || ''} &bull; Strategic Enrollment Ledger</div>
+              </div>
 
-            <p style="font-size: 15px; margin-bottom: 8px;"><strong>Dear Admin,</strong></p>
-            <p style="font-size: 14px; color: #334155; margin-top: 0;">A new membership purchase has been completed and registered in the system for <strong>${property?.name || 'THE TORCH DOHA'}</strong> (${outlet?.name || 'TORCH CLUB'}). Below are the member enrollment details and attached agreement.</p>
+              <div class="success-banner">✓ Membership Enrollment Verified</div>
 
-            <div class="details-grid">
-              <div class="detail-item">
-                <div class="detail-label">Member Name</div>
-                <div class="detail-value">${member.guest_name}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Membership Number</div>
-                <div class="detail-value">${member.membership_number}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Package & Access</div>
-                <div class="detail-value">${member.package_type || 'Single'} (${member.access_type || 'Both'})</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Enrollment Type</div>
-                <div class="detail-value">${member.membership_type || 'New'}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Commencement Date</div>
-                <div class="detail-value">${startDateFormatted}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Expiry Date (Validity)</div>
-                <div class="detail-value">${endDateFormatted}</div>
-              </div>
-            </div>
+              <div class="content">
+                <div class="welcome-box">
+                  <div class="welcome-name">${member.guest_name}</div>
+                  <div style="font-size: 13px; color: #64748b;">Member ID: #${member.membership_number}</div>
+                </div>
 
-            <div class="amount-box">
-              <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #a5b4fc; letter-spacing: 0.1em;">Total Contribution Paid</div>
-              <div class="amount-val">${symbol} ${(member.net_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-              <div style="font-size: 11px; color: #cbd5e1; margin-top: 4px;">Payment Ref: ${member.check_no || 'Direct Registration'}</div>
-            </div>
+                <p style="font-size: 14px; color: #64748b; margin-bottom: 24px; text-align: center;">A new membership purchase has been finalized and integrated into the global registry. Comprehensive enrollment data is provided below.</p>
 
-            ${cleanTerms && !pdfBase64 ? `
-            <div style="font-weight: 800; font-size: 12px; text-transform: uppercase; color: #0f172a; margin-top: 24px;">Terms & Conditions Summary</div>
-            <div class="agreement-box">
-${cleanTerms}
-            </div>
-            ` : ''}
+                <table class="info-table">
+                  <tr class="info-row"><td class="info-label">Property</td><td class="info-value">${property?.name}</td></tr>
+                  <tr class="info-row"><td class="info-label">Facility</td><td class="info-value">${outlet?.name}</td></tr>
+                  <tr class="info-row"><td class="info-label">Package</td><td class="info-value">${member.package_type || 'Single'} (${member.access_type || 'Both'})</td></tr>
+                  <tr class="info-row"><td class="info-label">Tier</td><td class="info-value">${member.membership_type || 'New'}</td></tr>
+                  <tr class="info-row"><td class="info-label">Commencement</td><td class="info-value">${startDateFormatted}</td></tr>
+                  <tr class="info-row"><td class="info-label">Maturity</td><td class="info-value">${endDateFormatted}</td></tr>
+                </table>
 
-            <div class="footer">
-              ${property?.name || 'THE TORCH DOHA'} &bull; ${outlet?.name || 'TORCH CLUB'}<br/>
-              Verified Member Enrollment System &bull; Confidential
+                <div class="amount-box">
+                  <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #a5b4fc; letter-spacing: 0.1em; margin-bottom: 8px;">Total Investment Recognized</div>
+                  <div class="amount-val">${symbol} ${(member.net_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                  <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Audit Ref: ${member.check_no || 'Direct Capture'}</div>
+                </div>
+                
+                <span class="timestamp">Intelligence recorded at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}</span>
+              </div>
+
+              <div class="footer">
+                ${property?.name || ''} &bull; Internal Intelligence Dispatch
+              </div>
             </div>
           </div>
         </body>

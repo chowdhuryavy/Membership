@@ -56,7 +56,6 @@ export const reportService = {
       return bDate >= start && bDate <= end && b.status === 'completed';
     });
     if (dailyBookings.length > 0) {
-      // Group by category if possible, or just aggregate
       dailyRevenue.push({
         category: 'Treatment Services',
         amount: dailyBookings.reduce((sum, b) => sum + (Number(b.price) || 0), 0),
@@ -84,14 +83,6 @@ export const reportService = {
     doc.setFontSize(10);
     doc.text(`Report Date: ${dateStr}`, 105, 38, { align: 'center' });
 
-    // Logo Placeholder or actual logo if available
-    if (property.logo_url) {
-        try {
-            // In a real app, you'd fetch and add the image
-            // doc.addImage(property.logo_url, 'PNG', 10, 10, 30, 30);
-        } catch (e) {}
-    }
-
     // Fetch Real Data & Currency
     const [revenueData, currencies, settings] = await Promise.all([
       this.fetchRevenueData(property.id, outlet === 'all' ? 'all' : outlet.id, date),
@@ -108,12 +99,7 @@ export const reportService = {
     const formatCurrency = (val: number | undefined | null) => {
       const safeAmount = (val === null || val === undefined || isNaN(Number(val))) ? 0 : Number(val);
       const formatted = safeAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      // jsPDF default fonts only support WinAnsiEncoding (mostly Latin-1).
-      // Symbols like 'ر.ق' (Qatari Riyal) will render as garbled text (e.g. þÕ.þ-).
-      // We check if the currency symbol contains characters outside the safe range.
-      // If it does, we fallback to the currency code (e.g. QAR) to ensure the PDF is readable.
       if (/[^\x00-\xFF\u20AC]/.test(currencySymbol)) {
-        // Special case for Qatari Riyal which is common in this app
         if (currencyCode === 'QAR' || currencySymbol === 'ر.ق') {
           return `QR ${formatted}`;
         }
@@ -140,25 +126,20 @@ export const reportService = {
 
     try {
       const actualAutoTable = typeof autoTable === 'function' ? autoTable : ((autoTable as any).default || autoTable);
-      
       if (typeof (doc as any).autoTable === 'function') {
         (doc as any).autoTable(tableConfig);
       } else if (typeof actualAutoTable === 'function') {
         actualAutoTable(doc, tableConfig);
-      } else {
-        throw new Error("autoTable not found on doc or as standalone function");
       }
     } catch (tableErr) {
       console.error("autoTable call failed", tableErr);
-      throw tableErr;
     }
 
-    // Footer
-    const finalY = (doc as any).lastAutoTable.finalY + 20;
+    const finalY = (doc as any).lastAutoTable?.finalY || 100;
     doc.setFontSize(8);
     doc.setTextColor(148, 163, 184); // slate-400
-    doc.text('This report is generated automatically by the TTH Management System.', 105, finalY, { align: 'center' });
-    doc.text(`© ${new Date().getFullYear()} ${property.name}. All rights reserved.`, 105, finalY + 5, { align: 'center' });
+    doc.text('This report is generated automatically by the TTH Management System.', 105, finalY + 20, { align: 'center' });
+    doc.text(`© ${new Date().getFullYear()} ${property.name}. All rights reserved.`, 105, finalY + 25, { align: 'center' });
 
     return doc;
   },
@@ -180,7 +161,6 @@ export const reportService = {
 
         const results = [];
         for (const recipient of filteredRecipients) {
-            // Check scope if not forced
             if (!forcedRecipient) {
                 if (recipient.property_id && data.property_id && recipient.property_id !== data.property_id) continue;
                 if (recipient.outlet_id && recipient.outlet_id !== 'all' && data.outlet_id && recipient.outlet_id !== data.outlet_id) continue;
@@ -188,192 +168,137 @@ export const reportService = {
 
             const property = properties.find(p => p.id === (data.property_id || recipient.property_id)) || properties[0];
             const outlet = outlets.find(o => o.id === (data.outlet_id || recipient.outlet_id));
-            const logoUrl = property?.logo_url || settings?.logo_url || 'https://picsum.photos/seed/tth/200/200';
+            
+            // Robust logo selection with better fallback
+            const logoUrl = property?.logo_url || settings?.logo_url || 'https://api.dicebear.com/7.x/initials/svg?seed=TTH';
             
             let subject = '';
             let html = '';
+
+            const baseStyles = `
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #334155; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+                .container { max-width: 600px; margin: 0 auto; padding: 40px 10px; }
+                .card { background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border: 1px solid #e2e8f0; }
+                .header { background-color: #ffffff; padding: 32px 40px 24px; text-align: center; border-bottom: 1px solid #f1f5f9; }
+                .logo { max-width: 180px; max-height: 80px; margin-bottom: 16px; object-fit: contain; }
+                .title { font-size: 18px; font-weight: 700; color: #0f172a; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
+                .subtitle { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 6px; }
+                .content { padding: 32px 40px; }
+                .info-table { width: 100%; border-collapse: collapse; margin: 24px 0; }
+                .info-row { border-bottom: 1px solid #f8fafc; }
+                .info-row:last-child { border-bottom: none; }
+                .info-label { padding: 12px 0; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; width: 35%; vertical-align: top; text-align: left; }
+                .info-value { padding: 12px 0; font-size: 14px; font-weight: 600; color: #334155; text-align: right; }
+                .footer { background-color: #f8fafc; padding: 24px 40px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; }
+                .timestamp { font-size: 10px; font-style: italic; color: #cbd5e1; margin-top: 16px; display: block; }
+                .badge { padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+            `;
 
             if (type === 'member_freeze') {
                 subject = `⚠️ Member Freeze Alert: ${data.member_name} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = `
                     <!DOCTYPE html>
                     <html>
-                    <head>
-                        <style>
-                            body { font-family: 'Inter', -apple-system, sans-serif; line-height: 1.6; color: #1e293b; margin: 0; padding: 0; }
-                            .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #fff1f2; }
-                            .card { background: #ffffff; border-radius: 24px; padding: 40px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); border: 1px solid #fecaca; }
-                            .header { text-align: center; margin-bottom: 32px; }
-                            .logo { width: 64px; height: 64px; border-radius: 16px; margin-bottom: 16px; object-fit: cover; border: 2px solid #f1f5f9; }
-                            .title { font-size: 20px; font-weight: 900; color: #9f1239; text-transform: uppercase; letter-spacing: -0.025em; margin: 0; }
-                            .subtitle { font-size: 10px; font-weight: 700; color: #e11d48; text-transform: uppercase; letter-spacing: 0.2em; margin-top: 4px; }
-                            .divider { height: 1px; background: #f1f5f9; margin: 24px 0; }
-                            .content { font-size: 14px; color: #475569; }
-                            .info-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin: 20px 0; }
-                            .info-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; width: 40%; }
-                            .info-value { font-size: 13px; font-weight: 700; color: #0f172a; text-align: right; }
-                            .footer { text-align: center; margin-top: 32px; font-size: 10px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; }
-                            .alert-banner { background: #fff1f2; color: #9f1239; padding: 12px; border-radius: 12px; text-align: center; font-weight: 800; font-size: 11px; text-transform: uppercase; margin-bottom: 24px; }
-                        </style>
-                    </head>
-                    <body>
+                    <head><style>${baseStyles} .alert-banner { background-color: #fee2e2; color: #b91c1c; padding: 10px 20px; font-weight: 700; font-size: 12px; text-transform: uppercase; text-align: center; letter-spacing: 0.05em; } .guest-summary { text-align: center; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px dashed #e2e8f0; } .guest-name { font-size: 22px; font-weight: 800; color: #0f172a; margin-bottom: 4px; }</style></head>
+                    <body style="background-color: #f1f5f9;">
                         <div class="container">
                             <div class="card">
                                 <div class="header">
-                                    <img src="${logoUrl}" class="logo" />
-                                    <h1 class="title">${property?.name || 'Security Alert'}</h1>
-                                    <div class="subtitle">${outlet?.name || ''} &bull; Operational Exception Logged</div>
+                                    <img src="${logoUrl}" class="logo" alt="${property?.name}" />
+                                    <h1 class="title">${property?.name || 'Operational Alert'}</h1>
+                                    <div class="subtitle">${outlet?.name || ''} &bull; Internal Intelligence Log</div>
                                 </div>
-                                
-                                <div class="alert-banner">⚠️ Membership Frozen Action Detected</div>
-                                <div style="font-size: 16px; font-weight: 800; color: #0f172a; margin-bottom: 8px; text-align: center;">Guest Detail: ${data.member_name}</div>
-                                <div style="font-size: 12px; color: #64748b; margin-bottom: 24px; text-align: center;">#${data.membership_number}</div>
-
+                                <div class="alert-banner">⚠️ Membership Freeze Action Detected</div>
                                 <div class="content">
-                                    <p>The system has logged a manual membership freeze for the guest specified above. Please review the forensic details below.</p>
-                                    
+                                    <div class="guest-summary">
+                                        <div class="guest-name">${data.member_name}</div>
+                                        <div style="font-size: 13px; color: #64748b;">Account Reference: #${data.membership_number}</div>
+                                    </div>
+                                    <p style="font-size: 14px; color: #64748b; margin-bottom: 24px; text-align: center;">This automated dispatch confirms a manual membership freeze has been processed. Detailed audit logs are provided below.</p>
                                     <table class="info-table">
-                                        <tr><td class="info-label">Property context</td><td class="info-value">${property?.name}</td></tr>
-                                        <tr><td class="info-label">Facility context</td><td class="info-value">${outlet?.name}</td></tr>
-                                        <tr><td class="info-label">Member Name</td><td class="info-value">${data.member_name}</td></tr>
-                                        <tr><td class="info-label">Member ID</td><td class="info-value">#${data.membership_number}</td></tr>
-                                        <tr><td class="info-label">Membership Tier</td><td class="info-value">${data.membership_tier || 'N/A'}</td></tr>
-                                        <tr><td class="info-label">Contact Phone</td><td class="info-value">${data.phone || 'N/A'}</td></tr>
-                                        <tr><td class="info-label">Freeze Period</td><td class="info-value">${format(new Date(data.start_date), 'dd MMM')} - ${format(new Date(data.end_date), 'dd MMM yyyy')}</td></tr>
-                                        <tr><td class="info-label">Total Duration</td><td class="info-value">${data.total_days} Days</td></tr>
-                                        <tr><td class="info-label">Reason Provided</td><td class="info-value">${data.reason || 'Not specified'}</td></tr>
-                                        <tr><td class="info-label">Authorized By</td><td class="info-value">${data.staff_name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Property</td><td class="info-value">${property?.name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Facility</td><td class="info-value">${outlet?.name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Membership Tier</td><td class="info-value">${data.membership_tier || 'N/A'}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Contact Phone</td><td class="info-value">${data.phone || 'N/A'}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Freeze Period</td><td class="info-value">${format(new Date(data.start_date), 'dd MMM')} - ${format(new Date(data.end_date), 'dd MMM yyyy')}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Total Duration</td><td class="info-value">${data.total_days} Days</td></tr>
+                                        <tr class="info-row"><td class="info-label">Reason</td><td class="info-value">${data.reason || 'Not specified'}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Authorized By</td><td class="info-value">${data.staff_name}</td></tr>
                                     </table>
-
-                                    <p style="font-size: 12px; font-style: italic; color: #94a3b8; margin-top: 24px;">
-                                        Audit recorded at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}
-                                    </p>
+                                    <span class="timestamp">Audit recorded at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}</span>
                                 </div>
-                                
-                                <div class="footer">
-                                    ${property?.name || ''} &bull; Internal Intelligence Dispatch
-                                </div>
+                                <div class="footer">${property?.name || ''} &bull; Internal Intelligence Dispatch</div>
                             </div>
                         </div>
                     </body>
                     </html>
                 `;
             } else if (type === 'sale_void') {
-                const outlet = outlets.find(o => o.id === data.outlet_id);
                 subject = `❌ Transaction Void Alert: Sale #${data.receipt_no} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = `
                     <!DOCTYPE html>
                     <html>
-                    <head>
-                        <style>
-                            body { font-family: 'Inter', -apple-system, sans-serif; line-height: 1.6; color: #1e293b; margin: 0; padding: 0; }
-                            .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #f8fafc; }
-                            .card { background: #ffffff; border-radius: 24px; padding: 40px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; }
-                            .header { text-align: center; margin-bottom: 32px; }
-                            .logo { width: 64px; height: 64px; border-radius: 16px; margin-bottom: 16px; object-fit: cover; border: 2px solid #f1f5f9; }
-                            .title { font-size: 20px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: -0.025em; margin: 0; }
-                            .subtitle { font-size: 10px; font-weight: 700; color: #ef4444; text-transform: uppercase; letter-spacing: 0.2em; margin-top: 4px; }
-                            .divider { height: 1px; background: #f1f5f9; margin: 24px 0; }
-                            .content { font-size: 14px; color: #475569; }
-                            .info-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin: 20px 0; }
-                            .info-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; width: 40%; }
-                            .info-value { font-size: 13px; font-weight: 700; color: #0f172a; text-align: right; }
-                            .footer { text-align: center; margin-top: 32px; font-size: 10px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; }
-                            .void-banner { background: #fee2e2; color: #b91c1c; padding: 12px; border-radius: 12px; text-align: center; font-weight: 800; font-size: 11px; text-transform: uppercase; margin-bottom: 24px; }
-                        </style>
-                    </head>
-                    <body>
+                    <head><style>${baseStyles} .alert-banner { background-color: #fee2e2; color: #b91c1c; padding: 10px 20px; font-weight: 700; font-size: 12px; text-transform: uppercase; text-align: center; letter-spacing: 0.05em; } .summary-box { background-color: #f8fafc; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 32px; border: 1px solid #f1f5f9; } .summary-value { font-size: 26px; font-weight: 800; color: #ef4444; }</style></head>
+                    <body style="background-color: #f8fafc;">
                         <div class="container">
                             <div class="card">
                                 <div class="header">
-                                    <img src="${logoUrl}" class="logo" />
+                                    <img src="${logoUrl}" class="logo" alt="${property?.name}" />
                                     <h1 class="title">${property?.name || 'Financial Alert'}</h1>
-                                    <div class="subtitle">${outlet?.name || ''} &bull; Transaction Revocation Logged</div>
+                                    <div class="subtitle">${outlet?.name || ''} &bull; Internal Audit Log</div>
                                 </div>
-                                
-                                <div class="void-banner">❌ Transaction Void Action Detected</div>
-
+                                <div class="alert-banner">❌ Transaction Void Action Detected</div>
                                 <div class="content">
-                                    <p>A finalized transaction has been voided. Please investigate the transaction record to confirm validity.</p>
-                                    
+                                    <div class="summary-box">
+                                        <div style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.05em;">Voided Portfolio Value</div>
+                                        <div class="summary-value">${data.currency} ${data.amount}</div>
+                                    </div>
                                     <table class="info-table">
-                                        <tr><td class="info-label">Property context</td><td class="info-value">${property?.name}</td></tr>
-                                        <tr><td class="info-label">Facility context</td><td class="info-value">${outlet?.name}</td></tr>
-                                        <tr><td class="info-label">Receipt Number</td><td class="info-value">#${data.receipt_no}</td></tr>
-                                        <tr><td class="info-label">Customer Name</td><td class="info-value">${data.guest_name}</td></tr>
-                                        <tr><td class="info-label">Original Amount</td><td class="info-value">${data.currency} ${data.amount}</td></tr>
-                                        <tr><td class="info-label">Void Reason</td><td class="info-value">${data.void_reason || 'Not specified'}</td></tr>
-                                        <tr><td class="info-label">Authorized By</td><td class="info-value">${data.staff_name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Property</td><td class="info-value">${property?.name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Facility</td><td class="info-value">${outlet?.name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Receipt Reference</td><td class="info-value">#${data.receipt_no}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Customer Profile</td><td class="info-value">${data.guest_name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Void Justification</td><td class="info-value">${data.void_reason || 'Not specified'}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Authorized By</td><td class="info-value">${data.staff_name}</td></tr>
                                     </table>
-
-                                    <p style="font-size: 12px; font-style: italic; color: #94a3b8; margin-top: 24px;">
-                                        Audit recorded at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}
-                                    </p>
+                                    <span class="timestamp">Audit recorded at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}</span>
                                 </div>
-                                
-                                <div class="footer">
-                                    ${property?.name || ''} &bull; Internal Intelligence Dispatch
-                                </div>
+                                <div class="footer">${property?.name || ''} &bull; Internal Intelligence Dispatch</div>
                             </div>
                         </div>
                     </body>
                     </html>
                 `;
             } else if (type === 'members_joined') {
-                const outlet = outlets.find(o => o.id === data.outlet_id);
                 subject = `🎉 New Enrollment: ${data.member_name} - ${property?.name || ''} (${outlet?.name || ''})`;
                 html = `
                     <!DOCTYPE html>
                     <html>
-                    <head>
-                        <style>
-                            body { font-family: 'Inter', -apple-system, sans-serif; line-height: 1.6; color: #1e293b; margin: 0; padding: 0; }
-                            .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #f0fdf4; }
-                            .card { background: #ffffff; border-radius: 24px; padding: 40px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); border: 1px solid #dcfce7; }
-                            .header { text-align: center; margin-bottom: 32px; }
-                            .logo { width: 64px; height: 64px; border-radius: 16px; margin-bottom: 16px; object-fit: cover; border: 2px solid #f1f5f9; }
-                            .title { font-size: 20px; font-weight: 900; color: #166534; text-transform: uppercase; letter-spacing: -0.025em; margin: 0; }
-                            .subtitle { font-size: 10px; font-weight: 700; color: #15803d; text-transform: uppercase; letter-spacing: 0.2em; margin-top: 4px; }
-                            .divider { height: 1px; background: #f1f5f9; margin: 24px 0; }
-                            .content { font-size: 14px; color: #475569; }
-                            .info-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin: 20px 0; }
-                            .info-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; width: 40%; }
-                            .info-value { font-size: 13px; font-weight: 700; color: #0f172a; text-align: right; }
-                            .footer { text-align: center; margin-top: 32px; font-size: 10px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; }
-                            .success-banner { background: #dcfce7; color: #166534; padding: 12px; border-radius: 12px; text-align: center; font-weight: 800; font-size: 11px; text-transform: uppercase; margin-bottom: 24px; }
-                        </style>
-                    </head>
-                    <body>
+                    <head><style>${baseStyles} .success-banner { background-color: #dcfce7; color: #166534; padding: 10px 20px; font-weight: 700; font-size: 12px; text-transform: uppercase; text-align: center; letter-spacing: 0.05em; } .welcome-box { text-align: center; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px dashed #dcfce7; } .welcome-name { font-size: 22px; font-weight: 800; color: #065f46; margin-bottom: 4px; }</style></head>
+                    <body style="background-color: #f0fdf4;">
                         <div class="container">
                             <div class="card">
                                 <div class="header">
-                                    <img src="${logoUrl}" class="logo" />
+                                    <img src="${logoUrl}" class="logo" alt="${property?.name}" />
                                     <h1 class="title">${property?.name || 'Growth Update'}</h1>
                                     <div class="subtitle">${outlet?.name || ''} &bull; Membership Acquisition Successful</div>
                                 </div>
-                                
-                                <div class="success-banner">🎉 New Member Acquisition Logged</div>
-
+                                <div class="success-banner">🎉 New Member Enrollment Verified</div>
                                 <div class="content">
-                                    <p>A new membership contract has been finalized. Welcome our newest member to the community.</p>
-                                    
+                                    <div class="welcome-box">
+                                        <div class="welcome-name">${data.member_name}</div>
+                                        <div style="font-size: 13px; color: #059669; font-weight: 600;">Strategic Relationship Established</div>
+                                    </div>
                                     <table class="info-table">
-                                        <tr><td class="info-label">Property context</td><td class="info-value">${property?.name}</td></tr>
-                                        <tr><td class="info-label">Facility context</td><td class="info-value">${outlet?.name}</td></tr>
-                                        <tr><td class="info-label">Member Name</td><td class="info-value">${data.member_name}</td></tr>
-                                        <tr><td class="info-label">Membership Tier</td><td class="info-value">${data.category_name}</td></tr>
-                                        <tr><td class="info-label">Investment Amount</td><td class="info-value">${data.currency} ${data.amount}</td></tr>
-                                        <tr><td class="info-label">Sales Representative</td><td class="info-value">${data.staff_name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Property</td><td class="info-value">${property?.name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Facility</td><td class="info-value">${outlet?.name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Membership Tier</td><td class="info-value">${data.category_name}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Strategic Investment</td><td class="info-value">${data.currency} ${data.amount}</td></tr>
+                                        <tr class="info-row"><td class="info-label">Sales Representative</td><td class="info-value">${data.staff_name}</td></tr>
                                     </table>
-
-                                    <p style="font-size: 12px; font-style: italic; color: #94a3b8; margin-top: 24px;">
-                                        Audit recorded at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}
-                                    </p>
+                                    <span class="timestamp">Audit recorded at: ${format(new Date(), 'HH:mm:ss dd/MM/yyyy')}</span>
                                 </div>
-                                
-                                <div class="footer">
-                                    ${property?.name || ''} &bull; Internal Intelligence Dispatch
-                                </div>
+                                <div class="footer">${property?.name || ''} &bull; Internal Intelligence Dispatch</div>
                             </div>
                         </div>
                     </body>
@@ -400,14 +325,14 @@ export const reportService = {
   async generateEmailTemplate(property: Property, outlet: Outlet | 'all', date: Date = new Date()) {
     const dateStr = format(date, 'dd MMM yyyy');
     const outletName = outlet === 'all' ? 'All Outlets (Consolidated)' : outlet.name;
-    const logoUrl = property.logo_url || 'https://picsum.photos/seed/tth/200/200';
-
+    
     const [revenueData, currencies, settings] = await Promise.all([
       this.fetchRevenueData(property.id, outlet === 'all' ? 'all' : outlet.id, date),
       db.getCurrencies(),
       db.getSettings()
     ]);
 
+    const logoUrl = property.logo_url || settings?.logo_url || 'https://api.dicebear.com/7.x/initials/svg?seed=TTH';
     const defaultCurrency = (settings && currencies.find(c => c.id === settings.currency_id)) || currencies.find(c => c.is_default) || currencies[0];
     const currencySymbol = defaultCurrency?.symbol || '';
     const totalRevenue = revenueData.reduce((sum, item) => sum + item.amount, 0);
@@ -418,35 +343,40 @@ export const reportService = {
       <html>
       <head>
         <style>
-          body { font-family: 'Inter', -apple-system, sans-serif; line-height: 1.6; color: #1e293b; margin: 0; padding: 0; }
-          .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #f8fafc; }
-          .card { background: #ffffff; border-radius: 24px; padding: 40px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; }
-          .header { text-align: center; margin-bottom: 32px; }
-          .logo { width: 80px; height: 80px; border-radius: 20px; margin-bottom: 20px; object-fit: cover; border: 4px solid #f1f5f9; }
-          .title { font-size: 24px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: -0.025em; margin: 0; }
-          .subtitle { font-size: 12px; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: 0.2em; margin-top: 8px; }
-          .divider { height: 1px; background: #f1f5f9; margin: 32px 0; }
-          .content { font-size: 14px; color: #475569; }
-          .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
-          .stat-card { background: #f8fafc; padding: 20px; border-radius: 16px; border: 1px solid #f1f5f9; }
-          .stat-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
-          .stat-value { font-size: 18px; font-weight: 900; color: #0f172a; }
-          .footer { text-align: center; margin-top: 32px; font-size: 11px; color: #94a3b8; }
-          .btn { display: inline-block; background: #6366f1; color: #ffffff; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 24px; }
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #334155; margin: 0; padding: 0; background-color: #f1f5f9; }
+          .container { max-width: 600px; margin: 0 auto; padding: 40px 10px; }
+          .card { background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border: 1px solid #e2e8f0; }
+          .header { background-color: #ffffff; padding: 32px 40px 24px; text-align: center; border-bottom: 1px solid #f1f5f9; }
+          .logo { max-width: 180px; max-height: 80px; margin-bottom: 16px; object-fit: contain; }
+          .title { font-size: 18px; font-weight: 700; color: #0f172a; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
+          .subtitle { font-size: 11px; font-weight: 600; color: #6366f1; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 6px; }
+          
+          .content { padding: 32px 40px; }
+          .intro { font-size: 14px; color: #64748b; margin-bottom: 32px; }
+          
+          .stat-grid { display: table; width: 100%; border-collapse: separate; border-spacing: 12px 0; margin: 24px -12px; }
+          .stat-card { display: table-cell; background: #f8fafc; padding: 24px; border-radius: 12px; border: 1px solid #f1f5f9; width: 50%; text-align: center; }
+          .stat-label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+          .stat-value { font-size: 24px; font-weight: 800; color: #0f172a; }
+          
+          .footer { background-color: #f8fafc; padding: 24px 40px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; }
+          .btn { display: inline-block; background-color: #6366f1; color: #ffffff; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 24px; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="card">
             <div class="header">
-              <img src="${logoUrl}" class="logo" />
+              <img src="${logoUrl}" class="logo" alt="${property.name}" />
               <h1 class="title">${property.name}</h1>
               <div class="subtitle">Daily Revenue Intelligence</div>
             </div>
             
             <div class="content">
-              <p>Greetings Administrator,</p>
-              <p>The daily financial performance report for <strong>${outletName}</strong> is now ready for your review. This report encapsulates all strategic revenue streams processed on <strong>${dateStr}</strong>.</p>
+              <div class="intro">
+                <p style="margin-top: 0;">Greetings Administrator,</p>
+                <p>The daily financial performance report for <strong>${outletName}</strong> is now ready for your review. This summary encapsulates all strategic revenue streams processed on <strong>${dateStr}</strong>.</p>
+              </div>
               
               <div class="stat-grid">
                 <div class="stat-card">
@@ -459,18 +389,16 @@ export const reportService = {
                 </div>
               </div>
 
-              <p>Please find the detailed PDF intelligence report attached to this communication for a comprehensive breakdown of departmental yields and volume analysis.</p>
+              <p style="font-size: 13px; color: #64748b; line-height: 1.5;">A detailed PDF intelligence report is attached to this communication, providing a comprehensive breakdown of departmental yields and volume analysis.</p>
               
-              <center>
-                <a href="#" class="btn">View Online Dashboard</a>
-              </center>
+              <div style="text-align: center;">
+                <a href="#" class="btn">Access Intelligence Dashboard</a>
+              </div>
             </div>
             
-            <div class="divider"></div>
-            
             <div class="footer">
-              <p>This is an automated intelligence dispatch from the TTH Management System.<br/>
-              © ${new Date().getFullYear()} ${property.name}. All rights reserved.</p>
+              This is an automated intelligence dispatch from the TTH Management System.<br/>
+              © ${new Date().getFullYear()} ${property.name}. All rights reserved.
             </div>
           </div>
         </div>
