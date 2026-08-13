@@ -154,23 +154,26 @@ export const reportService = {
         ]);
 
         const filteredRecipients = forcedRecipient ? [forcedRecipient] : recipients.filter(r => r.report_type === type);
-        if (filteredRecipients.length === 0) {
-            console.log(`[ReportService] No recipients found for ${type}`);
-            return { success: false, error: 'No recipients' };
-        }
+        console.log(`[ReportService] Found ${filteredRecipients.length} potential recipients for ${type}`);
 
         const results = [];
         for (const recipient of filteredRecipients) {
             if (!forcedRecipient) {
-                if (recipient.property_id && data.property_id && recipient.property_id !== data.property_id) continue;
-                if (recipient.outlet_id && recipient.outlet_id !== 'all' && data.outlet_id && recipient.outlet_id !== data.outlet_id) continue;
+                if (recipient.property_id && data.property_id && recipient.property_id !== data.property_id) {
+                    console.log(`[ReportService] Skipping recipient ${recipient.email}: Property ID mismatch (${recipient.property_id} vs ${data.property_id})`);
+                    continue;
+                }
+                if (recipient.outlet_id && recipient.outlet_id !== 'all' && data.outlet_id && recipient.outlet_id !== data.outlet_id) {
+                    console.log(`[ReportService] Skipping recipient ${recipient.email}: Outlet ID mismatch (${recipient.outlet_id} vs ${data.outlet_id})`);
+                    continue;
+                }
             }
 
             const property = properties.find(p => p.id === (data.property_id || recipient.property_id)) || properties[0];
             const outlet = outlets.find(o => o.id === (data.outlet_id || recipient.outlet_id));
             
-            // Robust logo selection with better fallback
-            const logoUrl = property?.logo_url || settings?.logo_url || 'https://api.dicebear.com/7.x/initials/svg?seed=TTH';
+            // Robust logo selection with better fallback (PNG for better Outlook support)
+            const logoUrl = property?.logo_url || settings?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(property?.name || 'TTH')}&background=0f172a&color=fff&size=128&format=png`;
             
             let subject = '';
             let html = '';
@@ -187,8 +190,8 @@ export const reportService = {
                 .info-table { width: 100%; border-collapse: collapse; margin: 24px 0; }
                 .info-row { border-bottom: 1px solid #f8fafc; }
                 .info-row:last-child { border-bottom: none; }
-                .info-label { padding: 12px 0; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; width: 35%; vertical-align: top; text-align: left; }
-                .info-value { padding: 12px 0; font-size: 14px; font-weight: 600; color: #334155; text-align: right; }
+                .info-label { padding: 12px 16px 12px 0; font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; width: 40%; vertical-align: top; text-align: left; }
+                .info-value { padding: 12px 0; font-size: 14px; font-weight: 600; color: #1e293b; text-align: left; }
                 .footer { background-color: #f8fafc; padding: 24px 40px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; }
                 .timestamp { font-size: 10px; font-style: italic; color: #cbd5e1; margin-top: 16px; display: block; }
                 .badge { padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
@@ -204,7 +207,7 @@ export const reportService = {
                         <div class="container">
                             <div class="card">
                                 <div class="header">
-                                    <img src="${logoUrl}" class="logo" alt="${property?.name}" />
+                                    <img src="${logoUrl}" width="180" style="max-width: 180px; max-height: 80px; margin-bottom: 16px; object-fit: contain; display: block; margin-left: auto; margin-right: auto;" alt="${property?.name}" />
                                     <h1 class="title">${property?.name || 'Operational Alert'}</h1>
                                     <div class="subtitle">${outlet?.name || ''} &bull; Internal Intelligence Log</div>
                                 </div>
@@ -243,7 +246,7 @@ export const reportService = {
                         <div class="container">
                             <div class="card">
                                 <div class="header">
-                                    <img src="${logoUrl}" class="logo" alt="${property?.name}" />
+                                    <img src="${logoUrl}" width="180" style="max-width: 180px; max-height: 80px; margin-bottom: 16px; object-fit: contain; display: block; margin-left: auto; margin-right: auto;" alt="${property?.name}" />
                                     <h1 class="title">${property?.name || 'Financial Alert'}</h1>
                                     <div class="subtitle">${outlet?.name || ''} &bull; Internal Audit Log</div>
                                 </div>
@@ -279,7 +282,7 @@ export const reportService = {
                         <div class="container">
                             <div class="card">
                                 <div class="header">
-                                    <img src="${logoUrl}" class="logo" alt="${property?.name}" />
+                                    <img src="${logoUrl}" width="180" style="max-width: 180px; max-height: 80px; margin-bottom: 16px; object-fit: contain; display: block; margin-left: auto; margin-right: auto;" alt="${property?.name}" />
                                     <h1 class="title">${property?.name || 'Growth Update'}</h1>
                                     <div class="subtitle">${outlet?.name || ''} &bull; Membership Acquisition Successful</div>
                                 </div>
@@ -332,7 +335,7 @@ export const reportService = {
       db.getSettings()
     ]);
 
-    const logoUrl = property.logo_url || settings?.logo_url || 'https://api.dicebear.com/7.x/initials/svg?seed=TTH';
+    const logoUrl = property.logo_url || settings?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(property.name)}&background=0f172a&color=fff&size=128&format=png`;
     const defaultCurrency = (settings && currencies.find(c => c.id === settings.currency_id)) || currencies.find(c => c.is_default) || currencies[0];
     const currencySymbol = defaultCurrency?.symbol || '';
     const totalRevenue = revenueData.reduce((sum, item) => sum + item.amount, 0);
@@ -367,7 +370,7 @@ export const reportService = {
         <div class="container">
           <div class="card">
             <div class="header">
-              <img src="${logoUrl}" class="logo" alt="${property.name}" />
+              <img src="${logoUrl}" width="180" style="max-width: 180px; max-height: 80px; margin-bottom: 16px; object-fit: contain; display: block; margin-left: auto; margin-right: auto;" alt="${property.name}" />
               <h1 class="title">${property.name}</h1>
               <div class="subtitle">Daily Revenue Intelligence</div>
             </div>

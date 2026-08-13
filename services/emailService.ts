@@ -86,14 +86,14 @@ export const emailService = {
       <html>
       <head>
         <style>
-          body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background-color: #f1f5f9; color: #1e293b; margin: 0; padding: 40px 20px; line-height: 1.6; }
-          .container { max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 24px; padding: 48px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f1f5f9; color: #1e293b; margin: 0; padding: 40px 10px; line-height: 1.6; }
+          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 40px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
           .badge { display: inline-block; background: #e0e7ff; color: #4338ca; font-size: 10px; font-weight: 800; text-transform: uppercase; padding: 6px 14px; border-radius: 999px; letter-spacing: 0.1em; margin-bottom: 24px; }
           .header { border-bottom: 2px solid #f1f5f9; padding-bottom: 24px; margin-bottom: 32px; text-align: left; }
-          .title { font-size: 26px; font-weight: 900; text-transform: uppercase; color: #0f172a; margin: 0; letter-spacing: -0.025em; }
+          .title { font-size: 24px; font-weight: 900; text-transform: uppercase; color: #0f172a; margin: 0; letter-spacing: -0.025em; }
           .subtitle { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.15em; margin-top: 8px; }
           .content { font-size: 14px; color: #475569; }
-          .meta { background: #f8fafc; padding: 24px; border-radius: 16px; margin: 24px 0; font-size: 13px; border: 1px solid #f1f5f9; }
+          .meta { background: #f8fafc; padding: 24px; border-radius: 12px; margin: 24px 0; font-size: 13px; border: 1px solid #f1f5f9; }
           .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 24px; }
         </style>
       </head>
@@ -159,6 +159,8 @@ export const emailService = {
       }
 
       targetEmails = Array.from(new Set(targetEmails.filter(Boolean)));
+      console.log(`[Email Service] Targeted recipients for purchase: ${targetEmails.length}`, targetEmails);
+      
       if (targetEmails.length === 0) {
         console.log('[Email Service] No recipient emails found for member purchase notification.');
         return;
@@ -191,7 +193,7 @@ export const emailService = {
 
       const subject = `Membership Purchase Confirmed - ${member.guest_name} (${member.membership_number})`;
       
-      const logoUrl = property?.logo_url || settings?.logo_url || 'https://api.dicebear.com/7.x/initials/svg?seed=TTH';
+      const logoUrl = property?.logo_url || settings?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(property?.name || 'TTH')}&background=0f172a&color=fff&size=128&format=png`;
 
       const html = `
         <!DOCTYPE html>
@@ -216,8 +218,8 @@ export const emailService = {
             .info-table { width: 100%; border-collapse: collapse; margin: 24px 0; }
             .info-row { border-bottom: 1px solid #f8fafc; }
             .info-row:last-child { border-bottom: none; }
-            .info-label { padding: 12px 0; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; width: 35%; vertical-align: top; text-align: left; }
-            .info-value { padding: 12px 0; font-size: 14px; font-weight: 600; color: #334155; text-align: right; }
+            .info-label { padding: 12px 16px 12px 0; font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; width: 40%; vertical-align: top; text-align: left; }
+            .info-value { padding: 12px 0; font-size: 14px; font-weight: 600; color: #1e293b; text-align: left; }
             
             .amount-box { background: #0f172a; color: #ffffff; padding: 24px; border-radius: 12px; text-align: center; margin: 24px 0; }
             .amount-val { font-size: 28px; font-weight: 900; color: #818cf8; }
@@ -230,7 +232,7 @@ export const emailService = {
           <div class="container">
             <div class="card">
               <div class="header">
-                <img src="${logoUrl}" class="logo" alt="${property?.name}" />
+                <img src="${logoUrl}" width="160" style="max-width: 160px; max-height: 80px; margin-bottom: 16px; object-fit: contain; display: block; margin-left: auto; margin-right: auto;" alt="${property?.name}" />
                 <h1 class="title">${property?.name || 'Operational Insight'}</h1>
                 <div class="subtitle">${outlet?.name || ''} &bull; Strategic Enrollment Ledger</div>
               </div>
