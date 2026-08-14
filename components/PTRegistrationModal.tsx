@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { X, Save, User, Calendar, AlertTriangle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Input, Button } from './ui';
-import { db } from '../services/mockSupabase';
+import { db, supabase } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
 import { PTMember } from '../types';
+import { SignatureModal } from './SignatureModal';
+import SignatureCanvas from 'react-signature-canvas';
 
 export const PTRegistrationModal = ({
     isOpen,
@@ -19,9 +21,15 @@ export const PTRegistrationModal = ({
     initialData: { guestName: string; saleId?: string; qty: number; itemName?: string; trainerId?: string };
     staff: any[];
 }) => {
-    const { currentOutlet } = useSettings();
+    const { currentOutlet, currentProperty, settings, currency, currencies } = useSettings();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [showSignatureModal, setShowSignatureModal] = useState(false);
+    const [signature, setSignature] = useState<string | null>(null);
+    const signatureRef = useRef<SignatureCanvas>(null);
+    const [signatureMethod, setSignatureMethod] = useState<'pad' | 'qr' | null>(null);
+    const [pendingSubmitData, setPendingSubmitData] = useState<any | null>(null);
+
     const [formData, setFormData] = useState({
         guest_name: initialData?.guestName || '',
         phone: '',
@@ -32,6 +40,31 @@ export const PTRegistrationModal = ({
         trainer_id: initialData?.trainerId || '',
         notes: initialData?.itemName ? `Purchased item: ${initialData.itemName}` : ''
     });
+
+    const initiateSignature = (data: any) => {
+        setPendingSubmitData(data);
+        setShowSignatureModal(true);
+        setSignatureMethod(null);
+    };
+
+    const handleSignatureSave = () => {
+        if (signatureRef.current) {
+            const dataUrl = signatureRef.current.toDataURL();
+            setSignature(dataUrl);
+            setShowSignatureModal(false);
+            setSignatureMethod(null);
+            if (pendingSubmitData) {
+                onFinalSubmit(pendingSubmitData, dataUrl);
+            }
+        }
+    };
+    
+    const handleSkipSignature = async () => {
+        if (pendingSubmitData) {
+            await onFinalSubmit(pendingSubmitData, 'BYPASSED'); 
+            setShowSignatureModal(false);
+        }
+    };
 
     React.useEffect(() => {
         if (isOpen && initialData) {
@@ -60,25 +93,32 @@ export const PTRegistrationModal = ({
             return;
         }
 
+        const memberData = {
+            outlet_id: currentOutlet.id,
+            guest_name: formData.guest_name,
+            phone: formData.phone,
+            email: formData.email,
+            total_sessions: Number(formData.total_sessions),
+            used_sessions: 0,
+            sale_id: initialData.saleId,
+            start_date: formData.start_date,
+            end_date: formData.end_date,
+            status: 'Active',
+            trainer_id: formData.trainer_id,
+            notes: formData.notes
+        };
+
+        initiateSignature(memberData);
+    };
+
+    const onFinalSubmit = async (data: any, signatureOverride?: string) => {
         setLoading(true);
         try {
-            const memberData: Omit<PTMember, 'id' | 'created_at'> = {
-                outlet_id: currentOutlet.id,
-                guest_name: formData.guest_name,
-                phone: formData.phone,
-                email: formData.email,
-                total_sessions: Number(formData.total_sessions),
-                used_sessions: 0,
-                sale_id: initialData.saleId,
-                start_date: formData.start_date,
-                end_date: formData.end_date,
-                status: 'Active',
-                trainer_id: formData.trainer_id,
-                notes: formData.notes
-            };
-
-            await db.addPTMember(memberData);
-            onSuccess(memberData as any); // Technically missing id/created_at, but sufficient for UI trigger
+            await db.addPTMember({
+                ...data,
+                member_signature: signatureOverride || signature
+            });
+            onSuccess(data as any);
         } catch (err: any) {
             const msg = err.message || '';
             if (msg.includes('schema cache') || msg.includes('42P01') || msg.includes('relation "public.pt_members" does not exist') || msg.includes('row-level security policy') || msg.includes('violates row-level security')) {
@@ -186,6 +226,18 @@ NOTIFY pgrst, 'reload schema';`;
                     </CardContent>
                 </Card>
             </div>
+            {showSignatureModal && (
+                <SignatureModal
+                    isOpen={showSignatureModal}
+                    onClose={() => setShowSignatureModal(false)}
+                    onSave={handleSignatureSave}
+                    onSkip={handleSkipSignature}
+                    onMethodSelect={setSignatureMethod}
+                    signatureMethod={signatureMethod}
+                    signatureRef={signatureRef}
+                    onClear={() => signatureRef.current?.clear()}
+                />
+            )}
         </div>
     );
 };
