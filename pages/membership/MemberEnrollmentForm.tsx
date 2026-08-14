@@ -579,21 +579,6 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
             console.warn('[Enrollment Email] Purchase notification failed:', err);
         });
 
-        // Trigger Instant Email Alert for New Member Join
-        reportService.sendInstantAlert('members_joined', {
-            member_name: payload.guest_name,
-            category_name: cat?.name || 'Standard Tier',
-            amount: payload.net_amount,
-            currency: currency?.code || 'AED',
-            staff_name: user?.name || 'System Administrator',
-            property_id: currentProperty?.id,
-            outlet_id: payload.outlet_id
-        }).then(result => {
-            if (result && !result.success) {
-                console.warn('[Enrollment Alert] Email dispatch failed:', result.error);
-            }
-        });
-
         toast.success('Member agreement saved.');
 
         setTimeout(() => {

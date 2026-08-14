@@ -298,7 +298,7 @@ export async function generateMemberAgreementPdfBase64(
             <!-- Signatures -->
             <div style="margin-top: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 48px;">
               <div style="display: flex; flex-direction: column; justify-content: flex-end; height: 80px;">
-                ${member.member_signature ? `<img src="${member.member_signature}" alt="Member Signature" style="height: 50px; object-fit: contain; margin-bottom: 6px; align-self: flex-start;" />` : ''}
+                ${(member.member_signature && member.member_signature !== 'BYPASSED') ? `<img src="${member.member_signature}" alt="Member Signature" style="height: 80px; object-fit: contain; margin-bottom: 6px; align-self: flex-start;" />` : ''}
                 <div style="border-top: 1px solid black; padding-top: 6px; display: flex; justify-content: space-between; align-items: center;">
                   <span style="font-size: 11px; font-weight: 900; text-transform: uppercase;">Member Signature</span>
                   <span style="font-size: 11px; font-weight: 900; text-transform: uppercase; font-family: 'Amiri', serif;" dir="rtl">توقيع العضو</span>
@@ -340,8 +340,8 @@ export async function generateMemberAgreementPdfBase64(
 
           <div style="margin-top: auto; padding-top: 16px; border-top: 2px solid black;">
             <div style="display: flex; justify-content: space-between; padding: 0 8px;">
-              <div style="width: 280px; display: flex; flex-direction: column; justify-content: flex-end; height: 70px;">
-                ${member.member_signature ? `<img src="${member.member_signature}" alt="Member Signature" style="height: 40px; object-fit: contain; margin-bottom: 4px; align-self: flex-start;" />` : ''}
+              <div style="width: 280px; display: flex; flex-direction: column; justify-content: flex-end; height: 100px;">
+                ${(member.member_signature && member.member_signature !== 'BYPASSED') ? `<img src="${member.member_signature}" alt="Member Signature" style="height: 80px; object-fit: contain; margin-bottom: 4px; align-self: flex-start;" />` : ''}
                 <div style="border-top: 1px solid black; padding-top: 4px; font-size: 11px; display: flex; justify-content: space-between;">
                   <span style="font-weight: bold;">Member Signature</span>
                   <span style="font-weight: bold; font-family: 'Amiri', serif;" dir="rtl">توقيع العضو :</span>
