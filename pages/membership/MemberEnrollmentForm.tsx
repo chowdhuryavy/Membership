@@ -385,7 +385,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
   useEffect(() => {
     if (!isEditing && !isRenewal && guestName && guestName.length >= 3) {
-      const found = (allMembers || []).filter(m => m.guest_name.toLowerCase().includes(guestName.toLowerCase()));
+      const found = (allMembers || []).filter(m => m.guest_name.toLowerCase() === guestName.toLowerCase());
       if (found.length > 0) {
         const sorted = [...found].sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
         setMatchedMembers(sorted);
