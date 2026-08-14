@@ -10,10 +10,10 @@ export const getOutletArabicName = (outletName?: string): string => {
 };
 
 export const getBilingualWaiverText = (outletNameInput?: string, hotelNameInput?: string) => {
-  const outletName = outletNameInput || 'The Torch Club';
+  const outletName = outletNameInput || 'the Health Club';
   const outletNameAr = getOutletArabicName(outletNameInput);
-  const hotelName = hotelNameInput || 'The Torch Doha (“Hotel”)';
-  const hotelNameAr = 'فندق ذا تورش الدوحة ("الفندق")';
+  const hotelName = hotelNameInput || 'the Facility (“Facility”)';
+  const hotelNameAr = 'المنشأة ("المنشأة")';
 
   return {
     outletName,

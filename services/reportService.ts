@@ -29,7 +29,7 @@ export function resolveLogoUrl(
     }
   }
 
-  const displayName = outlet?.name || property?.name || 'TTH';
+  const displayName = outlet?.name || property?.name || 'CLUB';
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0f172a&color=ffffff&size=200&format=png&bold=true`;
 }
 
@@ -177,7 +177,7 @@ export const reportService = {
     const finalY = (doc as any).lastAutoTable?.finalY || 100;
     doc.setFontSize(8);
     doc.setTextColor(148, 163, 184); // slate-400
-    doc.text('This report is generated automatically by the TTH Management System.', 105, finalY + 20, { align: 'center' });
+    doc.text('This report is generated automatically by the Management System.', 105, finalY + 20, { align: 'center' });
     doc.text(`© ${new Date().getFullYear()} ${property.name}. All rights reserved.`, 105, finalY + 25, { align: 'center' });
 
     return doc;
@@ -241,8 +241,8 @@ export const reportService = {
                     bannerType: 'info',
                     bannerText: 'MEMBERSHIP FREEZE NOTICE',
                     logoUrl,
-                    propertyName: property?.name || 'The Torch Doha',
-                    outletName: outlet?.name || 'Torch Club',
+                    propertyName: property?.name || 'HEALTH CLUB',
+                    outletName: outlet?.name || 'CLUB',
                     subtitle: 'MEMBERSHIP STATUS UPDATE',
                     greeting: 'Dear Admin,',
                     introParagraph: `This notification confirms that a membership freeze has been recorded for <strong>${data.member_name || 'Member'}</strong> at ${property?.name || 'the facility'}. Details of the request are outlined below.`,
@@ -267,8 +267,8 @@ export const reportService = {
                     bannerType: 'alert',
                     bannerText: 'TRANSACTION VOID LOGGED',
                     logoUrl,
-                    propertyName: property?.name || 'The Torch Doha',
-                    outletName: outlet?.name || 'Torch Club',
+                    propertyName: property?.name || 'HEALTH CLUB',
+                    outletName: outlet?.name || 'CLUB',
                     subtitle: 'MANAGEMENT AUDIT LOG',
                     greeting: 'Dear Admin,',
                     introParagraph: `A transaction void event has been recorded for receipt <strong>#${receiptId}</strong> at ${property?.name || 'the facility'}. Audit parameters are detailed below.`,
@@ -294,11 +294,11 @@ export const reportService = {
                     bannerType: 'success',
                     bannerText: 'ENROLLMENT CONFIRMED',
                     logoUrl,
-                    propertyName: property?.name || 'The Torch Doha',
-                    outletName: outlet?.name || 'Torch Club',
+                    propertyName: property?.name || 'HEALTH CLUB',
+                    outletName: outlet?.name || 'CLUB',
                     subtitle: 'OFFICIAL MEMBERSHIP ENROLLMENT',
                     greeting: 'Dear Admin,',
-                    introParagraph: `A new membership purchase has been completed and registered in the system for <strong>${property?.name || 'The Torch Doha'}</strong> (${outlet?.name || 'Torch Club'}). Below are the member enrollment details.`,
+                    introParagraph: `A new membership purchase has been completed and registered in the system for <strong>${property?.name || 'HEALTH CLUB'}</strong> (${outlet?.name || 'CLUB'}). Below are the member enrollment details.`,
                     dataFields: [
                         { label: 'MEMBER NAME', value: data.member_name || 'New Member' },
                         { label: 'MEMBERSHIP TIER', value: data.category_name || 'Standard Tier' },

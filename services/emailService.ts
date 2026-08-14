@@ -69,8 +69,8 @@ export function buildBoxedEmailHtml(params: {
     : 'MEMBERSHIP ENROLLMENT CONFIRMED';
 
   const banner = params.bannerText || defaultBannerText;
-  const propName = params.propertyName || 'The Torch Doha';
-  const outlet = params.outletName || 'Torch Club';
+  const propName = params.propertyName || 'HEALTH CLUB';
+  const outlet = params.outletName || 'CLUB';
   const sub = params.subtitle || 'OFFICIAL MEMBERSHIP ENROLLMENT';
   const greeting = params.greeting !== undefined ? params.greeting : 'Dear Admin,';
 
@@ -403,11 +403,11 @@ export const emailService = {
         bannerType: 'success',
         bannerText: 'MEMBERSHIP ENROLLMENT CONFIRMED',
         logoUrl,
-        propertyName: property?.name || 'The Torch Doha',
-        outletName: outlet?.name || 'Torch Club',
+        propertyName: property?.name || 'HEALTH CLUB',
+        outletName: outlet?.name || 'CLUB',
         subtitle: 'OFFICIAL MEMBERSHIP ENROLLMENT',
         greeting: 'Dear Admin,',
-        introParagraph: `A new membership purchase has been completed and registered in the system for <strong>${property?.name || 'The Torch Doha'}</strong> (${outlet?.name || 'Torch Club'}). Below are the member enrollment details and attached agreement.`,
+        introParagraph: `A new membership purchase has been completed and registered in the system for <strong>${property?.name || 'HEALTH CLUB'}</strong> (${outlet?.name || 'CLUB'}). Below are the member enrollment details and attached agreement.`,
         calloutBox: pdfBase64 ? `📄 <strong>Official Document Attached:</strong> Your signed Membership Agreement & Facility Rules PDF is attached to this email (Membership_Agreement_${member.membership_number || 'Record'}.pdf).` : undefined,
         dataFields: [
           { label: 'MEMBER NAME', value: member.guest_name || 'N/A' },

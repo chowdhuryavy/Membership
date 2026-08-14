@@ -66,7 +66,7 @@ export async function generateMemberAgreementPdfBase64(
 ): Promise<string> {
   if (typeof document !== 'undefined') {
     try {
-      const propertyName = (property?.name || settings?.company_name || 'AL AZIZIYAH BOUTIQUE HOTEL').toUpperCase();
+      const propertyName = (property?.name || settings?.company_name || 'HEALTH CLUB').toUpperCase();
       const outletName = (outlet?.name || 'NOVA SPA').toUpperCase();
       const logoUrl = property?.logo_url || settings?.logo_url || '';
       
@@ -417,7 +417,7 @@ export async function generateMemberAgreementPdfBase64(
     format: 'a4'
   });
 
-  const propertyName = (property?.name || settings?.company_name || 'AL AZIZIYAH BOUTIQUE HOTEL').toUpperCase();
+  const propertyName = (property?.name || settings?.company_name || 'HEALTH CLUB').toUpperCase();
   const outletName = (outlet?.name || 'NOVA SPA').toUpperCase();
 
   doc.setFont('helvetica', 'bold');
