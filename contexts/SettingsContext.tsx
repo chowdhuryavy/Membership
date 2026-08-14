@@ -148,6 +148,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   useEffect(() => {
+    if (currentOutlet) {
+      const updatedOutlet = outlets.find(o => o.id === currentOutlet.id);
+      if (updatedOutlet && JSON.stringify(updatedOutlet) !== JSON.stringify(currentOutlet)) {
+        setCurrentOutletState(updatedOutlet);
+      }
+    }
+  }, [outlets, currentOutlet]);
+
+  useEffect(() => {
     if (user && outlets.length > 0) {
       setCurrentOutletState(prev => {
           const userChanged = !lastUserRef.current || lastUserRef.current.id !== user.id;
