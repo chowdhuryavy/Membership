@@ -156,19 +156,32 @@ export const SignatureCapturePage: React.FC = () => {
                 timestamp: new Date().toISOString()
             };
 
-            // Use upsert to Supabase notifications as our "live bridge"
-            const { error } = await supabase
-                .from('notifications')
-                .upsert({
-                    id: signatureId, 
-                    title: `SIG_SYNC:${signatureId}`,
-                    message: JSON.stringify(syncData),
-                    type: 'info',
-                    outlet_id: outletId || null,
-                    user_id: '00000000-0000-0000-0000-000000000000'
-                });
+            const payloadData = {
+                id: signatureId, 
+                title: `SIG_SYNC:${signatureId}`,
+                message: JSON.stringify(syncData),
+                type: 'info',
+                outlet_id: outletId || null,
+                user_id: '00000000-0000-0000-0000-000000000000'
+            };
 
-            if (error) throw error;
+            const { data: existing } = await supabase
+                .from('notifications')
+                .select('id')
+                .eq('id', signatureId)
+                .maybeSingle();
+
+            if (existing) {
+                await supabase
+                    .from('notifications')
+                    .update({ message: JSON.stringify(syncData) })
+                    .eq('id', signatureId);
+            } else {
+                await supabase
+                    .from('notifications')
+                    .insert([payloadData]);
+            }
+
             if (confirmed) setSaved(true);
         } catch (err) {
             console.error('Error syncing signature:', err);

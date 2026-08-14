@@ -13,7 +13,31 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
-import { SignaturePad } from '../components/SignatureModal';
+import SignatureCanvas from 'react-signature-canvas';
+import { PTAgreementModal } from '../components/PTAgreementModal';
+
+const SessionSignaturePad: React.FC<{ title: string; onSave: (sig: string) => void; onClear: () => void }> = ({ title, onSave, onClear }) => {
+    const sigRef = useRef<any>(null);
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{title}</label>
+                <button type="button" onClick={() => { sigRef.current?.clear(); onClear(); }} className="text-[10px] text-red-500 font-bold uppercase">Clear</button>
+            </div>
+            <div className="border-2 border-slate-200 rounded-2xl bg-white overflow-hidden h-40">
+                <SignatureCanvas 
+                    ref={sigRef} 
+                    canvasProps={{ className: 'w-full h-full cursor-crosshair' }}
+                    onEnd={() => {
+                        if (sigRef.current) {
+                            onSave(sigRef.current.toDataURL());
+                        }
+                    }}
+                />
+            </div>
+        </div>
+    );
+};
 
 export default function PTMembers() {
     const { user, isSuperAdmin } = useAuth();
@@ -74,6 +98,7 @@ export default function PTMembers() {
     // Printable Session Slip & Package Form state
     const [printingSession, setPrintingSession] = useState<PTSession | null>(null);
     const [printingPackageForm, setPrintingPackageForm] = useState<boolean>(false);
+    const [showAgreementForPackage, setShowAgreementForPackage] = useState<PTMember | null>(null);
     const [deletingSession, setDeletingSession] = useState<PTSession | null>(null);
     const [deletingMember, setDeletingMember] = useState<PTMember | null>(null);
 
@@ -1199,6 +1224,13 @@ export default function PTMembers() {
 
                                                                     <div className="flex flex-wrap items-center gap-2">
                                                                         <Button
+                                                                            onClick={() => setShowAgreementForPackage(pkg)}
+                                                                            variant="secondary"
+                                                                            className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 border border-indigo-400/30"
+                                                                        >
+                                                                            <FileText className="w-3.5 h-3.5 mr-1" /> Agreement Form
+                                                                        </Button>
+                                                                        <Button
                                                                             onClick={() => {
                                                                                 setSelectedPackage(pkg);
                                                                                 setPrintingPackageForm(true);
@@ -1441,7 +1473,7 @@ export default function PTMembers() {
                                                                             </div>
 
                                                                             <div>
-                                                                                <SignaturePad 
+                                                                                <SessionSignaturePad 
                                                                                     title="Guest Digital Signature" 
                                                                                     onSave={(sig) => setEditGuestSignature(sig)} 
                                                                                     onClear={() => setEditGuestSignature('')} 
@@ -1690,7 +1722,7 @@ export default function PTMembers() {
                             </div>
 
                             <div>
-                                <SignaturePad 
+                                <SessionSignaturePad 
                                     title="Guest Digital Signature (Required)" 
                                     onSave={(sig) => setGuestSignature(sig)} 
                                     onClear={() => setGuestSignature('')} 
@@ -1844,6 +1876,17 @@ export default function PTMembers() {
                 {renderPackageCard()}
             </div>,
             document.body
+        )}
+
+        {showAgreementForPackage && (
+            <PTAgreementModal 
+                ptMember={showAgreementForPackage}
+                trainer={staff.find(s => s.id === showAgreementForPackage.trainer_id)}
+                outlet={currentOutlet}
+                property={currentProperty}
+                settings={settings}
+                onClose={() => setShowAgreementForPackage(null)}
+            />
         )}
 
         <style>{`

@@ -3,6 +3,7 @@ import { Button } from './ui';
 import { X, ArrowRight } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import SignatureCanvas from 'react-signature-canvas';
+export { default as SignaturePad } from 'react-signature-canvas';
 import { supabase } from '../services/mockSupabase';
 
 interface SignatureModalProps {
