@@ -1,16 +1,17 @@
 export interface PassTokenData {
   memberId: string;
   membershipNumber: string;
+  guestName?: string;
   issuedAt: number; // ms
   expiresAt: number; // ms
 }
 
-export function generatePassToken(memberId: string, membershipNumber: string): string {
+export function generatePassToken(memberId: string, membershipNumber: string, guestName?: string): string {
   const now = Date.now();
   // Set validity to 24 hours so scanned links remain active for guest's session
   const expiresAt = now + 24 * 60 * 60 * 1000;
-  // Compact format: memberId~membershipNumber~expiresAt~issuedAt
-  const rawStr = `${memberId}~${membershipNumber}~${expiresAt}~${now}`;
+  // Compact format: memberId~membershipNumber~expiresAt~issuedAt~guestName
+  const rawStr = `${memberId}~${membershipNumber}~${expiresAt}~${now}${guestName ? '~' + guestName : ''}`;
   // Standard base64 with URL safety
   return btoa(rawStr).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
@@ -34,7 +35,8 @@ export function decodePassToken(token: string): PassTokenData | null {
           memberId: parts[0],
           membershipNumber: parts[1],
           expiresAt: parseInt(parts[2], 10),
-          issuedAt: parts[3] ? parseInt(parts[3], 10) : Date.now()
+          issuedAt: parts[3] ? parseInt(parts[3], 10) : Date.now(),
+          guestName: parts[4] || undefined
         };
       }
     }

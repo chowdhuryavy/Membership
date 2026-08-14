@@ -31,7 +31,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   const matchedOutlet = outlets?.find(o => o.id === member.outlet_id) || currentOutlet || outlets?.[0];
   const matchedProperty = properties?.find(p => p.id === matchedOutlet?.property_id) || currentProperty || properties?.[0];
 
-  const propertyName = matchedProperty?.name || currentProperty?.name || settings?.name || 'THE TORCH DOHA';
+  const propertyName = matchedProperty?.name || currentProperty?.name || settings?.name || 'Health Club';
   const displayOutletName = propOutletName || matchedOutlet?.name || currentOutlet?.name || 'HEALTH CLUB';
 
   const isUnsplashDefault = (url?: string) => !url || url.includes('images.unsplash.com/photo-1540555700478-4be289fbecef');
@@ -129,7 +129,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
   const [remainingSeconds, setRemainingSeconds] = useState<number>(300); // 5 minutes
 
   const generateNewToken = () => {
-    const newToken = generatePassToken(member.id, member.membership_number);
+    const newToken = generatePassToken(member.id, member.membership_number, member.guest_name);
     setToken(newToken);
     setRemainingSeconds(300); // 5 minutes
     toast.success('Generated fresh 5-minute camera QR access link!');

@@ -58,6 +58,17 @@ export const PublicMemberPass: React.FC = () => {
       setTokenData(decoded);
       const remaining = Math.max(0, Math.floor((decoded.expiresAt - Date.now()) / 1000));
       setRemainingSeconds(remaining);
+      
+      // Pre-populate member state with basic token data for instant UI (Zero-flicker)
+      setMember(({
+        id: decoded.memberId,
+        membership_number: decoded.membershipNumber,
+        guest_name: decoded.guestName || 'Member',
+        status: 'Active',
+        access_type: 'Facility Access',
+        package_type: 'Digital Pass',
+        current_end_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+      } as unknown) as Member);
     } else {
       setTokenData(null);
     }
@@ -132,13 +143,13 @@ export const PublicMemberPass: React.FC = () => {
             setMember(({
               id: tokenData.memberId,
               membership_number: tokenData.membershipNumber,
-              guest_name: 'Valued Member',
+              guest_name: tokenData.guestName || 'Member',
               status: 'Active',
-              access_type: 'Full Access',
-              package_type: 'VIP Member',
+              access_type: 'Facility Access',
+              package_type: 'Digital Pass',
               current_end_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
             } as unknown) as Member);
-            setMemberTier('VIP Member');
+            setMemberTier(tokenData.guestName ? 'Member' : 'Member');
           }
         }
       } catch (err) {
@@ -151,8 +162,8 @@ export const PublicMemberPass: React.FC = () => {
     fetchData();
   }, [tokenData]);
 
-  const propertyName = property?.name || settings?.name || outlet?.name || 'THE TORCH DOHA';
-  const logoUrl = outlet?.logo_url || property?.logo_url || settings?.logo_url || 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=150&q=80';
+  const propertyName = property?.name || settings?.name || outlet?.name || 'Health Club';
+  const logoUrl = outlet?.logo_url || property?.logo_url || settings?.logo_url || '';
   const propertyAddress = outlet?.address?.trim() || property?.address?.trim() || settings?.address?.trim() || '';
   const propertyPhone = outlet?.phone?.trim() || property?.phone?.trim() || settings?.phone?.trim() || '';
 
@@ -182,13 +193,21 @@ export const PublicMemberPass: React.FC = () => {
     if (!member) return;
     const toastId = toast.loading('Connecting to Google Wallet API...');
     try {
+      const fullLogoUrl = logoUrl ? (logoUrl.startsWith('http') ? logoUrl : `${window.location.origin}${logoUrl.startsWith('/') ? '' : '/'}${logoUrl}`) : '';
       const response = await fetch('/api/google-wallet/generate-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           memberId: member.id,
           guestName: member.guest_name,
-          membershipNumber: member.membership_number
+          membershipNumber: member.membership_number,
+          propertyName: propertyName,
+          outletName: outlet?.name || 'Health Club',
+          logoUrl: fullLogoUrl,
+          packageTier: memberTier || member.package_type || 'Digital Pass',
+          accessType: member.access_type || 'Facility Access',
+          validUntil: member.current_end_date || 'N/A',
+          status: member.status || 'Active'
         })
       });
 
@@ -389,7 +408,7 @@ export const PublicMemberPass: React.FC = () => {
                       MEMBER NAME
                     </span>
                     <h2 className="text-xl font-black uppercase tracking-tight text-white leading-tight">
-                      {member?.guest_name || 'Valued Member'}
+                      {member?.guest_name || 'Member'}
                     </h2>
                     <span className="text-[10px] font-mono font-bold text-amber-300 block mt-0.5">
                       #{member?.membership_number || tokenData.membershipNumber}
