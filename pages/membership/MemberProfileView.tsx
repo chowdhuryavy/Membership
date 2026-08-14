@@ -1669,7 +1669,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         <Button 
                             type="submit" 
                             disabled={!!validation.error || !validation.impact || isLoading || maxAllowed === 0}
-                            className={`w-full h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl mt-4 active:scale-95 transition-all ${validation.error || maxAllowed === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-[#a5b4fc] hover:bg-[#93a5f7] text-white'}`}
+                            className={`w-full h-16 rounded-[1.8rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl mt-4 active:scale-95 transition-all ${validation.error || maxAllowed === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-indigo-600 hover:bg-indigo-700 text-white animate-pulse shadow-indigo-500/30'}`}
                         >
                             {editingFreezeId ? 'Save Changes' : 'Freeze Member'}
                         </Button>

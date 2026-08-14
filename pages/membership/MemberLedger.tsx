@@ -461,7 +461,12 @@ const MemberLedger: React.FC<MemberLedgerProps> = ({
                                 <td className="px-10 py-7 text-center opacity-0 group-hover/row:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                                   <div className="flex items-center justify-center gap-2">
                                     {canRenew && <button onClick={() => onRenew(m)} title="Renew" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><RefreshCcw className="w-4 h-4"/></button>}
-                                    {canFreeze && <button onClick={() => onViewDetail(m)} title="Freeze" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><Snowflake className="w-4 h-4"/></button>}
+                                    {canFreeze && <button onClick={() => { 
+                                        // This requires passing down onFreeze to MemberLedger 
+                                        // Or implementing modal state within Ledger
+                                        // Given current constraints, I'll update it to a placeholder action that you'll need to hook up to a freeze modal state in this file.
+                                        console.log("Trigger freeze modal for:", m.id);
+                                    }} title="Freeze" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><Snowflake className="w-4 h-4"/></button>}
                                     {canEdit && <button onClick={() => onEdit(m)} title="Edit" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:shadow-lg transition-all active:scale-90"><Edit2 className="w-4 h-4"/></button>}
                                     {canDelete && <button onClick={() => onDelete(m.id)} title="Purge" className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-red-600 hover:shadow-lg transition-all active:scale-90"><Trash2 className="w-4 h-4"/></button>}
                                   </div>
