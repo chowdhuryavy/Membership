@@ -2065,7 +2065,10 @@ class DatabaseService {
             logo_url: remote.logo_url || '',
             signatory_config: remote.signatory_config || {},
             contract_template: remote.contract_template || '',
-            conditions: remote.conditions || ''
+            conditions: remote.conditions || '',
+            booking_enabled: remote.booking_enabled ?? true,
+            booking_start_time: remote.booking_start_time || '08:00',
+            booking_end_time: remote.booking_end_time || '22:00'
           })) as Outlet[];
         }
         return [];

@@ -142,20 +142,25 @@ interface SignatureModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (memberSig: string, staffSig: string) => void;
-  initialMemberSignature?: string;
-  initialStaffSignature?: string;
+  onSkip?: () => void;
+  onMethodSelect: (method: 'pad' | 'qr') => void;
+  onClear: () => void;
+  signatureMethod: 'pad' | 'qr' | null;
+  signatureRef: React.RefObject<SignatureCanvas>;
+  qrUrl: string;
 }
 
 export const SignatureModal: React.FC<SignatureModalProps> = ({ 
   isOpen, 
   onClose, 
   onSave, 
-  initialMemberSignature, 
-  initialStaffSignature 
+  onSkip,
+  onMethodSelect,
+  onClear,
+  signatureMethod,
+  signatureRef,
+  qrUrl
 }) => {
-  const [memberSig, setMemberSig] = useState(initialMemberSignature || '');
-  const [staffSig, setStaffSig] = useState(initialStaffSignature || '');
-
   if (!isOpen) return null;
 
   return (
@@ -170,29 +175,33 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
           </button>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
-          <SignaturePad 
-            title="Member Signature" 
-            initialData={memberSig}
-            onSave={setMemberSig} 
-            onClear={() => setMemberSig('')} 
-          />
-          <SignaturePad 
-            title="Authorized Staff Signature" 
-            initialData={staffSig}
-            onSave={setStaffSig} 
-            onClear={() => setStaffSig('')} 
-          />
-          
-          <div className="flex gap-3 pt-4 border-t border-slate-100">
-            <Button variant="secondary" onClick={onClose} className="flex-1 rounded-xl h-12 font-bold">Cancel</Button>
-            <Button 
-              onClick={() => onSave(memberSig, staffSig)} 
-              className="flex-1 rounded-xl h-12 font-black shadow-lg shadow-indigo-100"
-              disabled={!memberSig || !staffSig}
-            >
-              <Check className="w-4 h-4 mr-2" /> Save Signatures
-            </Button>
-          </div>
+          {!signatureMethod ? (
+            <div className="space-y-4">
+              <Button onClick={() => onMethodSelect('pad')} className="w-full h-16 rounded-xl font-black text-xs uppercase" variant="outline">Sign on Pad</Button>
+              <Button onClick={() => onMethodSelect('qr')} className="w-full h-16 rounded-xl font-black text-xs uppercase" variant="outline">Scan QR to Sign on Device</Button>
+              {onSkip && <Button onClick={onSkip} className="w-full h-12 rounded-xl font-bold" variant="ghost">Skip Signature</Button>}
+            </div>
+          ) : signatureMethod === 'pad' ? (
+            <div className="space-y-4">
+              <div className="border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 overflow-hidden relative h-[150px]">
+                <SignatureCanvas
+                    ref={signatureRef}
+                    penColor='black'
+                    canvasProps={{width: 400, height: 150, className: 'w-full h-[150px]'}}
+                />
+              </div>
+              <div className="flex gap-3">
+                  <Button onClick={() => onMethodSelect(null as any)} variant="secondary" className="flex-1 rounded-xl h-12 font-bold">Back</Button>
+                  <Button onClick={() => onSave('signature-data', '')} className="flex-1 rounded-xl h-12 font-black shadow-lg shadow-indigo-100">Save</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4">
+              <QRCodeSVG value={qrUrl} size={200} />
+              <p className="text-xs font-bold text-slate-500">Scan this QR code with the guest's phone to sign.</p>
+              <Button onClick={() => onMethodSelect(null as any)} variant="secondary" className="w-full rounded-xl h-12 font-bold">Back</Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

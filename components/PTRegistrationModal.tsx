@@ -29,6 +29,8 @@ export const PTRegistrationModal = ({
     const signatureRef = useRef<SignatureCanvas>(null);
     const [signatureMethod, setSignatureMethod] = useState<'pad' | 'qr' | null>(null);
     const [pendingSubmitData, setPendingSubmitData] = useState<any | null>(null);
+    const [qrUrl, setQrUrl] = useState('');
+    const signatureIdRef = useRef<string | null>(null);
 
     const [formData, setFormData] = useState({
         guest_name: initialData?.guestName || '',
@@ -45,6 +47,34 @@ export const PTRegistrationModal = ({
         setPendingSubmitData(data);
         setShowSignatureModal(true);
         setSignatureMethod(null);
+    };
+
+    const handleSignatureMethodSelect = (method: 'pad' | 'qr') => {
+        setSignatureMethod(method);
+        if (method === 'qr') {
+            const id = crypto.randomUUID();
+            signatureIdRef.current = id;
+            
+            const baseUrl = window.location.origin;
+            const queryParams = new URLSearchParams({
+                id: id,
+                name: pendingSubmitData?.guest_name || 'Guest',
+                property: currentProperty?.name || '',
+                outlet: currentOutlet?.name || '',
+                outlet_id: currentOutlet?.id || '',
+            }).toString();
+            
+            setQrUrl(`${baseUrl}/#/signature/${id}?${queryParams}`);
+
+            supabase.from('notifications').insert({
+                id: id,
+                title: `SIG_SYNC:${id}`,
+                message: JSON.stringify({ status: 'pending' }),
+                type: 'info',
+                outlet_id: currentOutlet?.id || null,
+                user_id: '00000000-0000-0000-0000-000000000000'
+            });
+        }
     };
 
     const handleSignatureSave = () => {
@@ -232,10 +262,11 @@ NOTIFY pgrst, 'reload schema';`;
                     onClose={() => setShowSignatureModal(false)}
                     onSave={handleSignatureSave}
                     onSkip={handleSkipSignature}
-                    onMethodSelect={setSignatureMethod}
+                    onMethodSelect={handleSignatureMethodSelect}
                     signatureMethod={signatureMethod}
                     signatureRef={signatureRef}
                     onClear={() => signatureRef.current?.clear()}
+                    qrUrl={qrUrl}
                 />
             )}
         </div>
