@@ -108,6 +108,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                               setShowSignatureModal(false);
                               setSignatureMethod(null);
                               supabase.from('notifications').delete().eq('id', record.id);
+                              console.log('[Sync] Confirmed, triggering final submit', { pendingSubmitData: !!pendingSubmitData });
                               if (pendingSubmitData) onFinalSubmit(pendingSubmitData, syncData.signature);
                           }
                       } catch (e) {
@@ -134,6 +135,7 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                           setSignatureMethod(null);
                           clearInterval(interval);
                           await supabase.from('notifications').delete().eq('id', (data as any).id);
+                          console.log('[Polling] Confirmed, triggering final submit', { pendingSubmitData: !!pendingSubmitData });
                           if (pendingSubmitData) onFinalSubmit(pendingSubmitData, syncData.signature);
                       }
                   }

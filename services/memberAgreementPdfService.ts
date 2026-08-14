@@ -409,7 +409,7 @@ export async function generateMemberAgreementPdfBase64(
       console.warn('[MemberAgreementPdfService] Falling back to programmatic jsPDF generator...');
     }
   }
-
+  
   // Fallback programmatic jsPDF builder
   const doc = new jsPDF({
     orientation: 'portrait',
