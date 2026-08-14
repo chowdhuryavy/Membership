@@ -24,6 +24,7 @@ const Members = () => {
   const [selectedTypeId, setSelectedTypeId] = useState<string | 'all'>('all');
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [autoFreezeId, setAutoFreezeId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isRenewal, setIsRenewal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -44,7 +45,13 @@ const Members = () => {
   const canView = user && hasPermission(user.role_id, 'members:view');
 
   const loadData = async (isSilent = false) => {
+    console.log("[Diagnostic - Members.tsx] loadData triggered:", {
+        hasOutlet: !!currentOutlet,
+        hasProperty: !!currentProperty,
+        canView
+    });
     if (!currentOutlet || !currentProperty || !canView) {
+      console.log("[Diagnostic - Members.tsx] loadData returning early due to missing context.");
       setLoading(false);
       setPageLoading(false);
       return;
@@ -192,6 +199,7 @@ const Members = () => {
           onViewDetail={(m) => { setSelectedMember(m); setView('detail'); }}
           onEdit={(m) => { setSelectedMember(m); setIsEditing(true); setIsRenewal(false); setView('form'); }}
           onRenew={(m) => { setSelectedMember(m); setIsRenewal(true); setIsEditing(false); setView('form'); }}
+          onFreeze={(m) => { setAutoFreezeId(m.id); setSelectedMember(m); setView('detail'); }}
           onDelete={(id) => setDeleteId(id)}
           onRefresh={loadData}
         />
@@ -219,13 +227,14 @@ const Members = () => {
 
       {view === 'detail' && selectedMember && (
         <MemberProfileView 
-          member={selectedMember}
+          member={selectedMember} 
           categories={categories}
-          onBack={() => setView('list')}
+          onBack={() => { setView('list'); setSelectedMember(null); setAutoFreezeId(null); }}
           onEdit={(m) => { setSelectedMember(m); setIsEditing(true); setIsRenewal(false); setView('form'); }}
           onRenew={(m) => { setSelectedMember(m); setIsRenewal(true); setIsEditing(false); setView('form'); }}
           onUpdate={loadData}
           onDelete={(id) => setDeleteId(id)}
+          initialFreeze={autoFreezeId === selectedMember.id}
         />
       )}
 

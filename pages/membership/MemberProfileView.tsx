@@ -30,16 +30,23 @@ interface MemberProfileViewProps {
   onRenew: (m: Member) => void;
   onUpdate: () => void;
   onDelete: (id: string) => void;
+  initialFreeze?: boolean;
 }
 
 const MemberProfileView: React.FC<MemberProfileViewProps> = ({
-  member: initialMember, categories, onBack, onEdit, onRenew, onUpdate, onDelete
+  member: initialMember, categories, onBack, onEdit, onRenew, onUpdate, onDelete, initialFreeze
 }) => {
   const { user, isSuperAdmin } = useAuth();
   const { formatMoney, currentOutlet, currentProperty, settings, hasPermission, setPageLoading, outlets } = useSettings();
   
   const [viewingMember, setViewingMember] = useState<Member>(initialMember);
   const [freezes, setFreezes] = useState<Freeze[]>([]);
+
+  useEffect(() => {
+    if (initialFreeze) {
+        setShowFreezeModal(true);
+    }
+  }, [initialFreeze]);
 
   useEffect(() => {
     if (initialMember) {
