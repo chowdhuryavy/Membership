@@ -100,23 +100,26 @@ export const SignatureCapturePage: React.FC = () => {
 
         // Check status on mount
         const initCheck = async () => {
-            const { data } = await supabase
-                .from('notifications')
-                .select('id, message')
-                .eq('id', signatureId)
-                .maybeSingle();
-            
-            if (data?.message) {
-                try {
-                    const syncData = JSON.parse(data.message);
-                    if (syncData.completed_by_staff) setSaved(true);
-                    if (syncData.cancelled) setExpired(true);
-                } catch (e) {}
-            } else if (!data) {
-                // If record doesn't exist, it's either completed or invalid
-                setExpired(true);
+            try {
+                const { data } = await supabase
+                    .from('notifications')
+                    .select('id, message')
+                    .eq('id', signatureId)
+                    .maybeSingle();
+                
+                if (data?.message) {
+                    try {
+                        const syncData = JSON.parse(data.message);
+                        if (syncData.completed_by_staff) setSaved(true);
+                        if (syncData.cancelled) setExpired(true);
+                    } catch (e) {}
+                }
+                // If record does not exist yet, do NOT mark as expired; let guest sign and upsert
+            } catch (err) {
+                console.warn("Signature session check fallback:", err);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
         initCheck();
 

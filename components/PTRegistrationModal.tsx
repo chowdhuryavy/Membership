@@ -1,12 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { X, Save, User, Calendar, AlertTriangle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Input, Button } from './ui';
-import { db, supabase } from '../services/mockSupabase';
+import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
 import { PTMember } from '../types';
 import { SignatureModal } from './SignatureModal';
-import SignatureCanvas from 'react-signature-canvas';
 
 export const PTRegistrationModal = ({
     isOpen,
@@ -18,19 +17,14 @@ export const PTRegistrationModal = ({
     isOpen: boolean;
     onClose: () => void;
     onSuccess: (ptMember: PTMember) => void;
-    initialData: { guestName: string; saleId?: string; qty: number; itemName?: string; trainerId?: string };
+    initialData: { guestName: string; saleId?: string; qty: number; itemName?: string; trainerId?: string; price?: number };
     staff: any[];
 }) => {
     const { currentOutlet, currentProperty, settings, currency, currencies } = useSettings();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [showSignatureModal, setShowSignatureModal] = useState(false);
-    const [signature, setSignature] = useState<string | null>(null);
-    const signatureRef = useRef<SignatureCanvas>(null);
-    const [signatureMethod, setSignatureMethod] = useState<'pad' | 'qr' | null>(null);
     const [pendingSubmitData, setPendingSubmitData] = useState<any | null>(null);
-    const [qrUrl, setQrUrl] = useState('');
-    const signatureIdRef = useRef<string | null>(null);
 
     const [formData, setFormData] = useState({
         guest_name: initialData?.guestName || '',
@@ -46,53 +40,25 @@ export const PTRegistrationModal = ({
     const initiateSignature = (data: any) => {
         setPendingSubmitData(data);
         setShowSignatureModal(true);
-        setSignatureMethod(null);
     };
 
-    const handleSignatureMethodSelect = (method: 'pad' | 'qr') => {
-        setSignatureMethod(method);
-        if (method === 'qr') {
-            const id = crypto.randomUUID();
-            signatureIdRef.current = id;
-            
-            const baseUrl = window.location.origin;
-            const queryParams = new URLSearchParams({
-                id: id,
-                name: pendingSubmitData?.guest_name || 'Guest',
-                property: currentProperty?.name || '',
-                outlet: currentOutlet?.name || '',
-                outlet_id: currentOutlet?.id || '',
-            }).toString();
-            
-            setQrUrl(`${baseUrl}/#/signature/${id}?${queryParams}`);
-
-            supabase.from('notifications').insert({
-                id: id,
-                title: `SIG_SYNC:${id}`,
-                message: JSON.stringify({ status: 'pending' }),
-                type: 'info',
-                outlet_id: currentOutlet?.id || null,
-                user_id: '00000000-0000-0000-0000-000000000000'
-            });
-        }
-    };
-
-    const handleSignatureSave = () => {
-        if (signatureRef.current) {
-            const dataUrl = signatureRef.current.toDataURL();
-            setSignature(dataUrl);
-            setShowSignatureModal(false);
-            setSignatureMethod(null);
-            if (pendingSubmitData) {
-                onFinalSubmit(pendingSubmitData, dataUrl);
-            }
+    const handleSignatureSave = (dataUrl: string) => {
+        setShowSignatureModal(false);
+        if (pendingSubmitData) {
+            onFinalSubmit(pendingSubmitData, dataUrl);
         }
     };
     
+    const closeSignatureModal = () => {
+        setShowSignatureModal(false); 
+        setPendingSubmitData(null); 
+        setLoading(false);
+    };
+    
     const handleSkipSignature = async () => {
+        setShowSignatureModal(false);
         if (pendingSubmitData) {
             await onFinalSubmit(pendingSubmitData, 'BYPASSED'); 
-            setShowSignatureModal(false);
         }
     };
 
@@ -106,7 +72,7 @@ export const PTRegistrationModal = ({
                 start_date: new Date().toISOString().split('T')[0],
                 end_date: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                 trainer_id: initialData.trainerId || '',
-                notes: initialData.itemName ? `Purchased item: ${initialData.itemName}` : ''
+                notes: initialData?.itemName ? `Purchased item: ${initialData.itemName}` : ''
             });
             setError('');
         }
@@ -115,6 +81,9 @@ export const PTRegistrationModal = ({
     if (!isOpen) return null;
 
     const allActiveStaff = staff.filter(s => s.is_active !== false);
+    const activeCurrency = currency || 
+                           (currentProperty && currencies.find(c => c.property_id === currentProperty.id)) || 
+                           { code: 'AED', symbol: 'AED' };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -125,6 +94,7 @@ export const PTRegistrationModal = ({
 
         const memberData = {
             outlet_id: currentOutlet.id,
+            property_id: currentProperty?.id,
             guest_name: formData.guest_name,
             phone: formData.phone,
             email: formData.email,
@@ -146,7 +116,7 @@ export const PTRegistrationModal = ({
         try {
             await db.addPTMember({
                 ...data,
-                member_signature: signatureOverride || signature
+                member_signature: signatureOverride
             });
             onSuccess(data as any);
         } catch (err: any) {
@@ -216,6 +186,7 @@ export const PTRegistrationModal = ({
                                                     const sql = `CREATE TABLE IF NOT EXISTS public.pt_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     outlet_id TEXT NOT NULL,
+    property_id TEXT,
     guest_name TEXT NOT NULL,
     phone TEXT,
     email TEXT,
@@ -227,6 +198,7 @@ export const PTRegistrationModal = ({
     trainer_id TEXT,
     notes TEXT,
     status TEXT DEFAULT 'Active',
+    member_signature TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.pt_members ENABLE ROW LEVEL SECURITY;
@@ -247,7 +219,7 @@ NOTIFY pgrst, 'reload schema';`;
                             )}
                             
                             <div className="flex gap-3 pt-2">
-                                <button type="button" onClick={onClose} className="flex-1 h-12 rounded-xl font-bold uppercase text-[10px] tracking-widest bg-slate-100 hover:bg-slate-200 transition-colors">Skip</button>
+                                <button type="button" onClick={onClose} className="flex-1 h-12 rounded-xl font-bold uppercase text-[10px] tracking-widest bg-slate-100 hover:bg-slate-200 transition-colors">Cancel</button>
                                 <Button type="submit" disabled={loading} className="flex-[2] h-12 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100">
                                     {loading ? 'Registering...' : 'Register Profile'}
                                 </Button>
@@ -259,14 +231,18 @@ NOTIFY pgrst, 'reload schema';`;
             {showSignatureModal && (
                 <SignatureModal
                     isOpen={showSignatureModal}
-                    onClose={() => setShowSignatureModal(false)}
+                    onClose={closeSignatureModal}
                     onSave={handleSignatureSave}
                     onSkip={handleSkipSignature}
-                    onMethodSelect={handleSignatureMethodSelect}
-                    signatureMethod={signatureMethod}
-                    signatureRef={signatureRef}
-                    onClear={() => signatureRef.current?.clear()}
-                    qrUrl={qrUrl}
+                    guestName={formData.guest_name}
+                    propertyName={currentProperty?.name || ''}
+                    outletName={currentOutlet?.name || ''}
+                    outletId={currentOutlet?.id || ''}
+                    tier={`${formData.total_sessions} PT Sessions`}
+                    price={initialData?.price || '0'}
+                    currency={activeCurrency?.code || 'AED'}
+                    currencySymbol={activeCurrency?.symbol || ''}
+                    logoUrl={currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || ''}
                 />
             )}
         </div>

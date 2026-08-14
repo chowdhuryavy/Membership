@@ -1475,7 +1475,8 @@ const Sales = () => {
                                         saleId: saleData.id,
                                         qty: saleData.quantity || 10,
                                         itemName: saleData.item_name,
-                                        trainerId: saleData.sold_by_id || (saleData as any).therapist_id || ''
+                                        trainerId: saleData.sold_by_id || (saleData as any).therapist_id || '',
+                                        price: saleData.net_amount || saleData.total_amount || 0
                                     });
                                 } else if (saleData && isEntrance) {
                                     setShowEntranceFeeConsent({
@@ -1494,9 +1495,22 @@ const Sales = () => {
             {showPTRegistration && (
                 <PTRegistrationModal
                     isOpen={true}
-                    onClose={() => setShowPTRegistration(null)}
+                    onClose={async () => {
+                        if (showPTRegistration?.saleId) {
+                            try {
+                                await db.deleteSale(showPTRegistration.saleId);
+                                cache.invalidate('sales');
+                                loadData();
+                                toast('PT Registration cancelled and transaction discarded.', { icon: 'ℹ️' });
+                            } catch (e) {
+                                console.error('Error discarding sale on PT cancel:', e);
+                            }
+                        }
+                        setShowPTRegistration(null);
+                    }}
                     onSuccess={(ptMember) => {
                         setShowPTRegistration(null);
+                        loadData();
                         toast.success('PT Profile Created successfully!');
                     }}
                     initialData={showPTRegistration}

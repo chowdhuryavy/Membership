@@ -456,6 +456,7 @@ export interface PTMember {
   status: 'Active' | 'Completed' | 'Expired';
   trainer_id?: string;
   notes?: string;
+  member_signature?: string;
   created_at: string;
 }
 
