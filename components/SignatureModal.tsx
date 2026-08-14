@@ -1,6 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button } from './ui';
 import { X, PenTool, Eraser, Check } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import SignatureCanvas from 'react-signature-canvas';
 
 interface SignaturePadProps {
   title: string;
