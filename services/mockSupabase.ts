@@ -2694,21 +2694,42 @@ class DatabaseService {
 
     if (this.isSupabase()) {
       await this.safeCall(async () => {
-        const { error } = await supabase.from('pt_members').insert([payload]);
+        const cleanPayload: any = {
+          id: payload.id,
+          outlet_id: payload.outlet_id,
+          property_id: payload.property_id || null,
+          guest_name: payload.guest_name,
+          phone: payload.phone || null,
+          email: payload.email || null,
+          total_sessions: payload.total_sessions,
+          used_sessions: payload.used_sessions || 0,
+          sale_id: payload.sale_id || null,
+          start_date: payload.start_date,
+          end_date: payload.end_date,
+          status: payload.status || 'active',
+          trainer_id: payload.trainer_id || null,
+          notes: payload.notes || null,
+          member_signature: payload.member_signature || null,
+          created_at: payload.created_at
+        };
+        // Remove undefined keys
+        Object.keys(cleanPayload).forEach(k => cleanPayload[k] === undefined && delete cleanPayload[k]);
+
+        const { error } = await supabase.from('pt_members').insert([cleanPayload]);
         if (error) {
           if (error.message && (error.message.includes('column') || error.message.includes('schema cache'))) {
             const corePayload = {
-              id: payload.id,
-              outlet_id: payload.outlet_id,
-              guest_name: payload.guest_name,
-              phone: payload.phone || null,
-              email: payload.email || null,
-              total_sessions: payload.total_sessions,
-              used_sessions: payload.used_sessions || 0,
-              start_date: payload.start_date,
-              end_date: payload.end_date,
-              sale_id: payload.sale_id || null,
-              created_at: payload.created_at
+              id: cleanPayload.id,
+              outlet_id: cleanPayload.outlet_id,
+              guest_name: cleanPayload.guest_name,
+              phone: cleanPayload.phone,
+              email: cleanPayload.email,
+              total_sessions: cleanPayload.total_sessions,
+              used_sessions: cleanPayload.used_sessions,
+              start_date: cleanPayload.start_date,
+              end_date: cleanPayload.end_date,
+              sale_id: cleanPayload.sale_id,
+              created_at: cleanPayload.created_at
             };
             const { error: retryErr } = await supabase.from('pt_members').insert([corePayload]);
             if (retryErr) throw retryErr;
