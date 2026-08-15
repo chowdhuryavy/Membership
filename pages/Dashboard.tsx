@@ -267,9 +267,11 @@ const Dashboard = () => {
             limitToIds = allowedOutletsInProperty.map(o => o.id);
         }
 
-        // Fetch data with scope awareness
+        // Fetch data with scope awareness (ensuring both 6-month trend and full YTD are fetched)
         const sixMonthsAgo = subMonths(viewDate, 6);
-        const dataStartDate = format(sixMonthsAgo, 'yyyy-MM-01');
+        const yearStart = startOfYear(viewDate);
+        const earliestDate = sixMonthsAgo < yearStart ? sixMonthsAgo : yearStart;
+        const dataStartDate = format(earliestDate, 'yyyy-MM-01');
 
         const memberColumns = 'id, status, start_date, current_end_date, created_at, membership_type_id, daily_rate, net_amount, outlet_id, guest_name, membership_number';
         const results = await Promise.allSettled([
@@ -415,6 +417,68 @@ const Dashboard = () => {
         // but for now let's keep them so the user sees the types exist.
         setMembershipTypeMix(typeMix);
 
+        // Helper to normalize sale categories consistently across the platform
+        const normalizeCategory = (cat?: string, itemName?: string): 'massage' | 'personalTraining' | 'retail' | 'entranceFee' | 'other' => {
+            const c = (cat || '').toLowerCase().trim();
+            const it = (itemName || '').toLowerCase().trim();
+
+            if (
+                c === 'massage' || 
+                c.includes('massage') || 
+                c === 'treatments' || 
+                c === 'spa' ||
+                it.includes('massage') ||
+                it.includes('treatment')
+            ) {
+                return 'massage';
+            }
+
+            if (
+                c === 'personal training' || 
+                c === 'p. training' || 
+                c === 'p.training' ||
+                c === 'pt' || 
+                c === 'personal trainer' ||
+                c.includes('personal training') ||
+                it.includes('personal training') ||
+                it.includes('pt session') ||
+                it.includes('pt package')
+            ) {
+                return 'personalTraining';
+            }
+
+            if (
+                c === 'entrance fee' || 
+                c === 'entrance fees' || 
+                c === 'day use' || 
+                c === 'day pass' || 
+                c === 'daily pass' || 
+                c === 'guest pass' || 
+                c === 'pool pass' || 
+                c === 'gym pass' ||
+                c.includes('entrance') ||
+                it.includes('entrance') ||
+                it.includes('day pass') ||
+                it.includes('daily pass') ||
+                it.includes('day use')
+            ) {
+                return 'entranceFee';
+            }
+
+            if (
+                c === 'retail' || 
+                c === 'retail items' || 
+                c === 'retail products' || 
+                c.includes('retail')
+            ) {
+                return 'retail';
+            }
+
+            return 'other';
+        };
+
+        const saleBookingIds = new Set(sales.map(s => s.booking_id).filter(Boolean));
+
         // 2. Performance Trend (6 months)
         const performanceTrend: PerformanceTrendData[] = [];
         for (let i = 5; i >= 0; i--) {
@@ -441,7 +505,11 @@ const Dashboard = () => {
                 return s.status === 'completed' && isSameMonth(d, targetMonthDate);
             }).forEach(s => totalRevInMonth += Number(s.net_amount));
 
-            // Removed bookings.filter(...) to avoid double counting, matching MTD logic
+            // Include completed massage bookings not registered through POS sales
+            bookings.filter(b => {
+                const bDate = parseISO(b.date);
+                return b.status === 'completed' && !saleBookingIds.has(b.id) && isSameMonth(bDate, targetMonthDate);
+            }).forEach(b => totalRevInMonth += Number((b.price || 0) - (b.discount || 0)));
 
             performanceTrend.push({ month: format(targetMonthDate, 'MMM'), revenue: totalRevInMonth, intake: intakeInMonth });
         }
@@ -487,46 +555,60 @@ const Dashboard = () => {
         const mtdSalesBreakdown = { personalTraining: 0, retail: 0, entranceFee: 0, other: 0 };
         const ytdSalesBreakdown = { personalTraining: 0, retail: 0, entranceFee: 0, other: 0 };
 
-        // We calculate all non-membership revenue from sales to avoid double counting with bookings
-        // Bookings are used for counts and utilization metrics, but Sales is the financial source of truth
+        // We calculate non-membership revenue from sales, plus any direct completed massage bookings
         sales.filter(s => s.status === 'completed').forEach(s => {
             const sDate = new Date(s.created_at);
             const amount = Number(s.net_amount || 0);
-            const cat = s.category as string;
+            const cat = normalizeCategory(s.category as string, s.item_name);
             
             if (isSameYear(sDate, viewDate)) {
-                if (cat === 'Massage') {
+                if (cat === 'massage') {
                     ytdServiceRevenue += amount;
                 } else {
                     ytdSalesRevenue += amount;
-                    if (cat === 'Personal Training') ytdSalesBreakdown.personalTraining += amount;
-                    else if (cat === 'Retail' || cat === 'Retail Items') ytdSalesBreakdown.retail += amount;
-                    else if (cat === 'Entrance Fee' || cat === 'Day Use') ytdSalesBreakdown.entranceFee += amount;
+                    if (cat === 'personalTraining') ytdSalesBreakdown.personalTraining += amount;
+                    else if (cat === 'retail') ytdSalesBreakdown.retail += amount;
+                    else if (cat === 'entranceFee') ytdSalesBreakdown.entranceFee += amount;
                     else ytdSalesBreakdown.other += amount;
                 }
             }
 
             if (isSameMonth(sDate, viewDate)) {
-                if (cat === 'Massage') {
+                if (cat === 'massage') {
                     mtdServiceRevenue += amount;
                 } else {
                     mtdSalesRevenue += amount;
-                    if (cat === 'Personal Training') mtdSalesBreakdown.personalTraining += amount;
-                    else if (cat === 'Retail' || cat === 'Retail Items') mtdSalesBreakdown.retail += amount;
-                    else if (cat === 'Entrance Fee' || cat === 'Day Use') mtdSalesBreakdown.entranceFee += amount;
+                    if (cat === 'personalTraining') mtdSalesBreakdown.personalTraining += amount;
+                    else if (cat === 'retail') mtdSalesBreakdown.retail += amount;
+                    else if (cat === 'entranceFee') mtdSalesBreakdown.entranceFee += amount;
                     else mtdSalesBreakdown.other += amount;
                 }
             }
 
             if (isSameDay(sDate, now)) {
-                if (cat === 'Massage') {
+                if (cat === 'massage') {
                     dailyServiceRevenue += amount;
                 } else {
-                    if (cat === 'Personal Training') dailySalesBreakdown.personalTraining += amount;
-                    else if (cat === 'Retail' || cat === 'Retail Items') dailySalesBreakdown.retail += amount;
-                    else if (cat === 'Entrance Fee' || cat === 'Day Use') dailySalesBreakdown.entranceFee += amount;
+                    if (cat === 'personalTraining') dailySalesBreakdown.personalTraining += amount;
+                    else if (cat === 'retail') dailySalesBreakdown.retail += amount;
+                    else if (cat === 'entranceFee') dailySalesBreakdown.entranceFee += amount;
                     else dailySalesBreakdown.other += amount;
                 }
+            }
+        });
+
+        // Add completed massage bookings not recorded in sales
+        bookings.filter(b => b.status === 'completed' && !saleBookingIds.has(b.id)).forEach(b => {
+            const bDate = parseISO(b.date);
+            const amount = Number((b.price || 0) - (b.discount || 0));
+            if (isSameYear(bDate, viewDate)) {
+                ytdServiceRevenue += amount;
+            }
+            if (isSameMonth(bDate, viewDate)) {
+                mtdServiceRevenue += amount;
+            }
+            if (isSameDay(bDate, now)) {
+                dailyServiceRevenue += amount;
             }
         });
 

@@ -3182,12 +3182,18 @@ class DatabaseService {
         let query = supabase.from('sales').select('*');
         
         if (guestId) {
-            query = query.eq('guest_id', guestId).limit(500);
+            query = query.eq('guest_id', guestId).limit(2000);
         } else if (isPropertyScope) {
             if (limitToOutletIds && limitToOutletIds.length > 0) {
                 query = query.in('outlet_id', limitToOutletIds);
             } else {
-                query = query.eq('property_id', scopeId).limit(500);
+                const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
+                const oIds = (outlets || []).map((o: any) => o.id);
+                if (oIds.length > 0) {
+                    query = query.or(`property_id.eq.${scopeId},outlet_id.in.(${oIds.join(',')})`);
+                } else {
+                    query = query.eq('property_id', scopeId);
+                }
             }
         }
         else query = query.eq('outlet_id', scopeId);
@@ -3196,7 +3202,7 @@ class DatabaseService {
             query = query.gte('created_at', startDate);
         }
 
-        const { data, error } = await query.order('created_at', { ascending: false }).limit(startDate ? 10000 : 2000); // Safety limit
+        const { data, error } = await query.order('created_at', { ascending: false }).limit(startDate ? 20000 : 5000);
         if (error) throw error;
         return (data || []) as Sale[] | any;
       }, []);
@@ -3725,16 +3731,22 @@ class DatabaseService {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         // Optimization: Select only required columns to reduce payload size and query time
-        const selectCols = 'id,date,start_time,end_time,guest_id,guest_name,guest_phone,massage_type_id,outlet_id,property_id,room_id,therapist_id,status,notes,total_price,is_paid,staff_id,created_at,updated_at,inventory_item_id,member_id';
+        const selectCols = 'id,date,start_time,end_time,guest_id,guest_name,guest_phone,massage_type_id,outlet_id,property_id,room_id,therapist_id,status,notes,total_price,is_paid,staff_id,created_at,updated_at,inventory_item_id,member_id,price,discount';
         let query = supabase.from('massage_bookings').select(selectCols);
         
         if (guestId) {
-            query = query.eq('guest_id', guestId).limit(500);
+            query = query.eq('guest_id', guestId).limit(2000);
         } else if (isPropertyScope) {
             if (limitToOutletIds && limitToOutletIds.length > 0) {
                 query = query.in('outlet_id', limitToOutletIds);
             } else {
-                query = query.eq('property_id', scopeId).limit(500);
+                const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
+                const oIds = (outlets || []).map((o: any) => o.id);
+                if (oIds.length > 0) {
+                    query = query.or(`property_id.eq.${scopeId},outlet_id.in.(${oIds.join(',')})`);
+                } else {
+                    query = query.eq('property_id', scopeId);
+                }
             }
         }
         else query = query.eq('outlet_id', scopeId);
@@ -3743,8 +3755,7 @@ class DatabaseService {
             query = query.gte('date', startDate);
         }
 
-        // Reduced limit to 5000 to improve performance and prevent statement timeouts
-        const { data, error } = await query.order('date', { ascending: false }).limit(startDate ? 5000 : 1000);
+        const { data, error } = await query.order('date', { ascending: false }).limit(startDate ? 10000 : 2000);
         if (error) throw error;
         return (data || []) as any as MassageBooking[];
       }, []);
