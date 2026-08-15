@@ -1,4 +1,4 @@
-const CACHE_NAME = 'health-club-v24';
+const CACHE_NAME = 'health-club-v25';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -39,21 +39,25 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch event - Network First for navigation, Cache First for others
+// Fetch event - Network First for navigation, Cache First for local assets
 self.addEventListener('fetch', (event) => {
-  // Ignore non-http(s) requests (like chrome-extension, data:, etc.)
+  // Ignore non-http(s) requests
   if (!event.request.url.startsWith('http')) return;
+
+  // ONLY handle same-origin requests.
+  // NEVER intercept cross-origin API calls (Supabase, Google Wallet, external services)
+  if (!event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
 
   // Navigation requests: Try Network First
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          // Important/optional: Only cache navigation if successful and http/https
-          if (response.status === 200 && event.request.url.startsWith('http')) {
+          if (response.status === 200) {
             const responseClone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
-                // DON'T always overwrite index.html, but okay to cache the navigation request
                 cache.put(event.request, responseClone);
             });
           }
@@ -67,25 +71,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
-  // Non-GET requests: Just fetch
+  // Non-GET requests: Just let the browser handle them directly
   if (event.request.method !== 'GET') {
-      return event.respondWith(fetch(event.request));
+      return;
   }
 
-  // Other GET assets: Try Cache First, fallback to Network
+  // Other same-origin GET assets: Try Cache First, fallback to Network
   event.respondWith(
     caches.match(event.request).then((response) => {
       if (response) return response;
       
       return fetch(event.request).then((networkResponse) => {
-        // Handle opaque responses (e.g. cross-origin)
         if (!networkResponse || networkResponse.status !== 200) {
           return networkResponse;
         }
         
-        // Only cache basic responses from http/https schemes
-        const isHttp = event.request.url.startsWith('http');
-        if (networkResponse.type === 'basic' && isHttp) {
+        if (networkResponse.type === 'basic') {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
               cache.put(event.request, responseToCache);
@@ -93,6 +94,9 @@ self.addEventListener('fetch', (event) => {
         }
         
         return networkResponse;
+      }).catch(() => {
+        // Safe fallback if network is offline
+        return caches.match(event.request);
       });
     })
   );

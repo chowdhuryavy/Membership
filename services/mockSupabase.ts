@@ -1069,6 +1069,17 @@ class DatabaseService {
         
         const membersList = (data || []) as any as Member[];
 
+        // Keep local storage cache warm for offline / connection failure resilience
+        if (membersList && membersList.length > 0) {
+          try {
+            const existingCache = JSON.parse(localStorage.getItem('membership_members') || '[]') as Member[];
+            const mergedMap = new Map<string, Member>();
+            existingCache.forEach(m => mergedMap.set(m.id, m));
+            membersList.forEach(m => mergedMap.set(m.id, m));
+            localStorage.setItem('membership_members', JSON.stringify(Array.from(mergedMap.values())));
+          } catch (e) {}
+        }
+
         // Lazy background update for stale statuses (fire and forget)
         // Optimized: only check a few to avoid system-wide lag
         setTimeout(async () => {
@@ -2092,12 +2103,27 @@ class DatabaseService {
   }
 
   async getOutlets(): Promise<Outlet[]> {
+    const fallbackFn = () => {
+      const defaultOutlets: Outlet[] = [
+        {
+          id: 'outlet-1',
+          property_id: 'prop-1',
+          name: 'The Torch Health Club',
+          address: '',
+          phone: '',
+          logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80'
+        }
+      ];
+      const local = localStorage.getItem('company_outlets_cache');
+      return local ? JSON.parse(local) : defaultOutlets;
+    };
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('outlets').select('*');
         if (error) throw error;
-        if (data) {
-          return (data as any[]).map(remote => ({
+        if (data && data.length > 0) {
+          const mapped = (data as any[]).map(remote => ({
             id: remote.id,
             property_id: remote.property_id || '',
             name: remote.name || '',
@@ -2111,24 +2137,16 @@ class DatabaseService {
             booking_start_time: remote.booking_start_time || '08:00',
             booking_end_time: remote.booking_end_time || '22:00'
           })) as Outlet[];
+          try {
+            localStorage.setItem('company_outlets_cache', JSON.stringify(mapped));
+          } catch (e) {}
+          return mapped;
         }
-        return [];
-      }, []);
+        return fallbackFn();
+      }, fallbackFn);
     }
 
-    const defaultOutlets: Outlet[] = [
-      {
-        id: 'outlet-1',
-        property_id: 'prop-1',
-        name: 'The Torch Health Club',
-        address: '',
-        phone: '',
-        logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80'
-      }
-    ];
-
-    const local = localStorage.getItem('company_outlets_cache');
-    return local ? JSON.parse(local) : defaultOutlets;
+    return fallbackFn();
   }
 
   async addOutlet(outlet: Omit<Outlet, 'id'>) {
@@ -2230,12 +2248,26 @@ class DatabaseService {
   }
 
   async getProperties(): Promise<Property[]> {
+    const fallbackFn = () => {
+      const defaultProperties: Property[] = [
+        {
+          id: 'prop-1',
+          name: 'The Torch Doha',
+          address: '',
+          phone: '',
+          logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80'
+        }
+      ];
+      const local = localStorage.getItem('company_properties_cache');
+      return local ? JSON.parse(local) : defaultProperties;
+    };
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('properties').select('*');
         if (error) throw error;
-        if (data) {
-          return (data as any[]).map(remote => ({
+        if (data && data.length > 0) {
+          const mapped = (data as any[]).map(remote => ({
             id: remote.id,
             name: remote.name || '',
             address: remote.address || '',
@@ -2243,23 +2275,16 @@ class DatabaseService {
             logo_url: remote.logo_url || '',
             signatory_config: remote.signatory_config || {}
           })) as Property[];
+          try {
+            localStorage.setItem('company_properties_cache', JSON.stringify(mapped));
+          } catch (e) {}
+          return mapped;
         }
-        return [];
-      }, []);
+        return fallbackFn();
+      }, fallbackFn);
     }
 
-    const defaultProperties: Property[] = [
-      {
-        id: 'prop-1',
-        name: 'The Torch Doha',
-        address: '',
-        phone: '',
-        logo_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=200&q=80'
-      }
-    ];
-
-    const local = localStorage.getItem('company_properties_cache');
-    return local ? JSON.parse(local) : defaultProperties;
+    return fallbackFn();
   }
 
   async addProperty(prop: Omit<Property, 'id'>) {
