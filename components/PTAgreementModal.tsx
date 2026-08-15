@@ -29,6 +29,16 @@ const parseISO = (dateString?: string) => {
   }
 };
 
+const getDisplayMembership = (member: PTMember) => {
+  if (member.membership_number && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(member.membership_number)) {
+    return member.membership_number;
+  }
+  if (member.guest_name?.toLowerCase().includes('walk-in') || !member.membership_number) {
+    return 'Non-Member (Walk-in Guest)';
+  }
+  return `PT-${(member.id || '').slice(0, 8).toUpperCase()}`;
+};
+
 export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
   ptMember,
   trainer,
@@ -203,7 +213,7 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
           </div>
           <div>
             <span className="text-[8px] font-black uppercase text-indigo-400 tracking-widest block">Membership / العضوية</span>
-            <span className="font-bold text-slate-800">{ptMember.membership_number || ptMember.sale_id || 'PT Client'}</span>
+            <span className="font-bold text-slate-800">{getDisplayMembership(ptMember)}</span>
           </div>
           <div>
             <span className="text-[8px] font-black uppercase text-indigo-400 tracking-widest block">Contact / الهاتف</span>
@@ -469,7 +479,7 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
               <span dir="rtl" className="font-arabic font-bold text-slate-700">الاسم الكامل</span>
             </div>
             <div className="flex justify-between items-center border-b border-slate-200 pb-1 text-[9px]">
-              <span className="font-bold text-slate-600">Membership: <span className="text-slate-900 font-bold">{ptMember.membership_number || ptMember.sale_id || 'PT Package'}</span></span>
+              <span className="font-bold text-slate-600">Membership: <span className="text-slate-900 font-bold">{getDisplayMembership(ptMember)}</span></span>
               <span dir="rtl" className="font-arabic font-bold text-slate-700">العضوية</span>
             </div>
             <div className="flex justify-between items-center border-b border-slate-200 pb-1 text-[9px]">

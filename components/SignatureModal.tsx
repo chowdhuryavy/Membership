@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from './ui';
 import { X, ArrowRight } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -204,9 +205,9 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
 
   const isPT = agreementType === 'pt' || tier.toLowerCase().includes('pt') || tier.toLowerCase().includes('personal') || tier.toLowerCase().includes('consent');
 
-  return (
-    <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className={`bg-white rounded-[2rem] shadow-2xl w-full overflow-hidden p-6 sm:p-8 flex flex-col items-center transition-all ${signatureMethod === 'pad' ? 'max-w-xl' : 'max-w-md'}`}>
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
+      <div className={`bg-white rounded-[2rem] shadow-2xl w-full overflow-hidden p-6 sm:p-8 flex flex-col items-center transition-all my-auto ${signatureMethod === 'pad' ? 'max-w-xl' : 'max-w-md'}`}>
         {!signatureMethod ? (
           <>
             <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 mb-3 font-black text-lg">
@@ -353,7 +354,8 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
