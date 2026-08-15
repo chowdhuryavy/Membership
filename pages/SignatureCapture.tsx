@@ -58,6 +58,9 @@ export const SignatureCapturePage: React.FC = () => {
     const currency = searchParams.get('currency') || 'AED';
     const currencySymbol = searchParams.get('symbol') || currency;
     const logoUrl = searchParams.get('logo') || '';
+    const agreementType = searchParams.get('type') || '';
+    const isPTAgreement = agreementType === 'pt' || tier.toLowerCase().includes('pt') || tier.toLowerCase().includes('personal') || tier.toLowerCase().includes('training') || tier.toLowerCase().includes('consent');
+
 
     useEffect(() => {
         if (!signatureId) return;
@@ -297,10 +300,32 @@ export const SignatureCapturePage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Terms and Conditions Section */}
+                {/* Terms and Conditions Section - Shown prominently BEFORE the signature pad */}
                 <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col gap-4">
-                    <div className="flex items-start gap-3">
-                        <div className="relative flex items-center pt-1">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Health Declaration & Consent</h3>
+                        </div>
+                        <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded-md">Bilingual / ثنائي اللغة</span>
+                    </div>
+
+                    {/* Prominent Bilingual Declaration Preview */}
+                    <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 text-[11px] leading-relaxed space-y-2 max-h-36 overflow-y-auto">
+                        <p className="text-slate-700 font-medium text-justify">
+                            {isPTAgreement 
+                                ? "I declare that I am in good physical health to participate in Personal Training. I confirm that all PAR-Q answers provided are true and accurate." 
+                                : "I agree to abide by all club guidelines, facility safety rules, and operational regulations."}
+                        </p>
+                        <p dir="rtl" className="text-slate-600 font-arabic text-justify">
+                            {isPTAgreement 
+                                ? "أقر بأنني بحالة صحية جيدة تؤهلني للمشاركة في التدريب الشخصي، وأؤكد أن جميع إجاباتي على استبيان الجاهزية البدنية صحيحة ودقيقة." 
+                                : "أوافق على الالتزام بكافة لوائح وقوانين النادي وشروط السلامة المعتمدة."}
+                        </p>
+                    </div>
+
+                    <div className="flex items-start gap-3 pt-1">
+                        <div className="relative flex items-center pt-0.5">
                             <input
                                 id="terms"
                                 type="checkbox"
@@ -310,20 +335,22 @@ export const SignatureCapturePage: React.FC = () => {
                             />
                         </div>
                         <div className="flex-1">
-                            <label htmlFor="terms" className="text-sm font-bold text-slate-700 cursor-pointer select-none">
-                                I accept the <span className="text-indigo-600">Terms, Conditions & Waiver</span>.
+                            <label htmlFor="terms" className="text-xs font-bold text-slate-800 cursor-pointer select-none">
+                                I accept the <span className="text-indigo-600 underline">Terms, Conditions & Waiver</span>.
                             </label>
-                            <p className="text-[10px] text-slate-400 font-medium mt-1 uppercase tracking-tight">
-                                Required for agreement completion
+                            <p className="text-[10px] text-slate-400 font-medium mt-0.5 uppercase tracking-tight">
+                                أوافق على شروط وأحكام الإقرار الصحي
                             </p>
                         </div>
                     </div>
+
                     <button 
+                        type="button"
                         onClick={() => setShowTermsModal(true)}
-                        className="flex items-center justify-center gap-2 w-full py-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-widest transition-all"
+                        className="flex items-center justify-center gap-2 w-full py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-black text-indigo-600 uppercase tracking-widest transition-all cursor-pointer"
                     >
                         <FileText className="w-4 h-4" />
-                        View Terms (EN/AR)
+                        Read Full Policy & Questionnaire (EN/AR)
                     </button>
                 </div>
 

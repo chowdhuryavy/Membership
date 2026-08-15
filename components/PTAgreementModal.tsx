@@ -333,103 +333,131 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
         </div>
 
         {/* Section 4: For Participants Under 18 */}
-        <div className="mb-5 p-4 bg-amber-50/40 border-2 border-amber-200 rounded-xl text-[9px]">
-          <div className="flex justify-between items-center font-black text-amber-900 border-b border-amber-200 pb-1.5 mb-2.5">
-            <div className="flex items-center gap-2">
-              <span className="uppercase tracking-wide">{consent.under18TitleEn}</span>
-              <label className="flex items-center gap-1.5 ml-3 print:hidden text-[9px] text-amber-800 font-bold cursor-pointer">
+        <div className={`mb-5 p-4 rounded-xl text-[9px] transition-all border-2 ${isUnder18 ? 'bg-amber-50/60 border-amber-300 shadow-sm' : 'bg-slate-50/60 border-slate-200'}`}>
+          <div className="flex justify-between items-center font-black text-slate-900 border-b border-slate-200 pb-1.5 mb-2.5">
+            <div className="flex items-center gap-3">
+              <span className={`uppercase tracking-wide ${isUnder18 ? 'text-amber-900 font-black' : 'text-slate-700'}`}>{consent.under18TitleEn}</span>
+              <label className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-amber-300 shadow-xs text-[9px] text-amber-900 font-black cursor-pointer hover:bg-amber-50/80 transition-colors print:hidden">
                 <input
                   type="checkbox"
                   checked={isUnder18}
                   onChange={e => setIsUnder18(e.target.checked)}
-                  className="rounded border-amber-300 text-indigo-600 cursor-pointer"
+                  className="w-3.5 h-3.5 rounded border-amber-400 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                 />
                 <span>Enable Minor Guardian Form</span>
               </label>
             </div>
-            <span dir="rtl" className="font-arabic">{consent.under18TitleAr}</span>
+            <span dir="rtl" className="font-arabic font-bold text-slate-700">{consent.under18TitleAr}</span>
           </div>
 
-          {/* Bilingual Guardian Declaration Text */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 text-[8.5px] leading-relaxed">
-            <p className="text-slate-800 text-justify">
-              {consent.under18TextEn(guardianName || '________________', ptMember.guest_name || '')}
-            </p>
-            <p dir="rtl" className="text-slate-700 font-arabic text-justify">
-              {consent.under18TextAr(guardianName || '________________', ptMember.guest_name || '')}
-            </p>
-          </div>
-
-          {/* Interactive Screen Inputs (Print transforms to clean formatted lines) */}
-          <div className="print:hidden grid grid-cols-1 sm:grid-cols-4 gap-2.5 p-3 bg-white/80 rounded-xl border border-amber-200 mb-2">
-            <div>
-              <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-0.5">Parent / Guardian Name</label>
-              <input
-                type="text"
-                value={guardianName}
-                onChange={e => setGuardianName(e.target.value)}
-                placeholder="Full Name of Guardian"
-                className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-0.5">Participant DOB</label>
-              <input
-                type="date"
-                value={dob}
-                onChange={e => setDob(e.target.value)}
-                className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-0.5">Relationship</label>
-              <input
-                type="text"
-                value={guardianRelationship}
-                onChange={e => setGuardianRelationship(e.target.value)}
-                placeholder="Father, Mother, Legal Guardian"
-                className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-0.5">Guardian Contact #</label>
-              <input
-                type="text"
-                value={guardianContact}
-                onChange={e => setGuardianContact(e.target.value)}
-                placeholder="+974 / Phone #"
-                className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Formatted Fields for Printing & Preview Display */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-amber-200/60 text-[8.5px]">
-            <div>
-              <span className="font-bold text-slate-500 block">Participant's DOB / تاريخ الميلاد:</span>
-              <span className="font-black text-slate-900">{dob || '___________________'}</span>
-            </div>
-            <div>
-              <span className="font-bold text-slate-500 block">Relationship / صلة القرابة:</span>
-              <span className="font-black text-slate-900">{guardianRelationship || '___________________'}</span>
-            </div>
-            <div>
-              <span className="font-bold text-slate-500 block">Contact Number / رقم الهاتف:</span>
-              <span className="font-black text-slate-900">{guardianContact || ptMember.phone || '___________________'}</span>
-            </div>
-            <div>
-              <span className="font-bold text-slate-500 block">Parent Signature / توقيع ولي الأمر:</span>
-              {guardianSignature ? (
-                <div className="h-6 flex items-center">
-                  <img src={guardianSignature} alt="Parent Signature" className="max-h-6 object-contain" />
+          {/* If NOT under 18 (Unchecked) - Show note on screen, standard lines on print */}
+          {!isUnder18 ? (
+            <div className="py-2">
+              <p className="text-[9px] text-slate-500 italic print:hidden">
+                Participant is an adult (18+). If registering on behalf of a minor under 18, check <strong className="text-amber-800 font-bold">"Enable Minor Guardian Form"</strong> above.
+              </p>
+              <div className="hidden print:block text-[8.5px] text-slate-400 pt-1">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                  <div><span className="block font-bold">Participant's DOB:</span> ___________________</div>
+                  <div><span className="block font-bold">Relationship:</span> ___________________</div>
+                  <div><span className="block font-bold">Contact Number:</span> ___________________</div>
+                  <div><span className="block font-bold">Parent Signature:</span> ___________________</div>
                 </div>
-              ) : (
-                <span className="font-black text-slate-900">
-                  {guardianName ? `${guardianName} (Confirmed)` : '___________________'}
-                </span>
-              )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Bilingual Guardian Declaration Text */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 text-[8.5px] leading-relaxed">
+                <p className="text-slate-800 text-justify">
+                  {consent.under18TextEn(guardianName || '________________', ptMember.guest_name || '')}
+                </p>
+                <p dir="rtl" className="text-slate-700 font-arabic text-justify">
+                  {consent.under18TextAr(guardianName || '________________', ptMember.guest_name || '')}
+                </p>
+              </div>
+
+              {/* Interactive Screen Inputs (Only rendered when isUnder18 is true) */}
+              <div className="print:hidden grid grid-cols-1 sm:grid-cols-4 gap-2.5 p-3.5 bg-white rounded-xl border border-amber-300 shadow-sm mb-3">
+                <div>
+                  <label className="text-[8px] font-black text-amber-900 uppercase tracking-widest block mb-0.5">Parent / Guardian Name *</label>
+                  <input
+                    type="text"
+                    value={guardianName}
+                    onChange={e => setGuardianName(e.target.value)}
+                    placeholder="Full Name of Guardian"
+                    className="w-full h-8 px-2 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] font-black text-amber-900 uppercase tracking-widest block mb-0.5">Participant DOB *</label>
+                  <input
+                    type="date"
+                    value={dob}
+                    onChange={e => setDob(e.target.value)}
+                    className="w-full h-8 px-2 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] font-black text-amber-900 uppercase tracking-widest block mb-0.5">Relationship *</label>
+                  <input
+                    type="text"
+                    value={guardianRelationship}
+                    onChange={e => setGuardianRelationship(e.target.value)}
+                    placeholder="Father, Mother, Legal Guardian"
+                    className="w-full h-8 px-2 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] font-black text-amber-900 uppercase tracking-widest block mb-0.5">Guardian Contact # *</label>
+                  <input
+                    type="text"
+                    value={guardianContact}
+                    onChange={e => setGuardianContact(e.target.value)}
+                    placeholder="+974 / Phone #"
+                    className="w-full h-8 px-2 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Formatted Fields for Printing & Preview Display */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-amber-200 text-[8.5px]">
+                <div>
+                  <span className="font-bold text-slate-500 block">Participant's DOB / تاريخ الميلاد:</span>
+                  <span className="font-black text-slate-900">{dob || '___________________'}</span>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-500 block">Relationship / صلة القرابة:</span>
+                  <span className="font-black text-slate-900">{guardianRelationship || '___________________'}</span>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-500 block">Contact Number / رقم الهاتف:</span>
+                  <span className="font-black text-slate-900">{guardianContact || ptMember.phone || '___________________'}</span>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-500 block">Parent Signature / توقيع ولي الأمر:</span>
+                  {guardianSignature ? (
+                    <div className="h-6 flex items-center">
+                      <img src={guardianSignature} alt="Parent Signature" className="max-h-6 object-contain" />
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-slate-900">
+                        {guardianName ? `${guardianName} (Confirmed)` : '___________________'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setSigningTarget('guardian'); setShowSigModal(true); }}
+                        className="print:hidden text-[7.5px] font-black text-amber-800 bg-amber-100 hover:bg-amber-200 px-1.5 py-0.5 rounded uppercase tracking-wider"
+                      >
+                        Sign
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Section 5: Member & Staff Signatures (Exact Match to Specification) */}
