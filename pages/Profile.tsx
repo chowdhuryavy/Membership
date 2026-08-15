@@ -10,6 +10,7 @@ import { Lock, User, CheckCircle, AlertCircle, Mail, UserCircle2, Award, Trendin
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { Staff } from '../types';
+import { purgeAllDeviceCaches } from '../src/shared/cacheManager';
 
 import { useNotificationContext } from '../contexts/NotificationContext';
 
@@ -290,6 +291,37 @@ const Profile = () => {
                                     </p>
                                 </div>
                             )}
+                        </CardContent>
+                    </Card>
+
+                    <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg overflow-hidden">
+                        <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
+                            <CardTitle className="text-lg font-black tracking-tight flex items-center gap-3">
+                                <RefreshCcw className="w-5 h-5 text-indigo-600" /> Device Cache & Data Sync
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-8">
+                            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                                <div className="space-y-1">
+                                    <h4 className="text-sm font-black text-slate-900 tracking-tight">
+                                        Purge Local Storage Cache
+                                    </h4>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                        Clears stale local records on this device and downloads fresh data from the server.
+                                    </p>
+                                </div>
+                                <Button 
+                                    onClick={async () => {
+                                        if (window.confirm("Purge local device cache and reload fresh data from the server?")) {
+                                            await purgeAllDeviceCaches({ reload: true, hardLogout: false });
+                                        }
+                                    }}
+                                    variant="secondary"
+                                    className="h-12 px-8 rounded-xl font-black bg-slate-100 hover:bg-slate-200 text-slate-800 shrink-0 flex items-center gap-2"
+                                >
+                                    <RefreshCcw className="w-4 h-4" /> Purge & Resync
+                                </Button>
+                            </div>
                         </CardContent>
                     </Card>
 

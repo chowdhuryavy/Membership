@@ -5,6 +5,10 @@ import './index.css';
 import { AuthProvider } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { autoValidateCacheVersion } from './src/shared/cacheManager';
+
+// Automatically validate & synchronize cache version across all user devices on startup
+autoValidateCacheVersion();
 
 // Handle browser extension / message channel asynchronous response rejections gracefully
 window.addEventListener('unhandledrejection', (event) => {

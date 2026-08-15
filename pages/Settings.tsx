@@ -12,6 +12,7 @@ import { CustomReportBuilder } from '../components/CustomReportBuilder';
 import { CustomReportViewer } from '../components/CustomReportViewer';
 import { EntranceConsentsList } from '../components/EntranceConsentsList';
 import { EntranceFeeConsentModal } from '../components/EntranceFeeConsentModal';
+import { purgeAllDeviceCaches } from '../src/shared/cacheManager';
 import { 
   Trash2, 
   Edit2, 
@@ -1491,8 +1492,28 @@ const SettingsPage = () => {
                               </div>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <Button variant="danger" className="h-20 rounded-3xl font-black uppercase tracking-widest"><RefreshCcw className="w-5 h-5 mr-3" /> Purge Cache & Sync</Button>
-                              <Button variant="outline" className="h-20 rounded-3xl font-black uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50"><Eraser className="w-5 h-5 mr-3" /> Hard Reset System</Button>
+                              <Button 
+                                onClick={async () => {
+                                  if (window.confirm("Purge local device cache and re-sync freshly from server?")) {
+                                    await purgeAllDeviceCaches({ reload: true, hardLogout: false });
+                                  }
+                                }}
+                                variant="danger" 
+                                className="h-20 rounded-3xl font-black uppercase tracking-widest"
+                              >
+                                <RefreshCcw className="w-5 h-5 mr-3" /> Purge Cache & Sync
+                              </Button>
+                              <Button 
+                                onClick={async () => {
+                                  if (window.confirm("WARNING: This will clear all local storage, log you out, and force a clean reload. Proceed?")) {
+                                    await purgeAllDeviceCaches({ reload: true, hardLogout: true });
+                                  }
+                                }}
+                                variant="outline" 
+                                className="h-20 rounded-3xl font-black uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50"
+                              >
+                                <Eraser className="w-5 h-5 mr-3" /> Hard Reset System
+                              </Button>
                           </div>
                       </CardContent>
                   </Card>
