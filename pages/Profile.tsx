@@ -15,13 +15,15 @@ import { purgeAllDeviceCaches } from '../src/shared/cacheManager';
 import { useNotificationContext } from '../contexts/NotificationContext';
 
 const Profile = () => {
-    const { user, changePassword, updateProfile } = useAuth();
+    const { user, changePassword, updateProfile, isSuperAdmin } = useAuth();
     const { settings, formatMoney, roles } = useSettings();
     const { isPushEnabled, enablePush, disablePush } = useNotificationContext();
     const [profileData, setProfileData] = useState({ name: '', email: '' });
     const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
     const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
     const [loading, setLoading] = useState(false);
+
+    const isSystemAdmin = isSuperAdmin || user?.role_id === 'system_admin' || user?.role_id === 'super_admin';
 
     const roleName = React.useMemo(() => {
         if (!user?.role_id) return 'No Role';
@@ -294,36 +296,38 @@ const Profile = () => {
                         </CardContent>
                     </Card>
 
-                    <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg overflow-hidden">
-                        <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
-                            <CardTitle className="text-lg font-black tracking-tight flex items-center gap-3">
-                                <RefreshCcw className="w-5 h-5 text-indigo-600" /> Device Cache & Data Sync
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-8">
-                            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                                <div className="space-y-1">
-                                    <h4 className="text-sm font-black text-slate-900 tracking-tight">
-                                        Purge Local Storage Cache
-                                    </h4>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                        Clears stale local records on this device and downloads fresh data from the server.
-                                    </p>
+                    {isSystemAdmin && (
+                        <Card className="rounded-[2.5rem] border-slate-200/60 shadow-lg overflow-hidden">
+                            <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
+                                <CardTitle className="text-lg font-black tracking-tight flex items-center gap-3">
+                                    <RefreshCcw className="w-5 h-5 text-indigo-600" /> Device Cache & Data Sync
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-8">
+                                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                                    <div className="space-y-1">
+                                        <h4 className="text-sm font-black text-slate-900 tracking-tight">
+                                            Purge Local Storage Cache
+                                        </h4>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                            Clears stale local records on this device and downloads fresh data from the server.
+                                        </p>
+                                    </div>
+                                    <Button 
+                                        onClick={async () => {
+                                            if (window.confirm("Purge local device cache and reload fresh data from the server?")) {
+                                                await purgeAllDeviceCaches({ reload: true, hardLogout: false });
+                                            }
+                                        }}
+                                        variant="secondary"
+                                        className="h-12 px-8 rounded-xl font-black bg-slate-100 hover:bg-slate-200 text-slate-800 shrink-0 flex items-center gap-2"
+                                    >
+                                        <RefreshCcw className="w-4 h-4" /> Purge & Resync
+                                    </Button>
                                 </div>
-                                <Button 
-                                    onClick={async () => {
-                                        if (window.confirm("Purge local device cache and reload fresh data from the server?")) {
-                                            await purgeAllDeviceCaches({ reload: true, hardLogout: false });
-                                        }
-                                    }}
-                                    variant="secondary"
-                                    className="h-12 px-8 rounded-xl font-black bg-slate-100 hover:bg-slate-200 text-slate-800 shrink-0 flex items-center gap-2"
-                                >
-                                    <RefreshCcw className="w-4 h-4" /> Purge & Resync
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {linkedStaff && (
                       <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
