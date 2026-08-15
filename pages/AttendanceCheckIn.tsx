@@ -19,10 +19,26 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 
 export default function AttendanceCheckIn() {
   const { user, isSuperAdmin } = useAuth();
-  const { currentOutlet, currentProperty, settings, formatMoney, outlets = [] } = useSettings();
+  const { currentOutlet, currentProperty, settings, formatMoney, outlets = [], hasPermission } = useSettings();
+
+  const canView = user && hasPermission(user.role_id, 'checkin:view');
+  const canManage = user && hasPermission(user.role_id, 'checkin:manage');
+  const canUseKiosk = user && hasPermission(user.role_id, 'checkin:self_kiosk');
+  const canUseSql = user && hasPermission(user.role_id, 'checkin:sql_access');
 
   const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
   const [activeTab, setActiveTab] = useState<'desk' | 'active_now' | 'history' | 'analytics' | 'sql'>('desk');
+
+  if (!canView) {
+    return (
+        <div className="h-full flex items-center justify-center p-8">
+            <div className="text-center">
+                <h2 className="text-xl font-bold text-slate-900">Access Denied</h2>
+                <p className="text-slate-500 mt-2">You don't have permission to access the Check-In system.</p>
+            </div>
+        </div>
+    );
+  }
 
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<Member[]>([]);
@@ -259,12 +275,14 @@ export default function AttendanceCheckIn() {
               <QrCode className="w-4 h-4" /> Scan Member QR
             </button>
 
-            <button
-              onClick={() => setIsKioskActive(true)}
-              className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shadow-xl active:scale-95 border border-emerald-300/40"
-            >
-              <Maximize2 className="w-4 h-4" /> Launch Kiosk Terminal
-            </button>
+            {canUseKiosk && (
+              <button
+                onClick={() => setIsKioskActive(true)}
+                className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 shadow-xl active:scale-95 border border-emerald-300/40"
+              >
+                <Maximize2 className="w-4 h-4" /> Launch Kiosk Terminal
+              </button>
+            )}
 
 
           </div>

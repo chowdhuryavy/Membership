@@ -9,10 +9,25 @@ import toast from 'react-hot-toast';
 
 export default function EntranceFee() {
     const { user, isSuperAdmin } = useAuth();
-    const { currentOutlet, currentProperty, outlets = [] } = useSettings();
+    const { currentOutlet, currentProperty, outlets = [], hasPermission } = useSettings();
+
+    const canView = user && hasPermission(user.role_id, 'entrance_fee:view');
+    const canCreate = user && hasPermission(user.role_id, 'entrance_fee:create');
+
     const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
     const [showConsentModal, setShowConsentModal] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
+
+    if (!canView) {
+        return (
+            <div className="h-full flex items-center justify-center p-8">
+                <div className="text-center">
+                    <h2 className="text-xl font-bold text-slate-900">Access Denied</h2>
+                    <p className="text-slate-500 mt-2">You don't have permission to view Entrance Fees.</p>
+                </div>
+            </div>
+        );
+    }
 
     const allowedOutletsInProperty = useMemo(() => {
         if (!currentProperty || !user || !outlets) return [];
@@ -72,12 +87,14 @@ export default function EntranceFee() {
                         </div>
                     )}
 
-                    <Button
-                        onClick={() => setShowConsentModal(true)}
-                        className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 bg-indigo-600 hover:bg-indigo-700 text-white"
-                    >
-                        <Plus className="w-4 h-4 mr-2" /> New Consent Form
-                    </Button>
+                    {canCreate && (
+                        <Button
+                            onClick={() => setShowConsentModal(true)}
+                            className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 bg-indigo-600 hover:bg-indigo-700 text-white"
+                        >
+                            <Plus className="w-4 h-4 mr-2" /> New Consent Form
+                        </Button>
+                    )}
                 </div>
             </div>
 

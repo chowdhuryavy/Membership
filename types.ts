@@ -1,7 +1,7 @@
 export type Permission = 
   | 'dashboard:view' | 'dashboard:view_financials' | 'dashboard:view_insights'
   | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:bulk_freeze' | 'members:renew' | 'members:print_contract' | 'members:view_history'
-  | 'checkin:view' | 'checkin:manage' | 'checkin:kiosk'
+  | 'checkin:view' | 'checkin:manage' | 'checkin:self_kiosk' | 'checkin:sql_access'
   | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete'
   | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email' | 'users:manage_overrides' | 'users:edit_self'
   | 'staff:view' | 'staff:manage' | 'staff:manage_leaves' | 'staff:manage_portal_settings'
@@ -12,6 +12,7 @@ export type Permission =
   | 'logs:view' | 'logs:search' | 'logs:filter' | 'logs:clear'
   | 'bookings:view' | 'bookings:create' | 'bookings:edit' | 'bookings:delete' | 'bookings:manage_resources' | 'bookings:view_therapist_schedule'
   | 'sales:view' | 'sales:create' | 'sales:edit' | 'sales:delete' | 'sales:void'
+  | 'pt_members:view' | 'pt_members:create' | 'pt_members:edit' | 'pt_members:delete' | 'pt_members:manage_sessions' | 'pt_members:print'
   | 'entrance_fee:view' | 'entrance_fee:create' | 'entrance_fee:edit' | 'entrance_fee:delete'
   | 'inventory:view' | 'inventory:manage' | 'inventory:adjust_stock'; 
 

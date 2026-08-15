@@ -39,6 +39,14 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   const { user, isSuperAdmin } = useAuth();
   const { formatMoney, currentOutlet, currentProperty, settings, hasPermission, setPageLoading, outlets } = useSettings();
   
+  const canEdit = user && hasPermission(user.role_id, 'members:edit');
+  const canDelete = user && hasPermission(user.role_id, 'members:delete');
+  const canViewContactInfo = user && hasPermission(user.role_id, 'members:view_contact_info');
+  const canFreeze = user && hasPermission(user.role_id, 'members:freeze');
+  const canRenew = user && hasPermission(user.role_id, 'members:renew');
+  const canPrintContract = user && hasPermission(user.role_id, 'members:print_contract');
+  const canViewHistory = user && hasPermission(user.role_id, 'members:view_history');
+  
   const [viewingMember, setViewingMember] = useState<Member>(initialMember);
   const [freezes, setFreezes] = useState<Freeze[]>([]);
 
@@ -657,9 +665,6 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
     }
   };
 
-  const canEdit = hasPermission(user?.role_id || '', 'members:edit');
-  const canDelete = hasPermission(user?.role_id || '', 'members:delete');
-  const canFreeze = hasPermission(user?.role_id || '', 'members:freeze');
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500 pb-20">
@@ -678,17 +683,19 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
           <Button onClick={() => setShowSignatureModal(true)} variant="outline" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm transition-all">
               <PenTool className="w-4 h-4 mr-2" /> Signatures
           </Button>
-          <Button onClick={() => setShowAgreement(true)} variant="outline" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase border-indigo-100 text-indigo-600 hover:bg-indigo-50 shadow-sm transition-all">
-              <FileText className="w-4 h-4 mr-2" /> Print Agreement
-          </Button>
+          {canPrintContract && (
+            <Button onClick={() => setShowAgreement(true)} variant="outline" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase border-indigo-100 text-indigo-600 hover:bg-indigo-50 shadow-sm transition-all">
+                <FileText className="w-4 h-4 mr-2" /> Print Agreement
+            </Button>
+          )}
           
-          {isActive && (
+          {isActive && canEdit && (
             <Button onClick={() => setShowCancelModal(true)} variant="secondary" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase bg-red-50 border-2 border-red-100 text-red-600 hover:bg-red-100 shadow-sm transition-all">
                 <X className="w-4 h-4 mr-2" /> Cancel Membership
             </Button>
           )}
 
-          {viewingMember.status === MemberStatus.CANCELLED && (
+          {viewingMember.status === MemberStatus.CANCELLED && canEdit && (
             <Button onClick={handleDeleteCancellation} variant="secondary" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase bg-amber-50 border-2 border-amber-100 text-amber-600 hover:bg-amber-100 shadow-sm transition-all">
                 <RotateCcw className="w-4 h-4 mr-2" /> Revert Cancellation
             </Button>
@@ -710,9 +717,11 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
               </Button>
           )}
 
-          <Button onClick={() => onRenew(viewingMember)} className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase bg-slate-900 text-white hover:bg-slate-800 shadow-xl transition-all active:scale-95">
-              <RotateCcw className="w-4 h-4 mr-2" /> Renew Logic
-          </Button>
+          {canRenew && (
+            <Button onClick={() => onRenew(viewingMember)} className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase bg-slate-900 text-white hover:bg-slate-800 shadow-xl transition-all active:scale-95">
+                <RotateCcw className="w-4 h-4 mr-2" /> Renew Logic
+            </Button>
+          )}
 
           <Button onClick={() => setShowNotesModal(true)} variant="secondary" className="flex-1 md:flex-none rounded-xl h-11 px-6 font-black text-xs uppercase bg-white border-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50 shadow-sm transition-all">
               <ClipboardList className="w-4 h-4 mr-2" /> Member Notes
@@ -758,14 +767,14 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                         </button>
                       </div>
                       
-                      <div className="mt-10 space-y-3">
+                       <div className="mt-10 space-y-3">
                         <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs font-black text-slate-700 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all cursor-default">
                            <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600"><Phone className="w-4 h-4" /></div>
-                           <span className="flex-1 text-left">{viewingMember.phone || 'No Phone Number'}</span>
+                           <span className="flex-1 text-left">{canViewContactInfo ? (viewingMember.phone || 'No Phone Number') : '••••••••••••'}</span>
                         </div>
                         <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs font-black text-slate-700 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all cursor-default overflow-hidden">
                            <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600"><Mail className="w-4 h-4 shrink-0" /></div>
-                           <span className="truncate flex-1 text-left">{viewingMember.email || 'No Email ID'}</span>
+                           <span className="truncate flex-1 text-left">{canViewContactInfo ? (viewingMember.email || 'No Email ID') : '••••••••••••'}</span>
                         </div>
                         <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs font-black text-slate-700 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all cursor-default">
                            <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600"><Globe className="w-4 h-4" /></div>

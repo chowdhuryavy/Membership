@@ -154,12 +154,25 @@ class DatabaseService {
         ]
       },
       {
+        id: 'pt_members',
+        label: 'Personal Training (PT)',
+        permissions: [
+          { key: 'pt_members:view', label: 'View PT Registry', description: 'Access the PT member directory.' },
+          { key: 'pt_members:create', label: 'Add PT Members', description: 'Create new PT packages for guests.' },
+          { key: 'pt_members:edit', label: 'Edit PT Details', description: 'Modify PT member information.' },
+          { key: 'pt_members:delete', label: 'Delete PT Records', description: 'Remove PT member records from system.' },
+          { key: 'pt_members:manage_sessions', label: 'Manage Sessions', description: 'Add, edit, or delete PT training sessions.' },
+          { key: 'pt_members:print', label: 'Print Forms', description: 'Print session slips, package forms, and agreements.' },
+        ]
+      },
+      {
         id: 'checkin',
         label: 'Facility Check-In',
         permissions: [
           { key: 'checkin:view', label: 'View Check-Ins', description: 'Access the check-in and attendance logs.' },
           { key: 'checkin:manage', label: 'Manage Attendance', description: 'Perform manual check-ins and check-outs.' },
-          { key: 'checkin:kiosk', label: 'Launch Kiosk', description: 'Enable self-service kiosk mode for members.' },
+          { key: 'checkin:self_kiosk', label: 'Launch Kiosk', description: 'Enable self-service kiosk mode for members.' },
+          { key: 'checkin:sql_access', label: 'SQL Diagnostics', description: 'Access raw SQL check-in data (Developers only).' },
         ]
       },
       {

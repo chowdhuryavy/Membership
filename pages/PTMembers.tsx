@@ -41,7 +41,15 @@ const SessionSignaturePad: React.FC<{ title: string; onSave: (sig: string) => vo
 
 export default function PTMembers() {
     const { user, isSuperAdmin } = useAuth();
-    const { currentOutlet, currentProperty, settings, setPageLoading, formatMoney, outlets = [] } = useSettings();
+    const { currentOutlet, currentProperty, settings, setPageLoading, formatMoney, outlets = [], hasPermission } = useSettings();
+
+    const canView = user && hasPermission(user.role_id, 'pt_members:view');
+    const canCreate = user && hasPermission(user.role_id, 'pt_members:create');
+    const canEdit = user && hasPermission(user.role_id, 'pt_members:edit');
+    const canDelete = user && hasPermission(user.role_id, 'pt_members:delete');
+    const canManageSessions = user && hasPermission(user.role_id, 'pt_members:manage_sessions');
+    const canPrint = user && hasPermission(user.role_id, 'pt_members:print');
+
     const logoUrl = currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || '';
     
     const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
@@ -98,6 +106,31 @@ export default function PTMembers() {
     // Printable Session Slip & Package Form state
     const [printingSession, setPrintingSession] = useState<PTSession | null>(null);
     const [printingPackageForm, setPrintingPackageForm] = useState<boolean>(false);
+
+    if (!canView) {
+        return (
+            <div className="h-full flex items-center justify-center p-8">
+                <Card className="w-full max-w-md border-rose-100 bg-rose-50/30">
+                    <CardContent className="pt-12 pb-12 flex flex-col items-center text-center">
+                        <div className="w-20 h-20 bg-rose-100 rounded-full flex items-center justify-center mb-6">
+                            <ShieldCheck className="w-10 h-10 text-rose-600" />
+                        </div>
+                        <h2 className="text-2xl font-black text-slate-900 mb-2 uppercase tracking-tight">Access Restricted</h2>
+                        <p className="text-slate-500 font-medium px-8 leading-relaxed mb-8">
+                            You don't have the required authorization to access the Personal Training registry.
+                        </p>
+                        <Button 
+                            variant="outline" 
+                            onClick={() => window.history.back()}
+                            className="h-12 px-8 rounded-xl font-black text-xs uppercase tracking-widest border-rose-200 text-rose-700 hover:bg-rose-100 transition-all"
+                        >
+                            Return to Previous
+                        </Button>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
     const [showAgreementForPackage, setShowAgreementForPackage] = useState<PTMember | null>(null);
     const [deletingSession, setDeletingSession] = useState<PTSession | null>(null);
     const [deletingMember, setDeletingMember] = useState<PTMember | null>(null);
