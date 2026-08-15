@@ -177,58 +177,75 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
       {/* Printable Sheet (A4 Dimensions) */}
       <div 
         id="pt-consent-sheet" 
-        className="w-full max-w-[210mm] bg-white text-slate-900 border border-slate-200 shadow-2xl p-6 sm:p-10 mb-8 print:border-0 print:shadow-none print:m-0 print:p-6 print:w-full print:max-w-none text-[10px] sm:text-[11px] leading-relaxed font-sans"
+        className="w-full max-w-[210mm] bg-white text-slate-900 border border-slate-200 shadow-2xl p-6 sm:p-8 mb-8 print:border-0 print:shadow-none print:m-0 print:p-0 print:w-full print:max-w-none text-[9.5px] leading-relaxed font-sans"
       >
+        <style>{`
+          @media print {
+            @page {
+              size: A4 portrait;
+              margin: 8mm 10mm 8mm 10mm;
+            }
+            body {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .print-avoid-break {
+              break-inside: avoid !important;
+              page-break-inside: avoid !important;
+            }
+          }
+        `}</style>
+
         {/* Header Branding */}
-        <div className="flex justify-between items-center pb-4 border-b-2 border-slate-900 mb-5">
+        <div className="flex justify-between items-center pb-3 border-b-2 border-slate-900 mb-3.5 print-avoid-break">
           <div className="flex flex-col">
-            <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 uppercase">{propertyName}</h1>
-            <p className="text-xs font-bold text-slate-600 tracking-wider uppercase mt-0.5">{outletName}</p>
-            <span className="inline-block mt-1 px-2.5 py-0.5 bg-slate-900 text-white font-black text-[8.5px] uppercase tracking-widest rounded self-start">
+            <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900 uppercase">{propertyName}</h1>
+            <p className="text-[10px] font-bold text-slate-600 tracking-wider uppercase">{outletName}</p>
+            <span className="inline-block mt-0.5 px-2 py-0.5 bg-slate-900 text-white font-black text-[7.5px] uppercase tracking-widest rounded self-start">
               Official Personal Training Consent & Health Declaration
             </span>
           </div>
           {logoUrl && (
-            <div className="h-14 flex items-center justify-end">
-              <img src={logoUrl} alt="Logo" className="max-h-12 max-w-[150px] object-contain" crossOrigin="anonymous" />
+            <div className="h-10 flex items-center justify-end">
+              <img src={logoUrl} alt="Logo" className="max-h-10 max-w-[130px] object-contain" crossOrigin="anonymous" />
             </div>
           )}
         </div>
 
         {/* Document Title (Bilingual) */}
-        <div className="text-center py-2.5 px-4 bg-slate-50 border border-slate-200 rounded-xl mb-5">
-          <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-900">
+        <div className="text-center py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg mb-3.5 print-avoid-break">
+          <h2 className="text-xs font-black uppercase tracking-wider text-slate-900">
             {consent.titleEn}
           </h2>
-          <p dir="rtl" className="text-xs sm:text-sm font-black text-slate-800 font-arabic mt-0.5">
+          <p dir="rtl" className="text-xs font-black text-slate-800 font-arabic mt-0.5">
             {consent.titleAr}
           </p>
         </div>
 
         {/* Member & Training Package Summary Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5 bg-indigo-50/40 p-3 rounded-xl border border-indigo-100 text-[10px]">
+        <div className="grid grid-cols-4 gap-2 mb-3.5 bg-indigo-50/40 p-2.5 rounded-lg border border-indigo-100 text-[9px] print-avoid-break">
           <div>
-            <span className="text-[8px] font-black uppercase text-indigo-400 tracking-widest block">Full Name / الاسم</span>
-            <span className="font-black text-slate-900">{ptMember.guest_name}</span>
+            <span className="text-[7.5px] font-black uppercase text-indigo-500 tracking-widest block">Full Name / الاسم</span>
+            <span className="font-black text-slate-900 truncate block">{ptMember.guest_name}</span>
           </div>
           <div>
-            <span className="text-[8px] font-black uppercase text-indigo-400 tracking-widest block">Membership / العضوية</span>
-            <span className="font-bold text-slate-800">{getDisplayMembership(ptMember)}</span>
+            <span className="text-[7.5px] font-black uppercase text-indigo-500 tracking-widest block">Membership / العضوية</span>
+            <span className="font-bold text-slate-800 truncate block">{getDisplayMembership(ptMember)}</span>
           </div>
           <div>
-            <span className="text-[8px] font-black uppercase text-indigo-400 tracking-widest block">Contact / الهاتف</span>
-            <span className="font-bold text-slate-800">{ptMember.phone || 'N/A'}</span>
+            <span className="text-[7.5px] font-black uppercase text-indigo-500 tracking-widest block">Contact / الهاتف</span>
+            <span className="font-bold text-slate-800 truncate block">{ptMember.phone || 'N/A'}</span>
           </div>
           <div>
-            <span className="text-[8px] font-black uppercase text-indigo-400 tracking-widest block">Assigned Trainer / المدرب</span>
-            <span className="font-bold text-indigo-700">{trainer?.name || 'Personal Training Team'}</span>
+            <span className="text-[7.5px] font-black uppercase text-indigo-500 tracking-widest block">Trainer / المدرب</span>
+            <span className="font-bold text-indigo-700 truncate block">{trainer?.name || 'Personal Training Team'}</span>
           </div>
         </div>
 
-        {/* Section 1: Introduction Paragraphs (Bilingual) */}
-        <div className="space-y-3 mb-5 bg-slate-50/50 p-4 rounded-xl border border-slate-200/80">
+        {/* Section 1: Introduction Paragraphs (Bilingual Side-by-Side) */}
+        <div className="space-y-2 mb-3.5 bg-slate-50/50 p-3 rounded-lg border border-slate-200/80 print-avoid-break">
           {consent.introParagraphs.map((para, idx) => (
-            <div key={idx} className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[9.5px] leading-relaxed border-b border-slate-200/50 pb-2.5 last:border-0 last:pb-0">
+            <div key={idx} className="grid grid-cols-2 gap-3 text-[8.5px] leading-snug border-b border-slate-200/50 pb-1.5 last:border-0 last:pb-0">
               <p className="text-slate-800 text-justify">{para.en}</p>
               <p dir="rtl" className="text-slate-700 font-arabic text-justify">{para.ar}</p>
             </div>
@@ -236,13 +253,13 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
         </div>
 
         {/* Section 2: PAR-Q (Physical Activity Readiness Questionnaire) */}
-        <div className="mb-5 bg-white border-2 border-slate-200 rounded-xl overflow-hidden shadow-sm">
-          <div className="bg-slate-900 text-white px-4 py-2 flex justify-between items-center">
-            <span className="font-black text-[10px] tracking-wide uppercase">{consent.parqTitleEn}</span>
-            <span dir="rtl" className="font-arabic font-bold text-[10px]">{consent.parqTitleAr}</span>
+        <div className="mb-3.5 bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs print-avoid-break">
+          <div className="bg-slate-900 text-white px-3 py-1.5 flex justify-between items-center">
+            <span className="font-black text-[9px] tracking-wide uppercase">{consent.parqTitleEn}</span>
+            <span dir="rtl" className="font-arabic font-bold text-[9px]">{consent.parqTitleAr}</span>
           </div>
 
-          <div className="p-3 bg-slate-50/60 border-b border-slate-200 flex justify-between text-[9px] font-black text-slate-600">
+          <div className="px-3 py-1.5 bg-slate-50/60 border-b border-slate-200 flex justify-between text-[8px] font-black text-slate-600">
             <span>{consent.parqInstructionEn}</span>
             <span dir="rtl" className="font-arabic">{consent.parqInstructionAr}</span>
           </div>
@@ -253,43 +270,41 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
               const isNo = parqAnswers[q.id] === false;
 
               return (
-                <div key={q.id} className="p-3 hover:bg-slate-50/50 transition-colors">
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
-                    <div className="md:col-span-1 text-center font-black text-indigo-700 text-xs">
-                      #{q.id}
-                    </div>
-                    <div className="md:col-span-8 space-y-1">
-                      <p className="text-[9.5px] text-slate-900 font-medium">{q.en}</p>
-                      <p dir="rtl" className="text-[9.5px] text-slate-600 font-arabic">{q.ar}</p>
-                    </div>
-                    <div className="md:col-span-3 flex items-center justify-end gap-2 text-[9px] font-black pt-1 md:pt-0">
-                      {/* Interactive Buttons (On-screen) & Print-compatible indicator */}
-                      <button
-                        type="button"
-                        onClick={() => handleToggleParq(q.id, true)}
-                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
-                          isYes 
-                          ? 'bg-rose-50 border-rose-400 text-rose-700 font-black shadow-sm' 
-                          : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                        }`}
-                      >
-                        {isYes ? <CheckSquare className="w-3.5 h-3.5 text-rose-600 shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
-                        <span>Yes / نعم</span>
-                      </button>
+                <div key={q.id} className="p-2 sm:p-2.5 flex items-center gap-2.5 hover:bg-slate-50/50 transition-colors">
+                  <div className="w-5 shrink-0 text-center font-black text-indigo-700 text-[10px]">
+                    #{q.id}
+                  </div>
+                  <div className="flex-1 min-w-0 grid grid-cols-2 gap-2">
+                    <p className="text-[8.5px] text-slate-900 font-medium leading-tight">{q.en}</p>
+                    <p dir="rtl" className="text-[8.5px] text-slate-600 font-arabic leading-tight">{q.ar}</p>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1.5 text-[8.5px] font-black">
+                    {/* Interactive on-screen buttons / Clean printable checks */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleParq(q.id, true)}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded border transition-all cursor-pointer ${
+                        isYes 
+                        ? 'bg-rose-50 border-rose-500 text-rose-700 font-black shadow-xs' 
+                        : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'
+                      }`}
+                    >
+                      {isYes ? <CheckSquare className="w-3.5 h-3.5 text-rose-600 shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+                      <span>Yes / نعم</span>
+                    </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleToggleParq(q.id, false)}
-                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
-                          isNo 
-                          ? 'bg-emerald-50 border-emerald-400 text-emerald-700 font-black shadow-sm' 
-                          : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                        }`}
-                      >
-                        {isNo ? <CheckSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
-                        <span>No / لا</span>
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleParq(q.id, false)}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded border transition-all cursor-pointer ${
+                        isNo 
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700 font-black shadow-xs' 
+                        : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'
+                      }`}
+                    >
+                      {isNo ? <CheckSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+                      <span>No / لا</span>
+                    </button>
                   </div>
                 </div>
               );
@@ -297,8 +312,8 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
           </div>
 
           {/* If Yes, Details */}
-          <div className="p-3.5 bg-slate-50 border-t border-slate-200">
-            <div className="flex justify-between items-center text-[9px] font-bold text-slate-700 mb-1">
+          <div className="p-2.5 bg-slate-50 border-t border-slate-200">
+            <div className="flex justify-between items-center text-[8px] font-bold text-slate-700 mb-1">
               <span>{consent.parqDetailsPromptEn}</span>
               <span dir="rtl" className="font-arabic">{consent.parqDetailsPromptAr}</span>
             </div>
@@ -308,32 +323,32 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
                 value={parqDetails}
                 onChange={e => setParqDetails(e.target.value)}
                 placeholder="Enter details if any condition was marked Yes (e.g. physician clearance, allergies, joint pain)..."
-                className="w-full p-2 bg-white rounded-lg border border-slate-300 text-[9.5px] text-slate-900 focus:ring-2 focus:ring-indigo-600 outline-none"
+                className="w-full p-2 bg-white rounded-lg border border-slate-300 text-[9px] text-slate-900 focus:ring-2 focus:ring-indigo-600 outline-none"
               />
             </div>
-            <div className="hidden print:block min-h-[32px] p-2 bg-white rounded border border-slate-300 text-[9.5px] text-slate-800">
+            <div className="hidden print:block min-h-[26px] p-1.5 bg-white rounded border border-slate-300 text-[8.5px] text-slate-800">
               {parqDetails || (
-                <span className="text-slate-300 italic">None reported / لا توجد تفاصيل إضافية</span>
+                <span className="text-slate-400 italic">None reported / لا توجد تفاصيل إضافية</span>
               )}
             </div>
           </div>
         </div>
 
         {/* Section 3: Declaration */}
-        <div className="mb-5 bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="bg-slate-800 text-white px-4 py-1.5 flex justify-between items-center">
-            <span className="font-black text-[10px] tracking-wide uppercase">{consent.declarationTitleEn}</span>
-            <span dir="rtl" className="font-arabic font-bold text-[10px]">{consent.declarationTitleAr}</span>
+        <div className="mb-3.5 bg-white border border-slate-200 rounded-lg overflow-hidden print-avoid-break">
+          <div className="bg-slate-800 text-white px-3 py-1 flex justify-between items-center">
+            <span className="font-black text-[9px] tracking-wide uppercase">{consent.declarationTitleEn}</span>
+            <span dir="rtl" className="font-arabic font-bold text-[9px]">{consent.declarationTitleAr}</span>
           </div>
 
-          <div className="p-4 space-y-2.5 bg-slate-50/40">
+          <div className="p-2.5 space-y-1.5 bg-slate-50/40">
             {consent.declarationParagraphs.map((para, idx) => (
-              <div key={idx} className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[9px] leading-relaxed border-b border-slate-100 pb-2 last:border-0 last:pb-0">
-                <p className="text-slate-800 text-justify flex gap-1.5">
+              <div key={idx} className="grid grid-cols-2 gap-3 text-[8px] leading-tight border-b border-slate-100 pb-1 last:border-0 last:pb-0">
+                <p className="text-slate-800 text-justify flex gap-1">
                   <span className="text-slate-400 font-bold shrink-0">•</span>
                   <span>{para.en}</span>
                 </p>
-                <p dir="rtl" className="text-slate-700 font-arabic text-justify flex gap-1.5">
+                <p dir="rtl" className="text-slate-700 font-arabic text-justify flex gap-1">
                   <span className="text-slate-400 font-bold shrink-0">•</span>
                   <span>{para.ar}</span>
                 </p>
@@ -343,16 +358,16 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
         </div>
 
         {/* Section 4: For Participants Under 18 */}
-        <div className={`mb-5 p-4 rounded-xl text-[9px] transition-all border-2 ${isUnder18 ? 'bg-amber-50/60 border-amber-300 shadow-sm' : 'bg-slate-50/60 border-slate-200'}`}>
-          <div className="flex justify-between items-center font-black text-slate-900 border-b border-slate-200 pb-1.5 mb-2.5">
+        <div className={`mb-3.5 p-3 rounded-lg text-[8.5px] transition-all border print-avoid-break ${isUnder18 ? 'bg-amber-50/60 border-amber-300 shadow-xs' : 'bg-slate-50/60 border-slate-200'}`}>
+          <div className="flex justify-between items-center font-black text-slate-900 border-b border-slate-200 pb-1 mb-2">
             <div className="flex items-center gap-3">
               <span className={`uppercase tracking-wide ${isUnder18 ? 'text-amber-900 font-black' : 'text-slate-700'}`}>{consent.under18TitleEn}</span>
-              <label className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-amber-300 shadow-xs text-[9px] text-amber-900 font-black cursor-pointer hover:bg-amber-50/80 transition-colors print:hidden">
+              <label className="flex items-center gap-1.5 px-2 py-0.5 bg-white rounded border border-amber-300 shadow-xs text-[8.5px] text-amber-900 font-black cursor-pointer hover:bg-amber-50/80 transition-colors print:hidden">
                 <input
                   type="checkbox"
                   checked={isUnder18}
                   onChange={e => setIsUnder18(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-amber-400 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  className="w-3 h-3 rounded border-amber-400 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                 />
                 <span>Enable Minor Guardian Form</span>
               </label>
@@ -362,23 +377,23 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
 
           {/* If NOT under 18 (Unchecked) - Show note on screen, standard lines on print */}
           {!isUnder18 ? (
-            <div className="py-2">
-              <p className="text-[9px] text-slate-500 italic print:hidden">
+            <div className="py-1">
+              <p className="text-[8.5px] text-slate-500 italic print:hidden">
                 Participant is an adult (18+). If registering on behalf of a minor under 18, check <strong className="text-amber-800 font-bold">"Enable Minor Guardian Form"</strong> above.
               </p>
-              <div className="hidden print:block text-[8.5px] text-slate-400 pt-1">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-                  <div><span className="block font-bold">Participant's DOB:</span> ___________________</div>
-                  <div><span className="block font-bold">Relationship:</span> ___________________</div>
-                  <div><span className="block font-bold">Contact Number:</span> ___________________</div>
-                  <div><span className="block font-bold">Parent Signature:</span> ___________________</div>
+              <div className="hidden print:block text-[8px] text-slate-500 pt-0.5">
+                <div className="grid grid-cols-4 gap-2 pt-0.5">
+                  <div><span className="block font-bold text-slate-400">Participant's DOB / الميلاد:</span> ___________________</div>
+                  <div><span className="block font-bold text-slate-400">Relationship / القرابة:</span> ___________________</div>
+                  <div><span className="block font-bold text-slate-400">Contact Number / الهاتف:</span> ___________________</div>
+                  <div><span className="block font-bold text-slate-400">Parent Signature / التوقيع:</span> ___________________</div>
                 </div>
               </div>
             </div>
           ) : (
             <>
               {/* Bilingual Guardian Declaration Text */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 text-[8.5px] leading-relaxed">
+              <div className="grid grid-cols-2 gap-3 mb-2 text-[8px] leading-snug">
                 <p className="text-slate-800 text-justify">
                   {consent.under18TextEn(guardianName || '________________', ptMember.guest_name || '')}
                 </p>
@@ -388,77 +403,77 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
               </div>
 
               {/* Interactive Screen Inputs (Only rendered when isUnder18 is true) */}
-              <div className="print:hidden grid grid-cols-1 sm:grid-cols-4 gap-2.5 p-3.5 bg-white rounded-xl border border-amber-300 shadow-sm mb-3">
+              <div className="print:hidden grid grid-cols-4 gap-2 p-2.5 bg-white rounded-lg border border-amber-300 shadow-xs mb-2">
                 <div>
-                  <label className="text-[8px] font-black text-amber-900 uppercase tracking-widest block mb-0.5">Parent / Guardian Name *</label>
+                  <label className="text-[7.5px] font-black text-amber-900 uppercase tracking-widest block mb-0.5">Parent / Guardian Name *</label>
                   <input
                     type="text"
                     value={guardianName}
                     onChange={e => setGuardianName(e.target.value)}
                     placeholder="Full Name of Guardian"
-                    className="w-full h-8 px-2 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                    className="w-full h-7 px-2 rounded border border-slate-300 text-[10px] font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-[8px] font-black text-amber-900 uppercase tracking-widest block mb-0.5">Participant DOB *</label>
+                  <label className="text-[7.5px] font-black text-amber-900 uppercase tracking-widest block mb-0.5">Participant DOB *</label>
                   <input
                     type="date"
                     value={dob}
                     onChange={e => setDob(e.target.value)}
-                    className="w-full h-8 px-2 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                    className="w-full h-7 px-2 rounded border border-slate-300 text-[10px] font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-[8px] font-black text-amber-900 uppercase tracking-widest block mb-0.5">Relationship *</label>
+                  <label className="text-[7.5px] font-black text-amber-900 uppercase tracking-widest block mb-0.5">Relationship *</label>
                   <input
                     type="text"
                     value={guardianRelationship}
                     onChange={e => setGuardianRelationship(e.target.value)}
-                    placeholder="Father, Mother, Legal Guardian"
-                    className="w-full h-8 px-2 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                    placeholder="Father, Mother..."
+                    className="w-full h-7 px-2 rounded border border-slate-300 text-[10px] font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-[8px] font-black text-amber-900 uppercase tracking-widest block mb-0.5">Guardian Contact # *</label>
+                  <label className="text-[7.5px] font-black text-amber-900 uppercase tracking-widest block mb-0.5">Guardian Contact # *</label>
                   <input
                     type="text"
                     value={guardianContact}
                     onChange={e => setGuardianContact(e.target.value)}
                     placeholder="+974 / Phone #"
-                    className="w-full h-8 px-2 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                    className="w-full h-7 px-2 rounded border border-slate-300 text-[10px] font-bold focus:ring-1 focus:ring-amber-500 outline-none"
                   />
                 </div>
               </div>
 
               {/* Formatted Fields for Printing & Preview Display */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-amber-200 text-[8.5px]">
+              <div className="grid grid-cols-4 gap-2 pt-1.5 border-t border-amber-200 text-[8px]">
                 <div>
                   <span className="font-bold text-slate-500 block">Participant's DOB / تاريخ الميلاد:</span>
-                  <span className="font-black text-slate-900">{dob || '___________________'}</span>
+                  <span className="font-black text-slate-900 truncate block">{dob || '___________________'}</span>
                 </div>
                 <div>
                   <span className="font-bold text-slate-500 block">Relationship / صلة القرابة:</span>
-                  <span className="font-black text-slate-900">{guardianRelationship || '___________________'}</span>
+                  <span className="font-black text-slate-900 truncate block">{guardianRelationship || '___________________'}</span>
                 </div>
                 <div>
                   <span className="font-bold text-slate-500 block">Contact Number / رقم الهاتف:</span>
-                  <span className="font-black text-slate-900">{guardianContact || ptMember.phone || '___________________'}</span>
+                  <span className="font-black text-slate-900 truncate block">{guardianContact || ptMember.phone || '___________________'}</span>
                 </div>
                 <div>
                   <span className="font-bold text-slate-500 block">Parent Signature / توقيع ولي الأمر:</span>
                   {guardianSignature ? (
-                    <div className="h-6 flex items-center">
-                      <img src={guardianSignature} alt="Parent Signature" className="max-h-6 object-contain" />
+                    <div className="h-5 flex items-center">
+                      <img src={guardianSignature} alt="Parent Signature" className="max-h-5 object-contain" />
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-slate-900">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-black text-slate-900 truncate block">
                         {guardianName ? `${guardianName} (Confirmed)` : '___________________'}
                       </span>
                       <button
                         type="button"
                         onClick={() => { setSigningTarget('guardian'); setShowSigModal(true); }}
-                        className="print:hidden text-[7.5px] font-black text-amber-800 bg-amber-100 hover:bg-amber-200 px-1.5 py-0.5 rounded uppercase tracking-wider"
+                        className="print:hidden text-[7px] font-black text-amber-800 bg-amber-100 hover:bg-amber-200 px-1 py-0.5 rounded uppercase tracking-wider"
                       >
                         Sign
                       </button>
@@ -471,28 +486,28 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
         </div>
 
         {/* Section 5: Member & Staff Signatures (Exact Match to Specification) */}
-        <div className="pt-4 border-t-2 border-slate-900 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="pt-3 border-t-2 border-slate-900 grid grid-cols-2 gap-4 print-avoid-break">
           {/* Member Details & Digital Signature */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-1 text-[9px]">
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1.5">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-0.5 text-[8.5px]">
               <span className="font-black text-slate-600">Full Name : <span className="text-slate-900 font-black">{ptMember.guest_name}</span></span>
               <span dir="rtl" className="font-arabic font-bold text-slate-700">الاسم الكامل</span>
             </div>
-            <div className="flex justify-between items-center border-b border-slate-200 pb-1 text-[9px]">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-0.5 text-[8.5px]">
               <span className="font-bold text-slate-600">Membership: <span className="text-slate-900 font-bold">{getDisplayMembership(ptMember)}</span></span>
               <span dir="rtl" className="font-arabic font-bold text-slate-700">العضوية</span>
             </div>
-            <div className="flex justify-between items-center border-b border-slate-200 pb-1 text-[9px]">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-0.5 text-[8.5px]">
               <span className="font-bold text-slate-600">Contact Number: <span className="text-slate-900 font-bold">{ptMember.phone || 'N/A'}</span></span>
               <span dir="rtl" className="font-arabic font-bold text-slate-700">رقم الهاتف</span>
             </div>
             
             <div className="pt-1">
-              <div className="flex justify-between items-center text-[8.5px] font-black text-slate-500 mb-1">
+              <div className="flex justify-between items-center text-[7.5px] font-black text-slate-500 mb-0.5">
                 <span>Signature / التوقيع:</span>
                 <span>Date / التاريخ: {ptMember.created_at ? format(parseISO(ptMember.created_at), 'dd/MM/yyyy') : format(new Date(), 'dd/MM/yyyy')}</span>
               </div>
-              <div className="h-24 border-2 border-dashed border-slate-300 rounded-xl bg-white flex flex-col items-center justify-center overflow-hidden p-2 relative group">
+              <div className="h-16 border border-dashed border-slate-300 rounded-lg bg-white flex flex-col items-center justify-center overflow-hidden p-1 relative group">
                 {memberSignature && memberSignature !== 'BYPASSED' ? (
                   <>
                     <img 
@@ -503,34 +518,27 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
                     <button
                       type="button"
                       onClick={() => { setSigningTarget('member'); setShowSigModal(true); }}
-                      className="print:hidden absolute inset-0 bg-slate-900/60 text-white flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity font-bold text-[9px] uppercase tracking-wider rounded-xl backdrop-blur-xs"
+                      className="print:hidden absolute inset-0 bg-slate-900/60 text-white flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity font-bold text-[8px] uppercase tracking-wider rounded-lg backdrop-blur-xs"
                     >
-                      <PenTool className="w-3.5 h-3.5" /> Re-sign on Pad / Tablet
+                      <PenTool className="w-3 h-3" /> Re-sign
                     </button>
                   </>
                 ) : memberSignature === 'BYPASSED' ? (
-                  <div className="flex flex-col items-center justify-center text-center p-1">
-                    <CheckCircle2 className="w-5 h-5 text-amber-500 mb-1" />
-                    <span className="text-[8.5px] font-black text-amber-700 uppercase tracking-widest">
+                  <div className="flex flex-col items-center justify-center text-center p-0.5">
+                    <CheckCircle2 className="w-4 h-4 text-amber-500 mb-0.5" />
+                    <span className="text-[7.5px] font-black text-amber-700 uppercase tracking-widest">
                       Verified In Person (Staff Bypassed)
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => { setSigningTarget('member'); setShowSigModal(true); }}
-                      className="print:hidden mt-1 text-[8px] font-black text-indigo-600 underline uppercase tracking-wider hover:text-indigo-800"
-                    >
-                      Add Digital Signature
-                    </button>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center gap-1 text-center">
-                    <span className="text-[8.5px] font-bold text-slate-400 italic">No signature recorded yet</span>
+                  <div className="flex flex-col items-center justify-center gap-0.5 text-center">
+                    <span className="text-[7.5px] font-bold text-slate-400 italic">No signature recorded yet</span>
                     <button
                       type="button"
                       onClick={() => { setSigningTarget('member'); setShowSigModal(true); }}
-                      className="print:hidden flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[8.5px] font-black uppercase tracking-wider transition-colors shadow-sm"
+                      className="print:hidden flex items-center gap-1 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[7.5px] font-black uppercase tracking-wider transition-colors shadow-xs"
                     >
-                      <PenTool className="w-3 h-3" /> Sign on Pad / Tablet (QR)
+                      <PenTool className="w-2.5 h-2.5" /> Sign on Pad / Tablet (QR)
                     </button>
                   </div>
                 )}
@@ -539,29 +547,29 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
           </div>
 
           {/* Trainer / Fitness Staff Authorization */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2 flex flex-col justify-between">
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1.5 flex flex-col justify-between">
             <div>
-              <div className="flex justify-between items-center border-b border-slate-200 pb-1 text-[9px]">
+              <div className="flex justify-between items-center border-b border-slate-200 pb-0.5 text-[8.5px]">
                 <span className="font-black text-slate-600">Trainer: <span className="text-indigo-700 font-black">{trainer?.name || 'Authorized Fitness Professional'}</span></span>
                 <span dir="rtl" className="font-arabic font-bold text-slate-700">المدرب المسؤول</span>
               </div>
-              <div className="flex justify-between items-center border-b border-slate-200 pb-1 text-[9px]">
+              <div className="flex justify-between items-center border-b border-slate-200 pb-0.5 text-[8.5px]">
                 <span className="font-bold text-slate-600">Package: <span className="text-slate-900 font-bold">{ptMember.total_sessions} Sessions ({ptMember.start_date ? format(parseISO(ptMember.start_date), 'dd/MM/yy') : ''} - {ptMember.end_date ? format(parseISO(ptMember.end_date), 'dd/MM/yy') : ''})</span></span>
                 <span dir="rtl" className="font-arabic font-bold text-slate-700">الباقة والصلاحية</span>
               </div>
             </div>
 
             <div className="pt-1">
-              <div className="flex justify-between items-center text-[8.5px] font-black text-slate-500 mb-1">
+              <div className="flex justify-between items-center text-[7.5px] font-black text-slate-500 mb-0.5">
                 <span>Trainer / Staff Signature:</span>
                 <span>Date: {format(new Date(), 'dd/MM/yyyy')}</span>
               </div>
-              <div className="h-24 border-2 border-dashed border-slate-300 rounded-xl bg-white flex flex-col items-center justify-center p-2 text-center">
-                <UserCheck className="w-6 h-6 text-indigo-600 mb-1" />
-                <span className="text-[9.5px] font-black text-slate-900 uppercase">
+              <div className="h-16 border border-dashed border-slate-300 rounded-lg bg-white flex flex-col items-center justify-center p-1 text-center">
+                <UserCheck className="w-5 h-5 text-indigo-600 mb-0.5" />
+                <span className="text-[8.5px] font-black text-slate-900 uppercase">
                   {trainer?.name || 'Fitness Department'}
                 </span>
-                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">
+                <span className="text-[7px] font-bold text-slate-400 uppercase tracking-wider">
                   Health & Fitness Authorization
                 </span>
               </div>
@@ -570,7 +578,7 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
         </div>
 
         {/* Footer Notice */}
-        <div className="mt-5 pt-3 border-t border-slate-200 flex justify-between items-center text-[7.5px] text-slate-400">
+        <div className="mt-3.5 pt-2 border-t border-slate-200 flex justify-between items-center text-[7px] text-slate-400 print-avoid-break">
           <span>In accordance with Qatar Law No. 13 of 2016 on Personal Data Protection.</span>
           <span>{clubDisplayName} • Personal Training Health Declaration</span>
         </div>
