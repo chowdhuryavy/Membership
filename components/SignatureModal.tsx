@@ -84,11 +84,20 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
     // Fallback polling for environments where real-time might be restricted
     const interval = setInterval(async () => {
       try {
-        const { data } = await supabase
+        let { data } = await supabase
           .from('notifications')
           .select('message, id')
-          .eq('title', `SIG_SYNC:${currentSigId}`)
+          .eq('id', currentSigId)
           .maybeSingle();
+
+        if (!data) {
+          const res = await supabase
+            .from('notifications')
+            .select('message, id')
+            .eq('title', `SIG_SYNC:${currentSigId}`)
+            .maybeSingle();
+          data = res.data;
+        }
 
         if ((data as any)?.message) {
           const syncData = JSON.parse((data as any).message);
@@ -103,7 +112,7 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
       } catch (e) {
         console.error("Polling error:", e);
       }
-    }, 2000);
+    }, 1500);
 
     return () => {
       clearInterval(interval);

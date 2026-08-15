@@ -28,3 +28,20 @@ ADD COLUMN IF NOT EXISTS privileges JSONB DEFAULT '[]'::jsonb;
 -- Add privilege_usage to members
 ALTER TABLE members
 ADD COLUMN IF NOT EXISTS privilege_usage JSONB DEFAULT '[]'::jsonb;
+
+-- ----------------------------------------------------
+-- PT MEMBERS HEALTH DECLARATION & SIGNATURE ENHANCEMENTS
+-- ----------------------------------------------------
+
+ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS member_signature TEXT;
+ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS parq_answers JSONB;
+ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS parq_details TEXT;
+ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS is_under_18 BOOLEAN DEFAULT false;
+ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS guardian_name TEXT;
+ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS guardian_relationship TEXT;
+ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS guardian_contact TEXT;
+ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS guardian_signature TEXT;
+ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS dob DATE;
+ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS membership_number TEXT;
+ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS property_id UUID;
+ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS trainer_id UUID;

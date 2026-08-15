@@ -118,14 +118,41 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
     }
   };
 
-  const handleSignatureCaptured = (dataUrl: string) => {
+  const handleSignatureCaptured = async (dataUrl: string) => {
     setShowSigModal(false);
-    if (signingTarget === 'member') {
+    const isMember = signingTarget === 'member';
+    if (isMember) {
       setMemberSignature(dataUrl);
     } else {
       setGuardianSignature(dataUrl);
     }
-    toast.success('Signature recorded! Remember to click Save.');
+
+    // Immediately auto-save and persist to database
+    try {
+      const updates: Partial<PTMember> = {
+        parq_answers: parqAnswers,
+        parq_details: parqDetails,
+        is_under_18: isUnder18,
+        guardian_name: isUnder18 ? guardianName : undefined,
+        guardian_relationship: isUnder18 ? guardianRelationship : undefined,
+        guardian_contact: isUnder18 ? guardianContact : undefined,
+        guardian_signature: !isMember ? dataUrl : (isUnder18 ? guardianSignature : undefined),
+        dob: dob || undefined,
+        member_signature: isMember ? dataUrl : memberSignature
+      };
+
+      await db.updatePTMember(ptMember.id, updates);
+      toast.success('Signature recorded and agreement saved successfully!');
+      
+      const updatedMember = { ...ptMember, ...updates };
+      if (onUpdate) onUpdate(updatedMember);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('booking_updated'));
+      }
+    } catch (err) {
+      console.warn("Auto-save signature warning:", err);
+      toast.success('Signature recorded! Remember to click Save Updates.');
+    }
   };
 
   const logoUrl = outlet?.logo_url || property?.logo_url || settings?.logo_url || '';

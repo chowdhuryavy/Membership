@@ -2532,22 +2532,32 @@ class DatabaseService {
 
         allMembers = supabaseMembers.map(dbMember => {
           const local = localMap.get(dbMember.id);
-          if (!local) return dbMember;
+          // Extract embedded metadata from notes if present
+          let embeddedMeta: any = null;
+          let cleanDisplayNotes = dbMember.notes;
+          if (dbMember.notes && dbMember.notes.includes('___PT_META___:')) {
+            const idx = dbMember.notes.indexOf('___PT_META___:');
+            cleanDisplayNotes = dbMember.notes.slice(0, idx).trim();
+            try {
+              embeddedMeta = JSON.parse(dbMember.notes.slice(idx + 14).trim());
+            } catch (e) {}
+          }
+
           return {
-            ...local,
+            ...(local || {}),
             ...dbMember,
+            notes: cleanDisplayNotes || (local?.notes),
             // Preserve rich client fields if not present in Supabase table
-            member_signature: dbMember.member_signature || local.member_signature,
-            parq_answers: dbMember.parq_answers || local.parq_answers,
-            parq_details: dbMember.parq_details || local.parq_details,
-            is_under_18: dbMember.is_under_18 !== undefined ? dbMember.is_under_18 : local.is_under_18,
-            guardian_name: dbMember.guardian_name || local.guardian_name,
-            guardian_relationship: dbMember.guardian_relationship || local.guardian_relationship,
-            guardian_contact: dbMember.guardian_contact || local.guardian_contact,
-            guardian_signature: dbMember.guardian_signature || local.guardian_signature,
-            dob: dbMember.dob || local.dob,
-            membership_number: dbMember.membership_number || local.membership_number,
-            notes: dbMember.notes || local.notes
+            member_signature: dbMember.member_signature || embeddedMeta?.member_signature || local?.member_signature,
+            parq_answers: dbMember.parq_answers || embeddedMeta?.parq_answers || local?.parq_answers,
+            parq_details: dbMember.parq_details || embeddedMeta?.parq_details || local?.parq_details,
+            is_under_18: dbMember.is_under_18 !== undefined ? dbMember.is_under_18 : (embeddedMeta?.is_under_18 !== undefined ? embeddedMeta.is_under_18 : local?.is_under_18),
+            guardian_name: dbMember.guardian_name || embeddedMeta?.guardian_name || local?.guardian_name,
+            guardian_relationship: dbMember.guardian_relationship || embeddedMeta?.guardian_relationship || local?.guardian_relationship,
+            guardian_contact: dbMember.guardian_contact || embeddedMeta?.guardian_contact || local?.guardian_contact,
+            guardian_signature: dbMember.guardian_signature || embeddedMeta?.guardian_signature || local?.guardian_signature,
+            dob: dbMember.dob || embeddedMeta?.dob || local?.dob,
+            membership_number: dbMember.membership_number || embeddedMeta?.membership_number || local?.membership_number,
           };
         });
 
@@ -2764,6 +2774,23 @@ class DatabaseService {
 
     if (this.isSupabase()) {
       await this.safeCall(async () => {
+        const consentMeta: any = {};
+        if (payload.member_signature) consentMeta.member_signature = payload.member_signature;
+        if (payload.parq_answers) consentMeta.parq_answers = payload.parq_answers;
+        if (payload.parq_details) consentMeta.parq_details = payload.parq_details;
+        if (payload.is_under_18 !== undefined) consentMeta.is_under_18 = payload.is_under_18;
+        if (payload.guardian_name) consentMeta.guardian_name = payload.guardian_name;
+        if (payload.guardian_relationship) consentMeta.guardian_relationship = payload.guardian_relationship;
+        if (payload.guardian_contact) consentMeta.guardian_contact = payload.guardian_contact;
+        if (payload.guardian_signature) consentMeta.guardian_signature = payload.guardian_signature;
+        if (payload.dob) consentMeta.dob = payload.dob;
+        if (payload.membership_number) consentMeta.membership_number = payload.membership_number;
+
+        const baseNotes = (payload.notes || '').replace(/\n*___PT_META___:[\s\S]*$/, '').trim();
+        const packedNotes = Object.keys(consentMeta).length > 0 
+          ? (baseNotes ? `${baseNotes}\n\n___PT_META___:${JSON.stringify(consentMeta)}` : `___PT_META___:${JSON.stringify(consentMeta)}`)
+          : baseNotes;
+
         const fullPayload: any = {
           id: payload.id,
           outlet_id: payload.outlet_id,
@@ -2780,7 +2807,7 @@ class DatabaseService {
           end_date: payload.end_date,
           status: payload.status || 'Active',
           trainer_id: payload.trainer_id || null,
-          notes: payload.notes || null,
+          notes: packedNotes || null,
           member_signature: payload.member_signature || null,
           parq_answers: payload.parq_answers || null,
           parq_details: payload.parq_details || null,
@@ -2796,7 +2823,7 @@ class DatabaseService {
 
         const { error } = await supabase.from('pt_members').insert([fullPayload]);
         if (error) {
-          // If custom columns (like parq_answers or member_signature) don't exist yet on the remote table, fallback gracefully
+          // If custom columns (like parq_answers or member_signature) don't exist yet on the remote table, fallback gracefully with packed notes
           const standardPayload: any = {
             id: payload.id,
             outlet_id: payload.outlet_id,
@@ -2811,8 +2838,7 @@ class DatabaseService {
             end_date: payload.end_date,
             status: payload.status || 'Active',
             trainer_id: payload.trainer_id || null,
-            notes: payload.notes || null,
-            member_signature: payload.member_signature || null,
+            notes: packedNotes || null,
             created_at: payload.created_at
           };
           Object.keys(standardPayload).forEach(k => standardPayload[k] === undefined && delete standardPayload[k]);
@@ -2830,6 +2856,7 @@ class DatabaseService {
               start_date: payload.start_date,
               end_date: payload.end_date,
               sale_id: payload.sale_id || null,
+              notes: packedNotes || null,
               created_at: payload.created_at
             };
             const { error: retryErr } = await supabase.from('pt_members').insert([corePayload]);
@@ -2860,17 +2887,55 @@ class DatabaseService {
 
     if (this.isSupabase()) {
       await this.safeCall(async () => {
-        const { error } = await supabase.from('pt_members').update(updates).eq('id', id);
+        let existingMember: PTMember | undefined;
+        try {
+          const localMembers = JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[];
+          existingMember = localMembers.find(m => m.id === id);
+        } catch (e) {}
+
+        const mergedMember = {
+          ...(existingMember || {}),
+          ...updates
+        };
+
+        const consentMeta: any = {};
+        if (mergedMember.member_signature) consentMeta.member_signature = mergedMember.member_signature;
+        if (mergedMember.parq_answers) consentMeta.parq_answers = mergedMember.parq_answers;
+        if (mergedMember.parq_details) consentMeta.parq_details = mergedMember.parq_details;
+        if (mergedMember.is_under_18 !== undefined) consentMeta.is_under_18 = mergedMember.is_under_18;
+        if (mergedMember.guardian_name) consentMeta.guardian_name = mergedMember.guardian_name;
+        if (mergedMember.guardian_relationship) consentMeta.guardian_relationship = mergedMember.guardian_relationship;
+        if (mergedMember.guardian_contact) consentMeta.guardian_contact = mergedMember.guardian_contact;
+        if (mergedMember.guardian_signature) consentMeta.guardian_signature = mergedMember.guardian_signature;
+        if (mergedMember.dob) consentMeta.dob = mergedMember.dob;
+        if (mergedMember.membership_number) consentMeta.membership_number = mergedMember.membership_number;
+
+        const baseNotes = (updates.notes !== undefined ? (updates.notes || '') : (existingMember?.notes || '')).replace(/\n*___PT_META___:[\s\S]*$/, '').trim();
+        const packedNotes = Object.keys(consentMeta).length > 0 
+          ? (baseNotes ? `${baseNotes}\n\n___PT_META___:${JSON.stringify(consentMeta)}` : `___PT_META___:${JSON.stringify(consentMeta)}`)
+          : baseNotes;
+
+        const updatePayload: any = {
+          ...updates,
+          notes: packedNotes
+        };
+        // Remove undefined keys
+        Object.keys(updatePayload).forEach(k => updatePayload[k] === undefined && delete updatePayload[k]);
+
+        const { error } = await supabase.from('pt_members').update(updatePayload).eq('id', id);
         if (error) {
-          // If updates had fields not in the table, try updating without rich fields
-          const cleanUpdates = { ...updates };
-          delete (cleanUpdates as any).parq_answers;
-          delete (cleanUpdates as any).parq_details;
-          delete (cleanUpdates as any).is_under_18;
-          delete (cleanUpdates as any).guardian_name;
-          delete (cleanUpdates as any).guardian_relationship;
-          delete (cleanUpdates as any).guardian_contact;
-          delete (cleanUpdates as any).guardian_signature;
+          // If updates had fields not in the table, try updating without rich custom columns
+          const cleanUpdates: any = { ...updatePayload };
+          delete cleanUpdates.parq_answers;
+          delete cleanUpdates.parq_details;
+          delete cleanUpdates.is_under_18;
+          delete cleanUpdates.guardian_name;
+          delete cleanUpdates.guardian_relationship;
+          delete cleanUpdates.guardian_contact;
+          delete cleanUpdates.guardian_signature;
+          delete cleanUpdates.member_signature;
+          delete cleanUpdates.dob;
+          delete cleanUpdates.membership_number;
           
           await supabase.from('pt_members').update(cleanUpdates).eq('id', id);
         }
