@@ -2525,14 +2525,43 @@ class DatabaseService {
     let allMembers: PTMember[] = [];
 
     if (this.isSupabase() && querySuccess && supabaseMembers !== null) {
-      allMembers = supabaseMembers;
-      // Sync local storage so manually deleted items in Supabase table don't ghost back from browser cache
+      // Merge Supabase records with local storage records to preserve rich fields like member_signature, parq_answers, guardian info
       try {
-        const fetchedIds = new Set(supabaseMembers.map(m => m.id));
         const localMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]);
-        const updatedLocal = localMembers.filter(m => fetchedIds.has(m.id));
-        localStorage.setItem('pt_members', JSON.stringify(updatedLocal));
-      } catch (e) {}
+        const localMap = new Map(localMembers.map(m => [m.id, m]));
+
+        allMembers = supabaseMembers.map(dbMember => {
+          const local = localMap.get(dbMember.id);
+          if (!local) return dbMember;
+          return {
+            ...local,
+            ...dbMember,
+            // Preserve rich client fields if not present in Supabase table
+            member_signature: dbMember.member_signature || local.member_signature,
+            parq_answers: dbMember.parq_answers || local.parq_answers,
+            parq_details: dbMember.parq_details || local.parq_details,
+            is_under_18: dbMember.is_under_18 !== undefined ? dbMember.is_under_18 : local.is_under_18,
+            guardian_name: dbMember.guardian_name || local.guardian_name,
+            guardian_relationship: dbMember.guardian_relationship || local.guardian_relationship,
+            guardian_contact: dbMember.guardian_contact || local.guardian_contact,
+            guardian_signature: dbMember.guardian_signature || local.guardian_signature,
+            dob: dbMember.dob || local.dob,
+            membership_number: dbMember.membership_number || local.membership_number,
+            notes: dbMember.notes || local.notes
+          };
+        });
+
+        // Also keep any purely local members that haven't synced yet
+        const dbIds = new Set(supabaseMembers.map(m => m.id));
+        const unsyncedLocals = localMembers.filter(m => !dbIds.has(m.id));
+        if (unsyncedLocals.length > 0) {
+          allMembers = [...allMembers, ...unsyncedLocals];
+        }
+
+        localStorage.setItem('pt_members', JSON.stringify(allMembers));
+      } catch (e) {
+        allMembers = supabaseMembers;
+      }
     } else {
       try {
         allMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]).filter(m => {
@@ -2735,47 +2764,78 @@ class DatabaseService {
 
     if (this.isSupabase()) {
       await this.safeCall(async () => {
-        const cleanPayload: any = {
+        const fullPayload: any = {
           id: payload.id,
           outlet_id: payload.outlet_id,
           property_id: payload.property_id || null,
           guest_name: payload.guest_name,
           phone: payload.phone || null,
           email: payload.email || null,
+          dob: payload.dob || null,
+          membership_number: payload.membership_number || null,
           total_sessions: payload.total_sessions,
           used_sessions: payload.used_sessions || 0,
           sale_id: payload.sale_id || null,
           start_date: payload.start_date,
           end_date: payload.end_date,
-          status: payload.status || 'active',
+          status: payload.status || 'Active',
           trainer_id: payload.trainer_id || null,
           notes: payload.notes || null,
           member_signature: payload.member_signature || null,
+          parq_answers: payload.parq_answers || null,
+          parq_details: payload.parq_details || null,
+          is_under_18: payload.is_under_18 || false,
+          guardian_name: payload.guardian_name || null,
+          guardian_relationship: payload.guardian_relationship || null,
+          guardian_contact: payload.guardian_contact || null,
+          guardian_signature: payload.guardian_signature || null,
           created_at: payload.created_at
         };
         // Remove undefined keys
-        Object.keys(cleanPayload).forEach(k => cleanPayload[k] === undefined && delete cleanPayload[k]);
+        Object.keys(fullPayload).forEach(k => fullPayload[k] === undefined && delete fullPayload[k]);
 
-        const { error } = await supabase.from('pt_members').insert([cleanPayload]);
+        const { error } = await supabase.from('pt_members').insert([fullPayload]);
         if (error) {
-          if (error.message && (error.message.includes('column') || error.message.includes('schema cache'))) {
+          // If custom columns (like parq_answers or member_signature) don't exist yet on the remote table, fallback gracefully
+          const standardPayload: any = {
+            id: payload.id,
+            outlet_id: payload.outlet_id,
+            property_id: payload.property_id || null,
+            guest_name: payload.guest_name,
+            phone: payload.phone || null,
+            email: payload.email || null,
+            total_sessions: payload.total_sessions,
+            used_sessions: payload.used_sessions || 0,
+            sale_id: payload.sale_id || null,
+            start_date: payload.start_date,
+            end_date: payload.end_date,
+            status: payload.status || 'Active',
+            trainer_id: payload.trainer_id || null,
+            notes: payload.notes || null,
+            member_signature: payload.member_signature || null,
+            created_at: payload.created_at
+          };
+          Object.keys(standardPayload).forEach(k => standardPayload[k] === undefined && delete standardPayload[k]);
+          
+          const { error: stdErr } = await supabase.from('pt_members').insert([standardPayload]);
+          if (stdErr) {
             const corePayload = {
-              id: cleanPayload.id,
-              outlet_id: cleanPayload.outlet_id,
-              guest_name: cleanPayload.guest_name,
-              phone: cleanPayload.phone,
-              email: cleanPayload.email,
-              total_sessions: cleanPayload.total_sessions,
-              used_sessions: cleanPayload.used_sessions,
-              start_date: cleanPayload.start_date,
-              end_date: cleanPayload.end_date,
-              sale_id: cleanPayload.sale_id,
-              created_at: cleanPayload.created_at
+              id: payload.id,
+              outlet_id: payload.outlet_id,
+              guest_name: payload.guest_name,
+              phone: payload.phone || null,
+              email: payload.email || null,
+              total_sessions: payload.total_sessions,
+              used_sessions: payload.used_sessions || 0,
+              start_date: payload.start_date,
+              end_date: payload.end_date,
+              sale_id: payload.sale_id || null,
+              created_at: payload.created_at
             };
             const { error: retryErr } = await supabase.from('pt_members').insert([corePayload]);
-            if (retryErr) throw retryErr;
-          } else {
-            throw error;
+            if (retryErr) {
+              console.warn("Could not insert to remote Supabase pt_members, saved locally:", retryErr);
+            }
           }
         }
         await this.logAction('CREATE_PT_MEMBER', `Registered PT Member: ${payload.guest_name} (${payload.total_sessions} sessions)`);
@@ -2801,7 +2861,19 @@ class DatabaseService {
     if (this.isSupabase()) {
       await this.safeCall(async () => {
         const { error } = await supabase.from('pt_members').update(updates).eq('id', id);
-        if (error) throw error;
+        if (error) {
+          // If updates had fields not in the table, try updating without rich fields
+          const cleanUpdates = { ...updates };
+          delete (cleanUpdates as any).parq_answers;
+          delete (cleanUpdates as any).parq_details;
+          delete (cleanUpdates as any).is_under_18;
+          delete (cleanUpdates as any).guardian_name;
+          delete (cleanUpdates as any).guardian_relationship;
+          delete (cleanUpdates as any).guardian_contact;
+          delete (cleanUpdates as any).guardian_signature;
+          
+          await supabase.from('pt_members').update(cleanUpdates).eq('id', id);
+        }
         await this.logAction('UPDATE_PT_MEMBER', `Updated PT Member: ${id}`);
       }, null);
     }

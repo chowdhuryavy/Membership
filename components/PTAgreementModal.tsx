@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PTMember, Property, CompanySettings, Outlet, Staff } from '../types';
 import { format } from 'date-fns';
-import { Printer, X, Dumbbell, ShieldCheck, UserCheck, CheckSquare, Square } from 'lucide-react';
-import { Button } from './ui';
+import { Printer, X, Dumbbell, ShieldCheck, UserCheck, CheckSquare, Square, PenTool, Save, CheckCircle2, QrCode } from 'lucide-react';
+import { Button, Input } from './ui';
 import { getBilingualPTConsentText } from '../lib/waiverHelper';
+import { db } from '../services/mockSupabase';
+import toast from 'react-hot-toast';
+import { SignatureModal } from './SignatureModal';
 
 interface PTAgreementModalProps {
   ptMember: PTMember;
@@ -13,6 +16,7 @@ interface PTAgreementModalProps {
   property?: Property | null;
   settings?: CompanySettings | null;
   onClose: () => void;
+  onUpdate?: (updatedMember: PTMember) => void;
 }
 
 const parseISO = (dateString?: string) => {
@@ -32,7 +36,29 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
   property,
   settings,
   onClose,
+  onUpdate,
 }) => {
+  // State for interactive modifications & saving
+  const [parqAnswers, setParqAnswers] = useState<{ [key: number]: boolean }>(() => {
+    if (ptMember.parq_answers && Object.keys(ptMember.parq_answers).length > 0) {
+      return ptMember.parq_answers;
+    }
+    return { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false };
+  });
+
+  const [parqDetails, setParqDetails] = useState(ptMember.parq_details || '');
+  const [isUnder18, setIsUnder18] = useState(ptMember.is_under_18 || false);
+  const [guardianName, setGuardianName] = useState(ptMember.guardian_name || '');
+  const [guardianRelationship, setGuardianRelationship] = useState(ptMember.guardian_relationship || '');
+  const [guardianContact, setGuardianContact] = useState(ptMember.guardian_contact || '');
+  const [guardianSignature, setGuardianSignature] = useState(ptMember.guardian_signature || '');
+  const [dob, setDob] = useState(ptMember.dob || '');
+  const [memberSignature, setMemberSignature] = useState(ptMember.member_signature || '');
+  
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSigModal, setShowSigModal] = useState(false);
+  const [signingTarget, setSigningTarget] = useState<'member' | 'guardian'>('member');
+
   const handlePrint = () => {
     const originalTitle = document.title;
     document.title = `PT_Consent_${ptMember.guest_name.replace(/\s+/g, '_')}`;
@@ -45,15 +71,59 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
     }, 100);
   };
 
+  const handleToggleParq = (qId: number, value: boolean) => {
+    setParqAnswers(prev => ({
+      ...prev,
+      [qId]: value
+    }));
+  };
+
+  const handleSaveUpdates = async () => {
+    setIsSaving(true);
+    try {
+      const updates: Partial<PTMember> = {
+        parq_answers: parqAnswers,
+        parq_details: parqDetails,
+        is_under_18: isUnder18,
+        guardian_name: isUnder18 ? guardianName : undefined,
+        guardian_relationship: isUnder18 ? guardianRelationship : undefined,
+        guardian_contact: isUnder18 ? guardianContact : undefined,
+        guardian_signature: isUnder18 ? guardianSignature : undefined,
+        dob: dob || undefined,
+        member_signature: memberSignature || undefined
+      };
+
+      await db.updatePTMember(ptMember.id, updates);
+      toast.success('Health Declaration & Consent details updated!');
+      
+      const updatedMember = { ...ptMember, ...updates };
+      if (onUpdate) onUpdate(updatedMember);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('booking_updated'));
+      }
+    } catch (err: any) {
+      toast.error('Failed to save updates');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSignatureCaptured = (dataUrl: string) => {
+    setShowSigModal(false);
+    if (signingTarget === 'member') {
+      setMemberSignature(dataUrl);
+    } else {
+      setGuardianSignature(dataUrl);
+    }
+    toast.success('Signature recorded! Remember to click Save.');
+  };
+
   const logoUrl = outlet?.logo_url || property?.logo_url || settings?.logo_url || '';
-  const propertyName = property?.name || settings?.company_name || 'The Torch Club';
+  const propertyName = property?.name || settings?.name || 'The Torch Club';
   const outletName = outlet?.name || propertyName;
   const clubDisplayName = outlet?.name || property?.name || 'The Torch Club';
 
   const consent = getBilingualPTConsentText(clubDisplayName);
-
-  const parqAnswers = ptMember.parq_answers || {};
-  const isMinor = ptMember.is_under_18 || false;
 
   return createPortal(
     <div className="fixed inset-0 z-[500] bg-slate-950/85 backdrop-blur-md flex flex-col justify-start items-center overflow-y-auto p-3 sm:p-6 print:p-0 print:bg-white print:static print:h-auto print:overflow-visible">
@@ -71,10 +141,18 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
         
         <div className="flex items-center gap-2">
           <Button 
-            onClick={handlePrint}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-10 px-5 rounded-xl shadow-lg flex items-center gap-2"
+            onClick={handleSaveUpdates}
+            disabled={isSaving}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 px-4 rounded-xl shadow-lg flex items-center gap-2 text-xs uppercase tracking-wider"
           >
-            <Printer className="w-4 h-4" /> Print Consent Form
+            <Save className="w-4 h-4" /> {isSaving ? 'Saving...' : 'Save Updates'}
+          </Button>
+
+          <Button 
+            onClick={handlePrint}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-10 px-4 rounded-xl shadow-lg flex items-center gap-2 text-xs uppercase tracking-wider"
+          >
+            <Printer className="w-4 h-4" /> Print Form
           </Button>
           <Button 
             onClick={onClose}
@@ -89,7 +167,7 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
       {/* Printable Sheet (A4 Dimensions) */}
       <div 
         id="pt-consent-sheet" 
-        className="w-full max-w-[210mm] bg-white text-slate-900 border border-slate-200 shadow-2xl p-6 sm:p-10 mb-8 print:border-0 print:shadow-none print:m-0 print:p-6 print:w-full print:max-w-none text-[10px] sm:text-[11px] leading-relaxed font-sans select-none print:select-text"
+        className="w-full max-w-[210mm] bg-white text-slate-900 border border-slate-200 shadow-2xl p-6 sm:p-10 mb-8 print:border-0 print:shadow-none print:m-0 print:p-6 print:w-full print:max-w-none text-[10px] sm:text-[11px] leading-relaxed font-sans"
       >
         {/* Header Branding */}
         <div className="flex justify-between items-center pb-4 border-b-2 border-slate-900 mb-5">
@@ -154,7 +232,7 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
             <span dir="rtl" className="font-arabic font-bold text-[10px]">{consent.parqTitleAr}</span>
           </div>
 
-          <div className="p-3.5 bg-slate-50/60 border-b border-slate-200 flex justify-between text-[9px] font-black text-slate-600">
+          <div className="p-3 bg-slate-50/60 border-b border-slate-200 flex justify-between text-[9px] font-black text-slate-600">
             <span>{consent.parqInstructionEn}</span>
             <span dir="rtl" className="font-arabic">{consent.parqInstructionAr}</span>
           </div>
@@ -174,15 +252,33 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
                       <p className="text-[9.5px] text-slate-900 font-medium">{q.en}</p>
                       <p dir="rtl" className="text-[9.5px] text-slate-600 font-arabic">{q.ar}</p>
                     </div>
-                    <div className="md:col-span-3 flex items-center justify-end gap-3 text-[9px] font-black pt-1 md:pt-0">
-                      <div className={`flex items-center gap-1 px-2.5 py-1 rounded-md border ${isYes ? 'bg-rose-50 border-rose-300 text-rose-700 font-black' : 'border-slate-300 text-slate-600'}`}>
-                        {isYes ? <CheckSquare className="w-3.5 h-3.5 text-rose-600" /> : <Square className="w-3.5 h-3.5 text-slate-400" />}
+                    <div className="md:col-span-3 flex items-center justify-end gap-2 text-[9px] font-black pt-1 md:pt-0">
+                      {/* Interactive Buttons (On-screen) & Print-compatible indicator */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleParq(q.id, true)}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                          isYes 
+                          ? 'bg-rose-50 border-rose-400 text-rose-700 font-black shadow-sm' 
+                          : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                        }`}
+                      >
+                        {isYes ? <CheckSquare className="w-3.5 h-3.5 text-rose-600 shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
                         <span>Yes / نعم</span>
-                      </div>
-                      <div className={`flex items-center gap-1 px-2.5 py-1 rounded-md border ${isNo ? 'bg-emerald-50 border-emerald-300 text-emerald-700 font-black' : 'border-slate-300 text-slate-600'}`}>
-                        {isNo ? <CheckSquare className="w-3.5 h-3.5 text-emerald-600" /> : <Square className="w-3.5 h-3.5 text-slate-400" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleParq(q.id, false)}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                          isNo 
+                          ? 'bg-emerald-50 border-emerald-400 text-emerald-700 font-black shadow-sm' 
+                          : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                        }`}
+                      >
+                        {isNo ? <CheckSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
                         <span>No / لا</span>
-                      </div>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -196,8 +292,17 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
               <span>{consent.parqDetailsPromptEn}</span>
               <span dir="rtl" className="font-arabic">{consent.parqDetailsPromptAr}</span>
             </div>
-            <div className="min-h-[32px] p-2 bg-white rounded border border-slate-300 text-[9.5px] text-slate-800">
-              {ptMember.parq_details || (
+            <div className="print:hidden">
+              <textarea
+                rows={2}
+                value={parqDetails}
+                onChange={e => setParqDetails(e.target.value)}
+                placeholder="Enter details if any condition was marked Yes (e.g. physician clearance, allergies, joint pain)..."
+                className="w-full p-2 bg-white rounded-lg border border-slate-300 text-[9.5px] text-slate-900 focus:ring-2 focus:ring-indigo-600 outline-none"
+              />
+            </div>
+            <div className="hidden print:block min-h-[32px] p-2 bg-white rounded border border-slate-300 text-[9.5px] text-slate-800">
+              {parqDetails || (
                 <span className="text-slate-300 italic">None reported / لا توجد تفاصيل إضافية</span>
               )}
             </div>
@@ -228,42 +333,106 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
         </div>
 
         {/* Section 4: For Participants Under 18 */}
-        <div className="mb-5 p-3.5 bg-amber-50/40 border border-amber-200 rounded-xl text-[9px]">
+        <div className="mb-5 p-4 bg-amber-50/40 border-2 border-amber-200 rounded-xl text-[9px]">
           <div className="flex justify-between items-center font-black text-amber-900 border-b border-amber-200 pb-1.5 mb-2.5">
-            <span className="uppercase tracking-wide">{consent.under18TitleEn}</span>
+            <div className="flex items-center gap-2">
+              <span className="uppercase tracking-wide">{consent.under18TitleEn}</span>
+              <label className="flex items-center gap-1.5 ml-3 print:hidden text-[9px] text-amber-800 font-bold cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isUnder18}
+                  onChange={e => setIsUnder18(e.target.checked)}
+                  className="rounded border-amber-300 text-indigo-600 cursor-pointer"
+                />
+                <span>Enable Minor Guardian Form</span>
+              </label>
+            </div>
             <span dir="rtl" className="font-arabic">{consent.under18TitleAr}</span>
           </div>
 
+          {/* Bilingual Guardian Declaration Text */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 text-[8.5px] leading-relaxed">
             <p className="text-slate-800 text-justify">
-              {consent.under18TextEn(ptMember.guardian_name || '', ptMember.guest_name || '')}
+              {consent.under18TextEn(guardianName || '________________', ptMember.guest_name || '')}
             </p>
             <p dir="rtl" className="text-slate-700 font-arabic text-justify">
-              {consent.under18TextAr(ptMember.guardian_name || '', ptMember.guest_name || '')}
+              {consent.under18TextAr(guardianName || '________________', ptMember.guest_name || '')}
             </p>
           </div>
 
+          {/* Interactive Screen Inputs (Print transforms to clean formatted lines) */}
+          <div className="print:hidden grid grid-cols-1 sm:grid-cols-4 gap-2.5 p-3 bg-white/80 rounded-xl border border-amber-200 mb-2">
+            <div>
+              <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-0.5">Parent / Guardian Name</label>
+              <input
+                type="text"
+                value={guardianName}
+                onChange={e => setGuardianName(e.target.value)}
+                placeholder="Full Name of Guardian"
+                className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-0.5">Participant DOB</label>
+              <input
+                type="date"
+                value={dob}
+                onChange={e => setDob(e.target.value)}
+                className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-0.5">Relationship</label>
+              <input
+                type="text"
+                value={guardianRelationship}
+                onChange={e => setGuardianRelationship(e.target.value)}
+                placeholder="Father, Mother, Legal Guardian"
+                className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-0.5">Guardian Contact #</label>
+              <input
+                type="text"
+                value={guardianContact}
+                onChange={e => setGuardianContact(e.target.value)}
+                placeholder="+974 / Phone #"
+                className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Formatted Fields for Printing & Preview Display */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-amber-200/60 text-[8.5px]">
             <div>
               <span className="font-bold text-slate-500 block">Participant's DOB / تاريخ الميلاد:</span>
-              <span className="font-black text-slate-800">{ptMember.dob || '___________________'}</span>
+              <span className="font-black text-slate-900">{dob || '___________________'}</span>
             </div>
             <div>
               <span className="font-bold text-slate-500 block">Relationship / صلة القرابة:</span>
-              <span className="font-black text-slate-800">{ptMember.guardian_relationship || '___________________'}</span>
+              <span className="font-black text-slate-900">{guardianRelationship || '___________________'}</span>
             </div>
             <div>
               <span className="font-bold text-slate-500 block">Contact Number / رقم الهاتف:</span>
-              <span className="font-black text-slate-800">{ptMember.guardian_contact || ptMember.phone || '___________________'}</span>
+              <span className="font-black text-slate-900">{guardianContact || ptMember.phone || '___________________'}</span>
             </div>
             <div>
               <span className="font-bold text-slate-500 block">Parent Signature / توقيع ولي الأمر:</span>
-              <span className="font-black text-slate-800">{ptMember.guardian_signature || '___________________'}</span>
+              {guardianSignature ? (
+                <div className="h-6 flex items-center">
+                  <img src={guardianSignature} alt="Parent Signature" className="max-h-6 object-contain" />
+                </div>
+              ) : (
+                <span className="font-black text-slate-900">
+                  {guardianName ? `${guardianName} (Confirmed)` : '___________________'}
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Section 5: Member & Staff Signatures (Exact Match to Requested Structure) */}
+        {/* Section 5: Member & Staff Signatures (Exact Match to Specification) */}
         <div className="pt-4 border-t-2 border-slate-900 grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Member Details & Digital Signature */}
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
@@ -285,19 +454,47 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
                 <span>Signature / التوقيع:</span>
                 <span>Date / التاريخ: {ptMember.created_at ? format(parseISO(ptMember.created_at), 'dd/MM/yyyy') : format(new Date(), 'dd/MM/yyyy')}</span>
               </div>
-              <div className="h-20 border border-dashed border-slate-300 rounded-lg bg-white flex items-center justify-center overflow-hidden p-1">
-                {ptMember.member_signature && ptMember.member_signature !== 'BYPASSED' ? (
-                  <img 
-                    src={ptMember.member_signature} 
-                    alt="Client Signature" 
-                    className="max-h-full max-w-full object-contain"
-                  />
-                ) : ptMember.member_signature === 'BYPASSED' ? (
-                  <span className="text-[8.5px] font-black text-amber-600 uppercase tracking-widest">
-                    Verified In Person (Staff Bypassed)
-                  </span>
+              <div className="h-24 border-2 border-dashed border-slate-300 rounded-xl bg-white flex flex-col items-center justify-center overflow-hidden p-2 relative group">
+                {memberSignature && memberSignature !== 'BYPASSED' ? (
+                  <>
+                    <img 
+                      src={memberSignature} 
+                      alt="Client Signature" 
+                      className="max-h-full max-w-full object-contain"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setSigningTarget('member'); setShowSigModal(true); }}
+                      className="print:hidden absolute inset-0 bg-slate-900/60 text-white flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity font-bold text-[9px] uppercase tracking-wider rounded-xl backdrop-blur-xs"
+                    >
+                      <PenTool className="w-3.5 h-3.5" /> Re-sign on Pad / Tablet
+                    </button>
+                  </>
+                ) : memberSignature === 'BYPASSED' ? (
+                  <div className="flex flex-col items-center justify-center text-center p-1">
+                    <CheckCircle2 className="w-5 h-5 text-amber-500 mb-1" />
+                    <span className="text-[8.5px] font-black text-amber-700 uppercase tracking-widest">
+                      Verified In Person (Staff Bypassed)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setSigningTarget('member'); setShowSigModal(true); }}
+                      className="print:hidden mt-1 text-[8px] font-black text-indigo-600 underline uppercase tracking-wider hover:text-indigo-800"
+                    >
+                      Add Digital Signature
+                    </button>
+                  </div>
                 ) : (
-                  <span className="text-[8.5px] font-bold text-slate-400 italic">Signature Recorded on File</span>
+                  <div className="flex flex-col items-center justify-center gap-1 text-center">
+                    <span className="text-[8.5px] font-bold text-slate-400 italic">No signature recorded yet</span>
+                    <button
+                      type="button"
+                      onClick={() => { setSigningTarget('member'); setShowSigModal(true); }}
+                      className="print:hidden flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[8.5px] font-black uppercase tracking-wider transition-colors shadow-sm"
+                    >
+                      <PenTool className="w-3 h-3" /> Sign on Pad / Tablet (QR)
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -321,12 +518,12 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
                 <span>Trainer / Staff Signature:</span>
                 <span>Date: {format(new Date(), 'dd/MM/yyyy')}</span>
               </div>
-              <div className="h-20 border border-dashed border-slate-300 rounded-lg bg-white flex flex-col items-center justify-center p-1 text-center">
-                <UserCheck className="w-5 h-5 text-indigo-600 mb-0.5" />
-                <span className="text-[9px] font-black text-slate-900 uppercase">
+              <div className="h-24 border-2 border-dashed border-slate-300 rounded-xl bg-white flex flex-col items-center justify-center p-2 text-center">
+                <UserCheck className="w-6 h-6 text-indigo-600 mb-1" />
+                <span className="text-[9.5px] font-black text-slate-900 uppercase">
                   {trainer?.name || 'Fitness Department'}
                 </span>
-                <span className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider">
+                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">
                   Health & Fitness Authorization
                 </span>
               </div>
@@ -340,7 +537,25 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
           <span>{clubDisplayName} • Personal Training Health Declaration</span>
         </div>
       </div>
+
+      {/* Embedded Signature Modal for capturing member/guardian signature */}
+      {showSigModal && (
+        <SignatureModal
+          isOpen={showSigModal}
+          onClose={() => setShowSigModal(false)}
+          onSave={handleSignatureCaptured}
+          guestName={signingTarget === 'member' ? ptMember.guest_name : (guardianName || `${ptMember.guest_name}'s Guardian`)}
+          propertyName={propertyName}
+          outletName={outletName}
+          outletId={outlet?.id || ''}
+          tier={`${ptMember.total_sessions} PT Sessions (Consent Form)`}
+          price="0"
+          currency="QAR"
+          logoUrl={logoUrl}
+        />
+      )}
     </div>,
     document.body
   );
 };
+

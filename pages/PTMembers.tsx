@@ -1919,6 +1919,13 @@ export default function PTMembers() {
                 property={currentProperty}
                 settings={settings}
                 onClose={() => setShowAgreementForPackage(null)}
+                onUpdate={(updatedMember) => {
+                    setShowAgreementForPackage(updatedMember);
+                    setPtMembers(prev => prev.map(m => m.id === updatedMember.id ? updatedMember : m));
+                    if (selectedMember?.id === updatedMember.id) {
+                        setSelectedMember(updatedMember);
+                    }
+                }}
             />
         )}
 
