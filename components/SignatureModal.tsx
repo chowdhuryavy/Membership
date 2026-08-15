@@ -211,13 +211,13 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
               <Button variant="outline" onClick={handleClose} className="h-14 rounded-xl">Cancel</Button>
               
               {onSkip && (
-                <Button 
-                  variant="ghost" 
+                <button 
+                  type="button"
                   onClick={onSkip} 
-                  className="h-10 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-600 hidden md:flex items-center justify-center gap-2 mt-2"
+                  className="h-10 text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-600 flex items-center justify-center gap-2 mt-2 transition-colors cursor-pointer"
                 >
-                  Skip Signature (Desktop) <ArrowRight className="w-3 h-3" />
-                </Button>
+                  Skip Signature (Desktop) <ArrowRight className="w-3.5 h-3.5" />
+                </button>
               )}
             </div>
           </>

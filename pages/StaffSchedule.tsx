@@ -388,7 +388,7 @@ const StaffSchedule = () => {
     if (Array.isArray(staff.outlet_ids) && staff.outlet_ids.length > 0) {
       ids = staff.outlet_ids;
     } else if (typeof (staff as any).outlet_ids === 'string' && ((staff as any).outlet_ids as string).trim().length > 0) {
-      ids = (staff.outlet_ids as string).split(',').map(s => s.trim());
+      ids = ((staff as any).outlet_ids as string).split(',').map(s => s.trim());
     } else if (Array.isArray((staff as any).staff_working_outlets)) {
       ids = (staff as any).staff_working_outlets;
     } else if ((staff as any).outlet_id) {

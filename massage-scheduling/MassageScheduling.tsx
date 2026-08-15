@@ -461,7 +461,7 @@ const MassageScheduling = () => {
   const [massageTypes, setMassageTypes] = useState<MassageType[]>([]);
   const [massageRooms, setMassageRooms] = useState<MassageRoom[]>([]);
 
-  const [newType, setNewType] = useState<{ id: string, name: string, price: number, duration_minutes: number, description?: string }>({ id: '', name: '', price: 0, duration_minutes: 60, description: '' });
+  const [newType, setNewType] = useState<{ id: string, name: string, price: number, duration_minutes: number, description?: string, category?: string }>({ id: '', name: '', price: 0, duration_minutes: 60, description: '', category: 'Massage' });
   const [newTherapist, setNewTherapist] = useState({ id: '', name: '', specialty: '', country: '', type: 'Therapist' });
   const [isEditingResource, setIsEditingResource] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'treatment' | 'therapist' | 'guest' | 'booking', name: string} | null>(null);

@@ -1699,9 +1699,11 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
         <SignatureModal
           isOpen={showSignatureModal}
           onClose={() => setShowSignatureModal(false)}
-          onSave={handleSaveSignatures}
-          initialMemberSignature={viewingMember.member_signature}
-          initialStaffSignature={viewingMember.staff_signature}
+          onSave={(sig) => handleSaveSignatures(sig, viewingMember.staff_signature || '')}
+          guestName={viewingMember.guest_name}
+          propertyName={currentProperty?.name}
+          outletName={currentOutlet?.name}
+          outletId={currentOutlet?.id}
         />
       )}
 

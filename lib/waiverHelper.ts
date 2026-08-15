@@ -46,3 +46,112 @@ export const getBilingualWaiverText = (outletNameInput?: string, hotelNameInput?
     p3Ar: `أقرّ أنني قد قرأت هذا التنازل بعناية و فهمته, و بموجب توقيعي على صحيفة الانضمام المرفقة و/أو استخدام مرافق ${outletNameAr} ، فأنا أوافق تمامًا على شروط وأحكام هذا التنازل، مع علمي الكامل بأهميته.`
   };
 };
+
+export const getBilingualPTConsentText = (clubNameInput?: string) => {
+  const clubName = clubNameInput || 'The Torch Club';
+  const clubNameAr = getOutletArabicName(clubNameInput);
+
+  return {
+    clubName,
+    clubNameAr,
+    titleEn: 'Health Declaration & Participation Consent Form',
+    titleAr: 'إقرار الحالة الصحية والموافقة على المشاركة',
+
+    introParagraphs: [
+      {
+        en: `I understand that participation in ${clubName} services involves physical activity and exposure to environmental conditions (including heat, salt, and humidity), which may involve risks such as muscle or joint injury, dehydration, dizziness, allergic or adverse reactions to nutrition guidance, salt room or sauna exposure, and accidents within the facility.`,
+        ar: `أقر بأن المشاركة في خدمات ${clubNameAr} تتضمن ممارسة أنشطة بدنية والتعرض لعوامل بيئية (مثل الحرارة والملح والرطوبة)، والتي قد تنطوي على مخاطر تشمل، على سبيل المثال لا الحصر، إصابات العضلات أو المفاصل، والجفاف، والدوخة، وردود الفعل السلبية تجاه الإرشادات الغذائية، أو غرفة الملح أو الساونا، بالإضافة إلى الحوادث التي قد تقع داخل مرافق النادي.`
+      },
+      {
+        en: `I confirm that I have no known medical condition that would make participation unsafe, or I have informed ${clubName} of any relevant health conditions. I agree to seek medical clearance if necessary and to notify staff immediately of any changes to my health.`,
+        ar: `أؤكد أنه لا توجد لدي أي حالة صحية معروفة تمنعني من المشاركة بأمان، أو أنني قمت بإبلاغ ${clubNameAr} بأي حالة صحية ذات صلة. كما أتعهد بالحصول على موافقة طبية عند الحاجة، وإبلاغ موظفي النادي فورًا بأي تغيير يطرأ على حالتي الصحية.`
+      },
+      {
+        en: `Participation is voluntary, and I may stop at any time, understanding this may affect my personal goals.`,
+        ar: `أفهم أن المشاركة اختيارية، ويحق لي التوقف في أي وقت، مع إدراكي أن ذلك قد يؤثر على تحقيق أهدافي الشخصية.`
+      }
+    ],
+
+    parqTitleEn: 'PAR-Q (Physical Activity Readiness Questionnaire)',
+    parqTitleAr: 'استبيان الجاهزية لممارسة النشاط البدني',
+    parqInstructionEn: 'Please answer Yes or No:',
+    parqInstructionAr: 'يرجى الإجابة بـ نعم أو لا على الأسئلة التالية:',
+
+    parqQuestions: [
+      {
+        id: 1,
+        en: 'Has a doctor ever told you that you have a heart condition or should only exercise under medical supervision?',
+        ar: 'هل سبق أن أخبرك طبيب بأن لديك مرضًا في القلب أو أوصى بأن تمارس النشاط البدني فقط تحت إشراف طبي؟'
+      },
+      {
+        id: 2,
+        en: 'Do you experience chest pain, dizziness, fainting, or loss of balance during physical activity?',
+        ar: 'هل تعاني من ألم في الصدر، أو دوخة، أو إغماء، أو فقدان للتوازن أثناء ممارسة النشاط البدني؟'
+      },
+      {
+        id: 3,
+        en: 'Do you have any bone, joint, muscle, or back condition that could be aggravated by exercise?',
+        ar: 'هل لديك أي مشكلة في العظام أو المفاصل أو العضلات أو الظهر قد تتفاقم بسبب ممارسة التمارين الرياضية؟'
+      },
+      {
+        id: 4,
+        en: 'Are you taking any medication that may affect your ability to exercise safely?',
+        ar: 'هل تتناول حاليًا أي أدوية قد تؤثر على قدرتك على ممارسة التمارين الرياضية بأمان؟'
+      },
+      {
+        id: 5,
+        en: 'Are you currently pregnant or have you given birth within the past six months?',
+        ar: 'هل أنتِ حامل حاليًا، أو أنجبتِ طفلًا خلال الأشهر الستة الماضية؟'
+      },
+      {
+        id: 6,
+        en: 'Do you have any other medical condition, injury, recent surgery, or health concern your trainer should know about?',
+        ar: 'هل لديك أي حالة طبية، أو إصابة، أو عملية جراحية حديثة، أو أي مشكلة صحية أخرى ينبغي أن يكون المدرب على علم بها؟'
+      }
+    ],
+
+    parqDetailsPromptEn: 'If yes, please provide details:',
+    parqDetailsPromptAr: 'في حال كانت الإجابة نعم، يرجى ذكر التفاصيل:',
+
+    declarationTitleEn: 'Declaration',
+    declarationTitleAr: 'الإقرار',
+
+    declarationParagraphs: [
+      {
+        en: 'I confirm that the information provided is true and complete to the best of my knowledge. If I answered "Yes" to any question above, I understand that I may be asked to obtain medical clearance before participating.',
+        ar: 'أقر بأن جميع المعلومات التي قدمتها صحيحة وكاملة حسب علمي. وأفهم أنه إذا كانت إجابتي "نعم" على أي من الأسئلة أعلاه، فقد يُطلب مني الحصول على موافقة أو تقرير طبي قبل المشاركة.'
+      },
+      {
+        en: 'I accept full responsibility for my participation and agree to stop exercising and inform staff immediately if I experience pain, dizziness, shortness of breath, or any unusual symptoms.',
+        ar: 'أتحمل المسؤولية الكاملة عن مشاركتي، وأتعهد بالتوقف عن ممارسة النشاط وإبلاغ موظفي النادي فورًا إذا شعرت بألم أو دوخة أو ضيق في التنفس أو أي أعراض غير طبيعية.'
+      },
+      {
+        en: `I release and hold harmless ${clubName}, its owners, employees, and affiliates from liability for injury, illness, loss, or damage arising from my participation or use of its facilities, equipment, or services, except where caused by gross negligence or willful misconduct.`,
+        ar: `أوافق على إبراء ذمة ${clubNameAr} وملاكه وموظفيه والجهات التابعة له من أي مسؤولية عن أي إصابة أو مرض أو خسارة أو ضرر ناتج عن مشاركتي أو استخدامي للمرافق أو المعدات أو الخدمات، باستثناء الحالات الناتجة عن الإهمال الجسيم أو سوء السلوك المتعمد.`
+      },
+      {
+        en: `I understand that ${clubName} is not responsible for the loss, theft, or damage of personal belongings.`,
+        ar: `كما أقر بأن ${clubNameAr} غير مسؤول عن فقدان أو سرقة أو تلف أي من متعلقاتي الشخصية.`
+      },
+      {
+        en: 'I agree to follow all club rules, staff instructions, and health and safety procedures. Failure to do so may result in suspension or termination of services without refund.',
+        ar: 'أوافق على الالتزام بجميع أنظمة النادي وتعليمات الموظفين وإجراءات الصحة والسلامة. ويحق للنادي تعليق أو إنهاء تقديم الخدمات في حال عدم الالتزام بهذه التعليمات، وذلك دون استرداد الرسوم.'
+      },
+      {
+        en: 'I consent to the collection and use of my personal and health information for service delivery and safety in accordance with Qatar Law No. 13 of 2016, and understand that my information will not be shared except with my consent or where required by law.',
+        ar: `أوافق على قيام ${clubNameAr} بجمع واستخدام بياناتي الشخصية والصحية لأغراض تقديم الخدمات وضمان السلامة، وذلك وفقًا لأحكام قانون حماية خصوصية البيانات الشخصية رقم (13) لسنة 2016 في دولة قطر. ولن تتم مشاركة هذه البيانات إلا بموافقتي أو إذا كان ذلك مطلوبًا بموجب القانون.`
+      },
+      {
+        en: 'I have read, understood, and voluntarily agree to the terms of this Health Declaration & Participation Consent Form.',
+        ar: 'أقر بأنني قرأت هذا النموذج وفهمت جميع بنوده، وأوافق عليها بمحض إرادتي.'
+      }
+    ],
+
+    under18TitleEn: 'For Participants Under 18',
+    under18TitleAr: 'للمشاركين الذين تقل أعمارهم عن 18 عامًا',
+    under18TextEn: (guardianName?: string, participantName?: string) => 
+      `I ${guardianName || '_____________________'} (Parent/Legal Guardian Name) confirm that I am the parent\\legal guardian of ${participantName || '___________________'} (Participant's Name) and consent to their participation in ${clubName}'s services. I have read, understood, and agree to the terms of this Health Declaration & Participation Consent Form on their behalf.`,
+    under18TextAr: (guardianName?: string, participantName?: string) => 
+      `أنا ${guardianName || '_____________________'} (اسم ولي أمر / الوصي القانوني) أُقر بأنني ولي الأمر أو الوصي القانوني لـ ${participantName || '___________________'} (اسم المشارك)، وأوافق على مشاركته في خدمات ${clubNameAr}. كما أؤكد أنني قرأت وفهمت وأوافق على شروط وأحكام إقرار الحالة الصحية والموافقة على المشاركة نيابةً عنه.`
+  };
+};

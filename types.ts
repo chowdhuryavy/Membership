@@ -1,20 +1,42 @@
 export type Permission = 
-  | 'dashboard:view' | 'dashboard:view_financials' | 'dashboard:view_insights'
-  | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:bulk_freeze' | 'members:renew' | 'members:print_contract' | 'members:view_history'
-  | 'checkin:view' | 'checkin:manage' | 'checkin:self_kiosk' | 'checkin:sql_access'
-  | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete'
+  // Dashboard & Analytics
+  | 'dashboard:view' | 'dashboard:view_financials' | 'dashboard:view_insights' | 'dashboard:view_charts' | 'dashboard:export_stats'
+  
+  // Membership Management
+  | 'members:view' | 'members:create' | 'members:edit' | 'members:delete' | 'members:view_contact_info' | 'members:freeze' | 'members:bulk_freeze' | 'members:renew' | 'members:print_contract' | 'members:view_history' | 'members:export' | 'members:view_digital_card' | 'members:manage_custom_fields'
+  
+  // Personal Training (PT)
+  | 'pt_members:view' | 'pt_members:create' | 'pt_members:edit' | 'pt_members:delete' | 'pt_members:manage_sessions' | 'pt_members:print' | 'pt_members:export' | 'pt_members:view_health_consent' | 'pt_members:assign_trainer'
+  
+  // Entrance Fee & Day Pass
+  | 'entrance_fee:view' | 'entrance_fee:create' | 'entrance_fee:edit' | 'entrance_fee:delete' | 'entrance_fee:print' | 'entrance_fee:export' | 'entrance_fee:view_history'
+  
+  // Facility Check-In
+  | 'checkin:view' | 'checkin:manage' | 'checkin:self_kiosk' | 'checkin:sql_access' | 'checkin:export' | 'checkin:qr_scanner'
+  
+  // Staff & Schedules
+  | 'staff:view' | 'staff:manage' | 'staff:manage_leaves' | 'staff:manage_schedules' | 'staff:view_incentives' | 'staff:manage_portal_settings' | 'staff:export'
+  
+  // Categories & Membership Tiers
+  | 'categories:view' | 'categories:create' | 'categories:edit' | 'categories:delete' | 'categories:reorder'
+  
+  // Resource Scheduling & Bookings
+  | 'bookings:view' | 'bookings:create' | 'bookings:edit' | 'bookings:delete' | 'bookings:manage_resources' | 'bookings:view_therapist_schedule' | 'bookings:export'
+  
+  // Sales, POS & Inventory
+  | 'sales:view' | 'sales:create' | 'sales:edit' | 'sales:delete' | 'sales:void' | 'sales:refund' | 'sales:print_receipt' | 'sales:export' | 'inventory:view' | 'inventory:manage' | 'inventory:adjust_stock' | 'inventory:export'
+  
+  // Financial & Operational Reports
+  | 'reports:view' | 'reports:export' | 'reports:view_financial' | 'reports:view_operational' | 'reports:view_inventory' | 'reports:view_staff' | 'reports:view_expiring' | 'reports:view_active_members' | 'reports:view_massage_revenue' | 'reports:view_monthly_revenue' | 'reports:custom_builder'
+  
+  // Users & Audit Logs
   | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email' | 'users:manage_overrides' | 'users:edit_self'
-  | 'staff:view' | 'staff:manage' | 'staff:manage_leaves' | 'staff:manage_portal_settings'
+  | 'logs:view' | 'logs:search' | 'logs:filter' | 'logs:clear' | 'logs:export'
+  
+  // System Configuration & Settings
   | 'settings:view' | 'settings:edit' 
   | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives' | 'settings:manage_visibility' | 'settings:view_staff_portal' | 'settings:view_booking_engine' | 'settings:view_membership_types' | 'settings:view_massage_rooms' | 'settings:view_reports_config' | 'settings:view_custom_reports' | 'settings:view_entrance_fee'
-  | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives' | 'settings:manage_staff_portal' | 'settings:manage_booking_engine' | 'settings:manage_membership_types' | 'settings:manage_massage_rooms' | 'settings:manage_reports_config' | 'settings:manage_custom_reports' | 'settings:manage_entrance_fee'
-  | 'reports:view' | 'reports:export' | 'reports:view_financial' | 'reports:view_operational' | 'reports:view_inventory' | 'reports:view_staff'
-  | 'logs:view' | 'logs:search' | 'logs:filter' | 'logs:clear'
-  | 'bookings:view' | 'bookings:create' | 'bookings:edit' | 'bookings:delete' | 'bookings:manage_resources' | 'bookings:view_therapist_schedule'
-  | 'sales:view' | 'sales:create' | 'sales:edit' | 'sales:delete' | 'sales:void'
-  | 'pt_members:view' | 'pt_members:create' | 'pt_members:edit' | 'pt_members:delete' | 'pt_members:manage_sessions' | 'pt_members:print'
-  | 'entrance_fee:view' | 'entrance_fee:create' | 'entrance_fee:edit' | 'entrance_fee:delete'
-  | 'inventory:view' | 'inventory:manage' | 'inventory:adjust_stock'; 
+  | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives' | 'settings:manage_staff_portal' | 'settings:manage_booking_engine' | 'settings:manage_membership_types' | 'settings:manage_massage_rooms' | 'settings:manage_reports_config' | 'settings:manage_custom_reports' | 'settings:manage_entrance_fee'; 
 
 export interface PermissionGroup {
   id: string;
@@ -269,6 +291,7 @@ export enum MemberStatus {
 
 export interface Member {
   id: string;
+  property_id?: string;
   outlet_id?: string;
   membership_type_id?: string;
   membership_number: string;
@@ -311,9 +334,11 @@ export interface Member {
     updated_by?: string;
     history?: {
       date: string;
+      service_date?: string;
       by: string;
       change: number;
       new_total: number;
+      note?: string;
     }[];
   }[];
 }
@@ -379,6 +404,7 @@ export interface MassageBooking {
   discount?: number;
   discount_reason?: string;
   discount_id_url?: string;
+  category?: string;
   room_id?: string;
   check_no?: string;
   payment_method?: 'cash' | 'card' | 'transfer';
@@ -449,6 +475,8 @@ export interface PTMember {
   guest_name: string;
   phone?: string;
   email?: string;
+  dob?: string;
+  membership_number?: string;
   total_sessions: number;
   used_sessions: number;
   sale_id?: string;
@@ -457,6 +485,13 @@ export interface PTMember {
   status: 'Active' | 'Completed' | 'Expired';
   trainer_id?: string;
   notes?: string;
+  parq_answers?: { [key: number]: boolean };
+  parq_details?: string;
+  is_under_18?: boolean;
+  guardian_name?: string;
+  guardian_relationship?: string;
+  guardian_contact?: string;
+  guardian_signature?: string;
   member_signature?: string;
   created_at: string;
 }
@@ -522,7 +557,7 @@ export interface CustomReportAggregation {
 export interface CustomReportConfig {
   id: string;
   name: string;
-  data_source: 'members' | 'bookings' | 'sales' | 'inventory';
+  data_source: 'members' | 'bookings' | 'sales' | 'inventory' | 'staff';
   columns: CustomReportColumn[];
   group_by?: string;
   sort_by?: string;

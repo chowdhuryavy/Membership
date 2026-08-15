@@ -135,6 +135,8 @@ class DatabaseService {
           { key: 'dashboard:view', label: 'Access Dashboard', description: 'Core entry point for operational overview.' },
           { key: 'dashboard:view_financials', label: 'Financial KPI Insights', description: 'Visibility into revenue recognition and daily accruals.' },
           { key: 'dashboard:view_insights', label: 'AI Strategic Analysis', description: 'Ability to generate Gemini-powered performance reports.' },
+          { key: 'dashboard:view_charts', label: 'Visual Analytics & Charts', description: 'Access interactive charts and trend visualizers.' },
+          { key: 'dashboard:export_stats', label: 'Export Overview Data', description: 'Export summary statistics to external files.' },
         ]
       },
       {
@@ -151,6 +153,9 @@ class DatabaseService {
           { key: 'members:renew', label: 'Process Renewals', description: 'Ability to trigger re-enrollment logic.' },
           { key: 'members:print_contract', label: 'Legal Documentation', description: 'Generate and print membership agreements.' },
           { key: 'members:view_history', label: 'Audit History', description: 'View historical changes to member records.' },
+          { key: 'members:export', label: 'Export Member Data', description: 'Download member ledger in CSV, Excel, or PDF.' },
+          { key: 'members:view_digital_card', label: 'Digital Pass / QR', description: 'Access and generate digital membership passes.' },
+          { key: 'members:manage_custom_fields', label: 'Custom Profile Fields', description: 'Configure custom membership data attributes.' },
         ]
       },
       {
@@ -161,8 +166,24 @@ class DatabaseService {
           { key: 'pt_members:create', label: 'Add PT Members', description: 'Create new PT packages for guests.' },
           { key: 'pt_members:edit', label: 'Edit PT Details', description: 'Modify PT member information.' },
           { key: 'pt_members:delete', label: 'Delete PT Records', description: 'Remove PT member records from system.' },
-          { key: 'pt_members:manage_sessions', label: 'Manage Sessions', description: 'Add, edit, or delete PT training sessions.' },
+          { key: 'pt_members:manage_sessions', label: 'Manage Sessions', description: 'Add, edit, log, or void PT training sessions.' },
           { key: 'pt_members:print', label: 'Print Forms', description: 'Print session slips, package forms, and agreements.' },
+          { key: 'pt_members:export', label: 'Export PT Ledger', description: 'Export PT records and session attendance data.' },
+          { key: 'pt_members:view_health_consent', label: 'Health Declaration & Consent', description: 'Access and verify PT Health Declaration & PAR-Q forms.' },
+          { key: 'pt_members:assign_trainer', label: 'Assign / Reassign Trainer', description: 'Modify assigned personal trainers on PT packages.' },
+        ]
+      },
+      {
+        id: 'entrance_fee',
+        label: 'Entrance Fee & Day Pass Consents',
+        permissions: [
+          { key: 'entrance_fee:view', label: 'View Entrance Consents', description: 'Access and search day pass waiver forms.' },
+          { key: 'entrance_fee:create', label: 'Create Consents', description: 'Log new guest entrance fee consent waivers.' },
+          { key: 'entrance_fee:edit', label: 'Edit Consents', description: 'Modify existing entrance fee consent records.' },
+          { key: 'entrance_fee:delete', label: 'Delete Consents', description: 'Remove entrance fee consent records.' },
+          { key: 'entrance_fee:print', label: 'Print Consents & Receipts', description: 'Print guest entrance fee waiver slips.' },
+          { key: 'entrance_fee:export', label: 'Export Entrance Reports', description: 'Export daily guest entry records.' },
+          { key: 'entrance_fee:view_history', label: 'Audit History', description: 'View historical entrance logs for guests.' },
         ]
       },
       {
@@ -172,6 +193,8 @@ class DatabaseService {
           { key: 'checkin:view', label: 'View Check-Ins', description: 'Access the check-in and attendance logs.' },
           { key: 'checkin:manage', label: 'Manage Attendance', description: 'Perform manual check-ins and check-outs.' },
           { key: 'checkin:self_kiosk', label: 'Launch Kiosk', description: 'Enable self-service kiosk mode for members.' },
+          { key: 'checkin:qr_scanner', label: 'QR Code Scanning', description: 'Operate camera scanner for member passes.' },
+          { key: 'checkin:export', label: 'Export Attendance', description: 'Export facility visit logs.' },
           { key: 'checkin:sql_access', label: 'SQL Diagnostics', description: 'Access raw SQL check-in data (Developers only).' },
         ]
       },
@@ -182,7 +205,10 @@ class DatabaseService {
           { key: 'staff:view', label: 'View Personnel', description: 'Access the facility staff list and profiles.' },
           { key: 'staff:manage', label: 'Control Registry', description: 'Add, edit, or archive staff members.' },
           { key: 'staff:manage_leaves', label: 'Leave Administration', description: 'Manage staff leave records and schedules.' },
+          { key: 'staff:manage_schedules', label: 'Duty Rosters & Shifts', description: 'Create and assign staff duty schedules.' },
+          { key: 'staff:view_incentives', label: 'View Incentives', description: 'Access staff commission reports.' },
           { key: 'staff:manage_portal_settings', label: 'Portal Configuration', description: 'Manage visibility and features for the staff portal.' },
+          { key: 'staff:export', label: 'Export Staff Data', description: 'Export staff rosters and profiles.' },
         ]
       },
       {
@@ -193,6 +219,7 @@ class DatabaseService {
           { key: 'categories:create', label: 'Define Tiers', description: 'Create new membership products.' },
           { key: 'categories:edit', label: 'Modify Logic', description: 'Adjust rates and durations for tiers.' },
           { key: 'categories:delete', label: 'Retire Tiers', description: 'Remove or archive old membership categories.' },
+          { key: 'categories:reorder', label: 'Reorder Tiers', description: 'Adjust the display sequence of membership tiers.' },
         ]
       },
       {
@@ -205,6 +232,7 @@ class DatabaseService {
           { key: 'bookings:delete', label: 'Void Sessions', description: 'Cancel or delete bookings.' },
           { key: 'bookings:manage_resources', label: 'Asset Config', description: 'Add/Edit therapists and treatment types.' },
           { key: 'bookings:view_therapist_schedule', label: 'Specialist Timelines', description: 'View detailed schedules for individual therapists.' },
+          { key: 'bookings:export', label: 'Export Bookings', description: 'Export appointment data and utilization.' },
         ]
       },
       {
@@ -216,14 +244,18 @@ class DatabaseService {
           { key: 'sales:edit', label: 'Modify Sales', description: 'Adjust completed transaction details.' },
           { key: 'sales:delete', label: 'Authorize Voids', description: 'Reverse revenue events and adjust inventory.' },
           { key: 'sales:void', label: 'Void Transactions', description: 'Mark transactions as void for audit purposes.' },
+          { key: 'sales:refund', label: 'Process Refunds', description: 'Issue refunds on items or services.' },
+          { key: 'sales:print_receipt', label: 'Print Receipts', description: 'Print or reprint POS sales receipts.' },
+          { key: 'sales:export', label: 'Export Sales', description: 'Export sales ledger to Excel/PDF.' },
           { key: 'inventory:view', label: 'Catalog Visibility', description: 'Access the item master and stock levels.' },
           { key: 'inventory:manage', label: 'Inventory Control', description: 'Define new assets and adjust quantities.' },
           { key: 'inventory:adjust_stock', label: 'Stock Reconciliation', description: 'Manually adjust stock levels for shrinkage or corrections.' },
+          { key: 'inventory:export', label: 'Export Inventory', description: 'Export inventory stock valuation sheets.' },
         ]
       },
       {
         id: 'reports',
-        label: 'Financial Reporting',
+        label: 'Financial & Operational Reports',
         permissions: [
           { key: 'reports:view', label: 'Generate Reports', description: 'Access high-level financial audit tools.' },
           { key: 'reports:export', label: 'Data Portability', description: 'Export ledger data to PDF or Excel formats.' },
@@ -231,16 +263,11 @@ class DatabaseService {
           { key: 'reports:view_operational', label: 'Operational Metrics', description: 'View attendance and facility usage reports.' },
           { key: 'reports:view_inventory', label: 'Inventory Reports', description: 'Access stock movement and valuation reports.' },
           { key: 'reports:view_staff', label: 'Staff Performance', description: 'View incentive and productivity reports.' },
-        ]
-      },
-      {
-        id: 'entrance_fee',
-        label: 'Entrance Fee & Day Pass Consents',
-        permissions: [
-          { key: 'entrance_fee:view', label: 'View Entrance Consents', description: 'Access and search day pass waiver forms.' },
-          { key: 'entrance_fee:create', label: 'Create Consents', description: 'Log new guest entrance fee consent waivers.' },
-          { key: 'entrance_fee:edit', label: 'Edit Consents', description: 'Modify existing entrance fee consent records.' },
-          { key: 'entrance_fee:delete', label: 'Delete Consents', description: 'Remove entrance fee consent records.' },
+          { key: 'reports:view_expiring', label: 'Expiring Memberships', description: 'Access memberships renewal tracking reports.' },
+          { key: 'reports:view_active_members', label: 'Active Members Report', description: 'Access demographic and tier breakdown reports.' },
+          { key: 'reports:view_massage_revenue', label: 'Massage Revenue Report', description: 'View revenue generated by massage and spa rooms.' },
+          { key: 'reports:view_monthly_revenue', label: 'Monthly Revenue Accruals', description: 'View monthly revenue recognition accounting reports.' },
+          { key: 'reports:custom_builder', label: 'Custom Report Builder', description: 'Build and query bespoke ad-hoc reports.' },
         ]
       },
       {
@@ -258,6 +285,7 @@ class DatabaseService {
           { key: 'logs:search', label: 'Log Search', description: 'Search through audit logs for specific events.' },
           { key: 'logs:filter', label: 'Log Filtering', description: 'Filter audit logs by date, user, or action.' },
           { key: 'logs:clear', label: 'Clear Filters', description: 'Reset all active filters on the logs page.' },
+          { key: 'logs:export', label: 'Export Audit Logs', description: 'Download security audit logs.' },
         ]
       },
       {

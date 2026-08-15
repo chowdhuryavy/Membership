@@ -1,12 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { X, Save, AlertTriangle, Eraser, CheckCircle2 } from 'lucide-react';
+import { X, Save, AlertTriangle, Eraser, CheckCircle2, QrCode, FileSignature, Sparkles, ArrowRight } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Input, Button } from './ui';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
 import { EntranceFeeConsent } from '../types';
 import { getBilingualWaiverText } from '../lib/waiverHelper';
-import SignatureCanvas from 'react-signature-canvas';
+import { SignatureModal } from './SignatureModal';
 
 const getCurrentFormattedTime = () => {
     const d = new Date();
@@ -24,14 +24,16 @@ export const EntranceFeeConsentModal = ({
     isOpen: boolean;
     onClose: () => void;
     onSuccess: (consent: EntranceFeeConsent) => void;
-    initialData?: (Partial<EntranceFeeConsent> & { guestName?: string }) | null;
+    initialData?: (Partial<EntranceFeeConsent> & { guestName?: string; price?: number }) | null;
 }) => {
-    const { currentOutlet, currentProperty } = useSettings();
+    const { currentOutlet, currentProperty, settings, currency, currencies } = useSettings();
     const waiver = getBilingualWaiverText(currentOutlet?.name, currentProperty?.name);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [acceptedWaiver, setAcceptedWaiver] = useState(true);
-    const signatureRef = useRef<SignatureCanvas>(null);
+    const [guestSignature, setGuestSignature] = useState<string | null>(null);
+    const [showSignatureModal, setShowSignatureModal] = useState(false);
+    const [pendingSubmitData, setPendingSubmitData] = useState<any | null>(null);
 
     const isEditMode = !!initialData?.id;
 
@@ -47,7 +49,7 @@ export const EntranceFeeConsentModal = ({
         notes: initialData?.notes || (initialData?.item_name ? `Purchased item: ${initialData.item_name}` : '')
     });
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (isOpen) {
             setFormData({
                 guest_name: initialData?.guest_name || initialData?.guestName || '',
@@ -60,64 +62,95 @@ export const EntranceFeeConsentModal = ({
                 is_hotel_guest: initialData?.is_hotel_guest ?? (!!initialData?.room_number),
                 notes: initialData?.notes || (initialData?.item_name ? `Purchased item: ${initialData.item_name}` : '')
             });
+            setGuestSignature(initialData?.guest_signature || null);
             setError('');
-
-            setTimeout(() => {
-                if (initialData?.guest_signature && signatureRef.current) {
-                    try {
-                        signatureRef.current.fromDataURL(initialData.guest_signature);
-                    } catch (e) {
-                        signatureRef.current?.clear();
-                    }
-                } else {
-                    signatureRef.current?.clear();
-                }
-            }, 100);
         }
     }, [isOpen, initialData]);
 
     if (!isOpen) return null;
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const activeCurrency = currency || 
+                           (currentProperty && currencies.find(c => c.property_id === currentProperty.id)) || 
+                           { code: 'AED', symbol: 'AED' };
+
+    const prepareConsentData = () => {
         const targetOutletId = initialData?.outlet_id || currentOutlet?.id;
         if (!formData.guest_name || !targetOutletId) {
             setError('Please fill all required fields (Guest Name & Facility Outlet).');
-            return;
+            return null;
         }
 
         if (!acceptedWaiver) {
             setError('Please accept the Waiver and Release terms to proceed.');
-            return;
+            return null;
         }
 
-        const isEmptySig = signatureRef.current?.isEmpty();
-        let signatureDataUrl = isEmptySig ? '' : signatureRef.current?.getTrimmedCanvas().toDataURL('image/png');
+        return {
+            outlet_id: targetOutletId,
+            guest_name: formData.guest_name,
+            phone: formData.phone,
+            email: formData.email,
+            qid_passport: formData.qid_passport,
+            date: formData.date,
+            time: formData.time,
+            room_number: formData.room_number,
+            is_hotel_guest: formData.is_hotel_guest || !!formData.room_number,
+            sale_id: initialData?.sale_id,
+            item_name: initialData?.item_name,
+            notes: formData.notes
+        };
+    };
 
-        // Retain existing signature if editing and signature canvas was not altered
-        if (isEmptySig && isEditMode && initialData?.guest_signature) {
-            signatureDataUrl = initialData.guest_signature;
-        } else if (isEmptySig && !isEditMode) {
-            setError('Please provide a guest signature.');
-            return;
+    const handleOpenSignatureModal = () => {
+        const data = prepareConsentData();
+        if (!data) return;
+        setPendingSubmitData(data);
+        setShowSignatureModal(true);
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const data = prepareConsentData();
+        if (!data) return;
+
+        // If signature is already provided or bypassed, submit directly
+        if (guestSignature) {
+            await onFinalSubmit(data, guestSignature);
+        } else {
+            // Prompt signature method modal (Pad, QR Code, Cancel, or Skip)
+            setPendingSubmitData(data);
+            setShowSignatureModal(true);
         }
+    };
 
+    const handleSignatureSave = async (dataUrl: string) => {
+        setGuestSignature(dataUrl);
+        setShowSignatureModal(false);
+        if (pendingSubmitData) {
+            await onFinalSubmit(pendingSubmitData, dataUrl);
+        }
+    };
+
+    const handleSkipSignature = async () => {
+        setGuestSignature('BYPASSED');
+        setShowSignatureModal(false);
+        if (pendingSubmitData) {
+            await onFinalSubmit(pendingSubmitData, 'BYPASSED');
+        }
+    };
+
+    const closeSignatureModal = () => {
+        setShowSignatureModal(false);
+        setPendingSubmitData(null);
+        setLoading(false);
+    };
+
+    const onFinalSubmit = async (data: any, signatureOverride?: string) => {
         setLoading(true);
         try {
             const consentData: Omit<EntranceFeeConsent, 'id' | 'created_at'> = {
-                outlet_id: targetOutletId,
-                guest_name: formData.guest_name,
-                phone: formData.phone,
-                email: formData.email,
-                qid_passport: formData.qid_passport,
-                date: formData.date,
-                time: formData.time,
-                room_number: formData.room_number,
-                is_hotel_guest: formData.is_hotel_guest || !!formData.room_number,
-                sale_id: initialData?.sale_id,
-                item_name: initialData?.item_name,
-                notes: formData.notes,
-                guest_signature: signatureDataUrl
+                ...data,
+                guest_signature: signatureOverride !== undefined ? signatureOverride : guestSignature || undefined
             };
 
             if (isEditMode && initialData?.id) {
@@ -132,7 +165,7 @@ export const EntranceFeeConsentModal = ({
             } else {
                 const saved = await db.addEntranceFeeConsent(consentData);
                 toast.success('Entrance Fee Consent logged successfully!');
-                onSuccess(saved as any); 
+                onSuccess(saved as any);
             }
         } catch (err: any) {
             const msg = err.message || '';
@@ -149,11 +182,17 @@ export const EntranceFeeConsentModal = ({
                     <CardHeader className="bg-emerald-600 text-white p-6 relative">
                         <div className="flex justify-between items-center pr-10">
                             <div>
-                                <CardTitle className="text-xl font-black uppercase tracking-tight">{isEditMode ? 'Edit Entrance Fee Consent' : 'Entrance Fee Consent'}</CardTitle>
-                                <p className="text-[9px] font-black text-emerald-200 uppercase tracking-widest mt-1">Guest Facility Waiver & Liability Release</p>
+                                <CardTitle className="text-xl font-black uppercase tracking-tight">
+                                    {isEditMode ? 'Edit Entrance Fee Consent' : 'Entrance Fee Consent'}
+                                </CardTitle>
+                                <p className="text-[9px] font-black text-emerald-200 uppercase tracking-widest mt-1">
+                                    Guest Facility Waiver & Liability Release
+                                </p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="absolute top-5 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"><X className="w-4 h-4" /></button>
+                        <button onClick={onClose} className="absolute top-5 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+                            <X className="w-4 h-4" />
+                        </button>
                     </CardHeader>
                     
                     <CardContent className="p-8">
@@ -265,25 +304,102 @@ export const EntranceFeeConsentModal = ({
                                 </label>
                             </div>
 
-                            {/* Guest Digital Signature */}
+                            {/* Guest Digital Signature Options */}
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Guest Signature *</label>
-                                    <button 
-                                        type="button" 
-                                        onClick={() => signatureRef.current?.clear()}
-                                        className="text-[10px] font-bold text-slate-500 hover:text-emerald-600 flex items-center gap-1 transition-colors"
-                                    >
-                                        <Eraser className="w-3 h-3" /> Clear Signature
-                                    </button>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                                        Guest Signature & Signing Method
+                                    </label>
+                                    {guestSignature && (
+                                        <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase flex items-center gap-1 ${
+                                            guestSignature === 'BYPASSED' 
+                                                ? 'bg-amber-50 text-amber-700 border border-amber-200' 
+                                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                        }`}>
+                                            <CheckCircle2 className="w-3 h-3" />
+                                            {guestSignature === 'BYPASSED' ? 'Signature Bypassed (Desktop)' : 'Signature Captured'}
+                                        </span>
+                                    )}
                                 </div>
-                                <div className="bg-white border-2 border-dashed border-slate-200 rounded-2xl overflow-hidden hover:border-emerald-300 transition-colors">
-                                    <SignatureCanvas 
-                                        ref={signatureRef}
-                                        penColor="#0f172a"
-                                        canvasProps={{ className: 'w-full h-32 cursor-crosshair' }}
-                                    />
-                                </div>
+
+                                {guestSignature && guestSignature !== 'BYPASSED' ? (
+                                    <div className="bg-slate-50 border-2 border-emerald-200/80 rounded-2xl p-4 flex flex-col items-center gap-3">
+                                        <div className="bg-white border border-slate-200 rounded-xl p-2 w-full flex items-center justify-center max-h-32">
+                                            <img 
+                                                src={guestSignature} 
+                                                alt="Guest Signature" 
+                                                className="max-h-28 max-w-full object-contain" 
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-2 w-full">
+                                            <Button 
+                                                type="button" 
+                                                variant="outline" 
+                                                onClick={handleOpenSignatureModal}
+                                                className="flex-1 h-9 rounded-xl text-xs font-bold gap-1.5"
+                                            >
+                                                <FileSignature className="w-3.5 h-3.5 text-indigo-600" /> Change / Re-Sign
+                                            </Button>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setGuestSignature(null)}
+                                                className="h-9 px-3 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors flex items-center gap-1"
+                                            >
+                                                <Eraser className="w-3.5 h-3.5" /> Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : guestSignature === 'BYPASSED' ? (
+                                    <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-4 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-xs font-bold text-amber-900">Signature Skipped (Desktop Waiver)</p>
+                                            <p className="text-[10px] text-amber-700">Consent will be recorded without an attached digital signature image.</p>
+                                        </div>
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            onClick={handleOpenSignatureModal}
+                                            className="h-9 rounded-xl text-xs font-bold gap-1.5 border-amber-300 text-amber-900 hover:bg-amber-100"
+                                        >
+                                            <FileSignature className="w-3.5 h-3.5" /> Add Signature
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <div className="bg-gradient-to-br from-slate-50 to-indigo-50/40 border-2 border-dashed border-indigo-200/70 rounded-2xl p-5 flex flex-col items-center gap-3 text-center">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                                                <FileSignature className="w-4 h-4" />
+                                            </div>
+                                            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                                                <QrCode className="w-4 h-4" />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-800">
+                                                Guest Signature Option
+                                            </p>
+                                            <p className="text-[10px] text-slate-500 max-w-sm mt-0.5">
+                                                Guest can sign on screen, scan dynamic QR code with mobile/tablet, or skip.
+                                            </p>
+                                        </div>
+                                        <div className="flex flex-wrap items-center justify-center gap-2 w-full pt-1">
+                                            <Button 
+                                                type="button" 
+                                                onClick={handleOpenSignatureModal}
+                                                className="h-10 px-5 rounded-xl text-xs font-black uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100 flex items-center gap-2"
+                                            >
+                                                <Sparkles className="w-3.5 h-3.5" /> Select Method (Pad / QR Code)
+                                            </Button>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setGuestSignature('BYPASSED')}
+                                                className="h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-wider text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+                                            >
+                                                Skip Signature
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {error && (
@@ -296,7 +412,9 @@ export const EntranceFeeConsentModal = ({
                             )}
                             
                             <div className="flex gap-3 pt-2">
-                                <button type="button" onClick={onClose} className="flex-1 h-12 rounded-2xl font-bold uppercase text-[10px] tracking-widest bg-slate-100 hover:bg-slate-200 transition-colors">Skip Form</button>
+                                <button type="button" onClick={onClose} className="flex-1 h-12 rounded-2xl font-bold uppercase text-[10px] tracking-widest bg-slate-100 hover:bg-slate-200 transition-colors">
+                                    Cancel
+                                </button>
                                 <Button type="submit" disabled={loading} className="flex-[2] h-12 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-100 text-white">
                                     {loading ? 'Saving...' : 'Save Consent & Store Record'}
                                 </Button>
@@ -305,7 +423,24 @@ export const EntranceFeeConsentModal = ({
                     </CardContent>
                 </Card>
             </div>
+
+            {showSignatureModal && (
+                <SignatureModal
+                    isOpen={showSignatureModal}
+                    onClose={closeSignatureModal}
+                    onSave={handleSignatureSave}
+                    onSkip={handleSkipSignature}
+                    guestName={formData.guest_name || 'Guest'}
+                    propertyName={currentProperty?.name || ''}
+                    outletName={currentOutlet?.name || ''}
+                    outletId={currentOutlet?.id || ''}
+                    tier={initialData?.item_name || 'Entrance Fee Pass'}
+                    price={initialData?.price || '0'}
+                    currency={activeCurrency?.code || 'AED'}
+                    currencySymbol={activeCurrency?.symbol || ''}
+                    logoUrl={currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || ''}
+                />
+            )}
         </div>
     );
 };
-

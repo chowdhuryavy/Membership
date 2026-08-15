@@ -926,8 +926,8 @@ const Sales = () => {
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingSale, setEditingSale] = useState<Sale | null>(null);
-    const [showPTRegistration, setShowPTRegistration] = useState<{ guestName: string; saleId?: string; qty: number; itemName?: string; trainerId?: string } | null>(null);
-    const [showEntranceFeeConsent, setShowEntranceFeeConsent] = useState<{ guestName: string; saleId?: string; itemName?: string } | null>(null);
+    const [showPTRegistration, setShowPTRegistration] = useState<{ guestName: string; saleId?: string; qty: number; itemName?: string; trainerId?: string; price?: number } | null>(null);
+    const [showEntranceFeeConsent, setShowEntranceFeeConsent] = useState<{ guestName: string; saleId?: string; itemName?: string; price?: number } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
     const [itemToDelete, setItemToDelete] = useState<{ id: string; type: 'pos' | 'booking' } | null>(null);

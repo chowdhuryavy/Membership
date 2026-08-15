@@ -137,6 +137,7 @@ const Dashboard = () => {
     todaySalesCount: 0,
     staffActive: 0,
     staffOnLeave: 0,
+    staffOnProbation: 0,
     atv: 0,
     grossRevenue: 0,
     totalDiscounts: 0,
