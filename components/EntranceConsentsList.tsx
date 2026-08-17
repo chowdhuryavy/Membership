@@ -43,6 +43,18 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
 
     useEffect(() => {
         loadConsents();
+
+        const handleSync = () => {
+            loadConsents();
+        };
+
+        window.addEventListener('entrance_consent_deleted', handleSync);
+        window.addEventListener('booking_updated', handleSync);
+
+        return () => {
+            window.removeEventListener('entrance_consent_deleted', handleSync);
+            window.removeEventListener('booking_updated', handleSync);
+        };
     }, [propertyId, outletId]);
 
     const handleDelete = async (id: string) => {

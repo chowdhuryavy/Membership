@@ -3381,6 +3381,31 @@ class DatabaseService {
           console.warn('Non-fatal error deleting associated PT member:', err);
         }
 
+        // Delete associated Entrance Fee Consent created for this sale
+        try {
+          const { data: allConsents } = await supabase.from('entrance_fee_consents').select('*');
+          if (allConsents && allConsents.length > 0) {
+            const matchingConsents = allConsents.filter((c: any) => {
+              if (c.sale_id === id || (c.notes && c.notes.includes(id))) return true;
+              if (saleData && c.guest_name && saleData.guest_name) {
+                const sameGuest = c.guest_name.trim().toLowerCase() === saleData.guest_name.trim().toLowerCase();
+                const isEntranceItem = saleData.category === 'Entrance Fee' || 
+                                      (saleData.item_name && c.item_name && c.item_name.toLowerCase() === saleData.item_name.toLowerCase()) ||
+                                      (c.notes && c.notes.toLowerCase().includes('purchased item') && c.notes.toLowerCase().includes((saleData.item_name || '').toLowerCase()));
+                if (sameGuest && isEntranceItem && (c.sale_id === id || !c.sale_id)) return true;
+              }
+              return false;
+            });
+
+            if (matchingConsents.length > 0) {
+              const consentIds = matchingConsents.map((c: any) => c.id);
+              await supabase.from('entrance_fee_consents').delete().in('id', consentIds);
+            }
+          }
+        } catch (err) {
+          console.warn('Non-fatal error deleting associated entrance fee consent:', err);
+        }
+
         await supabase.from('sales').delete().eq('id', id);
         await this.logAction('POS_VOID', `Voided sale ID: ${id}`);
 
@@ -3433,10 +3458,29 @@ class DatabaseService {
         const updatedSessions = localSessions.filter(s => !ptMemberIds.has(s.pt_member_id));
         localStorage.setItem('pt_sessions', JSON.stringify(updatedSessions));
       }
+
+      const localConsents = JSON.parse(localStorage.getItem('entrance_fee_consents') || '[]') as EntranceFeeConsent[];
+      const consentsToDelete = localConsents.filter(c => {
+        if (c.sale_id === id || (c.notes && c.notes.includes(id))) return true;
+        if (saleData && c.guest_name && saleData.guest_name) {
+          const sameGuest = c.guest_name.trim().toLowerCase() === saleData.guest_name.trim().toLowerCase();
+          const isEntranceItem = saleData.category === 'Entrance Fee' || 
+                                (saleData.item_name && c.item_name && c.item_name.toLowerCase() === saleData.item_name.toLowerCase()) ||
+                                (c.notes && c.notes.toLowerCase().includes('purchased item') && c.notes.toLowerCase().includes((saleData.item_name || '').toLowerCase()));
+          if (sameGuest && isEntranceItem && (c.sale_id === id || !c.sale_id)) return true;
+        }
+        return false;
+      });
+      const consentIds = new Set(consentsToDelete.map(c => c.id));
+      if (consentIds.size > 0) {
+        const updatedConsents = localConsents.filter(c => !consentIds.has(c.id));
+        localStorage.setItem('entrance_fee_consents', JSON.stringify(updatedConsents));
+      }
     } catch (e) {}
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('booking_updated'));
+      window.dispatchEvent(new CustomEvent('entrance_consent_deleted', { detail: { saleId: id } }));
     }
   }
 

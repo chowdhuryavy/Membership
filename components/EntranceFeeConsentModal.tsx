@@ -24,7 +24,7 @@ export const EntranceFeeConsentModal = ({
     isOpen: boolean;
     onClose: () => void;
     onSuccess: (consent: EntranceFeeConsent) => void;
-    initialData?: (Partial<EntranceFeeConsent> & { guestName?: string; price?: number }) | null;
+    initialData?: (Partial<EntranceFeeConsent> & { guestName?: string; saleId?: string; itemName?: string; price?: number }) | null;
 }) => {
     const { currentOutlet, currentProperty, settings, currency, currencies } = useSettings();
     const waiver = getBilingualWaiverText(currentOutlet?.name, currentProperty?.name);
@@ -46,7 +46,7 @@ export const EntranceFeeConsentModal = ({
         time: initialData?.time || getCurrentFormattedTime(),
         room_number: initialData?.room_number || '',
         is_hotel_guest: initialData?.is_hotel_guest ?? (!!initialData?.room_number),
-        notes: initialData?.notes || (initialData?.item_name ? `Purchased item: ${initialData.item_name}` : '')
+        notes: initialData?.notes || (initialData?.item_name || (initialData as any)?.itemName ? `Purchased item: ${initialData?.item_name || (initialData as any)?.itemName}` : '')
     });
 
     useEffect(() => {
@@ -60,7 +60,7 @@ export const EntranceFeeConsentModal = ({
                 time: initialData?.time || getCurrentFormattedTime(),
                 room_number: initialData?.room_number || '',
                 is_hotel_guest: initialData?.is_hotel_guest ?? (!!initialData?.room_number),
-                notes: initialData?.notes || (initialData?.item_name ? `Purchased item: ${initialData.item_name}` : '')
+                notes: initialData?.notes || (initialData?.item_name || (initialData as any)?.itemName ? `Purchased item: ${initialData?.item_name || (initialData as any)?.itemName}` : '')
             });
             setGuestSignature(initialData?.guest_signature || null);
             setError('');
@@ -85,6 +85,9 @@ export const EntranceFeeConsentModal = ({
             return null;
         }
 
+        const resolvedSaleId = initialData?.sale_id || (initialData as any)?.saleId;
+        const resolvedItemName = initialData?.item_name || (initialData as any)?.itemName;
+
         return {
             outlet_id: targetOutletId,
             guest_name: formData.guest_name,
@@ -95,8 +98,8 @@ export const EntranceFeeConsentModal = ({
             time: formData.time,
             room_number: formData.room_number,
             is_hotel_guest: formData.is_hotel_guest || !!formData.room_number,
-            sale_id: initialData?.sale_id,
-            item_name: initialData?.item_name,
+            sale_id: resolvedSaleId,
+            item_name: resolvedItemName,
             notes: formData.notes
         };
     };
