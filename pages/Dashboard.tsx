@@ -561,7 +561,8 @@ const Dashboard = () => {
             const amount = Number(s.net_amount || 0);
             const cat = normalizeCategory(s.category as string, s.item_name);
             
-            if (isSameYear(sDate, viewDate)) {
+            // YTD recognition: from start of year up to the audit point of the selected month
+            if (sDate >= ytdStart && sDate <= auditPoint) {
                 if (cat === 'massage') {
                     ytdServiceRevenue += amount;
                 } else {
@@ -601,7 +602,7 @@ const Dashboard = () => {
         bookings.filter(b => b.status === 'completed' && !saleBookingIds.has(b.id)).forEach(b => {
             const bDate = parseISO(b.date);
             const amount = Number((b.price || 0) - (b.discount || 0));
-            if (isSameYear(bDate, viewDate)) {
+            if (bDate >= ytdStart && bDate <= auditPoint) {
                 ytdServiceRevenue += amount;
             }
             if (isSameMonth(bDate, viewDate)) {
