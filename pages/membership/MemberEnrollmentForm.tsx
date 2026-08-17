@@ -21,6 +21,7 @@ import { RevenueEngine } from '../../services/revenueEngine';
 import { format, addDays, parse, isAfter, differenceInDays, startOfDay, parseISO } from 'date-fns';
 import { useSettings } from '../../contexts/SettingsContext';
 import { PERFECTION_QR_IMAGE_SETTINGS } from '../../lib/perfectionLogo';
+import { SignatureModal } from '../../components/SignatureModal';
 
 const memberSchema = z.object({
   membership_number: z.string().min(1, "ID required"),
@@ -79,157 +80,26 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
   const [pendingSubmitData, setPendingSubmitData] = useState<MemberFormValues | null>(null);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
-  const signatureRef = useRef<SignatureCanvas>(null);
-  const [signatureMethod, setSignatureMethod] = useState<'pad' | 'qr' | null>(null);
-  const [qrUrl, setQrUrl] = useState('');
-  const signatureIdRef = useRef<string | null>(null);
-  const [isQrScanned, setIsQrScanned] = useState(false);
-  const [isGuestSigning, setIsGuestSigning] = useState(false);
-
-  useEffect(() => {
-      if (showSignatureModal && signatureMethod === 'qr' && signatureIdRef.current) {
-          // Use Real-time subscription for instant preview
-          const channel = supabase
-              .channel(`sig_sync:${signatureIdRef.current}`)
-              .on(
-                  'postgres_changes',
-                  {
-                      event: '*',
-                      schema: 'public',
-                      table: 'notifications',
-                      filter: `id=eq.${signatureIdRef.current}`
-                  },
-                  (payload: any) => {
-                      const record = payload.new || payload.old;
-                      if (!record?.message) return;
-                      try {
-                          const syncData = JSON.parse(record.message);
-                          if (syncData.signature) setSignature(syncData.signature);
-                          if (syncData.confirmed) {
-                              setShowSignatureModal(false);
-                              setSignatureMethod(null);
-                              supabase.from('notifications').delete().eq('id', record.id);
-                              console.log('[Sync] Confirmed, triggering final submit', { pendingSubmitData: !!pendingSubmitData });
-                              if (pendingSubmitData) onFinalSubmit(pendingSubmitData, syncData.signature);
-                          }
-                      } catch (e) {
-                          console.error("Sync parse error:", e);
-                      }
-                  }
-              )
-              .subscribe();
-
-          // Fallback polling for environments where real-time might be restricted
-          const interval = setInterval(async () => {
-              try {
-                  const { data } = await supabase
-                      .from('notifications')
-                      .select('message, id')
-                      .eq('title', `SIG_SYNC:${signatureIdRef.current}`)
-                      .maybeSingle();
-
-                  if ((data as any)?.message) {
-                      const syncData = JSON.parse((data as any).message);
-                      if (syncData.signature) setSignature(syncData.signature);
-                      if (syncData.confirmed) {
-                          setShowSignatureModal(false);
-                          setSignatureMethod(null);
-                          clearInterval(interval);
-                          await supabase.from('notifications').delete().eq('id', (data as any).id);
-                          console.log('[Polling] Confirmed, triggering final submit', { pendingSubmitData: !!pendingSubmitData });
-                          if (pendingSubmitData) onFinalSubmit(pendingSubmitData, syncData.signature);
-                      }
-                  }
-              } catch (e) {
-                  console.error("Polling error:", e);
-              }
-          }, 2500);
-
-          return () => {
-              clearInterval(interval);
-              supabase.removeChannel(channel);
-          };
-      }
-  }, [showSignatureModal, signatureMethod, pendingSubmitData]);
 
   const initiateSignature = (data: MemberFormValues) => {
     setPendingSubmitData(data);
     setShowSignatureModal(true);
-    setSignatureMethod(null);
-  };
-
-  const handleSignatureMethodSelect = (method: 'pad' | 'qr') => {
-    setSignatureMethod(method);
-    if (method === 'qr') {
-        const id = crypto.randomUUID();
-        signatureIdRef.current = id;
-        
-        // Use getValues to ensure we have the most current data snapshot
-        const formValues = getValues();
-        const name = formValues.guest_name || 'Guest';
-        const categoryId = formValues.category_id;
-        
-        const cat = sortedCategories.find(c => c.id === categoryId);
-        const tier = cat?.name || 'Standard';
-        const price = cat?.base_rate || 0;
-        
-        const baseUrl = window.location.origin;
-        const activeCurrency = currency || 
-                               (currentProperty && currencies.find(c => c.property_id === currentProperty.id)) || 
-                               { code: 'AED', symbol: 'AED' };
-
-        const queryParams = new URLSearchParams({
-            id: id,
-            name: name,
-            tier: tier,
-            price: price.toString(),
-            property: currentProperty?.name || '',
-            outlet: currentOutlet?.name || '',
-            outlet_id: currentOutlet?.id || '',
-            currency: activeCurrency.code || 'AED',
-            symbol: activeCurrency.symbol || '',
-            logo: currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || ''
-        }).toString();
-        
-        // Use HashRouter format #/signature/...
-        setQrUrl(`${baseUrl}/#/signature/${id}?${queryParams}`);
-
-        // Create initial sync record so guest device can find it
-        supabase.from('notifications').insert({
-            id: id,
-            title: `SIG_SYNC:${id}`,
-            message: JSON.stringify({ status: 'pending' }),
-            type: 'info',
-            outlet_id: currentOutlet?.id || null,
-            user_id: '00000000-0000-0000-0000-000000000000'
-        }).then(({ error }) => {
-            if (error) console.error("Error creating sync record:", error);
-        });
-    }
   };
 
   const handleSkipSignature = async () => {
+    setSignature('BYPASSED');
+    setShowSignatureModal(false);
     if (pendingSubmitData) {
         await onFinalSubmit(pendingSubmitData, 'BYPASSED'); 
-        setShowSignatureModal(false);
     }
   };
 
-  const handleSignatureSave = () => {
-    if (signatureRef.current) {
-        const dataUrl = signatureRef.current.toDataURL();
-        setSignature(dataUrl);
-        setShowSignatureModal(false);
-        setSignatureMethod(null);
-        if (pendingSubmitData) {
-            onFinalSubmit(pendingSubmitData, dataUrl);
-        }
+  const handleSignatureSave = async (dataUrl: string) => {
+    setSignature(dataUrl);
+    setShowSignatureModal(false);
+    if (pendingSubmitData) {
+        await onFinalSubmit(pendingSubmitData, dataUrl);
     }
-  };
-
-  const handleSignatureClear = () => {
-    signatureRef.current?.clear();
-    setSignature(null);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
@@ -452,26 +322,10 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     }
   };
 
-  const closeSignatureModal = async () => {
-    if (signatureIdRef.current) {
-        try {
-            await supabase.from('notifications').update({
-                message: JSON.stringify({ cancelled: true })
-            }).eq('id', signatureIdRef.current);
-            
-            // Short delay to allow signal to reach guest
-            await new Promise(r => setTimeout(r, 500));
-            await supabase.from('notifications').delete().eq('id', signatureIdRef.current);
-        } catch (error) {
-            console.error('Error sending cancellation signal:', error);
-        }
-    }
-    
+  const closeSignatureModal = () => {
     setShowSignatureModal(false); 
     setPendingSubmitData(null); 
-    setSignatureMethod(null); 
     setSignature(null);
-    signatureIdRef.current = null;
   };
 
   const onFormSubmit = async (data: MemberFormValues) => {
@@ -1035,111 +889,22 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         </form>
 
         {showSignatureModal && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-                <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full overflow-hidden p-8 flex flex-col items-center">
-                    {!signatureMethod ? (
-                        <>
-                            <h3 className="text-lg font-black text-slate-900 mb-6 uppercase tracking-widest">Select Method</h3>
-                            <div className="flex flex-col gap-4 w-full">
-                                <Button onClick={() => handleSignatureMethodSelect('pad')} className="h-14 rounded-xl">Signature Pad</Button>
-                                <Button onClick={() => handleSignatureMethodSelect('qr')} className="h-14 rounded-xl">QR Code</Button>
-                                <Button variant="outline" onClick={() => {setShowSignatureModal(false); setPendingSubmitData(null);}} className="h-14 rounded-xl">Cancel</Button>
-                                
-                                <Button 
-                                    variant="ghost" 
-                                    onClick={handleSkipSignature} 
-                                    className="h-10 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-600 hidden md:flex items-center justify-center gap-2 mt-2"
-                                >
-                                    Skip Signature (Desktop) <ArrowRight className="w-3 h-3" />
-                                </Button>
-                            </div>
-                        </>
-                    ) : signatureMethod === 'pad' ? (
-                        <>
-                            <h3 className="text-lg font-black text-slate-900 mb-4 uppercase tracking-widest">Sign Below</h3>
-                            <div className="border-2 border-slate-200 rounded-2xl mb-6 bg-slate-50 w-full">
-                                <SignatureCanvas 
-                                    ref={signatureRef}
-                                    canvasProps={{ width: 300, height: 150, className: 'w-full h-36' }} 
-                                />
-                            </div>
-                            <div className="flex gap-2 w-full">
-                                <Button onClick={handleSignatureClear} variant="outline" className="flex-1 rounded-xl">Clear</Button>
-                                <Button onClick={handleSignatureSave} className="flex-1 rounded-xl bg-indigo-600">Confirm</Button>
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <h3 className="text-lg font-black text-slate-900 mb-2 uppercase tracking-widest">
-                                {signature ? 'Live Preview' : 'Guest Signature'}
-                            </h3>
-                            <p className="text-[10px] text-slate-500 font-bold mb-4 text-center uppercase tracking-tighter">
-                                {signature ? 'Guest is signing now...' : 'Scan QR with tablet to sign'}
-                            </p>
-                            <div className="bg-white p-4 border border-slate-100 rounded-3xl shadow-sm mb-6 flex items-center justify-center min-h-[270px] w-full">
-                                {signature ? (
-                                    <div className="w-full flex flex-col items-center">
-                                        <img src={signature} alt="Live Signature" className="max-h-48 object-contain border border-slate-50 rounded-xl" />
-                                        <p className="text-[10px] text-indigo-500 font-black mt-4 animate-pulse">WAITING FOR GUEST TO CONFIRM...</p>
-                                    </div>
-                                ) : qrUrl ? (
-                                    <div className="flex flex-col items-center">
-                                        <QRCodeSVG 
-                                            value={qrUrl} 
-                                            size={240} 
-                                            level="H" 
-                                            includeMargin={true}
-                                            imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
-                                        />
-                                        <div className="mt-2.5 text-center flex items-center gap-1.5 justify-center">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping"></span>
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Perfection Digital Sign</span>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="w-60 h-60 bg-slate-50 animate-pulse rounded-xl" />
-                                )}
-                            </div>
-                            <div className="flex flex-col items-center gap-4 w-full">
-                                {signature && (
-                                    <Button 
-                                        type="button"
-                                        onClick={async () => {
-                                            // Staff can also force confirm if signature is visible
-                                            setShowSignatureModal(false);
-                                            setSignatureMethod(null);
-                                            
-                                            // Signal to guest device before cleanup
-                                            if (signatureIdRef.current) {
-                                                await supabase.from('notifications').update({
-                                                    message: JSON.stringify({ completed_by_staff: true })
-                                                }).eq('id', signatureIdRef.current);
-                                                
-                                                await new Promise(r => setTimeout(r, 500));
-                                                await supabase.from('notifications').delete().eq('id', signatureIdRef.current);
-                                            }
-
-                                            if (pendingSubmitData) {
-                                                onFinalSubmit(pendingSubmitData, signature);
-                                            }
-                                        }}
-                                        className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12 shadow-lg shadow-indigo-100 transition-all active:scale-95"
-                                    >
-                                        Staff Confirm Signature
-                                    </Button>
-                                )}
-                                <button 
-                                    type="button"
-                                    onClick={closeSignatureModal}
-                                    className="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
-                                >
-                                    Cancel & Reset
-                                </button>
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
+            <SignatureModal
+                isOpen={showSignatureModal}
+                onClose={closeSignatureModal}
+                onSave={handleSignatureSave}
+                onSkip={handleSkipSignature}
+                guestName={pendingSubmitData?.guest_name || 'Member'}
+                propertyName={currentProperty?.name || ''}
+                outletName={currentOutlet?.name || ''}
+                outletId={currentOutlet?.id || ''}
+                tier={sortedCategories.find(c => c.id === pendingSubmitData?.category_id)?.name || 'Membership'}
+                price={baseRate || 0}
+                currency={typeof currency === 'string' ? currency : (currency?.code || 'AED')}
+                currencySymbol=""
+                logoUrl={currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || ''}
+                agreementType="membership"
+            />
         )}
 
         {showIncentivePrompt && pendingSubmitData && (

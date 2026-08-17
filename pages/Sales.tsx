@@ -1521,7 +1521,20 @@ const Sales = () => {
             {showEntranceFeeConsent && (
                 <EntranceFeeConsentModal
                     isOpen={true}
-                    onClose={() => setShowEntranceFeeConsent(null)}
+                    onClose={async () => {
+                        const sId = showEntranceFeeConsent?.saleId || showEntranceFeeConsent?.sale_id;
+                        if (sId) {
+                            try {
+                                await db.deleteSale(sId);
+                                cache.invalidate('sales');
+                                loadData();
+                                toast('Entrance Fee Consent cancelled and transaction discarded.', { icon: 'ℹ️' });
+                            } catch (e) {
+                                console.error('Error discarding sale on entrance fee cancel:', e);
+                            }
+                        }
+                        setShowEntranceFeeConsent(null);
+                    }}
                     onSuccess={() => {
                         setShowEntranceFeeConsent(null);
                         cache.invalidate('entrance_fee_consents');
