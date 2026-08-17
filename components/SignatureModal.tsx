@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import SignatureCanvas from 'react-signature-canvas';
 export { default as SignaturePad } from 'react-signature-canvas';
 import { supabase } from '../services/mockSupabase';
+import { PERFECTION_QR_IMAGE_SETTINGS } from '../lib/perfectionLogo';
 
 interface SignatureModalProps {
   isOpen: boolean;
@@ -329,13 +330,18 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
                   <p className="text-[10px] text-indigo-600 font-black mt-3 animate-pulse uppercase tracking-wider">Waiting for guest confirmation...</p>
                 </div>
               ) : qrUrl ? (
-                <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+                <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 relative group flex flex-col items-center">
                   <QRCodeSVG 
                     value={qrUrl} 
                     size={220} 
                     level="H" 
-                    includeMargin={true} 
+                    includeMargin={true}
+                    imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
                   />
+                  <div className="mt-2 text-center flex items-center gap-1.5 justify-center">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping"></span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Perfection Digital Sign</span>
+                  </div>
                 </div>
               ) : (
                 <div className="w-52 h-52 bg-slate-200 animate-pulse rounded-xl" />

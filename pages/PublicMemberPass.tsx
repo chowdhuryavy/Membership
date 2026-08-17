@@ -13,6 +13,7 @@ import { checkInService } from '../services/checkInService';
 import { detectDeviceOS, createPkpassZipBlob, generateGoogleWalletSaveUrl } from '../services/pkpassService';
 import toast from 'react-hot-toast';
 import { supabase } from '../services/supabase';
+import { PERFECTION_QR_IMAGE_SETTINGS } from '../lib/perfectionLogo';
 
 export const PublicMemberPass: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -442,10 +443,11 @@ export const PublicMemberPass: React.FC = () => {
                   <QRCodeSVG
                     value={member?.membership_number || tokenData.membershipNumber || tokenData.memberId || 'UNKNOWN'}
                     size={200}
-                    level="M"
+                    level="H"
                     includeMargin={true}
                     fgColor="#000000"
                     bgColor="#FFFFFF"
+                    imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
                   />
                 </div>
                 <div className="flex items-center gap-1.5 mt-2.5">

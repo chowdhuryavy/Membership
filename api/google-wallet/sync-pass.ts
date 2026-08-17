@@ -200,7 +200,11 @@ export default async function handler(req: any, res: any) {
     const errorStatus = err?.response?.status || 500;
     const errorData = err?.response?.data || err?.message || err;
 
-    console.error(`[Google Wallet Sync Error] Pass sync failed for member ${req.body?.memberId}:`, errorData);
+    if (errorStatus === 404) {
+      console.log(`[Google Wallet Sync] Pass object not found for member ${req.body?.memberId} (pass not added to wallet yet).`);
+    } else {
+      console.warn(`[Google Wallet Sync] Pass sync returned status ${errorStatus} for member ${req.body?.memberId}:`, errorData?.error?.message || errorData?.message || errorData);
+    }
 
     // Always return HTTP 200 to prevent browser console errors for expected 404s
     // (A 404 just means the user hasn't added the pass to their wallet yet)

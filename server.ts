@@ -430,7 +430,11 @@ async function startServer() {
       const errorStatus = err?.response?.status;
       const errorData = err?.response?.data || err?.message || err;
 
-      console.error(`[Google Wallet Sync Diagnostic] Automatic Google Wallet pass update for member ${req.body?.memberId} returned status ${errorStatus}:`, errorData);
+      if (errorStatus === 404) {
+        console.log(`[Google Wallet Sync] Pass object mem_${req.body?.memberId} not found in Google Wallet (pass not yet added to device).`);
+      } else {
+        console.warn(`[Google Wallet Sync] Automatic Google Wallet pass update for member ${req.body?.memberId} (status ${errorStatus}):`, errorData?.error?.message || errorData?.message || errorData);
+      }
 
       return res.json({
         success: false,

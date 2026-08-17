@@ -20,6 +20,7 @@ import { Member, MembershipCategory, MemberStatus, Staff, MembershipType } from 
 import { RevenueEngine } from '../../services/revenueEngine';
 import { format, addDays, parse, isAfter, differenceInDays, startOfDay, parseISO } from 'date-fns';
 import { useSettings } from '../../contexts/SettingsContext';
+import { PERFECTION_QR_IMAGE_SETTINGS } from '../../lib/perfectionLogo';
 
 const memberSchema = z.object({
   membership_number: z.string().min(1, "ID required"),
@@ -1082,12 +1083,19 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                                         <p className="text-[10px] text-indigo-500 font-black mt-4 animate-pulse">WAITING FOR GUEST TO CONFIRM...</p>
                                     </div>
                                 ) : qrUrl ? (
-                                    <QRCodeSVG 
-                                        value={qrUrl} 
-                                        size={240} 
-                                        level="H" 
-                                        includeMargin={true}
-                                    />
+                                    <div className="flex flex-col items-center">
+                                        <QRCodeSVG 
+                                            value={qrUrl} 
+                                            size={240} 
+                                            level="H" 
+                                            includeMargin={true}
+                                            imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
+                                        />
+                                        <div className="mt-2.5 text-center flex items-center gap-1.5 justify-center">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping"></span>
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Perfection Digital Sign</span>
+                                        </div>
+                                    </div>
                                 ) : (
                                     <div className="w-60 h-60 bg-slate-50 animate-pulse rounded-xl" />
                                 )}

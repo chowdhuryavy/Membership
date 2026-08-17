@@ -14,6 +14,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { detectDeviceOS, createPkpassZipBlob, generateGoogleWalletSaveUrl } from '../services/pkpassService';
 import toast from 'react-hot-toast';
 import { supabase } from '../services/supabase';
+import { PERFECTION_QR_IMAGE_SETTINGS } from '../lib/perfectionLogo';
 
 interface DigitalMembershipCardModalProps {
   member: Member;
@@ -370,10 +371,11 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
                     <QRCodeSVG
                       value={mobilePassUrl}
                       size={220}
-                      level="M"
+                      level="H"
                       includeMargin={true}
                       fgColor="#000000"
                       bgColor="#FFFFFF"
+                      imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
                     />
                   </div>
                 ) : (
@@ -531,10 +533,11 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
                         <QRCodeSVG
                           value={mobilePassUrl}
                           size={200}
-                          level="M"
+                          level="H"
                           includeMargin={true}
                           fgColor="#000000"
                           bgColor="#FFFFFF"
+                          imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
                         />
                       </div>
                       <div className="flex items-center gap-1.5 mt-2">
@@ -830,10 +833,11 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
                   <QRCodeSVG
                     value={mobilePassUrl}
                     size={180}
-                    level="M"
+                    level="H"
                     includeMargin={true}
                     fgColor="#000000"
                     bgColor="#FFFFFF"
+                    imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
                   />
                 </div>
                 <span className="text-[8px] font-mono text-slate-300 uppercase tracking-widest mt-1.5">
@@ -1009,10 +1013,11 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
                 <QRCodeSVG
                   value={mobilePassUrl}
                   size={180}
-                  level="M"
+                  level="H"
                   includeMargin={true}
                   fgColor="#000000"
                   bgColor="#FFFFFF"
+                  imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
                 />
               </div>
               <span className="text-[8px] font-mono text-slate-300 uppercase tracking-widest mt-1.5">
