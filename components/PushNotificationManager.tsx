@@ -25,6 +25,9 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
         }
     }
 
+    const hasMainPortal = !!authUser || !!localStorage.getItem('membership_session') || !!sessionStorage.getItem('membership_session');
+    const userType: 'admin' | 'staff' = hasMainPortal ? 'admin' : 'staff';
+
     const [permission, setPermission] = useState<NotificationPermission | 'not-supported'>('default');
     const [isSubscribing, setIsSubscribing] = useState(false);
 
@@ -37,17 +40,17 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
             // This ensures PWA/APK users don't have to manually click "Enable" every time they login
             if (p === 'granted' && user) {
                 try {
-                    await PushNotificationService.subscribeUser(user.id);
+                    await PushNotificationService.subscribeUser(user.id, userType);
                 } catch (error) {
                     console.error("Auto-sync failed:", error);
                 }
             }
         };
         checkPermission();
-    }, [user?.id]);
+    }, [user?.id, userType]);
 
     const handleEnableNotifications = async () => {
-        console.log('handleEnableNotifications clicked, user:', user);
+        console.log('handleEnableNotifications clicked, user:', user, 'type:', userType);
         if (!user) {
             console.error('No user found');
             return;
@@ -76,8 +79,8 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
                 }
                 
                 if (granted) {
-                    console.log('Permission granted, subscribing...');
-                    const subscription = await PushNotificationService.subscribeUser(user.id);
+                    console.log(`Permission granted, subscribing (${userType})...`);
+                    const subscription = await PushNotificationService.subscribeUser(user.id, userType);
                     if (subscription) {
                         console.log('Subscribe successful.');
                         setPermission('granted');

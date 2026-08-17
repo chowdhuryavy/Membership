@@ -140,9 +140,6 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
   const reportRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({ contentRef: reportRef });
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
-  const [emailRecipientsInput, setEmailRecipientsInput] = useState('');
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<any>(null);
   const supabase = supabaseClient;
@@ -458,20 +455,6 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
     }
   };
 
-  const handleOpenEmailModal = async () => {
-    if (!activeOutlet || !activeProperty) return;
-    try {
-      const recipients = await db.getReportRecipients();
-      const matching = recipients.filter(r => r.is_active && (r.outlet_id === 'all' || r.outlet_id === activeOutlet.id));
-      let initialEmails = matching.flatMap(r => r.email.split(',').map(e => e.trim())).filter(Boolean);
-      initialEmails = Array.from(new Set(initialEmails));
-      setEmailRecipientsInput(initialEmails.length > 0 ? initialEmails.join(', ') : (user?.email || ''));
-    } catch (e) {
-      setEmailRecipientsInput(user?.email || '');
-    }
-    setIsEmailModalOpen(true);
-  };
-
   const hasDispatched = useRef(false);
   useEffect(() => {
     if (autoDispatchConfig && !loading && !hasDispatched.current && activeProperty) {
@@ -514,38 +497,6 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
       executeDispatch();
     }
   }, [loading, autoDispatchConfig, activeProperty, reportType, incentiveDept]);
-
-  const handleSendEmail = async () => {
-    if (!emailRecipientsInput.trim()) {
-      toast.error('Please enter at least one recipient email address.');
-      return;
-    }
-    if (!activeOutlet || !activeProperty || !settings) return;
-
-    setIsSendingEmail(true);
-    try {
-      const reportName = getReportTitle(reportType, incentiveDept);
-      const pdf = await generatePDFFromView();
-      const pdfBase64 = pdf.output('datauristring').split(',')[1];
-
-      await emailService.sendReportEmail(
-        emailRecipientsInput,
-        reportName,
-        activeProperty.name,
-        activeOutlet.name,
-        pdfBase64,
-        `Report Period: ${reportType === 'daily_sales' ? dailySalesDate : reportMonth}`
-      );
-
-      toast.success(`Report successfully emailed to: ${emailRecipientsInput}`);
-      setIsEmailModalOpen(false);
-    } catch (err: any) {
-      console.error('Error sending report email:', err);
-      toast.error('Failed to send email: ' + (err.message || 'Unknown error'));
-    } finally {
-      setIsSendingEmail(false);
-    }
-  };
 
   const signatoryConfig = useMemo(() => {
     if (!activeOutlet || !activeProperty || !settings) return null;
@@ -1191,7 +1142,6 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
             <Button variant="outline" onClick={() => setShowConfig(!showConfig)} className={`h-12 px-5 rounded-2xl border-slate-200 ${showConfig ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-inner' : ''}`}><Settings2 className="w-4 h-4 mr-2" /> <span className="text-[10px] font-black uppercase tracking-widest">Layout Config</span></Button>
             <Button onClick={handlePrint} className="h-12 px-6 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 transition-all active:scale-95 no-print bg-indigo-600 text-white hover:bg-indigo-700"><Printer className="w-4 h-4 mr-2" /> Print Direct</Button>
             <Button variant="outline" onClick={handleExportPDF} isLoading={isGeneratingPDF} className="h-12 px-8 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] border-slate-200 bg-white hover:bg-slate-50 shadow-sm transition-all active:scale-95"><FileDown className="w-4 h-4 mr-2 text-indigo-600" /> Export PDF</Button>
-            <Button variant="outline" onClick={handleOpenEmailModal} className="h-12 px-6 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 shadow-sm transition-all active:scale-95 no-print"><Mail className="w-4 h-4 mr-2 text-indigo-600" /> Send Email</Button>
         </div>
       </div>
 
@@ -1593,7 +1543,7 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
                               Page 1 of 1 &bull; System ID: {activeOutlet?.id?.substring(0,8)}
                           </span>
                           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                              Exported on: {format(new Date(), 'dd-MMM-yyyy HH:mm:ss')} by {autoDispatchConfig || isSendingEmail ? 'SYSTEM AUTOMATED' : (user?.name || 'SYSTEM AUTOMATED')}
+                              Exported on: {format(new Date(), 'dd-MMM-yyyy HH:mm:ss')} by {autoDispatchConfig ? 'SYSTEM AUTOMATED' : (user?.name || 'SYSTEM AUTOMATED')}
                           </span>
                           <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">
                               &copy; {new Date().getFullYear()} {activeProperty?.name}. All rights reserved.
@@ -1603,49 +1553,6 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
               </Card>
           </div>
       </div>
-
-      {isEmailModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-8 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                  <Mail className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Email Report Dispatch</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{getReportTitle(reportType, incentiveDept)}</p>
-                </div>
-              </div>
-              <button onClick={() => setIsEmailModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest block mb-2">Recipient Email Addresses (Comma separated)</label>
-                <textarea
-                  value={emailRecipientsInput}
-                  onChange={e => setEmailRecipientsInput(e.target.value)}
-                  className="w-full h-28 p-4 rounded-2xl border-2 border-slate-200 text-xs font-mono focus:border-indigo-600 focus:outline-none"
-                  placeholder="e.g. manager@hotel.com, finance@hotel.com"
-                />
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-2">
-                  The generated PDF audit ledger will be attached automatically to the dispatch.
-                </p>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <Button variant="outline" onClick={() => setIsEmailModalOpen(false)} className="h-12 px-6 rounded-xl font-black text-xs uppercase">Cancel</Button>
-                <Button onClick={handleSendEmail} isLoading={isSendingEmail} className="h-12 px-8 rounded-xl font-black text-xs uppercase bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-100">
-                  <Mail className="w-4 h-4 mr-2" /> Dispatch Email
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <style>{`
         @media print {

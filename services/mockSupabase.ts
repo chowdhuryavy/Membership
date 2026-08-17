@@ -4565,13 +4565,14 @@ class DatabaseService {
               notification.message
           ).catch(err => console.error(`[Push] Trigger failure for ${notification.user_id}:`, err));
         } else {
-          // Unassigned/Global notification: Broadcast push to staff devices if important
+          // Unassigned/Global notification: Broadcast push ONLY to Admin portal devices
+          // (Staff devices only receive items specifically allocated to their user_id)
           console.log(`[Push] Unassigned/Global notification created: "${notification.title}". Type: ${notification.type}`);
-          if (notification.type === 'error' || notification.type === 'warning') {
-              console.log(`[Push] Broadcasting important global notification: "${notification.title}"`);
-              await this.triggerGlobalPush({ ...dbNotification, id: 'global-placeholder' } as any);
+          if (notification.type === 'error' || notification.type === 'warning' || notification.required_permission) {
+              console.log(`[Push] Broadcasting admin-only notification: "${notification.title}"`);
+              await this.triggerGlobalPush({ ...dbNotification, id: 'global-placeholder' } as any, 'admin');
           } else {
-              console.log(`[Push] Skipping general staff push broadcast for info notification.`);
+              console.log(`[Push] Skipping push broadcast for standard unassigned info notification.`);
           }
         }
       } catch (e) {
@@ -4592,16 +4593,17 @@ class DatabaseService {
     }
   }
 
-  private async triggerGlobalPush(n: Notification) {
+  private async triggerGlobalPush(n: Notification, targetRole: 'admin' | 'all' = 'admin') {
     try {
-        console.log(`[Push] Global notification: Broadcasting "${n.title}" to all logged-in staff...`);
-        // We now call the Edge Function ONCE with broadcast: true for efficiency
+        console.log(`[Push] Global notification: Broadcasting "${n.title}" to ${targetRole} devices...`);
+        // We call the Edge Function with broadcast: true and targetRole
         await this.triggerPushNotification(
             "global-broadcast", 
             n.title, 
             n.message, 
-            '/notifications',
-            true // Enable broadcast mode
+            '/#/notifications',
+            true, // Enable broadcast mode
+            targetRole
         );
         console.log("[Push] Global broadcast triggered successfully.");
     } catch (e) {
@@ -4609,7 +4611,7 @@ class DatabaseService {
     }
   }
 
-  async triggerPushNotification(userId: string, title: string, body: string, url: string = '/#/notifications', broadcast: boolean = false) {
+  async triggerPushNotification(userId: string, title: string, body: string, url: string = '/#/notifications', broadcast: boolean = false, targetRole: string = 'admin') {
     if (!this.isSupabase()) {
         console.log('Push notification trigger skipped: Supabase offline');
         return;
@@ -4618,14 +4620,15 @@ class DatabaseService {
         const payload = { 
             userId: broadcast ? undefined : userId,
             broadcast,
+            targetRole: broadcast ? targetRole : undefined,
             title, 
             body, 
             url,
             id: crypto.randomUUID(), 
             icon: '/icon.png',
-            tag: broadcast ? 'global-staff-alert' : 'direct-alert'
+            tag: broadcast ? 'admin-club-alert' : 'direct-staff-alert'
         };
-        console.log(`[Push] Dispatching to Edge Function (${broadcast ? 'BROADCAST' : 'DIRECT'}):`, JSON.stringify(payload, null, 2));
+        console.log(`[Push] Dispatching to Edge Function (${broadcast ? `BROADCAST [${targetRole}]` : `DIRECT [${userId}]`}):`, JSON.stringify(payload, null, 2));
         
         // Use a timeout for the invoke call to prevent hanging the UI
         const invokePromise = supabase.functions.invoke('send-push', {
@@ -4649,8 +4652,8 @@ class DatabaseService {
             console.log(`[Push] DONE: Sent to ${data.sentCount || 0} subscriptions.`);
         }
     } catch (e: any) {
-        console.error('❌ [Push] FATAL error triggering push:', e.message || e);
-        throw e;
+        console.warn('[Push] Push notification network/edge function note (non-fatal):', e.message || e);
+        // Do not throw so app actions (PT registration, etc.) complete successfully
     }
   }
 
@@ -4991,35 +4994,46 @@ class DatabaseService {
   }
 
   // --- PUSH SUBSCRIPTIONS ---
-  async savePushSubscription(userId: string, subscription: any) {
+  async savePushSubscription(userId: string, subscription: any, userType: 'admin' | 'staff' = 'admin') {
+    const subObj = typeof subscription === 'object' && subscription !== null ? { ...subscription, app_user_type: userType } : subscription;
+    
     if (this.isSupabase()) {
       try {
-        // We attempt to save all subscriptions (staff included) to Supabase
-        // Note: The user MUST run the SQL to remove the foreign key constraint on push_subscriptions table
-        // to allow staff members who are not in auth.users to have subscriptions saved.
-        
-        const { error } = await supabase.from('push_subscriptions').upsert([{
+        // Try saving with user_type column if it exists in Supabase
+        const payloadWithRole: any = {
           user_id: userId,
-          subscription: subscription,
+          subscription: subObj,
+          user_type: userType,
           updated_at: new Date().toISOString()
-        }], { onConflict: 'user_id' });
+        };
+
+        const { error } = await supabase.from('push_subscriptions').upsert([payloadWithRole], { onConflict: 'user_id' });
         
         if (error) {
-           // If we still get an error, it might be the foreign key constraint
-           if (error.code === '23503') {
-             console.log('Push subscription FK error - saving locally. (Admin: Please remove FK constraint on push_subscriptions table)');
+           // If user_type column doesn't exist yet, retry without user_type column (role is inside subObj)
+           if (error.message?.includes('user_type') || error.code === '42703') {
+             const fallbackPayload = {
+               user_id: userId,
+               subscription: subObj,
+               updated_at: new Date().toISOString()
+             };
+             await supabase.from('push_subscriptions').upsert([fallbackPayload], { onConflict: 'user_id' });
+             console.log(`Push subscription saved (with embedded ${userType} type) for user:`, userId);
+           } else if (error.code === '23503') {
+             console.log('Push subscription FK error - saving locally.');
+             this.saveLocalPushSubscription(userId, subObj);
            } else {
              throw error;
            }
         } else {
-           console.log('Push subscription saved to Supabase for user:', userId);
+           console.log(`Push subscription saved to Supabase (${userType}) for user:`, userId);
         }
       } catch (e) {
         console.warn('Failed to save push subscription to Supabase', e);
-        this.saveLocalPushSubscription(userId, subscription);
+        this.saveLocalPushSubscription(userId, subObj);
       }
     } else {
-      this.saveLocalPushSubscription(userId, subscription);
+      this.saveLocalPushSubscription(userId, subObj);
     }
   }
 

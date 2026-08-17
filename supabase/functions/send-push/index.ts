@@ -32,17 +32,43 @@ serve(async (req) => {
     }
 
     console.log(`[Push] Received JSON:`, JSON.stringify(json));
-    const { userId, user_id, title, body, icon, url, tag, broadcast } = json;
+    const { userId, user_id, title, body, icon, url, tag, broadcast, targetRole, target_role } = json;
     
     let subscriptions = [];
     if (broadcast) {
-      console.log(`[Push] BROADCAST MODE: Fetching all active subscriptions...`);
+      const requestedRole = targetRole || target_role || 'admin';
+      console.log(`[Push] BROADCAST MODE (Target Role: ${requestedRole}): Fetching subscriptions...`);
+      
+      // Try to select with user_type, fallback gracefully if column isn't present
+      let allSubs: any[] = [];
       const { data, error: subError } = await supabase
         .from("push_subscriptions")
-        .select("subscription, user_id");
+        .select("*");
       
-      if (subError) throw subError;
-      subscriptions = data || [];
+      if (subError) {
+        console.error("[Push] Error fetching subscriptions for broadcast:", subError);
+        throw subError;
+      }
+      
+      allSubs = data || [];
+      
+      // Filter out staff portal subscriptions from general/broadcast alerts
+      // Staff members only receive direct targeted pushes (for assigned PT, bookings, messages)
+      if (requestedRole === 'admin' || requestedRole === 'admin_only') {
+        subscriptions = allSubs.filter((s: any) => {
+          const uType = s.user_type || s.subscription?.app_user_type;
+          return uType !== 'staff';
+        });
+      } else if (requestedRole === 'all') {
+        subscriptions = allSubs;
+      } else {
+        subscriptions = allSubs.filter((s: any) => {
+          const uType = s.user_type || s.subscription?.app_user_type;
+          return uType === requestedRole;
+        });
+      }
+      
+      console.log(`[Push] Broadcast filtered: ${subscriptions.length} recipients out of ${allSubs.length} total active devices.`);
     } else {
       const effectiveUserId = userId || user_id;
       console.log(`[Push] Extracted UserId: ${effectiveUserId}, Title: ${title}`);

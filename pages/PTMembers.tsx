@@ -331,13 +331,13 @@ export default function PTMembers() {
             const trainerName = staff.find(s => s.id === trainerId)?.name || 'a new trainer';
             toast.success(`Assigned ${trainerName} to ${activeTarget.guest_name}`);
             
-            // Trigger Notification
+            // Trigger Notification targeted to the assigned trainer
             await db.addNotification({
-                title: `PT Trainer Assigned: ${activeTarget.guest_name}`,
-                message: `${activeTarget.guest_name} was assigned to trainer ${trainerName}.`,
+                title: `Personal Training Allocated: ${activeTarget.guest_name}`,
+                message: `You have been allocated ${activeTarget.guest_name} for Personal Training (${activeTarget.total_sessions} sessions).`,
                 type: 'info',
                 outlet_id: currentOutlet?.id,
-                user_id: undefined
+                user_id: trainerId || undefined
             });
         } catch (err: any) {
             toast.error("Failed to update trainer");

@@ -109,7 +109,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const permission = await PushNotificationService.getPermission();
         if (permission === 'granted') {
             try {
-                await PushNotificationService.subscribeUser(effectiveUserId);
+                const isAdmin = checkIsAdmin(user, staffUser, isSuperAdmin);
+                const userType: 'admin' | 'staff' = isAdmin ? 'admin' : 'staff';
+                await PushNotificationService.subscribeUser(effectiveUserId, userType);
                 setIsPushEnabled(true);
             } catch (e) {
                 console.warn("Auto push registration failed:", e);
@@ -117,7 +119,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
     };
     autoRegisterPush();
-  }, [user]);
+  }, [user, isSuperAdmin]);
 
   const fetchNotifications = useCallback(async (isAutoRefresh = false) => {
     // Try to get user from AuthContext or staff session from localStorage
@@ -168,7 +170,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const granted = await PushNotificationService.requestPermission();
       if (granted) {
-        await PushNotificationService.subscribeUser(effectiveUserId);
+        const isAdmin = checkIsAdmin(user, staffUser, isSuperAdmin);
+        const userType: 'admin' | 'staff' = isAdmin ? 'admin' : 'staff';
+        await PushNotificationService.subscribeUser(effectiveUserId, userType);
         setIsPushEnabled(true);
         toast.success("Push notifications enabled!");
         return true;

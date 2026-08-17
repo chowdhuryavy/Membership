@@ -56,11 +56,19 @@ export class PushNotificationService {
     }
   }
 
-  static async subscribeUser(userId: string) {
+  static async subscribeUser(userId: string, userType?: 'admin' | 'staff') {
+    const isStaff = userType === 'staff' || (
+      !userType && 
+      !!localStorage.getItem('staff_session') && 
+      !localStorage.getItem('membership_session') && 
+      !sessionStorage.getItem('membership_session')
+    );
+    const resolvedType: 'admin' | 'staff' = isStaff ? 'staff' : 'admin';
+
     if (window.self !== window.top) {
         console.log('Iframe detected: Mocking push subscription');
-        const mockSub = { endpoint: 'mock-endpoint-' + userId, keys: { p256dh: 'mock', auth: 'mock' } } as any;
-        await this.syncSubscriptionWithBackend(userId, mockSub);
+        const mockSub = { endpoint: 'mock-endpoint-' + userId, keys: { p256dh: 'mock', auth: 'mock' }, app_user_type: resolvedType } as any;
+        await this.syncSubscriptionWithBackend(userId, mockSub, resolvedType);
         return mockSub;
     }
     
@@ -89,7 +97,7 @@ export class PushNotificationService {
       }
 
       console.log('Push subscription obtained:', subscription);
-      await this.syncSubscriptionWithBackend(userId, subscription);
+      await this.syncSubscriptionWithBackend(userId, subscription, resolvedType);
       return subscription;
     } catch (error) {
       console.error('Failed to subscribe user to push notifications:', error);
@@ -125,11 +133,14 @@ export class PushNotificationService {
     }
   }
 
-  private static async syncSubscriptionWithBackend(userId: string, subscription: PushSubscription) {
-    console.log('Syncing subscription with backend for user:', userId);
+  private static async syncSubscriptionWithBackend(userId: string, subscription: PushSubscription, userType: 'admin' | 'staff' = 'admin') {
+    console.log(`Syncing subscription with backend for user: ${userId} (${userType})`);
     try {
+      const subJson = typeof subscription.toJSON === 'function' ? subscription.toJSON() : subscription;
+      // Embed role inside subJson for fallback compatibility
+      const subWithRole = { ...subJson, app_user_type: userType };
       // @ts-ignore - adding this to db service next
-      await db.savePushSubscription(userId, subscription.toJSON());
+      await db.savePushSubscription(userId, subWithRole, userType);
     } catch (error) {
       console.error('Failed to sync subscription with backend:', error);
     }

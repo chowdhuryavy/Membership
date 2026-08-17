@@ -1,6 +1,6 @@
 {
   "name": "Staff Portal",
-  "short_name": "HCM",
+  "short_name": "HCM-Staff Portal",
   "description": "Health Club Staff Management System",
   "start_url": "/#/staff-login",
   "display": "standalone",

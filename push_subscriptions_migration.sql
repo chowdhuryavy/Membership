@@ -3,10 +3,14 @@ CREATE TABLE IF NOT EXISTS public.push_subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
     subscription JSONB NOT NULL,
+    user_type VARCHAR(50) DEFAULT 'admin',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(user_id)
 );
+
+-- Ensure user_type column exists if table was created previously
+ALTER TABLE public.push_subscriptions ADD COLUMN IF NOT EXISTS user_type VARCHAR(50) DEFAULT 'admin';
 
 -- Ensure user_id column doesn't have the reference if it already exists
 -- We do this by dropping and recreating or using an alter (if we knew the constraint name)
