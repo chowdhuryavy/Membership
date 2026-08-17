@@ -77,6 +77,8 @@ import UserActivityTracker from './components/UserActivityTracker';
 import TopLoader from './components/TopLoader';
 import SplashLoading from './components/SplashLoading';
 
+import { PerfectionLogo } from './lib/perfectionLogo';
+
 const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
     const { user } = useAuth();
     const { outlets, userAllowedOutlets, properties, currentOutlet, setCurrentOutlet } = useSettings();
@@ -147,8 +149,8 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
                             }}
                         />
                     ) : null}
-                    <div className={`logo-fallback w-full h-full bg-indigo-600 items-center justify-center rounded-lg ${!(currentOutlet?.logo_url || currentProp?.logo_url) ? 'flex' : 'hidden'}`}>
-                        <Building2 className="w-4 h-4 text-white" />
+                    <div className={`logo-fallback w-full h-full items-center justify-center rounded-lg ${!(currentOutlet?.logo_url || currentProp?.logo_url) ? 'flex' : 'hidden'}`}>
+                        <PerfectionLogo animate={false} />
                     </div>
                 </div>
                 <div className="flex flex-col items-start overflow-hidden pr-2 text-left">
@@ -486,8 +488,8 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
                                 }}
                              />
                         ) : null}
-                        <div className={`logo-fallback w-full h-full bg-indigo-600 rounded-2xl items-center justify-center text-white shadow-xl shadow-indigo-100 ${settings?.logo_url ? 'hidden' : 'flex'}`}>
-                            <Sparkles className="w-7 h-7 animate-[spin_10s_linear_infinite]" />
+                        <div className={`logo-fallback w-full h-full items-center justify-center shadow-xl shadow-indigo-100 ${settings?.logo_url ? 'hidden' : 'flex'}`}>
+                            <PerfectionLogo />
                         </div>
                     </div>
                     {!isCollapsed && (
@@ -608,8 +610,8 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
                                 }}
                              />
                          ) : null}
-                         <div className={`logo-fallback w-full h-full bg-indigo-600 rounded-lg items-center justify-center text-white ${settings?.logo_url ? 'hidden' : 'flex'}`}>
-                             <Sparkles className="w-5 h-5 animate-[spin_15s_linear_infinite]" />
+                         <div className={`logo-fallback w-full h-full items-center justify-center ${settings?.logo_url ? 'hidden' : 'flex'}`}>
+                             <PerfectionLogo />
                          </div>
                      </div>
                      <div className="flex flex-col text-left">
