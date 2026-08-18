@@ -1,5 +1,5 @@
 {
-  "name": "Health Club Management",
+  "name": "Health Club Managements",
   "description": "A high-performance membership management system with automated revenue recognition, freeze logic handling.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

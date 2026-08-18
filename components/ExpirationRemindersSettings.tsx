@@ -32,7 +32,10 @@ import {
   ShieldCheck,
   Check,
   Zap,
-  Info
+  Info,
+  History,
+  Search,
+  Filter
 } from 'lucide-react';
 
 interface ExpirationRemindersSettingsProps {
@@ -59,6 +62,12 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
   const [logs, setLogs] = useState<ExpirationReminderLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [activePropertyId, setActivePropertyId] = useState<string>('');
+  const [activeSubTab, setActiveSubTab] = useState<'matrix' | 'history'>('matrix');
+
+  // History Filter State
+  const [selectedHistoryOutletId, setSelectedHistoryOutletId] = useState<string>('all');
+  const [historySearchQuery, setHistorySearchQuery] = useState<string>('');
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<'all' | 'sent' | 'failed'>('all');
 
   // Outlet Config Modal state
   const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null);
@@ -90,6 +99,7 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
     failed: number;
     skipped: number;
     details: string[];
+    propertyName?: string;
   } | null>(null);
   const [showScanModal, setShowScanModal] = useState(false);
 
@@ -125,12 +135,50 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
     }
   }, [filteredProperties, activePropertyId]);
 
+  const activeProperty = useMemo(() => {
+    return properties.find(p => p.id === activePropertyId);
+  }, [properties, activePropertyId]);
+
   const activePropertyOutlets = useMemo(() => {
     if (!activePropertyId) return [];
     const propOutlets = outlets.filter(o => o.property_id === activePropertyId);
     if (isSuperAdmin) return propOutlets;
     return propOutlets.filter(o => user?.allowed_outlets?.includes(o.id));
   }, [outlets, activePropertyId, user, isSuperAdmin]);
+
+  // Scoped Logs for selected property
+  const propertyLogs = useMemo(() => {
+    if (!activePropertyId) return [];
+    const propOutletIds = outlets.filter(o => o.property_id === activePropertyId).map(o => o.id);
+    const propName = activeProperty?.name?.toLowerCase().trim() || '';
+
+    return logs.filter(log => {
+      const matchesOutletId = log.outlet_id && propOutletIds.includes(log.outlet_id);
+      const matchesPropName = log.property_name && propName && log.property_name.toLowerCase().trim() === propName;
+      return matchesOutletId || matchesPropName;
+    });
+  }, [logs, activePropertyId, outlets, activeProperty]);
+
+  // Further filtered logs based on outlet filter, status filter, and search
+  const displayedHistoryLogs = useMemo(() => {
+    return propertyLogs.filter(log => {
+      if (selectedHistoryOutletId !== 'all' && log.outlet_id !== selectedHistoryOutletId) {
+        return false;
+      }
+      if (historyStatusFilter !== 'all' && log.status !== historyStatusFilter) {
+        return false;
+      }
+      if (historySearchQuery.trim()) {
+        const q = historySearchQuery.toLowerCase().trim();
+        const matchName = log.member_name?.toLowerCase().includes(q);
+        const matchNum = log.member_number?.toLowerCase().includes(q);
+        const matchEmail = log.recipient_email?.toLowerCase().includes(q);
+        const matchOutlet = log.outlet_name?.toLowerCase().includes(q);
+        if (!matchName && !matchNum && !matchEmail && !matchOutlet) return false;
+      }
+      return true;
+    });
+  }, [propertyLogs, selectedHistoryOutletId, historyStatusFilter, historySearchQuery]);
 
   // Global Toggle
   const handleToggleGlobal = async () => {
@@ -303,15 +351,22 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
     }
   };
 
-  // Run Manual Expiration Scan
+  // Run Manual Expiration Scan - strictly scoped to active property
   const handleRunManualScan = async () => {
     setIsScanning(true);
     try {
-      const summary = await emailService.processAutomatedExpirationReminders({ isManualTrigger: true });
-      setScanSummary(summary);
+      const summary = await emailService.processAutomatedExpirationReminders({ 
+        isManualTrigger: true,
+        forcePropertyId: activePropertyId 
+      });
+      setScanSummary({
+        ...summary,
+        propertyName: activeProperty?.name || 'Selected Property'
+      });
       setShowScanModal(true);
       const updatedLogs = await db.getExpirationReminderLogs();
       setLogs(updatedLogs);
+      showStatus(`Scan complete for ${activeProperty?.name || 'property'}: ${summary.sent} reminders dispatched.`);
     } catch (e: any) {
       showStatus(`Scan encountered an error: ${e?.message || String(e)}`, 'error');
     } finally {
@@ -345,15 +400,32 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
           </div>
 
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto shrink-0">
+            {/* History Toggle Button */}
+            <Button
+              onClick={() => setActiveSubTab(activeSubTab === 'history' ? 'matrix' : 'history')}
+              className={`h-12 px-5 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 border ${
+                activeSubTab === 'history'
+                  ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-lg shadow-amber-400/20'
+                  : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+              }`}
+            >
+              <History className="w-4 h-4 text-amber-300" />
+              <span>Audit History</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-900/30 text-white">
+                {propertyLogs.length}
+              </span>
+            </Button>
+
             <Button
               onClick={() => handleOpenTestModal()}
-              className="h-12 px-6 rounded-2xl font-black text-xs uppercase tracking-wider bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm flex items-center gap-2"
+              className="h-12 px-5 rounded-2xl font-black text-xs uppercase tracking-wider bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm flex items-center gap-2"
             >
               <Send className="w-4 h-4 text-indigo-300" /> Test Dispatcher
             </Button>
             <Button
               onClick={handleRunManualScan}
               isLoading={isScanning}
+              title={`Run scan strictly for ${activeProperty?.name || 'selected property'}`}
               className="h-12 px-6 rounded-2xl font-black text-xs uppercase tracking-wider bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 flex items-center gap-2"
             >
               <Play className="w-4 h-4" /> Run Scan Now
@@ -380,10 +452,18 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
                 const propOutlets = outlets.filter(o => o.property_id === prop.id);
                 const enabledCount = propOutlets.filter(o => config.outlets?.[o.id]?.enabled ?? false).length;
                 const isActive = activePropertyId === prop.id;
+                const propLogCount = logs.filter(l => {
+                  const oIds = propOutlets.map(o => o.id);
+                  return (l.outlet_id && oIds.includes(l.outlet_id)) || (l.property_name && l.property_name.toLowerCase().trim() === prop.name.toLowerCase().trim());
+                }).length;
+
                 return (
                   <button
                     key={prop.id}
-                    onClick={() => setActivePropertyId(prop.id)}
+                    onClick={() => {
+                      setActivePropertyId(prop.id);
+                      setSelectedHistoryOutletId('all');
+                    }}
                     className={`px-6 py-3.5 rounded-t-2xl font-black text-[11px] uppercase tracking-wider transition-all flex items-center gap-2.5 whitespace-nowrap border-t border-x ${
                       isActive
                         ? 'bg-white text-indigo-600 border-slate-200 border-b-transparent shadow-sm'
@@ -395,247 +475,442 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${isActive ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
                       {enabledCount}/{propOutlets.length} Active
                     </span>
+                    {propLogCount > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-md text-[8px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                        {propLogCount} Sent
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
           )}
 
-          {/* OUTLET CONFIGURATION GRID */}
-          <div className="p-8 space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">
-                  Facility Automated Notification Matrix
-                </h3>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Only members registered under active outlets with valid email addresses will receive automated expiration notices.
-                </p>
-              </div>
+          {/* SUB-VIEW NAVIGATION (MATRIX vs HISTORY) */}
+          <div className="bg-slate-100/60 border-b border-slate-200 px-8 py-3 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2 bg-slate-200/80 p-1 rounded-2xl">
+              <button
+                onClick={() => setActiveSubTab('matrix')}
+                className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                  activeSubTab === 'matrix'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Store className="w-3.5 h-3.5" /> Facility Matrix & Config
+              </button>
+              <button
+                onClick={() => setActiveSubTab('history')}
+                className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                  activeSubTab === 'history'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <History className="w-3.5 h-3.5" /> Dispatch Audit History
+                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                  activeSubTab === 'history' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-300 text-slate-700'
+                }`}>
+                  {propertyLogs.length}
+                </span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                Active Property Scope:
+              </span>
+              <span className="px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-lg text-xs font-black">
+                {activeProperty?.name || 'Property'}
+              </span>
               <Button
                 variant="outline"
                 onClick={loadConfigAndLogs}
-                className="h-10 px-4 rounded-xl text-xs font-bold text-slate-600 border-slate-200 flex items-center gap-1.5"
+                className="h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider text-slate-600 border-slate-200 flex items-center gap-1.5 ml-2"
               >
-                <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                <RefreshCw className="w-3 h-3" /> Sync
               </Button>
             </div>
+          </div>
 
-            {activePropertyOutlets.length === 0 ? (
-              <div className="py-16 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                <Store className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">No Facilities Configured for this Property</p>
+          {/* TAB 1: FACILITY NOTIFICATION MATRIX */}
+          {activeSubTab === 'matrix' && (
+            <div className="p-8 space-y-6 animate-in fade-in-50 duration-300">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">
+                    Facility Automated Notification Matrix
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    Only members registered under active facilities with valid email addresses will receive automated expiration notices.
+                  </p>
+                </div>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {activePropertyOutlets.map(outlet => {
-                  const outletConfig = config.outlets?.[outlet.id];
-                  const isEnabled = outletConfig?.enabled ?? false;
-                  const days = outletConfig?.days_before || [30, 14, 7, 1];
-                  const prop = properties.find(p => p.id === outlet.property_id);
 
-                  return (
-                    <div
-                      key={outlet.id}
-                      className={`relative rounded-3xl border p-6 transition-all duration-300 flex flex-col justify-between ${
-                        isEnabled
-                          ? 'bg-white border-indigo-200 shadow-lg shadow-indigo-50/50 hover:border-indigo-300'
-                          : 'bg-slate-50/70 border-slate-200 opacity-80 hover:opacity-100'
-                      }`}
-                    >
-                      <div>
-                        {/* Top Strip */}
-                        <div className="flex items-start justify-between gap-3 mb-4">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
-                              isEnabled ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-slate-200 text-slate-400'
-                            }`}>
-                              <Store className="w-5 h-5" />
+              {activePropertyOutlets.length === 0 ? (
+                <div className="py-16 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                  <Store className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">No Facilities Configured for this Property</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {activePropertyOutlets.map(outlet => {
+                    const outletConfig = config.outlets?.[outlet.id];
+                    const isEnabled = outletConfig?.enabled ?? false;
+                    const days = outletConfig?.days_before || [30, 14, 7, 1];
+                    const prop = properties.find(p => p.id === outlet.property_id);
+                    const outletLogCount = propertyLogs.filter(l => l.outlet_id === outlet.id).length;
+
+                    return (
+                      <div
+                        key={outlet.id}
+                        className={`relative rounded-3xl border p-6 transition-all duration-300 flex flex-col justify-between ${
+                          isEnabled
+                            ? 'bg-white border-indigo-200 shadow-lg shadow-indigo-50/50 hover:border-indigo-300'
+                            : 'bg-slate-50/70 border-slate-200 opacity-80 hover:opacity-100'
+                        }`}
+                      >
+                        <div>
+                          {/* Top Strip */}
+                          <div className="flex items-start justify-between gap-3 mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                                isEnabled ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-slate-200 text-slate-400'
+                              }`}>
+                                <Store className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <h4 className="font-black text-sm text-slate-900 uppercase tracking-tight">
+                                  {outlet.name}
+                                </h4>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                    {prop?.name || 'Property'}
+                                  </span>
+                                  {outletLogCount > 0 && (
+                                    <button 
+                                      onClick={() => {
+                                        setSelectedHistoryOutletId(outlet.id);
+                                        setActiveSubTab('history');
+                                      }}
+                                      className="text-[9px] font-black text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                                      title="View dispatch history for this outlet"
+                                    >
+                                      {outletLogCount} logs
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
                             </div>
+
+                            <button
+                              onClick={(e) => handleToggleOutlet(outlet.id, e)}
+                              className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-colors flex items-center gap-1.5 ${
+                                isEnabled
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200'
+                                  : 'bg-slate-200 text-slate-600 border border-slate-300 hover:bg-slate-300'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${isEnabled ? 'bg-emerald-600' : 'bg-slate-400'}`} />
+                              {isEnabled ? 'ENABLED' : 'PAUSED'}
+                            </button>
+                          </div>
+
+                          {/* Milestones & Rules */}
+                          <div className="space-y-3 pt-3 border-t border-slate-100">
                             <div>
-                              <h4 className="font-black text-sm text-slate-900 uppercase tracking-tight">
-                                {outlet.name}
-                              </h4>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                {prop?.name || 'Property'}
-                              </p>
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
+                                Reminder Intervals (Days Prior):
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {days.map(d => (
+                                  <span
+                                    key={d}
+                                    className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-[10px] font-bold"
+                                  >
+                                    {d === 0 ? 'Expiry Day' : `${d}d prior`}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+
+                            {outletConfig?.custom_message && (
+                              <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-2.5 text-[10px] text-indigo-900 font-medium">
+                                <span className="font-bold text-indigo-700 block uppercase text-[8px] tracking-widest">Custom Note Included:</span>
+                                "{outletConfig.custom_message}"
+                              </div>
+                            )}
+
+                            <div className="text-[10px] text-slate-500 space-y-1">
+                              {(outletConfig?.renewal_contact_phone || outlet.phone) && (
+                                <div className="flex items-center gap-1.5">
+                                  <Phone className="w-3 h-3 text-slate-400" />
+                                  <span className="font-semibold text-slate-700">
+                                    {outletConfig?.renewal_contact_phone || outlet.phone}
+                                  </span>
+                                </div>
+                              )}
+                              {outletConfig?.renewal_contact_email && (
+                                <div className="flex items-center gap-1.5">
+                                  <Mail className="w-3 h-3 text-slate-400" />
+                                  <span className="font-semibold text-slate-700 truncate">
+                                    {outletConfig.renewal_contact_email}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
+                        </div>
 
-                          <button
-                            onClick={(e) => handleToggleOutlet(outlet.id, e)}
-                            className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-colors flex items-center gap-1.5 ${
-                              isEnabled
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200'
-                                : 'bg-slate-200 text-slate-600 border border-slate-300 hover:bg-slate-300'
-                            }`}
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 mt-6 pt-4 border-t border-slate-100">
+                          <Button
+                            variant="outline"
+                            onClick={() => handleOpenConfigureOutlet(outlet)}
+                            className="flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-wider border-slate-200 hover:bg-slate-100 text-slate-700"
                           >
-                            <span className={`w-1.5 h-1.5 rounded-full ${isEnabled ? 'bg-emerald-600' : 'bg-slate-400'}`} />
-                            {isEnabled ? 'ENABLED' : 'PAUSED'}
-                          </button>
-                        </div>
-
-                        {/* Milestones & Rules */}
-                        <div className="space-y-3 pt-3 border-t border-slate-100">
-                          <div>
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">
-                              Reminder Intervals (Days Prior):
-                            </span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {days.map(d => (
-                                <span
-                                  key={d}
-                                  className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-[10px] font-bold"
-                                >
-                                  {d === 0 ? 'Expiry Day' : `${d}d prior`}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-
-                          {outletConfig?.custom_message && (
-                            <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-2.5 text-[10px] text-indigo-900 font-medium">
-                              <span className="font-bold text-indigo-700 block uppercase text-[8px] tracking-widest">Custom Note Included:</span>
-                              "{outletConfig.custom_message}"
-                            </div>
-                          )}
-
-                          <div className="text-[10px] text-slate-500 space-y-1">
-                            {(outletConfig?.renewal_contact_phone || outlet.phone) && (
-                              <div className="flex items-center gap-1.5">
-                                <Phone className="w-3 h-3 text-slate-400" />
-                                <span className="font-semibold text-slate-700">
-                                  {outletConfig?.renewal_contact_phone || outlet.phone}
-                                </span>
-                              </div>
-                            )}
-                            {outletConfig?.renewal_contact_email && (
-                              <div className="flex items-center gap-1.5">
-                                <Mail className="w-3 h-3 text-slate-400" />
-                                <span className="font-semibold text-slate-700 truncate">
-                                  {outletConfig.renewal_contact_email}
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                            <Settings2 className="w-3.5 h-3.5 mr-1 text-slate-500" /> Configure
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => handleOpenTestModal(outlet)}
+                            title={`Send test reminder using ${outlet.name} template`}
+                            className="h-9 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 text-indigo-700"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                          </Button>
                         </div>
                       </div>
-
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-2 mt-6 pt-4 border-t border-slate-100">
-                        <Button
-                          variant="outline"
-                          onClick={() => handleOpenConfigureOutlet(outlet)}
-                          className="flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-wider border-slate-200 hover:bg-slate-100 text-slate-700"
-                        >
-                          <Settings2 className="w-3.5 h-3.5 mr-1 text-slate-500" /> Configure
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => handleOpenTestModal(outlet)}
-                          className="h-9 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 text-indigo-700"
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 2. RECENT DISPATCH AUDIT LOGS */}
-      <Card className="rounded-[3rem] border-slate-200/70 shadow-xl overflow-hidden bg-white">
-        <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100">
-              <Clock className="w-6 h-6" />
+                    );
+                  })}
+                </div>
+              )}
             </div>
-            <div>
-              <CardTitle className="text-xl font-black text-slate-900 uppercase tracking-tight">
-                Guest Reminder Dispatch Audit History
-              </CardTitle>
-              <p className="text-xs font-semibold text-slate-400 mt-0.5">
-                Real-time log of automated expiration notices dispatched to members
-              </p>
-            </div>
-          </div>
-          <span className="text-xs font-bold text-slate-500 bg-white px-4 py-2 rounded-xl border border-slate-200 self-start md:self-auto">
-            Total Records: <strong className="text-slate-900 font-black">{logs.length}</strong>
-          </span>
-        </CardHeader>
-
-        <CardContent className="p-0 overflow-x-auto">
-          {logs.length === 0 ? (
-            <div className="py-16 text-center text-slate-400">
-              <Mail className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-bold uppercase tracking-wider">No expiration reminders dispatched yet</p>
-              <p className="text-xs text-slate-400 mt-1">
-                Click "Test Dispatcher" or "Run Scan Now" to dispatch your first automated notice.
-              </p>
-            </div>
-          ) : (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-100/70 border-b border-slate-200 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                  <th className="py-4 px-6">Timestamp</th>
-                  <th className="py-4 px-6">Member Details</th>
-                  <th className="py-4 px-6">Outlet & Property</th>
-                  <th className="py-4 px-6">Notice Stage</th>
-                  <th className="py-4 px-6">Recipient Email</th>
-                  <th className="py-4 px-6 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
-                {logs.slice(0, 50).map(log => (
-                  <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-4 px-6 text-slate-500 font-medium whitespace-nowrap">
-                      {format(new Date(log.sent_at), 'dd MMM yyyy, HH:mm')}
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="font-black text-slate-900">{log.member_name}</div>
-                      <div className="text-[10px] font-bold text-indigo-600 uppercase font-mono">{log.member_number}</div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="font-bold text-slate-800">{log.outlet_name}</div>
-                      <div className="text-[10px] text-slate-400">{log.property_name}</div>
-                    </td>
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                        log.days_remaining <= 0
-                          ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                          : log.days_remaining <= 7
-                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                          : 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                      }`}>
-                        {log.days_remaining <= 0 ? 'Expired Today' : `${log.days_remaining} Days Remaining`}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 font-mono text-slate-600 text-xs truncate max-w-[220px]">
-                      {log.recipient_email}
-                    </td>
-                    <td className="py-4 px-6 text-right whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                        log.status === 'sent'
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                          : 'bg-rose-100 text-rose-800 border border-rose-200'
-                      }`}>
-                        {log.status === 'sent' ? (
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        ) : (
-                          <XCircle className="w-3 h-3 text-rose-600" />
-                        )}
-                        {log.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           )}
+
+          {/* TAB 2: DISPATCH AUDIT HISTORY (FILTERED BY PROPERTY & OUTLET) */}
+          {activeSubTab === 'history' && (
+            <div className="p-8 space-y-6 animate-in fade-in-50 duration-300">
+              
+              {/* Toolbar & Filter Bar */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50 p-6 rounded-3xl border border-slate-200">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 border border-indigo-100 shrink-0">
+                      <Clock className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                        {activeProperty?.name || 'Property'} Dispatch Audit Log
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Historical record of all expiration notices sent to members of this property
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter Controls */}
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Outlet Filter Dropdown */}
+                  <div className="relative min-w-[200px]">
+                    <select
+                      value={selectedHistoryOutletId}
+                      onChange={e => setSelectedHistoryOutletId(e.target.value)}
+                      className="w-full h-11 px-4 text-xs font-bold text-slate-800 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 appearance-none pr-8 cursor-pointer"
+                    >
+                      <option value="all">All Outlets in {activeProperty?.name || 'Property'}</option>
+                      {activePropertyOutlets.map(o => (
+                        <option key={o.id} value={o.id}>
+                          {o.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Filter className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+
+                  {/* Status Filter */}
+                  <select
+                    value={historyStatusFilter}
+                    onChange={e => setHistoryStatusFilter(e.target.value as any)}
+                    className="h-11 px-4 text-xs font-bold text-slate-800 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="sent">Sent Only</option>
+                    <option value="failed">Failed Only</option>
+                  </select>
+
+                  {/* Search Input */}
+                  <div className="relative min-w-[220px]">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search member, email, #..."
+                      value={historySearchQuery}
+                      onChange={e => setHistorySearchQuery(e.target.value)}
+                      className="w-full h-11 pl-9 pr-4 text-xs font-medium text-slate-800 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  {/* Clear / Reset Filters */}
+                  {(selectedHistoryOutletId !== 'all' || historyStatusFilter !== 'all' || historySearchQuery) && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedHistoryOutletId('all');
+                        setHistoryStatusFilter('all');
+                        setHistorySearchQuery('');
+                      }}
+                      className="h-11 px-3 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800"
+                    >
+                      Reset
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Outlet Quick Pills */}
+              {activePropertyOutlets.length > 1 && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  <button
+                    onClick={() => setSelectedHistoryOutletId('all')}
+                    className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all border ${
+                      selectedHistoryOutletId === 'all'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    All Facilities ({propertyLogs.length})
+                  </button>
+                  {activePropertyOutlets.map(outlet => {
+                    const count = propertyLogs.filter(l => l.outlet_id === outlet.id).length;
+                    const isSelected = selectedHistoryOutletId === outlet.id;
+                    return (
+                      <button
+                        key={outlet.id}
+                        onClick={() => setSelectedHistoryOutletId(outlet.id)}
+                        className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all border flex items-center gap-2 ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span>{outlet.name}</span>
+                        <span className={`px-1.5 py-0.2 rounded-md text-[9px] font-black ${
+                          isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* History Table */}
+              <div className="rounded-3xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+                {displayedHistoryLogs.length === 0 ? (
+                  <div className="py-20 text-center text-slate-400">
+                    <Mail className="w-12 h-12 mx-auto mb-3 opacity-30 text-indigo-400" />
+                    <p className="text-sm font-bold uppercase tracking-wider text-slate-700">
+                      No matching expiration reminder records found
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                      {propertyLogs.length === 0 
+                        ? `No reminder notices have been sent for ${activeProperty?.name || 'this property'} yet. Run an automated scan or trigger a test email.`
+                        : 'Try adjusting your outlet, status, or search filters above to find records.'}
+                    </p>
+                    <div className="mt-5 flex items-center justify-center gap-3">
+                      <Button
+                        onClick={() => handleOpenTestModal()}
+                        className="h-10 px-5 rounded-xl text-xs font-black uppercase bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
+                      >
+                        <Send className="w-3.5 h-3.5 mr-1.5" /> Send Test Email
+                      </Button>
+                      <Button
+                        onClick={handleRunManualScan}
+                        className="h-10 px-5 rounded-xl text-xs font-black uppercase bg-indigo-600 text-white hover:bg-indigo-500 shadow-sm"
+                      >
+                        <Play className="w-3.5 h-3.5 mr-1.5" /> Scan {activeProperty?.name || 'Property'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                          <th className="py-4 px-6">Timestamp</th>
+                          <th className="py-4 px-6">Member Details</th>
+                          <th className="py-4 px-6">Outlet & Facility</th>
+                          <th className="py-4 px-6">Notice Stage</th>
+                          <th className="py-4 px-6">Recipient Email</th>
+                          <th className="py-4 px-6 text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-xs">
+                        {displayedHistoryLogs.map(log => (
+                          <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-4 px-6 text-slate-500 font-medium whitespace-nowrap">
+                              {format(new Date(log.sent_at), 'dd MMM yyyy, HH:mm')}
+                            </td>
+                            <td className="py-4 px-6">
+                              <div className="font-black text-slate-900">{log.member_name}</div>
+                              <div className="text-[10px] font-bold text-indigo-600 uppercase font-mono">{log.member_number}</div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <div className="font-bold text-slate-800">{log.outlet_name}</div>
+                              <div className="text-[10px] text-slate-400">{log.property_name || activeProperty?.name}</div>
+                            </td>
+                            <td className="py-4 px-6 whitespace-nowrap">
+                              <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                                log.days_remaining <= 0
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                  : log.days_remaining <= 7
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  : 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                              }`}>
+                                {log.days_remaining <= 0 ? 'Expired Today' : `${log.days_remaining} Days Remaining`}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 font-mono text-slate-600 text-xs truncate max-w-[220px]">
+                              {log.recipient_email}
+                            </td>
+                            <td className="py-4 px-6 text-right whitespace-nowrap">
+                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                log.status === 'sent'
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  : 'bg-rose-100 text-rose-800 border border-rose-200'
+                              }`}>
+                                {log.status === 'sent' ? (
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                ) : (
+                                  <XCircle className="w-3 h-3 text-rose-600" />
+                                )}
+                                {log.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                
+                {/* Table Footer Summary */}
+                <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                  <span>
+                    Showing <strong className="text-slate-800 font-bold">{displayedHistoryLogs.length}</strong> of <strong className="text-slate-800 font-bold">{propertyLogs.length}</strong> records for {activeProperty?.name}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                    Synced with database
+                  </span>
+                </div>
+              </div>
+
+            </div>
+          )}
+
         </CardContent>
       </Card>
 
@@ -921,7 +1196,7 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
                   Expiration Scan Summary
                 </h3>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Automated membership sweep results
+                  Automated membership sweep for: <strong className="text-indigo-600">{scanSummary.propertyName}</strong>
                 </p>
               </div>
             </div>
@@ -975,3 +1250,4 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
     </div>
   );
 };
+

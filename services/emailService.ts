@@ -813,6 +813,7 @@ export const emailService = {
 
   async processAutomatedExpirationReminders(options?: {
     forceOutletId?: string;
+    forcePropertyId?: string;
     isManualTrigger?: boolean;
   }): Promise<{
     scanned: number;
@@ -840,6 +841,7 @@ export const emailService = {
 
       const members = await db.getMembers();
       const outlets = await db.getOutlets();
+      const properties = await db.getProperties();
       const existingLogs = await db.getExpirationReminderLogs();
       const today = startOfDay(new Date());
       const dateStr = format(today, 'yyyy-MM-dd');
@@ -869,6 +871,17 @@ export const emailService = {
         if (!outletId) {
           results.skipped++;
           continue;
+        }
+
+        const memberOutlet = outlets.find(o => o.id === outletId);
+
+        // Filter by property if specified
+        if (options?.forcePropertyId && options.forcePropertyId !== 'all') {
+          const memberPropertyId = member.property_id || memberOutlet?.property_id;
+          if (memberPropertyId !== options.forcePropertyId) {
+            results.skipped++;
+            continue;
+          }
         }
 
         if (options?.forceOutletId && options.forceOutletId !== 'all' && outletId !== options.forceOutletId) {
