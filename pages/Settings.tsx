@@ -10,6 +10,7 @@ import { Role, Permission, Currency, CompanySettings, Outlet, Property, Incentiv
 import { BookingSettings } from '../components/BookingSettings';
 import { CustomReportBuilder } from '../components/CustomReportBuilder';
 import { CustomReportViewer } from '../components/CustomReportViewer';
+import { ExpirationRemindersSettings } from '../components/ExpirationRemindersSettings';
 import { purgeAllDeviceCaches } from '../src/shared/cacheManager';
 import { 
   Trash2, 
@@ -52,7 +53,8 @@ import {
   Key,
   Filter,
   Mail,
-  Ticket
+  Ticket,
+  BellRing
 } from 'lucide-react';
 
 const PermissionMatrix = ({ 
@@ -163,7 +165,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports' | 'staff_portal';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports' | 'expiration_reminders' | 'staff_portal';
 
 const SignatoryConfig = ({
   config = {},
@@ -300,6 +302,7 @@ const SettingsPage = () => {
       { id: 'membership_types', label: 'Membership Types', visible: hasPermission(user?.role_id || '', 'settings:view_membership_types') && !!currentOutlet, icon: Target },
       { id: 'massage_rooms', label: 'Massage Rooms', visible: hasPermission(user?.role_id || '', 'settings:view_massage_rooms') && !!currentProperty, icon: Store },
       { id: 'reports_config', label: 'Report Distribution', visible: hasPermission(user?.role_id || '', 'settings:view_reports_config'), icon: Mail },
+      { id: 'expiration_reminders', label: 'Expiration Reminders', visible: hasPermission(user?.role_id || '', 'settings:view_expiration_reminders') || hasPermission(user?.role_id || '', 'settings:view_reports_config') || isSuper, icon: BellRing },
       { id: 'custom_reports', label: 'Custom Intelligence', visible: hasPermission(user?.role_id || '', 'settings:view_custom_reports'), icon: FileText },
     ].filter(t => t.visible);
   }, [user, roles, hasPermission, currentProperty, currentOutlet]);
@@ -1954,6 +1957,16 @@ const SettingsPage = () => {
                   )}
                 </div>
               )}
+              {activeTab === 'expiration_reminders' && (
+                <ExpirationRemindersSettings
+                  outlets={outlets}
+                  properties={properties}
+                  settings={settings}
+                  user={user}
+                  isSuperAdmin={isSuperAdmin}
+                  showStatus={showStatus}
+                />
+              )}
           </div>
 
           <div className={`${showForm ? 'lg:col-span-6' : 'hidden'} animate-in slide-in-from-right-10 duration-500`}>
@@ -2219,7 +2232,6 @@ const SettingsPage = () => {
                                         {value:'daily_revenue', label:'Daily Revenue Summary (Daily)'},
                                         {value:'monthly_summary', label:'Monthly Performance Summary (Monthly)'},
                                         {value:'monthly_revenue', label:'Monthly Revenue Report (Monthly)'},
-                                        {value:'members_joined', label:'Members Joined / Acquisition Log (Monthly)'},
                                         {value:'expiring_memberships', label:'Expiring Memberships Audit (Monthly)'},
                                         {value:'active_members', label:'Active Members Audit (Monthly)'},
                                         {value:'massage_room_revenue', label:'Massage Room Revenue (Monthly)'},

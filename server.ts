@@ -503,10 +503,14 @@ async function startServer() {
             },
             body: JSON.stringify({
               from: `${appName} <${fromEmail}>`,
+              reply_to: fromEmail,
               to: [recipientEmail],
               subject,
               html,
               text,
+              headers: {
+                'X-Entity-Ref-ID': Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9),
+              },
               attachments: attachments || []
             })
           });
@@ -524,10 +528,14 @@ async function startServer() {
               },
               body: JSON.stringify({
                 from: `${appName} <onboarding@resend.dev>`,
+                reply_to: 'onboarding@resend.dev',
                 to: [recipientEmail],
                 subject,
                 html,
                 text,
+                headers: {
+                  'X-Entity-Ref-ID': Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9),
+                },
                 attachments: attachments || []
               })
             });

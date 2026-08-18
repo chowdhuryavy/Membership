@@ -86,10 +86,30 @@ serve(async (req) => {
     const appName = settings?.name || settings?.report_title || 'Health Club Management'
     const fromEmail = Deno.env.get('EMAIL_FROM') || 'noreply@perfection.my'
 
+    // Helper to strip HTML into clean plain text for multipart emails
+    const htmlToPlainText = (rawHtml: string) => {
+      return (rawHtml || '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<tr[^>]*>/gi, '\n')
+        .replace(/<td[^>]*>/gi, '  ')
+        .replace(/<p[^>]*>/gi, '\n\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&bull;/g, '•')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/\n\s*\n\s*\n/g, '\n\n')
+        .trim();
+    };
+
     // Handle direct email dispatches (e.g., member purchase notifications, direct reports)
     if (body.directEmail) {
       console.log(`DEBUG: Processing directEmail request`);
-      const { to, subject, html, attachments } = body.directEmail;
+      const { to, subject, html, text: customText, attachments } = body.directEmail;
+      const plainText = customText || htmlToPlainText(html);
       const rawToList = Array.isArray(to) ? to : [to];
       const emails = rawToList
         .flatMap((e: string) => (typeof e === 'string' ? e.split(',') : [e]))
@@ -109,9 +129,14 @@ serve(async (req) => {
 
       const resendResult = await resend.emails.send({
         from: `${appName} <${fromEmail}>`,
+        reply_to: fromEmail,
         to: emails,
         subject,
         html,
+        text: plainText,
+        headers: {
+          'X-Entity-Ref-ID': crypto.randomUUID(),
+        },
         attachments: attachments || []
       });
 
@@ -122,9 +147,14 @@ serve(async (req) => {
         console.warn('DEBUG: Direct email error from Resend with primary fromEmail:', emailError, 'Retrying with onboarding@resend.dev...');
         const retryResult = await resend.emails.send({
           from: `${appName} <onboarding@resend.dev>`,
+          reply_to: 'onboarding@resend.dev',
           to: emails,
           subject,
           html,
+          text: plainText,
+          headers: {
+            'X-Entity-Ref-ID': crypto.randomUUID(),
+          },
           attachments: attachments || []
         });
         emailRes = retryResult.data;
@@ -689,9 +719,14 @@ serve(async (req) => {
             
             const { data: emailRes, error: emailError } = await resend.emails.send({
               from: `${appName} <${fromEmail}>`,
+              reply_to: fromEmail,
               to: emails,
               subject: `${reportTitle} - ${appName} - ${params.date.toLocaleDateString()}`,
               html: emailHtml,
+              text: htmlToPlainText(emailHtml),
+              headers: {
+                'X-Entity-Ref-ID': crypto.randomUUID(),
+              },
               attachments: [
                 {
                   filename: `${recipient.report_type}_report_${params.date.toISOString().split('T')[0]}.pdf`,

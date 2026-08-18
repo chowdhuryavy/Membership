@@ -35,8 +35,8 @@ export type Permission =
   
   // System Configuration & Settings
   | 'settings:view' | 'settings:edit' 
-  | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives' | 'settings:manage_visibility' | 'settings:view_staff_portal' | 'settings:view_booking_engine' | 'settings:view_membership_types' | 'settings:view_massage_rooms' | 'settings:view_reports_config' | 'settings:view_custom_reports' | 'settings:view_entrance_fee'
-  | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives' | 'settings:manage_staff_portal' | 'settings:manage_booking_engine' | 'settings:manage_membership_types' | 'settings:manage_massage_rooms' | 'settings:manage_reports_config' | 'settings:manage_custom_reports' | 'settings:manage_entrance_fee'; 
+  | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives' | 'settings:manage_visibility' | 'settings:view_staff_portal' | 'settings:view_booking_engine' | 'settings:view_membership_types' | 'settings:view_massage_rooms' | 'settings:view_reports_config' | 'settings:view_custom_reports' | 'settings:view_entrance_fee' | 'settings:view_expiration_reminders'
+  | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives' | 'settings:manage_staff_portal' | 'settings:manage_booking_engine' | 'settings:manage_membership_types' | 'settings:manage_massage_rooms' | 'settings:manage_reports_config' | 'settings:manage_custom_reports' | 'settings:manage_entrance_fee' | 'settings:manage_expiration_reminders'; 
 
 export interface PermissionGroup {
   id: string;
@@ -103,6 +103,37 @@ export interface Property {
   signatory_config?: Record<string, { prepared?: string, reviewed?: string, approved?: string }>;
 }
 
+export interface ExpirationReminderOutletConfig {
+  enabled: boolean;
+  days_before: number[]; // e.g. [30, 14, 7, 1, 0]
+  send_time?: string; // e.g. "09:00"
+  custom_message?: string;
+  renewal_contact_phone?: string;
+  renewal_contact_email?: string;
+}
+
+export interface ExpirationReminderConfig {
+  global_enabled: boolean;
+  outlets: Record<string, ExpirationReminderOutletConfig>;
+  test_recipient_email?: string;
+}
+
+export interface ExpirationReminderLog {
+  id: string;
+  member_id: string;
+  member_name: string;
+  member_number: string;
+  recipient_email: string;
+  outlet_id: string;
+  outlet_name: string;
+  property_name: string;
+  expiry_date: string;
+  days_remaining: number;
+  sent_at: string;
+  status: 'sent' | 'failed';
+  error_message?: string;
+}
+
 export interface Outlet {
   id: string;
   name: string;
@@ -116,6 +147,8 @@ export interface Outlet {
   booking_enabled?: boolean;
   booking_start_time?: string;
   booking_end_time?: string;
+  expiration_reminders_enabled?: boolean;
+  expiration_reminder_days?: number[];
 }
 
 export interface StaffLeave {
@@ -278,6 +311,7 @@ export interface CompanySettings {
   restricted_permissions?: string[];
   conditions?: string;
   staff_portal_settings?: Record<string, any>;
+  expiration_reminder_config?: ExpirationReminderConfig;
 }
 
 export enum MemberStatus {

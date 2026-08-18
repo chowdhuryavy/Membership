@@ -1,4 +1,4 @@
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, LogModule, LogSeverity, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, CustomReportConfig, PTMember, PTSession, EntranceFeeConsent } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, LogModule, LogSeverity, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, CustomReportConfig, PTMember, PTSession, EntranceFeeConsent, ExpirationReminderConfig, ExpirationReminderOutletConfig, ExpirationReminderLog } from '../types';
 import type { Notification } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 export { supabase, supabaseUrl, supabaseAnonKey };
@@ -311,6 +311,7 @@ class DatabaseService {
           { key: 'settings:view_reports_config', label: 'Report Distribution', description: 'Access report distribution settings.' },
           { key: 'settings:view_custom_reports', label: 'Custom Intelligence', description: 'Access custom report builder.' },
           { key: 'settings:view_entrance_fee', label: 'Entrance Fee Settings', description: 'Access entrance fee consent configuration.' },
+          { key: 'settings:view_expiration_reminders', label: 'Expiration Reminders', description: 'Access automated membership expiration reminder settings.' },
           { key: 'settings:manage_visibility', label: 'Feature Visibility', description: 'Control which settings tabs are visible to other admins.' },
           { key: 'settings:manage_global', label: 'Manage Enterprise', description: 'Edit brand and address configuration.' },
           { key: 'settings:manage_properties', label: 'Manage Properties', description: 'Add/Edit/Delete luxury collection properties.' },
@@ -329,6 +330,7 @@ class DatabaseService {
           { key: 'settings:manage_reports_config', label: 'Manage Report Distribution', description: 'Edit report distribution settings.' },
           { key: 'settings:manage_custom_reports', label: 'Manage Custom Intelligence', description: 'Edit custom report builder.' },
           { key: 'settings:manage_entrance_fee', label: 'Manage Entrance Fee', description: 'Edit entrance fee consent settings.' },
+          { key: 'settings:manage_expiration_reminders', label: 'Manage Expiration Reminders', description: 'Configure automated membership expiration reminder rules and schedules.' },
         ]
       }
     ];
@@ -1980,18 +1982,51 @@ class DatabaseService {
   }
 
   async updateSettings(settings: CompanySettings) {
+    try {
+      const local = localStorage.getItem('company_settings_cache');
+      const existing = local ? JSON.parse(local) : {};
+      localStorage.setItem('company_settings_cache', JSON.stringify({ ...existing, ...settings }));
+    } catch (e) {
+      localStorage.setItem('company_settings_cache', JSON.stringify(settings));
+    }
+
     if (this.isSupabase()) {
       let payload: any = { ...settings, id: 'global' };
-      let { error } = await supabase.from('company_settings').upsert(payload);
-      if (error && (error.message?.includes('phone') || error.code === 'PGRST204')) {
-        delete payload.phone;
-        const retry = await supabase.from('company_settings').upsert(payload);
-        error = retry.error;
+      // Strip client-only or dynamic metadata fields not present in Supabase table
+      delete payload.expiration_reminder_config;
+
+      let attempts = 0;
+      let lastError: any = null;
+      while (attempts < 6) {
+        attempts++;
+        const { error } = await supabase.from('company_settings').upsert(payload);
+        if (!error) {
+          lastError = null;
+          break;
+        }
+        lastError = error;
+
+        // If PostgREST returns missing column in schema cache (PGRST204)
+        if (error.code === 'PGRST204' || error.message?.includes('Could not find the') || error.message?.includes('schema cache')) {
+          const match = error.message?.match(/Could not find the '([^']+)' column/i);
+          if (match && match[1] && payload[match[1]] !== undefined) {
+            delete payload[match[1]];
+            continue;
+          }
+        }
+
+        if (error.message?.includes('phone') && payload.phone !== undefined) {
+          delete payload.phone;
+          continue;
+        }
+
+        break;
       }
-      if (error) console.error('Error updating settings in Supabase:', error);
+
+      if (lastError) {
+        console.warn('Notice updating company_settings in Supabase (falling back to local cache):', lastError);
+      }
       await this.logAction('UPDATE_SETTINGS', 'Global system configuration mutated.');
-    } else {
-      localStorage.setItem('company_settings_cache', JSON.stringify(settings));
     }
   }
 
@@ -5054,6 +5089,122 @@ class DatabaseService {
     const subs = JSON.parse(localStorage.getItem('membership_push_subscriptions') || '{}');
     delete subs[userId];
     localStorage.setItem('membership_push_subscriptions', JSON.stringify(subs));
+  }
+
+  // --- AUTOMATED EXPIRATION REMINDER CONFIG & LOGS ---
+  async getExpirationReminderConfig(): Promise<ExpirationReminderConfig> {
+    const defaultConfig: ExpirationReminderConfig = {
+      global_enabled: true,
+      outlets: {},
+      test_recipient_email: ''
+    };
+
+    if (this.isSupabase()) {
+      try {
+        const { data, error } = await supabase
+          .from('company_settings')
+          .select('expiration_reminder_config')
+          .eq('id', 'global')
+          .maybeSingle();
+        if (!error && data && (data as any).expiration_reminder_config) {
+          const remoteConfig = (data as any).expiration_reminder_config;
+          return {
+            ...defaultConfig,
+            ...(typeof remoteConfig === 'string' ? JSON.parse(remoteConfig) : remoteConfig)
+          };
+        }
+      } catch (e) {
+        console.warn('Error fetching expiration_reminder_config from Supabase:', e);
+      }
+    }
+
+    const local = localStorage.getItem('membership_expiration_reminder_config');
+    if (local) {
+      try {
+        return {
+          ...defaultConfig,
+          ...JSON.parse(local)
+        };
+      } catch (e) {
+        console.warn('Failed parsing local expiration reminder config', e);
+      }
+    }
+
+    return defaultConfig;
+  }
+
+  async updateExpirationReminderConfig(config: ExpirationReminderConfig): Promise<void> {
+    localStorage.setItem('membership_expiration_reminder_config', JSON.stringify(config));
+
+    if (this.isSupabase()) {
+      try {
+        const { error } = await supabase
+          .from('company_settings')
+          .update({ expiration_reminder_config: config })
+          .eq('id', 'global');
+        if (error) {
+          console.warn('Notice: company_settings.expiration_reminder_config column update in Supabase:', error.message);
+        }
+      } catch (e) {
+        console.warn('Error updating expiration_reminder_config in Supabase:', e);
+      }
+    }
+
+    await this.logAction('UPDATE_SETTINGS', 'Automated expiration reminder configuration updated.');
+  }
+
+  async getExpirationReminderLogs(): Promise<ExpirationReminderLog[]> {
+    if (this.isSupabase()) {
+      try {
+        const { data, error } = await supabase
+          .from('expiration_reminder_logs')
+          .select('*')
+          .order('sent_at', { ascending: false })
+          .limit(300);
+        if (!error && data && data.length > 0) {
+          return data as ExpirationReminderLog[];
+        }
+      } catch (e) {
+        console.warn('Error fetching expiration_reminder_logs from Supabase:', e);
+      }
+    }
+
+    try {
+      const raw = localStorage.getItem('membership_expiration_reminder_logs');
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async logExpirationReminder(logEntry: Omit<ExpirationReminderLog, 'id'>): Promise<ExpirationReminderLog> {
+    const newLog: ExpirationReminderLog = {
+      ...logEntry,
+      id: this.generateUUID()
+    };
+
+    if (this.isSupabase()) {
+      try {
+        const { error } = await supabase
+          .from('expiration_reminder_logs')
+          .insert([newLog]);
+        if (error) {
+          console.warn('Notice writing to expiration_reminder_logs in Supabase:', error.message);
+        }
+      } catch (e) {
+        console.warn('Error writing to expiration_reminder_logs in Supabase:', e);
+      }
+    }
+
+    try {
+      const logs = await this.getExpirationReminderLogs();
+      const updated = [newLog, ...logs.filter(l => l.id !== newLog.id)].slice(0, 300);
+      localStorage.setItem('membership_expiration_reminder_logs', JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to cache expiration reminder log', e);
+    }
+
+    return newLog;
   }
 }
 
