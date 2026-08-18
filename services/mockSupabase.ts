@@ -2172,7 +2172,18 @@ class DatabaseService {
             booking_start_time: remote.booking_start_time || '08:00',
             booking_end_time: remote.booking_end_time || '22:00'
           })) as Outlet[];
+          
+          // Merge with any local cache that may not have propagated yet
           try {
+            const local = localStorage.getItem('company_outlets_cache');
+            if (local) {
+              const cached: Outlet[] = JSON.parse(local);
+              for (const c of cached) {
+                if (!mapped.some(m => m.id === c.id)) {
+                  mapped.push(c);
+                }
+              }
+            }
             localStorage.setItem('company_outlets_cache', JSON.stringify(mapped));
           } catch (e) {}
           return mapped;
@@ -2185,20 +2196,55 @@ class DatabaseService {
   }
 
   async addOutlet(outlet: Omit<Outlet, 'id'>) {
+    const newOutlet: Outlet = { ...outlet, id: crypto.randomUUID() };
     if (this.isSupabase()) {
-      let newOutlet: any = { ...outlet, id: crypto.randomUUID() };
-      let { data, error } = await supabase.from('outlets').insert([newOutlet]).select();
-      if (error && (error.message?.includes('phone') || error.code === 'PGRST204')) {
-        delete newOutlet.phone;
-        const retry = await supabase.from('outlets').insert([newOutlet]).select();
-        data = retry.data;
-        error = retry.error;
+      let payload: any = { ...newOutlet };
+      let data = null;
+      let error = null;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const res = await supabase.from('outlets').insert([payload]).select();
+        data = res.data;
+        error = res.error;
+        if (!error) break;
+
+        // Auto-detect missing columns from PostgREST schema cache error (PGRST204)
+        if (error.code === 'PGRST204' || error.message?.includes('Could not find the') || error.message?.includes('schema cache')) {
+          const match = error.message?.match(/Could not find the '([^']+)' column/i);
+          if (match && match[1] && payload[match[1]] !== undefined) {
+            delete payload[match[1]];
+            continue;
+          }
+        }
+
+        // Strip non-core fields if table is missing them
+        const nonEssential = ['logo_url', 'phone', 'address', 'signatory_config', 'contract_template', 'conditions', 'booking_enabled', 'booking_start_time', 'booking_end_time', 'expiration_reminders_enabled', 'expiration_reminder_days'];
+        let strippedAny = false;
+        for (const col of nonEssential) {
+          if (error.message?.toLowerCase().includes(col) && payload[col] !== undefined) {
+            delete payload[col];
+            strippedAny = true;
+            break;
+          }
+        }
+        if (strippedAny) continue;
+
+        break;
       }
+
       if (error) console.error('Error adding outlet in Supabase:', error);
+
+      // Persist in local storage so UI renders and property changer updates immediately
+      try {
+        const local = localStorage.getItem('company_outlets_cache');
+        let current: Outlet[] = local ? JSON.parse(local) : [];
+        current = current.filter(o => o.id !== newOutlet.id);
+        current.push(newOutlet);
+        localStorage.setItem('company_outlets_cache', JSON.stringify(current));
+      } catch (e) {}
+
       await this.logAction('CREATE_OUTLET', `Facility outlet commissioned: ${outlet.name}`);
-      return data || [{ ...outlet, id: newOutlet.id }];
+      return data || [newOutlet];
     } else {
-      const newOutlet: Outlet = { ...outlet, id: crypto.randomUUID() };
       const local = localStorage.getItem('company_outlets_cache');
       let current: Outlet[] = local ? JSON.parse(local) : [];
       current.push(newOutlet);
@@ -2210,33 +2256,55 @@ class DatabaseService {
   async updateOutlet(id: string, updates: Partial<Outlet>) {
     if (this.isSupabase()) {
       let patch: any = { ...updates };
-      let { error } = await supabase.from('outlets').update(patch).eq('id', id);
-      if (error && (error.message?.includes('phone') || error.code === 'PGRST204')) {
-        delete patch.phone;
-        const retry = await supabase.from('outlets').update(patch).eq('id', id);
-        error = retry.error;
+      let error = null;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const res = await supabase.from('outlets').update(patch).eq('id', id);
+        error = res.error;
+        if (!error) break;
+
+        if (error.code === 'PGRST204' || error.message?.includes('Could not find the') || error.message?.includes('schema cache')) {
+          const match = error.message?.match(/Could not find the '([^']+)' column/i);
+          if (match && match[1] && patch[match[1]] !== undefined) {
+            delete patch[match[1]];
+            continue;
+          }
+        }
+
+        const nonEssential = ['logo_url', 'phone', 'address', 'signatory_config', 'contract_template', 'conditions', 'booking_enabled', 'booking_start_time', 'booking_end_time', 'expiration_reminders_enabled', 'expiration_reminder_days'];
+        let strippedAny = false;
+        for (const col of nonEssential) {
+          if (error.message?.toLowerCase().includes(col) && patch[col] !== undefined) {
+            delete patch[col];
+            strippedAny = true;
+            break;
+          }
+        }
+        if (strippedAny) continue;
+
+        break;
       }
       if (error) console.error('Error updating outlet in Supabase:', error);
       await this.logAction('UPDATE_OUTLET', `Outlet modified: ${id}`);
-    } else {
+    }
+
+    try {
       const local = localStorage.getItem('company_outlets_cache');
       let current: Outlet[] = local ? JSON.parse(local) : [];
       current = current.map(o => o.id === id ? { ...o, ...updates } : o);
       localStorage.setItem('company_outlets_cache', JSON.stringify(current));
-    }
+    } catch (e) {}
   }
 
   async deleteOutlet(id: string) {
     if (this.isSupabase()) {
       await supabase.from('outlets').delete().eq('id', id);
       await this.logAction('DELETE_OUTLET', `Outlet decommissioned: ${id}`);
-    } else {
-      const local = localStorage.getItem('company_outlets_cache');
-      if (local) {
-        let current: Outlet[] = JSON.parse(local);
-        current = current.filter(o => o.id !== id);
-        localStorage.setItem('company_outlets_cache', JSON.stringify(current));
-      }
+    }
+    const local = localStorage.getItem('company_outlets_cache');
+    if (local) {
+      let current: Outlet[] = JSON.parse(local);
+      current = current.filter(o => o.id !== id);
+      localStorage.setItem('company_outlets_cache', JSON.stringify(current));
     }
   }
 
@@ -2310,7 +2378,18 @@ class DatabaseService {
             logo_url: remote.logo_url || '',
             signatory_config: remote.signatory_config || {}
           })) as Property[];
+
+          // Merge with any local cache that may not have propagated yet
           try {
+            const local = localStorage.getItem('company_properties_cache');
+            if (local) {
+              const cached: Property[] = JSON.parse(local);
+              for (const c of cached) {
+                if (!mapped.some(m => m.id === c.id)) {
+                  mapped.push(c);
+                }
+              }
+            }
             localStorage.setItem('company_properties_cache', JSON.stringify(mapped));
           } catch (e) {}
           return mapped;
@@ -2323,20 +2402,53 @@ class DatabaseService {
   }
 
   async addProperty(prop: Omit<Property, 'id'>) {
+    const newProp: Property = { ...prop, id: crypto.randomUUID() };
     if (this.isSupabase()) {
-      let newProp: any = { ...prop, id: crypto.randomUUID() };
-      let { data, error } = await supabase.from('properties').insert([newProp]).select();
-      if (error && (error.message?.includes('phone') || error.code === 'PGRST204')) {
-        delete newProp.phone;
-        const retry = await supabase.from('properties').insert([newProp]).select();
-        data = retry.data;
-        error = retry.error;
+      let payload: any = { ...newProp };
+      let data = null;
+      let error = null;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const res = await supabase.from('properties').insert([payload]).select();
+        data = res.data;
+        error = res.error;
+        if (!error) break;
+
+        if (error.code === 'PGRST204' || error.message?.includes('Could not find the') || error.message?.includes('schema cache')) {
+          const match = error.message?.match(/Could not find the '([^']+)' column/i);
+          if (match && match[1] && payload[match[1]] !== undefined) {
+            delete payload[match[1]];
+            continue;
+          }
+        }
+
+        const nonEssential = ['logo_url', 'phone', 'address', 'signatory_config'];
+        let strippedAny = false;
+        for (const col of nonEssential) {
+          if (error.message?.toLowerCase().includes(col) && payload[col] !== undefined) {
+            delete payload[col];
+            strippedAny = true;
+            break;
+          }
+        }
+        if (strippedAny) continue;
+
+        break;
       }
+
       if (error) console.error('Error adding property in Supabase:', error);
+
+      // Persist in local storage so UI renders and property changer updates immediately
+      try {
+        const local = localStorage.getItem('company_properties_cache');
+        let current: Property[] = local ? JSON.parse(local) : [];
+        current = current.filter(p => p.id !== newProp.id);
+        current.push(newProp);
+        localStorage.setItem('company_properties_cache', JSON.stringify(current));
+      } catch (e) {}
+
       await this.logAction('CREATE_PROPERTY', `Property asset registered: ${prop.name}`);
-      return data || [{ ...prop, id: newProp.id }];
+      return data || [newProp];
     } else {
-      const newProp: Property = { ...prop, id: crypto.randomUUID() };
       const local = localStorage.getItem('company_properties_cache');
       let current: Property[] = local ? JSON.parse(local) : [];
       current.push(newProp);
@@ -2348,20 +2460,43 @@ class DatabaseService {
   async updateProperty(id: string, updates: Partial<Property>) {
     if (this.isSupabase()) {
       let patch: any = { ...updates };
-      let { error } = await supabase.from('properties').update(patch).eq('id', id);
-      if (error && (error.message?.includes('phone') || error.code === 'PGRST204')) {
-        delete patch.phone;
-        const retry = await supabase.from('properties').update(patch).eq('id', id);
-        error = retry.error;
+      let error = null;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const res = await supabase.from('properties').update(patch).eq('id', id);
+        error = res.error;
+        if (!error) break;
+
+        if (error.code === 'PGRST204' || error.message?.includes('Could not find the') || error.message?.includes('schema cache')) {
+          const match = error.message?.match(/Could not find the '([^']+)' column/i);
+          if (match && match[1] && patch[match[1]] !== undefined) {
+            delete patch[match[1]];
+            continue;
+          }
+        }
+
+        const nonEssential = ['logo_url', 'phone', 'address', 'signatory_config'];
+        let strippedAny = false;
+        for (const col of nonEssential) {
+          if (error.message?.toLowerCase().includes(col) && patch[col] !== undefined) {
+            delete patch[col];
+            strippedAny = true;
+            break;
+          }
+        }
+        if (strippedAny) continue;
+
+        break;
       }
       if (error) console.error('Error updating property in Supabase:', error);
       await this.logAction('UPDATE_PROPERTY', `Property modified: ${id}`);
-    } else {
+    }
+
+    try {
       const local = localStorage.getItem('company_properties_cache');
       let current: Property[] = local ? JSON.parse(local) : [];
       current = current.map(p => p.id === id ? { ...p, ...updates } : p);
       localStorage.setItem('company_properties_cache', JSON.stringify(current));
-    }
+    } catch (e) {}
   }
 
   async deleteProperty(id: string) {

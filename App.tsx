@@ -102,6 +102,15 @@ const PortfolioSelector = ({ isMobile = false }: { isMobile?: boolean }) => {
             if (prop) {
                 if (!groups[prop.id]) groups[prop.id] = { property: prop, outlets: [] };
                 groups[prop.id].outlets.push(o);
+            } else {
+                const fallbackProp: Property = {
+                    id: o.property_id || 'unknown',
+                    name: 'Facility Context',
+                    address: '',
+                    logo_url: ''
+                };
+                if (!groups[fallbackProp.id]) groups[fallbackProp.id] = { property: fallbackProp, outlets: [] };
+                groups[fallbackProp.id].outlets.push(o);
             }
         });
         
