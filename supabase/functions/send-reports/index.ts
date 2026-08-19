@@ -107,15 +107,38 @@ serve(async (req) => {
       let emailRes: any;
       let emailError: any;
 
+      // Clean plain-text fallback generator to prevent Microsoft Outlook SCL spam classification
+      const textContent = body.directEmail.text || html
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<tr[^>]*>/gi, '\n')
+        .replace(/<td[^>]*>/gi, '  ')
+        .replace(/<p[^>]*>/gi, '\n\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&bull;/g, '•')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/\n\s*\n\s*\n/g, '\n\n')
+        .trim();
+
+      const deliverabilityHeaders = {
+        'X-Entity-Ref-ID': crypto.randomUUID(),
+        'Auto-Submitted': 'auto-generated',
+        'X-Auto-Response-Suppress': 'OOF, AutoReply',
+        'List-Unsubscribe': `<mailto:${fromEmail}?subject=unsubscribe>`
+      };
+
       const resendResult = await resend.emails.send({
         from: `${appName} <${fromEmail}>`,
         reply_to: fromEmail,
         to: emails,
         subject,
         html,
-        headers: {
-          'X-Entity-Ref-ID': crypto.randomUUID(),
-        },
+        text: textContent,
+        headers: deliverabilityHeaders,
         attachments: attachments || []
       });
 
@@ -126,13 +149,12 @@ serve(async (req) => {
         console.warn('DEBUG: Direct email error from Resend with primary fromEmail:', emailError, 'Retrying with onboarding@resend.dev...');
         const retryResult = await resend.emails.send({
           from: `${appName} <onboarding@resend.dev>`,
-          reply_to: 'onboarding@resend.dev',
+          reply_to: fromEmail, // Keep original support email as reply_to to avoid domain mismatch
           to: emails,
           subject,
           html,
-          headers: {
-            'X-Entity-Ref-ID': crypto.randomUUID(),
-          },
+          text: textContent,
+          headers: deliverabilityHeaders,
           attachments: attachments || []
         });
         emailRes = retryResult.data;
@@ -695,14 +717,34 @@ serve(async (req) => {
 
             console.log(`DEBUG: Attempting to send email to ${emails.join(', ')} from ${fromEmail}`);
             
+            const reportText = emailHtml
+              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+              .replace(/<tr[^>]*>/gi, '\n')
+              .replace(/<td[^>]*>/gi, '  ')
+              .replace(/<p[^>]*>/gi, '\n\n')
+              .replace(/<br\s*\/?>/gi, '\n')
+              .replace(/<[^>]+>/g, '')
+              .replace(/&bull;/g, '•')
+              .replace(/&nbsp;/g, ' ')
+              .replace(/&amp;/g, '&')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/\n\s*\n\s*\n/g, '\n\n')
+              .trim();
+
             const { data: emailRes, error: emailError } = await resend.emails.send({
               from: `${appName} <${fromEmail}>`,
               reply_to: fromEmail,
               to: emails,
               subject: `${reportTitle} - ${appName} - ${params.date.toLocaleDateString()}`,
               html: emailHtml,
+              text: reportText,
               headers: {
                 'X-Entity-Ref-ID': crypto.randomUUID(),
+                'Auto-Submitted': 'auto-generated',
+                'X-Auto-Response-Suppress': 'OOF, AutoReply',
+                'List-Unsubscribe': `<mailto:${fromEmail}?subject=unsubscribe>`
               },
               attachments: [
                 {

@@ -494,6 +494,13 @@ async function startServer() {
 
       const deliveryResults = await Promise.allSettled(
         emails.map(async (recipientEmail) => {
+          const deliverabilityHeaders = {
+            'X-Entity-Ref-ID': Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9),
+            'Auto-Submitted': 'auto-generated',
+            'X-Auto-Response-Suppress': 'OOF, AutoReply',
+            'List-Unsubscribe': `<mailto:${fromEmail}?subject=unsubscribe>`
+          };
+
           // Attempt 1: Send via configured fromEmail
           let resp = await fetch('https://api.resend.com/emails', {
             method: 'POST',
@@ -508,9 +515,7 @@ async function startServer() {
               subject,
               html,
               text,
-              headers: {
-                'X-Entity-Ref-ID': Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9),
-              },
+              headers: deliverabilityHeaders,
               attachments: attachments || []
             })
           });
@@ -528,14 +533,12 @@ async function startServer() {
               },
               body: JSON.stringify({
                 from: `${appName} <onboarding@resend.dev>`,
-                reply_to: 'onboarding@resend.dev',
+                reply_to: fromEmail, // Keep original support email as reply_to to avoid domain mismatch
                 to: [recipientEmail],
                 subject,
                 html,
                 text,
-                headers: {
-                  'X-Entity-Ref-ID': Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9),
-                },
+                headers: deliverabilityHeaders,
                 attachments: attachments || []
               })
             });

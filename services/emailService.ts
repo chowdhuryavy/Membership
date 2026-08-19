@@ -437,7 +437,7 @@ export function buildGuestExpirationReminderEmailHtml(params: {
               </p>
               <p style="margin: 8px 0 0 0; font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: 700; color: #0f172a;">
                 Warm regards,<br />
-                <span style="font-weight: 600; color: #64748b;">The Membership & Wellness Team at ${outlet}</span>
+                <span style="font-weight: 600; color: #64748b;">The Wellness Team at ${outlet}</span>
               </p>
             </td>
           </tr>
@@ -465,11 +465,28 @@ export function buildGuestExpirationReminderEmailHtml(params: {
 }
 
 export const emailService = {
-  async sendEmail(to: string | string[], subject: string, html: string, attachments: { filename: string; content: string }[] = []) {
+  async sendEmail(to: string | string[], subject: string, html: string, attachments: { filename: string; content: string }[] = [], text?: string) {
     const targetStr = Array.isArray(to) ? to.join(', ') : to;
     console.log(`[Email Service] Dispatching email to: ${targetStr}`);
     console.log(`[Email Service] Subject: ${subject}`);
     console.log(`[Email Service] Attachments: ${attachments.length}`);
+
+    // Generate plain-text alternative if not supplied to ensure high deliverability
+    const plainText = text || html
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<tr[^>]*>/gi, '\n')
+      .replace(/<td[^>]*>/gi, '  ')
+      .replace(/<p[^>]*>/gi, '\n\n')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&bull;/g, '•')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\n\s*\n\s*\n/g, '\n\n')
+      .trim();
 
     let lastErrorMessage = '';
 
@@ -482,6 +499,7 @@ export const emailService = {
               to,
               subject,
               html,
+              text: plainText,
               attachments
             }
           }
@@ -505,7 +523,7 @@ export const emailService = {
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, subject, html, attachments })
+        body: JSON.stringify({ to, subject, html, text: plainText, attachments })
       });
       
       const data = await res.json().catch(() => ({}));
