@@ -239,29 +239,31 @@ export function buildGuestExpirationReminderEmailHtml(params: {
   let bannerBg = '#eef2ff';
   let bannerColor = '#3730a3';
   let bannerBorder = '#c7d2fe';
-  let bannerText = `COURTESY RENEWAL NOTICE &bull; ${params.daysRemaining} DAYS REMAINING`;
-  let countdownTitle = `${params.daysRemaining} DAYS REMAINING`;
+  let bannerText = `Membership Validity Notification &bull; ${params.daysRemaining} Days Remaining`;
+  let countdownTitle = `${params.daysRemaining} Days Remaining`;
 
   if (params.daysRemaining <= 0) {
     bannerBg = '#fef2f2';
     bannerColor = '#991b1b';
     bannerBorder = '#fecaca';
-    bannerText = 'MEMBERSHIP EXPIRED TODAY &bull; RENEWAL REQUIRED';
-    countdownTitle = 'EXPIRES TODAY';
+    bannerText = 'Membership Term Concluded &bull; Renewal Notice';
+    countdownTitle = 'Expired Today';
   } else if (params.daysRemaining === 1) {
     bannerBg = '#fffbeb';
     bannerColor = '#92400e';
     bannerBorder = '#fde68a';
-    bannerText = 'CRITICAL REMINDER &bull; EXPIRES TOMORROW';
-    countdownTitle = 'EXPIRES IN 24 HOURS';
+    bannerText = 'Membership Validity Notice &bull; 1 Day Remaining';
+    countdownTitle = 'Expires Tomorrow';
   } else if (params.daysRemaining <= 7) {
     bannerBg = '#fffbeb';
     bannerColor = '#b45309';
     bannerBorder = '#fde68a';
-    bannerText = `EXPIRING SOON &bull; ${params.daysRemaining} DAYS REMAINING`;
+    bannerText = `Membership Validity Notice &bull; ${params.daysRemaining} Days Remaining`;
   }
 
   const isSuspiciousImageHost = !params.logoUrl ||
+    params.logoUrl.includes('ui-avatars.com') ||
+    params.logoUrl.includes('imgur.com') ||
     params.logoUrl.includes('placeholder.com');
 
   const logoHtml = !isSuspiciousImageHost && params.logoUrl ? `
@@ -797,12 +799,12 @@ export const emailService = {
         renewalEmail
       });
 
-      let urgencyPrefix = `Expiring in ${daysRemaining} Days`;
-      if (daysRemaining <= 0) urgencyPrefix = 'Expires Today';
-      else if (daysRemaining === 1) urgencyPrefix = 'Expires Tomorrow';
+      let urgencyPrefix = `${daysRemaining} Days Remaining`;
+      if (daysRemaining <= 0) urgencyPrefix = 'Expired Today';
+      else if (daysRemaining === 1) urgencyPrefix = '1 Day Remaining';
 
-      const testPrefix = options?.isTest ? '[TEST REMINDER] ' : '';
-      const subject = `${testPrefix}Membership Expiration Notice - ${urgencyPrefix} | ${propName}`;
+      const testPrefix = options?.isTest ? '[Test] ' : '';
+      const subject = `${testPrefix}Membership Notice (${urgencyPrefix}) - ${propName}`;
 
       const sendResult = await this.sendEmail(targetEmail, subject, html);
 

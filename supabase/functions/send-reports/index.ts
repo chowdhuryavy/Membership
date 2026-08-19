@@ -126,9 +126,6 @@ serve(async (req) => {
 
       const deliverabilityHeaders = {
         'X-Entity-Ref-ID': crypto.randomUUID(),
-        'Auto-Submitted': 'auto-generated',
-        'X-Auto-Response-Suppress': 'OOF, AutoReply',
-        'List-Unsubscribe': `<mailto:${fromEmail}?subject=unsubscribe>`
       };
 
       const resendResult = await resend.emails.send({
@@ -742,9 +739,6 @@ serve(async (req) => {
               text: reportText,
               headers: {
                 'X-Entity-Ref-ID': crypto.randomUUID(),
-                'Auto-Submitted': 'auto-generated',
-                'X-Auto-Response-Suppress': 'OOF, AutoReply',
-                'List-Unsubscribe': `<mailto:${fromEmail}?subject=unsubscribe>`
               },
               attachments: [
                 {

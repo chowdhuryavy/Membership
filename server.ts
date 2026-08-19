@@ -496,9 +496,6 @@ async function startServer() {
         emails.map(async (recipientEmail) => {
           const deliverabilityHeaders = {
             'X-Entity-Ref-ID': Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9),
-            'Auto-Submitted': 'auto-generated',
-            'X-Auto-Response-Suppress': 'OOF, AutoReply',
-            'List-Unsubscribe': `<mailto:${fromEmail}?subject=unsubscribe>`
           };
 
           // Attempt 1: Send via configured fromEmail
