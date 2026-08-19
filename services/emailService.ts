@@ -437,7 +437,7 @@ export function buildGuestExpirationReminderEmailHtml(params: {
               </p>
               <p style="margin: 8px 0 0 0; font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: 700; color: #0f172a;">
                 Warm regards,<br />
-                <span style="font-weight: 600; color: #64748b;">The Membership & Wellness Team at ${outlet}</span>
+                <span style="font-weight: 600; color: #64748b;">The Wellness Team at ${outlet}</span>
               </p>
             </td>
           </tr>
