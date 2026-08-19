@@ -124,8 +124,11 @@ serve(async (req) => {
         .replace(/\n\s*\n\s*\n/g, '\n\n')
         .trim();
 
+      const senderDomain = fromEmail.includes('@') ? fromEmail.split('@')[1] : 'perfection.my';
+      const msgId = `${crypto.randomUUID()}@${senderDomain}`;
       const deliverabilityHeaders = {
-        'X-Entity-Ref-ID': crypto.randomUUID(),
+        'Message-ID': `<${msgId}>`,
+        'X-Entity-Ref-ID': msgId,
       };
 
       const resendResult = await resend.emails.send({
@@ -730,6 +733,8 @@ serve(async (req) => {
               .replace(/\n\s*\n\s*\n/g, '\n\n')
               .trim();
 
+            const reportSenderDomain = fromEmail.includes('@') ? fromEmail.split('@')[1] : 'perfection.my';
+            const reportMsgId = `${crypto.randomUUID()}@${reportSenderDomain}`;
             const { data: emailRes, error: emailError } = await resend.emails.send({
               from: `${appName} <${fromEmail}>`,
               reply_to: fromEmail,
@@ -738,7 +743,8 @@ serve(async (req) => {
               html: emailHtml,
               text: reportText,
               headers: {
-                'X-Entity-Ref-ID': crypto.randomUUID(),
+                'Message-ID': `<${reportMsgId}>`,
+                'X-Entity-Ref-ID': reportMsgId,
               },
               attachments: [
                 {

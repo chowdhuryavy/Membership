@@ -449,7 +449,7 @@ export function buildGuestExpirationReminderEmailHtml(params: {
             <td bgcolor="#ffffff" style="background-color: #ffffff; padding: 22px 32px 26px 32px; text-align: center; border-top: 1px solid #f1f5f9; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.5; color: #94a3b8;">
               <div style="font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">${propName} &bull; ${outlet}</div>
               <div style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Automated Guest Membership Courtesy Notification &bull; Confidential</div>
-              <div style="font-size: 10px; font-style: italic; color: #cbd5e1; margin-top: 6px;">Generated on: ${format(new Date(), 'dd MMMM yyyy, HH:mm')}</div>
+              <div style="font-size: 10px; color: #cbd5e1; margin-top: 6px;">Dispatch Ref: REF-${Math.random().toString(36).substring(2, 8).toUpperCase()} &bull; Date: ${format(new Date(), 'dd MMM yyyy, HH:mm:ss')} UTC</div>
             </td>
           </tr>
 

@@ -494,8 +494,11 @@ async function startServer() {
 
       const deliveryResults = await Promise.allSettled(
         emails.map(async (recipientEmail) => {
+          const expressSenderDomain = fromEmail.includes('@') ? fromEmail.split('@')[1] : 'perfection.my';
+          const expressMsgId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}@${expressSenderDomain}`;
           const deliverabilityHeaders = {
-            'X-Entity-Ref-ID': Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9),
+            'Message-ID': `<${expressMsgId}>`,
+            'X-Entity-Ref-ID': expressMsgId,
           };
 
           // Attempt 1: Send via configured fromEmail
