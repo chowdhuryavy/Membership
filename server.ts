@@ -494,13 +494,6 @@ async function startServer() {
 
       const deliveryResults = await Promise.allSettled(
         emails.map(async (recipientEmail) => {
-          const expressSenderDomain = fromEmail.includes('@') ? fromEmail.split('@')[1] : 'perfection.my';
-          const expressMsgId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}@${expressSenderDomain}`;
-          const deliverabilityHeaders = {
-            'Message-ID': `<${expressMsgId}>`,
-            'X-Entity-Ref-ID': expressMsgId,
-          };
-
           // Attempt 1: Send via configured fromEmail
           let resp = await fetch('https://api.resend.com/emails', {
             method: 'POST',
@@ -515,7 +508,6 @@ async function startServer() {
               subject,
               html,
               text,
-              headers: deliverabilityHeaders,
               attachments: attachments || []
             })
           });
@@ -538,7 +530,6 @@ async function startServer() {
                 subject,
                 html,
                 text,
-                headers: deliverabilityHeaders,
                 attachments: attachments || []
               })
             });

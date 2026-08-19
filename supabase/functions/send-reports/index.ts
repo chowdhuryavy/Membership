@@ -124,13 +124,6 @@ serve(async (req) => {
         .replace(/\n\s*\n\s*\n/g, '\n\n')
         .trim();
 
-      const senderDomain = fromEmail.includes('@') ? fromEmail.split('@')[1] : 'perfection.my';
-      const msgId = `${crypto.randomUUID()}@${senderDomain}`;
-      const deliverabilityHeaders = {
-        'Message-ID': `<${msgId}>`,
-        'X-Entity-Ref-ID': msgId,
-      };
-
       const resendResult = await resend.emails.send({
         from: `${appName} <${fromEmail}>`,
         reply_to: fromEmail,
@@ -138,7 +131,6 @@ serve(async (req) => {
         subject,
         html,
         text: textContent,
-        headers: deliverabilityHeaders,
         attachments: attachments || []
       });
 
@@ -733,8 +725,6 @@ serve(async (req) => {
               .replace(/\n\s*\n\s*\n/g, '\n\n')
               .trim();
 
-            const reportSenderDomain = fromEmail.includes('@') ? fromEmail.split('@')[1] : 'perfection.my';
-            const reportMsgId = `${crypto.randomUUID()}@${reportSenderDomain}`;
             const { data: emailRes, error: emailError } = await resend.emails.send({
               from: `${appName} <${fromEmail}>`,
               reply_to: fromEmail,
@@ -742,10 +732,6 @@ serve(async (req) => {
               subject: `${reportTitle} - ${appName} - ${params.date.toLocaleDateString()}`,
               html: emailHtml,
               text: reportText,
-              headers: {
-                'Message-ID': `<${reportMsgId}>`,
-                'X-Entity-Ref-ID': reportMsgId,
-              },
               attachments: [
                 {
                   filename: `${recipient.report_type}_report_${params.date.toISOString().split('T')[0]}.pdf`,
