@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { X, Save, AlertTriangle, Eraser, CheckCircle2, QrCode, FileSignature, Sparkles, ArrowRight } from 'lucide-react';
+import { X, Save, AlertTriangle, Eraser, CheckCircle2, QrCode, FileSignature, Sparkles, ArrowRight, Search, User, Phone } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Input, Button } from './ui';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
-import { EntranceFeeConsent } from '../types';
+import { EntranceFeeConsent, Guest } from '../types';
 import { getBilingualWaiverText } from '../lib/waiverHelper';
 import { SignatureModal } from './SignatureModal';
 
@@ -34,6 +34,10 @@ export const EntranceFeeConsentModal = ({
     const [guestSignature, setGuestSignature] = useState<string | null>(null);
     const [showSignatureModal, setShowSignatureModal] = useState(false);
     const [pendingSubmitData, setPendingSubmitData] = useState<any | null>(null);
+    const [guestSearchResults, setGuestSearchResults] = useState<Guest[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [showGuestSuggestions, setShowGuestSuggestions] = useState(false);
+    const suggestionRef = useRef<HTMLDivElement>(null);
 
     const isEditMode = !!initialData?.id;
 
@@ -64,8 +68,53 @@ export const EntranceFeeConsentModal = ({
             });
             setGuestSignature(initialData?.guest_signature || null);
             setError('');
+            setGuestSearchResults([]);
+            setShowGuestSuggestions(false);
         }
     }, [isOpen, initialData]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
+                setShowGuestSuggestions(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const searchGuests = async (value: string, type: 'name' | 'phone') => {
+        if (value.length < 3 || !currentProperty) {
+            setGuestSearchResults([]);
+            setShowGuestSuggestions(false);
+            return;
+        }
+
+        setIsSearching(true);
+        try {
+            const results = await db.getGuests(currentProperty.id, {
+                [type]: value,
+                limit: 5
+            });
+            setGuestSearchResults(results);
+            setShowGuestSuggestions(results.length > 0);
+        } catch (err) {
+            console.error('Guest search error:', err);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleSelectGuest = (guest: Guest) => {
+        setFormData({
+            ...formData,
+            guest_name: guest.name,
+            phone: guest.phone || '',
+            email: guest.email || '',
+            qid_passport: formData.qid_passport
+        });
+        setShowGuestSuggestions(false);
+    };
 
     if (!isOpen) return null;
 
@@ -201,12 +250,59 @@ export const EntranceFeeConsentModal = ({
                     <CardContent className="p-8">
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Input label="Guest Name *" value={formData.guest_name} onChange={e => setFormData({...formData, guest_name: e.target.value})} className="h-11 rounded-xl text-xs font-bold" />
+                                <div className="relative">
+                                    <Input 
+                                        label="Guest Name *" 
+                                        value={formData.guest_name} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            setFormData({...formData, guest_name: val});
+                                            searchGuests(val, 'name');
+                                        }} 
+                                        placeholder="Search or enter name..."
+                                        className="h-11 rounded-xl text-xs font-bold pr-10" 
+                                    />
+                                    {isSearching && (
+                                        <div className="absolute right-3 top-8">
+                                            <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                                        </div>
+                                    )}
+                                    {showGuestSuggestions && (
+                                        <div ref={suggestionRef} className="absolute z-[210] w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                                            {guestSearchResults.map(guest => (
+                                                <button
+                                                    key={guest.id}
+                                                    type="button"
+                                                    onClick={() => handleSelectGuest(guest)}
+                                                    className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center justify-between border-b border-slate-50 last:border-0"
+                                                >
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-bold text-slate-900">{guest.name}</span>
+                                                        <span className="text-[10px] text-slate-500 font-medium">{guest.phone || 'No phone'}</span>
+                                                    </div>
+                                                    <ArrowRight className="w-3 h-3 text-slate-300" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                                 <Input label="QID / Passport No." value={formData.qid_passport} onChange={e => setFormData({...formData, qid_passport: e.target.value})} className="h-11 rounded-xl text-xs" />
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Input label="Phone Number" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="h-11 rounded-xl text-xs" />
+                                <div className="relative">
+                                    <Input 
+                                        label="Phone Number" 
+                                        value={formData.phone} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            setFormData({...formData, phone: val});
+                                            searchGuests(val, 'phone');
+                                        }} 
+                                        placeholder="Search by phone..."
+                                        className="h-11 rounded-xl text-xs" 
+                                    />
+                                </div>
                                 <Input label="Email Address" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 rounded-xl text-xs" />
                             </div>
 
@@ -293,116 +389,127 @@ export const EntranceFeeConsentModal = ({
                                         <p className="text-slate-800 text-[11px] font-bold leading-relaxed">{waiver.p3Ar}</p>
                                     </div>
                                 </div>
-
-                                <label className="flex items-center gap-3 p-3 bg-emerald-50/60 rounded-xl border border-emerald-200/60 cursor-pointer hover:bg-emerald-50 transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={acceptedWaiver} 
-                                        onChange={e => setAcceptedWaiver(e.target.checked)}
-                                        className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
-                                    />
-                                    <span className="text-[11px] font-bold text-emerald-950">
-                                        I have read, understood, and agree to the Bilingual Waiver & Release terms above. / قرأت وفهمت وأوافق على شروط وإخلاء المسؤولية أعلاه.
-                                    </span>
-                                </label>
                             </div>
 
                             {/* Guest Digital Signature Options */}
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                                        Guest Signature & Signing Method
-                                    </label>
-                                    {guestSignature && (
-                                        <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase flex items-center gap-1 ${
-                                            guestSignature === 'BYPASSED' 
-                                                ? 'bg-amber-50 text-amber-700 border border-amber-200' 
-                                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                        }`}>
-                                            <CheckCircle2 className="w-3 h-3" />
-                                            {guestSignature === 'BYPASSED' ? 'Signature Bypassed (Desktop)' : 'Signature Captured'}
-                                        </span>
-                                    )}
-                                </div>
-
-                                {guestSignature && guestSignature !== 'BYPASSED' ? (
-                                    <div className="bg-slate-50 border-2 border-emerald-200/80 rounded-2xl p-4 flex flex-col items-center gap-3">
-                                        <div className="bg-white border border-slate-200 rounded-xl p-2 w-full flex items-center justify-center max-h-32">
-                                            <img 
-                                                src={guestSignature} 
-                                                alt="Guest Signature" 
-                                                className="max-h-28 max-w-full object-contain" 
+                            <div className="space-y-4 pt-2">
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-black text-slate-800 uppercase tracking-widest ml-1">
+                                            Mandatory Waiver Acceptance
+                                        </label>
+                                    </div>
+                                    <label className="flex items-center gap-3 p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200/60 cursor-pointer hover:bg-emerald-50 transition-colors shadow-sm">
+                                        <div className="relative flex items-center">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={acceptedWaiver} 
+                                                onChange={e => setAcceptedWaiver(e.target.checked)}
+                                                className="w-5 h-5 text-emerald-600 rounded-lg border-slate-300 focus:ring-emerald-500 transition-all"
                                             />
                                         </div>
-                                        <div className="flex items-center gap-2 w-full">
+                                        <span className="text-[11px] font-bold text-emerald-950 leading-relaxed">
+                                            I have read, understood, and agree to the Bilingual Waiver & Release terms above. / قرأت وفهمت وأوافق على شروط وإخلاء المسؤولية أعلاه.
+                                        </span>
+                                    </label>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                                            Guest Signature & Signing Method
+                                        </label>
+                                        {guestSignature && (
+                                            <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase flex items-center gap-1 ${
+                                                guestSignature === 'BYPASSED' 
+                                                    ? 'bg-amber-50 text-amber-700 border border-amber-200' 
+                                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                            }`}>
+                                                <CheckCircle2 className="w-3 h-3" />
+                                                {guestSignature === 'BYPASSED' ? 'Signature Bypassed (Desktop)' : 'Signature Captured'}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {guestSignature && guestSignature !== 'BYPASSED' ? (
+                                        <div className="bg-slate-50 border-2 border-emerald-200/80 rounded-2xl p-4 flex flex-col items-center gap-3">
+                                            <div className="bg-white border border-slate-200 rounded-xl p-2 w-full flex items-center justify-center max-h-32">
+                                                <img 
+                                                    src={guestSignature} 
+                                                    alt="Guest Signature" 
+                                                    className="max-h-28 max-w-full object-contain" 
+                                                />
+                                            </div>
+                                            <div className="flex items-center gap-2 w-full">
+                                                <Button 
+                                                    type="button" 
+                                                    variant="outline" 
+                                                    onClick={handleOpenSignatureModal}
+                                                    className="flex-1 h-10 rounded-xl text-xs font-bold gap-1.5"
+                                                >
+                                                    <FileSignature className="w-3.5 h-3.5 text-indigo-600" /> Change / Re-Sign
+                                                </Button>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setGuestSignature(null)}
+                                                    className="h-10 px-3 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors flex items-center gap-1"
+                                                >
+                                                    <Eraser className="w-3.5 h-3.5" /> Remove
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : guestSignature === 'BYPASSED' ? (
+                                        <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-5 flex items-center justify-between shadow-sm">
+                                            <div>
+                                                <p className="text-xs font-bold text-amber-900">Signature Skipped (Desktop Waiver)</p>
+                                                <p className="text-[10px] text-amber-700">Consent will be recorded without an attached digital signature image.</p>
+                                            </div>
                                             <Button 
                                                 type="button" 
                                                 variant="outline" 
                                                 onClick={handleOpenSignatureModal}
-                                                className="flex-1 h-9 rounded-xl text-xs font-bold gap-1.5"
+                                                className="h-10 px-4 rounded-xl text-xs font-bold gap-1.5 border-amber-300 text-amber-900 hover:bg-amber-100 shadow-sm"
                                             >
-                                                <FileSignature className="w-3.5 h-3.5 text-indigo-600" /> Change / Re-Sign
+                                                <FileSignature className="w-3.5 h-3.5" /> Add Signature
                                             </Button>
-                                            <button 
-                                                type="button" 
-                                                onClick={() => setGuestSignature(null)}
-                                                className="h-9 px-3 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors flex items-center gap-1"
-                                            >
-                                                <Eraser className="w-3.5 h-3.5" /> Remove
-                                            </button>
                                         </div>
-                                    </div>
-                                ) : guestSignature === 'BYPASSED' ? (
-                                    <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-4 flex items-center justify-between">
-                                        <div>
-                                            <p className="text-xs font-bold text-amber-900">Signature Skipped (Desktop Waiver)</p>
-                                            <p className="text-[10px] text-amber-700">Consent will be recorded without an attached digital signature image.</p>
-                                        </div>
-                                        <Button 
-                                            type="button" 
-                                            variant="outline" 
-                                            onClick={handleOpenSignatureModal}
-                                            className="h-9 rounded-xl text-xs font-bold gap-1.5 border-amber-300 text-amber-900 hover:bg-amber-100"
-                                        >
-                                            <FileSignature className="w-3.5 h-3.5" /> Add Signature
-                                        </Button>
-                                    </div>
-                                ) : (
-                                    <div className="bg-gradient-to-br from-slate-50 to-indigo-50/40 border-2 border-dashed border-indigo-200/70 rounded-2xl p-5 flex flex-col items-center gap-3 text-center">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                                                <FileSignature className="w-4 h-4" />
+                                    ) : (
+                                        <div className="bg-gradient-to-br from-white to-indigo-50/30 border-2 border-dashed border-indigo-200/70 rounded-3xl p-6 flex flex-col items-center gap-4 text-center shadow-sm">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center shadow-inner">
+                                                    <FileSignature className="w-5 h-5" />
+                                                </div>
+                                                <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center shadow-inner">
+                                                    <QrCode className="w-5 h-5" />
+                                                </div>
                                             </div>
-                                            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                                                <QrCode className="w-4 h-4" />
+                                            <div>
+                                                <p className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                                                    Guest Signature Option
+                                                </p>
+                                                <p className="text-[10px] font-medium text-slate-500 max-w-sm mt-1 leading-relaxed">
+                                                    Guest can sign on screen, scan dynamic QR code with mobile/tablet, or skip if necessary.
+                                                </p>
+                                            </div>
+                                            <div className="flex flex-wrap items-center justify-center gap-3 w-full pt-2">
+                                                <Button 
+                                                    type="button" 
+                                                    onClick={handleOpenSignatureModal}
+                                                    className="h-12 px-6 rounded-2xl text-[11px] font-black uppercase tracking-widest bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-100 flex items-center gap-2.5 active:scale-95 transition-all"
+                                                >
+                                                    <Sparkles className="w-4 h-4" /> Select Method (Pad / QR Code)
+                                                </Button>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setGuestSignature('BYPASSED')}
+                                                    className="h-12 px-5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all"
+                                                >
+                                                    Skip Signature
+                                                </button>
                                             </div>
                                         </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-slate-800">
-                                                Guest Signature Option
-                                            </p>
-                                            <p className="text-[10px] text-slate-500 max-w-sm mt-0.5">
-                                                Guest can sign on screen, scan dynamic QR code with mobile/tablet, or skip.
-                                            </p>
-                                        </div>
-                                        <div className="flex flex-wrap items-center justify-center gap-2 w-full pt-1">
-                                            <Button 
-                                                type="button" 
-                                                onClick={handleOpenSignatureModal}
-                                                className="h-10 px-5 rounded-xl text-xs font-black uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100 flex items-center gap-2"
-                                            >
-                                                <Sparkles className="w-3.5 h-3.5" /> Select Method (Pad / QR Code)
-                                            </Button>
-                                            <button 
-                                                type="button" 
-                                                onClick={() => setGuestSignature('BYPASSED')}
-                                                className="h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-wider text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-                                            >
-                                                Skip Signature
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
 
                             {error && (
@@ -415,10 +522,10 @@ export const EntranceFeeConsentModal = ({
                             )}
                             
                             <div className="flex gap-3 pt-2">
-                                <button type="button" onClick={onClose} className="flex-1 h-12 rounded-2xl font-bold uppercase text-[10px] tracking-widest bg-slate-100 hover:bg-slate-200 transition-colors">
+                                <button type="button" onClick={onClose} className="flex-1 h-14 rounded-3xl font-black uppercase text-[10px] tracking-widest bg-slate-100 hover:bg-slate-200 transition-colors">
                                     Cancel
                                 </button>
-                                <Button type="submit" disabled={loading} className="flex-[2] h-12 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-100 text-white">
+                                <Button type="submit" disabled={loading} className="flex-[2] h-14 rounded-3xl font-black text-xs uppercase tracking-[0.15em] bg-emerald-600 hover:bg-emerald-700 shadow-2xl shadow-emerald-200 text-white active:scale-95 transition-all">
                                     {loading ? 'Saving...' : 'Save Consent & Store Record'}
                                 </Button>
                             </div>

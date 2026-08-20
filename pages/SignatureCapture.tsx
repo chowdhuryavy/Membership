@@ -8,7 +8,7 @@ import { Button } from '../components/ui';
 import { CheckCircle2, X, FileText } from 'lucide-react';
 import { supabase } from '../services/mockSupabase';
 import { GYM_RULES } from '../services/memberAgreementPdfService';
-import { getBilingualPTConsentText } from '../lib/waiverHelper';
+import { getBilingualPTConsentText, getBilingualWaiverText } from '../lib/waiverHelper';
 
 export const SignatureCapturePage: React.FC = () => {
     const { signatureId } = useParams<{ signatureId: string }>();
@@ -59,7 +59,11 @@ export const SignatureCapturePage: React.FC = () => {
     const currencySymbol = searchParams.get('symbol') || currency;
     const logoUrl = searchParams.get('logo') || '';
     const agreementType = searchParams.get('type') || '';
+    
     const isPTAgreement = agreementType === 'pt' || tier.toLowerCase().includes('pt') || tier.toLowerCase().includes('personal') || tier.toLowerCase().includes('training') || tier.toLowerCase().includes('consent');
+    const isEntranceWaiver = agreementType === 'waiver' || agreementType === 'entrance' || tier.toLowerCase().includes('entrance') || tier.toLowerCase().includes('pass') || tier.toLowerCase().includes('waiver');
+
+    const waiverContent = isEntranceWaiver ? getBilingualWaiverText(outletName, propertyName) : null;
 
 
     useEffect(() => {
@@ -413,8 +417,7 @@ export const SignatureCapturePage: React.FC = () => {
 
             {/* Terms and Conditions Modal */}
             {showTermsModal && (() => {
-                const isPT = tier.toLowerCase().includes('pt') || tier.toLowerCase().includes('personal') || tier.toLowerCase().includes('training');
-                const ptConsent = isPT ? getBilingualPTConsentText(propertyName || outletName || 'The Torch Club') : null;
+                const ptConsent = isPTAgreement ? getBilingualPTConsentText(propertyName || outletName || 'The Torch Club') : null;
 
                 return (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -422,10 +425,10 @@ export const SignatureCapturePage: React.FC = () => {
                             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                                 <div>
                                     <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">
-                                        {isPT && ptConsent ? ptConsent.titleEn : 'Rules & Regulations'}
+                                        {isPTAgreement && ptConsent ? ptConsent.titleEn : 'Rules & Regulations'}
                                     </h3>
                                     <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mt-1" dir="rtl">
-                                        {isPT && ptConsent ? ptConsent.titleAr : 'القواعد و اللوائح'}
+                                        {isPTAgreement && ptConsent ? ptConsent.titleAr : 'القواعد و اللوائح'}
                                     </p>
                                 </div>
                                 <button 
@@ -437,7 +440,7 @@ export const SignatureCapturePage: React.FC = () => {
                             </div>
                             
                             <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
-                                {isPT && ptConsent ? (
+                                {isPTAgreement && ptConsent ? (
                                     <div className="space-y-6">
                                         {/* Intro */}
                                         <div className="space-y-4">
@@ -478,6 +481,31 @@ export const SignatureCapturePage: React.FC = () => {
                                                     <p dir="rtl" className="text-slate-600 font-arabic leading-relaxed">• {para.ar}</p>
                                                 </div>
                                             ))}
+                                        </div>
+                                    </div>
+                                ) : isEntranceWaiver && waiverContent ? (
+                                    <div className="space-y-8">
+                                        <div className="space-y-4 border-b border-slate-100 pb-6">
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{waiverContent.waiverTitleEn}</p>
+                                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{waiverContent.waiverSubEn}</p>
+                                            </div>
+                                            <div className="space-y-3 text-slate-700 leading-relaxed text-[13px] text-justify font-medium">
+                                                <p>{waiverContent.p1En}</p>
+                                                <p>{waiverContent.p2En}</p>
+                                                <p className="font-bold text-slate-900">{waiverContent.p3En}</p>
+                                            </div>
+                                        </div>
+                                        <div dir="rtl" className="space-y-4 text-right">
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-black text-slate-900 tracking-tight">{waiverContent.waiverTitleAr}</p>
+                                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{waiverContent.waiverSubAr}</p>
+                                            </div>
+                                            <div className="space-y-3 text-slate-600 leading-relaxed text-[13px] text-justify font-arabic">
+                                                <p>{waiverContent.p1Ar}</p>
+                                                <p>{waiverContent.p2Ar}</p>
+                                                <p className="font-bold text-slate-900">{waiverContent.p3Ar}</p>
+                                            </div>
                                         </div>
                                     </div>
                                 ) : (
