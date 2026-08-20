@@ -204,6 +204,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // True Super Admins (Owners) always have full system clearance and bypass the blacklist.
     if (isOwner) return true;
 
+    const isAdminRole = normalizedRoleId === 'admin' || normalizedRoleId === 'system_admin' || normalizedRoleId === 'system_administrator';
+
+    // 1.2. SETTINGS PAGE ENTRY BYPASS
+    // Always allow admins to enter the settings page itself, even if it was accidentally restricted globally.
+    // Restrictions will still apply to individual tabs within the settings page.
+    if (permission === 'settings:view' && isAdminRole) return true;
+
     // 2. GLOBAL FEATURE CONTROL (BLACKLIST LOGIC)
     // If a permission is in the restricted_permissions list, it is globally HIDDEN for all non-owners.
     if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
@@ -214,7 +221,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     // 1.5. LEGACY ADMIN BYPASS
     // Standard admins get everything that isn't blacklisted.
-    if (normalizedRoleId === 'admin' || normalizedRoleId === 'system_admin' || normalizedRoleId === 'system_administrator') return true;
+    if (isAdminRole) return true;
 
     // 2. USER-SPECIFIC OVERRIDES (High Priority)
     const targetUser = (userId === user?.id || !userId) ? user : null;
