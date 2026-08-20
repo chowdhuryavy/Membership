@@ -15,6 +15,8 @@ const getCurrentFormattedTime = () => {
     return `${h}:${m}`;
 };
 
+const DEFAULT_CURRENCY = { code: 'AED', symbol: 'AED' };
+
 export const EntranceFeeConsentModal = ({
     isOpen,
     onClose,
@@ -27,7 +29,7 @@ export const EntranceFeeConsentModal = ({
     initialData?: (Partial<EntranceFeeConsent> & { guestName?: string; saleId?: string; itemName?: string; price?: number }) | null;
 }) => {
     const { currentOutlet, currentProperty, settings, currency, currencies } = useSettings();
-    const waiver = getBilingualWaiverText(currentOutlet?.name, currentProperty?.name);
+    const waiver = React.useMemo(() => getBilingualWaiverText(currentOutlet?.name, currentProperty?.name), [currentOutlet?.name, currentProperty?.name]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [acceptedWaiver, setAcceptedWaiver] = useState(true);
@@ -118,9 +120,11 @@ export const EntranceFeeConsentModal = ({
 
     if (!isOpen) return null;
 
-    const activeCurrency = currency || 
-                           (currentProperty && currencies.find(c => c.property_id === currentProperty.id)) || 
-                           { code: 'AED', symbol: 'AED' };
+    const activeCurrency = useMemo(() => {
+        return currency || 
+               (currentProperty && currencies.find(c => c.property_id === currentProperty.id)) || 
+               DEFAULT_CURRENCY;
+    }, [currency, currentProperty, currencies]);
 
     const prepareConsentData = () => {
         const targetOutletId = initialData?.outlet_id || currentOutlet?.id;
@@ -175,27 +179,27 @@ export const EntranceFeeConsentModal = ({
         }
     };
 
-    const handleSignatureSave = async (dataUrl: string) => {
+    const handleSignatureSave = React.useCallback(async (dataUrl: string) => {
         setGuestSignature(dataUrl);
         setShowSignatureModal(false);
         if (pendingSubmitData) {
             await onFinalSubmit(pendingSubmitData, dataUrl);
         }
-    };
+    }, [pendingSubmitData]);
 
-    const handleSkipSignature = async () => {
+    const handleSkipSignature = React.useCallback(async () => {
         setGuestSignature('BYPASSED');
         setShowSignatureModal(false);
         if (pendingSubmitData) {
             await onFinalSubmit(pendingSubmitData, 'BYPASSED');
         }
-    };
+    }, [pendingSubmitData]);
 
-    const closeSignatureModal = () => {
+    const closeSignatureModal = React.useCallback(() => {
         setShowSignatureModal(false);
         setPendingSubmitData(null);
         setLoading(false);
-    };
+    }, []);
 
     const onFinalSubmit = async (data: any, signatureOverride?: string) => {
         setLoading(true);
@@ -549,6 +553,7 @@ export const EntranceFeeConsentModal = ({
                     currency={activeCurrency?.code || 'AED'}
                     currencySymbol={activeCurrency?.symbol || ''}
                     logoUrl={currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || ''}
+                    agreementType="entrance"
                 />
             )}
         </div>

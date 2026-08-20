@@ -22,7 +22,7 @@ interface SignatureModalProps {
   currency?: string;
   currencySymbol?: string;
   logoUrl?: string;
-  agreementType?: 'pt' | 'general' | 'membership';
+  agreementType?: 'pt' | 'general' | 'membership' | 'entrance';
 }
 
 export const SignatureModal: React.FC<SignatureModalProps> = ({ 

@@ -42,6 +42,8 @@ export default function EntranceFee() {
 
     const canSwitchScope = Boolean(user && allowedOutletsInProperty.length > 1);
 
+    const defaultInitialData = useMemo(() => ({ guestName: '' }), []);
+
     return (
         <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
             {/* Top Bar Header */}
@@ -115,7 +117,7 @@ export default function EntranceFee() {
                         setRefreshKey(prev => prev + 1);
                         toast.success('Entrance Fee Consent saved successfully!');
                     }}
-                    initialData={{ guestName: '' }}
+                    initialData={defaultInitialData}
                 />
             )}
         </div>

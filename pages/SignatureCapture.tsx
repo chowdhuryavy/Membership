@@ -63,7 +63,8 @@ export const SignatureCapturePage: React.FC = () => {
     const isPTAgreement = agreementType === 'pt' || tier.toLowerCase().includes('pt') || tier.toLowerCase().includes('personal') || tier.toLowerCase().includes('training') || tier.toLowerCase().includes('consent');
     const isEntranceWaiver = agreementType === 'waiver' || agreementType === 'entrance' || tier.toLowerCase().includes('entrance') || tier.toLowerCase().includes('pass') || tier.toLowerCase().includes('waiver');
 
-    const waiverContent = isEntranceWaiver ? getBilingualWaiverText(outletName, propertyName) : null;
+    const waiverContent = useMemo(() => isEntranceWaiver ? getBilingualWaiverText(outletName, propertyName) : null, [isEntranceWaiver, outletName, propertyName]);
+    const ptConsent = useMemo(() => isPTAgreement ? getBilingualPTConsentText(propertyName || outletName || 'The Torch Club') : null, [isPTAgreement, propertyName, outletName]);
 
 
     useEffect(() => {
@@ -82,14 +83,8 @@ export const SignatureCapturePage: React.FC = () => {
                 },
                 (payload) => {
                     if (payload.eventType === 'DELETE') {
-                        setSaved(prevSaved => {
-                            setExpired(prevExpired => {
-                                if (!prevExpired) return prevExpired;
-                                return prevExpired;
-                            });
-                            // If it was already expired (cancelled), don't show success
-                            return true; 
-                        });
+                        setExpired(prev => prev); // This was weirdly nested
+                        setSaved(true);
                         toast.success('Agreement Finalized!');
                     } else if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
                         try {
@@ -415,133 +410,128 @@ export const SignatureCapturePage: React.FC = () => {
                 </div>
             </footer>
 
-            {/* Terms and Conditions Modal */}
-            {showTermsModal && (() => {
-                const ptConsent = isPTAgreement ? getBilingualPTConsentText(propertyName || outletName || 'The Torch Club') : null;
+            {showTermsModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[2rem] shadow-2xl max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">
+                                    {ptConsent?.titleEn || (isEntranceWaiver ? 'Liability Waiver' : 'Rules & Regulations')}
+                                </h3>
+                                <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mt-1" dir="rtl">
+                                    {ptConsent?.titleAr || (isEntranceWaiver ? 'إخلاء المسؤولية' : 'القواعد و اللوائح')}
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => setShowTermsModal(false)}
+                                className="p-2 hover:bg-white rounded-xl transition-colors text-slate-400 hover:text-slate-900 shadow-sm"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
+                            {ptConsent ? (
+                                <div className="space-y-6">
+                                    {/* Intro */}
+                                    <div className="space-y-4">
+                                        {ptConsent.introParagraphs.map((para, idx) => (
+                                            <div key={idx} className="space-y-1.5 border-b border-slate-100 pb-3">
+                                                <p className="text-slate-700 leading-relaxed font-medium">{para.en}</p>
+                                                <p dir="rtl" className="text-slate-600 font-arabic leading-relaxed">{para.ar}</p>
+                                            </div>
+                                        ))}
+                                    </div>
 
-                return (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-                        <div className="bg-white rounded-[2rem] shadow-2xl max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
-                            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                                <div>
-                                    <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">
-                                        {isPTAgreement && ptConsent ? ptConsent.titleEn : 'Rules & Regulations'}
-                                    </h3>
-                                    <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mt-1" dir="rtl">
-                                        {isPTAgreement && ptConsent ? ptConsent.titleAr : 'القواعد و اللوائح'}
-                                    </p>
+                                    {/* PAR-Q */}
+                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                                        <div className="flex justify-between items-center font-black text-[11px] text-slate-900 border-b border-slate-200 pb-1.5">
+                                            <span>{ptConsent.parqTitleEn}</span>
+                                            <span dir="rtl" className="font-arabic">{ptConsent.parqTitleAr}</span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 font-bold">{ptConsent.parqInstructionEn}</p>
+                                        <div className="space-y-2.5">
+                                            {ptConsent.parqQuestions.map((q) => (
+                                                <div key={q.id} className="text-[10.5px] border-b border-slate-200/60 pb-2 last:border-0">
+                                                    <p className="font-bold text-slate-800">{q.id}. {q.en}</p>
+                                                    <p dir="rtl" className="font-arabic text-slate-600 mt-0.5">{q.ar}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Declarations */}
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center font-black text-[11px] text-slate-900 border-b border-slate-200 pb-1">
+                                            <span>{ptConsent.declarationTitleEn}</span>
+                                            <span dir="rtl" className="font-arabic">{ptConsent.declarationTitleAr}</span>
+                                        </div>
+                                        {ptConsent.declarationParagraphs.map((para, idx) => (
+                                            <div key={idx} className="space-y-1 text-[10.5px] border-b border-slate-50 pb-2.5 last:border-0">
+                                                <p className="text-slate-700 leading-relaxed">• {para.en}</p>
+                                                <p dir="rtl" className="text-slate-600 font-arabic leading-relaxed">• {para.ar}</p>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                                <button 
-                                    onClick={() => setShowTermsModal(false)}
-                                    className="p-2 hover:bg-white rounded-xl transition-colors text-slate-400 hover:text-slate-900 shadow-sm"
-                                >
-                                    <X className="w-6 h-6" />
-                                </button>
-                            </div>
-                            
-                            <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
-                                {isPTAgreement && ptConsent ? (
-                                    <div className="space-y-6">
-                                        {/* Intro */}
-                                        <div className="space-y-4">
-                                            {ptConsent.introParagraphs.map((para, idx) => (
-                                                <div key={idx} className="space-y-1.5 border-b border-slate-100 pb-3">
-                                                    <p className="text-slate-700 leading-relaxed font-medium">{para.en}</p>
-                                                    <p dir="rtl" className="text-slate-600 font-arabic leading-relaxed">{para.ar}</p>
-                                                </div>
-                                            ))}
+                            ) : isEntranceWaiver && waiverContent ? (
+                                <div className="space-y-8">
+                                    <div className="space-y-4 border-b border-slate-100 pb-6">
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{waiverContent.waiverTitleEn}</p>
+                                            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{waiverContent.waiverSubEn}</p>
                                         </div>
-
-                                        {/* PAR-Q */}
-                                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                                            <div className="flex justify-between items-center font-black text-[11px] text-slate-900 border-b border-slate-200 pb-1.5">
-                                                <span>{ptConsent.parqTitleEn}</span>
-                                                <span dir="rtl" className="font-arabic">{ptConsent.parqTitleAr}</span>
-                                            </div>
-                                            <p className="text-[10px] text-slate-500 font-bold">{ptConsent.parqInstructionEn}</p>
-                                            <div className="space-y-2.5">
-                                                {ptConsent.parqQuestions.map((q) => (
-                                                    <div key={q.id} className="text-[10.5px] border-b border-slate-200/60 pb-2 last:border-0">
-                                                        <p className="font-bold text-slate-800">{q.id}. {q.en}</p>
-                                                        <p dir="rtl" className="font-arabic text-slate-600 mt-0.5">{q.ar}</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Declarations */}
-                                        <div className="space-y-3">
-                                            <div className="flex justify-between items-center font-black text-[11px] text-slate-900 border-b border-slate-200 pb-1">
-                                                <span>{ptConsent.declarationTitleEn}</span>
-                                                <span dir="rtl" className="font-arabic">{ptConsent.declarationTitleAr}</span>
-                                            </div>
-                                            {ptConsent.declarationParagraphs.map((para, idx) => (
-                                                <div key={idx} className="space-y-1 text-[10.5px] border-b border-slate-50 pb-2.5 last:border-0">
-                                                    <p className="text-slate-700 leading-relaxed">• {para.en}</p>
-                                                    <p dir="rtl" className="text-slate-600 font-arabic leading-relaxed">• {para.ar}</p>
-                                                </div>
-                                            ))}
+                                        <div className="space-y-3 text-slate-700 leading-relaxed text-[13px] text-justify font-medium">
+                                            <p>{waiverContent.p1En}</p>
+                                            <p>{waiverContent.p2En}</p>
+                                            <p className="font-bold text-slate-900">{waiverContent.p3En}</p>
                                         </div>
                                     </div>
-                                ) : isEntranceWaiver && waiverContent ? (
-                                    <div className="space-y-8">
-                                        <div className="space-y-4 border-b border-slate-100 pb-6">
-                                            <div className="space-y-1">
-                                                <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{waiverContent.waiverTitleEn}</p>
-                                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{waiverContent.waiverSubEn}</p>
-                                            </div>
-                                            <div className="space-y-3 text-slate-700 leading-relaxed text-[13px] text-justify font-medium">
-                                                <p>{waiverContent.p1En}</p>
-                                                <p>{waiverContent.p2En}</p>
-                                                <p className="font-bold text-slate-900">{waiverContent.p3En}</p>
-                                            </div>
+                                    <div dir="rtl" className="space-y-4 text-right">
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-black text-slate-900 tracking-tight">{waiverContent.waiverTitleAr}</p>
+                                            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{waiverContent.waiverSubAr}</p>
                                         </div>
-                                        <div dir="rtl" className="space-y-4 text-right">
-                                            <div className="space-y-1">
-                                                <p className="text-sm font-black text-slate-900 tracking-tight">{waiverContent.waiverTitleAr}</p>
-                                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{waiverContent.waiverSubAr}</p>
-                                            </div>
-                                            <div className="space-y-3 text-slate-600 leading-relaxed text-[13px] text-justify font-arabic">
-                                                <p>{waiverContent.p1Ar}</p>
-                                                <p>{waiverContent.p2Ar}</p>
-                                                <p className="font-bold text-slate-900">{waiverContent.p3Ar}</p>
-                                            </div>
+                                        <div className="space-y-3 text-slate-600 leading-relaxed text-[13px] text-justify font-arabic">
+                                            <p>{waiverContent.p1Ar}</p>
+                                            <p>{waiverContent.p2Ar}</p>
+                                            <p className="font-bold text-slate-900">{waiverContent.p3Ar}</p>
                                         </div>
                                     </div>
-                                ) : (
-                                    GYM_RULES.map((rule, idx) => (
-                                        <div key={idx} className="flex gap-4 items-start border-b border-slate-50 pb-6 last:border-0">
-                                            <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 w-6 h-6 rounded-lg flex items-center justify-center shrink-0">
-                                                {idx + 1}
-                                            </span>
-                                            <div className="flex-1 space-y-2">
-                                                <p className="text-sm font-bold text-slate-700 leading-relaxed text-left">
-                                                    {rule.en}
-                                                </p>
-                                                <p className="text-sm font-black text-slate-500 leading-relaxed text-right font-serif" dir="rtl">
-                                                    {rule.ar}
-                                                </p>
-                                            </div>
+                                </div>
+                            ) : (
+                                GYM_RULES.map((rule, idx) => (
+                                    <div key={idx} className="flex gap-4 items-start border-b border-slate-50 pb-6 last:border-0">
+                                        <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 w-6 h-6 rounded-lg flex items-center justify-center shrink-0">
+                                            {idx + 1}
+                                        </span>
+                                        <div className="flex-1 space-y-2">
+                                            <p className="text-sm font-bold text-slate-700 leading-relaxed text-left">
+                                                {rule.en}
+                                            </p>
+                                            <p className="text-sm font-black text-slate-500 leading-relaxed text-right font-serif" dir="rtl">
+                                                {rule.ar}
+                                            </p>
                                         </div>
-                                    ))
-                                )}
-                            </div>
-                            
-                            <div className="p-6 border-t border-slate-100 bg-white">
-                                <Button 
-                                    onClick={() => {
-                                        setAcceptedTerms(true);
-                                        setShowTermsModal(false);
-                                    }}
-                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl shadow-lg shadow-indigo-100"
-                                >
-                                    I Understand & Accept
-                                </Button>
-                            </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                        
+                        <div className="p-6 border-t border-slate-100 bg-white">
+                            <Button 
+                                onClick={() => {
+                                    setAcceptedTerms(true);
+                                    setShowTermsModal(false);
+                                }}
+                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl shadow-lg shadow-indigo-100"
+                            >
+                                I Understand & Accept
+                            </Button>
                         </div>
                     </div>
-                );
-            })()}
+                </div>
+            )}
         </div>
     );
 };
