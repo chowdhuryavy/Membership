@@ -7,7 +7,16 @@ export const isSuperAdminRole = (roleId: string | undefined | null) => {
     const id = roleId?.toLowerCase()?.trim();
     return id === 'super_admin' || 
            id === 'superadmin' || 
-           id === 'owner';
+           id === 'owner' ||
+           id === 'admin' || 
+           id === 'system_admin' || 
+           id === 'system_administrator' ||
+           id === 'administrator';
+};
+
+export const isOwnerRole = (roleId: string | undefined | null) => {
+    const id = roleId?.toLowerCase()?.trim();
+    return id === 'owner' || id === 'super_admin' || id === 'superadmin';
 };
 
 export const isSuperAdmin = (user: UserProfile | null) => {
@@ -25,6 +34,7 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   isSuperAdmin: boolean;
+  isOwner: boolean;
   checkIsSuperAdmin: () => Promise<boolean>;
 }
 
@@ -66,6 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   
   const isSuperAdminState = useMemo(() => isSuperAdminRole(user?.role_id), [user]);
+  const isOwnerState = useMemo(() => isOwnerRole(user?.role_id), [user]);
 
   const checkIsSuperAdmin = async (currentUser: UserProfile | null = user) => {
       return isSuperAdminRole(currentUser?.role_id);
@@ -160,9 +171,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshUser, 
     logout, 
     isLoading, 
-    isSuperAdmin: isSuperAdminState, 
+    isSuperAdmin: isSuperAdminState,
+    isOwner: isOwnerState, 
     checkIsSuperAdmin 
-  }), [user, login, register, changePassword, updateProfile, refreshUser, logout, isLoading, isSuperAdminState, checkIsSuperAdmin]);
+  }), [user, login, register, changePassword, updateProfile, refreshUser, logout, isLoading, isSuperAdminState, isOwnerState, checkIsSuperAdmin]);
 
   return (
     <AuthContext.Provider value={authContextValue}>

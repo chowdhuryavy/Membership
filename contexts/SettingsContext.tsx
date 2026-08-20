@@ -28,7 +28,7 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, refreshUser, isSuperAdmin } = useAuth();
+  const { user, refreshUser, isSuperAdmin, isOwner } = useAuth();
   const [settings, setSettings] = useState<CompanySettings | null>(() => {
     const cached = localStorage.getItem('company_settings_cache');
     if (cached) {
@@ -201,11 +201,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const normalizedRoleId = userRoleId.toLowerCase();
     
     // 1. SYSTEM SUPERUSER BYPASS
-    // True Super Admins (Owners) always have full system clearance.
-    if (isSuperAdmin) return true;
+    // True Super Admins (Owners) always have full system clearance and bypass the blacklist.
+    if (isOwner) return true;
 
     // 2. GLOBAL FEATURE CONTROL (BLACKLIST LOGIC)
-    // If a permission is in the restricted_permissions list, it is globally HIDDEN for all non-super-admins.
+    // If a permission is in the restricted_permissions list, it is globally HIDDEN for all non-owners.
     if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
         if (settings.restricted_permissions.includes(permission)) {
             return false;
