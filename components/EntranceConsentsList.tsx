@@ -17,12 +17,14 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
     const [consents, setConsents] = useState<EntranceFeeConsent[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [activeView, setActiveView] = useState<'registry' | 'reports'>('registry');
+    const [activeView, setActiveView] = useState<'registry' | 'history' | 'reports'>('registry');
     const [editingConsent, setEditingConsent] = useState<EntranceFeeConsent | null>(null);
     const [deletingConsent, setDeletingConsent] = useState<EntranceFeeConsent | null>(null);
     const [selectedGuestHistoryConsent, setSelectedGuestHistoryConsent] = useState<EntranceFeeConsent | null>(null);
     const [newConsentGuestData, setNewConsentGuestData] = useState<Partial<EntranceFeeConsent> | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    const todayStr = new Date().toISOString().split('T')[0];
 
     const canEdit = true;
     const canDelete = true;
@@ -71,7 +73,12 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
         }
     };
 
-    const filtered = consents.filter(c => 
+    const todayConsents = consents.filter(c => c.date === todayStr);
+    const archiveConsents = consents.filter(c => c.date !== todayStr);
+
+    const baseConsents = activeView === 'registry' ? todayConsents : (activeView === 'history' ? archiveConsents : consents);
+
+    const filtered = baseConsents.filter(c => 
         c.guest_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         (c.qid_passport && c.qid_passport.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (c.room_number && c.room_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -264,17 +271,28 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
         <div className="space-y-6 animate-in fade-in">
             {/* View Mode Switcher Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl border border-slate-200">
                     <button
                         onClick={() => setActiveView('registry')}
                         className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
                             activeView === 'registry'
-                                ? 'bg-white text-indigo-600 shadow-sm'
+                                ? 'bg-white text-emerald-600 shadow-sm'
                                 : 'text-slate-500 hover:text-slate-800'
                         }`}
                     >
                         <LayoutGrid className="w-4 h-4" />
-                        Consents Registry ({consents.length})
+                        Today's Registry ({todayConsents.length})
+                    </button>
+                    <button
+                        onClick={() => setActiveView('history')}
+                        className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                            activeView === 'history'
+                                ? 'bg-white text-amber-600 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                    >
+                        <History className="w-4 h-4" />
+                        Archive History ({archiveConsents.length})
                     </button>
                     <button
                         onClick={() => setActiveView('reports')}
@@ -285,11 +303,11 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                         }`}
                     >
                         <BarChart3 className="w-4 h-4" />
-                        Daily & Monthly Reports
+                        Reports
                     </button>
                 </div>
 
-                {activeView === 'registry' && (
+                {activeView !== 'reports' && (
                     <div className="relative flex-1 max-w-md w-full">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                         <input 
@@ -313,8 +331,8 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                 />
             )}
 
-            {/* Cards Grid Registry View */}
-            {activeView === 'registry' && (
+            {/* Cards Grid Registry/History View */}
+            {(activeView === 'registry' || activeView === 'history') && (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {filtered.map(c => (
                         <div 
@@ -415,9 +433,19 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
 
                     {filtered.length === 0 && (
                         <div className="col-span-full py-12 flex flex-col items-center justify-center text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                            <FileSignature className="w-12 h-12 text-slate-300 mb-4" />
-                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">No Consents Found</h3>
-                            <p className="text-xs font-medium text-slate-500 max-w-sm">No entrance fee consents match your current filters. New consents will appear here automatically.</p>
+                            {activeView === 'registry' ? (
+                                <>
+                                    <FileSignature className="w-12 h-12 text-slate-300 mb-4" />
+                                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">No Entries Today</h3>
+                                    <p className="text-xs font-medium text-slate-500 max-w-sm">There are no entrance consents logged for today yet. Use the "New Consent Form" button to add one.</p>
+                                </>
+                            ) : (
+                                <>
+                                    <History className="w-12 h-12 text-slate-300 mb-4" />
+                                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">Archive is Empty</h3>
+                                    <p className="text-xs font-medium text-slate-500 max-w-sm">No historical entrance consents were found matching your filters.</p>
+                                </>
+                            )}
                         </div>
                     )}
                 </div>
