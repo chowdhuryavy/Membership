@@ -204,15 +204,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Super Admins (Admins/Owners) always have full system clearance.
     if (isSuperAdmin) return true;
 
-    // 2. GLOBAL FEATURE CONTROL (Refined Logic)
+    // 2. GLOBAL FEATURE CONTROL (BLACKLIST LOGIC)
+    // If a permission is in the restricted_permissions list, it is globally HIDDEN for all non-super-admins.
+    // This allows the Super Admin to selectively disable features system-wide.
     if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
-        // Module-Scoped Restriction: ONLY APPLES TO 'settings' GROUP
-        // This prevents other admins from accessing global configurations like Properties or Outlets
-        // unless explicitly granted via "Feature Visibility"
-        if (permission.startsWith('settings:')) {
-            if (!settings.restricted_permissions.includes(permission)) {
-                return false;
-            }
+        if (settings.restricted_permissions.includes(permission)) {
+            return false;
         }
     }
 

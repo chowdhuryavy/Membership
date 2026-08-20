@@ -447,6 +447,7 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
             {/* New Consent Modal for Returning Guest */}
             {newConsentGuestData && (
                 <EntranceFeeConsentModal
+                    key={`new-consent-${newConsentGuestData.guest_name || 'guest'}`}
                     isOpen={!!newConsentGuestData}
                     onClose={() => setNewConsentGuestData(null)}
                     onSuccess={(newObj) => {
@@ -461,6 +462,7 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
             {/* Edit Entrance Fee Consent Modal */}
             {editingConsent && (
                 <EntranceFeeConsentModal
+                    key={`edit-consent-${editingConsent.id}`}
                     isOpen={!!editingConsent}
                     onClose={() => setEditingConsent(null)}
                     onSuccess={(updated) => {

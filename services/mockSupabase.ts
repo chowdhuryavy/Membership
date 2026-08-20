@@ -3524,9 +3524,9 @@ class DatabaseService {
       return this.safeCall(async () => {
         let query = supabase.from('guests').select('*').eq('property_id', propertyId);
         
-        if (options?.phone) query = query.eq('phone', options.phone);
-        if (options?.email) query = query.eq('email', options.email);
-        if (options?.name) query = query.ilike('name', options.name);
+        if (options?.phone) query = query.ilike('phone', `%${options.phone}%`);
+        if (options?.email) query = query.ilike('email', `%${options.email}%`);
+        if (options?.name) query = query.ilike('name', `%${options.name}%`);
 
         if (options?.limit) query = query.limit(options.limit);
         const { data, error } = await query.order('name');

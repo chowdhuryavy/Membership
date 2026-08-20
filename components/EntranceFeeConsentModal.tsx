@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { X, Save, AlertTriangle, Eraser, CheckCircle2, QrCode, FileSignature, Sparkles, ArrowRight, Search, User, Phone } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Input, Button } from './ui';
@@ -26,10 +26,18 @@ export const EntranceFeeConsentModal = ({
     isOpen: boolean;
     onClose: () => void;
     onSuccess: (consent: EntranceFeeConsent) => void;
-    initialData?: (Partial<EntranceFeeConsent> & { guestName?: string; saleId?: string; itemName?: string; price?: number }) | null;
+    initialData?: (Partial<EntranceFeeConsent> & { guestName?: string; saleId?: string; itemName?: string; price?: number; created_at?: string; id?: string; outlet_id?: string; guest_signature?: string; phone?: string; email?: string; qid_passport?: string; date?: string; time?: string; room_number?: string; is_hotel_guest?: boolean; notes?: string; guest_name?: string; item_name?: string; sale_id?: string }) | null;
 }) => {
     const { currentOutlet, currentProperty, settings, currency, currencies } = useSettings();
-    const waiver = React.useMemo(() => getBilingualWaiverText(currentOutlet?.name, currentProperty?.name), [currentOutlet?.name, currentProperty?.name]);
+    
+    // 1. All hooks at the top level
+    const waiver = useMemo(() => getBilingualWaiverText(currentOutlet?.name, currentProperty?.name), [currentOutlet?.name, currentProperty?.name]);
+    const activeCurrency = useMemo(() => {
+        return currency || 
+               (currentProperty && currencies.find(c => c.property_id === currentProperty.id)) || 
+               DEFAULT_CURRENCY;
+    }, [currency, currentProperty, currencies]);
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [acceptedWaiver, setAcceptedWaiver] = useState(true);
@@ -85,6 +93,57 @@ export const EntranceFeeConsentModal = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const onFinalSubmit = useCallback(async (data: any, signatureOverride?: string) => {
+        setLoading(true);
+        try {
+            const consentData: Omit<EntranceFeeConsent, 'id' | 'created_at'> = {
+                ...data,
+                guest_signature: signatureOverride !== undefined ? signatureOverride : guestSignature || undefined
+            };
+
+            if (isEditMode && initialData?.id) {
+                await db.updateEntranceFeeConsent(initialData.id, consentData);
+                toast.success('Entrance Fee Consent record updated successfully!');
+                const updatedObj: EntranceFeeConsent = {
+                    ...consentData,
+                    id: initialData.id,
+                    created_at: initialData.created_at || new Date().toISOString()
+                } as EntranceFeeConsent;
+                onSuccess(updatedObj);
+            } else {
+                const saved = await db.addEntranceFeeConsent(consentData);
+                toast.success('Entrance Fee Consent logged successfully!');
+                onSuccess(saved as any);
+            }
+        } catch (err: any) {
+            setError(err.message || 'Failed to register Entrance Fee Consent');
+        } finally {
+            setLoading(false);
+        }
+    }, [isEditMode, initialData, guestSignature, onSuccess]);
+
+    const handleSignatureSave = useCallback(async (dataUrl: string) => {
+        setGuestSignature(dataUrl);
+        setShowSignatureModal(false);
+        if (pendingSubmitData) {
+            await onFinalSubmit(pendingSubmitData, dataUrl);
+        }
+    }, [pendingSubmitData, onFinalSubmit]);
+
+    const handleSkipSignature = useCallback(async () => {
+        setGuestSignature('BYPASSED');
+        setShowSignatureModal(false);
+        if (pendingSubmitData) {
+            await onFinalSubmit(pendingSubmitData, 'BYPASSED');
+        }
+    }, [pendingSubmitData, onFinalSubmit]);
+
+    const closeSignatureModal = useCallback(() => {
+        setShowSignatureModal(false);
+        setPendingSubmitData(null);
+        setLoading(false);
+    }, []);
+
     const searchGuests = async (value: string, type: 'name' | 'phone') => {
         if (value.length < 3 || !currentProperty) {
             setGuestSearchResults([]);
@@ -113,18 +172,9 @@ export const EntranceFeeConsentModal = ({
             guest_name: guest.name,
             phone: guest.phone || '',
             email: guest.email || '',
-            qid_passport: formData.qid_passport
         });
         setShowGuestSuggestions(false);
     };
-
-    if (!isOpen) return null;
-
-    const activeCurrency = useMemo(() => {
-        return currency || 
-               (currentProperty && currencies.find(c => c.property_id === currentProperty.id)) || 
-               DEFAULT_CURRENCY;
-    }, [currency, currentProperty, currencies]);
 
     const prepareConsentData = () => {
         const targetOutletId = initialData?.outlet_id || currentOutlet?.id;
@@ -138,9 +188,6 @@ export const EntranceFeeConsentModal = ({
             return null;
         }
 
-        const resolvedSaleId = initialData?.sale_id || (initialData as any)?.saleId;
-        const resolvedItemName = initialData?.item_name || (initialData as any)?.itemName;
-
         return {
             outlet_id: targetOutletId,
             guest_name: formData.guest_name,
@@ -151,17 +198,10 @@ export const EntranceFeeConsentModal = ({
             time: formData.time,
             room_number: formData.room_number,
             is_hotel_guest: formData.is_hotel_guest || !!formData.room_number,
-            sale_id: resolvedSaleId,
-            item_name: resolvedItemName,
+            sale_id: initialData?.sale_id || (initialData as any)?.saleId,
+            item_name: initialData?.item_name || (initialData as any)?.itemName,
             notes: formData.notes
         };
-    };
-
-    const handleOpenSignatureModal = () => {
-        const data = prepareConsentData();
-        if (!data) return;
-        setPendingSubmitData(data);
-        setShowSignatureModal(true);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -169,67 +209,15 @@ export const EntranceFeeConsentModal = ({
         const data = prepareConsentData();
         if (!data) return;
 
-        // If signature is already provided or bypassed, submit directly
         if (guestSignature) {
             await onFinalSubmit(data, guestSignature);
         } else {
-            // Prompt signature method modal (Pad, QR Code, Cancel, or Skip)
             setPendingSubmitData(data);
             setShowSignatureModal(true);
         }
     };
 
-    const handleSignatureSave = React.useCallback(async (dataUrl: string) => {
-        setGuestSignature(dataUrl);
-        setShowSignatureModal(false);
-        if (pendingSubmitData) {
-            await onFinalSubmit(pendingSubmitData, dataUrl);
-        }
-    }, [pendingSubmitData]);
-
-    const handleSkipSignature = React.useCallback(async () => {
-        setGuestSignature('BYPASSED');
-        setShowSignatureModal(false);
-        if (pendingSubmitData) {
-            await onFinalSubmit(pendingSubmitData, 'BYPASSED');
-        }
-    }, [pendingSubmitData]);
-
-    const closeSignatureModal = React.useCallback(() => {
-        setShowSignatureModal(false);
-        setPendingSubmitData(null);
-        setLoading(false);
-    }, []);
-
-    const onFinalSubmit = async (data: any, signatureOverride?: string) => {
-        setLoading(true);
-        try {
-            const consentData: Omit<EntranceFeeConsent, 'id' | 'created_at'> = {
-                ...data,
-                guest_signature: signatureOverride !== undefined ? signatureOverride : guestSignature || undefined
-            };
-
-            if (isEditMode && initialData?.id) {
-                await db.updateEntranceFeeConsent(initialData.id, consentData);
-                toast.success('Entrance Fee Consent record updated successfully!');
-                const updatedObj: EntranceFeeConsent = {
-                    ...consentData,
-                    id: initialData.id,
-                    created_at: initialData.created_at || new Date().toISOString()
-                };
-                onSuccess(updatedObj);
-            } else {
-                const saved = await db.addEntranceFeeConsent(consentData);
-                toast.success('Entrance Fee Consent logged successfully!');
-                onSuccess(saved as any);
-            }
-        } catch (err: any) {
-            const msg = err.message || '';
-            setError(msg || 'Failed to register Entrance Fee Consent');
-        } finally {
-            setLoading(false);
-        }
-    };
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto pt-16 pb-16">
@@ -304,233 +292,88 @@ export const EntranceFeeConsentModal = ({
                                             searchGuests(val, 'phone');
                                         }} 
                                         placeholder="Search by phone..."
-                                        className="h-11 rounded-xl text-xs" 
+                                        className="h-11 rounded-xl text-xs font-bold pr-10" 
                                     />
                                 </div>
                                 <Input label="Email Address" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-11 rounded-xl text-xs" />
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Input label="Date *" type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="h-11 rounded-xl text-xs font-bold" />
-                                <Input label="Check-In Time" type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="h-11 rounded-xl text-xs font-bold" />
+                                <Input label="Date *" type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="h-11 rounded-xl text-xs" />
+                                <Input label="Time *" type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="h-11 rounded-xl text-xs" />
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <Input 
-                                        label="Room Number (If Hotel Guest)" 
-                                        value={formData.room_number} 
-                                        onChange={e => setFormData({
-                                            ...formData, 
-                                            room_number: e.target.value,
-                                            is_hotel_guest: !!e.target.value || formData.is_hotel_guest
-                                        })} 
-                                        placeholder="e.g. Room 402..." 
-                                        className="h-11 rounded-xl text-xs font-bold" 
+                            <div className="flex items-center gap-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                                <label className="flex items-center gap-2 cursor-pointer group">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={formData.is_hotel_guest} 
+                                        onChange={e => setFormData({...formData, is_hotel_guest: e.target.checked})} 
+                                        className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" 
                                     />
-                                    <label className="flex items-center gap-2 mt-1.5 cursor-pointer">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 group-hover:text-emerald-600 transition-colors">Hotel Guest?</span>
+                                </label>
+                                {formData.is_hotel_guest && (
+                                    <Input 
+                                        placeholder="Room Number" 
+                                        value={formData.room_number} 
+                                        onChange={e => setFormData({...formData, room_number: e.target.value})} 
+                                        className="h-9 rounded-xl text-xs font-bold w-32 border-emerald-200" 
+                                    />
+                                )}
+                            </div>
+
+                            <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-200 shadow-inner">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-1.5 bg-emerald-100 rounded-lg"><Sparkles className="w-3.5 h-3.5 text-emerald-600" /></div>
+                                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-800">Waiver & Liability Release</h4>
+                                    </div>
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                </div>
+                                <div className="max-h-48 overflow-y-auto pr-2 space-y-3">
+                                    <p className="text-[10px] text-slate-700 leading-relaxed text-justify font-medium">{waiver.importantDisclaimerEn}</p>
+                                    <p dir="rtl" className="text-[10px] text-slate-600 leading-relaxed text-justify font-arabic">{waiver.importantDisclaimerAr}</p>
+                                </div>
+                                <div className="mt-4 pt-4 border-t border-slate-200">
+                                    <label className="flex items-start gap-3 cursor-pointer group">
                                         <input 
                                             type="checkbox" 
-                                            checked={formData.is_hotel_guest} 
-                                            onChange={e => setFormData({...formData, is_hotel_guest: e.target.checked})} 
-                                            className="w-3.5 h-3.5 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+                                            checked={acceptedWaiver} 
+                                            onChange={e => setAcceptedWaiver(e.target.checked)} 
+                                            className="mt-1 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" 
                                         />
-                                        <span className="text-[10px] font-bold text-slate-600">In-House Hotel Guest Resident</span>
-                                    </label>
-                                </div>
-                                <Input label="Internal Audit Notes" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Pass type or notes..." className="h-11 rounded-xl text-xs" />
-                            </div>
-
-                            {/* Detailed Bilingual Waiver and Release of Liability */}
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-[10px] font-black text-slate-800 uppercase tracking-widest">
-                                        Bilingual Waiver and Release of Liability Terms
-                                    </label>
-                                    <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100 uppercase">
-                                        Mandatory Guest Agreement / اتفاقية إلزامية
-                                    </span>
-                                </div>
-
-                                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 text-[11px] text-slate-600 leading-relaxed max-h-56 overflow-y-auto space-y-4 shadow-inner">
-                                    {/* IMPORTANT DISCLAIMER BOX */}
-                                    <div className="p-3.5 bg-amber-50/80 rounded-xl border border-amber-200/80 space-y-2">
-                                        <div>
-                                            <p className="font-black text-amber-900 uppercase text-[10px] tracking-wider">
-                                                IMPORTANT DISCLAIMER:
-                                            </p>
-                                            <p className="text-amber-900/90 text-[10.5px] mt-0.5">
-                                                {waiver.importantDisclaimerEn}
-                                            </p>
-                                        </div>
-                                        <div dir="rtl" className="pt-2 border-t border-amber-200/60 font-sans text-right">
-                                            <p className="font-black text-amber-950 text-[11px]">
-                                                إخلاء مسؤولية هام:
-                                            </p>
-                                            <p className="text-amber-950/90 text-[11px] leading-relaxed mt-0.5">
-                                                {waiver.importantDisclaimerAr}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* FULL WAIVER TERMS - ENGLISH */}
-                                    <div className="space-y-2 pt-1">
-                                        <p className="font-black text-slate-900 uppercase text-[11px] tracking-wider border-b border-slate-200 pb-1">
-                                            {waiver.waiverTitleEn} — <span className="text-emerald-700">{waiver.waiverSubEn}</span>
-                                        </p>
-                                        <p className="text-slate-600 text-[10.5px]">{waiver.p1En}</p>
-                                        <p className="text-slate-600 text-[10.5px]">{waiver.p2En}</p>
-                                        <p className="text-slate-600 text-[10.5px] font-medium">{waiver.p3En}</p>
-                                    </div>
-
-                                    {/* FULL WAIVER TERMS - ARABIC */}
-                                    <div dir="rtl" className="space-y-2 pt-3 border-t border-slate-200 font-sans text-right">
-                                        <p className="font-black text-slate-900 text-[12px] border-b border-slate-200 pb-1">
-                                            {waiver.waiverTitleAr} — <span className="text-emerald-700">{waiver.waiverSubAr}</span>
-                                        </p>
-                                        <p className="text-slate-700 text-[11px] leading-relaxed">{waiver.p1Ar}</p>
-                                        <p className="text-slate-700 text-[11px] leading-relaxed">{waiver.p2Ar}</p>
-                                        <p className="text-slate-800 text-[11px] font-bold leading-relaxed">{waiver.p3Ar}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Guest Digital Signature Options */}
-                            <div className="space-y-4 pt-2">
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-[10px] font-black text-slate-800 uppercase tracking-widest ml-1">
-                                            Mandatory Waiver Acceptance
-                                        </label>
-                                    </div>
-                                    <label className="flex items-center gap-3 p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200/60 cursor-pointer hover:bg-emerald-50 transition-colors shadow-sm">
-                                        <div className="relative flex items-center">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={acceptedWaiver} 
-                                                onChange={e => setAcceptedWaiver(e.target.checked)}
-                                                className="w-5 h-5 text-emerald-600 rounded-lg border-slate-300 focus:ring-emerald-500 transition-all"
-                                            />
-                                        </div>
-                                        <span className="text-[11px] font-bold text-emerald-950 leading-relaxed">
-                                            I have read, understood, and agree to the Bilingual Waiver & Release terms above. / قرأت وفهمت وأوافق على شروط وإخلاء المسؤولية أعلاه.
+                                        <span className="text-[10px] font-bold text-slate-600 group-hover:text-slate-900 transition-colors">
+                                            I have read and agree to the waiver and liability release terms.
+                                            <br/>
+                                            <span className="font-arabic text-[11px]" dir="rtl">لقد قرأت وأوافق على شروط التنازل وإخلاء المسؤولية.</span>
                                         </span>
                                     </label>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <div className="flex justify-between items-center">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                                            Guest Signature & Signing Method
-                                        </label>
-                                        {guestSignature && (
-                                            <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase flex items-center gap-1 ${
-                                                guestSignature === 'BYPASSED' 
-                                                    ? 'bg-amber-50 text-amber-700 border border-amber-200' 
-                                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                            }`}>
-                                                <CheckCircle2 className="w-3 h-3" />
-                                                {guestSignature === 'BYPASSED' ? 'Signature Bypassed (Desktop)' : 'Signature Captured'}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {guestSignature && guestSignature !== 'BYPASSED' ? (
-                                        <div className="bg-slate-50 border-2 border-emerald-200/80 rounded-2xl p-4 flex flex-col items-center gap-3">
-                                            <div className="bg-white border border-slate-200 rounded-xl p-2 w-full flex items-center justify-center max-h-32">
-                                                <img 
-                                                    src={guestSignature} 
-                                                    alt="Guest Signature" 
-                                                    className="max-h-28 max-w-full object-contain" 
-                                                />
-                                            </div>
-                                            <div className="flex items-center gap-2 w-full">
-                                                <Button 
-                                                    type="button" 
-                                                    variant="outline" 
-                                                    onClick={handleOpenSignatureModal}
-                                                    className="flex-1 h-10 rounded-xl text-xs font-bold gap-1.5"
-                                                >
-                                                    <FileSignature className="w-3.5 h-3.5 text-indigo-600" /> Change / Re-Sign
-                                                </Button>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => setGuestSignature(null)}
-                                                    className="h-10 px-3 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors flex items-center gap-1"
-                                                >
-                                                    <Eraser className="w-3.5 h-3.5" /> Remove
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : guestSignature === 'BYPASSED' ? (
-                                        <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-5 flex items-center justify-between shadow-sm">
-                                            <div>
-                                                <p className="text-xs font-bold text-amber-900">Signature Skipped (Desktop Waiver)</p>
-                                                <p className="text-[10px] text-amber-700">Consent will be recorded without an attached digital signature image.</p>
-                                            </div>
-                                            <Button 
-                                                type="button" 
-                                                variant="outline" 
-                                                onClick={handleOpenSignatureModal}
-                                                className="h-10 px-4 rounded-xl text-xs font-bold gap-1.5 border-amber-300 text-amber-900 hover:bg-amber-100 shadow-sm"
-                                            >
-                                                <FileSignature className="w-3.5 h-3.5" /> Add Signature
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <div className="bg-gradient-to-br from-white to-indigo-50/30 border-2 border-dashed border-indigo-200/70 rounded-3xl p-6 flex flex-col items-center gap-4 text-center shadow-sm">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center shadow-inner">
-                                                    <FileSignature className="w-5 h-5" />
-                                                </div>
-                                                <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center shadow-inner">
-                                                    <QrCode className="w-5 h-5" />
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-black text-slate-900 uppercase tracking-tight">
-                                                    Guest Signature Option
-                                                </p>
-                                                <p className="text-[10px] font-medium text-slate-500 max-w-sm mt-1 leading-relaxed">
-                                                    Guest can sign on screen, scan dynamic QR code with mobile/tablet, or skip if necessary.
-                                                </p>
-                                            </div>
-                                            <div className="flex flex-wrap items-center justify-center gap-3 w-full pt-2">
-                                                <Button 
-                                                    type="button" 
-                                                    onClick={handleOpenSignatureModal}
-                                                    className="h-12 px-6 rounded-2xl text-[11px] font-black uppercase tracking-widest bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-100 flex items-center gap-2.5 active:scale-95 transition-all"
-                                                >
-                                                    <Sparkles className="w-4 h-4" /> Select Method (Pad / QR Code)
-                                                </Button>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => setGuestSignature('BYPASSED')}
-                                                    className="h-12 px-5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all"
-                                                >
-                                                    Skip Signature
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
 
                             {error && (
-                                <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold p-4 rounded-xl space-y-3 animate-in shake duration-300">
-                                    <div className="flex items-center gap-2">
-                                        <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
-                                        <span>{error}</span>
-                                    </div>
+                                <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 text-rose-600 text-xs font-bold animate-in slide-in-from-top-2">
+                                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                                    <p>{error}</p>
                                 </div>
                             )}
-                            
-                            <div className="flex gap-3 pt-2">
-                                <button type="button" onClick={onClose} className="flex-1 h-14 rounded-3xl font-black uppercase text-[10px] tracking-widest bg-slate-100 hover:bg-slate-200 transition-colors">
+
+                            <div className="flex gap-4">
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    onClick={onClose} 
+                                    className="flex-1 h-12 rounded-2xl border-slate-200 text-slate-600 font-bold uppercase tracking-widest text-[10px] hover:bg-slate-50"
+                                >
                                     Cancel
-                                </button>
-                                <Button type="submit" disabled={loading} className="flex-[2] h-14 rounded-3xl font-black text-xs uppercase tracking-[0.15em] bg-emerald-600 hover:bg-emerald-700 shadow-2xl shadow-emerald-200 text-white active:scale-95 transition-all">
-                                    {loading ? 'Saving...' : 'Save Consent & Store Record'}
+                                </Button>
+                                <Button 
+                                    type="submit" 
+                                    disabled={loading || !acceptedWaiver}
+                                    className="flex-1 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-100 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
+                                >
+                                    {loading ? 'Processing...' : guestSignature ? 'Update Consent' : 'Provide Signature'}
                                 </Button>
                             </div>
                         </form>
@@ -544,15 +387,15 @@ export const EntranceFeeConsentModal = ({
                     onClose={closeSignatureModal}
                     onSave={handleSignatureSave}
                     onSkip={handleSkipSignature}
-                    guestName={formData.guest_name || 'Guest'}
-                    propertyName={currentProperty?.name || ''}
-                    outletName={currentOutlet?.name || ''}
-                    outletId={currentOutlet?.id || ''}
-                    tier={initialData?.item_name || 'Entrance Fee Pass'}
-                    price={initialData?.price || '0'}
-                    currency={activeCurrency?.code || 'AED'}
-                    currencySymbol={activeCurrency?.symbol || ''}
-                    logoUrl={currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || ''}
+                    guestName={formData.guest_name}
+                    propertyName={currentProperty?.name}
+                    outletName={currentOutlet?.name}
+                    outletId={currentOutlet?.id}
+                    tier="Facility Guest Waiver"
+                    price="0"
+                    currency={activeCurrency?.code}
+                    currencySymbol={activeCurrency?.symbol}
+                    logoUrl={currentProperty?.logo_url || settings?.logo_url}
                     agreementType="entrance"
                 />
             )}

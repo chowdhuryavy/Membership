@@ -61,14 +61,20 @@ const PermissionMatrix = ({
   registry, 
   selectedPermissions, 
   onChange,
-  readOnly = false
+  readOnly = false,
+  activeLabel = 'Disable Module',
+  inactiveLabel = 'Enable Module',
+  countLabel = 'Authorized'
 }: { 
   registry: PermissionGroup[], 
   selectedPermissions: Permission[], 
   onChange: (perms: Permission[]) => void,
-  readOnly?: boolean
+  readOnly?: boolean,
+  activeLabel?: string,
+  inactiveLabel?: string,
+  countLabel?: string
 }) => {
-  const [expanded, setExpanded] = useState<string[]>([registry[0]?.id]);
+  const [expanded, setExpanded] = useState<string[]>(registry.length > 0 ? [registry[0].id] : []);
   
   
   const toggleGroup = (id: string) => {
@@ -121,7 +127,7 @@ const PermissionMatrix = ({
                 <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                 <div>
                   <h4 className="font-black text-slate-900 uppercase text-[10px] tracking-widest">{group.label}</h4>
-                  <p className="text-[8px] font-bold text-slate-400 uppercase">{selectedCount} of {groupKeys.length} Authorized</p>
+                  <p className="text-[8px] font-bold text-slate-400 uppercase">{selectedCount} of {groupKeys.length} {countLabel}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -130,7 +136,7 @@ const PermissionMatrix = ({
                     onClick={(e) => { e.stopPropagation(); toggleAllInGroup(group.id); }}
                     className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-tighter border transition-all ${allSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-white hover:text-indigo-600'}`}
                    >
-                     {allSelected ? 'Disable Module' : 'Enable Module'}
+                     {allSelected ? activeLabel : inactiveLabel}
                    </button>
                  )}
               </div>
@@ -1344,27 +1350,29 @@ const SettingsPage = () => {
                       </CardHeader>
                       <CardContent className="p-8">
                           <div className="bg-amber-50 border border-amber-100 p-6 rounded-3xl mb-8 flex items-start gap-4">
-                              <Info className="w-6 h-6 text-amber-600 shrink-0 mt-1" />
+                              <ShieldAlert className="w-6 h-6 text-amber-600 shrink-0 mt-1" />
                               <div className="space-y-1">
-                                  <p className="text-xs font-black text-amber-900 uppercase">Global Settings Visibility</p>
+                                  <p className="text-xs font-black text-amber-900 uppercase">Global Function Access Restriction</p>
                                   <p className="text-[10px] font-bold text-amber-700 uppercase leading-relaxed">
-                                      Use this to control which settings tabs are visible to regular administrators. 
-                                      If you enable specific settings below, <b>only those settings tabs</b> will be visible to non-superadmin users. 
-                                      This prevents other admins from accessing global configurations like Properties or Outlets.
+                                      Use this to selectively <b>disable</b> features organization-wide for non-superadmin users. 
+                                      Ticking a feature here will hide it from all other admins, even if their role permissions would normally allow access.
                                   </p>
                               </div>
                           </div>
                           <PermissionMatrix 
-                              registry={permissionRegistry.filter(g => g.id === 'settings')} 
+                              registry={permissionRegistry} 
                               selectedPermissions={(settings?.restricted_permissions || []) as Permission[]} 
+                              activeLabel="Un-Restrict All"
+                              inactiveLabel="Restrict All"
+                              countLabel="Restricted"
                               onChange={async (perms) => {
                                   try {
                                       const updatedSettings = { ...settings!, restricted_permissions: perms };
                                       await db.updateSettings(updatedSettings);
                                       await refreshSettings();
-                                      showStatus('Feature visibility updated successfully.', 'success');
+                                      showStatus('Global visibility restrictions synchronized.', 'success');
                                   } catch (e: any) {
-                                      showStatus('Failed to update feature visibility: ' + e.message, 'error');
+                                      showStatus('Failed to update restrictions: ' + e.message, 'error');
                                   }
                               }} 
                           />
