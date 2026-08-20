@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
@@ -62,6 +62,7 @@ export const SignatureCapturePage: React.FC = () => {
     
     const isPTAgreement = agreementType === 'pt' || tier.toLowerCase().includes('pt') || tier.toLowerCase().includes('personal') || tier.toLowerCase().includes('training') || tier.toLowerCase().includes('consent');
     const isEntranceWaiver = agreementType === 'waiver' || agreementType === 'entrance' || tier.toLowerCase().includes('entrance') || tier.toLowerCase().includes('pass') || tier.toLowerCase().includes('waiver');
+    const isMembershipAgreement = agreementType === 'membership' || (!isPTAgreement && !isEntranceWaiver);
 
     const waiverContent = useMemo(() => isEntranceWaiver ? getBilingualWaiverText(outletName, propertyName) : null, [isEntranceWaiver, outletName, propertyName]);
     const ptConsent = useMemo(() => isPTAgreement ? getBilingualPTConsentText(propertyName || outletName || 'The Torch Club') : null, [isPTAgreement, propertyName, outletName]);
@@ -314,12 +315,16 @@ export const SignatureCapturePage: React.FC = () => {
                         <p className="text-slate-700 font-medium text-justify">
                             {isPTAgreement 
                                 ? "I declare that I am in good physical health to participate in Personal Training. I confirm that all PAR-Q answers provided are true and accurate." 
-                                : "I agree to abide by all club guidelines, facility safety rules, and operational regulations."}
+                                : isEntranceWaiver
+                                ? "I agree to abide by all club guidelines, facility safety rules, and operational regulations as outlined in the liability waiver."
+                                : "I agree to abide by all gymnasium rules and regulations as outlined in the membership agreement."}
                         </p>
                         <p dir="rtl" className="text-slate-600 font-arabic text-justify">
                             {isPTAgreement 
                                 ? "أقر بأنني بحالة صحية جيدة تؤهلني للمشاركة في التدريب الشخصي، وأؤكد أن جميع إجاباتي على استبيان الجاهزية البدنية صحيحة ودقيقة." 
-                                : "أوافق على الالتزام بكافة لوائح وقوانين النادي وشروط السلامة المعتمدة."}
+                                : isEntranceWaiver
+                                ? "أوافق على الالتزام بكافة لوائح وقوانين النادي وشروط السلامة المعتمدة كما هو موضح في نموذج إخلاء المسؤولية."
+                                : "أوافق على الالتزام بكافة لوائح وقوانين النادي وشروط السلامة المعتمدة كما هو موضح في اتفاقية العضوية."}
                         </p>
                     </div>
 
@@ -416,10 +421,10 @@ export const SignatureCapturePage: React.FC = () => {
                         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                             <div>
                                 <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">
-                                    {ptConsent?.titleEn || (isEntranceWaiver ? 'Liability Waiver' : 'Rules & Regulations')}
+                                    {ptConsent?.titleEn || (isEntranceWaiver ? 'Liability Waiver' : 'Membership Rules & Regulations')}
                                 </h3>
                                 <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mt-1" dir="rtl">
-                                    {ptConsent?.titleAr || (isEntranceWaiver ? 'إخلاء المسؤولية' : 'القواعد و اللوائح')}
+                                    {ptConsent?.titleAr || (isEntranceWaiver ? 'إخلاء المسؤولية' : 'قواعد ولوائح العضوية')}
                                 </p>
                             </div>
                             <button 

@@ -625,6 +625,7 @@ export const PTAgreementModal: React.FC<PTAgreementModalProps> = ({
           price="0"
           currency="QAR"
           logoUrl={logoUrl}
+          agreementType="pt"
         />
       )}
     </div>,

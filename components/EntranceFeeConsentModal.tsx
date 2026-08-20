@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { X, Save, AlertTriangle, Eraser, CheckCircle2, QrCode, FileSignature, Sparkles, ArrowRight, Search, User, Phone } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Input, Button } from './ui';

@@ -1704,6 +1704,7 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
           propertyName={currentProperty?.name}
           outletName={currentOutlet?.name}
           outletId={currentOutlet?.id}
+          agreementType="membership"
         />
       )}
 

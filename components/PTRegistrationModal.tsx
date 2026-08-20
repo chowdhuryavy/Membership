@@ -422,6 +422,7 @@ NOTIFY pgrst, 'reload schema';`;
                     currency={activeCurrency?.code || 'AED'}
                     currencySymbol={activeCurrency?.symbol || ''}
                     logoUrl={currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || ''}
+                    agreementType="pt"
                 />
             )}
         </div>
