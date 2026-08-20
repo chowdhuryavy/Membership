@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { EntranceFeeConsent } from '../types';
 import { getBilingualWaiverText } from '../lib/waiverHelper';
 import { Search, Calendar, FileSignature, Download, Printer, Edit3, Trash2, AlertTriangle, X, History, BarChart3, LayoutGrid, Plus } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { EntranceFeeConsentModal } from './EntranceFeeConsentModal';
 import { GuestEntranceHistoryModal } from './GuestEntranceHistoryModal';
 import { EntranceFeeReports } from './EntranceFeeReports';
@@ -17,6 +17,7 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
     const [consents, setConsents] = useState<EntranceFeeConsent[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [filterDate, setFilterDate] = useState<string>('');
     const [activeView, setActiveView] = useState<'registry' | 'history' | 'reports'>('registry');
     const [editingConsent, setEditingConsent] = useState<EntranceFeeConsent | null>(null);
     const [deletingConsent, setDeletingConsent] = useState<EntranceFeeConsent | null>(null);
@@ -76,7 +77,9 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
     const todayConsents = consents.filter(c => c.date === todayStr);
     const archiveConsents = consents.filter(c => c.date !== todayStr);
 
-    const baseConsents = activeView === 'registry' ? todayConsents : (activeView === 'history' ? archiveConsents : consents);
+    const baseConsents = filterDate 
+        ? consents.filter(c => c.date === filterDate)
+        : (activeView === 'registry' ? todayConsents : (activeView === 'history' ? archiveConsents : consents));
 
     const filtered = baseConsents.filter(c => 
         c.guest_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -84,6 +87,101 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
         (c.room_number && c.room_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (c.phone && c.phone.toLowerCase().includes(searchTerm.toLowerCase()))
     );
+
+    const handlePrintReport = () => {
+        if (filtered.length === 0) {
+            toast.error('No data to print for the current selection.');
+            return;
+        }
+
+        const reportDate = filterDate ? format(parseISO(filterDate), 'dd MMM yyyy') : (activeView === 'registry' ? 'Today (' + format(new Date(), 'dd MMM yyyy') + ')' : 'All Records');
+        const title = `Entrance Fee Report - ${reportDate}`;
+        
+        const matchedProperty = currentProperty || properties?.[0];
+        const propertyName = matchedProperty?.name || settings?.name || '';
+        const logoUrl = matchedProperty?.logo_url || settings?.logo_url || '';
+
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        
+        const doc = iframe.contentWindow?.document;
+        if (!doc) return;
+
+        doc.open();
+        doc.write(`
+            <html>
+                <head>
+                    <title>${title}</title>
+                    <style>
+                        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+                        body { font-family: 'Plus Jakarta Sans', sans-serif; padding: 30px; color: #0f172a; }
+                        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px; margin-bottom: 20px; }
+                        .logo { max-height: 50px; }
+                        .title-section h1 { margin: 0; font-size: 18px; font-weight: 800; text-transform: uppercase; color: #059669; }
+                        .title-section p { margin: 2px 0 0; font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                        th { background: #f8fafc; text-align: left; padding: 10px; font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; border-bottom: 2px solid #e2e8f0; }
+                        td { padding: 10px; font-size: 10px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+                        .footer { margin-top: 30px; font-size: 9px; color: #94a3b8; text-align: center; border-top: 1px solid #f1f5f9; padding-top: 15px; }
+                        .tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 8px; font-weight: 800; text-transform: uppercase; }
+                        .tag-resident { background: #fff7ed; color: #c2410c; }
+                        .tag-visitor { background: #f0fdf4; color: #15803d; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <div class="title-section">
+                            <h1>Entrance Registry Report</h1>
+                            <p>${propertyName} • ${reportDate}</p>
+                        </div>
+                        ${logoUrl ? `<img src="${logoUrl}" class="logo" />` : ''}
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Guest Name</th>
+                                <th>Type</th>
+                                <th>Room/QID</th>
+                                <th>Contact</th>
+                                <th>Item/Access</th>
+                                <th>Date & Time</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filtered.map((c, idx) => `
+                                <tr>
+                                    <td>${idx + 1}</td>
+                                    <td style="font-weight: 700;">${c.guest_name}</td>
+                                    <td><span class="tag ${c.room_number || c.is_hotel_guest ? 'tag-resident' : 'tag-visitor'}">${c.room_number || c.is_hotel_guest ? 'Hotel Guest' : 'Visitor'}</span></td>
+                                    <td>${c.room_number ? 'Room ' + c.room_number : (c.qid_passport || '-')}</td>
+                                    <td>${c.phone || '-'}</td>
+                                    <td>${c.item_name || '-'}</td>
+                                    <td>${format(parseISO(c.date), 'dd/MM/yyyy')} ${c.time || ''}</td>
+                                    <td>${c.guest_signature ? 'Signed' : 'No Sig'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+
+                    <div class="footer">
+                        Generated on ${format(new Date(), 'dd MMM yyyy, HH:mm')} by ${user?.name || 'System Administrator'} • Total Entries: ${filtered.length}
+                    </div>
+                    <script>
+                        window.onload = () => { window.print(); };
+                    </script>
+                </body>
+            </html>
+        `);
+        doc.close();
+
+        setTimeout(() => {
+            document.body.removeChild(iframe);
+        }, 1000);
+    };
 
     const isUnsplashDefault = (url?: string) => !url || url.includes('images.unsplash.com/photo-1540555700478-4be289fbecef');
 
@@ -308,15 +406,47 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                 </div>
 
                 {activeView !== 'reports' && (
-                    <div className="relative flex-1 max-w-md w-full">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <input 
-                            type="text" 
-                            placeholder="Search by guest name, QID, phone..." 
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full h-10 pl-10 pr-4 rounded-xl bg-slate-50 border-none text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 transition-all placeholder:text-slate-400"
-                        />
+                    <div className="flex flex-1 flex-col sm:flex-row items-center gap-2 max-w-2xl w-full">
+                        <div className="relative flex-1 w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input 
+                                type="text" 
+                                placeholder="Search by name, QID, phone..." 
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="w-full h-10 pl-10 pr-4 rounded-xl bg-slate-50 border-none text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-600 transition-all placeholder:text-slate-400"
+                            />
+                        </div>
+                        <div className="relative w-full sm:w-44">
+                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input 
+                                type="date" 
+                                value={filterDate}
+                                onChange={e => {
+                                    setFilterDate(e.target.value);
+                                    if (e.target.value) {
+                                        setActiveView('history'); // Switch to history view if filtering by specific date
+                                    }
+                                }}
+                                className="w-full h-10 pl-10 pr-4 rounded-xl bg-slate-50 border-none text-[10px] font-black text-slate-900 focus:ring-2 focus:ring-emerald-600 transition-all uppercase"
+                            />
+                            {filterDate && (
+                                <button 
+                                    onClick={() => setFilterDate('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-slate-200 text-slate-400"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+                            )}
+                        </div>
+                        <button
+                            onClick={handlePrintReport}
+                            className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 transition-all shadow-md shadow-indigo-100 active:scale-95"
+                            title="Print Date-wise Report"
+                        >
+                            <Printer className="w-4 h-4" />
+                            <span className="text-[10px] font-black uppercase tracking-widest hidden lg:inline">Print Report</span>
+                        </button>
                     </div>
                 )}
             </div>
@@ -351,7 +481,7 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                                         </span>
                                     </div>
                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1 flex items-center gap-1">
-                                        <Calendar className="w-3 h-3 text-slate-400" /> {format(new Date(c.date), 'dd MMM yyyy')} {c.time ? `• ${c.time}` : ''}
+                                        <Calendar className="w-3 h-3 text-slate-400" /> {format(parseISO(c.date), 'dd MMM yyyy')} {c.time ? `• ${c.time}` : ''}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
@@ -512,7 +642,7 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                             <button onClick={() => setDeletingConsent(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
                         </div>
                         <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                            Are you sure you want to delete the entrance fee waiver consent for <strong className="text-slate-900">{deletingConsent.guest_name}</strong> dated <strong className="text-slate-900">{format(new Date(deletingConsent.date), 'dd MMM yyyy')}</strong>? This action will remove the record permanently from Supabase.
+                            Are you sure you want to delete the entrance fee waiver consent for <strong className="text-slate-900">{deletingConsent.guest_name}</strong> dated <strong className="text-slate-900">{format(parseISO(deletingConsent.date), 'dd MMM yyyy')}</strong>? This action will remove the record permanently from Supabase.
                         </p>
                         <div className="flex justify-end gap-3 pt-2">
                             <button
