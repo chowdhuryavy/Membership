@@ -1364,16 +1364,21 @@ const SettingsPage = () => {
                                   {
                                       id: 'settings_functions',
                                       label: 'Settings Page Functions (Tabs)',
-                                      permissions: permissionRegistry.find(g => g.id === 'settings')?.permissions.filter(p => p.key.startsWith('settings:view_') || p.key === 'settings:manage_visibility') || []
+                                      permissions: permissionRegistry.find(g => g.id === 'settings')?.permissions.filter(p => p.key.startsWith('settings:view_') || p.key === 'settings:manage_visibility' || p.key === 'settings:manage_global') || []
                                   },
                                   {
                                       id: 'main_modules',
                                       label: 'Main Application Modules',
                                       permissions: (permissionRegistry.map(group => {
-                                          if (group.id === 'settings') return null;
+                                          if (group.id === 'settings' || group.id === 'security' || group.id === 'notifications') return null;
                                           const viewPerm = group.permissions.find(p => p.key.endsWith(':view'));
                                           return viewPerm ? { ...viewPerm, label: group.label } : null;
                                       }).filter(Boolean) as any[])
+                                  },
+                                  {
+                                      id: 'governance',
+                                      label: 'Security & Governance',
+                                      permissions: permissionRegistry.find(g => g.id === 'security')?.permissions || []
                                   }
                               ]} 
                               selectedPermissions={(settings?.restricted_permissions || []) as Permission[]} 

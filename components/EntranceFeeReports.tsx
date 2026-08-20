@@ -294,6 +294,7 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
               <tr>
                 <th>#</th>
                 <th>Date</th>
+                <th>Time</th>
                 <th>Guest Name</th>
                 <th>QID / Passport</th>
                 <th>Access / Package</th>
@@ -304,7 +305,8 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
               ${list.map((c, i) => `
                 <tr>
                   <td>${i + 1}</td>
-                  <td>${c.date}</td>
+                  <td>${format(parseISO(c.date), 'dd/MM/yy')}</td>
+                  <td>${c.time || '-'}</td>
                   <td>${c.guest_name}</td>
                   <td>${c.qid_passport || 'N/A'}</td>
                   <td>${c.item_name || 'Standard Entrance'}</td>
@@ -519,6 +521,7 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
                   <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-400">
                     <th className="pb-3 pl-2">#</th>
                     <th className="pb-3">Guest Name</th>
+                    <th className="pb-3">Time</th>
                     <th className="pb-3">QID / Passport</th>
                     <th className="pb-3">Package / Access</th>
                     <th className="pb-3">Contact</th>
@@ -533,6 +536,7 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
                       <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-3 pl-2 font-bold text-slate-400">{idx + 1}</td>
                         <td className="py-3 font-bold text-slate-900">{c.guest_name}</td>
+                        <td className="py-3 font-medium text-amber-600">{c.time || '-'}</td>
                         <td className="py-3 font-medium text-slate-600">{c.qid_passport || 'N/A'}</td>
                         <td className="py-3 font-semibold text-indigo-600">{c.item_name || 'Standard Access'}</td>
                         <td className="py-3 font-medium text-slate-500">{c.phone || c.email || 'N/A'}</td>

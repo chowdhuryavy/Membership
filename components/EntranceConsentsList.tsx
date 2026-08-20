@@ -147,7 +147,8 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                                 <th>Room/QID</th>
                                 <th>Contact</th>
                                 <th>Item/Access</th>
-                                <th>Date & Time</th>
+                                <th>Date</th>
+                                <th>Time</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -160,7 +161,8 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                                     <td>${c.room_number ? 'Room ' + c.room_number : (c.qid_passport || '-')}</td>
                                     <td>${c.phone || '-'}</td>
                                     <td>${c.item_name || '-'}</td>
-                                    <td>${format(parseISO(c.date), 'dd/MM/yyyy')} ${c.time || ''}</td>
+                                    <td>${format(parseISO(c.date), 'dd/MM/yyyy')}</td>
+                                    <td>${c.time || '-'}</td>
                                     <td>${c.guest_signature ? 'Signed' : 'No Sig'}</td>
                                 </tr>
                             `).join('')}

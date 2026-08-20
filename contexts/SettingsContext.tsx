@@ -201,12 +201,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const normalizedRoleId = userRoleId.toLowerCase();
     
     // 1. SYSTEM SUPERUSER BYPASS
-    // Super Admins (Admins/Owners) always have full system clearance.
+    // True Super Admins (Owners) always have full system clearance.
     if (isSuperAdmin) return true;
 
     // 2. GLOBAL FEATURE CONTROL (BLACKLIST LOGIC)
     // If a permission is in the restricted_permissions list, it is globally HIDDEN for all non-super-admins.
-    // This allows the Super Admin to selectively disable features system-wide.
     if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
         if (settings.restricted_permissions.includes(permission)) {
             return false;
@@ -214,8 +213,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     // 1.5. LEGACY ADMIN BYPASS
-    // Restore the ability for the 'admin' role to have all permissions by default.
-    if (normalizedRoleId === 'admin' || normalizedRoleId === 'system_admin') return true;
+    // Standard admins get everything that isn't blacklisted.
+    if (normalizedRoleId === 'admin' || normalizedRoleId === 'system_admin' || normalizedRoleId === 'system_administrator') return true;
 
     // 2. USER-SPECIFIC OVERRIDES (High Priority)
     const targetUser = (userId === user?.id || !userId) ? user : null;
