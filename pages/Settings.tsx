@@ -1343,8 +1343,8 @@ const SettingsPage = () => {
                           <div className="flex items-center gap-5">
                               <ShieldAlert className="w-8 h-8 text-indigo-600" />
                               <div>
-                                  <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Global Feature Control</CardTitle>
-                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Define which functions are enabled for the entire organization</p>
+                                  <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Feature Visibility Control</CardTitle>
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Restrict specific system functions from other administrators</p>
                               </div>
                           </div>
                       </CardHeader>
@@ -1354,17 +1354,32 @@ const SettingsPage = () => {
                               <div className="space-y-1">
                                   <p className="text-xs font-black text-amber-900 uppercase">Global Function Access Restriction</p>
                                   <p className="text-[10px] font-bold text-amber-700 uppercase leading-relaxed">
-                                      Use this to selectively <b>disable</b> features organization-wide for non-superadmin users. 
-                                      Ticking a feature here will hide it from all other admins, even if their role permissions would normally allow access.
+                                      Use this to selectively <b>disable</b> specific tabs and modules organization-wide for non-superadmin users. 
+                                      Ticking a function here will <b>hide</b> it from all other admins, even if they have Settings page access.
                                   </p>
                               </div>
                           </div>
                           <PermissionMatrix 
-                              registry={permissionRegistry} 
+                              registry={[
+                                  {
+                                      id: 'settings_functions',
+                                      label: 'Settings Page Functions (Tabs)',
+                                      permissions: permissionRegistry.find(g => g.id === 'settings')?.permissions.filter(p => p.key.startsWith('settings:view_') || p.key === 'settings:manage_visibility') || []
+                                  },
+                                  {
+                                      id: 'main_modules',
+                                      label: 'Main Application Modules',
+                                      permissions: (permissionRegistry.map(group => {
+                                          if (group.id === 'settings') return null;
+                                          const viewPerm = group.permissions.find(p => p.key.endsWith(':view'));
+                                          return viewPerm ? { ...viewPerm, label: group.label } : null;
+                                      }).filter(Boolean) as any[])
+                                  }
+                              ]} 
                               selectedPermissions={(settings?.restricted_permissions || []) as Permission[]} 
-                              activeLabel="Un-Restrict All"
-                              inactiveLabel="Restrict All"
-                              countLabel="Restricted"
+                              activeLabel="Un-Hide"
+                              inactiveLabel="Hide Function"
+                              countLabel="Hidden"
                               onChange={async (perms) => {
                                   try {
                                       const updatedSettings = { ...settings!, restricted_permissions: perms };
