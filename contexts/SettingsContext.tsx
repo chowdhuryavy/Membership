@@ -1,7 +1,7 @@
 
 import { CompanySettings, Currency, Role, Permission, Outlet, Property, UserPermissionOverride, PermissionGroup, UserProfile } from '../types';
 import { db } from '../services/mockSupabase';
-import { useAuth } from './AuthContext';
+import { useAuth, isSuperAdminRole } from './AuthContext';
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 interface SettingsContextType {
@@ -198,39 +198,31 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
    */
   const hasPermission = useCallback((userRoleId: string, permission: Permission, userId?: string): boolean => {
     if (!userRoleId) return false;
-    const normalizedRoleId = userRoleId.toLowerCase();
+    const normalizedRoleId = userRoleId.toLowerCase().trim();
     
-    // 1. SYSTEM SUPERUSER BYPASS
-    // True Super Admins (Owners) always have full system clearance and bypass the blacklist.
-    if (isOwner) return true;
-
-    const isAdminRole = normalizedRoleId === 'admin' || normalizedRoleId === 'system_admin' || normalizedRoleId === 'system_administrator';
-
-    // 1.2. SETTINGS PAGE ENTRY BYPASS
-    // Always allow admins to enter the settings page itself, even if it was accidentally restricted globally.
-    // Restrictions will still apply to individual tabs within the settings page.
-    if (permission === 'settings:view' && isAdminRole) return true;
+    // 1. SYSTEM SUPERUSER / SYSTEM ADMIN BYPASS
+    // System Admins (role_id = admin, super_admin, superadmin, owner, system_admin, administrator, system_administrator)
+    // ALWAYS have full system clearance and bypass ALL feature restrictions/blacklists!
+    if (isSuperAdmin || isOwner || isSuperAdminRole(normalizedRoleId) || (user && isSuperAdminRole(user.role_id))) {
+        return true;
+    }
 
     // 2. GLOBAL FEATURE CONTROL (BLACKLIST LOGIC)
-    // If a permission is in the restricted_permissions list, it is globally HIDDEN for all non-owners.
+    // If a permission is in the restricted_permissions list, it is globally HIDDEN for all other roles (e.g. Property Admins, Managers, Staff).
     if (settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
         if (settings.restricted_permissions.includes(permission)) {
             return false;
         }
     }
 
-    // 1.5. LEGACY ADMIN BYPASS
-    // Standard admins get everything that isn't blacklisted.
-    if (isAdminRole) return true;
-
-    // 2. USER-SPECIFIC OVERRIDES (High Priority)
+    // 3. USER-SPECIFIC OVERRIDES (High Priority)
     const targetUser = (userId === user?.id || !userId) ? user : null;
     if (targetUser?.overrides) {
         const override = targetUser.overrides.find(o => o.permission_key === permission);
         if (override !== undefined) return override.is_granted;
     }
 
-    // 3. ROLE-BASED DEFINITIONS
+    // 4. ROLE-BASED DEFINITIONS
     const role = roles.find(r => r.id.toLowerCase() === normalizedRoleId || r.name.toLowerCase() === normalizedRoleId);
     
     // If the role is found in the database, use its permissions strictly.
@@ -239,7 +231,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     return false;
-  }, [roles, user, isSuperAdmin, settings]);
+  }, [roles, user, isSuperAdmin, isOwner, settings]);
 
   const checkShortcut = useCallback((e: KeyboardEvent, actionId: string): boolean => {
     const defaults: Record<string, string> = {

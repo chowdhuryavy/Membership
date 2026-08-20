@@ -15,8 +15,7 @@ export const isSuperAdminRole = (roleId: string | undefined | null) => {
 };
 
 export const isOwnerRole = (roleId: string | undefined | null) => {
-    const id = roleId?.toLowerCase()?.trim();
-    return id === 'owner' || id === 'super_admin' || id === 'superadmin';
+    return isSuperAdminRole(roleId);
 };
 
 export const isSuperAdmin = (user: UserProfile | null) => {
