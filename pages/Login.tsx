@@ -99,7 +99,7 @@ const Login = () => {
           <div className="relative z-10">
             <div className="inline-flex items-center gap-3 px-4 py-1.5 bg-white/5 backdrop-blur-md rounded-full border border-white/10 mb-12">
               <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse"></div>
-              <span className="text-[10px] font-black text-indigo-100 uppercase tracking-[0.3em]">Authorized Access Terminal</span>
+              <span className="text-[10px] font-black text-indigo-100 uppercase tracking-[0.3em]">Secure Management Portal</span>
             </div>
             
             <h1 className="text-6xl font-black tracking-tighter leading-[0.9] mb-6" style={{ textShadow: '0 0 20px rgba(255, 255, 255, 0.1)' }}>
@@ -109,7 +109,7 @@ const Login = () => {
             <p className="text-indigo-100/60 text-base font-medium max-w-sm leading-relaxed">
               {mustChangePassword 
                 ? 'Your account requires a mandatory credential update to comply with corporate security protocols.' 
-                : 'Professional asset logistics and membership intelligence for luxury hospitality portfolios.'}
+                : 'One platform for memberships, operations, and exceptional member experiences.'}
             </p>
           </div>
 
@@ -143,7 +143,7 @@ const Login = () => {
             <div className="flex items-center justify-center gap-3">
               <div className="h-px w-8 bg-slate-200"></div>
               <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.3em] whitespace-nowrap">
-                {mustChangePassword ? 'Change Password' : 'Product of Perfection BD'}
+                {mustChangePassword ? 'Change Password' : 'A Product of Perfection'}
               </p>
               <div className="h-px w-8 bg-slate-200"></div>
             </div>
