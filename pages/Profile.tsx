@@ -6,7 +6,7 @@ import { db } from '../services/mockSupabase';
 import { supabase } from '../services/supabase';
 import { getReportData } from '../src/shared/reportLogic';
 import { useSettings } from '../contexts/SettingsContext';
-import { Lock, User, CheckCircle, AlertCircle, Mail, UserCircle2, Award, TrendingUp, Sparkles, Calendar, RefreshCcw } from 'lucide-react';
+import { Lock, User, CheckCircle, AlertCircle, Mail, UserCircle2, Award, TrendingUp, Sparkles, Calendar, RefreshCcw, Eye, EyeOff } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { Staff } from '../types';
@@ -20,6 +20,9 @@ const Profile = () => {
     const { isPushEnabled, enablePush, disablePush } = useNotificationContext();
     const [profileData, setProfileData] = useState({ name: '', email: '' });
     const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
     const [loading, setLoading] = useState(false);
 
@@ -221,34 +224,64 @@ const Profile = () => {
                             <form onSubmit={handlePasswordSubmit} className="space-y-6">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Current Security Key</label>
-                                    <Input 
-                                        type="password" 
-                                        value={passwords.current} 
-                                        onChange={e => setPasswords({...passwords, current: e.target.value})}
-                                        className="h-12 rounded-xl"
-                                        placeholder="••••••••"
-                                    />
+                                    <div className="relative">
+                                        <Input 
+                                            type={showCurrentPassword ? "text" : "password"} 
+                                            value={passwords.current} 
+                                            onChange={e => setPasswords({...passwords, current: e.target.value})}
+                                            className="h-12 rounded-xl pr-12"
+                                            placeholder="••••••••"
+                                        />
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 focus:outline-none transition-colors"
+                                            aria-label={showCurrentPassword ? "Hide password" : "Show password"}
+                                        >
+                                            {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">New Security Key</label>
-                                        <Input 
-                                            type="password" 
-                                            value={passwords.new} 
-                                            onChange={e => setPasswords({...passwords, new: e.target.value})}
-                                            className="h-12 rounded-xl"
-                                            placeholder="••••••••"
-                                        />
+                                        <div className="relative">
+                                            <Input 
+                                                type={showNewPassword ? "text" : "password"} 
+                                                value={passwords.new} 
+                                                onChange={e => setPasswords({...passwords, new: e.target.value})}
+                                                className="h-12 rounded-xl pr-12"
+                                                placeholder="••••••••"
+                                            />
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setShowNewPassword(!showNewPassword)}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 focus:outline-none transition-colors"
+                                                aria-label={showNewPassword ? "Hide password" : "Show password"}
+                                            >
+                                                {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirm New Key</label>
-                                        <Input 
-                                            type="password" 
-                                            value={passwords.confirm} 
-                                            onChange={e => setPasswords({...passwords, confirm: e.target.value})}
-                                            className="h-12 rounded-xl"
-                                            placeholder="••••••••"
-                                        />
+                                        <div className="relative">
+                                            <Input 
+                                                type={showConfirmPassword ? "text" : "password"} 
+                                                value={passwords.confirm} 
+                                                onChange={e => setPasswords({...passwords, confirm: e.target.value})}
+                                                className="h-12 rounded-xl pr-12"
+                                                placeholder="••••••••"
+                                            />
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 focus:outline-none transition-colors"
+                                                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                                            >
+                                                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 <Button type="submit" variant="secondary" disabled={loading} className="h-14 px-10 rounded-2xl font-black bg-slate-100 hover:bg-slate-200 mt-2">
