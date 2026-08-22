@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { Button } from '../components/ui';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Sparkles, ShieldAlert, CheckCircle2, UserCircle2, Users } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Sparkles, ShieldAlert, CheckCircle2, UserCircle2, Users, Check } from 'lucide-react';
 import { db } from '../services/mockSupabase';
 
 const Login = () => {
@@ -17,11 +17,17 @@ const Login = () => {
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordsMatch, setPasswordsMatch] = useState(false);
 
   const { login, changePassword } = useAuth();
   const { settings } = useSettings();
   const navigate = useNavigate();
+
+  const isLengthValid = newPassword.length >= 6;
+  const isMatchValid = newPassword !== '' && newPassword === confirmPassword;
+  const isForcePasswordValid = isLengthValid && isMatchValid;
 
   useEffect(() => {
       setPasswordsMatch(newPassword !== '' && newPassword === confirmPassword);
@@ -225,8 +231,24 @@ const Login = () => {
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Lock className={`w-4 h-4 transition-colors ${isFocused === 'new_password' ? 'text-indigo-600' : 'text-slate-300'}`} />
                   </div>
-                  <input type="password" value={newPassword} onFocus={() => setIsFocused('new_password')} onBlur={() => setIsFocused(null)} onChange={(e) => setNewPassword(e.target.value)} placeholder="••••••••"
-                    className="w-full h-12 pl-11 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm" required />
+                  <input 
+                    type={showNewPassword ? "text" : "password"} 
+                    value={newPassword} 
+                    onFocus={() => setIsFocused('new_password')} 
+                    onBlur={() => setIsFocused(null)} 
+                    onChange={(e) => setNewPassword(e.target.value)} 
+                    placeholder="••••••••"
+                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm" 
+                    required 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowNewPassword(!showNewPassword)} 
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none"
+                    aria-label={showNewPassword ? "Hide password" : "Show password"}
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                  </button>
                 </div>
               </div>
 
@@ -234,22 +256,69 @@ const Login = () => {
                  <div className="flex justify-between items-center mb-1">
                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirm New Password</label>
                     {confirmPassword !== '' && (
-                        <span className={`text-[8px] font-black uppercase tracking-tighter ${passwordsMatch ? 'text-emerald-500' : 'text-red-500'}`}>
-                            {passwordsMatch ? 'Keys Match' : 'Keys Do Not Match'}
+                        <span className={`text-[8px] font-black uppercase tracking-tighter ${isMatchValid ? 'text-emerald-500' : 'text-red-500'}`}>
+                            {isMatchValid ? 'Keys Match' : 'Keys Do Not Match'}
                         </span>
                     )}
                  </div>
                 <div className={`relative transition-all duration-300 ${isFocused === 'confirm_password' ? 'translate-x-1' : ''}`}>
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <CheckCircle2 className={`w-4 h-4 transition-colors ${confirmPassword === '' ? 'text-slate-300' : passwordsMatch ? 'text-emerald-500' : 'text-red-500'}`} />
+                    <CheckCircle2 className={`w-4 h-4 transition-colors ${confirmPassword === '' ? 'text-slate-300' : isMatchValid ? 'text-emerald-500' : 'text-red-500'}`} />
                   </div>
-                  <input type="password" value={confirmPassword} onFocus={() => setIsFocused('confirm_password')} onBlur={() => setIsFocused(null)} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••"
-                    className={`w-full h-12 pl-11 pr-4 rounded-xl bg-slate-50 border text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold shadow-sm ${confirmPassword === '' ? 'border-slate-200' : passwordsMatch ? 'border-emerald-500' : 'border-red-500'}`} required />
+                  <input 
+                    type={showConfirmPassword ? "text" : "password"} 
+                    value={confirmPassword} 
+                    onFocus={() => setIsFocused('confirm_password')} 
+                    onBlur={() => setIsFocused(null)} 
+                    onChange={(e) => setConfirmPassword(e.target.value)} 
+                    placeholder="••••••••"
+                    className={`w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-bold shadow-sm ${confirmPassword === '' ? 'border-slate-200' : isMatchValid ? 'border-emerald-500' : 'border-red-500'}`} 
+                    required 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)} 
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none"
+                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                  </button>
                 </div>
               </div>
+
+              {/* Live Security Requirements Checklist */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1.5">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Security Requirements</p>
+                <div className="flex items-center gap-2">
+                  <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center transition-colors ${isLengthValid ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span className={`text-[10px] font-bold transition-colors ${isLengthValid ? 'text-emerald-600' : 'text-slate-400'}`}>At least 6 characters</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center transition-colors ${isMatchValid ? 'bg-emerald-500 text-white' : confirmPassword !== '' ? 'bg-red-400 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span className={`text-[10px] font-bold transition-colors ${isMatchValid ? 'text-emerald-600' : confirmPassword !== '' ? 'text-red-500' : 'text-slate-400'}`}>
+                    {confirmPassword !== '' && !isMatchValid ? 'Passwords do not match' : 'Passwords match'}
+                  </span>
+                </div>
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-bold p-3 rounded-xl flex items-center gap-3 animate-in shake duration-300">
+                  <ShieldAlert className="w-4 h-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
               
               <div className="pt-2">
-                <Button type="submit" disabled={!passwordsMatch || loading} className={`w-full h-12 rounded-xl font-black text-xs uppercase tracking-widest shadow-xl transition-all active:scale-[0.98] group ${passwordsMatch ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`} isLoading={loading}>
+                <Button 
+                  type="submit" 
+                  disabled={!isForcePasswordValid || loading} 
+                  className={`w-full h-12 rounded-xl font-black text-xs uppercase tracking-widest shadow-xl transition-all active:scale-[0.98] group ${isForcePasswordValid ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`} 
+                  isLoading={loading}
+                >
                   <span className="flex items-center justify-center gap-2">
                     Update Credentials <ShieldCheck className="w-4 h-4" />
                   </span>

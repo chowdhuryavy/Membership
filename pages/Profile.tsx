@@ -6,7 +6,7 @@ import { db } from '../services/mockSupabase';
 import { supabase } from '../services/supabase';
 import { getReportData } from '../src/shared/reportLogic';
 import { useSettings } from '../contexts/SettingsContext';
-import { Lock, User, CheckCircle, AlertCircle, Mail, UserCircle2, Award, TrendingUp, Sparkles, Calendar, RefreshCcw, Eye, EyeOff } from 'lucide-react';
+import { Lock, User, CheckCircle, AlertCircle, Mail, UserCircle2, Award, TrendingUp, Sparkles, Calendar, RefreshCcw, Eye, EyeOff, Check, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { Staff } from '../types';
@@ -25,6 +25,10 @@ const Profile = () => {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
     const [loading, setLoading] = useState(false);
+
+    const isLengthValid = passwords.new.length >= 6;
+    const isMatchValid = passwords.new !== '' && passwords.new === passwords.confirm;
+    const isFormReady = passwords.current.trim() !== '' && isLengthValid && isMatchValid;
 
     const isSystemAdmin = isSuperAdmin || user?.role_id === 'system_admin' || user?.role_id === 'super_admin';
 
@@ -264,13 +268,20 @@ const Profile = () => {
                                         </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirm New Key</label>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirm New Key</label>
+                                            {passwords.confirm !== '' && (
+                                                <span className={`text-[8px] font-black uppercase tracking-tighter ${isMatchValid ? 'text-emerald-500' : 'text-red-500'}`}>
+                                                    {isMatchValid ? 'Keys Match' : 'Keys Do Not Match'}
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="relative">
                                             <Input 
                                                 type={showConfirmPassword ? "text" : "password"} 
                                                 value={passwords.confirm} 
                                                 onChange={e => setPasswords({...passwords, confirm: e.target.value})}
-                                                className="h-12 rounded-xl pr-12"
+                                                className={`h-12 rounded-xl pr-12 ${passwords.confirm === '' ? '' : isMatchValid ? 'border-emerald-500' : 'border-red-400'}`}
                                                 placeholder="••••••••"
                                             />
                                             <button 
@@ -284,7 +295,35 @@ const Profile = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <Button type="submit" variant="secondary" disabled={loading} className="h-14 px-10 rounded-2xl font-black bg-slate-100 hover:bg-slate-200 mt-2">
+
+                                {/* Live Security Requirements Checklist */}
+                                {(passwords.new !== '' || passwords.confirm !== '') && (
+                                    <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200/70 space-y-2 animate-in fade-in duration-300">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Key Security Requirements</p>
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center transition-colors ${isLengthValid ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                            </div>
+                                            <span className={`text-[10px] font-bold transition-colors ${isLengthValid ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                                At least 6 characters
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center transition-colors ${isMatchValid ? 'bg-emerald-500 text-white' : passwords.confirm !== '' ? 'bg-red-400 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                            </div>
+                                            <span className={`text-[10px] font-bold transition-colors ${isMatchValid ? 'text-emerald-600' : passwords.confirm !== '' ? 'text-red-500' : 'text-slate-400'}`}>
+                                                {passwords.confirm !== '' && !isMatchValid ? 'Passwords do not match' : 'Passwords match'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <Button 
+                                    type="submit" 
+                                    disabled={!isFormReady || loading} 
+                                    className={`h-14 px-10 rounded-2xl font-black mt-2 transition-all ${isFormReady ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-200 active:scale-[0.98]' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                                >
                                     Deploy New Security Key
                                 </Button>
                             </form>
