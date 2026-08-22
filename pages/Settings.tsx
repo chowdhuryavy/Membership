@@ -295,7 +295,7 @@ const SettingsPage = () => {
       { id: 'outlets', label: 'Outlets', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_outlets'), icon: Store },
       { id: 'currency', label: 'Currency', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_currency'), icon: Globe },
       { id: 'navigation', label: 'Navigation', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_navigation'), icon: ListOrdered },
-      { id: 'functions', label: 'Feature Visibility', visible: isSuper || hasPermission(user?.role_id || '', 'settings:manage_visibility'), icon: ShieldAlert },
+      { id: 'functions', label: 'Feature Visibility', visible: isSuper, icon: ShieldAlert },
       { id: 'staff_portal', label: 'Staff Portal', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_staff_portal'), icon: Users },
       { id: 'maintenance', label: 'Maintenance', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_maintenance'), icon: Zap },
       
@@ -985,6 +985,22 @@ const SettingsPage = () => {
     });
   }, [allInventory, incentiveForm.scope, incentiveForm.scope_id]);
 
+  if (availableTabs.length === 0) {
+    return (
+      <div className="max-w-xl mx-auto mt-20 p-10 bg-white rounded-[2.5rem] border border-slate-200 shadow-xl text-center space-y-6 animate-in fade-in">
+        <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto text-amber-600">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Access Restricted</h2>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider leading-relaxed">
+            Your role does not have authorization to access any settings modules. Please contact your System Administrator.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-10 max-w-7xl mx-auto animate-in fade-in duration-700 pb-20">
       <div className="flex items-center gap-6">
@@ -1344,7 +1360,7 @@ const SettingsPage = () => {
                               <ShieldAlert className="w-8 h-8 text-indigo-600" />
                               <div>
                                   <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Feature Visibility Control</CardTitle>
-                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Restrict specific system functions from other administrators</p>
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">System Administrator Console • Restrict specific functions from other roles</p>
                               </div>
                           </div>
                       </CardHeader>
@@ -1352,32 +1368,62 @@ const SettingsPage = () => {
                           <div className="bg-amber-50 border border-amber-100 p-6 rounded-3xl mb-8 flex items-start gap-4">
                               <ShieldAlert className="w-6 h-6 text-amber-600 shrink-0 mt-1" />
                               <div className="space-y-1">
-                                  <p className="text-xs font-black text-amber-900 uppercase">Global Function Access Restriction</p>
+                                  <p className="text-xs font-black text-amber-900 uppercase">Global Function Access Restriction (Blacklist)</p>
                                   <p className="text-[10px] font-bold text-amber-700 uppercase leading-relaxed">
-                                      Use this to selectively <b>disable</b> specific tabs and modules organization-wide for non-superadmin users. 
-                                      Ticking a function here will <b>hide</b> it from all other admins, even if they have Settings page access.
+                                      This control is strictly reserved for <b>System Administrators</b>. 
+                                      Ticking a module or settings tab below will <b>hide</b> it organization-wide for all non-superadmin roles (such as Property Admins, Managers, and Staff), even if their role has been assigned that permission.
                                   </p>
                               </div>
                           </div>
                           <PermissionMatrix 
                               registry={[
                                   {
-                                      id: 'settings_functions',
-                                      label: 'Settings Page Functions (Tabs)',
-                                      permissions: permissionRegistry.find(g => g.id === 'settings')?.permissions.filter(p => p.key.startsWith('settings:view_') || p.key === 'settings:manage_visibility' || p.key === 'settings:manage_global') || []
-                                  },
-                                  {
                                       id: 'main_modules',
-                                      label: 'Main Application Modules',
-                                      permissions: (permissionRegistry.map(group => {
-                                          if (group.id === 'settings' || group.id === 'security' || group.id === 'notifications') return null;
-                                          const viewPerm = group.permissions.find(p => p.key.endsWith(':view'));
-                                          return viewPerm ? { ...viewPerm, label: group.label } : null;
-                                      }).filter(Boolean) as any[])
+                                      label: 'Main Navigation Modules (Sidebar)',
+                                      permissions: [
+                                          { key: 'dashboard:view', label: 'Dashboard', description: 'Main executive KPI dashboard.' },
+                                          { key: 'checkin:view', label: 'Facility Check-In', description: 'Member visit logging and access scanner.' },
+                                          { key: 'members:view', label: 'Members Directory', description: 'Member profiles, contracts, and digital passes.' },
+                                          { key: 'pt_members:view', label: 'Personal Training (PT)', description: 'PT packages, trainer assignments, and session slips.' },
+                                          { key: 'entrance_fee:view', label: 'Entrance Fee & Day Pass', description: 'Guest entrance waivers and daily pass billing.' },
+                                          { key: 'staff:view', label: 'Staff Roster', description: 'Staff directory, duty shifts, and leave records.' },
+                                          { key: 'bookings:view', label: 'Booking Calendar', description: 'Service scheduling, therapist timelines, and rooms.' },
+                                          { key: 'sales:view', label: 'Sales & Retail POS', description: 'POS transactions, cash drawer, and product stock.' },
+                                          { key: 'categories:view', label: 'Membership Tiers', description: 'Membership category definitions and rate tiers.' },
+                                          { key: 'reports:view', label: 'Financial & Operational Reports', description: 'Revenue audits, accruals, and performance reporting.' },
+                                          { key: 'settings:view', label: 'System Settings (Main Access)', description: 'Entire Settings module entry in sidebar navigation.' },
+                                          { key: 'users:view', label: 'Users & Roles Directory', description: 'User identity management and role assignments.' },
+                                          { key: 'logs:view', label: 'Audit Logs', description: 'System-wide activity logs and change audit trails.' },
+                                      ]
                                   },
                                   {
-                                      id: 'governance',
-                                      label: 'Security & Governance',
+                                      id: 'settings_tabs',
+                                      label: 'Settings Page Tabs (Granular Settings Access)',
+                                      permissions: [
+                                          { key: 'settings:view', label: 'View Settings Page', description: 'Master switch to access the Settings framework.' },
+                                          { key: 'settings:view_global', label: 'Global Scope / Enterprise Info', description: 'Company brand name, logo, address, and legal entity.' },
+                                          { key: 'settings:view_properties', label: 'Properties Collection', description: 'Manage luxury property assets and locations.' },
+                                          { key: 'settings:view_outlets', label: 'Facility Outlets', description: 'Manage specific gym and spa outlet facilities.' },
+                                          { key: 'settings:view_roles', label: 'Roles & Permissions', description: 'Role-based permission templates and policies.' },
+                                          { key: 'settings:view_currency', label: 'Monetary Standards', description: 'Manage system currency and exchange rates.' },
+                                          { key: 'settings:view_navigation', label: 'UI Navigation Architecture', description: 'Rearrange and customize sidebar navigation sequence.' },
+                                          { key: 'settings:view_staff_portal', label: 'Staff Portal Config', description: 'Configure staff schedule view and portal appearance.' },
+                                          { key: 'settings:view_maintenance', label: 'Terminal Ops & Maintenance', description: 'Database cleanup, wipes, and system resets.' },
+                                          { key: 'settings:view_incentives', label: 'Yield & Commission Incentives', description: 'Configure commission rules and sales targets.' },
+                                          { key: 'settings:view_shortcuts', label: 'Keyboard Shortcuts', description: 'Configure hotkey accelerators across the app.' },
+                                          { key: 'settings:view_documents', label: 'Audit & Legal Templates', description: 'Membership agreements, liability waivers, and contracts.' },
+                                          { key: 'settings:view_booking_engine', label: 'Booking Engine Configuration', description: 'Service timing, deposit policies, and calendar intervals.' },
+                                          { key: 'settings:view_membership_types', label: 'Membership Types', description: 'Sub-types and product categorization.' },
+                                          { key: 'settings:view_massage_rooms', label: 'Massage Rooms', description: 'Spa treatment rooms and capacity management.' },
+                                          { key: 'settings:view_reports_config', label: 'Report Distribution', description: 'Automated email dispatch rules and recipient lists.' },
+                                          { key: 'settings:view_expiration_reminders', label: 'Expiration Reminders', description: 'Automated membership expiration notices.' },
+                                          { key: 'settings:view_custom_reports', label: 'Custom Intelligence Builder', description: 'Bespoke custom report templates and queries.' },
+                                          { key: 'settings:view_entrance_fee', label: 'Entrance Fee Consent Settings', description: 'Day pass consent waiver terms and pricing defaults.' },
+                                      ]
+                                  },
+                                  {
+                                      id: 'security_governance',
+                                      label: 'Security & Governance Functions',
                                       permissions: permissionRegistry.find(g => g.id === 'security')?.permissions || []
                                   }
                               ]} 
@@ -2145,15 +2191,7 @@ const SettingsPage = () => {
                                   <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Permissions</h4>
                                 </div>
                                 <PermissionMatrix 
-                                  registry={permissionRegistry.map(group => {
-                                    if (group.id === 'settings' && settings?.restricted_permissions && settings.restricted_permissions.length > 0) {
-                                      return {
-                                        ...group,
-                                        permissions: group.permissions.filter(p => settings.restricted_permissions!.includes(p.key as Permission))
-                                      };
-                                    }
-                                    return group;
-                                  }).filter(group => group.permissions.length > 0)} 
+                                  registry={permissionRegistry} 
                                   selectedPermissions={roleForm.permissions} 
                                   onChange={(perms) => setRoleForm({ ...roleForm, permissions: perms })} 
                                 />
