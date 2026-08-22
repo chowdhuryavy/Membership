@@ -2,6 +2,7 @@
 /// <reference types="vite/client" />
 
 import { db } from './mockSupabase';
+import { getDeviceSessionItem } from './deviceStorage';
 
 // VAPID Public Key from environment variables
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BJ7C_aKVlBqq5c3bKluSbmQQ4DmFQw2SftLT-RzsTr8q31JvyEml9XuS4AZT5Nw68lrUgcW-5ikrjWpIFJR-5uc'; 
@@ -59,9 +60,8 @@ export class PushNotificationService {
   static async subscribeUser(userId: string, userType?: 'admin' | 'staff') {
     const isStaff = userType === 'staff' || (
       !userType && 
-      !!localStorage.getItem('staff_session') && 
-      !localStorage.getItem('membership_session') && 
-      !sessionStorage.getItem('membership_session')
+      !!getDeviceSessionItem('staff_session') && 
+      !getDeviceSessionItem('membership_session')
     );
     const resolvedType: 'admin' | 'staff' = isStaff ? 'staff' : 'admin';
 

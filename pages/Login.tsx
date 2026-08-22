@@ -5,6 +5,7 @@ import { Button } from '../components/ui';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Sparkles, ShieldAlert, CheckCircle2, UserCircle2, Users, Check } from 'lucide-react';
 import { db } from '../services/mockSupabase';
+import { getDeviceSessionItem } from '../services/deviceStorage';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -46,7 +47,8 @@ const Login = () => {
     } else if (requiresPasswordChange) {
       setMustChangePassword(true);
     } else {
-      const session = JSON.parse(localStorage.getItem('membership_session') || sessionStorage.getItem('membership_session') || '{}');
+      const sessionStr = getDeviceSessionItem('membership_session');
+      const session = sessionStr ? JSON.parse(sessionStr) : {};
       db.logAction('AUTH_LOGIN', `User session authenticated for: ${session.name || email} (${email.toLowerCase()}) at ${new Date().toLocaleString()}`);
       navigate('/');
     }

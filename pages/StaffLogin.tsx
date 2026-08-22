@@ -4,6 +4,7 @@ import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
 import { LogIn, ShieldAlert, UserCircle2, ArrowRight, Sparkles, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { Button, Input } from '../components/ui';
+import { getDeviceSessionItem, setDeviceSessionItem, removeDeviceSessionItem } from '../services/deviceStorage';
 
 const StaffLogin = () => {
   const [employeeNumber, setEmployeeNumber] = useState('');
@@ -23,7 +24,7 @@ const StaffLogin = () => {
       const staff = await db.loginStaff(employeeNumber, password);
       if (staff) {
         // Store staff session
-        localStorage.setItem('staff_session', JSON.stringify(staff));
+        setDeviceSessionItem('staff_session', JSON.stringify(staff));
         navigate('/staff-schedule');
       } else {
         setError('Invalid employee number or password, or access denied.');
@@ -47,7 +48,7 @@ const StaffLogin = () => {
     }
     
     // Check for existing session and redirect if valid
-    const sessionStr = localStorage.getItem('staff_session');
+    const sessionStr = getDeviceSessionItem('staff_session');
     if (sessionStr) {
       try {
         const session = JSON.parse(sessionStr);
@@ -56,7 +57,7 @@ const StaffLogin = () => {
         }
       } catch (e) {
         console.error("Invalid session found, clearing...");
-        localStorage.removeItem('staff_session');
+        removeDeviceSessionItem('staff_session');
       }
     }
   }, [navigate]);

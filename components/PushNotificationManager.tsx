@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, BellOff, Shield, Smartphone } from 'lucide-react';
 import { PushNotificationService } from '../services/pushNotificationService';
 import { useAuth } from '../contexts/AuthContext';
+import { getDeviceSessionItem } from '../services/deviceStorage';
 import { toast } from 'react-hot-toast';
 
 interface PushNotificationManagerProps {
@@ -16,7 +17,7 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
     let user = authUser;
     if (!user) {
         try {
-            const staffSessionStr = localStorage.getItem('staff_session');
+            const staffSessionStr = getDeviceSessionItem('staff_session');
             if (staffSessionStr) {
                 user = JSON.parse(staffSessionStr);
             }
@@ -25,7 +26,7 @@ const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ varia
         }
     }
 
-    const hasMainPortal = !!authUser || !!localStorage.getItem('membership_session') || !!sessionStorage.getItem('membership_session');
+    const hasMainPortal = !!authUser || !!getDeviceSessionItem('membership_session');
     const userType: 'admin' | 'staff' = hasMainPortal ? 'admin' : 'staff';
 
     const [permission, setPermission] = useState<NotificationPermission | 'not-supported'>('default');

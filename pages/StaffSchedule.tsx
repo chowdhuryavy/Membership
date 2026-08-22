@@ -17,6 +17,7 @@ import { getReportData } from '../src/shared/reportLogic';
 import { supabase } from '../services/supabase';
 import { StaffLoadingScreens } from '../components/StaffLoadingScreens';
 import PushNotificationManager from '../components/PushNotificationManager';
+import { getDeviceSessionItem, setDeviceSessionItem, removeDeviceSessionItem } from '../services/deviceStorage';
 
 interface StaffNotification {
   id: string;
@@ -771,7 +772,7 @@ const StaffSchedule = () => {
   const isPasswordValid = passwordValidation.length && passwordValidation.match;
 
   useEffect(() => {
-    const sessionStr = localStorage.getItem('staff_session');
+    const sessionStr = getDeviceSessionItem('staff_session');
     if (!sessionStr) {
       navigate('/staff-login');
       return;
@@ -782,8 +783,8 @@ const StaffSchedule = () => {
       db.getStaffById(session.id).then(updatedStaff => {
         if (updatedStaff) {
           setStaff(updatedStaff);
-          // Update session in localStorage
-          localStorage.setItem('staff_session', JSON.stringify(updatedStaff));
+          // Update session
+          setDeviceSessionItem('staff_session', JSON.stringify(updatedStaff));
         } else {
           setStaff(session);
         }
@@ -1264,7 +1265,7 @@ const StaffSchedule = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('staff_session');
+    removeDeviceSessionItem('staff_session');
     navigate('/staff-login');
   };
 
@@ -1284,7 +1285,7 @@ const StaffSchedule = () => {
       
       // Update local session just in case
       const updatedStaff = { ...staff, password: newPassword };
-      localStorage.setItem('staff_session', JSON.stringify(updatedStaff));
+      setDeviceSessionItem('staff_session', JSON.stringify(updatedStaff));
       setStaff(updatedStaff);
       
       setTimeout(() => {
@@ -1306,7 +1307,7 @@ const StaffSchedule = () => {
       const updatedStaff = await db.getStaffById(staff.id);
       if (updatedStaff) {
         setStaff(updatedStaff);
-        localStorage.setItem('staff_session', JSON.stringify(updatedStaff));
+        setDeviceSessionItem('staff_session', JSON.stringify(updatedStaff));
         toast.success('Permissions synced');
       }
     } catch (e) {

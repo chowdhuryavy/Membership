@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { UserProfile } from '../types';
 import { db } from '../services/mockSupabase';
+import { getDeviceSessionItem, setDeviceSessionItem, removeDeviceSessionItem } from '../services/deviceStorage';
 
 export const isSuperAdminRole = (roleId: string | undefined | null) => {
     const id = roleId?.toLowerCase()?.trim();
@@ -41,24 +42,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const getStoredSessionStr = () => {
-      return localStorage.getItem('membership_session') || sessionStorage.getItem('membership_session');
+      return getDeviceSessionItem('membership_session');
   };
 
   const saveSession = (userData: UserProfile) => {
       const str = JSON.stringify(userData);
-      localStorage.setItem('membership_session', str);
-      sessionStorage.setItem('membership_session', str);
+      setDeviceSessionItem('membership_session', str);
       if (isSuperAdminRole(userData.role_id)) {
-          localStorage.setItem('admin_session_active', 'true');
-          sessionStorage.setItem('admin_session_active', 'true');
+          setDeviceSessionItem('admin_session_active', 'true');
       }
   };
 
   const clearSession = () => {
-      localStorage.removeItem('membership_session');
-      sessionStorage.removeItem('membership_session');
-      localStorage.removeItem('admin_session_active');
-      sessionStorage.removeItem('admin_session_active');
+      removeDeviceSessionItem('membership_session');
+      removeDeviceSessionItem('admin_session_active');
   };
 
   const [user, setUser] = useState<UserProfile | null>(() => {

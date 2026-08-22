@@ -5,11 +5,12 @@ import { useAuth, isSuperAdminRole } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { toast } from 'react-hot-toast';
 import { PushNotificationService } from '../services/pushNotificationService';
+import { getDeviceSessionItem } from '../services/deviceStorage';
 
 const checkIsAdmin = (user: any, staffUser: any, isSuperAdminFromAuth?: boolean): boolean => {
   // Any user logged into the Main Portal (has AuthContext user or membership_session) is a portal user
   // (e.g. Admin, Manager, Receptionist, Accountant, Sales, etc.) who receives general/global notifications.
-  const hasMainPortalSession = !!user || !!localStorage.getItem('membership_session') || !!sessionStorage.getItem('membership_session');
+  const hasMainPortalSession = !!user || !!getDeviceSessionItem('membership_session');
   if (hasMainPortalSession) {
     return true;
   }
@@ -98,7 +99,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Set up real-time subscription and push auto-registration
   useEffect(() => {
-    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffSessionStr = getDeviceSessionItem('staff_session');
     const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
     const effectiveUserId = user?.id || staffUser?.id;
 
@@ -122,8 +123,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [user, isSuperAdmin]);
 
   const fetchNotifications = useCallback(async (isAutoRefresh = false) => {
-    // Try to get user from AuthContext or staff session from localStorage
-    const staffSessionStr = localStorage.getItem('staff_session');
+    // Try to get user from AuthContext or staff session from storage
+    const staffSessionStr = getDeviceSessionItem('staff_session');
     const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
     const effectiveUserId = user?.id || staffUser?.id;
 
@@ -161,7 +162,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [user, outletId, isSuperAdmin, hasPermission]);
 
   const enablePush = async () => {
-    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffSessionStr = getDeviceSessionItem('staff_session');
     const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
     const effectiveUserId = user?.id || staffUser?.id;
     
@@ -188,7 +189,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const disablePush = async () => {
-    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffSessionStr = getDeviceSessionItem('staff_session');
     const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
     const effectiveUserId = user?.id || staffUser?.id;
 
@@ -205,7 +206,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     // Set up real-time subscription
     let unsubscribe: (() => void) | undefined;
     
-    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffSessionStr = getDeviceSessionItem('staff_session');
     const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
     const effectiveUserId = user?.id || staffUser?.id;
     const isAdmin = checkIsAdmin(user, staffUser, isSuperAdmin);
@@ -351,7 +352,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
 
   const markAsRead = async (id: string) => {
-    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffSessionStr = getDeviceSessionItem('staff_session');
     const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
     const effectiveUserId = user?.id || staffUser?.id;
 
@@ -368,7 +369,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const markAllAsRead = async () => {
-    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffSessionStr = getDeviceSessionItem('staff_session');
     const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
     const effectiveUserId = user?.id || staffUser?.id;
 
@@ -389,7 +390,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const removeNotification = async (id: string) => {
-    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffSessionStr = getDeviceSessionItem('staff_session');
     const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
     const effectiveUserId = user?.id || staffUser?.id;
 
@@ -406,7 +407,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const clearAll = async () => {
-    const staffSessionStr = localStorage.getItem('staff_session');
+    const staffSessionStr = getDeviceSessionItem('staff_session');
     const staffUser = staffSessionStr ? JSON.parse(staffSessionStr) : null;
     const effectiveUserId = user?.id || staffUser?.id;
 

@@ -4,6 +4,7 @@ import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 export { supabase, supabaseUrl, supabaseAnonKey };
 import { createClient } from '@supabase/supabase-js';
 import { addDays, format, parse, differenceInCalendarDays } from 'date-fns';
+import { getDeviceSessionItem } from './deviceStorage';
 
 // Robust date parsing for the Intelligence Engine
 const parseISO = (dateString: string) => {
@@ -450,7 +451,7 @@ class DatabaseService {
         affected_entity?: string;
     } = {}
   ) {
-    const sessionStr = localStorage.getItem('membership_session') || sessionStorage.getItem('membership_session');
+    const sessionStr = getDeviceSessionItem('membership_session');
     const session = sessionStr ? JSON.parse(sessionStr) : null;
     
     // Inferred Metadata (Mocked)

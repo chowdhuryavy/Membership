@@ -19,6 +19,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getHours } from 'date-fns';
+import { getDeviceSessionItem } from '../services/deviceStorage';
 
 interface EntranceFeeReportsProps {
   consents: EntranceFeeConsent[];
@@ -266,7 +267,7 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
             </div>
             <div class="meta" style="text-align: right;">
               <div>EXPORTED ON: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')}</div>
-              <div>BY: ${JSON.parse(localStorage.getItem('membership_session') || '{}')?.name || 'Admin'}</div>
+              <div>BY: ${JSON.parse(getDeviceSessionItem('membership_session') || '{}')?.name || 'Admin'}</div>
             </div>
           </div>
 

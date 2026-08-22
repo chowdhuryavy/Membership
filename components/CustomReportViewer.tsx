@@ -19,6 +19,7 @@ import { format, subDays, startOfDay, endOfDay, isWithinInterval } from 'date-fn
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
 import { generateCustomReportPDF } from '../src/shared/reportLogic';
+import { getDeviceSessionItem } from '../services/deviceStorage';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -175,7 +176,7 @@ export const CustomReportViewer: React.FC<CustomReportViewerProps> = ({
       body,
       propertyName: property?.name || 'Management System',
       logoUrl: property?.logo_url,
-      userName: JSON.parse(localStorage.getItem('membership_session') || '{}')?.name || 'Admin',
+      userName: JSON.parse(getDeviceSessionItem('membership_session') || '{}')?.name || 'Admin',
       filename: `${config.name.toLowerCase().replace(/\s+/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`,
       signatoryConfig: signatoryConfig
     });
