@@ -4556,9 +4556,20 @@ class DatabaseService {
     return filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
-  async addNotification(notification: Omit<Notification, 'id' | 'created_at' | 'read'>) {
+  async addNotification(notification: Omit<Notification, 'id' | 'created_at' | 'read'>, excludeUserId?: string) {
     console.log('Adding notification:', notification.title);
     
+    let effectiveExcludeUserId = excludeUserId;
+    if (!effectiveExcludeUserId && typeof window !== 'undefined') {
+      try {
+        const staffSession = localStorage.getItem('staff_session');
+        if (staffSession) {
+          const parsed = JSON.parse(staffSession);
+          if (parsed?.id) effectiveExcludeUserId = parsed.id;
+        }
+      } catch (e) {}
+    }
+
     // Prepare notification object - let database handle id and created_at if possible
     const dbNotification: any = {
       title: notification.title,
@@ -4598,7 +4609,11 @@ class DatabaseService {
           this.triggerPushNotification(
               notification.user_id, 
               notification.title, 
-              notification.message
+              notification.message,
+              '/#/notifications',
+              false,
+              'admin',
+              effectiveExcludeUserId
           ).catch(err => console.error(`[Push] Trigger failure for ${notification.user_id}:`, err));
         } else {
           // Unassigned/Global notification: Broadcast push ONLY to Admin portal devices
@@ -4606,7 +4621,7 @@ class DatabaseService {
           console.log(`[Push] Unassigned/Global notification created: "${notification.title}". Type: ${notification.type}`);
           if (notification.type === 'error' || notification.type === 'warning' || notification.required_permission) {
               console.log(`[Push] Broadcasting admin-only notification: "${notification.title}"`);
-              await this.triggerGlobalPush({ ...dbNotification, id: 'global-placeholder' } as any, 'admin');
+              await this.triggerGlobalPush({ ...dbNotification, id: 'global-placeholder' } as any, 'admin', effectiveExcludeUserId);
           } else {
               console.log(`[Push] Skipping push broadcast for standard unassigned info notification.`);
           }
@@ -4629,7 +4644,7 @@ class DatabaseService {
     }
   }
 
-  private async triggerGlobalPush(n: Notification, targetRole: 'admin' | 'all' = 'admin') {
+  private async triggerGlobalPush(n: Notification, targetRole: 'admin' | 'all' = 'admin', excludeUserId?: string) {
     try {
         console.log(`[Push] Global notification: Broadcasting "${n.title}" to ${targetRole} devices...`);
         // We call the Edge Function with broadcast: true and targetRole
@@ -4639,7 +4654,8 @@ class DatabaseService {
             n.message, 
             '/#/notifications',
             true, // Enable broadcast mode
-            targetRole
+            targetRole,
+            excludeUserId
         );
         console.log("[Push] Global broadcast triggered successfully.");
     } catch (e) {
@@ -4647,7 +4663,7 @@ class DatabaseService {
     }
   }
 
-  async triggerPushNotification(userId: string, title: string, body: string, url: string = '/#/notifications', broadcast: boolean = false, targetRole: string = 'admin') {
+  async triggerPushNotification(userId: string, title: string, body: string, url: string = '/#/notifications', broadcast: boolean = false, targetRole: string = 'admin', excludeUserId?: string) {
     if (!this.isSupabase()) {
         console.log('Push notification trigger skipped: Supabase offline');
         return;
@@ -4657,6 +4673,7 @@ class DatabaseService {
             userId: broadcast ? undefined : userId,
             broadcast,
             targetRole: broadcast ? targetRole : undefined,
+            excludeUserId,
             title, 
             body, 
             url,

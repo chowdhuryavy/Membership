@@ -32,7 +32,8 @@ serve(async (req) => {
     }
 
     console.log(`[Push] Received JSON:`, JSON.stringify(json));
-    const { userId, user_id, title, body, icon, url, tag, broadcast, targetRole, target_role } = json;
+    const { userId, user_id, title, body, icon, url, tag, broadcast, targetRole, target_role, excludeUserId, exclude_user_id, excludeUser } = json;
+    const effectiveExcludeUserId = excludeUserId || exclude_user_id || excludeUser;
     
     let subscriptions = [];
     if (broadcast) {
@@ -82,7 +83,7 @@ serve(async (req) => {
       console.log(`[Push] Querying push_subscriptions for user ${effectiveUserId}...`);
       const { data: userSubs, error: subError } = await supabase
         .from("push_subscriptions")
-        .select("subscription")
+        .select("subscription, user_id")
         .eq("user_id", effectiveUserId);
 
       if (subError) {
@@ -91,6 +92,25 @@ serve(async (req) => {
       }
       subscriptions = userSubs || [];
     }
+
+    // Exclude specified actor user if provided (e.g. admin who triggered void/delete)
+    if (effectiveExcludeUserId) {
+      const beforeCount = subscriptions.length;
+      subscriptions = subscriptions.filter((s: any) => s.user_id !== effectiveExcludeUserId);
+      console.log(`[Push] Excluded user ${effectiveExcludeUserId}: ${beforeCount - subscriptions.length} subscriptions removed. Remaining: ${subscriptions.length}`);
+    }
+
+    // Deduplicate subscriptions by endpoint to prevent double/multiple pushes to the same device/browser
+    const seenEndpoints = new Set();
+    subscriptions = subscriptions.filter((s: any) => {
+      const endpoint = s.subscription?.endpoint;
+      if (!endpoint) return true;
+      if (seenEndpoints.has(endpoint)) {
+        return false;
+      }
+      seenEndpoints.add(endpoint);
+      return true;
+    });
 
     if (!subscriptions || subscriptions.length === 0) {
       console.log(`[Push] No subscriptions found. Push aborted.`);
