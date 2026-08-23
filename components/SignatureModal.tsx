@@ -1,12 +1,15 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './ui';
-import { X, ArrowRight } from 'lucide-react';
+import { X, ArrowRight, FileText } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import SignatureCanvas from 'react-signature-canvas';
 export { default as SignaturePad } from 'react-signature-canvas';
 import { supabase } from '../services/mockSupabase';
 import { PERFECTION_QR_IMAGE_SETTINGS } from '../lib/perfectionLogo';
+import { GYM_RULES } from '../services/memberAgreementPdfService';
+import { getBilingualPTConsentText, getBilingualWaiverText } from '../lib/waiverHelper';
+import toast from 'react-hot-toast';
 
 interface SignatureModalProps {
   isOpen: boolean;
@@ -22,7 +25,7 @@ interface SignatureModalProps {
   currency?: string;
   currencySymbol?: string;
   logoUrl?: string;
-  agreementType?: 'pt' | 'general' | 'membership' | 'entrance';
+  agreementType?: 'pt' | 'general' | 'membership' | 'entrance' | 'waiver';
 }
 
 export const SignatureModal: React.FC<SignatureModalProps> = ({ 
@@ -180,14 +183,6 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
     onClose();
   };
 
-  const handlePadSave = () => {
-    if (signatureRef.current && !signatureRef.current.isEmpty()) {
-      const dataUrl = signatureRef.current.toDataURL();
-      setSignatureMethod(null);
-      onSave(dataUrl);
-    }
-  };
-
   const handlePadClear = () => {
     signatureRef.current?.clear();
   };
@@ -211,9 +206,29 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
     onSave(liveSignature);
   };
 
-  if (!isOpen) return null;
+  const [acceptedTerms, setAcceptedTerms] = useState(true);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
-  const isPT = agreementType === 'pt' || tier.toLowerCase().includes('pt') || tier.toLowerCase().includes('personal') || tier.toLowerCase().includes('consent');
+  const isPTAgreement = agreementType === 'pt' || tier.toLowerCase().includes('pt') || tier.toLowerCase().includes('personal') || tier.toLowerCase().includes('training') || tier.toLowerCase().includes('consent');
+  const isEntranceWaiver = agreementType === 'waiver' || agreementType === 'entrance' || tier.toLowerCase().includes('entrance') || tier.toLowerCase().includes('pass') || tier.toLowerCase().includes('waiver');
+  const isMembershipAgreement = agreementType === 'membership' || (!isPTAgreement && !isEntranceWaiver);
+
+  const waiverContent = useMemo(() => isEntranceWaiver ? getBilingualWaiverText(outletName, propertyName) : null, [isEntranceWaiver, outletName, propertyName]);
+  const ptConsent = useMemo(() => isPTAgreement ? getBilingualPTConsentText(propertyName || outletName || 'The Torch Club') : null, [isPTAgreement, propertyName, outletName]);
+
+  const handlePadSave = () => {
+    if (!acceptedTerms) {
+      toast.error('Please accept the Terms and Conditions.');
+      return;
+    }
+    if (signatureRef.current && !signatureRef.current.isEmpty()) {
+      const dataUrl = signatureRef.current.toDataURL();
+      setSignatureMethod(null);
+      onSave(dataUrl);
+    } else {
+      toast.error('Please sign before confirming.');
+    }
+  };
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
@@ -249,10 +264,12 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
             </div>
           </>
         ) : signatureMethod === 'pad' ? (
-          <div className="w-full flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+          <div className="w-full flex flex-col max-h-[82vh] overflow-y-auto pr-1">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4 sticky top-0 bg-white z-10">
               <div>
-                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">Health Declaration & Signature</h3>
+                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                  {isPTAgreement ? 'Personal Training & Health Declaration' : isEntranceWaiver ? 'Facility Liability Waiver' : 'Membership Agreement & Consent'}
+                </h3>
                 <p className="text-[11px] text-indigo-600 font-bold">{guestName} • {tier}</p>
               </div>
               <button onClick={() => setSignatureMethod(null)} className="text-slate-400 hover:text-slate-600 text-xs font-black uppercase tracking-widest">
@@ -260,21 +277,64 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
               </button>
             </div>
 
-            {/* Terms & Consent Summary Box shown BEFORE the signature pad */}
-            <div className="mb-4 p-3.5 bg-slate-50 rounded-xl border border-slate-200 max-h-40 overflow-y-auto text-[10px] space-y-2 text-slate-700 leading-relaxed shadow-inner">
-              <div className="flex items-center gap-1.5 text-indigo-700 font-black text-[10.5px]">
-                <span>📋 Consent & PAR-Q Acknowledgment</span>
+            {/* Terms and Conditions Section - Shown prominently BEFORE the signature pad */}
+            <div className="bg-slate-50 rounded-2xl p-4 shadow-sm border border-slate-200/80 flex flex-col gap-3 mb-4">
+              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                    {isPTAgreement ? 'Health Declaration & PAR-Q' : isEntranceWaiver ? 'Liability Waiver' : 'Terms & Conditions'}
+                  </h3>
+                </div>
+                <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded-md">Bilingual / ثنائي اللغة</span>
               </div>
-              <p className="text-justify font-medium">
-                {isPT 
-                  ? "I declare that I am physically fit and voluntarily participate in personal training sessions. I have accurately answered the Physical Activity Readiness Questionnaire (PAR-Q) and consent to the health & safety terms."
-                  : "I acknowledge and agree to abide by the club rules, terms of membership, and safety regulations."}
-              </p>
-              <p dir="rtl" className="text-justify font-arabic text-slate-600">
-                {isPT
-                  ? "أقر بأنني لائق بدنياً وأشارك طواعية في جلسات التدريب الشخصي، وقد أجبت بدقة على استبيان الجاهزية للنشاط البدني وأوافق على شروط السلامة والصحة."
-                  : "أقر وأوافق على الالتزام بقواعد النادي وشروط العضوية واللوائح الخاصة بالسلامة."}
-              </p>
+
+              {/* Prominent Bilingual Declaration Preview */}
+              <div className="p-3 bg-white rounded-xl border border-slate-200 text-[11px] leading-relaxed space-y-2 max-h-32 overflow-y-auto">
+                <p className="text-slate-700 font-medium text-justify">
+                  {isPTAgreement 
+                    ? "I declare that I am in good physical health to participate in Personal Training. I confirm that all PAR-Q answers provided are true and accurate." 
+                    : isEntranceWaiver
+                    ? "I agree to abide by all club guidelines, facility safety rules, and operational regulations as outlined in the liability waiver."
+                    : "I agree to abide by all gymnasium rules and regulations as outlined in the membership agreement."}
+                </p>
+                <p dir="rtl" className="text-slate-600 font-arabic text-justify">
+                  {isPTAgreement 
+                    ? "أقر بأنني بحالة صحية جيدة تؤهلني للمشاركة في التدريب الشخصي، وأؤكد أن جميع إجاباتي على استبيان الجاهزية البدنية صحيحة ودقيقة." 
+                    : isEntranceWaiver
+                    ? "أوافق على الالتزام بكافة لوائح وقوانين النادي وشروط السلامة المعتمدة كما هو موضح في نموذج إخلاء المسؤولية."
+                    : "أوافق على الالتزام بكافة لوائح وقوانين النادي وشروط السلامة المعتمدة كما هو موضح في اتفاقية العضوية."}
+                </p>
+              </div>
+
+              <div className="flex items-start gap-2.5 pt-1">
+                <div className="relative flex items-center pt-0.5">
+                  <input
+                    id="modal-terms"
+                    type="checkbox"
+                    checked={acceptedTerms}
+                    onChange={(e) => setAcceptedTerms(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label htmlFor="modal-terms" className="text-[11px] font-bold text-slate-800 cursor-pointer select-none">
+                    I accept the Terms, Conditions & Waiver.
+                  </label>
+                  <p className="text-[9px] text-slate-400 font-medium uppercase tracking-tight">
+                    أوافق على شروط وأحكام الإقرار الصحي
+                  </p>
+                </div>
+              </div>
+
+              <button 
+                type="button"
+                onClick={() => setShowTermsModal(true)}
+                className="flex items-center justify-center gap-2 w-full py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-black text-indigo-600 uppercase tracking-widest transition-all cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Read Full Policy & Questionnaire (EN/AR)
+              </button>
             </div>
 
             {/* Signature Area */}
@@ -289,11 +349,12 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
                   Clear Pad
                 </button>
               </div>
-              <div className="border-2 border-slate-300 rounded-2xl bg-white w-full overflow-hidden shadow-inner focus-within:border-indigo-500">
+              <div className="border-2 border-slate-300 rounded-2xl bg-white w-full overflow-hidden shadow-inner focus-within:border-indigo-500 relative">
+                <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:24px_24px] opacity-20 pointer-events-none" />
                 <SignatureCanvas 
                   ref={signatureRef}
                   penColor="#0f172a"
-                  canvasProps={{ className: 'w-full h-40 cursor-crosshair' }} 
+                  canvasProps={{ className: 'w-full h-36 cursor-crosshair relative z-10' }} 
                 />
               </div>
             </div>
@@ -302,7 +363,15 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
               <Button onClick={() => setSignatureMethod(null)} variant="outline" className="flex-1 h-12 rounded-xl border-slate-200 text-slate-600 font-bold">
                 Cancel
               </Button>
-              <Button onClick={handlePadSave} className="flex-1 h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-wider shadow-lg shadow-indigo-100">
+              <Button 
+                onClick={handlePadSave} 
+                disabled={!acceptedTerms}
+                className={`flex-1 h-12 rounded-xl font-black uppercase tracking-wider shadow-lg ${
+                  acceptedTerms 
+                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100' 
+                  : 'bg-slate-100 text-slate-400 shadow-none cursor-not-allowed opacity-50'
+                }`}
+              >
                 Confirm Signature
               </Button>
             </div>
@@ -369,6 +438,124 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
           </>
         )}
       </div>
+
+      {showTermsModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[2rem] shadow-2xl max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">
+                  {ptConsent?.titleEn || (isEntranceWaiver ? 'Liability Waiver' : 'Membership Rules & Regulations')}
+                </h3>
+                <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mt-1" dir="rtl">
+                  {ptConsent?.titleAr || (isEntranceWaiver ? 'إخلاء المسؤولية' : 'قواعد ولوائح العضوية')}
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowTermsModal(false)}
+                className="p-2 hover:bg-white rounded-xl transition-colors text-slate-400 hover:text-slate-900 shadow-sm"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
+              {ptConsent ? (
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    {ptConsent.introParagraphs.map((para, idx) => (
+                      <div key={idx} className="space-y-1.5 border-b border-slate-100 pb-3">
+                        <p className="text-slate-700 leading-relaxed font-medium">{para.en}</p>
+                        <p dir="rtl" className="text-slate-600 font-arabic leading-relaxed">{para.ar}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                    <div className="flex justify-between items-center font-black text-[11px] text-slate-900 border-b border-slate-200 pb-1.5">
+                      <span>{ptConsent.parqTitleEn}</span>
+                      <span dir="rtl" className="font-arabic">{ptConsent.parqTitleAr}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 font-bold">{ptConsent.parqInstructionEn}</p>
+                    <div className="space-y-2.5">
+                      {ptConsent.parqQuestions.map((q) => (
+                        <div key={q.id} className="text-[10.5px] border-b border-slate-200/60 pb-2 last:border-0">
+                          <p className="font-bold text-slate-800">{q.id}. {q.en}</p>
+                          <p dir="rtl" className="font-arabic text-slate-600 mt-0.5">{q.ar}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center font-black text-[11px] text-slate-900 border-b border-slate-200 pb-1">
+                      <span>{ptConsent.declarationTitleEn}</span>
+                      <span dir="rtl" className="font-arabic">{ptConsent.declarationTitleAr}</span>
+                    </div>
+                    {ptConsent.declarationParagraphs.map((para, idx) => (
+                      <div key={idx} className="space-y-1 text-[10.5px] border-b border-slate-50 pb-2.5 last:border-0">
+                        <p className="text-slate-700 leading-relaxed">• {para.en}</p>
+                        <p dir="rtl" className="text-slate-600 font-arabic leading-relaxed">• {para.ar}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : isEntranceWaiver && waiverContent ? (
+                <div className="space-y-8">
+                  <div className="space-y-4 border-b border-slate-100 pb-6">
+                    <div className="space-y-1">
+                      <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{waiverContent.waiverTitleEn}</p>
+                      <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{waiverContent.waiverSubEn}</p>
+                    </div>
+                    <div className="space-y-3 text-slate-700 leading-relaxed text-[13px] text-justify font-medium">
+                      <p>{waiverContent.p1En}</p>
+                      <p>{waiverContent.p2En}</p>
+                      <p className="font-bold text-slate-900">{waiverContent.p3En}</p>
+                    </div>
+                  </div>
+                  <div dir="rtl" className="space-y-4 text-right">
+                    <div className="space-y-1">
+                      <p className="text-sm font-black text-slate-900 tracking-tight">{waiverContent.waiverTitleAr}</p>
+                      <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{waiverContent.waiverSubAr}</p>
+                    </div>
+                    <div className="space-y-3 text-slate-600 leading-relaxed text-[13px] text-justify font-arabic">
+                      <p>{waiverContent.p1Ar}</p>
+                      <p>{waiverContent.p2Ar}</p>
+                      <p className="font-bold text-slate-900">{waiverContent.p3Ar}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                GYM_RULES.map((rule, idx) => (
+                  <div key={idx} className="flex gap-4 items-start border-b border-slate-50 pb-6 last:border-0">
+                    <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 w-6 h-6 rounded-lg flex items-center justify-center shrink-0">
+                      {idx + 1}
+                    </span>
+                    <div className="flex-1 space-y-2">
+                      <p className="text-sm font-bold text-slate-700 leading-relaxed text-left">
+                        {rule.en}
+                      </p>
+                      <p className="text-sm font-black text-slate-500 leading-relaxed text-right font-serif" dir="rtl">
+                        {rule.ar}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <div className="p-6 border-t border-slate-100 bg-white">
+              <Button 
+                onClick={() => {
+                  setAcceptedTerms(true);
+                  setShowTermsModal(false);
+                }}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl shadow-lg shadow-indigo-100"
+              >
+                I Understand & Accept
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>,
     document.body
   );

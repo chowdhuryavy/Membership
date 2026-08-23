@@ -1027,13 +1027,14 @@ const StaffSchedule = () => {
         (db as any).getPTMembers ? (db as any).getPTMembers(selectedOutletId, false) : Promise.resolve([])
       ]);
 
-      // Filter bookings for this specific therapist
-      const myBookings = allBookings.filter(b => b.therapist_id === staff.id && b.status !== 'cancelled');
+      // Filter bookings for this specific therapist and outlet
+      const myBookings = allBookings.filter(b => b.therapist_id === staff.id && b.outlet_id === selectedOutletId && b.status !== 'cancelled');
       
-      // Filter sales for this specific staff (sold_by_id or secondary_sold_by_id)
+      // Filter sales for this specific staff (sold_by_id or secondary_sold_by_id) and outlet
       // and only those that are NOT linked to a booking (to avoid duplicates)
       const mySales = allSales.filter(s => 
         (s.sold_by_id === staff.id || s.secondary_sold_by_id === staff.id) && 
+        s.outlet_id === selectedOutletId &&
         !s.booking_id && s.status !== 'void'
       );
 
@@ -1118,7 +1119,7 @@ const StaffSchedule = () => {
       const res = await getReportData({
         supabase,
         propertyId,
-        outletId: 'all',
+        outletId: selectedOutletId,
         reportType: 'incentives',
         date: currentDate,
         incentiveDept: 'All'
@@ -1233,12 +1234,13 @@ const StaffSchedule = () => {
         (db as any).getPTMembers ? (db as any).getPTMembers(selectedOutletId, false) : Promise.resolve([])
       ]);
 
-      // Filter bookings for this specific therapist
-      const myBookings = allBookings.filter(b => b.therapist_id === staff.id && b.status !== 'cancelled');
+      // Filter bookings for this specific therapist and outlet
+      const myBookings = allBookings.filter(b => b.therapist_id === staff.id && b.outlet_id === selectedOutletId && b.status !== 'cancelled');
       
-      // Filter sales for this specific staff
+      // Filter sales for this specific staff and outlet
       const mySales = allSales.filter(s => 
         (s.sold_by_id === staff.id || s.secondary_sold_by_id === staff.id) && 
+        s.outlet_id === selectedOutletId &&
         !s.booking_id && s.status !== 'void'
       );
 
