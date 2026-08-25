@@ -2,9 +2,8 @@
  * Device-aware session storage management
  * 
  * Rules:
- * - On Mobile (iOS, Android, Tablets): Sessions persist in localStorage across app closures.
- * - On Desktop / Desktop PWA: Sessions are stored in sessionStorage ONLY so closing the app window
- *   automatically logs out the user on next launch.
+ * - Sessions persist in localStorage across app closures and are shared across tabs.
+ * - sessionStorage is checked first for high-speed retrieval.
  */
 
 export const isMobileDevice = (): boolean => {
@@ -21,15 +20,13 @@ export const isMobileDevice = (): boolean => {
 };
 
 /**
- * Retrieves a session string based on device type:
- * - On mobile: checks sessionStorage first, falls back to localStorage (persistent across app restarts).
- * - On desktop / desktop PWA: checks sessionStorage ONLY. If not found, purges any legacy/stale
- *   localStorage token so closing and reopening the desktop app logs the user out.
+ * Retrieves a session string:
+ * Checks sessionStorage first, falls back to localStorage.
+ * This ensures "Open in new tab" works as localStorage is shared.
  */
 export const getDeviceSessionItem = (key: string): string | null => {
   if (typeof window === 'undefined') return null;
 
-  const isMobile = isMobileDevice();
   let sessionVal: string | null = null;
   
   try {
@@ -42,30 +39,15 @@ export const getDeviceSessionItem = (key: string): string | null => {
     return sessionVal;
   }
 
-  if (isMobile) {
-    try {
-      return localStorage.getItem(key);
-    } catch (e) {
-      return null;
-    }
-  } else {
-    // Desktop / Desktop PWA: If not active in sessionStorage, clear any legacy persistent entry
-    try {
-      if (localStorage.getItem(key)) {
-        localStorage.removeItem(key);
-      }
-    } catch (e) {
-      // Ignore
-    }
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
     return null;
   }
 };
 
 /**
- * Saves a session item based on device type:
- * - Mobile: saves to both sessionStorage and localStorage (persists across app closure).
- * - Desktop / Desktop PWA: saves to sessionStorage ONLY and removes from localStorage
- *   (session terminates when the desktop app/window is closed).
+ * Saves a session item to both sessionStorage and localStorage.
  */
 export const setDeviceSessionItem = (key: string, value: string): void => {
   if (typeof window === 'undefined') return;
@@ -76,18 +58,10 @@ export const setDeviceSessionItem = (key: string, value: string): void => {
     console.warn(`[DeviceStorage] Failed to write to sessionStorage for key: ${key}`, e);
   }
 
-  if (isMobileDevice()) {
-    try {
-      localStorage.setItem(key, value);
-    } catch (e) {
-      console.warn(`[DeviceStorage] Failed to write to localStorage for key: ${key}`, e);
-    }
-  } else {
-    try {
-      localStorage.removeItem(key);
-    } catch (e) {
-      // Ignore
-    }
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    console.warn(`[DeviceStorage] Failed to write to localStorage for key: ${key}`, e);
   }
 };
 
