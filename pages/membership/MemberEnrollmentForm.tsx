@@ -553,9 +553,21 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
                 </div>
             </div>
         </div>
-        <button onClick={onCancel} className="p-3 bg-white/5 hover:bg-white/10 rounded-full transition-colors active:scale-90">
-            <X className="w-5 h-5 text-white/60" />
-        </button>
+        <div className="flex items-center gap-3">
+            {(isEditing || isRenewal || matchedMembers.length > 0 || membershipNo) && (
+                <button 
+                    type="button"
+                    onClick={handleManualReset}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-white/5 hover:bg-white/10 rounded-full transition-all text-[10px] font-black uppercase tracking-[0.2em] text-white/90 border border-white/10 hover:border-white/20 active:scale-95 shadow-lg"
+                >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Clear Form
+                </button>
+            )}
+            <button onClick={onCancel} className="p-3 bg-white/5 hover:bg-white/10 rounded-full transition-colors active:scale-90 border border-transparent hover:border-white/10">
+                <X className="w-5 h-5 text-white/60" />
+            </button>
+        </div>
       </div>
 
       {getMatchBanner()}
