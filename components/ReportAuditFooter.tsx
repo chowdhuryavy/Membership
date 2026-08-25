@@ -26,9 +26,13 @@ export const ReportAuditFooter: React.FC<ReportAuditFooterProps> = ({ isEmbedded
           }
           .print-audit-footer {
             display: flex !important;
-            position: relative;
-            margin-top: 3rem;
-            page-break-inside: avoid;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 1.5cm;
+            background: white;
+            z-index: 1000;
           }
           /* Hide the audit footer if it's embedded in a container that already has a global footer (like Reports.tsx) */
           .report-container-context .print-audit-footer {

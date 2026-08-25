@@ -1538,7 +1538,7 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
                         </div>
                       )}
 
-                      <div className="mt-8 flex justify-between items-center border-t border-slate-100 pt-4">
+                      <div className="mt-8 flex justify-between items-center border-t border-slate-100 pt-4 dashboard-print-footer">
                           <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">
                               Page 1 of 1 &bull; System ID: {activeOutlet?.id?.substring(0,8)}
                           </span>
@@ -1556,6 +1556,17 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
 
       <style>{`
         @media print {
+            .dashboard-print-footer {
+                position: fixed !important;
+                bottom: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                padding: 1cm !important;
+                background: white !important;
+                display: flex !important;
+                z-index: 1000 !important;
+                border-top: 1px solid #f1f5f9 !important;
+            }
             html, body, #root, main, .print-container, .print-container * {
                 overflow: visible !important;
                 height: auto !important;
