@@ -30,6 +30,10 @@ export const ReportAuditFooter: React.FC<ReportAuditFooterProps> = ({ isEmbedded
             margin-top: 3rem;
             page-break-inside: avoid;
           }
+          /* Hide the audit footer if it's embedded in a container that already has a global footer (like Reports.tsx) */
+          .report-container-context .print-audit-footer {
+            display: none !important;
+          }
           .print-page-number-only {
             display: block !important;
             position: fixed;

@@ -1434,7 +1434,7 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
                           </div>
                       </div>
                       
-                      <div className="flex-1">
+                      <div className="flex-1 report-container-context">
                           {reportType === 'revenue_recognition' ? renderRevenueTable() : 
                            reportType === 'active_members' ? <ActiveMembersReport isEmbedded={true} selectedMembershipTypeId={selectedMembershipTypeId} /> : 
                            reportType === 'expiring_memberships' ? <ExpiringMembershipsReport isEmbedded={true} embeddedMonth={reportMonth} selectedMembershipTypeId={selectedMembershipTypeId} /> : 
