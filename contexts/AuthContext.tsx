@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { UserProfile } from '../types';
 import { db } from '../services/mockSupabase';
-import { getDeviceSessionItem, setDeviceSessionItem, removeDeviceSessionItem } from '../services/deviceStorage';
+import { getDeviceSessionItem, setDeviceSessionItem, removeDeviceSessionItem, isMobileDevice } from '../services/deviceStorage';
 
 export const isSuperAdminRole = (roleId: string | undefined | null) => {
     const id = roleId?.toLowerCase()?.trim();
@@ -109,15 +109,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') {
+        setIsLoading(false);
+        return;
+    }
+    
+    const bc = new BroadcastChannel('auth_session_sync');
+    
+    bc.onmessage = (event) => {
+      if (event.data.type === 'SESSION_REQUEST') {
+        const session = getStoredSessionStr();
+        if (session) {
+          bc.postMessage({ type: 'SESSION_DATA', session });
+        }
+      } else if (event.data.type === 'SESSION_DATA') {
+        if (!getStoredSessionStr() && event.data.session) {
+           try {
+             const parsed = JSON.parse(event.data.session);
+             setDeviceSessionItem('membership_session', event.data.session);
+             setUser(parsed);
+             setIsLoading(false);
+           } catch (e) {}
+        }
+      }
+    };
+
     const init = async () => {
         const stored = getStoredSessionStr();
         if (stored) {
             await refreshUser();
+            setIsLoading(false);
+        } else if (!isMobileDevice()) {
+            bc.postMessage({ type: 'SESSION_REQUEST' });
+            const timeout = setTimeout(() => {
+                setIsLoading(false);
+            }, 300);
+            return () => clearTimeout(timeout);
+        } else {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
 
     init();
+    return () => bc.close();
   }, []);
 
   const login = async (email: string, password: string) => {
