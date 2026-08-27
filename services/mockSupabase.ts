@@ -3032,28 +3032,20 @@ class DatabaseService {
   async getAllPTSessions(scopeId: string, isProperty: boolean = false): Promise<PTSession[]> {
     return this.safeCall(
       async () => {
-        let query = supabase.from('pt_sessions').select('*');
-        if (isProperty) {
-          const outlets = await this.getOutlets();
-          const outletIds = outlets.filter(o => o.property_id === scopeId).map(o => o.id);
-          query = query.in('outlet_id', outletIds);
-        } else {
-          query = query.eq('outlet_id', scopeId);
-        }
-        const { data, error } = await query;
+        const ptMembers = await this.getPTMembers(scopeId, isProperty);
+        const memberIds = (ptMembers || []).map(m => m.id).filter(Boolean);
+        if (memberIds.length === 0) return [];
+
+        const { data, error } = await supabase.from('pt_sessions').select('*').in('pt_member_id', memberIds);
         if (error) {
             if (error.code === '42P01') return [];
             throw error;
         }
-        return data as PTSession[];
+        return (data || []) as PTSession[];
       },
       () => {
         const sessions = JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[];
-        if (isProperty) {
-          // This is a bit tricky with mocks since outlets might not be available here easily
-          return sessions; // For mock, return all as a simple fallback
-        }
-        return sessions.filter(s => s.outlet_id === scopeId);
+        return sessions;
       }
     );
   }
