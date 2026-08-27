@@ -149,6 +149,8 @@ export interface Outlet {
   booking_end_time?: string;
   expiration_reminders_enabled?: boolean;
   expiration_reminder_days?: number[];
+  backup_email?: string;
+  backup_enabled?: boolean;
 }
 
 export interface StaffLeave {

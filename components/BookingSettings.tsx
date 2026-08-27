@@ -92,7 +92,9 @@ export const BookingSettings = () => {
 {`ALTER TABLE IF EXISTS public.outlets
 ADD COLUMN IF NOT EXISTS booking_enabled BOOLEAN DEFAULT true,
 ADD COLUMN IF NOT EXISTS booking_start_time TEXT DEFAULT '08:00',
-ADD COLUMN IF NOT EXISTS booking_end_time TEXT DEFAULT '22:00';
+ADD COLUMN IF NOT EXISTS booking_end_time TEXT DEFAULT '22:00',
+ADD COLUMN IF NOT EXISTS backup_email TEXT,
+ADD COLUMN IF NOT EXISTS backup_enabled BOOLEAN DEFAULT false;
 
 -- Ensure RLS doesn't block updates
 ALTER TABLE public.outlets ENABLE ROW LEVEL SECURITY;

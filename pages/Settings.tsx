@@ -439,7 +439,9 @@ const SettingsPage = () => {
     phone: '',
     signatory_config: {},
     contract_template: '',
-    conditions: '' 
+    conditions: '',
+    backup_email: '',
+    backup_enabled: false
   });
   const [roleForm, setRoleForm] = useState<Omit<Role, 'id'>>({ name: '', permissions: [] });
   const [currencyForm, setCurrencyForm] = useState<Omit<Currency, 'id'>>({ code: '', symbol: '', rate: 1, is_default: false, property_id: currentProperty?.id });
@@ -579,6 +581,12 @@ const SettingsPage = () => {
         showStatus('Unauthorized: Super Admin access required.', 'error');
         return;
     }
+    
+    if (!propertyForm.name) {
+        showStatus('Property Name is required.', 'error');
+        return;
+    }
+
     setIsSaving(true);
     try {
       if (editingId) await db.updateProperty(editingId, propertyForm);
@@ -635,6 +643,12 @@ const SettingsPage = () => {
         showStatus('Unauthorized: Super Admin access required.', 'error');
         return;
     }
+    
+    if (!outletForm.name || !outletForm.property_id) {
+        showStatus('Name and Property selection are required.', 'error');
+        return;
+    }
+
     setIsSaving(true);
     try {
       if (editingId) await db.updateOutlet(editingId, outletForm);
@@ -767,6 +781,21 @@ const SettingsPage = () => {
       showStatus(e.message, 'error');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSendTestBackup = async (outlet: Outlet) => {
+    if (!outlet.backup_email) {
+        showStatus('Please configure a backup recipient email first.', 'error');
+        return;
+    }
+    try {
+        showStatus('Aggregating property assets for backup...', 'success');
+        const { backupService } = await import('../services/backupService');
+        await backupService.sendDailyBackup(outlet.property_id, outlet.backup_email);
+        showStatus('Secure data backup transmitted successfully.');
+    } catch (e: any) {
+        showStatus(e.message || 'Backup transmission failed.', 'error');
     }
   };
 
@@ -1165,7 +1194,7 @@ const SettingsPage = () => {
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-5"><Store className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Asset Contexts</CardTitle></div>
-                          <Button onClick={() => { setEditingId(null); setOutletForm({name:'', property_id:'', logo_url:'', address:'', phone:'', signatory_config: {}, contract_template: '', conditions:''}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Commission Outlet</Button>
+                          <Button onClick={() => { setEditingId(null); setOutletForm({name:'', property_id: currentProperty?.id || '', logo_url:'', address:'', phone:'', signatory_config: {}, contract_template: '', conditions:'', backup_email: '', backup_enabled: false}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Commission Outlet</Button>
                       </CardHeader>
                       <CardContent className="p-0">
                           <table className="w-full text-left">
@@ -1188,7 +1217,9 @@ const SettingsPage = () => {
                                           phone: o.phone || '',
                                           signatory_config: o.signatory_config || {},
                                           contract_template: o.contract_template || '',
-                                          conditions: o.conditions || ''
+                                          conditions: o.conditions || '',
+                                          backup_email: o.backup_email || '',
+                                          backup_enabled: o.backup_enabled || false
                                       }); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'outlet', id:o.id, name:o.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
                                   </tr>
                               ))}</tbody>
@@ -2179,6 +2210,59 @@ const SettingsPage = () => {
                                     placeholder="Outlet-specific conditions..."
                                 />
                             </div>
+
+                            <div className="p-6 bg-slate-900 rounded-3xl border border-white/10 shadow-xl space-y-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+                                        <Mail className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-[11px] font-black text-white uppercase tracking-widest leading-none">Daily Data Backup</h4>
+                                        <p className="text-[8px] font-bold text-indigo-300 uppercase mt-1">Automated Excel Sync</p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 cursor-pointer" onClick={() => setOutletForm({...outletForm, backup_enabled: !outletForm.backup_enabled})}>
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${outletForm.backup_enabled ? 'bg-indigo-500 text-white' : 'bg-white/10 text-white/30'}`}>
+                                                <Zap className="w-4 h-4" />
+                                            </div>
+                                            <span className="text-[10px] font-black text-white uppercase tracking-widest">Enable Daily Backup</span>
+                                        </div>
+                                        <div className={`w-10 h-5 rounded-full relative transition-all ${outletForm.backup_enabled ? 'bg-indigo-500' : 'bg-white/10'}`}>
+                                            <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${outletForm.backup_enabled ? 'left-6' : 'left-1'}`} />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-[9px] font-black text-indigo-300 uppercase tracking-widest ml-1">Backup Recipient Email</label>
+                                        <div className="relative">
+                                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                                            <Input 
+                                                value={outletForm.backup_email || ''} 
+                                                onChange={e => setOutletForm({...outletForm, backup_email: e.target.value})}
+                                                placeholder="e.g. backup@client.com"
+                                                className="h-12 pl-12 rounded-xl bg-white/5 border-white/10 text-white text-xs font-bold focus:border-indigo-500 transition-all"
+                                            />
+                                        </div>
+                                        <p className="text-[8px] font-medium text-white/40 leading-relaxed px-1">
+                                            All data (Sales, Memberships, PT, etc.) for this property will be consolidated into a multi-sheet Excel file and emailed daily.
+                                        </p>
+                                    </div>
+
+                                    {editingId && (
+                                        <Button 
+                                            variant="outline"
+                                            onClick={() => handleSendTestBackup({ ...outletForm, id: editingId } as Outlet)}
+                                            className="w-full h-12 rounded-xl border-indigo-500/30 text-indigo-300 hover:bg-indigo-500 hover:text-white text-[9px] font-black uppercase tracking-widest transition-all"
+                                        >
+                                            <Zap className="w-3 h-3 mr-2" /> Trigger Test Backup Now
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+
                             <Button onClick={handleOutletSubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Save Outlet</Button>
                         </div>
                       )}
