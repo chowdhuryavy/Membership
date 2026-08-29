@@ -145,8 +145,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const isAdmin = checkIsAdmin(user, staffUser, isSuperAdmin);
       const data = await db.getNotifications(effectiveUserId, outletId, isAdmin);
       
-      // Filter by permission
+      // Filter by permission and outlet access
       const filteredData = data.filter(n => {
+        // Outlet permission check for non-superadmin users
+        if (n.outlet_id && !isSuperAdmin && user?.allowed_outlets && user.allowed_outlets.length > 0) {
+          if (!user.allowed_outlets.includes(n.outlet_id)) return false;
+        }
+
         if (!n.required_permission) return true;
         return hasPermission(user?.role_id || staffUser?.role || '', n.required_permission, user?.id || staffUser?.id);
       });
@@ -219,6 +224,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (!isAdmin && n.user_id !== effectiveUserId) return;
 
+      // Outlet permission check for non-superadmin users
+      if (n.outlet_id && !isSuperAdmin && user?.allowed_outlets && user.allowed_outlets.length > 0) {
+        if (!user.allowed_outlets.includes(n.outlet_id)) return;
+      }
+
       seenIds.current.add(n.id);
 
       const contentKey = `${n.title}:${n.message}`;
@@ -262,6 +272,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           // Check if dismissed by current user
           if (n.dismissed_by?.includes(effectiveUserId)) return;
           
+          // Outlet permission check for non-superadmin users
+          if (n.outlet_id && !isSuperAdmin && user?.allowed_outlets && user.allowed_outlets.length > 0) {
+            if (!user.allowed_outlets.includes(n.outlet_id)) return;
+          }
+
           // Check permission
           if (n.required_permission && !hasPermission(user?.role_id || staffUser?.role || '', n.required_permission, user?.id || staffUser?.id)) {
             return;

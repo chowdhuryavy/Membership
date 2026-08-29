@@ -4663,14 +4663,16 @@ class DatabaseService {
               '/#/notifications',
               false,
               'admin',
-              effectiveExcludeUserId
+              effectiveExcludeUserId,
+              notification.outlet_id,
+              notification.required_permission
           ).catch(err => console.error(`[Push] Trigger failure for ${notification.user_id}:`, err));
         } else {
-          // Unassigned/Global notification: Broadcast push ONLY to Admin portal devices
+          // Unassigned/Global notification: Broadcast push ONLY to Admin portal devices with matching outlet/property permission
           // (Staff devices only receive items specifically allocated to their user_id)
-          console.log(`[Push] Unassigned/Global notification created: "${notification.title}". Type: ${notification.type}`);
+          console.log(`[Push] Unassigned/Global notification created: "${notification.title}". Type: ${notification.type}, Outlet: ${notification.outlet_id || 'ALL'}`);
           if (notification.type === 'error' || notification.type === 'warning' || notification.required_permission) {
-              console.log(`[Push] Broadcasting admin-only notification: "${notification.title}"`);
+              console.log(`[Push] Broadcasting permission-filtered admin notification: "${notification.title}"`);
               await this.triggerGlobalPush({ ...dbNotification, id: 'global-placeholder' } as any, 'admin', effectiveExcludeUserId);
           } else {
               console.log(`[Push] Skipping push broadcast for standard unassigned info notification.`);
@@ -4696,8 +4698,8 @@ class DatabaseService {
 
   private async triggerGlobalPush(n: Notification, targetRole: 'admin' | 'all' = 'admin', excludeUserId?: string) {
     try {
-        console.log(`[Push] Global notification: Broadcasting "${n.title}" to ${targetRole} devices...`);
-        // We call the Edge Function with broadcast: true and targetRole
+        console.log(`[Push] Global notification: Broadcasting "${n.title}" to ${targetRole} devices (Outlet: ${n.outlet_id || 'ALL'})...`);
+        // We call the Edge Function with broadcast: true, targetRole, outlet_id and required_permission
         await this.triggerPushNotification(
             "global-broadcast", 
             n.title, 
@@ -4705,7 +4707,9 @@ class DatabaseService {
             '/#/notifications',
             true, // Enable broadcast mode
             targetRole,
-            excludeUserId
+            excludeUserId,
+            n.outlet_id,
+            n.required_permission
         );
         console.log("[Push] Global broadcast triggered successfully.");
     } catch (e) {
@@ -4713,7 +4717,17 @@ class DatabaseService {
     }
   }
 
-  async triggerPushNotification(userId: string, title: string, body: string, url: string = '/#/notifications', broadcast: boolean = false, targetRole: string = 'admin', excludeUserId?: string) {
+  async triggerPushNotification(
+    userId: string, 
+    title: string, 
+    body: string, 
+    url: string = '/#/notifications', 
+    broadcast: boolean = false, 
+    targetRole: string = 'admin', 
+    excludeUserId?: string,
+    outletId?: string,
+    requiredPermission?: string
+  ) {
     if (!this.isSupabase()) {
         console.log('Push notification trigger skipped: Supabase offline');
         return;
@@ -4724,6 +4738,10 @@ class DatabaseService {
             broadcast,
             targetRole: broadcast ? targetRole : undefined,
             excludeUserId,
+            outletId,
+            outlet_id: outletId,
+            requiredPermission,
+            required_permission: requiredPermission,
             title, 
             body, 
             url,
@@ -4731,7 +4749,7 @@ class DatabaseService {
             icon: '/icon.png',
             tag: broadcast ? 'admin-club-alert' : 'direct-staff-alert'
         };
-        console.log(`[Push] Dispatching to Edge Function (${broadcast ? `BROADCAST [${targetRole}]` : `DIRECT [${userId}]`}):`, JSON.stringify(payload, null, 2));
+        console.log(`[Push] Dispatching to Edge Function (${broadcast ? `BROADCAST [${targetRole}] [Outlet: ${outletId || 'ALL'}]` : `DIRECT [${userId}]`}):`, JSON.stringify(payload, null, 2));
         
         // Use a timeout for the invoke call to prevent hanging the UI
         const invokePromise = supabase.functions.invoke('send-push', {
