@@ -77,16 +77,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Session Inactivity State
+  // Session Inactivity State (Standard 15 minutes for all users)
   const [sessionTimeoutMinutes, setSessionTimeoutMinutesState] = useState<number>(() => {
     const cached = localStorage.getItem('company_settings_cache');
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
-        if (typeof parsed.session_timeout_minutes === 'number') return parsed.session_timeout_minutes;
+        if (typeof parsed.session_timeout_minutes === 'number' && parsed.session_timeout_minutes > 0) {
+          return parsed.session_timeout_minutes;
+        }
       } catch (e) {}
     }
-    return 15;
+    return 15; // Standard default 15 minutes
   });
 
   const [showInactivityWarning, setShowInactivityWarning] = useState(false);
