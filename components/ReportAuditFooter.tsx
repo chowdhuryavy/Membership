@@ -23,29 +23,23 @@ export const ReportAuditFooter: React.FC<ReportAuditFooterProps> = ({ isEmbedded
         @media print {
           .print-audit-footer {
             display: flex !important;
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            padding: 0.6cm 1cm;
-            background: white;
-            z-index: 1000;
-            border-top: 1px solid #f1f5f9;
+            margin-top: 1.5rem !important;
+            padding-top: 1rem !important;
+            border-top: 1px solid #e2e8f0 !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           /* Hide the audit footer if it's embedded in a container that already has a global footer (like Reports.tsx) */
           .report-container-context .print-audit-footer {
             display: none !important;
           }
-          .print-audit-footer .print-page-counter::after {
-            content: "PAGE " counter(page);
-          }
         }
       `}} />
       
-      {/* Full Audit Trail - Appears on every printed sheet */}
+      {/* Full Audit Trail - Appears at the end of report content */}
       <div className={`print-audit-footer mt-12 pt-6 border-t border-slate-100 flex justify-between items-center ${isEmbedded ? 'text-[8px]' : 'text-[10px]'} font-black text-slate-300 uppercase tracking-widest print:flex hidden`}>
-        <span className="print-page-counter">
-          <span className="print:hidden">OFFICIAL FACILITY REPORT</span>
+        <span>
+          OFFICIAL FACILITY REPORT
         </span>
         <span className="text-slate-400">
           Exported on: {format(new Date(), 'dd-MMM-yyyy HH:mm:ss')} by {exporterName}

@@ -232,28 +232,15 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
             th { background: #0f172a; color: #ffffff; text-align: left; padding: 12px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
             td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; font-weight: 600; color: #334155; }
             tr:nth-child(even) { background: #f8fafc; }
-            .audit-footer { margin-top: 50px; border-top: 2px solid #f1f5f9; padding-top: 15px; display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; }
+            .audit-footer { margin-top: 50px; border-top: 2px solid #f1f5f9; padding-top: 15px; display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; break-inside: avoid; page-break-inside: avoid; }
             
             @page {
-              margin: 0;
+              margin: 8mm;
             }
             @media print {
               body { padding: 1.5cm; }
               .header { margin-top: 0; }
-              .page-number-float {
-                display: block !important;
-                position: fixed;
-                bottom: 1cm;
-                right: 1.5cm;
-                font-size: 9px;
-                font-weight: 900;
-                color: #cbd5e1;
-              }
-              .page-number-float:after {
-                content: "PAGE " counter(page);
-              }
             }
-            .page-number-float { display: none; }
           </style>
         </head>
         <body>
@@ -318,7 +305,7 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
           </table>
 
           <div class="audit-footer">
-            <span class="page-number-float"></span>
+            <span>OFFICIAL FACILITY REPORT</span>
             <span>EXPORTED ON: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')}</span>
             <span>&copy; ${new Date().getFullYear()} ${currentProperty?.name || 'System'}. ALL RIGHTS RESERVED.</span>
           </div>

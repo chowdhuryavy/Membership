@@ -1539,8 +1539,8 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
                       )}
 
                       <div className="mt-8 flex justify-between items-center border-t border-slate-100 pt-4 dashboard-print-footer">
-                          <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest print-page-counter">
-                              <span className="print:hidden">OFFICIAL FACILITY REPORT</span>
+                          <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">
+                              OFFICIAL FACILITY REPORT
                           </span>
                           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
                               Exported on: {format(new Date(), 'dd-MMM-yyyy HH:mm:ss')} by {autoDispatchConfig ? 'SYSTEM AUTOMATED' : (user?.name || 'SYSTEM AUTOMATED')}
@@ -1557,18 +1557,12 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
       <style>{`
         @media print {
             .dashboard-print-footer {
-                position: fixed !important;
-                bottom: 0 !important;
-                left: 0 !important;
-                right: 0 !important;
-                padding: 0.6cm 1cm !important;
-                background: white !important;
                 display: flex !important;
-                z-index: 1000 !important;
-                border-top: 1px solid #f1f5f9 !important;
-            }
-            .dashboard-print-footer .print-page-counter::after {
-                content: "PAGE " counter(page);
+                margin-top: 1.5rem !important;
+                padding-top: 1rem !important;
+                border-top: 1px solid #e2e8f0 !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
             }
             html, body, #root, main, .print-container, .print-container * {
                 overflow: visible !important;
