@@ -4,10 +4,12 @@ import { Staff, StaffLeave } from '../types';
 import { db } from '../services/mockSupabase';
 import { supabase } from '../services/supabase';
 import { getReportData } from '../src/shared/reportLogic';
-import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X, Database, RefreshCcw, ShieldAlert, Award, TrendingUp, Sparkles, User, Clock, Building2, ChevronLeft, ChevronRight, UserPlus } from 'lucide-react';
+import { ArrowLeft, Calendar, Plus, Trash2, Edit2, ShieldCheck, Mail, Phone, CalendarX, X, Database, RefreshCcw, ShieldAlert, Award, TrendingUp, Sparkles, User, Clock, Building2, ChevronLeft, ChevronRight, UserPlus, Lock, Unlock, CheckCircle, AlertTriangle, KeyRound, Shield } from 'lucide-react';
 import { format, parseISO, subDays } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 interface StaffProfileViewProps {
   staff: Staff;
@@ -18,14 +20,76 @@ interface StaffProfileViewProps {
   loadStaff: () => void;
 }
 
-const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff, onBack, canManage, canManageLeaves, onEdit, loadStaff }) => {
-  const { settings, formatMoney } = useSettings();
+const StaffProfileView: React.FC<StaffProfileViewProps> = ({ staff: initialStaff, onBack, canManage, canManageLeaves, onEdit, loadStaff }) => {
+  const { settings, formatMoney, hasPermission } = useSettings();
+  const { user, isSuperAdmin } = useAuth();
+  const [staff, setStaff] = useState<Staff>(initialStaff);
   const [leaves, setLeaves] = useState<StaffLeave[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [editingLeaveId, setEditingLeaveId] = useState<string | null>(null);
   const [leaveForm, setLeaveForm] = useState({ start_date: '', end_date: '' });
   const [displayDates, setDisplayDates] = useState({ start: '', end: '' });
+  const [isUnlocking, setIsUnlocking] = useState(false);
+
+  useEffect(() => {
+    setStaff(initialStaff);
+  }, [initialStaff]);
+
+  const canUnlock = isSuperAdmin || (user && hasPermission(user.role_id, 'users:unlock'));
+
+  const handleUnlockStaff = async () => {
+    if (!canUnlock) {
+      toast.error('You do not have permission to unlock staff accounts');
+      return;
+    }
+    setIsUnlocking(true);
+    try {
+      await db.unlockStaff(staff.id, {
+        id: user?.id,
+        name: user?.name,
+        email: user?.email
+      });
+      toast.success(`Staff account for ${staff.name} unlocked successfully!`);
+      setStaff(prev => ({
+        ...prev,
+        is_locked: false,
+        failed_login_attempts: 0,
+        unlocked_at: new Date().toISOString(),
+        unlocked_by: user?.name || user?.email || 'Property Admin'
+      }));
+      loadStaff();
+    } catch (err: any) {
+      console.error("Unlock error:", err);
+      toast.error(`Failed to unlock account: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
+  const handleLockStaff = async () => {
+    if (!canUnlock) {
+      toast.error('You do not have permission to lock staff accounts');
+      return;
+    }
+    setIsUnlocking(true);
+    try {
+      await db.lockStaff(staff.id);
+      toast.success(`Staff account for ${staff.name} has been locked`);
+      setStaff(prev => ({
+        ...prev,
+        is_locked: true,
+        failed_login_attempts: 3,
+        locked_at: new Date().toISOString()
+      }));
+      loadStaff();
+    } catch (err: any) {
+      console.error("Lock error:", err);
+      toast.error(`Failed to lock account: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
   
   const [activeTab, setActiveTab] = useState<'leaves' | 'incentives'>('leaves');
   const [incentiveData, setIncentiveData] = useState<any[]>([]);
@@ -436,6 +500,115 @@ NOTIFY pgrst, 'reload schema';`}
                     </div>
                   )}
                 </div>
+            </CardContent>
+          </Card>
+
+          {/* AUTHENTICATION MONITOR */}
+          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+            <CardHeader className={`p-6 border-b ${staff.is_locked ? 'bg-red-950 text-white' : 'border-slate-100 bg-slate-50/50'}`}>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-black tracking-tight flex items-center gap-2.5">
+                  {staff.is_locked ? (
+                    <ShieldAlert className="w-5 h-5 text-red-400" />
+                  ) : (
+                    <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                  )}
+                  <span className="uppercase text-xs tracking-wider">Authentication Monitor</span>
+                </CardTitle>
+                {staff.is_locked ? (
+                  <span className="px-2.5 py-1 bg-red-500/20 text-red-300 border border-red-500/30 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    Locked
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    Secure
+                  </span>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              {staff.is_locked ? (
+                <div className="space-y-4">
+                  <div className="p-4 bg-red-50 border border-red-100 rounded-2xl">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-black text-red-900 uppercase tracking-tight">Security Lockout Active</p>
+                        <p className="text-[11px] font-medium text-red-700 mt-1 leading-relaxed">
+                          Staff portal account automatically locked after 3 consecutive failed login attempts. Property Admin authorization required to restore access.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Failed Attempts</span>
+                      <span className="font-black text-red-600 text-xs mt-0.5 block">{staff.failed_login_attempts || 3} of 3</span>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Locked At</span>
+                      <span className="font-bold text-slate-700 text-[11px] mt-0.5 block truncate">
+                        {staff.locked_at ? format(new Date(staff.locked_at), 'dd MMM, HH:mm') : 'Recently'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {canUnlock && (
+                    <Button 
+                      onClick={handleUnlockStaff} 
+                      isLoading={isUnlocking}
+                      className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-600/20"
+                    >
+                      <Unlock className="w-4 h-4 mr-2" />
+                      Unlock Staff Account
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Failed Attempts</span>
+                      <span className="font-black text-slate-800 text-xs mt-0.5 block">{staff.failed_login_attempts || 0} / 3</span>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Lock Threshold</span>
+                      <span className="font-bold text-slate-600 text-xs mt-0.5 block">3 Attempts</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-500 text-[11px]">Portal Login</span>
+                    <span className={`font-black text-[10px] uppercase px-2 py-0.5 rounded-md ${staff.can_login ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-200 text-slate-600'}`}>
+                      {staff.can_login ? `Enabled (${staff.employee_number || 'ID Set'})` : 'Disabled'}
+                    </span>
+                  </div>
+
+                  {staff.unlocked_at && (
+                    <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100/60 text-xs">
+                      <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider block">Last Unlocked</span>
+                      <span className="font-medium text-emerald-700 text-[10px] mt-0.5 block">
+                        {format(new Date(staff.unlocked_at), 'dd MMM yyyy, HH:mm')} by <strong className="font-black">{staff.unlocked_by || 'Property Admin'}</strong>
+                      </span>
+                    </div>
+                  )}
+
+                  {canUnlock && staff.can_login && (
+                    <Button
+                      variant="secondary"
+                      onClick={handleLockStaff}
+                      isLoading={isUnlocking}
+                      className="w-full h-9 rounded-xl font-black text-[9px] uppercase tracking-widest text-slate-500 border border-slate-200 hover:border-red-200 hover:text-red-600 bg-white"
+                    >
+                      <Lock className="w-3 h-3 mr-1.5" />
+                      Manually Lock Account
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

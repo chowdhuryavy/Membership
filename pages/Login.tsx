@@ -21,10 +21,19 @@ const Login = () => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordsMatch, setPasswordsMatch] = useState(false);
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string | null>(null);
 
   const { login, changePassword } = useAuth();
   const { settings } = useSettings();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const expiredReason = sessionStorage.getItem('session_expired_reason');
+    if (expiredReason) {
+      setSessionExpiredNotice(expiredReason);
+      sessionStorage.removeItem('session_expired_reason');
+    }
+  }, []);
 
   const isLengthValid = newPassword.length >= 6;
   const isMatchValid = newPassword !== '' && newPassword === confirmPassword;
@@ -199,6 +208,16 @@ const Login = () => {
                   </button>
                 </div>
               </div>
+
+              {sessionExpiredNotice && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold p-3.5 rounded-xl flex items-start gap-3 animate-in fade-in duration-300">
+                  <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-black text-amber-900 uppercase tracking-wider text-[10px]">Session Terminated</p>
+                    <p className="text-amber-700 font-medium text-xs mt-0.5">{sessionExpiredNotice}</p>
+                  </div>
+                </div>
+              )}
 
               {error && (
                 <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-bold p-3 rounded-xl flex items-center gap-3 animate-in shake duration-300">

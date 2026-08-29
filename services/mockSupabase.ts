@@ -284,6 +284,7 @@ class DatabaseService {
           { key: 'users:edit', label: 'Edit Roles', description: 'Change roles and outlet access scopes.' },
           { key: 'users:edit_self', label: 'Self-Modification', description: 'Allow user to edit their own profile and access.' },
           { key: 'users:edit_email', label: 'Email Control', description: 'Permission to change user account emails.' },
+          { key: 'users:unlock', label: 'Unlock / Lock Accounts', description: 'Unlock or manually lock user profiles and staff accounts after authentication lockouts.' },
           { key: 'users:delete', label: 'Revoke Identity', description: 'Terminate user access permanently.' },
           { key: 'users:manage_overrides', label: 'Policy Overrides', description: 'Manage granular user-specific permission deviations.' },
           { key: 'logs:view', label: 'Audit Log Access', description: 'Access the system mutation and activity logs.' },
@@ -626,6 +627,24 @@ class DatabaseService {
 
     if (this.isSupabase()) {
       try {
+        // Pre-check profile for status, lockout, and attempt tracking
+        let { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
+
+        if (profile) {
+          if (profile.is_active === false) {
+            return { user: null, error: "Account is inactive. Please contact administration.", requiresPasswordChange: false };
+          }
+
+          if (profile.is_locked === true) {
+            await this.logAction('AUTH_BLOCKED', `Login blocked for locked user profile: ${cleanEmail}`, profile.allowed_outlets?.[0], { id: profile.id, name: profile.name });
+            return { 
+              user: null, 
+              error: `Account is locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.`, 
+              requiresPasswordChange: false 
+            };
+          }
+        }
+
         // 1. Primary: Direct Supabase auth sign-in
         const { data: authData, error: authError } = await (supabase.auth as any).signInWithPassword({ 
           email: cleanEmail, 
@@ -633,8 +652,6 @@ class DatabaseService {
         });
 
         if (!authError && authData?.user) {
-          let { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
-          
           if (!profile) {
             const newProfileData = {
               id: crypto.randomUUID(),
@@ -644,6 +661,8 @@ class DatabaseService {
               role_id: isMasterEmail ? 'super_admin' : 'member',
               allowed_outlets: [],
               is_active: true,
+              failed_login_attempts: 0,
+              is_locked: false,
               created_at: new Date().toISOString()
             };
             const { data: createdProfile } = await supabase.from('profiles').upsert([newProfileData], { onConflict: 'email' }).select().single();
@@ -656,24 +675,26 @@ class DatabaseService {
           }
 
           if (profile) {
+            const updates: any = {};
             if (!profile.auth_id || profile.auth_id !== authData.user.id) {
-              await supabase.from('profiles').update({ auth_id: authData.user.id }).eq('id', profile.id);
+              updates.auth_id = authData.user.id;
             }
+            if ((profile.failed_login_attempts || 0) > 0) {
+              updates.failed_login_attempts = 0;
+            }
+            if (Object.keys(updates).length > 0) {
+              await supabase.from('profiles').update(updates).eq('id', profile.id);
+            }
+
             await this.syncAuthMetadata(profile);
             const overrides = await this.getPermissionOverrides(profile.id);
-            const hydrated = { ...profile, overrides };
+            const hydrated = { ...profile, ...updates, overrides };
             await this.logAction('AUTH_LOGIN', `Access authorized for ${profile.email}`, undefined, { id: profile.id, name: profile.name });
             return { user: hydrated, error: null, requiresPasswordChange: !!profile.temp_password };
           }
         }
 
         // 2. Secondary: Check profile table for temp passwords or initial setups
-        const { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
-        
-        if (profile && profile.is_active === false) {
-          return { user: null, error: "Account is inactive. Please contact administration.", requiresPasswordChange: false };
-        }
-
         if (profile && profile.temp_password === passwordAttempt) {
           const { data: signUpData, error: signUpError } = await (supabase.auth as any).signUp({ 
             email: cleanEmail, 
@@ -682,12 +703,15 @@ class DatabaseService {
           });
           
           if (signUpData?.user) {
-            await supabase.from('profiles').update({ auth_id: signUpData.user.id }).eq('id', profile.id);
+            await supabase.from('profiles').update({ auth_id: signUpData.user.id, failed_login_attempts: 0 }).eq('id', profile.id);
             const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
             await this.logAction('AUTH_SIGNUP', `Identity provisioned for ${profile.email}`);
             return { user: refreshed || profile, error: null, requiresPasswordChange: true };
           }
           if (signUpError) {
+            if ((profile.failed_login_attempts || 0) > 0) {
+              await supabase.from('profiles').update({ failed_login_attempts: 0 }).eq('id', profile.id);
+            }
             return { user: profile, error: null, requiresPasswordChange: true };
           }
         }
@@ -700,9 +724,70 @@ class DatabaseService {
             name: 'Chowdhury Avy (Master Admin)',
             role_id: 'super_admin',
             allowed_outlets: [],
-            is_active: true
+            is_active: true,
+            failed_login_attempts: 0,
+            is_locked: false
           };
+          if (profile && (profile.failed_login_attempts || 0) > 0) {
+            await supabase.from('profiles').update({ failed_login_attempts: 0 }).eq('id', profile.id);
+          }
           return { user: masterProfile, error: null, requiresPasswordChange: false };
+        }
+
+        // Failed password attempt: Process attempt counter & locking monitor
+        if (profile) {
+          const prevAttempts = profile.failed_login_attempts || 0;
+          const currentAttempts = prevAttempts + 1;
+          const primaryOutlet = profile.allowed_outlets?.[0];
+
+          if (currentAttempts >= 3) {
+            const lockedAt = new Date().toISOString();
+            await supabase.from('profiles').update({
+              failed_login_attempts: currentAttempts,
+              is_locked: true,
+              locked_at: lockedAt
+            }).eq('id', profile.id);
+
+            await this.addNotification({
+              title: 'Security Alert: Account Locked',
+              message: `User ${profile.name || cleanEmail} (${cleanEmail}) has been locked after 3 unsuccessful login attempts.`,
+              type: 'error',
+              outlet_id: primaryOutlet,
+              required_permission: 'users:edit'
+            });
+
+            await this.logAction(
+              'AUTH_LOCK',
+              `Account locked for ${profile.name || cleanEmail} (${cleanEmail}) after 3 consecutive failed login attempts.`,
+              primaryOutlet,
+              { id: profile.id, name: profile.name },
+              { module: 'Authentication', severity: 'error', status: 'failed' }
+            );
+
+            return { 
+              user: null, 
+              error: "Account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.", 
+              requiresPasswordChange: false 
+            };
+          } else {
+            await supabase.from('profiles').update({
+              failed_login_attempts: currentAttempts
+            }).eq('id', profile.id);
+
+            await this.logAction(
+              'AUTH_FAILED',
+              `Unsuccessful login attempt (${currentAttempts}/3) for ${profile.name || cleanEmail} (${cleanEmail}).`,
+              primaryOutlet,
+              { id: profile.id, name: profile.name },
+              { module: 'Authentication', severity: 'warning', status: 'failed' }
+            );
+
+            return { 
+              user: null, 
+              error: `Invalid email or password. Unsuccessful attempt ${currentAttempts} of 3. Account will be locked after 3 failed attempts.`, 
+              requiresPasswordChange: false 
+            };
+          }
         }
 
         return { user: null, error: authError?.message || "Invalid email or password.", requiresPasswordChange: false };
@@ -723,7 +808,9 @@ class DatabaseService {
         name: 'Chowdhury Avy (Master Admin)',
         role_id: 'super_admin',
         allowed_outlets: [],
-        is_active: true
+        is_active: true,
+        failed_login_attempts: 0,
+        is_locked: false
       };
       return { user: masterUser, error: null, requiresPasswordChange: false };
     }
@@ -774,6 +861,11 @@ class DatabaseService {
             allowed_outlets: updates.allowed_outlets, 
             default_outlet_id: (updates as any).default_outlet_id,
             is_active: updates.is_active,
+            is_locked: updates.is_locked,
+            failed_login_attempts: updates.failed_login_attempts,
+            locked_at: updates.locked_at,
+            unlocked_at: updates.unlocked_at,
+            unlocked_by: updates.unlocked_by,
             updated_at: new Date().toISOString() 
         };
         Object.keys(finalUpdates).forEach(k => finalUpdates[k] === undefined && delete finalUpdates[k]);
@@ -782,6 +874,76 @@ class DatabaseService {
         await this.logAction('UPDATE_USER', `Identity modified for ${current.name} (${current.email})`);
       }, null);
     }
+  }
+
+  async unlockUser(userId: string, adminContext?: { id?: string; name?: string; email?: string }): Promise<boolean> {
+    if (this.isSupabase()) {
+      return this.safeCall(async () => {
+        const { data: profile } = await supabase.from('profiles').select('id, name, email, allowed_outlets').eq('id', userId).single();
+        const adminIdentifier = adminContext?.name || adminContext?.email || 'Property Admin';
+        const { error } = await supabase.from('profiles').update({
+          is_locked: false,
+          failed_login_attempts: 0,
+          locked_at: null,
+          unlocked_at: new Date().toISOString(),
+          unlocked_by: adminIdentifier
+        }).eq('id', userId);
+
+        if (error) throw error;
+
+        const outletId = profile?.allowed_outlets?.[0];
+        await this.logAction(
+          'AUTH_UNLOCKED',
+          `Account unlocked for ${profile?.name || userId} (${profile?.email || ''}) by ${adminIdentifier}`,
+          outletId,
+          { id: userId, name: profile?.name || 'User' },
+          { module: 'Authentication', severity: 'info', status: 'success' }
+        );
+
+        await this.addNotification({
+          title: 'Account Unlocked',
+          message: `Account for ${profile?.name || 'User'} (${profile?.email || ''}) has been unlocked by ${adminIdentifier}.`,
+          type: 'info',
+          outlet_id: outletId
+        });
+
+        return true;
+      }, false);
+    }
+    return false;
+  }
+
+  async lockUser(userId: string, reasonOrAdminContext?: string | { id?: string; name?: string; email?: string }, adminContext?: { id?: string; name?: string; email?: string }): Promise<boolean> {
+    const reason = typeof reasonOrAdminContext === 'string' ? reasonOrAdminContext : 'Administrative Action';
+    const effectiveAdmin = typeof reasonOrAdminContext === 'object' && reasonOrAdminContext !== null ? reasonOrAdminContext : adminContext;
+
+    if (this.isSupabase()) {
+      return this.safeCall(async () => {
+        const { data: profile } = await supabase.from('profiles').select('id, name, email, allowed_outlets').eq('id', userId).single();
+        const adminIdentifier = effectiveAdmin?.name || effectiveAdmin?.email || 'Property Admin';
+        const { error } = await supabase.from('profiles').update({
+          is_locked: true,
+          failed_login_attempts: 3,
+          locked_at: new Date().toISOString(),
+          unlocked_at: null,
+          unlocked_by: null
+        }).eq('id', userId);
+
+        if (error) throw error;
+
+        const outletId = profile?.allowed_outlets?.[0];
+        await this.logAction(
+          'AUTH_LOCK',
+          `Account manually locked for ${profile?.name || userId} (${profile?.email || ''}) by ${adminIdentifier}. Reason: ${reason}`,
+          outletId,
+          { id: userId, name: profile?.name || 'User' },
+          { module: 'Authentication', severity: 'warning', status: 'success' }
+        );
+
+        return true;
+      }, false);
+    }
+    return false;
   }
 
   async getUsers(): Promise<UserProfile[]> {
@@ -948,24 +1110,169 @@ class DatabaseService {
   }
 
   async loginStaff(employeeNumber: string, password: string): Promise<Staff | null> {
+    const cleanEmp = employeeNumber.trim();
     if (this.isSupabase()) {
       return this.safeCall(async () => {
-        const { data, error } = await supabase
+        // 1. Fetch staff record by employee number
+        const { data: staff, error: queryError } = await supabase
           .from('staff')
           .select('*')
-          .eq('employee_number', employeeNumber)
-          .eq('password', password)
-          .eq('can_login', true)
-          .eq('is_active', true)
-          .single();
+          .eq('employee_number', cleanEmp)
+          .maybeSingle();
         
-        if (error || !data) {
-          return null;
+        if (queryError || !staff) {
+          throw new Error("Invalid employee number or password.");
         }
-        return data as Staff;
+
+        if (staff.is_active === false) {
+          throw new Error("Staff account is inactive. Please contact your property administrator.");
+        }
+
+        if (staff.can_login === false) {
+          throw new Error("Staff portal access is disabled for this account.");
+        }
+
+        if (staff.is_locked === true) {
+          await this.logAction(
+            'AUTH_BLOCKED',
+            `Staff portal access blocked for locked personnel: ${staff.name} (${cleanEmp})`,
+            staff.outlet_ids?.[0] || staff.property_id
+          );
+          throw new Error("Staff account is locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator to unlock.");
+        }
+
+        // 2. Validate password
+        if (staff.password !== password) {
+          const currentAttempts = (staff.failed_login_attempts || 0) + 1;
+          const targetOutlet = staff.outlet_ids?.[0] || staff.property_id;
+
+          if (currentAttempts >= 3) {
+            const lockedAt = new Date().toISOString();
+            await supabase.from('staff').update({
+              failed_login_attempts: currentAttempts,
+              is_locked: true,
+              locked_at: lockedAt
+            }).eq('id', staff.id);
+
+            await this.addNotification({
+              title: 'Security Alert: Staff Account Locked',
+              message: `Staff personnel ${staff.name} (${staff.employee_number}) was locked after 3 unsuccessful login attempts.`,
+              type: 'error',
+              outlet_id: targetOutlet,
+              required_permission: 'staff:manage'
+            });
+
+            await this.logAction(
+              'AUTH_LOCK',
+              `Staff portal account locked for ${staff.name} (${cleanEmp}) after 3 consecutive failed login attempts.`,
+              targetOutlet,
+              undefined,
+              { module: 'Authentication', severity: 'error', status: 'failed' }
+            );
+
+            throw new Error("Staff account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator to unlock.");
+          } else {
+            await supabase.from('staff').update({
+              failed_login_attempts: currentAttempts
+            }).eq('id', staff.id);
+
+            await this.logAction(
+              'AUTH_FAILED',
+              `Unsuccessful staff portal login attempt (${currentAttempts}/3) for ${staff.name} (${cleanEmp}).`,
+              targetOutlet,
+              undefined,
+              { module: 'Authentication', severity: 'warning', status: 'failed' }
+            );
+
+            throw new Error(`Invalid employee number or password. Unsuccessful attempt ${currentAttempts} of 3. Account will be locked after 3 failed attempts.`);
+          }
+        }
+
+        // 3. Success: Reset failed attempts if any
+        if ((staff.failed_login_attempts || 0) > 0) {
+          await supabase.from('staff').update({ failed_login_attempts: 0 }).eq('id', staff.id);
+        }
+
+        await this.logAction(
+          'AUTH_LOGIN',
+          `Staff portal authenticated for: ${staff.name} (${cleanEmp})`,
+          staff.outlet_ids?.[0] || staff.property_id
+        );
+
+        return staff as Staff;
       }, null);
     }
     return null;
+  }
+
+  async unlockStaff(staffId: string, adminContext?: { id?: string; name?: string; email?: string }): Promise<boolean> {
+    if (this.isSupabase()) {
+      return this.safeCall(async () => {
+        const { data: staff } = await supabase.from('staff').select('id, name, employee_number, outlet_ids, property_id').eq('id', staffId).single();
+        const adminIdentifier = adminContext?.name || adminContext?.email || 'Property Admin';
+        const { error } = await supabase.from('staff').update({
+          is_locked: false,
+          failed_login_attempts: 0,
+          locked_at: null,
+          unlocked_at: new Date().toISOString(),
+          unlocked_by: adminIdentifier
+        }).eq('id', staffId);
+
+        if (error) throw error;
+
+        const outletId = staff?.outlet_ids?.[0] || staff?.property_id;
+        await this.logAction(
+          'AUTH_UNLOCKED',
+          `Staff account unlocked for ${staff?.name || staffId} (EMP: ${staff?.employee_number || ''}) by ${adminIdentifier}`,
+          outletId,
+          undefined,
+          { module: 'Authentication', severity: 'info', status: 'success' }
+        );
+
+        await this.addNotification({
+          title: 'Staff Account Unlocked',
+          message: `Staff account for ${staff?.name || 'Staff'} (${staff?.employee_number || ''}) has been unlocked by ${adminIdentifier}.`,
+          type: 'info',
+          outlet_id: outletId
+        });
+
+        return true;
+      }, false);
+    }
+    return false;
+  }
+
+  async lockStaff(staffId: string, reasonOrAdminContext?: string | { id?: string; name?: string; email?: string }, adminContext?: { id?: string; name?: string; email?: string }): Promise<boolean> {
+    const reason = typeof reasonOrAdminContext === 'string' ? reasonOrAdminContext : 'Administrative Action';
+    const effectiveAdmin = typeof reasonOrAdminContext === 'object' && reasonOrAdminContext !== null ? reasonOrAdminContext : adminContext;
+
+    if (this.isSupabase()) {
+      return this.safeCall(async () => {
+        const { data: staff } = await supabase.from('staff').select('id, name, employee_number, outlet_ids, property_id').eq('id', staffId).single();
+        const adminIdentifier = effectiveAdmin?.name || effectiveAdmin?.email || 'Property Admin';
+        const { error } = await supabase.from('staff').update({
+          is_locked: true,
+          failed_login_attempts: 3,
+          locked_at: new Date().toISOString(),
+          unlocked_at: null,
+          unlocked_by: null
+        }).eq('id', staffId);
+
+        if (error) throw error;
+
+        const outletId = staff?.outlet_ids?.[0] || staff?.property_id;
+        await this.logAction(
+          'AUTH_LOCK',
+          `Staff account manually locked for ${staff?.name || staffId} (${staff?.employee_number || ''}) by ${adminIdentifier}. Reason: ${reason}`,
+          outletId,
+          undefined,
+          { module: 'Authentication', severity: 'warning', status: 'success' }
+        );
+
+        return true;
+      }, false);
+    }
+    return false;
   }
 
   async addStaff(staff: Omit<Staff, 'id' | 'created_at'>) {
@@ -1956,21 +2263,23 @@ class DatabaseService {
         const { data, error } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
         if (error) throw error;
         if (data) {
-          return data as CompanySettings;
+          return { session_timeout_minutes: 15, ...data } as CompanySettings;
         }
         return {
           name: '',
           logo_url: '',
           address: '',
           phone: '',
-          currency_id: 'default'
+          currency_id: 'default',
+          session_timeout_minutes: 15
         } as CompanySettings;
       }, {
         name: '',
         logo_url: '',
         address: '',
         phone: '',
-        currency_id: 'default'
+        currency_id: 'default',
+        session_timeout_minutes: 15
       } as CompanySettings);
     }
 
@@ -1979,11 +2288,13 @@ class DatabaseService {
       logo_url: 'https://i.imgur.com/oZVRrvo.png', 
       address: '', 
       phone: '',
-      currency_id: 'default' 
+      currency_id: 'default',
+      session_timeout_minutes: 15
     };
     
     const local = localStorage.getItem('company_settings_cache');
-    return local ? JSON.parse(local) : defaultSettings;
+    const parsed = local ? JSON.parse(local) : defaultSettings;
+    return { session_timeout_minutes: 15, ...parsed };
   }
 
   async updateSettings(settings: CompanySettings) {

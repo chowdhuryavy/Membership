@@ -7,7 +7,7 @@ import { UserProfile, Role, Outlet, Permission, UserPermissionOverride, Staff } 
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { getReportData } from '../src/shared/reportLogic';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command, Search, Filter, ShieldAlert, Check, ChevronRight, Award, TrendingUp, Sparkles, User as UserIcon, Calendar, ChevronDown, CheckCircle, MousePointer, ShieldCheck, UserCog } from 'lucide-react';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Unlock, KeyRound, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command, Search, Filter, ShieldAlert, Check, ChevronRight, Award, TrendingUp, Sparkles, User as UserIcon, Calendar, ChevronDown, CheckCircle, MousePointer, ShieldCheck, UserCog } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -36,6 +36,43 @@ const UserDetail = ({
     const [incentiveSummary, setIncentiveSummary] = useState<any>({});
     const [incentiveLoading, setIncentiveLoading] = useState(false);
     const [incentiveDate, setIncentiveDate] = useState(new Date());
+    const [isUnlocking, setIsUnlocking] = useState(false);
+
+    const canUnlock = currentUser && (hasPermission(currentUser.role_id, 'users:unlock') || isSuperAdmin);
+
+    const handleUnlockAccount = async () => {
+      if (!canUnlock) return;
+      setIsUnlocking(true);
+      try {
+        await db.unlockUser(user.id, { 
+          id: currentUser?.id, 
+          name: currentUser?.name, 
+          email: currentUser?.email 
+        });
+        onRefresh();
+      } catch (err) {
+        console.error("Failed to unlock user:", err);
+      } finally {
+        setIsUnlocking(false);
+      }
+    };
+
+    const handleLockAccount = async () => {
+      if (!canUnlock) return;
+      setIsUnlocking(true);
+      try {
+        await db.lockUser(user.id, { 
+          id: currentUser?.id, 
+          name: currentUser?.name, 
+          email: currentUser?.email 
+        });
+        onRefresh();
+      } catch (err) {
+        console.error("Failed to lock user:", err);
+      } finally {
+        setIsUnlocking(false);
+      }
+    };
 
     useEffect(() => {
       findLinkedStaff();
@@ -163,6 +200,107 @@ const UserDetail = ({
                         </CardContent>
                     </Card>
                     
+                    <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
+                        <CardHeader className={`p-6 border-b ${user.is_locked ? 'bg-red-950 text-white' : 'border-slate-100 bg-slate-50/50'}`}>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-base font-black tracking-tight flex items-center gap-2.5">
+                                    {user.is_locked ? (
+                                        <ShieldAlert className="w-5 h-5 text-red-400" />
+                                    ) : (
+                                        <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                                    )}
+                                    <span className="uppercase text-xs tracking-wider">Authentication Monitor</span>
+                                </CardTitle>
+                                {user.is_locked ? (
+                                    <span className="px-2.5 py-1 bg-red-500/20 text-red-300 border border-red-500/30 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
+                                        <Lock className="w-3 h-3" />
+                                        Locked
+                                    </span>
+                                ) : (
+                                    <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
+                                        <CheckCircle className="w-3 h-3" />
+                                        Secure
+                                    </span>
+                                )}
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-6 space-y-4">
+                            {user.is_locked ? (
+                                <div className="space-y-4">
+                                    <div className="p-4 bg-red-50 border border-red-100 rounded-2xl">
+                                        <div className="flex items-start gap-3">
+                                            <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                                            <div>
+                                                <p className="text-xs font-black text-red-900 uppercase tracking-tight">Security Lockout Active</p>
+                                                <p className="text-[11px] font-medium text-red-700 mt-1 leading-relaxed">
+                                                    Account automatically locked after 3 consecutive failed login attempts. Property Admin authorization required to restore access.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Failed Attempts</span>
+                                            <span className="font-black text-red-600 text-xs mt-0.5 block">{user.failed_login_attempts || 3} of 3</span>
+                                        </div>
+                                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Locked At</span>
+                                            <span className="font-bold text-slate-700 text-[11px] mt-0.5 block truncate">
+                                                {user.locked_at ? format(new Date(user.locked_at), 'dd MMM, HH:mm') : 'Recently'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {canUnlock && (
+                                        <Button 
+                                            onClick={handleUnlockAccount} 
+                                            isLoading={isUnlocking}
+                                            className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-600/20"
+                                        >
+                                            <Unlock className="w-4 h-4 mr-2" />
+                                            Unlock Account
+                                        </Button>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Failed Attempts</span>
+                                            <span className="font-black text-slate-800 text-xs mt-0.5 block">{user.failed_login_attempts || 0} / 3</span>
+                                        </div>
+                                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Lock Threshold</span>
+                                            <span className="font-bold text-slate-600 text-xs mt-0.5 block">3 Attempts</span>
+                                        </div>
+                                    </div>
+
+                                    {user.unlocked_at && (
+                                        <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100/60 text-xs">
+                                            <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider block">Last Unlocked</span>
+                                            <span className="font-medium text-emerald-700 text-[10px] mt-0.5 block">
+                                                {format(new Date(user.unlocked_at), 'dd MMM yyyy, HH:mm')} by <strong className="font-black">{user.unlocked_by || 'Property Admin'}</strong>
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {canUnlock && (
+                                        <Button
+                                            variant="secondary"
+                                            onClick={handleLockAccount}
+                                            isLoading={isUnlocking}
+                                            className="w-full h-9 rounded-xl font-black text-[9px] uppercase tracking-widest text-slate-500 border border-slate-200 hover:border-red-200 hover:text-red-600 bg-white"
+                                        >
+                                            <Lock className="w-3 h-3 mr-1.5" />
+                                            Manually Lock Account
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
                     <Card className="rounded-[2.5rem] border-slate-200/60 shadow-xl overflow-hidden">
                         <CardHeader className="p-8 border-b border-slate-100 flex items-center justify-between">
                             <CardTitle className="text-lg font-black tracking-tight flex items-center gap-3">
@@ -532,7 +670,8 @@ const Users = () => {
   const canCreate = currentUser && hasPermission(currentUser.role_id, 'users:create');
   const canEdit = currentUser && hasPermission(currentUser.role_id, 'users:edit');
   const canDelete = currentUser && hasPermission(currentUser.role_id, 'users:delete');
-  const canModifyTable = canEdit || canDelete;
+  const canUnlockTable = currentUser && (hasPermission(currentUser.role_id, 'users:unlock') || isSuperAdmin);
+  const canModifyTable = canEdit || canDelete || canUnlockTable;
   const canEditEmail = currentUser && (hasPermission(currentUser.role_id, 'users:edit_email') || !isEditing);
 
   const filteredUsers = useMemo(() => {
@@ -817,7 +956,12 @@ const Users = () => {
                                       <div className="text-indigo-600 text-xs font-bold">{u.email}</div>
                                   </td>
                                   <td className="px-8 py-6 text-center">
-                                      {u.is_active !== false ? (
+                                      {u.is_locked ? (
+                                          <div className="inline-flex items-center gap-1.5 text-red-700 bg-red-50 px-3 py-1.5 rounded-xl border border-red-200 w-fit animate-pulse">
+                                              <Lock className="w-3 h-3 text-red-600" />
+                                              <span className="text-[9px] font-black uppercase tracking-widest">Locked ({u.failed_login_attempts || 3}/3)</span>
+                                          </div>
+                                      ) : u.is_active !== false ? (
                                           <div className="inline-flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 w-fit">
                                               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                               <span className="text-[9px] font-black uppercase tracking-widest">Active</span>
@@ -887,6 +1031,18 @@ const Users = () => {
                                   {canModifyTable && (
                                     <td className="px-8 py-6 text-right" onClick={e => e.stopPropagation()}>
                                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {canUnlockTable && u.is_locked && (
+                                                <button 
+                                                    onClick={async () => { 
+                                                        await db.unlockUser(u.id, { id: currentUser?.id, name: currentUser?.name, email: currentUser?.email }); 
+                                                        loadUsers(); 
+                                                    }} 
+                                                    className="p-2.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 hover:shadow-lg border border-emerald-100 rounded-xl transition-all" 
+                                                    title="Unlock Account"
+                                                >
+                                                    <Unlock className="w-4 h-4" />
+                                                </button>
+                                            )}
                                             {canEdit && (u.id !== currentUser?.id || isSuperAdmin || hasPermission(currentUser.role_id, 'users:edit_self')) && <button onClick={() => handleEdit(u)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all"><Edit2 className="w-4 h-4" /></button>}
                                             {canDelete && u.id !== currentUser?.id && <button onClick={() => setDeleteId(u.id)} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-white hover:shadow-lg border border-transparent hover:border-slate-100 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>}
                                         </div>

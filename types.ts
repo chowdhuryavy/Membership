@@ -30,7 +30,7 @@ export type Permission =
   | 'reports:view' | 'reports:export' | 'reports:view_financial' | 'reports:view_operational' | 'reports:view_inventory' | 'reports:view_staff' | 'reports:view_expiring' | 'reports:view_active_members' | 'reports:view_massage_revenue' | 'reports:view_monthly_revenue' | 'reports:custom_builder'
   
   // Users & Audit Logs
-  | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email' | 'users:manage_overrides' | 'users:edit_self'
+  | 'users:view' | 'users:create' | 'users:edit' | 'users:delete' | 'users:edit_email' | 'users:manage_overrides' | 'users:edit_self' | 'users:unlock'
   | 'logs:view' | 'logs:search' | 'logs:filter' | 'logs:clear' | 'logs:export'
   
   // System Configuration & Settings
@@ -204,6 +204,11 @@ export interface Staff {
   probation_end_date?: string;   
   created_at: string;
   staff_portal_settings?: StaffPortalSettings;
+  failed_login_attempts?: number;
+  is_locked?: boolean;
+  locked_at?: string | null;
+  unlocked_at?: string | null;
+  unlocked_by?: string | null;
 }
 
 export interface MembershipType {
@@ -241,6 +246,11 @@ export interface UserProfile {
   temp_password?: string | null;
   overrides?: UserPermissionOverride[]; // Hydrated in session
   is_active: boolean;
+  failed_login_attempts?: number;
+  is_locked?: boolean;
+  locked_at?: string | null;
+  unlocked_at?: string | null;
+  unlocked_by?: string | null;
 }
 
 export type LogModule = 
@@ -314,6 +324,7 @@ export interface CompanySettings {
   conditions?: string;
   staff_portal_settings?: Record<string, any>;
   expiration_reminder_config?: ExpirationReminderConfig;
+  session_timeout_minutes?: number;
 }
 
 export enum MemberStatus {

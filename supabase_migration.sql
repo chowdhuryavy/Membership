@@ -53,3 +53,28 @@ ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS trainer_id UUID;
 ALTER TABLE outlets 
 ADD COLUMN IF NOT EXISTS backup_email TEXT,
 ADD COLUMN IF NOT EXISTS backup_enabled BOOLEAN DEFAULT false;
+
+-- ----------------------------------------------------
+-- AUTHENTICATION MECHANISM MONITOR (ACCOUNT LOCKOUT & ATTEMPTS)
+-- ----------------------------------------------------
+
+ALTER TABLE public.profiles 
+ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS is_locked BOOLEAN NOT NULL DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS unlocked_by TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_profiles_is_locked ON public.profiles(is_locked);
+CREATE INDEX IF NOT EXISTS idx_profiles_failed_login ON public.profiles(failed_login_attempts);
+
+ALTER TABLE public.staff 
+ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS is_locked BOOLEAN NOT NULL DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS unlocked_by TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_staff_is_locked ON public.staff(is_locked);
+CREATE INDEX IF NOT EXISTS idx_staff_failed_login ON public.staff(failed_login_attempts);
+

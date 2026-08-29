@@ -1183,6 +1183,47 @@ const SettingsPage = () => {
                               <Input label="Report Title" value={companyForm.report_title || ''} onChange={e => setCompanyForm({...companyForm, report_title: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                               <Input label="Report Subtitle" value={companyForm.report_subtitle || ''} onChange={e => setCompanyForm({...companyForm, report_subtitle: e.target.value})} className="h-16 rounded-2xl font-bold border-2" />
                           </div>
+
+                          <div className="pt-8 border-t border-slate-100 space-y-6">
+                              <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                                      <Clock className="w-5 h-5" />
+                                  </div>
+                                  <div>
+                                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">Security & Session Inactivity Control</h4>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Automated Workstation Lockout & Inactivity Expiration</p>
+                                  </div>
+                              </div>
+                              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                                      <div>
+                                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">
+                                              Inactivity Session Timeout
+                                          </label>
+                                          <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                                              Automatically terminate active sessions and require re-authentication if no user activity (mouse, keyboard, touch) is detected.
+                                          </p>
+                                      </div>
+                                      <Select
+                                          value={String(companyForm.session_timeout_minutes ?? 15)}
+                                          onChange={e => setCompanyForm({ ...companyForm, session_timeout_minutes: parseInt(e.target.value, 10) })}
+                                          className="h-14 rounded-2xl font-bold border-2 bg-white"
+                                      >
+                                          <option value="5">5 Minutes (High Security)</option>
+                                          <option value="15">15 Minutes (Standard Corporate Policy)</option>
+                                          <option value="30">30 Minutes (Extended Operations)</option>
+                                          <option value="60">60 Minutes (1 Hour)</option>
+                                          <option value="120">120 Minutes (2 Hours)</option>
+                                          <option value="0">Disabled (Never Expire - Unsafe)</option>
+                                      </Select>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider pt-2 border-t border-slate-200/60">
+                                      <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                                      <span>Enforces compliance with NIST & ISO 27001 session management standards.</span>
+                                  </div>
+                              </div>
+                          </div>
+
                           <SignatoryConfig 
                             labelPrefix="Global"
                             config={companyForm.signatory_config}

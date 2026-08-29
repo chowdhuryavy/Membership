@@ -40,7 +40,9 @@ import {
   Coins,
   Shield,
   Layers,
-  CalendarDays
+  CalendarDays,
+  Lock,
+  Unlock
 } from 'lucide-react';
 
 import StaffProfileView from './StaffProfileView';
@@ -133,6 +135,7 @@ const StaffPage = () => {
   const canManage = user && hasPermission(user.role_id, 'staff:manage');
   const canManageLeaves = user && hasPermission(user.role_id, 'staff:manage_leaves');
   const canManagePortalSettings = user && hasPermission(user.role_id, 'staff:manage_portal_settings');
+  const canUnlock = isSuperAdmin || (user && hasPermission(user.role_id, 'users:unlock'));
   const canSwitchScope = Boolean(user && allowedOutletsInProperty.length > 1);
 
   const loadStaff = useCallback(async () => {
@@ -337,41 +340,61 @@ GRANT ALL ON TABLE public.staff TO anon, authenticated, postgres;`}
             <CardContent className="p-6">
             <div className="flex justify-between items-start mb-6">
                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-black uppercase ${s.is_active ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{s.name.charAt(0)}</div>
-                {canManage && (
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={(e) => { 
-                          e.stopPropagation();
-                          setEditingId(s.id); 
-                          setFormData({
-                            ...s,
-                            email: s.email || '',
-                            phone: s.phone || '',
-                            probation_start_date: s.probation_start_date || '',
-                            probation_end_date: s.probation_end_date || '',
-                            property_id: s.property_id,
-                            outlet_ids: s.outlet_ids || [],
-                            outlet_assignments: s.outlet_assignments || [],
-                            can_login: !!s.can_login,
-                            employee_number: s.employee_number || '',
-                            joining_date: s.joining_date || format(new Date(), 'yyyy-MM-dd'),
-                            inactive_date: s.inactive_date || '',
-                            password: '', // Don't pre-fill password for security
-                            staff_portal_settings: {
-                              show_daily_schedule: s.staff_portal_settings?.show_daily_schedule ?? true,
-                              show_monthly_summary: s.staff_portal_settings?.show_monthly_summary ?? true,
-                              show_incentives: s.staff_portal_settings?.show_incentives ?? true,
-                              show_session_notes: s.staff_portal_settings?.show_session_notes ?? true
-                            }
-                          }); 
-                          setShowForm(true); 
-                        }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>
-                        <button onClick={(e) => { e.stopPropagation(); setDeleteId(s.id); }} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
-                    </div>
-                )}
+                <div className="flex gap-1 items-center">
+                    {canUnlock && s.is_locked && (
+                        <button 
+                            onClick={async (e) => { 
+                                e.stopPropagation(); 
+                                await db.unlockStaff(s.id, { id: user?.id, name: user?.name, email: user?.email }); 
+                                loadStaff(); 
+                            }} 
+                            className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all shadow-sm border border-emerald-100" 
+                            title="Unlock Staff Account"
+                        >
+                            <Unlock className="w-4 h-4" />
+                        </button>
+                    )}
+                    {canManage && (
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={(e) => { 
+                              e.stopPropagation();
+                              setEditingId(s.id); 
+                              setFormData({
+                                ...s,
+                                email: s.email || '',
+                                phone: s.phone || '',
+                                probation_start_date: s.probation_start_date || '',
+                                probation_end_date: s.probation_end_date || '',
+                                property_id: s.property_id,
+                                outlet_ids: s.outlet_ids || [],
+                                outlet_assignments: s.outlet_assignments || [],
+                                can_login: !!s.can_login,
+                                employee_number: s.employee_number || '',
+                                joining_date: s.joining_date || format(new Date(), 'yyyy-MM-dd'),
+                                inactive_date: s.inactive_date || '',
+                                password: '', // Don't pre-fill password for security
+                                staff_portal_settings: {
+                                  show_daily_schedule: s.staff_portal_settings?.show_daily_schedule ?? true,
+                                  show_monthly_summary: s.staff_portal_settings?.show_monthly_summary ?? true,
+                                  show_incentives: s.staff_portal_settings?.show_incentives ?? true,
+                                  show_session_notes: s.staff_portal_settings?.show_session_notes ?? true
+                                }
+                              }); 
+                              setShowForm(true); 
+                            }} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>
+                            <button onClick={(e) => { e.stopPropagation(); setDeleteId(s.id); }} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
+                        </div>
+                    )}
+                </div>
             </div>
             <h3 className="font-black text-slate-900 tracking-tight uppercase truncate">{s.name}</h3>
             <div className="flex flex-wrap gap-2 mt-1">
               <div className="inline-flex items-center px-2 py-0.5 bg-indigo-50 rounded text-[9px] font-black text-indigo-600 uppercase tracking-widest">{s.role}</div>
+              {s.is_locked && (
+                <div className="inline-flex items-center px-2 py-0.5 bg-red-50 text-red-600 border border-red-200 rounded text-[9px] font-black uppercase tracking-widest animate-pulse">
+                  <Lock className="w-2.5 h-2.5 mr-1" /> Locked ({s.failed_login_attempts || 3}/3)
+                </div>
+              )}
               {(() => {
                 const leaves = (s as any).leaves || [];
                 const today = startOfDay(new Date());
