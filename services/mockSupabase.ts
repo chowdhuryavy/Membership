@@ -639,7 +639,7 @@ class DatabaseService {
             await this.logAction('AUTH_BLOCKED', `Login blocked for locked user profile: ${cleanEmail}`, profile.allowed_outlets?.[0], { id: profile.id, name: profile.name });
             return { 
               user: null, 
-              error: `Account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.`, 
+              error: `Your account has been locked due unsuccessful login attempts. Please contact your Administrator to unlock your account.`, 
               requiresPasswordChange: false 
             };
           }
