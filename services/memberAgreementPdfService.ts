@@ -315,7 +315,7 @@ export async function generateMemberAgreementPdfBase64(
           </div>
 
           <div style="margin-top: 24px; text-align: center;">
-            <p style="font-size: 9px; font-weight: bold; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.3em; margin: 0;">THIS IS A DIGITALLY GENERATED LEGAL INSTRUMENT &bull; SYSTEM ID: ${String(member.id || 'RECORD').substring(0,8)}</p>
+            <p style="font-size: 9px; font-weight: bold; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.3em; margin: 0;">THIS IS A DIGITALLY GENERATED LEGAL INSTRUMENT</p>
           </div>
         </div>
 
@@ -456,7 +456,7 @@ export async function generateMemberAgreementPdfBase64(
   y += 20;
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
-  doc.text(`System ID: ${member.id ? String(member.id).substring(0, 8) : 'RECORD'} • Page 1 of 2`, 105, 280, { align: 'center' });
+  doc.text(`Page 1 of 2`, 105, 280, { align: 'center' });
 
   doc.addPage();
   doc.setFontSize(14);
@@ -470,6 +470,8 @@ export async function generateMemberAgreementPdfBase64(
     doc.text(`${idx + 1}. ${rule.en}`, 15, ry);
     ry += 6;
   });
+
+  doc.text(`Page 2 of 2`, 105, 280, { align: 'center' });
 
   const dataUri = doc.output('datauristring');
   return dataUri.split(',')[1];

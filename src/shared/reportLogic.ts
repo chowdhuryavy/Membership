@@ -2459,7 +2459,7 @@ export const generateReportPDF = (options: PDFOptions) => {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(203, 213, 225); // slate-300
-    doc.text(`Page ${i} of ${pageCount} • System ID: ${outletId?.substring(0,8) || 'N/A'}`, margin, footerY);
+    doc.text(`Page ${i} of ${pageCount}`, margin, footerY);
     
     const exportDateStr = format(new Date(), 'dd-MMM-yyyy HH:mm:ss');
     const exportInfo = `Exported on: ${exportDateStr}${userName ? ` by ${userName}` : ''}`;

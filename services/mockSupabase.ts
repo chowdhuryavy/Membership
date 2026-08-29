@@ -37,8 +37,12 @@ class DatabaseService {
     DatabaseService.supabaseFailed = false;
   }
 
-  private isSupabase() {
+  public isSupabase() {
     return !!supabase && !DatabaseService.supabaseFailed;
+  }
+
+  public supabase() {
+    return supabase;
   }
 
   public async safeCall<T>(call: () => Promise<T>, fallback: T | (() => T | Promise<T>)): Promise<T> {
@@ -2195,7 +2199,10 @@ class DatabaseService {
         data = retry.data;
         error = retry.error;
       }
-      if (error) console.error('Error adding outlet in Supabase:', error);
+      if (error) {
+        console.error('Error adding outlet in Supabase:', error);
+        throw error;
+      }
       await this.logAction('CREATE_OUTLET', `Facility outlet commissioned: ${outlet.name}`);
       return data || [{ ...outlet, id: newOutlet.id }];
     } else {
@@ -2212,12 +2219,34 @@ class DatabaseService {
     if (this.isSupabase()) {
       let patch: any = { ...updates };
       let { error } = await supabase.from('outlets').update(patch).eq('id', id);
+      
+      // Auto-migrate if columns are missing
+      if (error && error.message?.includes('column "backup_email" does not exist')) {
+        console.log('[AutoMigrate] Adding missing backup columns to outlets table...');
+        try {
+          const { error: rpcError } = await supabase.rpc('execute_sql', { sql: `
+            ALTER TABLE outlets 
+            ADD COLUMN IF NOT EXISTS backup_email TEXT,
+            ADD COLUMN IF NOT EXISTS backup_enabled BOOLEAN DEFAULT false;
+          ` });
+          if (rpcError) console.warn('[AutoMigrate] RPC Migration failed.', rpcError);
+        } catch (err) {
+          console.warn('[AutoMigrate] RPC Exception:', err);
+        }
+        // Retry update
+        const retry = await supabase.from('outlets').update(patch).eq('id', id);
+        error = retry.error;
+      }
+
       if (error && (error.message?.includes('phone') || error.code === 'PGRST204')) {
         delete patch.phone;
         const retry = await supabase.from('outlets').update(patch).eq('id', id);
         error = retry.error;
       }
-      if (error) console.error('Error updating outlet in Supabase:', error);
+      if (error) {
+        console.error('Error updating outlet in Supabase:', error);
+        throw error;
+      }
       await this.logAction('UPDATE_OUTLET', `Outlet modified: ${id}`);
     } else {
       const local = localStorage.getItem('company_outlets_cache');

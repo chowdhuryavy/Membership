@@ -322,7 +322,7 @@ export const MembersAgreement: React.FC<MembersAgreementProps> = ({
             </div>
 
             <div className="mt-8 text-center print:mt-4">
-              <p className="text-[9px] font-bold text-slate-300 uppercase tracking-[0.5em]">This is a digitally generated legal instrument &bull; System ID: {member.id.substring(0,8)}</p>
+              <p className="text-[9px] font-bold text-slate-300 uppercase tracking-[0.5em]">This is a digitally generated legal instrument</p>
             </div>
           </div>
         </div>

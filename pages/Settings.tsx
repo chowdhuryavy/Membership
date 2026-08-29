@@ -383,6 +383,35 @@ const SettingsPage = () => {
   }, [reportRecipients, activeReportProperty, activeReportOutlet]);
 
   useEffect(() => {
+    // Automated Schema Guard: Ensure Outlets table has backup configuration columns
+    const ensureBackupSchema = async () => {
+        if (db.isSupabase()) {
+            try {
+                // We check if the column exists by attempting a narrow select
+                const { error } = await db.supabase().from('outlets').select('backup_email').limit(1);
+                if (error && error.message?.includes('column "backup_email" does not exist')) {
+                    console.log('[SchemaGuard] Migrating Outlets table for Backups...');
+                    // Use standard SQL to add columns
+                    const migrationSql = `
+                        ALTER TABLE outlets 
+                        ADD COLUMN IF NOT EXISTS backup_email TEXT,
+                        ADD COLUMN IF NOT EXISTS backup_enabled BOOLEAN DEFAULT false;
+                    `;
+                    // Attempting via a direct SQL execution if available or rpc
+                    try {
+                        const { error: rpcError } = await db.supabase().rpc('execute_sql', { sql: migrationSql });
+                        if (rpcError) console.warn('[SchemaGuard] RPC Migration failed (expected if not setup).', rpcError);
+                    } catch (err) {
+                        console.warn('[SchemaGuard] RPC Exception:', err);
+                    }
+                }
+            } catch (err) {
+                console.error('[SchemaGuard] Failed to verify schema:', err);
+            }
+        }
+    };
+    ensureBackupSchema();
+
     if (currentOutlet) {
       db.getMassageRooms(currentOutlet.id).then(setMassageRooms);
       db.getMembershipTypes(currentOutlet.id).then(setMembershipTypes);
@@ -656,7 +685,11 @@ const SettingsPage = () => {
       await refreshSettings();
       setShowForm(false);
       showStatus('Facility Context Updated.');
-    } catch (e: any) { showStatus(e.message, 'error'); }
+    } catch (e: any) { 
+      console.error('Outlet Save Failure:', e);
+      const msg = e.message || e.details || 'Database Error';
+      showStatus(`Save Failed: ${msg}`, 'error'); 
+    }
     finally { setIsSaving(false); }
   };
 

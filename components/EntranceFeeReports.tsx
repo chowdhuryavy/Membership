@@ -318,11 +318,10 @@ export const EntranceFeeReports: React.FC<EntranceFeeReportsProps> = ({
           </table>
 
           <div class="audit-footer">
-            <span>SYSTEM ID: ${currentOutlet?.id?.substring(0,8) || 'N/A'}</span>
-            <span>&copy; ${new Date().getFullYear()} ${currentProperty?.name}. ALL RIGHTS RESERVED.</span>
+            <span class="page-number-float"></span>
+            <span>EXPORTED ON: ${format(new Date(), 'dd-MMM-yyyy HH:mm:ss')}</span>
+            <span>&copy; ${new Date().getFullYear()} ${currentProperty?.name || 'System'}. ALL RIGHTS RESERVED.</span>
           </div>
-
-          <div class="page-number-float"></div>
 
           <script>
             window.onload = () => {

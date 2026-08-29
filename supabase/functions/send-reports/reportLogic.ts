@@ -2239,17 +2239,21 @@ export const generateReportPDF = (options: PDFOptions) => {
   }
 
   // --- FOOTER SECTION ---
-  const footerY = pageHeight - margin;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(203, 213, 225); // slate-300
-  doc.text(`Page 1 of 1 • System ID: ${Math.random().toString(36).substring(7).toUpperCase()}`, margin, footerY);
-  
-  const exportDateStr = format(new Date(), 'dd-MMM-yyyy');
-  const exportInfo = `Exported on: ${exportDateStr}${userName ? ` by ${userName}` : ''}`;
-  doc.text(exportInfo, pageWidth / 2, footerY, { align: 'center' });
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    const footerY = pageHeight - margin;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(203, 213, 225); // slate-300
+    doc.text(`Page ${i} of ${pageCount}`, margin, footerY);
+    
+    const exportDateStr = format(new Date(), 'dd-MMM-yyyy');
+    const exportInfo = `Exported on: ${exportDateStr}${userName ? ` by ${userName}` : ''}`;
+    doc.text(exportInfo, pageWidth / 2, footerY, { align: 'center' });
 
-  doc.text(`© ${new Date().getFullYear()} ${propertyName}. All rights reserved.`, pageWidth - margin, footerY, { align: 'right' });
+    doc.text(`© ${new Date().getFullYear()} ${propertyName}. All rights reserved.`, pageWidth - margin, footerY, { align: 'right' });
+  }
 
   return doc;
 };

@@ -45,3 +45,11 @@ ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS dob DATE;
 ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS membership_number TEXT;
 ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS property_id UUID;
 ALTER TABLE pt_members ADD COLUMN IF NOT EXISTS trainer_id UUID;
+
+-- ----------------------------------------------------
+-- DAILY DATA BACKUP CONFIGURATION FOR OUTLETS
+-- ----------------------------------------------------
+
+ALTER TABLE outlets 
+ADD COLUMN IF NOT EXISTS backup_email TEXT,
+ADD COLUMN IF NOT EXISTS backup_enabled BOOLEAN DEFAULT false;
