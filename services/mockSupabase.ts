@@ -639,7 +639,7 @@ class DatabaseService {
             await this.logAction('AUTH_BLOCKED', `Login blocked for locked user profile: ${cleanEmail}`, profile.allowed_outlets?.[0], { id: profile.id, name: profile.name });
             return { 
               user: null, 
-              error: `Account is locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.`, 
+              error: `Account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.`, 
               requiresPasswordChange: false 
             };
           }
@@ -674,6 +674,15 @@ class DatabaseService {
             return { user: null, error: "Account is inactive. Please contact administration.", requiresPasswordChange: false };
           }
 
+          if (profile && profile.is_locked === true) {
+            await (supabase.auth as any).signOut();
+            return { 
+              user: null, 
+              error: `Account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.`, 
+              requiresPasswordChange: false 
+            };
+          }
+
           if (profile) {
             const updates: any = {};
             if (!profile.auth_id || profile.auth_id !== authData.user.id) {
@@ -695,7 +704,7 @@ class DatabaseService {
         }
 
         // 2. Secondary: Check profile table for temp passwords or initial setups
-        if (profile && profile.temp_password === passwordAttempt) {
+        if (profile && profile.temp_password && profile.temp_password === passwordAttempt) {
           const { data: signUpData, error: signUpError } = await (supabase.auth as any).signUp({ 
             email: cleanEmail, 
             password: passwordAttempt, 
@@ -716,8 +725,8 @@ class DatabaseService {
           }
         }
 
-        // 3. Master email recovery check
-        if (isMasterEmail && (passwordAttempt === 'Admin@123' || passwordAttempt === 'admin' || passwordAttempt === '123456' || passwordAttempt.length >= 4)) {
+        // 3. Master email recovery check (strictly matching Admin@123 or admin123)
+        if (isMasterEmail && (passwordAttempt === 'Admin@123' || passwordAttempt === 'admin123')) {
           const masterProfile: UserProfile = profile || {
             id: 'master-super-admin-id',
             email: 'chowdhuryavy@gmail.com',
@@ -735,6 +744,22 @@ class DatabaseService {
         }
 
         // Failed password attempt: Process attempt counter & locking monitor
+        if (!profile) {
+          const shadowProfile = {
+            id: crypto.randomUUID(),
+            email: cleanEmail,
+            name: isMasterEmail ? 'Chowdhury Avy' : cleanEmail.split('@')[0],
+            role_id: isMasterEmail ? 'super_admin' : 'member',
+            allowed_outlets: [],
+            is_active: true,
+            failed_login_attempts: 0,
+            is_locked: false,
+            created_at: new Date().toISOString()
+          };
+          const { data: created } = await supabase.from('profiles').upsert([shadowProfile], { onConflict: 'email' }).select().single();
+          profile = created || shadowProfile;
+        }
+
         if (profile) {
           const prevAttempts = profile.failed_login_attempts || 0;
           const currentAttempts = prevAttempts + 1;
@@ -760,7 +785,7 @@ class DatabaseService {
               'AUTH_LOCK',
               `Account locked for ${profile.name || cleanEmail} (${cleanEmail}) after 3 consecutive failed login attempts.`,
               primaryOutlet,
-              { id: profile.id, name: profile.name },
+              { id: profile.id, name: profile.name || 'User' },
               { module: 'Authentication', severity: 'error', status: 'failed' }
             );
 
@@ -778,7 +803,7 @@ class DatabaseService {
               'AUTH_FAILED',
               `Unsuccessful login attempt (${currentAttempts}/3) for ${profile.name || cleanEmail} (${cleanEmail}).`,
               primaryOutlet,
-              { id: profile.id, name: profile.name },
+              { id: profile.id, name: profile.name || 'User' },
               { module: 'Authentication', severity: 'warning', status: 'failed' }
             );
 
@@ -800,8 +825,23 @@ class DatabaseService {
       }
     }
 
-    // 4. Local fallback for master user
-    if (isMasterEmail) {
+    // 4. Fallback Mode (when Supabase unavailable or in mock mode)
+    const localLockoutsStr = localStorage.getItem('local_user_lockouts') || '{}';
+    const localLockouts: Record<string, { attempts: number; locked: boolean }> = JSON.parse(localLockoutsStr);
+    const userLockout = localLockouts[cleanEmail] || { attempts: 0, locked: false };
+
+    if (userLockout.locked) {
+      return {
+        user: null,
+        error: "Account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.",
+        requiresPasswordChange: false
+      };
+    }
+
+    const isValidMasterPass = isMasterEmail && (passwordAttempt === 'Admin@123' || passwordAttempt === 'admin123');
+    if (isValidMasterPass) {
+      localLockouts[cleanEmail] = { attempts: 0, locked: false };
+      localStorage.setItem('local_user_lockouts', JSON.stringify(localLockouts));
       const masterUser: UserProfile = {
         id: 'master-super-admin-id',
         email: 'chowdhuryavy@gmail.com',
@@ -815,7 +855,25 @@ class DatabaseService {
       return { user: masterUser, error: null, requiresPasswordChange: false };
     }
 
-    return { user: null, error: "Authentication server unreachable.", requiresPasswordChange: false };
+    userLockout.attempts = (userLockout.attempts || 0) + 1;
+    if (userLockout.attempts >= 3) {
+      userLockout.locked = true;
+      localLockouts[cleanEmail] = userLockout;
+      localStorage.setItem('local_user_lockouts', JSON.stringify(localLockouts));
+      return {
+        user: null,
+        error: "Account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.",
+        requiresPasswordChange: false
+      };
+    } else {
+      localLockouts[cleanEmail] = userLockout;
+      localStorage.setItem('local_user_lockouts', JSON.stringify(localLockouts));
+      return {
+        user: null,
+        error: `Invalid email or password. Unsuccessful attempt ${userLockout.attempts} of 3. Account will be locked after 3 failed attempts.`,
+        requiresPasswordChange: false
+      };
+    }
   }
 
   async addUser(user: Omit<UserProfile, 'id'> & { password?: string }): Promise<UserProfile> {
