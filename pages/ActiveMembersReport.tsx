@@ -5,12 +5,13 @@ import { Member, MembershipCategory, MemberStatus } from '../types';
 import { db, DEFAULT_MEMBER_COLUMNS } from '../services/mockSupabase';
 import { format, parseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
-import { UserCheck, FileDown, Filter } from 'lucide-react';
+import { UserCheck, FileDown, FileSpreadsheet, Filter } from 'lucide-react';
 import TabLoader from '../components/TabLoader';
 import { ReportAuditFooter } from '../components/ReportAuditFooter';
 import { toPng } from 'html-to-image';
 import jsPDF from 'jspdf';
 import toast from 'react-hot-toast';
+import { exportActiveMembersExcel, ExcelExportOptions } from '../services/excelReportGenerator';
 
 interface ActiveMembersReportProps {
     isEmbedded?: boolean;
@@ -18,11 +19,12 @@ interface ActiveMembersReportProps {
 }
 
 export default function ActiveMembersReport({ isEmbedded, selectedMembershipTypeId = 'all' }: ActiveMembersReportProps = {}) {
-    const { currentOutlet, currentProperty, formatMoney, setPageLoading } = useSettings();
+    const { currentOutlet, currentProperty, formatMoney, setPageLoading, settings } = useSettings();
     const [members, setMembers] = useState<Member[]>([]);
     const [categories, setCategories] = useState<MembershipCategory[]>([]);
     const [membershipTypes, setMembershipTypes] = useState<{id: string, name: string}[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isGeneratingExcel, setIsGeneratingExcel] = useState(false);
 
     useEffect(() => {
         if (currentOutlet && currentProperty) {
@@ -135,6 +137,27 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
         }
     };
 
+    const handleExportExcel = async () => {
+        if (!currentOutlet || !currentProperty) return;
+        setIsGeneratingExcel(true);
+        try {
+            const options: ExcelExportOptions = {
+                reportTitle: 'Active Members Report',
+                propertyName: currentProperty.name || settings?.name || 'Property',
+                outletName: currentOutlet.name || 'Main Facility',
+                auditPeriod: format(new Date(), 'dd MMMM yyyy'),
+                currencyCode: 'QAR'
+            };
+            await exportActiveMembersExcel(Object.entries(groupedMembers), options);
+            toast.success('Active Members Report exported as Excel successfully!');
+        } catch (err: any) {
+            console.error('Excel generation error:', err);
+            toast.error('Failed to export Excel report: ' + (err.message || 'Unknown error'));
+        } finally {
+            setIsGeneratingExcel(false);
+        }
+    };
+
     // Removing full page spinner to prevent UI jumping
     // We will just dim the content while loading if needed
 
@@ -157,8 +180,11 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-                        <Button onClick={handleExportPDF} className="h-12 px-8 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 transition-all active:scale-95">
+                        <Button onClick={handleExportPDF} className="h-12 px-7 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 transition-all active:scale-95">
                             <FileDown className="w-4 h-4 mr-2" /> Export PDF
+                        </Button>
+                        <Button onClick={handleExportExcel} isLoading={isGeneratingExcel} variant="outline" className="h-12 px-7 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/80 text-emerald-800 shadow-sm transition-all active:scale-95">
+                            <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600" /> Export Excel
                         </Button>
                     </div>
                 </div>

@@ -15,6 +15,7 @@ import {
   FileText, 
   Printer, 
   FileDown, 
+  FileSpreadsheet,
   Globe,
   Layers,
   UserCheck,
@@ -36,6 +37,18 @@ import {
 } from 'lucide-react';
 import { getReportData, getReportTitle, ReportContext } from '../src/shared/reportLogic';
 import { emailService } from '../services/emailService';
+import {
+  exportRevenueRecognitionExcel,
+  exportIncentivesExcel,
+  exportDailySalesExcel,
+  exportActiveMembersExcel,
+  exportExpiringMembershipsExcel,
+  exportMassageRoomRevenueExcel,
+  exportMonthlyRevenueExcel,
+  exportCustomReportExcel,
+  exportMembersJoinedExcel,
+  ExcelExportOptions
+} from '../services/excelReportGenerator';
 
 
 import { toPng } from 'html-to-image';
@@ -140,6 +153,7 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
   const reportRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({ contentRef: reportRef });
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isGeneratingExcel, setIsGeneratingExcel] = useState(false);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<any>(null);
   const supabase = supabaseClient;
@@ -452,6 +466,119 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
       toast.error('Failed to generate PDF: ' + (error.message || 'Unknown error'));
     } finally {
       setIsGeneratingPDF(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    if (!activeOutlet || !activeProperty || !settings) return;
+    setIsGeneratingExcel(true);
+    try {
+      const reportName = getReportTitle(reportType, incentiveDept);
+      const auditPeriodStr = reportType === 'daily_sales' 
+        ? format(parseISO(dailySalesDate), 'dd MMMM yyyy') 
+        : reportType === 'monthly_revenue' 
+          ? format(parseISO(reportMonth + '-01'), 'yyyy')
+          : reportType === 'active_members'
+            ? format(new Date(), 'dd MMMM yyyy')
+            : format(parseISO(reportMonth + '-01'), 'MMMM yyyy');
+
+      const options: ExcelExportOptions = {
+        reportTitle: reportName,
+        propertyName: activeProperty.name || settings.name || 'Property',
+        outletName: activeOutlet === 'all' ? 'All Facilities' : (activeOutlet.name || 'Main Facility'),
+        auditPeriod: auditPeriodStr,
+        exportedBy: user?.name || 'System Auditor',
+        currencyCode: currency || 'QAR',
+        selectedTypeBadge: selectedTypeName,
+        signatoryConfig: signatoryConfig
+      };
+
+      if (reportType === 'revenue_recognition') {
+        await exportRevenueRecognitionExcel(revenueRows, options, selectedMembershipTypeId);
+      } else if (reportType === 'incentives') {
+        await exportIncentivesExcel(rows, summary, activeStaffList, incentiveDept, options);
+      } else if (reportType === 'daily_sales') {
+        await exportDailySalesExcel(rows, options);
+      } else if (reportType === 'members_joined') {
+        await exportMembersJoinedExcel(rows, options);
+      } else if (reportType === 'active_members') {
+        const [membersList, catsList, typesList] = await Promise.all([
+          db.getMembers(activeOutlet === 'all' ? undefined : activeOutlet.id),
+          db.getCategories(activeOutlet === 'all' ? undefined : activeOutlet.id),
+          db.getMembershipTypes(activeOutlet === 'all' ? undefined : activeOutlet.id)
+        ]);
+        let filtered = (membersList || []).filter((m: any) => m.status === MemberStatus.ACTIVE);
+        if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
+          filtered = filtered.filter((m: any) => m.membership_type_id === selectedMembershipTypeId);
+        }
+        const grouped = filtered.reduce((acc: any, member: any) => {
+          const type = typesList?.find((t: any) => t.id === member.membership_type_id);
+          const typeKey = type?.name || (member.membership_type_id ? 'Unknown Type' : 'General');
+          const cat = catsList?.find((c: any) => c.id === member.category_id);
+          const catKey = cat?.name || 'Uncategorized';
+          if (!acc[typeKey]) acc[typeKey] = {};
+          if (!acc[typeKey][catKey]) acc[typeKey][catKey] = [];
+          acc[typeKey][catKey].push(member);
+          return acc;
+        }, {});
+        await exportActiveMembersExcel(Object.entries(grouped), options);
+      } else if (reportType === 'expiring_memberships') {
+        const [year, month] = reportMonth.split('-').map(Number);
+        const start = startOfMonth(new Date(year, month - 1));
+        const end = endOfMonth(new Date(year, month - 1));
+        const [membersList, catsList, typesList] = await Promise.all([
+          db.getMembers(activeOutlet === 'all' ? undefined : activeOutlet.id),
+          db.getCategories(activeOutlet === 'all' ? undefined : activeOutlet.id),
+          db.getMembershipTypes(activeOutlet === 'all' ? undefined : activeOutlet.id)
+        ]);
+        let filtered = (membersList || []).filter((m: any) => {
+          if (m.status === MemberStatus.TENTATIVE || m.status === MemberStatus.PENDING) return false;
+          if (!m.current_end_date) return false;
+          const endDate = parseISO(m.current_end_date);
+          return isWithinInterval(endDate, { start, end });
+        });
+        if (selectedMembershipTypeId && selectedMembershipTypeId !== 'all') {
+          filtered = filtered.filter((m: any) => m.membership_type_id === selectedMembershipTypeId);
+        }
+        await exportExpiringMembershipsExcel(filtered, catsList || [], typesList || [], options);
+      } else if (reportType === 'massage_room_revenue') {
+        const [bookingsList, roomsList, staffList] = await Promise.all([
+          db.getMassageBookings(activeOutlet === 'all' ? undefined : activeOutlet.id),
+          db.getRooms(activeOutlet === 'all' ? undefined : activeOutlet.id),
+          db.getStaff(activeOutlet === 'all' ? undefined : activeOutlet.id)
+        ]);
+        const [year, month] = reportMonth.split('-').map(Number);
+        const start = startOfMonth(new Date(year, month - 1));
+        const end = endOfMonth(new Date(year, month - 1));
+        const filtered = (bookingsList || []).filter((b: any) => {
+          if (!b.date) return false;
+          const bookingDate = parseISO(b.date);
+          return isWithinInterval(bookingDate, { start, end });
+        });
+        await exportMassageRoomRevenueExcel(filtered, roomsList || [], staffList || [], options);
+      } else if (reportType === 'monthly_revenue') {
+        await exportMonthlyRevenueExcel(summary, options);
+      } else if (reportType === 'custom_report') {
+        const cfg = customReports.find(r => r.id === selectedCustomReportId) || customReports[0];
+        if (cfg) {
+          let rawData: any[] = [];
+          const oId = activeOutlet === 'all' ? undefined : activeOutlet.id;
+          switch (cfg.data_source) {
+            case 'members': rawData = await db.getMembers(oId); break;
+            case 'bookings': rawData = await db.getMassageBookings(oId); break;
+            case 'sales': rawData = await db.getSales(oId); break;
+            case 'inventory': rawData = await db.getInventory(oId); break;
+            case 'staff': rawData = await db.getStaff(oId); break;
+          }
+          await exportCustomReportExcel(cfg.columns || [], rawData, options);
+        }
+      }
+      toast.success('Excel audit report generated successfully!');
+    } catch (err: any) {
+      console.error('Error generating Excel report:', err);
+      toast.error('Failed to export Excel report: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsGeneratingExcel(false);
     }
   };
 
@@ -1141,7 +1268,8 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
             </div>
             <Button variant="outline" onClick={() => setShowConfig(!showConfig)} className={`h-12 px-5 rounded-2xl border-slate-200 ${showConfig ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-inner' : ''}`}><Settings2 className="w-4 h-4 mr-2" /> <span className="text-[10px] font-black uppercase tracking-widest">Layout Config</span></Button>
             <Button onClick={handlePrint} className="h-12 px-6 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 transition-all active:scale-95 no-print bg-indigo-600 text-white hover:bg-indigo-700"><Printer className="w-4 h-4 mr-2" /> Print Direct</Button>
-            <Button variant="outline" onClick={handleExportPDF} isLoading={isGeneratingPDF} className="h-12 px-8 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] border-slate-200 bg-white hover:bg-slate-50 shadow-sm transition-all active:scale-95"><FileDown className="w-4 h-4 mr-2 text-indigo-600" /> Export PDF</Button>
+            <Button variant="outline" onClick={handleExportPDF} isLoading={isGeneratingPDF} className="h-12 px-7 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] border-slate-200 bg-white hover:bg-slate-50 shadow-sm transition-all active:scale-95"><FileDown className="w-4 h-4 mr-2 text-indigo-600" /> Export PDF</Button>
+            <Button variant="outline" onClick={handleExportExcel} isLoading={isGeneratingExcel} className="h-12 px-7 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/80 text-emerald-800 shadow-sm transition-all active:scale-95"><FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600" /> Export Excel</Button>
         </div>
       </div>
 

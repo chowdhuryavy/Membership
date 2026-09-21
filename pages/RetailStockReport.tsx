@@ -12,6 +12,7 @@ import {
   ChevronRight, 
   Printer, 
   FileText, 
+  FileSpreadsheet,
   TrendingUp, 
   AlertCircle, 
   CheckCircle2, 
@@ -27,6 +28,7 @@ import html2canvas from 'html2canvas';
 import { toPng } from 'html-to-image';
 import toast from 'react-hot-toast';
 import RetailStockReportPrint from '../components/RetailStockReportPrint';
+import { exportRetailStockExcel, ExcelExportOptions } from '../services/excelReportGenerator';
 
 interface ItemStockSummary {
   itemId: string;
@@ -58,6 +60,7 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
   const [internalViewScope, setInternalViewScope] = useState<'outlet' | 'property'>('outlet');
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [outletsMap, setOutletsMap] = useState<Record<string, string>>({});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -406,6 +409,28 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
     }
   };
 
+  const handleExportExcel = async () => {
+    if (!currentProperty) return;
+    setIsExportingExcel(true);
+    try {
+      const options: ExcelExportOptions = {
+        reportTitle: 'Retail Stock Ledger & Inventory Audit',
+        propertyName: currentProperty.name || settings?.name || 'Property',
+        outletName: viewScope === 'property' ? 'All Property Outlets' : (currentOutlet?.name || 'Main Facility'),
+        auditPeriod: format(selectedMonth, 'MMMM yyyy'),
+        currencyCode: currency || 'QAR',
+        signatoryConfig: signatoryConfig
+      };
+      await exportRetailStockExcel(reportData, summary, groupedData, options);
+      toast.success('Retail Stock Report exported as Excel successfully!');
+    } catch (err: any) {
+      console.error('Excel generation error:', err);
+      toast.error('Failed to export Excel report: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
+
   return (
     <div className={`space-y-8 animate-in fade-in duration-500 ${isEmbedded ? '' : 'pb-12'}`}>
       {/* App Header Section */}
@@ -422,6 +447,12 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
           <div className="flex gap-3">
              <Button variant="outline" onClick={handlePrint} className="h-12 px-6 rounded-2xl border-slate-200 hover:bg-slate-50 transition-all gap-2 font-black uppercase text-[10px] tracking-widest text-slate-900">
                <Printer className="w-4 h-4" /> Print
+             </Button>
+             <Button variant="outline" onClick={handleDownloadPDF} disabled={isExporting} className="h-12 px-6 rounded-2xl border-slate-200 bg-white hover:bg-slate-50 transition-all gap-2 font-black uppercase text-[10px] tracking-widest text-slate-900 shadow-sm">
+               <FileText className="w-4 h-4 text-indigo-600" /> {isExporting ? 'Exporting...' : 'Export PDF'}
+             </Button>
+             <Button variant="outline" onClick={handleExportExcel} disabled={isExportingExcel} className="h-12 px-6 rounded-2xl border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/80 transition-all gap-2 font-black uppercase text-[10px] tracking-widest text-emerald-800 shadow-sm">
+               <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> {isExportingExcel ? 'Exporting...' : 'Export Excel'}
              </Button>
              <Button variant="ghost" onClick={() => window.history.back()} className="h-12 px-6 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-900 transition-colors shadow-sm font-black uppercase text-[10px] tracking-widest">
                Back
@@ -478,6 +509,18 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
                            <FileText className="w-3.5 h-3.5" />
                          )}
                          {isExporting ? 'Exporting...' : 'Export'}
+                       </Button>
+                       <Button 
+                         onClick={handleExportExcel} 
+                         disabled={isExportingExcel}
+                         className="h-10 px-4 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 shadow-sm gap-2 font-black uppercase text-[10px] tracking-widest"
+                       >
+                         {isExportingExcel ? (
+                           <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-emerald-600"></div>
+                         ) : (
+                           <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                         )}
+                         {isExportingExcel ? 'Exporting...' : 'Excel'}
                        </Button>
                     </div>
                   )}

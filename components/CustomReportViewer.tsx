@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select } from 
 import { 
   FileText, 
   Download, 
+  FileSpreadsheet,
   Filter, 
   Search, 
   ChevronLeft, 
@@ -22,6 +23,7 @@ import { generateCustomReportPDF } from '../src/shared/reportLogic';
 import { getDeviceSessionItem } from '../services/deviceStorage';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { exportCustomReportExcel, ExcelExportOptions } from '../services/excelReportGenerator';
 
 interface CustomReportViewerProps {
   config: CustomReportConfig;
@@ -182,6 +184,24 @@ export const CustomReportViewer: React.FC<CustomReportViewerProps> = ({
     });
   };
 
+  const handleExportExcel = async () => {
+    try {
+      const options: ExcelExportOptions = {
+        reportTitle: config.name,
+        propertyName: currentProperty?.name || settings?.name || 'Property',
+        outletName: currentOutlet?.name || 'Main Facility',
+        auditPeriod: `${format(new Date(dateRange.start), 'dd MMM yyyy')} to ${format(new Date(dateRange.end), 'dd MMM yyyy')}`,
+        currencyCode: 'QAR',
+        signatoryConfig: signatoryConfig
+      };
+      await exportCustomReportExcel(config.columns, filteredData, options);
+      toast.success('Custom Report exported to Excel successfully!');
+    } catch (err: any) {
+      console.error('Excel generation error:', err);
+      toast.error('Failed to export Excel report: ' + (err.message || 'Unknown error'));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -224,9 +244,15 @@ export const CustomReportViewer: React.FC<CustomReportViewerProps> = ({
           </div>
           <Button 
             onClick={handleExport}
-            className="h-12 px-6 rounded-2xl font-black text-xs uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200"
+            className="h-12 px-6 rounded-2xl font-black text-xs uppercase tracking-widest bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200"
           >
             <Download className="w-4 h-4 mr-2" /> Export PDF
+          </Button>
+          <Button 
+            onClick={handleExportExcel}
+            className="h-12 px-6 rounded-2xl font-black text-xs uppercase tracking-widest border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 shadow-sm"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600" /> Export Excel
           </Button>
         </div>
       </div>
