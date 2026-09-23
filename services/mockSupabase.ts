@@ -855,6 +855,27 @@ class DatabaseService {
       return { user: masterUser, error: null, requiresPasswordChange: false };
     }
 
+    // Check local fallback users for offline / development environments
+    try {
+      const localUsers: any[] = JSON.parse(localStorage.getItem('membership_local_users') || '[]');
+      const matchedLocalUser = localUsers.find(u => u.email?.toLowerCase() === cleanEmail);
+      if (matchedLocalUser) {
+        if (matchedLocalUser.is_active === false) {
+          return { user: null, error: "Account is inactive. Please contact administration.", requiresPasswordChange: false };
+        }
+        if (matchedLocalUser.password === passwordAttempt || matchedLocalUser.temp_password === passwordAttempt) {
+          localLockouts[cleanEmail] = { attempts: 0, locked: false };
+          localStorage.setItem('local_user_lockouts', JSON.stringify(localLockouts));
+          await this.logAction('AUTH_LOGIN', `Access authorized for ${matchedLocalUser.email}`);
+          return { 
+            user: matchedLocalUser as UserProfile, 
+            error: null, 
+            requiresPasswordChange: !!matchedLocalUser.temp_password 
+          };
+        }
+      }
+    } catch (e) {}
+
     userLockout.attempts = (userLockout.attempts || 0) + 1;
     if (userLockout.attempts >= 3) {
       userLockout.locked = true;
@@ -880,6 +901,30 @@ class DatabaseService {
     const cleanEmail = user.email.trim().toLowerCase();
     let authId: string | null = user.auth_id || null;
     let tempPassword: string | null = user.password || 'Temporary123!';
+
+    // Persist to local cache for instant availability and fallback
+    try {
+      const localUsers: any[] = JSON.parse(localStorage.getItem('membership_local_users') || '[]');
+      const existingIdx = localUsers.findIndex(u => u.email?.toLowerCase() === cleanEmail);
+      const newUserObj = {
+        ...user,
+        id: existingIdx >= 0 ? localUsers[existingIdx].id : crypto.randomUUID(),
+        email: cleanEmail,
+        temp_password: tempPassword,
+        password: tempPassword,
+        is_active: user.is_active ?? true,
+        allowed_outlets: user.allowed_outlets || [],
+        default_outlet_id: (user as any).default_outlet_id || null,
+        created_at: new Date().toISOString()
+      };
+      if (existingIdx >= 0) {
+        localUsers[existingIdx] = newUserObj;
+      } else {
+        localUsers.push(newUserObj);
+      }
+      localStorage.setItem('membership_local_users', JSON.stringify(localUsers));
+    } catch (e) {}
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         if (!authId) {
@@ -902,9 +947,9 @@ class DatabaseService {
         if (error) throw error;
         await this.logAction('CREATE_USER', `Identity provisioned: ${user.name} (${user.email})`);
         return data as UserProfile;
-      }, { ...user, id: crypto.randomUUID() } as UserProfile);
+      }, { ...user, id: crypto.randomUUID(), temp_password: tempPassword } as UserProfile);
     }
-    return { ...user, id: crypto.randomUUID() } as UserProfile;
+    return { ...user, id: crypto.randomUUID(), temp_password: tempPassword } as UserProfile;
   }
 
   async updateUser(id: string, updates: Partial<UserProfile>) { 
@@ -1005,17 +1050,36 @@ class DatabaseService {
   }
 
   async getUsers(): Promise<UserProfile[]> {
+    let localUsers: UserProfile[] = [];
+    try {
+      localUsers = JSON.parse(localStorage.getItem('membership_local_users') || '[]');
+    } catch (e) {}
+
     if (this.isSupabase()) {
       return this.safeCall(async () => {
         const { data, error } = await supabase.from('profiles').select('*');
         if (error) throw error;
-        return (data || []) as UserProfile[];
-      }, []);
+        const dbUsers = (data || []) as UserProfile[];
+        const emailMap = new Map<string, UserProfile>();
+        dbUsers.forEach(u => emailMap.set(u.email.toLowerCase(), u));
+        localUsers.forEach(u => {
+          if (!emailMap.has(u.email.toLowerCase())) {
+            emailMap.set(u.email.toLowerCase(), u);
+          }
+        });
+        return Array.from(emailMap.values());
+      }, localUsers);
     }
-    return [];
+    return localUsers;
   }
 
   async deleteUser(id: string) {
+    try {
+      const localUsers: any[] = JSON.parse(localStorage.getItem('membership_local_users') || '[]');
+      const filtered = localUsers.filter(u => u.id !== id);
+      localStorage.setItem('membership_local_users', JSON.stringify(filtered));
+    } catch (e) {}
+
     if (this.isSupabase()) {
       await this.safeCall(async () => {
         const { error } = await supabase.from('profiles').delete().eq('id', id);
@@ -1025,6 +1089,16 @@ class DatabaseService {
   }
 
   async changePassword(userId: string, currentPass: string, newPass: string) {
+    try {
+      const localUsers: any[] = JSON.parse(localStorage.getItem('membership_local_users') || '[]');
+      const userIdx = localUsers.findIndex(u => u.id === userId);
+      if (userIdx >= 0) {
+        localUsers[userIdx].password = newPass;
+        localUsers[userIdx].temp_password = null;
+        localStorage.setItem('membership_local_users', JSON.stringify(localUsers));
+      }
+    } catch (e) {}
+
     if (this.isSupabase()) {
       await this.safeCall(async () => {
         const { error: authError } = await (supabase.auth as any).updateUser({ password: newPass });
@@ -5484,23 +5558,22 @@ class DatabaseService {
   }
 
   // --- PUSH SUBSCRIPTIONS ---
-  async savePushSubscription(userId: string, subscription: any, userType: 'admin' | 'staff' = 'admin') {
-    const subObj = typeof subscription === 'object' && subscription !== null ? { ...subscription, app_user_type: userType } : subscription;
+  async savePushSubscription(userId: string, subscription: any, userType: 'admin' | 'staff' = 'admin', allowedOutlets: string[] = []) {
+    const subObj = typeof subscription === 'object' && subscription !== null ? { ...subscription, app_user_type: userType, allowed_outlets: allowedOutlets } : subscription;
     
     if (this.isSupabase()) {
       try {
-        // Try saving with user_type column if it exists in Supabase
         const payloadWithRole: any = {
           user_id: userId,
           subscription: subObj,
           user_type: userType,
+          allowed_outlets: allowedOutlets,
           updated_at: new Date().toISOString()
         };
 
         const { error } = await supabase.from('push_subscriptions').upsert([payloadWithRole], { onConflict: 'user_id' });
         
         if (error) {
-           // If user_type column doesn't exist yet, retry without user_type column (role is inside subObj)
            if (error.message?.includes('user_type') || error.code === '42703') {
              const fallbackPayload = {
                user_id: userId,
@@ -5524,6 +5597,43 @@ class DatabaseService {
       }
     } else {
       this.saveLocalPushSubscription(userId, subObj);
+    }
+  }
+
+  // Backend validation: Always validate user's current property/outlet access before dispatching notifications
+  public validateNotificationAccess(userProfile: { role_id?: string, allowed_outlets?: string[] } | null, outletId?: string, propertyId?: string): boolean {
+    if (!outletId && !propertyId) return true;
+    if (!userProfile) return false;
+    const roleId = userProfile.role_id?.toLowerCase()?.trim();
+    const isSuper = roleId === 'super_admin' || roleId === 'superadmin' || roleId === 'owner' || roleId === 'admin' || roleId === 'system_admin' || roleId === 'system_administrator' || roleId === 'administrator';
+    if (isSuper) return true;
+    if (!userProfile.allowed_outlets) return false;
+    
+    if (outletId && userProfile.allowed_outlets.includes(outletId)) {
+      return true;
+    }
+    return false;
+  }
+
+  async getRooms(outletId?: string): Promise<MassageRoom[]> {
+    if (this.isSupabase()) {
+      try {
+        let query = supabase.from('massage_rooms').select('*');
+        if (outletId) {
+          query = query.eq('outlet_id', outletId);
+        }
+        const { data, error } = await query;
+        if (!error && data) return data as MassageRoom[];
+      } catch (e) {
+        console.warn('Error fetching massage rooms from Supabase:', e);
+      }
+    }
+    try {
+      const raw = localStorage.getItem('membership_massage_rooms');
+      const rooms: MassageRoom[] = raw ? JSON.parse(raw) : [];
+      return outletId ? rooms.filter(r => r.outlet_id === outletId) : rooms;
+    } catch (e) {
+      return [];
     }
   }
 

@@ -146,6 +146,7 @@ export default function ActiveMembersReport({ isEmbedded, selectedMembershipType
                 propertyName: currentProperty.name || settings?.name || 'Property',
                 outletName: currentOutlet.name || 'Main Facility',
                 auditPeriod: format(new Date(), 'dd MMMM yyyy'),
+                exportedBy: 'Admin',
                 currencyCode: 'QAR'
             };
             await exportActiveMembersExcel(Object.entries(groupedMembers), options);

@@ -169,6 +169,7 @@ export default function ExpiringMembershipsReport({ isEmbedded, embeddedMonth, s
                 propertyName: currentProperty.name || settings?.name || 'Property',
                 outletName: currentOutlet.name || 'Main Facility',
                 auditPeriod: format(parseISO(reportMonth + '-01'), 'MMMM yyyy'),
+                exportedBy: 'Admin',
                 currencyCode: 'QAR'
             };
             await exportExpiringMembershipsExcel(expiringMembers, categories, membershipTypes, options);

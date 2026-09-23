@@ -488,7 +488,7 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
         outletName: activeOutlet === 'all' ? 'All Facilities' : (activeOutlet.name || 'Main Facility'),
         auditPeriod: auditPeriodStr,
         exportedBy: user?.name || 'System Auditor',
-        currencyCode: currency || 'QAR',
+        currencyCode: typeof currency === 'string' ? currency : (currency?.code || 'QAR'),
         selectedTypeBadge: selectedTypeName,
         signatoryConfig: signatoryConfig
       };

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, Button, ConfirmationModal } from '../components/ui';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/mockSupabase';
 import { 
   Package, 
@@ -53,6 +54,7 @@ interface RetailStockReportProps {
 
 const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportProps = {}) => {
   const { currentOutlet, currentProperty, formatMoney, setPageLoading, currency, settings } = useSettings();
+  const { user } = useAuth();
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [inventoryLogs, setInventoryLogs] = useState<InventoryLog[]>([]);
@@ -418,10 +420,11 @@ const RetailStockReport = ({ embeddedViewScope, isEmbedded }: RetailStockReportP
         propertyName: currentProperty.name || settings?.name || 'Property',
         outletName: viewScope === 'property' ? 'All Property Outlets' : (currentOutlet?.name || 'Main Facility'),
         auditPeriod: format(selectedMonth, 'MMMM yyyy'),
-        currencyCode: currency || 'QAR',
+        exportedBy: user?.name || 'Admin',
+        currencyCode: typeof currency === 'string' ? currency : (currency?.code || 'QAR'),
         signatoryConfig: signatoryConfig
       };
-      await exportRetailStockExcel(reportData, summary, groupedData, options);
+      await exportRetailStockExcel(reportData, options);
       toast.success('Retail Stock Report exported as Excel successfully!');
     } catch (err: any) {
       console.error('Excel generation error:', err);

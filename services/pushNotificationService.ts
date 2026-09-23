@@ -57,18 +57,19 @@ export class PushNotificationService {
     }
   }
 
-  static async subscribeUser(userId: string, userType?: 'admin' | 'staff') {
+  static async subscribeUser(userId: string, userType?: 'admin' | 'staff', allowedOutlets?: string[]) {
     const isStaff = userType === 'staff' || (
       !userType && 
       !!getDeviceSessionItem('staff_session') && 
       !getDeviceSessionItem('membership_session')
     );
     const resolvedType: 'admin' | 'staff' = isStaff ? 'staff' : 'admin';
+    const outlets = allowedOutlets || [];
 
     if (window.self !== window.top) {
         console.log('Iframe detected: Mocking push subscription');
-        const mockSub = { endpoint: 'mock-endpoint-' + userId, keys: { p256dh: 'mock', auth: 'mock' }, app_user_type: resolvedType } as any;
-        await this.syncSubscriptionWithBackend(userId, mockSub, resolvedType);
+        const mockSub = { endpoint: 'mock-endpoint-' + userId, keys: { p256dh: 'mock', auth: 'mock' }, app_user_type: resolvedType, allowed_outlets: outlets } as any;
+        await this.syncSubscriptionWithBackend(userId, mockSub, resolvedType, outlets);
         return mockSub;
     }
     
@@ -97,7 +98,7 @@ export class PushNotificationService {
       }
 
       console.log('Push subscription obtained:', subscription);
-      await this.syncSubscriptionWithBackend(userId, subscription, resolvedType);
+      await this.syncSubscriptionWithBackend(userId, subscription, resolvedType, outlets);
       return subscription;
     } catch (error) {
       console.error('Failed to subscribe user to push notifications:', error);
@@ -133,14 +134,14 @@ export class PushNotificationService {
     }
   }
 
-  private static async syncSubscriptionWithBackend(userId: string, subscription: PushSubscription, userType: 'admin' | 'staff' = 'admin') {
-    console.log(`Syncing subscription with backend for user: ${userId} (${userType})`);
+  private static async syncSubscriptionWithBackend(userId: string, subscription: PushSubscription, userType: 'admin' | 'staff' = 'admin', allowedOutlets: string[] = []) {
+    console.log(`Syncing subscription with backend for user: ${userId} (${userType}) with outlets:`, allowedOutlets);
     try {
       const subJson = typeof subscription.toJSON === 'function' ? subscription.toJSON() : subscription;
-      // Embed role inside subJson for fallback compatibility
-      const subWithRole = { ...subJson, app_user_type: userType };
+      // Embed role and outlets inside subJson for fallback compatibility
+      const subWithRole = { ...subJson, app_user_type: userType, allowed_outlets: allowedOutlets };
       // @ts-ignore - adding this to db service next
-      await db.savePushSubscription(userId, subWithRole, userType);
+      await db.savePushSubscription(userId, subWithRole, userType, allowedOutlets);
     } catch (error) {
       console.error('Failed to sync subscription with backend:', error);
     }

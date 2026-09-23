@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { UserProfile } from '../types';
 import { db } from '../services/mockSupabase';
 import { getDeviceSessionItem, setDeviceSessionItem, removeDeviceSessionItem, isMobileDevice } from '../services/deviceStorage';
+import { PushNotificationService } from '../services/pushNotificationService';
 import toast from 'react-hot-toast';
 import { Clock, ShieldAlert, LogOut } from 'lucide-react';
 
@@ -120,6 +121,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = useCallback((reason?: string) => {
+    // PC/Web: PCs may be shared by multiple users. Stop user-specific push notifications on logout.
+    // Mobile PWA: Treat device as belonging to user; keep push notifications active even when logged out or closed.
+    if (!isMobileDevice() && user) {
+      try {
+        PushNotificationService.unsubscribeUser(user.id).catch(() => {});
+      } catch (e) {}
+    }
     setUser(null);
     clearSession();
     localStorage.removeItem('membership_last_outlet');
@@ -128,7 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (reason) {
       sessionStorage.setItem('session_expired_reason', reason);
     }
-  }, []);
+  }, [user]);
 
   const refreshUser = async () => {
       const storedUser = getStoredSessionStr();
@@ -269,6 +277,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       saveSession(foundUser);
       localStorage.setItem('membership_last_activity', Date.now().toString());
       sessionStorage.removeItem('session_expired_reason');
+      // Once logged in, send/subscribe notifications based on user's current property and outlet access
+      try {
+        PushNotificationService.subscribeUser(foundUser.id, isSuperAdminRole(foundUser.role_id) ? 'admin' : 'staff', foundUser.allowed_outlets).catch(() => {});
+      } catch (e) {}
       return { error: null, requiresPasswordChange };
     }
     return { error: error || 'Authentication failed.', requiresPasswordChange: false };

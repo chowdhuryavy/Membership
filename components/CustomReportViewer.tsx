@@ -191,6 +191,7 @@ export const CustomReportViewer: React.FC<CustomReportViewerProps> = ({
         propertyName: currentProperty?.name || settings?.name || 'Property',
         outletName: currentOutlet?.name || 'Main Facility',
         auditPeriod: `${format(new Date(dateRange.start), 'dd MMM yyyy')} to ${format(new Date(dateRange.end), 'dd MMM yyyy')}`,
+        exportedBy: 'Admin',
         currencyCode: 'QAR',
         signatoryConfig: signatoryConfig
       };

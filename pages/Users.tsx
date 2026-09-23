@@ -7,7 +7,9 @@ import { UserProfile, Role, Outlet, Permission, UserPermissionOverride, Staff } 
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { getReportData } from '../src/shared/reportLogic';
-import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Unlock, KeyRound, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command, Search, Filter, ShieldAlert, Check, ChevronRight, Award, TrendingUp, Sparkles, User as UserIcon, Calendar, ChevronDown, CheckCircle, MousePointer, ShieldCheck, UserCog } from 'lucide-react';
+import { emailService } from '../services/emailService';
+import toast from 'react-hot-toast';
+import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Unlock, KeyRound, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command, Search, Filter, ShieldAlert, Check, ChevronRight, Award, TrendingUp, Sparkles, User as UserIcon, Calendar, ChevronDown, CheckCircle, MousePointer, ShieldCheck, UserCog, Mail } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -28,7 +30,7 @@ const UserDetail = ({
   onDelete: (id: string) => void,
   onRefresh: () => void
 }) => {
-    const { hasPermission, permissionRegistry, settings, formatMoney } = useSettings();
+    const { hasPermission, permissionRegistry, settings, formatMoney, properties } = useSettings();
     const { user: currentUser, isSuperAdmin } = useAuth();
     
     const [linkedStaff, setLinkedStaff] = useState<Staff | null>(null);
@@ -37,6 +39,51 @@ const UserDetail = ({
     const [incentiveLoading, setIncentiveLoading] = useState(false);
     const [incentiveDate, setIncentiveDate] = useState(new Date());
     const [isUnlocking, setIsUnlocking] = useState(false);
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+    const handleDispatchWelcomeEmail = async () => {
+      setIsSendingEmail(true);
+      try {
+        const tempPass = user.temp_password || `Temp@${Math.floor(100000 + Math.random() * 900000)}!`;
+        if (!user.temp_password) {
+          await db.updateUser(user.id, { temp_password: tempPass, password: tempPass } as any);
+        }
+
+        const roleObj = roles.find(r => r.id === user.role_id);
+        const assignedOutletNames = (user.allowed_outlets || [])
+          .map(id => outlets.find(o => o.id === id)?.name)
+          .filter((name): name is string => Boolean(name));
+        const primaryOutlet = outlets.find(o => o.id === (user.default_outlet_id || user.allowed_outlets?.[0]));
+        const property = properties.find(p => p.id === primaryOutlet?.property_id);
+
+        const res = await emailService.sendUserWelcomeCredentialsEmail({
+          user: {
+            name: user.name,
+            email: user.email,
+            role_id: user.role_id,
+            allowed_outlets: user.allowed_outlets,
+            default_outlet_id: user.default_outlet_id || undefined
+          },
+          temporaryPassword: tempPass,
+          roleName: roleObj?.name || 'Staff Member',
+          propertyName: property?.name || settings?.name,
+          outletNames: assignedOutletNames,
+          adminName: currentUser?.name || 'System Administrator'
+        });
+
+        if (res.success) {
+          toast.success(`Credentials & first-login notice emailed to ${user.email}`);
+        } else {
+          toast.error(res.error || 'Failed to dispatch email');
+        }
+        onRefresh();
+      } catch (err: any) {
+        console.error('Error dispatching credentials email:', err);
+        toast.error(err?.message || 'Error dispatching credentials email');
+      } finally {
+        setIsSendingEmail(false);
+      }
+    };
 
     const canUnlock = currentUser && (hasPermission(currentUser.role_id, 'users:unlock') || isSuperAdmin);
 
@@ -192,8 +239,19 @@ const UserDetail = ({
                                 )}
                             </div>
                             {canModifyThisUser && (
-                                <div className="mt-6 flex justify-center gap-2">
+                                <div className="mt-6 flex flex-wrap justify-center gap-2">
                                     <Button onClick={() => onEdit(user)} size="sm" className="rounded-xl font-bold">Edit Profile</Button>
+                                    <Button 
+                                        onClick={handleDispatchWelcomeEmail} 
+                                        size="sm" 
+                                        variant="secondary"
+                                        isLoading={isSendingEmail}
+                                        className="rounded-xl font-bold flex items-center gap-1.5 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100"
+                                        title="Dispatch official credentials email with mandatory first-login password change directive"
+                                    >
+                                        <Mail className="w-3.5 h-3.5 text-indigo-600" />
+                                        Email Credentials
+                                    </Button>
                                     <Button onClick={() => onDelete(user.id)} size="sm" variant="danger" className="rounded-xl">Revoke</Button>
                                 </div>
                             )}
@@ -552,6 +610,17 @@ const Users = () => {
   const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
+
+  const generateTemporaryPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+    let pass = 'Temp@';
+    for (let i = 0; i < 6; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setFormData(prev => ({ ...prev, password: pass }));
+    setShowPassword(true);
+  };
   
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');
@@ -602,6 +671,7 @@ const Users = () => {
       setIsEditing(false);
       setError('');
       setShowPassword(false);
+      setSendWelcomeEmail(true);
   }
   
   const handleFormCancel = () => {
@@ -612,6 +682,10 @@ const Users = () => {
   const handleAddNew = () => {
       resetForm();
       setIsEditing(false);
+      setSendWelcomeEmail(true);
+      const initialTempPass = `Temp@${Math.floor(100000 + Math.random() * 900000)}!`;
+      setFormData(prev => ({ ...prev, password: initialTempPass }));
+      setShowPassword(true);
       setShowForm(true);
   };
 
@@ -761,13 +835,53 @@ const Users = () => {
                 is_active: formData.is_active
             } as any);
         } else {
-            await db.addUser({
-                name: formData.name, email: formData.email, role_id: formData.role_id,
+            const tempPass = formData.password?.trim() || `Temp@${Math.floor(100000 + Math.random() * 900000)}!`;
+            const createdUser = await db.addUser({
+                name: formData.name, 
+                email: formData.email, 
+                role_id: formData.role_id,
                 allowed_outlets: formData.allowed_outlets, 
                 default_outlet_id: formData.default_outlet_id || null,
-                password: formData.password,
+                password: tempPass,
                 is_active: formData.is_active
             } as any);
+
+            if (sendWelcomeEmail && formData.email) {
+                try {
+                    const roleObj = roles.find(r => r.id === formData.role_id);
+                    const assignedOutletNames = (formData.allowed_outlets || [])
+                        .map(id => outlets.find(o => o.id === id)?.name)
+                        .filter((n): n is string => Boolean(n));
+                    const primaryOutlet = outlets.find(o => o.id === (formData.default_outlet_id || formData.allowed_outlets?.[0]));
+                    const prop = properties.find(p => p.id === primaryOutlet?.property_id) || currentProperty;
+
+                    const emailRes = await emailService.sendUserWelcomeCredentialsEmail({
+                        user: {
+                            name: formData.name,
+                            email: formData.email,
+                            role_id: formData.role_id,
+                            allowed_outlets: formData.allowed_outlets,
+                            default_outlet_id: formData.default_outlet_id || undefined
+                        },
+                        temporaryPassword: tempPass,
+                        roleName: roleObj?.name || 'Staff Member',
+                        propertyName: prop?.name,
+                        outletNames: assignedOutletNames,
+                        adminName: currentUser?.name || 'System Administrator'
+                    });
+
+                    if (emailRes.success) {
+                        toast.success(`User provisioned! Credentials & first-login directive emailed to ${formData.email}.`);
+                    } else {
+                        toast.success(`User provisioned! (Email note: ${emailRes.error || 'Check outgoing mailbox config'}).`);
+                    }
+                } catch (emailErr: any) {
+                    console.error('Error dispatching credentials email:', emailErr);
+                    toast.success(`User created successfully.`);
+                }
+            } else {
+                toast.success(`User ${formData.name} provisioned successfully.`);
+            }
         }
         handleFormCancel();
         await loadUsers();
@@ -1080,12 +1194,28 @@ const Users = () => {
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">{isEditing ? 'New Password' : 'Password'}</label>
+                                <div className="flex items-center justify-between">
+                                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">{isEditing ? 'New Password' : 'Temporary Password'}</label>
+                                  {!isEditing && (
+                                    <button
+                                      type="button"
+                                      onClick={generateTemporaryPassword}
+                                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors"
+                                    >
+                                      <Sparkles className="w-3 h-3" /> Auto-Generate
+                                    </button>
+                                  )}
+                                </div>
                                 <div className="relative group">
                                   <div className="absolute left-4 top-1/2 -translate-y-1/2"><Lock className="w-4 h-4 text-slate-400" /></div>
-                                  <input type={showPassword ? "text" : "password"} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder={isEditing ? "Leave blank to preserve" : "••••••••"} className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50" />
+                                  <input type={showPassword ? "text" : "password"} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder={isEditing ? "Leave blank to preserve" : "••••••••"} className="w-full h-12 pl-11 pr-11 font-mono rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 text-sm" />
                                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600"><Eye className="w-4 h-4"/></button>
                                 </div>
+                                {!isEditing && (
+                                  <p className="text-[10px] text-amber-700 bg-amber-50/80 px-2.5 py-1.5 rounded-lg border border-amber-200/60 font-medium">
+                                    ⚠️ <strong>Mandatory security rule:</strong> User will be required to change this temporary password upon first login.
+                                  </p>
+                                )}
                             </div>
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Role</label>
@@ -1145,7 +1275,7 @@ const Users = () => {
                               </div>
                           </div>
 
-                          {formData.allowed_outlets.length > 1 && (
+                           {formData.allowed_outlets.length > 1 && (
                             <div className="space-y-2 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2 duration-300">
                                 <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1 mb-2 block">Primary Account Home (Default Outlet)</label>
                                 <Select 
@@ -1171,6 +1301,28 @@ const Users = () => {
                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide px-2 mt-1">This outlet will be automatically selected whenever this user logs in.</p>
                             </div>
                           )}
+
+                          {!isEditing && (
+                            <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4 flex items-start gap-3">
+                              <input 
+                                  type="checkbox" 
+                                  id="sendWelcomeEmail"
+                                  checked={sendWelcomeEmail} 
+                                  onChange={e => setSendWelcomeEmail(e.target.checked)}
+                                  className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                              />
+                              <label htmlFor="sendWelcomeEmail" className="text-xs cursor-pointer select-none">
+                                  <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                                      <Mail className="w-3.5 h-3.5 text-indigo-600" />
+                                      Send official credentials email to user
+                                  </span>
+                                  <span className="text-slate-600 text-[11px] block mt-0.5 leading-relaxed">
+                                      Dispatches an executive welcome email to <span className="font-mono font-bold text-indigo-700">{formData.email || 'the user'}</span> containing their login email, temporary password, portal link, and explicit instructions to establish a new permanent password upon first login.
+                                  </span>
+                              </label>
+                            </div>
+                          )}
+
                           {error && <div className="bg-red-50 text-red-600 text-[11px] font-bold p-4 rounded-2xl border border-red-100 flex items-start gap-3"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /><span className="leading-relaxed">{error}</span></div>}
                           <div className="flex gap-3 pt-4">
                               <Button type="button" variant="secondary" onClick={handleFormCancel} className="flex-1 h-14 rounded-2xl font-bold bg-white border-slate-200">

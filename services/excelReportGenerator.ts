@@ -235,7 +235,7 @@ function finalizeWorksheet(sheet: ExcelJS.Worksheet, minColWidths: Record<number
     let maxLength = minColWidths[colIdx + 1] || 12;
     column.eachCell?.({ includeEmpty: false }, (cell) => {
       // Don't calculate width from merged rows or long banners in column 1
-      if (cell.row <= 7 || cell.row > sheet.rowCount - 5) return;
+      if (Number(cell.row) <= 7 || Number(cell.row) > Number(sheet.rowCount || 0) - 5) return;
       const valStr = cell.value ? cell.value.toString() : '';
       if (valStr.length > maxLength && valStr.length < 50) {
         maxLength = valStr.length;

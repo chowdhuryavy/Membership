@@ -466,6 +466,231 @@ export function buildGuestExpirationReminderEmailHtml(params: {
 </html>`;
 }
 
+export function buildUserCredentialsEmailHtml(params: {
+  userName: string;
+  userEmail: string;
+  temporaryPassword: string;
+  roleName: string;
+  propertyName?: string;
+  outletNames?: string[];
+  loginUrl?: string;
+  logoUrl?: string;
+  adminName?: string;
+}): string {
+  const propName = params.propertyName || 'Health Club Management';
+  const outletsList = params.outletNames && params.outletNames.length > 0 
+    ? params.outletNames.join(', ') 
+    : 'All Authorized Outlets';
+  const loginUrl = params.loginUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://ais-pre-mpohyasvfiv7e5djhwqyi7-54586722583.europe-west2.run.app');
+  const greeting = params.userName ? `Dear ${params.userName},` : 'Dear Colleague,';
+
+  const isSuspiciousImageHost = !params.logoUrl ||
+    params.logoUrl.includes('ui-avatars.com') ||
+    params.logoUrl.includes('imgur.com') ||
+    params.logoUrl.includes('placeholder.com');
+
+  const logoHtml = !isSuspiciousImageHost && params.logoUrl ? `
+    <div style="margin-bottom: 16px;">
+      <img src="${params.logoUrl}" width="140" style="max-width: 140px; max-height: 70px; object-fit: contain; display: block;" alt="${propName}" />
+    </div>
+  ` : '';
+
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Account Provisioning &amp; Credentials - ${propName}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;">
+  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; table-layout: fixed; padding: 32px 12px;">
+    <tr>
+      <td align="center">
+        <!--[if (gte mso 9)|(IE)]>
+        <table align="center" border="0" cellspacing="0" cellpadding="0" width="600">
+        <tr>
+        <td align="center" valign="top" width="600">
+        <![endif]-->
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);">
+          
+          <!-- TOP SECURITY STRIP -->
+          <tr>
+            <td bgcolor="#0f172a" style="background-color: #0f172a; color: #f8fafc; padding: 12px 28px; font-family: Arial, Helvetica, sans-serif; font-weight: 800; font-size: 11px; text-transform: uppercase; text-align: left; letter-spacing: 0.1em; border-bottom: 2px solid #4f46e5;">
+              SECURITY DISPATCH &bull; AUTHORIZED USER PROVISIONED
+            </td>
+          </tr>
+
+          <!-- HEADER / BRANDING -->
+          <tr>
+            <td style="padding: 28px 32px 20px 32px; text-align: left; background-color: #ffffff;">
+              ${logoHtml}
+              <div style="font-family: Arial, Helvetica, sans-serif; font-size: 10px; font-weight: 800; color: #4f46e5; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 4px;">
+                ${propName}
+              </div>
+              <h1 style="margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 22px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: -0.02em;">
+                User Credentials &amp; Access Notice
+              </h1>
+              <div style="font-family: Arial, Helvetica, sans-serif; font-size: 12px; font-weight: 600; color: #64748b; margin-top: 4px;">
+                Health Club Management Portal Access Directive
+              </div>
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 18px;">
+                <tr><td height="2" bgcolor="#e2e8f0" style="background-color: #e2e8f0; font-size: 1px; line-height: 1px;">&nbsp;</td></tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- BODY CONTENT -->
+          <tr>
+            <td style="padding: 0 32px 28px 32px; font-family: Arial, Helvetica, sans-serif; color: #334155; font-size: 14px; line-height: 1.6;">
+              <p style="margin: 0 0 14px 0; font-size: 15px; font-weight: 700; color: #0f172a;">
+                ${greeting}
+              </p>
+              <p style="margin: 0 0 18px 0; color: #475569; line-height: 1.6;">
+                An authorized operator profile has been configured for you on the Health Club Management platform for <strong>${propName}</strong>${params.adminName ? ` by ${params.adminName}` : ''}.
+              </p>
+              <p style="margin: 0 0 20px 0; color: #475569; line-height: 1.6;">
+                Your initial login credentials have been generated and are detailed below.
+              </p>
+
+              <!-- CREDENTIALS CARD -->
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 20px;">
+                <tr>
+                  <td bgcolor="#0f172a" style="background-color: #0f172a; border-radius: 12px; padding: 22px 24px; text-align: left; color: #ffffff;">
+                    <div style="font-family: Arial, Helvetica, sans-serif; font-size: 10px; font-weight: 800; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 14px; border-bottom: 1px solid #334155; padding-bottom: 8px;">
+                      SYSTEM ACCESS PARTICULARS
+                    </div>
+
+                    <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td style="padding: 6px 0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: bold; color: #94a3b8; text-transform: uppercase; width: 40%;">
+                          Login Portal:
+                        </td>
+                        <td style="padding: 6px 0; font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: bold; color: #38bdf8;">
+                          <a href="${loginUrl}" style="color: #38bdf8; text-decoration: underline;">${loginUrl}</a>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 6px 0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: bold; color: #94a3b8; text-transform: uppercase;">
+                          Registered Email:
+                        </td>
+                        <td style="padding: 6px 0; font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: bold; color: #f8fafc;">
+                          ${params.userEmail}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 6px 0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: bold; color: #94a3b8; text-transform: uppercase;">
+                          Assigned Role:
+                        </td>
+                        <td style="padding: 6px 0; font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: bold; color: #f8fafc;">
+                          ${params.roleName}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 6px 0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: bold; color: #94a3b8; text-transform: uppercase;">
+                          Facility Scopes:
+                        </td>
+                        <td style="padding: 6px 0; font-family: Arial, Helvetica, sans-serif; font-size: 12px; font-weight: bold; color: #cbd5e1;">
+                          ${outletsList}
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- TEMPORARY PASSWORD BLOCK -->
+                    <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid #1e293b; text-align: center;">
+                      <div style="font-family: Arial, Helvetica, sans-serif; font-size: 10px; font-weight: 800; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px;">
+                        TEMPORARY PASSCODE
+                      </div>
+                      <div style="font-family: Consolas, 'Courier New', Courier, monospace; font-size: 22px; font-weight: 800; color: #38bdf8; letter-spacing: 0.12em; background-color: #1e293b; padding: 10px 16px; border-radius: 8px; display: inline-block; border: 1px solid #334155;">
+                        ${params.temporaryPassword}
+                      </div>
+                      <div style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #94a3b8; margin-top: 6px;">
+                        Case-sensitive &bull; Single-use temporary access key
+                      </div>
+                    </div>
+
+                  </td>
+                </tr>
+              </table>
+
+              <!-- MANDATORY PASSWORD CHANGE WARNING BOX -->
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 22px;">
+                <tr>
+                  <td bgcolor="#fffbeb" style="background-color: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 10px; padding: 16px 20px;">
+                    <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 6px;">
+                          &#9888; MANDATORY SECURITY DIRECTIVE &bull; FIRST LOGIN
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #78350f; line-height: 1.55;">
+                          <strong>You are required to change this temporary password upon your very first login.</strong>
+                          For security and compliance reasons, this temporary password permits initial sign-in only. The system will immediately require you to establish your permanent, private password (minimum 6 characters) before granting access to operational modules.
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- ACTION STEPS -->
+              <div style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px;">
+                Initial Sign-In Instructions:
+              </div>
+              <ol style="margin: 0 0 24px 0; padding-left: 20px; font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #475569; line-height: 1.6;">
+                <li>Click the <strong>Access Portal</strong> button below or navigate to the portal link.</li>
+                <li>Enter your registered email: <strong>${params.userEmail}</strong> and the temporary passcode above.</li>
+                <li>When the <strong>Security Upgrade / Set New Password</strong> prompt appears, choose a strong permanent password.</li>
+                <li>Confirm your new password to finish authentication and access your dashboard.</li>
+              </ol>
+
+              <!-- PORTAL CTA BUTTON -->
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 10px 0 26px 0;">
+                <tr>
+                  <td align="center">
+                    <table role="presentation" border="0" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td align="center" bgcolor="#4f46e5" style="border-radius: 10px; background-color: #4f46e5;">
+                          <a href="${loginUrl}" target="_blank" style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: 800; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 10px; display: inline-block; letter-spacing: 0.08em; text-transform: uppercase;">
+                            SIGN IN TO PORTAL &rarr;
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CONFIDENTIALITY NOTICE -->
+              <div style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #94a3b8; line-height: 1.5; border-top: 1px solid #f1f5f9; padding-top: 14px;">
+                <strong>Confidentiality Notice:</strong> This message contains confidential credentials intended solely for ${params.userName || params.userEmail}. If you received this transmission in error, please immediately alert the IT Administrator or Management Office and permanently delete this email.
+              </div>
+
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td bgcolor="#f8fafc" style="background-color: #f8fafc; padding: 20px 32px; text-align: center; border-top: 1px solid #e2e8f0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.5; color: #94a3b8;">
+              <div style="font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">${propName}</div>
+              <div style="font-size: 10px; color: #94a3b8; margin-top: 2px;">Automated Security Identity Provisioning &bull; Confidential</div>
+              <div style="font-size: 10px; color: #cbd5e1; margin-top: 4px;">Dispatched at: ${format(new Date(), 'dd MMM yyyy, HH:mm:ss')}</div>
+            </td>
+          </tr>
+
+        </table>
+        <!--[if (gte mso 9)|(IE)]>
+        </td>
+        </tr>
+        </table>
+        <![endif]-->
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export const emailService = {
   async sendEmail(to: string | string[], subject: string, html: string, attachments: { filename: string; content: string }[] = [], text?: string) {
     const targetStr = Array.isArray(to) ? to.join(', ') : to;
@@ -976,6 +1201,70 @@ export const emailService = {
     }
 
     return results;
+  },
+
+  async sendUserWelcomeCredentialsEmail(params: {
+    user: {
+      name: string;
+      email: string;
+      role_id: string;
+      allowed_outlets?: string[];
+      default_outlet_id?: string;
+    };
+    temporaryPassword: string;
+    propertyName?: string;
+    roleName?: string;
+    outletNames?: string[];
+    loginUrl?: string;
+    adminName?: string;
+  }) {
+    try {
+      console.log('[Email Service] Preparing to send welcome credentials email to:', params.user.email);
+      const roles = await db.getRoles();
+      const properties = await db.getProperties();
+      const outlets = await db.getOutlets();
+      const settings = await db.getSettings();
+
+      const roleObj = roles.find(r => r.id === params.user.role_id);
+      const roleName = params.roleName || roleObj?.name || params.user.role_id;
+
+      let outletNames = params.outletNames;
+      if (!outletNames && params.user.allowed_outlets) {
+        outletNames = params.user.allowed_outlets
+          .map(id => outlets.find(o => o.id === id)?.name)
+          .filter((name): name is string => Boolean(name));
+      }
+
+      const primaryOutletId = params.user.default_outlet_id || params.user.allowed_outlets?.[0];
+      const primaryOutlet = outlets.find(o => o.id === primaryOutletId);
+      const primaryProp = properties.find(p => p.id === primaryOutlet?.property_id) || properties[0];
+
+      const propertyName = params.propertyName || primaryProp?.name || settings?.name || 'Health Club Management';
+      const logoUrl = resolveLogoUrl(primaryOutlet, primaryProp, settings);
+
+      const loginUrl = params.loginUrl || (typeof window !== 'undefined' ? window.location.origin : '');
+
+      const subject = `Official Account Credentials & Initial Login Notice - ${propertyName}`;
+
+      const html = buildUserCredentialsEmailHtml({
+        userName: params.user.name,
+        userEmail: params.user.email,
+        temporaryPassword: params.temporaryPassword,
+        roleName: roleName,
+        propertyName: propertyName,
+        outletNames: outletNames,
+        loginUrl: loginUrl,
+        logoUrl: logoUrl,
+        adminName: params.adminName
+      });
+
+      const res = await this.sendEmail(params.user.email, subject, html);
+      console.log('[Email Service] sendUserWelcomeCredentialsEmail result:', res);
+      return res;
+    } catch (err: any) {
+      console.error('[Email Service] Error in sendUserWelcomeCredentialsEmail:', err);
+      return { success: false, error: err?.message || 'Failed to dispatch credentials email' };
+    }
   }
 };
 
