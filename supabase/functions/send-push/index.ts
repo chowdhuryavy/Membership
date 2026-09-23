@@ -193,23 +193,23 @@ serve(async (req) => {
         throw new Error("userId is required for direct push");
       }
 
-      // If outlet_id is specified for targeted push, verify user has permission for that outlet
-      if (effectiveOutletId) {
-        const [
-          { data: targetProfile },
-          { data: targetStaff }
-        ] = await Promise.all([
-          supabase.from("profiles").select("id, role_id, allowed_outlets, is_active").eq("id", effectiveUserId).maybeSingle(),
-          supabase.from("staff").select("id, outlet_ids, property_id, is_active").eq("id", effectiveUserId).maybeSingle()
-        ]);
+      // Always verify user is active before dispatching direct push notifications
+      const [
+        { data: targetProfile },
+        { data: targetStaff }
+      ] = await Promise.all([
+        supabase.from("profiles").select("id, role_id, allowed_outlets, is_active").eq("id", effectiveUserId).maybeSingle(),
+        supabase.from("staff").select("id, outlet_ids, property_id, is_active").eq("id", effectiveUserId).maybeSingle()
+      ]);
 
-        if (targetProfile) {
-          if (targetProfile.is_active === false) {
-            console.log(`[Push] Targeted admin user ${effectiveUserId} is inactive. Push skipped.`);
-            return new Response(JSON.stringify({ success: true, message: "Target user is inactive", sentCount: 0 }), {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
+      if (targetProfile) {
+        if (targetProfile.is_active === false) {
+          console.log(`[Push] Targeted admin user ${effectiveUserId} is inactive. Push skipped.`);
+          return new Response(JSON.stringify({ success: true, message: "Target user is inactive", sentCount: 0 }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (effectiveOutletId) {
           const isSuper = isSuperAdminRole(targetProfile.role_id);
           const userAllowed = Array.isArray(targetProfile.allowed_outlets) ? targetProfile.allowed_outlets : [];
           if (!isSuper && !userAllowed.includes(effectiveOutletId)) {
@@ -218,13 +218,15 @@ serve(async (req) => {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
           }
-        } else if (targetStaff) {
-          if (targetStaff.is_active === false) {
-            console.log(`[Push] Targeted staff user ${effectiveUserId} is inactive. Push skipped.`);
-            return new Response(JSON.stringify({ success: true, message: "Target staff is inactive", sentCount: 0 }), {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
+        }
+      } else if (targetStaff) {
+        if (targetStaff.is_active === false) {
+          console.log(`[Push] Targeted staff user ${effectiveUserId} is inactive. Push skipped.`);
+          return new Response(JSON.stringify({ success: true, message: "Target staff is inactive", sentCount: 0 }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (effectiveOutletId) {
           const staffOutlets = Array.isArray(targetStaff.outlet_ids) ? targetStaff.outlet_ids : [];
           if (!staffOutlets.includes(effectiveOutletId) && targetStaff.property_id !== effectiveOutletId) {
             console.log(`[Push] Targeted staff ${effectiveUserId} does not belong to outlet ${effectiveOutletId}. Push aborted.`);

@@ -123,6 +123,7 @@ class DatabaseService {
   private getShadowClient() {
     return createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
+        storageKey: 'membership-shadow-auth-session',
         persistSession: false,
         autoRefreshToken: false,
         detectSessionInUrl: false
@@ -953,6 +954,15 @@ class DatabaseService {
   }
 
   async updateUser(id: string, updates: Partial<UserProfile>) { 
+    try {
+      const localUsers: any[] = JSON.parse(localStorage.getItem('membership_local_users') || '[]');
+      const index = localUsers.findIndex(u => u.id === id);
+      if (index !== -1) {
+        localUsers[index] = { ...localUsers[index], ...updates };
+        localStorage.setItem('membership_local_users', JSON.stringify(localUsers));
+      }
+    } catch (e) {}
+
     if (this.isSupabase()) {
       await this.safeCall(async () => {
         const { data: current, error: fetchError } = await supabase.from('profiles').select('email, name').eq('id', id).single();
@@ -5567,14 +5577,13 @@ class DatabaseService {
           user_id: userId,
           subscription: subObj,
           user_type: userType,
-          allowed_outlets: allowedOutlets,
           updated_at: new Date().toISOString()
         };
 
         const { error } = await supabase.from('push_subscriptions').upsert([payloadWithRole], { onConflict: 'user_id' });
         
         if (error) {
-           if (error.message?.includes('user_type') || error.code === '42703') {
+           if (error.message?.includes('user_type') || error.code === '42703' || error.code === 'PGRST204') {
              const fallbackPayload = {
                user_id: userId,
                subscription: subObj,
