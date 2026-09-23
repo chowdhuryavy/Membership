@@ -228,7 +228,7 @@ serve(async (req) => {
                 <tr><td style="padding: 6px 0; color: #64748b;">Username:</td><td style="font-weight: bold;">${config.username}</td></tr>
                 <tr><td style="padding: 6px 0; color: #64748b;">Security:</td><td style="font-weight: bold;">${config.secure_connection.toUpperCase()}</td></tr>
               </table>
-              <p style="font-size: 11px; color: #94a3b8; margin-top: 24px;">Generated automatically by AI Studio Membership Platform.</p>
+              <p style="font-size: 11px; color: #94a3b8; margin-top: 24px;">Generated automatically by Health Club Management System.</p>
             </div>
           `
         });

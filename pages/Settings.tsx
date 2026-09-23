@@ -1269,14 +1269,7 @@ const SettingsPage = () => {
 
               {activeTab === 'smtp' && (
                   <PropertySmtpConfig
-                      properties={properties}
                       currentProperty={currentProperty}
-                      onSelectProperty={(p) => {
-                          const propOutlet = outlets.find(o => o.property_id === p.id);
-                          if (propOutlet) {
-                              setCurrentOutlet(propOutlet);
-                          }
-                      }}
                   />
               )}
 
