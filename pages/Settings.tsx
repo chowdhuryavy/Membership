@@ -54,8 +54,10 @@ import {
   Filter,
   Mail,
   Ticket,
-  BellRing
+  BellRing,
+  Server
 } from 'lucide-react';
+import { PropertySmtpConfig } from '../components/settings/PropertySmtpConfig';
 
 const PermissionMatrix = ({ 
   registry, 
@@ -171,7 +173,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports' | 'expiration_reminders' | 'staff_portal';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'smtp' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports' | 'expiration_reminders' | 'staff_portal';
 
 const SignatoryConfig = ({
   config = {},
@@ -282,8 +284,8 @@ const SignatoryConfig = ({
 };
 
 const SettingsPage = () => {
-  // Fix: Destructured currentOutlet and currentProperty from useSettings to provide necessary context for data fetching
-  const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry, currentOutlet, currentProperty } = useSettings();
+  // Fix: Destructured currentOutlet, currentProperty, and setCurrentOutlet from useSettings
+  const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry, currentOutlet, currentProperty, setCurrentOutlet } = useSettings();
   const { user, isSuperAdmin } = useAuth();
   const availableTabs = useMemo(() => {
     const isSuper = isSuperAdmin || isSuperAdminRole(user?.role_id);
@@ -292,6 +294,7 @@ const SettingsPage = () => {
       // Super Admin Only
       { id: 'company', label: 'Global Scope', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_global'), icon: Building2 },
       { id: 'properties', label: 'Properties', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_properties'), icon: MapPin },
+      { id: 'smtp', label: 'Property SMTP', visible: isSuper, icon: Server },
       { id: 'outlets', label: 'Outlets', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_outlets'), icon: Store },
       { id: 'currency', label: 'Currency', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_currency'), icon: Globe },
       { id: 'navigation', label: 'Navigation', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_navigation'), icon: ListOrdered },
@@ -1262,6 +1265,19 @@ const SettingsPage = () => {
                           </table>
                       </CardContent>
                   </Card>
+              )}
+
+              {activeTab === 'smtp' && (
+                  <PropertySmtpConfig
+                      properties={properties}
+                      currentProperty={currentProperty}
+                      onSelectProperty={(p) => {
+                          const propOutlet = outlets.find(o => o.property_id === p.id);
+                          if (propOutlet) {
+                              setCurrentOutlet(propOutlet);
+                          }
+                      }}
+                  />
               )}
 
               {activeTab === 'outlets' && (

@@ -1,5 +1,6 @@
 import { db } from './mockSupabase';
 import { supabase } from './supabase';
+import { PropertySmtpService } from './propertySmtpService';
 import { format, parseISO, differenceInCalendarDays, startOfDay } from 'date-fns';
 import { generateMemberAgreementPdfBase64 } from './memberAgreementPdfService';
 import { Member, MemberStatus, ExpirationReminderConfig, ExpirationReminderOutletConfig, ExpirationReminderLog } from '../types';
@@ -692,7 +693,14 @@ export function buildUserCredentialsEmailHtml(params: {
 }
 
 export const emailService = {
-  async sendEmail(to: string | string[], subject: string, html: string, attachments: { filename: string; content: string }[] = [], text?: string) {
+  async sendEmail(
+    to: string | string[], 
+    subject: string, 
+    html: string, 
+    attachments: { filename: string; content: string }[] = [], 
+    text?: string,
+    options?: { propertyId?: string; outletId?: string }
+  ) {
     const targetStr = Array.isArray(to) ? to.join(', ') : to;
     console.log(`[Email Service] Dispatching email to: ${targetStr}`);
     console.log(`[Email Service] Subject: ${subject}`);
@@ -714,6 +722,28 @@ export const emailService = {
       .replace(/&gt;/g, '>')
       .replace(/\n\s*\n\s*\n/g, '\n\n')
       .trim();
+
+    // Priority 1: Check Property-Specific SMTP
+    if (options?.propertyId || options?.outletId) {
+      try {
+        const smtpResult = await PropertySmtpService.dispatchEmail({
+          to,
+          subject,
+          html,
+          text: plainText,
+          propertyId: options.propertyId,
+          outletId: options.outletId,
+          attachments
+        });
+
+        if (smtpResult.success) {
+          console.log(`[Email Service] Delivered via ${smtpResult.method.toUpperCase()} (${smtpResult.messageId})`);
+          return { success: true, messageId: smtpResult.messageId };
+        }
+      } catch (smtpErr) {
+        console.warn('[Email Service] Property SMTP check threw error, continuing to primary fallback:', smtpErr);
+      }
+    }
 
     let lastErrorMessage = '';
 

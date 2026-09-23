@@ -103,6 +103,25 @@ export interface Property {
   signatory_config?: Record<string, { prepared?: string, reviewed?: string, approved?: string }>;
 }
 
+export interface PropertySmtpSettings {
+  id?: string;
+  property_id: string;
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+  has_password_configured?: boolean;
+  secure_connection: 'ssl' | 'tls' | 'none';
+  from_email: string;
+  from_name: string;
+  is_enabled: boolean;
+  last_tested_at?: string;
+  last_test_status?: 'success' | 'failed';
+  last_test_error?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface ExpirationReminderOutletConfig {
   enabled: boolean;
   days_before: number[]; // e.g. [30, 14, 7, 1, 0]
