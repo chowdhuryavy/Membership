@@ -379,10 +379,33 @@ serve(async (req) => {
       const resend = new Resend(resendApiKey);
       const toAddresses = Array.isArray(to) ? to : [to];
 
-      const resendAttachments = (attachments || []).map((att: any) => ({
-        filename: att.filename,
-        content: att.content
-      }));
+      const resendAttachments = (attachments || []).map((att: any) => {
+        let rawContent = att.content;
+        if (typeof rawContent === 'string') {
+          if (rawContent.includes('base64,')) {
+            rawContent = rawContent.split('base64,')[1];
+          }
+          try {
+            // Decode base64 to Uint8Array for binary attachment (e.g. PDF)
+            const binaryString = atob(rawContent.trim());
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            return {
+              filename: att.filename,
+              content: bytes
+            };
+          } catch (e) {
+            console.warn('[PropertySMTP] Error decoding base64 attachment, falling back to raw:', e);
+          }
+        }
+        return {
+          filename: att.filename,
+          content: rawContent
+        };
+      });
 
       const resendPayload: any = {
         from: `${appName} <${fromEmail}>`,

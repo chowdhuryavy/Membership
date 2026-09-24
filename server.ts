@@ -492,6 +492,17 @@ async function startServer() {
 
       console.log(`[Express /api/send-email] Dispatching email to ${emails.join(', ')} (from: ${fromEmail})...`);
 
+      const formattedAttachments = (attachments || []).map((att: any) => {
+        let rawContent = att.content;
+        if (typeof rawContent === 'string' && rawContent.includes('base64,')) {
+          rawContent = rawContent.split('base64,')[1];
+        }
+        return {
+          filename: att.filename,
+          content: rawContent
+        };
+      });
+
       const deliveryResults = await Promise.allSettled(
         emails.map(async (recipientEmail) => {
           // Attempt 1: Send via configured fromEmail
@@ -508,7 +519,7 @@ async function startServer() {
               subject,
               html,
               text,
-              attachments: attachments || []
+              attachments: formattedAttachments.length > 0 ? formattedAttachments : undefined
             })
           });
 

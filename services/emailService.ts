@@ -754,77 +754,106 @@ export const emailService = {
       } catch (e) {}
     }
 
-    // PRIMARY DISPATCH: Unified Property SMTP with automatic Resend Fallback
-    // If SMTP is configured and active for the property, it triggers SMTP.
-    // If no SMTP configuration or disabled, it immediately triggers Resend default transport!
-    try {
-      const dispatchResult = await PropertySmtpService.dispatchEmail({
-        to,
-        subject,
-        html,
-        text: plainText,
-        propertyId,
-        outletId: options?.outletId,
-        attachments
-      });
+    // Step 1: If propertyId is present, check if property has custom SMTP enabled.
+    if (propertyId) {
+      try {
+        const smtpSettings = await PropertySmtpService.getSettings(propertyId);
+        if (smtpSettings && smtpSettings.is_enabled) {
+          console.log(`[Email Service] Property ${propertyId} has active custom SMTP. Attempting SMTP dispatch...`);
+          const smtpResult = await PropertySmtpService.dispatchEmail({
+            to,
+            subject,
+            html,
+            text: plainText,
+            propertyId,
+            outletId: options?.outletId,
+            attachments
+          });
 
-      if (dispatchResult.success) {
-        const transportName = dispatchResult.method === 'smtp' ? 'SMTP' : 'Resend';
-        console.log(`[Email Service] Delivered via ${transportName} (${dispatchResult.messageId})`);
-
-        await db.logAction(
-          'EMAIL_SENT',
-          `Email dispatched successfully to ${targetStr} using ${transportName} (Subject: "${subject}")`,
-          options?.outletId,
-          undefined,
-          {
-            module: 'Emails',
-            status: 'success',
-            severity: 'success',
-            record_id: dispatchResult.messageId || 'email_success',
-            affected_entity: targetStr,
-            new_values: {
-              to: targetStr,
-              subject,
-              transport: transportName,
-              status: 'success',
-              property_id: propertyId,
-              outlet_id: options?.outletId,
-              message_id: dispatchResult.messageId
-            }
+          if (smtpResult.success && smtpResult.method === 'smtp') {
+            console.log(`[Email Service] Delivered via Property SMTP (${smtpResult.messageId})`);
+            await db.logAction(
+              'EMAIL_SENT',
+              `Email dispatched successfully to ${targetStr} using Property SMTP (Subject: "${subject}")`,
+              options?.outletId,
+              undefined,
+              {
+                module: 'Emails',
+                status: 'success',
+                severity: 'success',
+                record_id: smtpResult.messageId || 'smtp_success',
+                affected_entity: targetStr,
+                new_values: {
+                  to: targetStr,
+                  subject,
+                  transport: 'SMTP',
+                  status: 'success',
+                  property_id: propertyId,
+                  outlet_id: options?.outletId,
+                  message_id: smtpResult.messageId
+                }
+              }
+            );
+            return { success: true, messageId: smtpResult.messageId, method: 'smtp' };
+          } else {
+            console.warn('[Email Service] Property SMTP dispatch failed, reverting to default Resend transport:', smtpResult.error);
           }
-        );
-
-        return { success: true, messageId: dispatchResult.messageId, method: dispatchResult.method };
-      } else {
-        console.warn(`[Email Service] Primary dispatch returned error, trying local Express fallback...`, dispatchResult.error);
-        await db.logAction(
-          'EMAIL_FAILED',
-          `Primary dispatch attempt to ${targetStr} failed: ${dispatchResult.error || 'Unknown error'}. Trying local fallback...`,
-          options?.outletId,
-          undefined,
-          {
-            module: 'Emails',
-            status: 'failed',
-            severity: 'warning',
-            affected_entity: targetStr,
-            new_values: {
-              to: targetStr,
-              subject,
-              transport: 'Resend',
-              status: 'failure',
-              property_id: propertyId,
-              outlet_id: options?.outletId,
-              error: dispatchResult.error
-            }
-          }
-        );
+        }
+      } catch (smtpErr) {
+        console.warn('[Email Service] Error querying/dispatching property SMTP, using default Resend transport:', smtpErr);
       }
-    } catch (err: any) {
-      console.warn('[Email Service] Exception during primary dispatch, trying Express fallback...', err);
     }
 
-    // Local Express Server Fallback (Calls /api/send-email)
+    // Step 2: PRIMARY RESEND DISPATCH via original 'send-reports' Edge Function
+    // (This is the original verified pipeline that delivers all emails via Resend)
+    try {
+      if (supabase) {
+        const { data, error } = await supabase.functions.invoke('send-reports', {
+          body: {
+            directEmail: {
+              to,
+              subject,
+              html,
+              text: plainText,
+              attachments
+            }
+          }
+        });
+
+        if (!error && data?.success) {
+          console.log(`[Email Service] Delivered via default Resend transport (${data.id})`);
+          await db.logAction(
+            'EMAIL_SENT',
+            `Email dispatched successfully to ${targetStr} using default Resend transport (Subject: "${subject}")`,
+            options?.outletId,
+            undefined,
+            {
+              module: 'Emails',
+              status: 'success',
+              severity: 'success',
+              record_id: data.id || 'resend_success',
+              affected_entity: targetStr,
+              new_values: {
+                to: targetStr,
+                subject,
+                transport: 'Resend',
+                status: 'success',
+                property_id: propertyId,
+                outlet_id: options?.outletId,
+                message_id: data.id
+              }
+            }
+          );
+          return { success: true, messageId: data.id, method: 'resend' };
+        } else if (error || (data && !data.success)) {
+          console.warn('[Email Service] send-reports function returned error:', error || data?.error);
+        }
+      }
+    } catch (edgeErr) {
+      console.warn('[Email Service] Exception during send-reports invocation:', edgeErr);
+    }
+
+    // Step 3: Local Express Server Fallback (Calls /api/send-email)
     try {
       const res = await fetch('/api/send-email', {
         method: 'POST',
