@@ -96,9 +96,37 @@ const Logs = () => {
             const val = (log.new_values as any).transport;
             if (val) return String(val).toUpperCase();
         }
-        if (log.description?.toLowerCase().includes('smtp')) return 'SMTP';
+        if (log.description?.toLowerCase().includes('property smtp') || log.description?.toLowerCase().includes('using smtp')) return 'SMTP';
         if (log.description?.toLowerCase().includes('resend')) return 'RESEND';
         return 'DEFAULT';
+    };
+
+    const getEmailProperty = (log: SystemLog): string => {
+        let propId = log.property_id;
+        if (!propId && log.new_values && typeof log.new_values === 'object') {
+            propId = (log.new_values as any).property_id;
+        }
+        if (!propId && log.outlet_id) {
+            const o = outlets.find(item => item.id === log.outlet_id);
+            if (o?.property_id) propId = o.property_id;
+        }
+        if (propId) {
+            const p = properties.find(item => item.id === propId);
+            return p?.name || 'Property: ' + propId.slice(0, 8);
+        }
+        return 'Not Specified';
+    };
+
+    const getEmailOutlet = (log: SystemLog): string => {
+        let outId = log.outlet_id;
+        if (!outId && log.new_values && typeof log.new_values === 'object') {
+            outId = (log.new_values as any).outlet_id;
+        }
+        if (outId) {
+            const o = outlets.find(item => item.id === outId);
+            return o?.name || 'Outlet: ' + outId.slice(0, 8);
+        }
+        return 'General / Global';
     };
 
     const getEmailSubject = (log: SystemLog): string => {
@@ -555,6 +583,7 @@ const Logs = () => {
                                 {activeTab === 'emails' ? (
                                     <>
                                         <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Recipient Target</th>
+                                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Property / Outlet</th>
                                         <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Transport Method</th>
                                         <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Subject / Thread</th>
                                         <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Trace Description</th>
@@ -601,6 +630,12 @@ const Logs = () => {
                                                         <span className="text-xs font-black text-slate-900 tracking-tight line-clamp-1 max-w-[200px]">{log.affected_entity || 'unknown@recipient.com'}</span>
                                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Recipient</span>
                                                     </div>
+                                                </div>
+                                            </td>
+                                            <td className="p-6">
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-black text-slate-900 tracking-tight line-clamp-1 max-w-[180px]">{getEmailProperty(log)}</span>
+                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{getEmailOutlet(log)}</span>
                                                 </div>
                                             </td>
                                             <td className="p-6">
@@ -830,10 +865,18 @@ const Logs = () => {
                                             </div>
                                         </div>
                                         
-                                        <div className="grid grid-cols-2 gap-4 text-xs font-bold">
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs font-bold">
                                             <div className="bg-white p-4 rounded-xl border border-slate-100">
                                                 <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Target Recipient</span>
                                                 <span className="text-slate-900 font-black tracking-tight">{selectedLog.affected_entity || 'N/A'}</span>
+                                            </div>
+                                            <div className="bg-white p-4 rounded-xl border border-slate-100">
+                                                <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Target Property</span>
+                                                <span className="text-slate-900 font-black tracking-tight">{getEmailProperty(selectedLog)}</span>
+                                            </div>
+                                            <div className="bg-white p-4 rounded-xl border border-slate-100">
+                                                <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Target Outlet</span>
+                                                <span className="text-slate-900 font-black tracking-tight">{getEmailOutlet(selectedLog)}</span>
                                             </div>
                                             <div className="bg-white p-4 rounded-xl border border-slate-100">
                                                 <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Email Subject</span>
