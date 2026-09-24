@@ -55,7 +55,8 @@ import {
   Mail,
   Ticket,
   BellRing,
-  Server
+  Server,
+  MessageSquare
 } from 'lucide-react';
 import { PropertySmtpConfig } from '../components/settings/PropertySmtpConfig';
 
@@ -460,7 +461,8 @@ const SettingsPage = () => {
     logo_url: '', 
     address: '',
     phone: '',
-    signatory_config: {}
+    signatory_config: {},
+    whatsapp_enabled: true
   });
   const [roomForm, setRoomForm] = useState<Omit<MassageRoom, 'id'>>({ property_id: '', outlet_id: '', name: '', number: '', is_active: true });
   const [outletForm, setOutletForm] = useState<Omit<Outlet, 'id'>>({ 
@@ -473,7 +475,8 @@ const SettingsPage = () => {
     contract_template: '',
     conditions: '',
     backup_email: '',
-    backup_enabled: false
+    backup_enabled: false,
+    whatsapp_enabled: true
   });
   const [roleForm, setRoleForm] = useState<Omit<Role, 'id'>>({ name: '', permissions: [] });
   const [currencyForm, setCurrencyForm] = useState<Omit<Currency, 'id'>>({ code: '', symbol: '', rate: 1, is_default: false, property_id: currentProperty?.id });
@@ -608,6 +611,78 @@ const SettingsPage = () => {
     } 
   };
 
+  const togglePropertyWhatsApp = async (property: Property) => {
+    if (!isSuperAdmin) return;
+    try {
+      const isCurrentlyDisabled = settings?.whatsapp_disabled_properties?.includes(property.id) || property.whatsapp_enabled === false;
+      const willBeEnabled = isCurrentlyDisabled;
+      const currentDisabled = settings?.whatsapp_disabled_properties || [];
+      const updatedDisabled = willBeEnabled
+        ? currentDisabled.filter(id => id !== property.id)
+        : (currentDisabled.includes(property.id) ? currentDisabled : [...currentDisabled, property.id]);
+      
+      const updatedSettings = { ...settings!, whatsapp_disabled_properties: updatedDisabled };
+      await db.updateSettings(updatedSettings);
+      await db.updateProperty(property.id, { whatsapp_enabled: willBeEnabled });
+      await refreshSettings();
+      showStatus(`WhatsApp sidebar visibility for "${property.name}" set to ${willBeEnabled ? 'Visible' : 'Hidden'}.`, 'success');
+    } catch (e: any) {
+      showStatus('Failed to update property sidebar visibility: ' + e.message, 'error');
+    }
+  };
+
+  const toggleOutletWhatsApp = async (outlet: Outlet) => {
+    if (!isSuperAdmin) return;
+    try {
+      const isCurrentlyDisabled = settings?.whatsapp_disabled_outlets?.includes(outlet.id) || outlet.whatsapp_enabled === false;
+      const willBeEnabled = isCurrentlyDisabled;
+      const currentDisabled = settings?.whatsapp_disabled_outlets || [];
+      const updatedDisabled = willBeEnabled
+        ? currentDisabled.filter(id => id !== outlet.id)
+        : (currentDisabled.includes(outlet.id) ? currentDisabled : [...currentDisabled, outlet.id]);
+      
+      const updatedSettings = { ...settings!, whatsapp_disabled_outlets: updatedDisabled };
+      await db.updateSettings(updatedSettings);
+      await db.updateOutlet(outlet.id, { whatsapp_enabled: willBeEnabled });
+      await refreshSettings();
+      showStatus(`WhatsApp sidebar visibility for "${outlet.name}" set to ${willBeEnabled ? 'Visible' : 'Hidden'}.`, 'success');
+    } catch (e: any) {
+      showStatus('Failed to update outlet sidebar visibility: ' + e.message, 'error');
+    }
+  };
+
+  const setAllPropertiesWhatsApp = async (enable: boolean) => {
+    if (!isSuperAdmin) return;
+    try {
+      const updatedDisabled = enable ? [] : properties.map(p => p.id);
+      const updatedSettings = { ...settings!, whatsapp_disabled_properties: updatedDisabled };
+      await db.updateSettings(updatedSettings);
+      for (const p of properties) {
+        await db.updateProperty(p.id, { whatsapp_enabled: enable });
+      }
+      await refreshSettings();
+      showStatus(`WhatsApp sidebar visibility ${enable ? 'enabled' : 'hidden'} for all properties.`, 'success');
+    } catch (e: any) {
+      showStatus('Bulk update failed: ' + e.message, 'error');
+    }
+  };
+
+  const setAllOutletsWhatsApp = async (enable: boolean) => {
+    if (!isSuperAdmin) return;
+    try {
+      const updatedDisabled = enable ? [] : outlets.map(o => o.id);
+      const updatedSettings = { ...settings!, whatsapp_disabled_outlets: updatedDisabled };
+      await db.updateSettings(updatedSettings);
+      for (const o of outlets) {
+        await db.updateOutlet(o.id, { whatsapp_enabled: enable });
+      }
+      await refreshSettings();
+      showStatus(`WhatsApp sidebar visibility ${enable ? 'enabled' : 'hidden'} for all outlets.`, 'success');
+    } catch (e: any) {
+      showStatus('Bulk update failed: ' + e.message, 'error');
+    }
+  };
+
   const handlePropertySubmit = async () => {
     if (!isSuperAdmin) {
         showStatus('Unauthorized: Super Admin access required.', 'error');
@@ -621,8 +696,23 @@ const SettingsPage = () => {
 
     setIsSaving(true);
     try {
-      if (editingId) await db.updateProperty(editingId, propertyForm);
-      else await db.addProperty(propertyForm);
+      let targetId = editingId;
+      if (editingId) {
+        await db.updateProperty(editingId, propertyForm);
+      } else {
+        const created = await db.addProperty(propertyForm);
+        if (created && created[0]) targetId = created[0].id;
+      }
+
+      if (targetId && propertyForm.whatsapp_enabled !== undefined) {
+        const isEnabled = propertyForm.whatsapp_enabled !== false;
+        const currentDisabled = settings?.whatsapp_disabled_properties || [];
+        const updatedDisabled = isEnabled
+          ? currentDisabled.filter(id => id !== targetId)
+          : (currentDisabled.includes(targetId) ? currentDisabled : [...currentDisabled, targetId]);
+        await db.updateSettings({ ...settings!, whatsapp_disabled_properties: updatedDisabled });
+      }
+
       await refreshSettings();
       setShowForm(false);
       showStatus('Property Asset Record Updated.');
@@ -683,8 +773,23 @@ const SettingsPage = () => {
 
     setIsSaving(true);
     try {
-      if (editingId) await db.updateOutlet(editingId, outletForm);
-      else await db.addOutlet(outletForm);
+      let targetId = editingId;
+      if (editingId) {
+        await db.updateOutlet(editingId, outletForm);
+      } else {
+        const created = await db.addOutlet(outletForm);
+        if (created && created[0]) targetId = created[0].id;
+      }
+
+      if (targetId && outletForm.whatsapp_enabled !== undefined) {
+        const isEnabled = outletForm.whatsapp_enabled !== false;
+        const currentDisabled = settings?.whatsapp_disabled_outlets || [];
+        const updatedDisabled = isEnabled
+          ? currentDisabled.filter(id => id !== targetId)
+          : (currentDisabled.includes(targetId) ? currentDisabled : [...currentDisabled, targetId]);
+        await db.updateSettings({ ...settings!, whatsapp_disabled_outlets: updatedDisabled });
+      }
+
       await refreshSettings();
       setShowForm(false);
       showStatus('Facility Context Updated.');
@@ -1241,27 +1346,46 @@ const SettingsPage = () => {
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-5"><MapPin className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Facility Portfolios</CardTitle></div>
-                          <Button onClick={() => { setEditingId(null); setPropertyForm({name:'', logo_url:'', address:'', phone:'', signatory_config: {}}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Register Asset</Button>
+                          <Button onClick={() => { setEditingId(null); setPropertyForm({name:'', logo_url:'', address:'', phone:'', signatory_config: {}, whatsapp_enabled: true}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Register Asset</Button>
                       </CardHeader>
                       <CardContent className="p-0">
                           <table className="w-full text-left">
-                              <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Asset Brand</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">HQ Location & Contact Phone</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
-                              <tbody className="divide-y divide-slate-100">{properties.map(p => (
+                              <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Asset Brand</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">HQ Location & Contact Phone</th><th className="px-6 py-6 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp Sidebar</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
+                              <tbody className="divide-y divide-slate-100">{properties.map(p => {
+                                  const isWaDisabled = settings?.whatsapp_disabled_properties?.includes(p.id) || p.whatsapp_enabled === false;
+                                  return (
                                   <tr key={p.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="flex items-center gap-4"><div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border">{p.logo_url ? <img src={p.logo_url} className="w-full h-full object-contain p-1" /> : <Building2 className="w-6 h-6 text-slate-300" />}</div><div className="font-black text-slate-900 text-lg uppercase">{p.name}</div></div></td>
                                       <td className="px-10 py-8 font-bold text-slate-500 text-xs">
                                           <div className="text-slate-800 font-semibold flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" /><span>{p.address || <span className="text-slate-400 font-normal italic">No HQ Address</span>}</span></div>
                                           <div className="text-indigo-600 font-mono text-[11px] mt-1.5 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-indigo-400 shrink-0" /><span>{p.phone || <span className="text-slate-400 font-sans font-normal italic text-[10px]">No Telephone Provided</span>}</span></div>
                                       </td>
+                                      <td className="px-6 py-8 text-center">
+                                          <button
+                                              type="button"
+                                              disabled={!isSuperAdmin}
+                                              onClick={() => togglePropertyWhatsApp(p)}
+                                              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all shadow-xs ${
+                                                  !isWaDisabled 
+                                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' 
+                                                      : 'bg-slate-100 text-slate-400 border border-slate-200 hover:bg-slate-200'
+                                              }`}
+                                              title={isSuperAdmin ? "Click to toggle WhatsApp visibility in sidebar for this property" : "Super Admin only"}
+                                          >
+                                              <span className={`w-2 h-2 rounded-full ${!isWaDisabled ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                                              {!isWaDisabled ? 'Visible' : 'Hidden'}
+                                          </button>
+                                      </td>
                                       <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(p.id); setPropertyForm({
                                           name: p.name,
                                           logo_url: p.logo_url || '',
                                           address: p.address || '',
                                           phone: p.phone || '',
-                                          signatory_config: p.signatory_config || {}
+                                          signatory_config: p.signatory_config || {},
+                                          whatsapp_enabled: !isWaDisabled
                                       }); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'property', id:p.id, name:p.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
                                   </tr>
-                              ))}</tbody>
+                              );})}</tbody>
                           </table>
                       </CardContent>
                   </Card>
@@ -1277,14 +1401,16 @@ const SettingsPage = () => {
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-5"><Store className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Asset Contexts</CardTitle></div>
-                          <Button onClick={() => { setEditingId(null); setOutletForm({name:'', property_id: currentProperty?.id || '', logo_url:'', address:'', phone:'', signatory_config: {}, contract_template: '', conditions:'', backup_email: '', backup_enabled: false}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Commission Outlet</Button>
+                          <Button onClick={() => { setEditingId(null); setOutletForm({name:'', property_id: currentProperty?.id || '', logo_url:'', address:'', phone:'', signatory_config: {}, contract_template: '', conditions:'', backup_email: '', backup_enabled: false, whatsapp_enabled: true}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Commission Outlet</Button>
                       </CardHeader>
                       <CardContent className="p-0">
                           <table className="w-full text-left">
-                              <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Facility Designation & Contact</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Property Link</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
+                              <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Facility Designation & Contact</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Property Link</th><th className="px-6 py-6 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp Sidebar</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
                               <tbody className="divide-y divide-slate-100">{outlets
                                   .filter(o => !currentProperty || o.property_id === currentProperty.id)
-                                  .map(o => (
+                                  .map(o => {
+                                  const isWaDisabled = settings?.whatsapp_disabled_outlets?.includes(o.id) || o.whatsapp_enabled === false;
+                                  return (
                                   <tr key={o.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8">
                                           <div className="font-black text-slate-900 text-lg uppercase">{o.name}</div>
@@ -1292,6 +1418,22 @@ const SettingsPage = () => {
                                           <div className="text-indigo-600 font-mono text-[11px] mt-1 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-indigo-400 shrink-0" /><span>{o.phone || <span className="text-slate-400 font-sans font-normal italic text-[10px]">No Phone</span>}</span></div>
                                       </td>
                                       <td className="px-10 py-8"><span className="bg-indigo-50 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-indigo-600 border border-indigo-100">{properties.find(p=>p.id===o.property_id)?.name || 'Detached'}</span></td>
+                                      <td className="px-6 py-8 text-center">
+                                          <button
+                                              type="button"
+                                              disabled={!isSuperAdmin}
+                                              onClick={() => toggleOutletWhatsApp(o)}
+                                              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all shadow-xs ${
+                                                  !isWaDisabled 
+                                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' 
+                                                      : 'bg-slate-100 text-slate-400 border border-slate-200 hover:bg-slate-200'
+                                              }`}
+                                              title={isSuperAdmin ? "Click to toggle WhatsApp visibility in sidebar for this outlet" : "Super Admin only"}
+                                          >
+                                              <span className={`w-2 h-2 rounded-full ${!isWaDisabled ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                                              {!isWaDisabled ? 'Visible' : 'Hidden'}
+                                          </button>
+                                      </td>
                                       <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(o.id); setOutletForm({
                                           name: o.name,
                                           property_id: o.property_id,
@@ -1302,10 +1444,11 @@ const SettingsPage = () => {
                                           contract_template: o.contract_template || '',
                                           conditions: o.conditions || '',
                                           backup_email: o.backup_email || '',
-                                          backup_enabled: o.backup_enabled || false
+                                          backup_enabled: o.backup_enabled || false,
+                                          whatsapp_enabled: !isWaDisabled
                                       }); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button><button onClick={()=>setItemToDelete({type:'outlet', id:o.id, name:o.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div></td>
                                   </tr>
-                              ))}</tbody>
+                              );})}</tbody>
                           </table>
                       </CardContent>
                   </Card>
@@ -1503,11 +1646,24 @@ const SettingsPage = () => {
                                           { key: 'staff:view', label: 'Staff Roster', description: 'Staff directory, duty shifts, and leave records.' },
                                           { key: 'bookings:view', label: 'Booking Calendar', description: 'Service scheduling, therapist timelines, and rooms.' },
                                           { key: 'sales:view', label: 'Sales & Retail POS', description: 'POS transactions, cash drawer, and product stock.' },
+                                          { key: 'whatsapp:view', label: 'WhatsApp Automation & Hub', description: 'WhatsApp guest inbox, automated workflows, and templates in sidebar navigation.' },
                                           { key: 'categories:view', label: 'Membership Tiers', description: 'Membership category definitions and rate tiers.' },
                                           { key: 'reports:view', label: 'Financial & Operational Reports', description: 'Revenue audits, accruals, and performance reporting.' },
                                           { key: 'settings:view', label: 'System Settings (Main Access)', description: 'Entire Settings module entry in sidebar navigation.' },
                                           { key: 'users:view', label: 'Users & Roles Directory', description: 'User identity management and role assignments.' },
                                           { key: 'logs:view', label: 'Audit Logs', description: 'System-wide activity logs and change audit trails.' },
+                                      ]
+                                  },
+                                  {
+                                      id: 'whatsapp_module',
+                                      label: 'WhatsApp Automation & Guest Engagement',
+                                      permissions: permissionRegistry.find(g => g.id === 'whatsapp')?.permissions || [
+                                          { key: 'whatsapp:view', label: 'Access WhatsApp Module', description: 'View WhatsApp inbox, conversation list, and metrics.' },
+                                          { key: 'whatsapp:send', label: 'Reply & Send Messages', description: 'Compose and dispatch direct WhatsApp replies to guests.' },
+                                          { key: 'whatsapp:manage', label: 'Manage Conversations', description: 'Change status, assign agents, and edit guest tags.' },
+                                          { key: 'whatsapp:templates', label: 'Manage Templates', description: 'Create and edit WhatsApp approved message templates.' },
+                                          { key: 'whatsapp:rules', label: 'Automation Rules', description: 'Build and toggle automated triggers and responders.' },
+                                          { key: 'whatsapp:settings', label: 'WhatsApp API Credentials', description: 'Manage Cloud API credentials, webhook tokens, and keys.' },
                                       ]
                                   },
                                   {
@@ -1557,6 +1713,134 @@ const SettingsPage = () => {
                                   }
                               }} 
                           />
+
+                          {/* Property & Outlet Sidebar Module Visibility Matrix */}
+                          <div className="p-8 border-t border-slate-100 bg-slate-50/50 space-y-6">
+                            <div className="flex items-center justify-between flex-wrap gap-4">
+                              <div>
+                                <div className="flex items-center gap-2.5">
+                                  <span className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
+                                    <MessageSquare className="w-4 h-4" />
+                                  </span>
+                                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">
+                                    Property &amp; Outlet Sidebar Visibility Matrix
+                                  </h3>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+                                  Super Admin granular controls: Decide explicitly which luxury properties and facility outlets display the <strong>WhatsApp Automation Hub</strong> in their sidebar navigation.
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="space-y-4">
+                              {properties.map(property => {
+                                const isPropertyDisabled = settings?.whatsapp_disabled_properties?.includes(property.id) || property.whatsapp_enabled === false;
+                                const propertyOutlets = outlets.filter(o => o.property_id === property.id);
+
+                                return (
+                                  <div key={property.id} className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-sm space-y-4">
+                                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">
+                                          <Building2 className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                          <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{property.name}</h4>
+                                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Property Level Scope</span>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-3">
+                                        <span className={`text-[11px] font-black uppercase tracking-wider ${!isPropertyDisabled ? 'text-emerald-700' : 'text-slate-400'}`}>
+                                          {!isPropertyDisabled ? 'Visible in Sidebar' : 'Hidden in Sidebar'}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            try {
+                                              const currentDisabled = settings?.whatsapp_disabled_properties || [];
+                                              const updatedList = isPropertyDisabled
+                                                ? currentDisabled.filter(id => id !== property.id)
+                                                : [...currentDisabled, property.id];
+                                              const updatedSettings = { ...settings!, whatsapp_disabled_properties: updatedList };
+                                              await db.updateSettings(updatedSettings);
+                                              await db.updateProperty(property.id, { whatsapp_enabled: isPropertyDisabled });
+                                              await refreshSettings();
+                                              showStatus(`WhatsApp sidebar visibility for ${property.name} updated.`, 'success');
+                                            } catch (e: any) {
+                                              showStatus('Update failed: ' + e.message, 'error');
+                                            }
+                                          }}
+                                          className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
+                                            !isPropertyDisabled ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
+                                          }`}
+                                        >
+                                          <div className="w-4 h-4 rounded-full bg-white shadow-md" />
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Outlets in this Property */}
+                                    <div className="space-y-2 pl-2 md:pl-4">
+                                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
+                                        Facility Outlets in {property.name}:
+                                      </span>
+
+                                      {propertyOutlets.length === 0 ? (
+                                        <div className="text-xs text-slate-400 italic">No outlets configured under this property.</div>
+                                      ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                          {propertyOutlets.map(outlet => {
+                                            const isOutletDisabled = settings?.whatsapp_disabled_outlets?.includes(outlet.id) || outlet.whatsapp_enabled === false;
+                                            return (
+                                              <div key={outlet.id} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                  <Store className="w-4 h-4 text-emerald-600 shrink-0" />
+                                                  <div className="min-w-0">
+                                                    <span className="text-xs font-bold text-slate-900 block truncate">{outlet.name}</span>
+                                                    <span className="text-[9px] text-slate-400 font-medium truncate block">{outlet.address || 'Outlet Facility'}</span>
+                                                  </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                  <span className={`text-[10px] font-black uppercase tracking-wider ${!isOutletDisabled ? 'text-emerald-700' : 'text-slate-400'}`}>
+                                                    {!isOutletDisabled ? 'Enabled' : 'Hidden'}
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                      try {
+                                                        const currentDisabled = settings?.whatsapp_disabled_outlets || [];
+                                                        const updatedList = isOutletDisabled
+                                                          ? currentDisabled.filter(id => id !== outlet.id)
+                                                          : [...currentDisabled, outlet.id];
+                                                        const updatedSettings = { ...settings!, whatsapp_disabled_outlets: updatedList };
+                                                        await db.updateSettings(updatedSettings);
+                                                        await db.updateOutlet(outlet.id, { whatsapp_enabled: isOutletDisabled });
+                                                        await refreshSettings();
+                                                        showStatus(`WhatsApp sidebar visibility for ${outlet.name} updated.`, 'success');
+                                                      } catch (e: any) {
+                                                        showStatus('Update failed: ' + e.message, 'error');
+                                                      }
+                                                    }}
+                                                    className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
+                                                      !isOutletDisabled ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
+                                                    }`}
+                                                  >
+                                                    <div className="w-3.5 h-3.5 rounded-full bg-white shadow-xs" />
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
                       </CardContent>
                   </Card>
               )}
@@ -2179,6 +2463,27 @@ const SettingsPage = () => {
                                 config={propertyForm.signatory_config}
                                 onChange={(config) => setPropertyForm({ ...propertyForm, signatory_config: config })}
                             />
+                            {/* WhatsApp Hub in Sidebar Toggle */}
+                            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${propertyForm.whatsapp_enabled !== false ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                        <MessageSquare className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <h5 className="text-xs font-black text-slate-900 uppercase tracking-tight">WhatsApp Hub in Sidebar</h5>
+                                        <p className="text-[10px] text-slate-500">Show WhatsApp automation module in navigation for this property</p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setPropertyForm({ ...propertyForm, whatsapp_enabled: propertyForm.whatsapp_enabled === false ? true : false })}
+                                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
+                                        propertyForm.whatsapp_enabled !== false ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
+                                    }`}
+                                >
+                                    <div className="w-4 h-4 rounded-full bg-white shadow-md" />
+                                </button>
+                            </div>
                             <Button onClick={handlePropertySubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Save Property</Button>
                         </div>
                       )}
@@ -2345,6 +2650,28 @@ const SettingsPage = () => {
                                         </Button>
                                     )}
                                 </div>
+                            </div>
+
+                            {/* WhatsApp Hub in Sidebar Toggle */}
+                            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${outletForm.whatsapp_enabled !== false ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                        <MessageSquare className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <h5 className="text-xs font-black text-slate-900 uppercase tracking-tight">WhatsApp Hub in Sidebar</h5>
+                                        <p className="text-[10px] text-slate-500">Show WhatsApp automation module in navigation for this outlet</p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setOutletForm({ ...outletForm, whatsapp_enabled: outletForm.whatsapp_enabled === false ? true : false })}
+                                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
+                                        outletForm.whatsapp_enabled !== false ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
+                                    }`}
+                                >
+                                    <div className="w-4 h-4 rounded-full bg-white shadow-md" />
+                                </button>
                             </div>
 
                             <Button onClick={handleOutletSubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Save Outlet</Button>

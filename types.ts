@@ -104,6 +104,7 @@ export interface Property {
   address: string;
   phone?: string;
   signatory_config?: Record<string, { prepared?: string, reviewed?: string, approved?: string }>;
+  whatsapp_enabled?: boolean;
 }
 
 export interface PropertySmtpSettings {
@@ -173,6 +174,7 @@ export interface Outlet {
   expiration_reminder_days?: number[];
   backup_email?: string;
   backup_enabled?: boolean;
+  whatsapp_enabled?: boolean;
 }
 
 export interface StaffLeave {
@@ -347,6 +349,8 @@ export interface CompanySettings {
   staff_portal_settings?: Record<string, any>;
   expiration_reminder_config?: ExpirationReminderConfig;
   session_timeout_minutes?: number;
+  whatsapp_disabled_properties?: string[];
+  whatsapp_disabled_outlets?: string[];
 }
 
 export enum MemberStatus {

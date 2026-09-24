@@ -389,7 +389,7 @@ const ProtectedLayout = () => {
 
 const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, isCollapsed: boolean, onToggle: () => void }) => {
     const { user } = useAuth();
-    const { settings, hasPermission, currentOutlet } = useSettings();
+    const { settings, hasPermission, currentOutlet, currentProperty } = useSettings();
     const location = useLocation();
 
     const ALL_NAV_ITEMS = useMemo(() => {
@@ -409,11 +409,24 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
             { id: 'logs', to: '/logs', icon: History, label: 'Audit Logs', permission: 'logs:view' as Permission },
             { id: 'settings', to: '/settings', icon: Settings, label: 'System Settings', permission: 'settings:view' as Permission },
         ];
+        let filtered = items;
         if (currentOutlet && currentOutlet.booking_enabled === false) {
-            return items.filter(item => item.id !== 'bookings');
+            filtered = filtered.filter(item => item.id !== 'bookings');
         }
-        return items;
-    }, [currentOutlet]);
+        if (currentOutlet && (
+            currentOutlet.whatsapp_enabled === false ||
+            settings?.whatsapp_disabled_outlets?.includes(currentOutlet.id)
+        )) {
+            filtered = filtered.filter(item => item.id !== 'whatsapp');
+        }
+        if (currentProperty && (
+            currentProperty.whatsapp_enabled === false ||
+            settings?.whatsapp_disabled_properties?.includes(currentProperty.id)
+        )) {
+            filtered = filtered.filter(item => item.id !== 'whatsapp');
+        }
+        return filtered;
+    }, [currentOutlet, currentProperty, settings]);
 
     const orderedNavItems = useMemo(() => {
         const rawOrder = settings?.navigation_order || [];
@@ -423,6 +436,12 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
             const salesIndex = order.indexOf('sales');
             const insertPos = ptIndex !== -1 ? ptIndex + 1 : (salesIndex !== -1 ? salesIndex + 1 : order.length);
             order.splice(insertPos, 0, 'entrance-fee');
+        }
+        if (order.length > 0 && !order.includes('whatsapp')) {
+            const salesIndex = order.indexOf('sales');
+            const bookingIndex = order.indexOf('bookings');
+            const insertPos = salesIndex !== -1 ? salesIndex + 1 : (bookingIndex !== -1 ? bookingIndex + 1 : order.length);
+            order.splice(insertPos, 0, 'whatsapp');
         }
         const sortedItems = order
             .map(id => ALL_NAV_ITEMS.find(item => item.id === id))
@@ -532,7 +551,7 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
 const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
     const [isOpen, setIsOpen] = useState(false);
     const { user } = useAuth();
-    const { settings, hasPermission, currentOutlet } = useSettings();
+    const { settings, hasPermission, currentOutlet, currentProperty } = useSettings();
     const location = useLocation();
 
     const ALL_NAV_ITEMS = useMemo(() => {
@@ -552,11 +571,24 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
             { id: 'logs', to: '/logs', icon: History, label: 'Audit Logs', permission: 'logs:view' as Permission },
             { id: 'settings', to: '/settings', icon: Settings, label: 'System Settings', permission: 'settings:view' as Permission },
         ];
+        let filtered = items;
         if (currentOutlet && currentOutlet.booking_enabled === false) {
-            return items.filter(item => item.id !== 'bookings');
+            filtered = filtered.filter(item => item.id !== 'bookings');
         }
-        return items;
-    }, [currentOutlet]);
+        if (currentOutlet && (
+            currentOutlet.whatsapp_enabled === false ||
+            settings?.whatsapp_disabled_outlets?.includes(currentOutlet.id)
+        )) {
+            filtered = filtered.filter(item => item.id !== 'whatsapp');
+        }
+        if (currentProperty && (
+            currentProperty.whatsapp_enabled === false ||
+            settings?.whatsapp_disabled_properties?.includes(currentProperty.id)
+        )) {
+            filtered = filtered.filter(item => item.id !== 'whatsapp');
+        }
+        return filtered;
+    }, [currentOutlet, currentProperty, settings]);
 
     const orderedNavItems = useMemo(() => {
         const rawOrder = settings?.navigation_order || [];
@@ -566,6 +598,12 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
             const salesIndex = order.indexOf('sales');
             const insertPos = ptIndex !== -1 ? ptIndex + 1 : (salesIndex !== -1 ? salesIndex + 1 : order.length);
             order.splice(insertPos, 0, 'entrance-fee');
+        }
+        if (order.length > 0 && !order.includes('whatsapp')) {
+            const salesIndex = order.indexOf('sales');
+            const bookingIndex = order.indexOf('bookings');
+            const insertPos = salesIndex !== -1 ? salesIndex + 1 : (bookingIndex !== -1 ? bookingIndex + 1 : order.length);
+            order.splice(insertPos, 0, 'whatsapp');
         }
         const sortedItems = order
             .map(id => ALL_NAV_ITEMS.find(item => item.id === id))

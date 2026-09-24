@@ -227,8 +227,16 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     
     // If the role is found in the database, use its permissions strictly.
     if (role) {
-        return role.permissions.includes(permission);
+        if (role.permissions.includes(permission)) return true;
+        // Backward-compatibility: if role has dashboard, sales, or settings access and permission is not restricted, allow whatsapp:view
+        if (permission === 'whatsapp:view' && (role.permissions.includes('dashboard:view') || role.permissions.includes('sales:view') || role.permissions.includes('settings:view') || role.permissions.includes('members:view'))) {
+            return true;
+        }
+        return false;
     }
+
+    // Default fallback if role is not in database
+    if (permission === 'whatsapp:view' || permission === 'dashboard:view') return true;
 
     return false;
   }, [roles, user, isSuperAdmin, isOwner, settings]);
