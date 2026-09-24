@@ -56,9 +56,15 @@ import {
   Ticket,
   BellRing,
   Server,
-  MessageSquare
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
 import { PropertySmtpConfig } from '../components/settings/PropertySmtpConfig';
+import { WhatsAppAutomationRulesTab } from '../components/whatsapp/WhatsAppAutomationRulesTab';
+import { WhatsAppTemplatesTab } from '../components/whatsapp/WhatsAppTemplatesTab';
+import { WhatsAppSettingsTab } from '../components/whatsapp/WhatsAppSettingsTab';
+import { WhatsAppService, DEFAULT_COMPANIES } from '../services/whatsappService';
+import { WhatsAppConfig, WhatsAppAutomationRule, WhatsAppTemplate } from '../types';
 
 const PermissionMatrix = ({ 
   registry, 
@@ -174,7 +180,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'smtp' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports' | 'expiration_reminders' | 'staff_portal';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'smtp' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports' | 'expiration_reminders' | 'staff_portal' | 'whatsapp_config' | 'whatsapp_rules' | 'whatsapp_templates' | 'whatsapp_settings';
 
 const SignatoryConfig = ({
   config = {},
@@ -313,6 +319,7 @@ const SettingsPage = () => {
       { id: 'massage_rooms', label: 'Massage Rooms', visible: (isSuper || hasPermission(user?.role_id || '', 'settings:view_massage_rooms')) && !!currentProperty, icon: Store },
       { id: 'reports_config', label: 'Report Distribution', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_reports_config'), icon: Mail },
       { id: 'expiration_reminders', label: 'Expiration Reminders', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_expiration_reminders') || hasPermission(user?.role_id || '', 'settings:view_reports_config'), icon: BellRing },
+      { id: 'whatsapp_config', label: 'WhatsApp Automation & API', visible: isSuper || hasPermission(user?.role_id || '', 'whatsapp:settings') || hasPermission(user?.role_id || '', 'whatsapp:rules') || hasPermission(user?.role_id || '', 'whatsapp:templates'), icon: MessageSquare },
       { id: 'custom_reports', label: 'Custom Intelligence', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_custom_reports'), icon: FileText },
     ].filter(t => t.visible);
   }, [user, roles, hasPermission, currentProperty, currentOutlet, isSuperAdmin]);
@@ -428,6 +435,142 @@ const SettingsPage = () => {
     }
   }, [currentOutlet, currentProperty]);
 
+  // WhatsApp Configuration State & Data Handlers
+  const [waConfig, setWaConfig] = useState<WhatsAppConfig | null>(null);
+  const [waRules, setWaRules] = useState<WhatsAppAutomationRule[]>([]);
+  const [waTemplates, setWaTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [waSubTab, setWaSubTab] = useState<'rules' | 'templates' | 'settings'>('rules');
+  const [isLoadingWaData, setIsLoadingWaData] = useState(false);
+
+  const activeWaOutlet = currentOutlet || outlets[0];
+  const activeWaProperty = currentProperty || properties.find(p => p.id === activeWaOutlet?.property_id) || properties[0];
+  const activeWaCompany = DEFAULT_COMPANIES[0];
+
+  const loadWaData = useCallback(async () => {
+    if (!activeWaCompany?.id || !activeWaProperty?.id || !activeWaOutlet?.id) return;
+    setIsLoadingWaData(true);
+    try {
+      const [cfg, rls, tmpls] = await Promise.all([
+        WhatsAppService.getConfig(activeWaCompany.id, activeWaProperty.id, activeWaOutlet.id),
+        WhatsAppService.getAutomationRules(activeWaCompany.id, activeWaProperty.id, activeWaOutlet.id),
+        WhatsAppService.getTemplates(activeWaCompany.id, activeWaProperty.id, activeWaOutlet.id)
+      ]);
+      setWaConfig(cfg);
+      setWaRules(rls);
+      setWaTemplates(tmpls);
+    } catch (err) {
+      console.error('Error loading WhatsApp settings data:', err);
+    } finally {
+      setIsLoadingWaData(false);
+    }
+  }, [activeWaCompany?.id, activeWaProperty?.id, activeWaOutlet?.id]);
+
+  useEffect(() => {
+    if (activeTab === 'whatsapp_config') {
+      loadWaData();
+    }
+  }, [activeTab, loadWaData]);
+
+  const handleToggleWaRule = async (ruleId: string, isActive: boolean) => {
+    if (!activeWaCompany?.id || !activeWaProperty?.id || !activeWaOutlet?.id) return;
+    const ok = await WhatsAppService.toggleRuleActive(ruleId, isActive, activeWaCompany.id, activeWaProperty.id, activeWaOutlet.id);
+    if (ok) {
+      setWaRules(prev => prev.map(r => r.id === ruleId ? { ...r, is_active: isActive } : r));
+      showStatus(`Rule ${isActive ? 'enabled' : 'disabled'} successfully`, 'success');
+    }
+  };
+
+  const handleSaveWaRule = async (rule: WhatsAppAutomationRule): Promise<void> => {
+    if (!activeWaCompany?.id || !activeWaProperty?.id || !activeWaOutlet?.id) return;
+    const res = await WhatsAppService.saveAutomationRule(rule);
+    if (res.success) {
+      setWaRules(prev => {
+        const idx = prev.findIndex(r => r.id === rule.id);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = rule;
+          return updated;
+        }
+        return [rule, ...prev];
+      });
+      showStatus('Automation rule saved successfully', 'success');
+    }
+  };
+
+  const handleDeleteWaRule = async (ruleId: string) => {
+    if (!activeWaCompany?.id || !activeWaProperty?.id || !activeWaOutlet?.id) return;
+    const ok = await WhatsAppService.deleteAutomationRule(ruleId, activeWaCompany.id, activeWaProperty.id, activeWaOutlet.id);
+    if (ok) {
+      setWaRules(prev => prev.filter(r => r.id !== ruleId));
+      showStatus('Automation rule removed', 'success');
+    }
+  };
+
+  const handleTestWaRule = async (ruleId: string, testPhone: string, guestName?: string): Promise<{ success: boolean; messageText?: string; error?: string }> => {
+    if (!activeWaCompany?.id || !activeWaProperty?.id || !activeWaOutlet?.id) return { success: false, error: 'Scope required' };
+    const res = await WhatsAppService.testRuleTrigger({
+      ruleId,
+      companyId: activeWaCompany.id,
+      propertyId: activeWaProperty.id,
+      outletId: activeWaOutlet.id,
+      testPhone,
+      guestName
+    });
+    if (res.success) {
+      showStatus(`Rule trigger test passed`, 'success');
+    } else {
+      showStatus(`Test failed: ${res.error || 'Execution error'}`, 'error');
+    }
+    return res;
+  };
+
+  const handleSaveWaTemplate = async (template: WhatsAppTemplate): Promise<void> => {
+    if (!activeWaCompany?.id || !activeWaProperty?.id || !activeWaOutlet?.id) return;
+    const res = await WhatsAppService.saveTemplate(template);
+    if (res.success) {
+      setWaTemplates(prev => {
+        const idx = prev.findIndex(t => t.id === template.id);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = template;
+          return updated;
+        }
+        return [template, ...prev];
+      });
+      showStatus('HSM Template saved successfully', 'success');
+    }
+  };
+
+  const handleDeleteWaTemplate = async (templateId: string) => {
+    if (!activeWaCompany?.id || !activeWaProperty?.id || !activeWaOutlet?.id) return;
+    const ok = await WhatsAppService.deleteTemplate(templateId, activeWaCompany.id, activeWaProperty.id, activeWaOutlet.id);
+    if (ok) {
+      setWaTemplates(prev => prev.filter(t => t.id !== templateId));
+      showStatus('HSM Template deleted', 'success');
+    }
+  };
+
+  const handleSaveWaConfig = async (updated: Partial<WhatsAppConfig>, newToken?: string): Promise<void> => {
+    if (!activeWaCompany?.id || !activeWaProperty?.id || !activeWaOutlet?.id) return;
+    const res = await WhatsAppService.saveConfig(activeWaCompany.id, activeWaProperty.id, activeWaOutlet.id, updated, newToken);
+    if (res.success) {
+      const refreshed = await WhatsAppService.getConfig(activeWaCompany.id, activeWaProperty.id, activeWaOutlet.id);
+      setWaConfig(refreshed);
+      showStatus('Meta Cloud API configuration updated successfully', 'success');
+    }
+  };
+
+  const handleTestWaConnection = async (): Promise<{ success: boolean; error?: string; details?: any }> => {
+    if (!activeWaCompany?.id || !activeWaProperty?.id || !activeWaOutlet?.id) return { success: false, error: 'Scope required' };
+    const res = await WhatsAppService.testConnection(activeWaCompany.id, activeWaProperty.id, activeWaOutlet.id);
+    if (res.success) {
+      showStatus('Meta Cloud API credentials verified & connected!', 'success');
+    } else {
+      showStatus(`Connection test failed: ${res.error || 'Connection failure'}`, 'error');
+    }
+    return res;
+  };
+
   const navItems = useMemo(() => [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'checkin', label: 'Facility Check-In' },
@@ -437,6 +580,7 @@ const SettingsPage = () => {
     { id: 'staff', label: 'Staff Roster' },
     { id: 'bookings', label: 'Booking' },
     { id: 'sales', label: 'Sales & Retail' },
+    { id: 'whatsapp', label: 'WhatsApp Automation' },
     { id: 'categories', label: 'Membership Tiers' },
     { id: 'users', label: 'Users & Security' },
     { id: 'reports', label: 'Financial Reports' },
@@ -1539,6 +1683,124 @@ const SettingsPage = () => {
                   </Card>
               )}
 
+              {activeTab === 'whatsapp_config' && (
+                  <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                      <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center font-black">
+                                  <MessageSquare className="w-6 h-6" />
+                              </div>
+                              <div>
+                                  <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">
+                                      WhatsApp Automation &amp; API Gateway
+                                  </CardTitle>
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                                      Configure Auto Triggers, Meta HSM Templates, and Meta Cloud API Credentials for {activeWaOutlet?.name || 'Active Facility'}
+                                  </p>
+                              </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 p-1.5 bg-slate-200/60 rounded-2xl border border-slate-200/80">
+                              <button
+                                  onClick={() => setWaSubTab('rules')}
+                                  className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                      waSubTab === 'rules'
+                                          ? 'bg-white text-emerald-700 shadow-sm'
+                                          : 'text-slate-600 hover:text-slate-900'
+                                  }`}
+                              >
+                                  <Zap className="w-3.5 h-3.5 inline mr-1.5 text-amber-500" />
+                                  Auto Triggers
+                                  <span className="ml-2 px-1.5 py-0.5 rounded-full bg-slate-100 text-[10px] font-black">
+                                      {waRules.length}
+                                  </span>
+                              </button>
+
+                              <button
+                                  onClick={() => setWaSubTab('templates')}
+                                  className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                      waSubTab === 'templates'
+                                          ? 'bg-white text-emerald-700 shadow-sm'
+                                          : 'text-slate-600 hover:text-slate-900'
+                                  }`}
+                              >
+                                  <FileText className="w-3.5 h-3.5 inline mr-1.5 text-indigo-500" />
+                                  HSM Templates
+                                  <span className="ml-2 px-1.5 py-0.5 rounded-full bg-slate-100 text-[10px] font-black">
+                                      {waTemplates.length}
+                                  </span>
+                              </button>
+
+                              <button
+                                  onClick={() => setWaSubTab('settings')}
+                                  className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                      waSubTab === 'settings'
+                                          ? 'bg-white text-emerald-700 shadow-sm'
+                                          : 'text-slate-600 hover:text-slate-900'
+                                  }`}
+                              >
+                                  <Settings className="w-3.5 h-3.5 inline mr-1.5 text-slate-600" />
+                                  API Gateway
+                              </button>
+                          </div>
+                      </CardHeader>
+
+                      <CardContent className="p-8">
+                          {isLoadingWaData ? (
+                              <div className="py-16 text-center">
+                                  <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto mb-3" />
+                                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                      Loading WhatsApp Settings for {activeWaOutlet?.name || 'Active Facility'}...
+                                  </p>
+                              </div>
+                          ) : (
+                              <div>
+                                  {waSubTab === 'rules' && (
+                                      <WhatsAppAutomationRulesTab
+                                          rules={waRules}
+                                          templates={waTemplates}
+                                          onToggleActive={handleToggleWaRule}
+                                          onSaveRule={handleSaveWaRule}
+                                          onDeleteRule={handleDeleteWaRule}
+                                          onTestRule={handleTestWaRule}
+                                          companyId={activeWaCompany.id}
+                                          propertyId={activeWaProperty?.id || 'prop-1'}
+                                          outletId={activeWaOutlet?.id || 'out-1'}
+                                          outletName={activeWaOutlet?.name || 'Default Outlet'}
+                                      />
+                                  )}
+
+                                  {waSubTab === 'templates' && (
+                                      <WhatsAppTemplatesTab
+                                          templates={waTemplates}
+                                          onSaveTemplate={handleSaveWaTemplate}
+                                          onDeleteTemplate={handleDeleteWaTemplate}
+                                          companyId={activeWaCompany.id}
+                                          propertyId={activeWaProperty?.id || 'prop-1'}
+                                          outletId={activeWaOutlet?.id || 'out-1'}
+                                          outletName={activeWaOutlet?.name || 'Default Outlet'}
+                                      />
+                                  )}
+
+                                  {waSubTab === 'settings' && waConfig && (
+                                      <WhatsAppSettingsTab
+                                          config={waConfig}
+                                          onSaveConfig={handleSaveWaConfig}
+                                          onTestConnection={handleTestWaConnection}
+                                          companyId={activeWaCompany.id}
+                                          propertyId={activeWaProperty?.id || 'prop-1'}
+                                          outletId={activeWaOutlet?.id || 'out-1'}
+                                          outletName={activeWaOutlet?.name || 'Default Outlet'}
+                                          propertyName={activeWaProperty?.name || 'Property'}
+                                          companyName={activeWaCompany.name}
+                                      />
+                                  )}
+                              </div>
+                          )}
+                      </CardContent>
+                  </Card>
+              )}
+
               {activeTab === 'shortcuts' && (
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center gap-3">
@@ -2439,6 +2701,122 @@ const SettingsPage = () => {
                   isSuperAdmin={isSuperAdmin}
                   showStatus={showStatus}
                 />
+              )}
+
+              {activeTab === 'whatsapp_rules' && (
+                <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                  <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-black">
+                        <Zap className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Auto Triggers</CardTitle>
+                        <p className="text-xs text-slate-500 font-medium">Configure automated WhatsApp triggers & event dispatchers for {activeWaOutlet?.name || 'Current Venue'}</p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-8">
+                    {isLoadingWaData ? (
+                      <div className="p-12 text-center text-slate-500 text-xs font-bold uppercase tracking-wider">Loading WhatsApp Auto Triggers...</div>
+                    ) : (
+                      <WhatsAppAutomationRulesTab
+                        rules={waRules}
+                        templates={waTemplates}
+                        onToggleActive={handleToggleWaRule}
+                        onSaveRule={handleSaveWaRule}
+                        onDeleteRule={async (ruleId) => {
+                          if (!activeWaCompany?.id || !activeWaProperty?.id || !activeWaOutlet?.id) return;
+                          const ok = await WhatsAppService.deleteAutomationRule(ruleId, activeWaCompany.id, activeWaProperty.id, activeWaOutlet.id);
+                          if (ok) {
+                            setWaRules(prev => prev.filter(r => r.id !== ruleId));
+                            showStatus('Rule deleted successfully', 'success');
+                          }
+                        }}
+                        onTestRule={async (ruleId, phone, name) => {
+                          if (!activeWaCompany?.id || !activeWaProperty?.id || !activeWaOutlet?.id) return;
+                          return WhatsAppService.testRuleTrigger({ ruleId, companyId: activeWaCompany.id, propertyId: activeWaProperty.id, outletId: activeWaOutlet.id, testPhone: phone, guestName: name });
+                        }}
+                        companyId={activeWaCompany?.id || ''}
+                        propertyId={activeWaProperty?.id || ''}
+                        outletId={activeWaOutlet?.id || ''}
+                        outletName={activeWaOutlet?.name || 'Outlet'}
+                      />
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {activeTab === 'whatsapp_templates' && (
+                <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                  <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">
+                        <FileText className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">HSM Templates</CardTitle>
+                        <p className="text-xs text-slate-500 font-medium">Meta Verified WhatsApp message templates for {activeWaOutlet?.name || 'Current Venue'}</p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-8">
+                    {isLoadingWaData ? (
+                      <div className="p-12 text-center text-slate-500 text-xs font-bold uppercase tracking-wider">Loading HSM Templates...</div>
+                    ) : (
+                      <WhatsAppTemplatesTab
+                        templates={waTemplates}
+                        onSaveTemplate={handleSaveWaTemplate}
+                        onDeleteTemplate={handleDeleteWaTemplate}
+                        companyId={activeWaCompany?.id || ''}
+                        propertyId={activeWaProperty?.id || ''}
+                        outletId={activeWaOutlet?.id || ''}
+                        outletName={activeWaOutlet?.name || 'Outlet'}
+                      />
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {activeTab === 'whatsapp_settings' && (
+                <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
+                  <CardHeader className="bg-slate-50 p-8 border-b border-slate-100">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black">
+                        <Settings className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">API Gateway</CardTitle>
+                        <p className="text-xs text-slate-500 font-medium">Meta Cloud API token, phone number IDs & webhook settings for {activeWaOutlet?.name || 'Current Venue'}</p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-8">
+                    {isLoadingWaData || !waConfig ? (
+                      <div className="p-12 text-center text-slate-500 text-xs font-bold uppercase tracking-wider">Loading API Gateway Config...</div>
+                    ) : (
+                      <WhatsAppSettingsTab
+                        config={waConfig}
+                        onSaveConfig={async (updated, newAccessToken) => {
+                          if (!activeWaCompany?.id || !activeWaProperty?.id || !activeWaOutlet?.id) return;
+                          const res = await WhatsAppService.saveConfig(activeWaCompany.id, activeWaProperty.id, activeWaOutlet.id, updated, newAccessToken);
+                          if (res.success) {
+                            const refreshed = await WhatsAppService.getConfig(activeWaCompany.id, activeWaProperty.id, activeWaOutlet.id);
+                            setWaConfig(refreshed);
+                            showStatus('WhatsApp API configuration saved', 'success');
+                          }
+                        }}
+                        onTestConnection={handleTestWaConnection}
+                        companyId={activeWaCompany?.id || ''}
+                        propertyId={activeWaProperty?.id || ''}
+                        outletId={activeWaOutlet?.id || ''}
+                        outletName={activeWaOutlet?.name || 'Outlet'}
+                        propertyName={activeWaProperty?.name || 'Property'}
+                        companyName={activeWaCompany?.name || 'Torch Group'}
+                      />
+                    )}
+                  </CardContent>
+                </Card>
               )}
           </div>
 
