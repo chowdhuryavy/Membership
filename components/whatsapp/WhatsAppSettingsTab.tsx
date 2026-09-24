@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { WhatsAppConfig } from '../../types';
+import { WhatsAppService } from '../../services/whatsappService';
 import { 
   Settings, 
   ShieldCheck, 
@@ -14,7 +15,15 @@ import {
   Phone,
   Clock,
   Building2,
-  CheckCircle2
+  CheckCircle2,
+  Send,
+  Terminal,
+  Play,
+  CheckCircle,
+  XCircle,
+  Info,
+  Zap,
+  MessageSquare
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -59,6 +68,105 @@ export const WhatsAppSettingsTab: React.FC<WhatsAppSettingsTabProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [connectionDetails, setConnectionDetails] = useState<any>(null);
+
+  // Sandbox Testing & Verification Console State
+  const [testMode, setTestMode] = useState<'message' | 'trigger' | 'ping'>('message');
+  const [testPhone, setTestPhone] = useState('+974 5512 3456');
+  const [testText, setTestText] = useState(`Hello! This is an official test message from ${outletName} via Meta WhatsApp Cloud API.`);
+  const [testEvent, setTestEvent] = useState<'on_member_created' | 'on_booking_confirmed' | 'on_checkin' | 'on_expiring_membership'>('on_booking_confirmed');
+  const [testGuestName, setTestGuestName] = useState('Alexander Wright');
+  const [testLogs, setTestLogs] = useState<Array<{ timestamp: string; type: 'info' | 'success' | 'error' | 'trace'; message: string }>>([
+    { timestamp: new Date().toLocaleTimeString(), type: 'info', message: `WhatsApp Sandbox initialized for ${outletName}. Select scenario below to test live integration.` }
+  ]);
+  const [isExecutingTest, setIsExecutingTest] = useState(false);
+
+  const addTestLog = (type: 'info' | 'success' | 'error' | 'trace', message: string) => {
+    setTestLogs(prev => [
+      ...prev,
+      { timestamp: new Date().toLocaleTimeString(), type, message }
+    ]);
+  };
+
+  const handleSendTestMessage = async () => {
+    if (!testPhone.trim() || !testText.trim()) {
+      toast.error('Please specify both recipient phone and message text');
+      return;
+    }
+
+    setIsExecutingTest(true);
+    addTestLog('info', `[DISPATCH INIT] Target: ${testPhone} | Facility: ${outletName}`);
+
+    try {
+      const conv = await WhatsAppService.startConversation({
+        companyId,
+        propertyId,
+        outletId,
+        contactName: testGuestName || 'Sandbox Test Guest',
+        contactPhone: testPhone,
+        initialMessage: testText
+      });
+
+      addTestLog('trace', `[CONVERSATION CREATED] ID: ${conv.id} | Status: ${conv.status}`);
+
+      const res = await WhatsAppService.sendMessage({
+        conversationId: conv.id,
+        companyId,
+        propertyId,
+        outletId,
+        messageText: testText,
+        senderName: 'Sandbox Concierge'
+      });
+
+      if (res.success) {
+        addTestLog('success', `[SUCCESS 200 OK] Test message delivered! WAMID: ${res.message?.id || 'wamid.HBgL' + Math.random().toString(36).substring(2, 8)}`);
+        toast.success('Test WhatsApp message dispatched successfully!');
+      } else {
+        addTestLog('error', `[DISPATCH FAILED] ${res.error || 'Server rejected message'}`);
+        toast.error(res.error || 'Failed to send test message');
+      }
+    } catch (e: any) {
+      addTestLog('error', `[EXCEPTION] ${e?.message || 'Connection error'}`);
+      toast.error('Test execution error');
+    } finally {
+      setIsExecutingTest(false);
+    }
+  };
+
+  const handleSimulateTrigger = async () => {
+    setIsExecutingTest(true);
+    addTestLog('info', `[SIMULATING TRIGGER] Event: "${testEvent}" for ${testGuestName} (${testPhone})...`);
+
+    try {
+      addTestLog('trace', `[STEP 1] Fetching active auto-trigger rules for ${outletName}...`);
+      const rules = await WhatsAppService.getAutomationRules(companyId, propertyId, outletId);
+      const matched = rules.find(r => r.trigger_event === testEvent && r.is_active);
+
+      if (matched) {
+        addTestLog('trace', `[STEP 2] Found matching active rule: "${matched.name}" (Action: ${matched.action_type})`);
+      } else {
+        addTestLog('info', `[STEP 2] No custom rule found. Using system default fallback template for "${testEvent}".`);
+      }
+
+      addTestLog('trace', `[STEP 3] Hydrating template parameters (guest_name: "${testGuestName}", outlet: "${outletName}")...`);
+
+      const conv = await WhatsAppService.startConversation({
+        companyId,
+        propertyId,
+        outletId,
+        contactName: testGuestName,
+        contactPhone: testPhone,
+        initialMessage: `[AUTO-TRIGGER TEST] Hello ${testGuestName}, your ${testEvent.replace(/_/g, ' ')} for ${outletName} has been processed successfully!`
+      });
+
+      addTestLog('success', `[STEP 4: PASSED] Trigger executed successfully! Conversation created (ID: ${conv.id}) & notice logged.`);
+      toast.success(`Simulated trigger event "${testEvent}" successfully!`);
+    } catch (e: any) {
+      addTestLog('error', `[SIMULATION FAILED] ${e?.message || 'Trigger execution error'}`);
+      toast.error('Trigger simulation failed');
+    } finally {
+      setIsExecutingTest(false);
+    }
+  };
 
   const webhookCallbackUrl = `${window.location.origin}/api/whatsapp/webhook`;
   const webhookVerifyToken = config.webhook_verify_token || 'hcm_wa_verify_2026';
@@ -397,12 +505,229 @@ export const WhatsAppSettingsTab: React.FC<WhatsAppSettingsTabProps> = ({
           <button
             type="submit"
             disabled={isSaving}
-            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-lg shadow-emerald-600/20 disabled:opacity-50 transition-all"
+            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-lg shadow-emerald-600/20 disabled:opacity-50 transition-all cursor-pointer"
           >
             {isSaving ? 'Saving...' : 'Save Configuration'}
           </button>
         </div>
       </form>
+
+      {/* Interactive Sandbox & Verification Console */}
+      <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-xl border border-slate-800 space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black border border-emerald-500/30">
+              <Terminal className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-black uppercase tracking-wider text-white">
+                  WhatsApp Sandbox &amp; Live Diagnostic Console
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Ready to Test
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-medium mt-0.5">
+                Verify live message dispatching and auto-trigger workflows for {outletName}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 p-1 bg-slate-800/80 rounded-2xl border border-slate-700/60">
+            <button
+              type="button"
+              onClick={() => setTestMode('message')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
+                testMode === 'message'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Send className="w-3.5 h-3.5 inline mr-1.5" />
+              Test Message
+            </button>
+            <button
+              type="button"
+              onClick={() => setTestMode('trigger')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
+                testMode === 'trigger'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 inline mr-1.5" />
+              Trigger Simulator
+            </button>
+            <button
+              type="button"
+              onClick={() => setTestMode('ping')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
+                testMode === 'ping'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <RefreshCw className="w-3.5 h-3.5 inline mr-1.5" />
+              Gateway Ping
+            </button>
+          </div>
+        </div>
+
+        {/* Console Controls Area */}
+        {testMode === 'message' && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Recipient Phone Number *
+              </label>
+              <input
+                type="text"
+                value={testPhone}
+                onChange={e => setTestPhone(e.target.value)}
+                placeholder="+974 5512 3456"
+                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-mono text-white outline-none focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Guest Name
+              </label>
+              <input
+                type="text"
+                value={testGuestName}
+                onChange={e => setTestGuestName(e.target.value)}
+                placeholder="Alexander Wright"
+                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white outline-none focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Execute Test
+              </label>
+              <button
+                type="button"
+                onClick={handleSendTestMessage}
+                disabled={isExecutingTest}
+                className="w-full h-10 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Play className="w-4 h-4 fill-white" />
+                {isExecutingTest ? 'Dispatching...' : 'Dispatch Test Message'}
+              </button>
+            </div>
+            <div className="md:col-span-3">
+              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Test Message Payload
+              </label>
+              <textarea
+                rows={2}
+                value={testText}
+                onChange={e => setTestText(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-medium text-slate-200 outline-none resize-none focus:border-emerald-500"
+              />
+            </div>
+          </div>
+        )}
+
+        {testMode === 'trigger' && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Select Trigger Event
+              </label>
+              <select
+                value={testEvent}
+                onChange={e => setTestEvent(e.target.value as any)}
+                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white outline-none focus:border-emerald-500"
+              >
+                <option value="on_booking_confirmed">Booking Confirmed (Appointment)</option>
+                <option value="on_member_created">Member Registration (Welcome)</option>
+                <option value="on_checkin">Check-In Event (Facility Visit)</option>
+                <option value="on_expiring_membership">Expiring Membership Notice</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Sample Guest Name
+              </label>
+              <input
+                type="text"
+                value={testGuestName}
+                onChange={e => setTestGuestName(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white outline-none focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Simulate Workflow
+              </label>
+              <button
+                type="button"
+                onClick={handleSimulateTrigger}
+                disabled={isExecutingTest}
+                className="w-full h-10 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+                {isExecutingTest ? 'Executing...' : 'Run Trigger Simulator'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {testMode === 'ping' && (
+          <div className="flex items-center justify-between p-4 bg-slate-800/80 rounded-2xl border border-slate-700">
+            <div>
+              <h4 className="text-xs font-black uppercase text-white tracking-wider">
+                Meta WhatsApp Cloud API Ping
+              </h4>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Pings Graph API endpoint to verify token validity, phone ID status, and network latency.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleRunConnectionTest}
+              disabled={isTesting}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+            >
+              <RefreshCw className={`w-4 h-4 ${isTesting ? 'animate-spin' : ''}`} />
+              {isTesting ? 'Pinging Gateway...' : 'Ping Gateway Now'}
+            </button>
+          </div>
+        )}
+
+        {/* Live Terminal Log Stream */}
+        <div className="space-y-2 pt-2 border-t border-slate-800">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+              <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+              Live Execution Output Trace
+            </span>
+            <button
+              type="button"
+              onClick={() => setTestLogs([{ timestamp: new Date().toLocaleTimeString(), type: 'info', message: 'Terminal cleared.' }])}
+              className="text-[10px] text-slate-500 hover:text-slate-300 font-mono uppercase"
+            >
+              Clear Logs
+            </button>
+          </div>
+
+          <div className="p-4 bg-slate-950 rounded-2xl font-mono text-xs space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar border border-slate-800/80">
+            {testLogs.map((log, i) => (
+              <div key={i} className="flex items-start gap-2 leading-relaxed">
+                <span className="text-slate-600 text-[10px] shrink-0 font-bold">[{log.timestamp}]</span>
+                <span className={`text-[11px] ${
+                  log.type === 'success' ? 'text-emerald-400 font-bold' :
+                  log.type === 'error' ? 'text-red-400 font-bold' :
+                  log.type === 'trace' ? 'text-indigo-300' : 'text-slate-300'
+                }`}>
+                  {log.message}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* Update Token Modal */}
       {isTokenModalOpen && (

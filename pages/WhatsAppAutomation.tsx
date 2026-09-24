@@ -238,7 +238,7 @@ export const WhatsAppAutomation: React.FC = () => {
           </div>
         </div>
 
-        {/* Action Controls & Link to Settings */}
+        {/* Action Controls */}
         <div className="flex items-center gap-3 flex-wrap">
           {/* Active Context Badge */}
           <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-50 text-xs font-bold text-slate-700 border border-slate-200/80">
@@ -253,16 +253,6 @@ export const WhatsAppAutomation: React.FC = () => {
             className="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-emerald-600' : ''}`} />
-          </button>
-
-          {/* Direct Link to Settings for Auto-Triggers, Templates & API Gateway */}
-          <button
-            onClick={() => navigate('/settings')}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-black text-xs uppercase tracking-wider transition-all border border-indigo-200/60 cursor-pointer"
-          >
-            <Settings className="w-4 h-4 text-indigo-600" />
-            <span>Settings &amp; Triggers</span>
-            <ChevronRight className="w-3.5 h-3.5 opacity-60" />
           </button>
         </div>
       </div>
